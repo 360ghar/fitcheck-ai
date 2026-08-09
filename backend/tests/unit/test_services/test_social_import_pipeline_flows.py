@@ -16,6 +16,7 @@ patched).
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import httpx
@@ -25,6 +26,7 @@ import app.services.social_import_pipeline_service as pipeline_mod
 from app.core.exceptions import (
     SocialImportAuthRequiredError,
     SocialImportJobNotFoundError,
+    SocialImportPhotoNotFoundError,
 )
 from app.models.social_import import (
     SocialImportItemStatus,
@@ -152,25 +154,22 @@ async def test_cleanup_all_finished_tasks_removes_done_entries(monkeypatch):
 @pytest.mark.asyncio
 async def test_schedule_capacity_retry_reschedules_after_sleep(monkeypatch):
     scheduled = []
+    slept = []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
 
     async def fake_schedule_job(cls, service, job_id):
         scheduled.append(job_id)
 
-    monkeypatch.setattr(asyncio, "sleep", lambda seconds: _instant_sleep())
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
     monkeypatch.setattr(
         SocialImportPipelineService, "schedule_job", classmethod(fake_schedule_job)
     )
     service = make_service()
-    await service._schedule_capacity_retry("job-1")
+    await service._schedule_capacity_retry("job-1", 60)
+    assert slept == [60]
     assert scheduled == ["job-1"]
-
-
-async def _instant_sleep():
-    return None
-
-
-async def _completed():
-    return None
 
 
 @pytest.mark.asyncio
@@ -188,7 +187,7 @@ async def test_schedule_capacity_retry_returns_on_cancellation(monkeypatch):
         SocialImportPipelineService, "schedule_job", classmethod(fake_schedule_job)
     )
     service = make_service()
-    await service._schedule_capacity_retry("job-1")
+    await service._schedule_capacity_retry("job-1", 60)
     assert scheduled == []
 
 
@@ -908,24 +907,123 @@ def patch_queue_collaborators(monkeypatch, job, slots, *, claimed=None, processe
 
 
 @pytest.mark.asyncio
-async def test_run_queue_capacity_exhausted_schedules_retry(monkeypatch):
-    patch_event(monkeypatch)
-    retried = []
+async def test_run_queue_capacity_exhausted_applies_backoff(monkeypatch):
+    """Capacity exhaustion inside _run_queue applies the capped-backoff
+    policy: the persistent attempt counter is bumped, a job_updated event
+    carries the retry delay, and a retry task is spawned with that delay."""
+    events = patch_event(monkeypatch)
+    updated = []
+    retry_calls = []
+    spawned = []
 
-    def fake_retry(job_id):
-        # Record synchronously and return a completed coroutine: the real
-        # _spawn_background schedules it on the loop without awaiting.
-        retried.append(job_id)
-        return _completed()
+    async def fake_get_job(db, *, job_id, user_id):
+        return make_job()
 
+    async def fake_update_job(db, *, job_id, user_id, updates):
+        updated.append(dict(updates))
+        return {"id": job_id, **updates}
+
+    def fake_schedule_retry(job_id, delay_seconds):
+        retry_calls.append((job_id, delay_seconds))
+        return None
+
+    def fake_spawn(coro):
+        spawned.append(coro)
+        return None
+
+    patch_store(
+        monkeypatch,
+        set_job_status=_async_value(None),
+        get_job=fake_get_job,
+        update_job=fake_update_job,
+    )
     service = make_service()
+    service.CAPACITY_RETRY_DELAYS_SECONDS = (60, 120, 240, 480)
     service._capacity_exhausted = True
     monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
-    monkeypatch.setattr(service, "_schedule_capacity_retry", fake_retry)
-    patch_store(monkeypatch, set_job_status=_async_value(None))
+    monkeypatch.setattr(service, "_schedule_capacity_retry", fake_schedule_retry)
+    monkeypatch.setattr(service, "_spawn_background", fake_spawn)
 
     await service._run_queue("job-1")
-    assert retried == ["job-1"]
+
+    # First backoff attempt: metadata counter 0 -> 1, delay 60s.
+    assert updated[0]["metadata"]["capacity_retry_attempts"] == 1
+    job_events = [e for e in events if e["event_type"] == "job_updated"]
+    assert job_events
+    assert job_events[0]["payload"]["retry_after_seconds"] == 60
+    assert retry_calls == [("job-1", 60)]
+    assert len(spawned) == 1
+
+
+@pytest.mark.asyncio
+async def test_handle_capacity_exhaustion_pauses_after_budget(monkeypatch):
+    """After CAPACITY_RETRY_MAX_ATTEMPTS failures the job is FAILED (paused)
+    with a retryable event instead of scheduling yet another retry."""
+    events = patch_event(monkeypatch)
+    statuses = []
+    spawned = []
+
+    async def fake_get_job(db, *, job_id, user_id):
+        return make_job(metadata={"capacity_retry_attempts": 5})
+
+    async def fake_set_job_status(db, *, job_id, user_id, status, error_message=None, **kwargs):
+        statuses.append((status, error_message))
+        return {"id": job_id}
+
+    def fake_spawn(coro):
+        spawned.append(coro)
+        return None
+
+    patch_store(
+        monkeypatch,
+        get_job=fake_get_job,
+        set_job_status=fake_set_job_status,
+    )
+    service = make_service()
+    monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
+    monkeypatch.setattr(service, "_spawn_background", fake_spawn)
+
+    await service._handle_capacity_exhaustion("job-1")
+
+    assert statuses[0][0] == SocialImportJobStatus.FAILED
+    assert "AI service capacity exhausted after repeated retries" in statuses[0][1]
+    assert spawned == []
+    failed_events = [e for e in events if e["event_type"] == "job_failed"]
+    assert failed_events
+    assert failed_events[0]["payload"]["retryable"] is True
+    assert "retry the import later" in failed_events[0]["payload"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_handle_capacity_exhaustion_missing_job_is_noop(monkeypatch):
+    patch_store(monkeypatch, get_job=_async_value(None))
+    service = make_service()
+    await service._handle_capacity_exhaustion("job-1")
+
+
+@pytest.mark.asyncio
+async def test_clear_capacity_retry_state_resets_counter(monkeypatch):
+    """Real pipeline progress resets the backoff budget: the metadata
+    counter is dropped so a later outage starts a fresh budget."""
+    updated = []
+
+    async def fake_get_job(db, *, job_id, user_id):
+        return make_job(metadata={"capacity_retry_attempts": 3})
+
+    async def fake_update_job(db, *, job_id, user_id, updates):
+        updated.append(dict(updates))
+        return {"id": job_id}
+
+    patch_store(monkeypatch, get_job=fake_get_job, update_job=fake_update_job)
+    service = make_service()
+    await service._clear_capacity_retry_state("job-1")
+    assert updated == [{"metadata": {}}]
+
+    # No counter -> no write at all.
+    patch_store(monkeypatch, get_job=_async_value(make_job()))
+    updated.clear()
+    await service._clear_capacity_retry_state("job-1")
+    assert updated == []
 
 
 @pytest.mark.asyncio
@@ -1377,17 +1475,20 @@ async def test_process_single_photo_item_generation_failure(monkeypatch):
 async def test_process_single_photo_capacity_exhaustion_sets_flag(monkeypatch):
     events = patch_event(monkeypatch)
     items_upserted = []
+    updated = []
 
     async def fake_upsert_items(db, *, job_id, photo_id, user_id, items):
         items_upserted.append(items)
 
     async def fake_update_photo(db, *, job_id, user_id, photo_id, updates):
+        updated.append(dict(updates))
         return {"id": photo_id, **updates}
 
     patch_store(
         monkeypatch,
         upsert_photo_items=fake_upsert_items,
         update_photo=fake_update_photo,
+        get_photo=_async_value(make_photo()),
         get_slots=_async_value({"awaiting": None}),
         get_photo_with_items=_identity_photo,
     )
@@ -1414,6 +1515,18 @@ async def test_process_single_photo_capacity_exhaustion_sets_flag(monkeypatch):
     assert capacity_events
     assert capacity_events[0]["payload"]["error_kind"] == "upstream_quota"
     assert capacity_events[0]["payload"]["retry_after_seconds"] == 30
+    # A4-01: the photo is requeued, NOT delivered as failed, and nothing is
+    # upserted - the extraction result is stored on the photo for the retry.
+    assert items_upserted == []
+    status_updates = [u for u in updated if u.get("status")]
+    assert status_updates[-1]["status"] == SocialImportPhotoStatus.QUEUED.value
+    # The extraction result rides along in the photo metadata so the retry
+    # does not re-extract (and does not burn a second extraction slot).
+    pending_updates = [u for u in updated if "pending_extraction" in u.get("metadata", {})]
+    assert pending_updates
+    stored = pending_updates[0]["metadata"]["pending_extraction"]
+    assert stored["items"] == [{"temp_id": "t1", "category": "tops", "source_image_url": "https://src", "source_image_storage_path": "src-path"}]
+    assert stored["source_image_url"] == "https://src"
 
 
 @pytest.mark.asyncio
@@ -1489,23 +1602,100 @@ async def test_process_single_photo_release_failure_does_not_mask(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_process_single_photo_generation_reserve_blocked(monkeypatch):
-    """When the generation reservation fails the photo goes back to QUEUED."""
+    """When the generation reservation fails the extraction slot is released,
+    the extraction result is stored on the photo, and the photo goes back to
+    QUEUED (the retry reuses the stored extraction instead of re-extracting)."""
     patch_event(monkeypatch)
     updated = []
+    released = []
 
     async def fake_update_photo(db, *, job_id, user_id, photo_id, updates):
         updated.append(dict(updates))
         return {"id": photo_id, **updates}
 
-    patch_store(monkeypatch, update_photo=fake_update_photo)
+    async def fake_release(user_id, operation_type, db):
+        released.append(operation_type)
+
+    patch_store(
+        monkeypatch,
+        update_photo=fake_update_photo,
+        get_photo=_async_value(make_photo()),
+    )
     patch_process_collaborators(monkeypatch, items=[{"temp_id": "t1"}], gen_reserve=False)
+    monkeypatch.setattr(AISettingsService, "release_usage", staticmethod(fake_release))
 
     service = make_service()
     monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
     monkeypatch.setattr(service, "_pause_for_rate_limit", _noop_async)
     await service._process_single_photo("job-1", make_photo())
 
-    assert updated == [{"status": SocialImportPhotoStatus.QUEUED.value}]
+    status_updates = [u for u in updated if u.get("status")]
+    assert status_updates == [{"status": SocialImportPhotoStatus.QUEUED.value}]
+    # The consumed-on-decline extraction reservation is returned to the daily
+    # budget, and the extraction result is stored for the retry.
+    assert released == [OperationType.EXTRACTION]
+    pending_updates = [u for u in updated if "pending_extraction" in u.get("metadata", {})]
+    assert pending_updates
+    assert pending_updates[0]["metadata"]["pending_extraction"]["items"] == [
+        {"temp_id": "t1", "source_image_url": "https://src", "source_image_storage_path": "src-path"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_process_single_photo_reuses_pending_extraction(monkeypatch):
+    """A4-03: a photo paused before generation carries its extraction result
+    in metadata; the retry reuses it - no second extraction reservation, no
+    second VLM call - and only generates."""
+    patch_event(monkeypatch)
+    updated = []
+    reserves = []
+
+    async def fake_reserve(user_id, operation_type, db, count=1):
+        reserves.append(operation_type)
+        return True
+
+    async def fake_update_photo(db, *, job_id, user_id, photo_id, updates):
+        updated.append(dict(updates))
+        return {"id": photo_id, **updates}
+
+    async def fake_upsert_items(db, *, job_id, photo_id, user_id, items):
+        return None
+
+    patch_store(
+        monkeypatch,
+        update_photo=fake_update_photo,
+        upsert_photo_items=fake_upsert_items,
+        get_slots=_async_value({"awaiting": None}),
+        get_photo_with_items=_identity_photo,
+        get_job=_async_value(make_job()),
+    )
+    fake_extraction, fake_generation = patch_process_collaborators(
+        monkeypatch, items=[{"temp_id": "t1", "category": "tops"}]
+    )
+    monkeypatch.setattr(AISettingsService, "reserve_usage", staticmethod(fake_reserve))
+
+    photo = make_photo(
+        metadata={
+            "pending_extraction": {
+                "items": [{"temp_id": "t1", "category": "tops"}],
+                "source_image_url": "https://src",
+                "source_image_storage_path": "src-path",
+            }
+        }
+    )
+
+    service = make_service()
+    monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
+    await service._process_single_photo("job-1", photo)
+
+    # Only the generation slot is reserved; the VLM is never re-run (the
+    # extraction fake raises if called) and generation still happens.
+    assert reserves == [OperationType.GENERATION]
+    assert fake_generation.calls
+    status_updates = [u for u in updated if u.get("status")]
+    assert status_updates[0]["status"] == SocialImportPhotoStatus.AWAITING_REVIEW.value
+    # The delivered photo no longer carries the pending marker.
+    assert "pending_extraction" not in status_updates[0].get("metadata", {})
 
 
 @pytest.mark.asyncio
@@ -1611,7 +1801,7 @@ async def test_approve_photo_skips_terminal_items(monkeypatch):
     update_item_calls = []
 
     async def fake_get_photo(db, *, job_id, user_id, photo_id):
-        return make_photo()
+        return make_photo(status=SocialImportPhotoStatus.AWAITING_REVIEW.value)
 
     async def fake_list_items(db, *, job_id, photo_id, user_id):
         return [
@@ -1658,7 +1848,7 @@ async def test_approve_photo_happy_path(monkeypatch):
     saved_items = []
 
     async def fake_get_photo(db, *, job_id, user_id, photo_id):
-        return make_photo()
+        return make_photo(status=SocialImportPhotoStatus.AWAITING_REVIEW.value)
 
     async def fake_list_items(db, *, job_id, photo_id, user_id):
         return [{"id": "i1", "status": SocialImportItemStatus.GENERATED.value}]
@@ -1704,7 +1894,8 @@ async def test_approve_photo_missing_photo_raises(monkeypatch):
 
     patch_store(monkeypatch, get_photo=fake_get_photo)
     service = make_service()
-    with pytest.raises(SocialImportJobNotFoundError):
+    # A4-07: a bad photo id raises the photo-scoped error, not "job not found".
+    with pytest.raises(SocialImportPhotoNotFoundError):
         await service.approve_photo("job-1", "photo-1")
 
 
@@ -1714,7 +1905,7 @@ async def test_reject_photo_happy_path(monkeypatch):
     cleaned = []
 
     async def fake_get_photo(db, *, job_id, user_id, photo_id):
-        return make_photo()
+        return make_photo(status=SocialImportPhotoStatus.AWAITING_REVIEW.value)
 
     async def fake_list_items(db, *, job_id, photo_id, user_id):
         return [
@@ -1751,6 +1942,24 @@ async def test_reject_photo_happy_path(monkeypatch):
     assert cleaned == [["gen/path-1"]]
     rejected_events = [e for e in events if e["event_type"] == "photo_rejected"]
     assert rejected_events
+
+
+@pytest.mark.asyncio
+async def test_reject_photo_not_awaiting_review_raises(monkeypatch):
+    """A4-09: reject is only valid for photos awaiting review; an APPROVED
+    (or PROCESSING) photo must 409 instead of discarding its saved items."""
+    from app.core.exceptions import SocialImportPhotoStateError
+
+    async def fake_get_photo(db, *, job_id, user_id, photo_id):
+        return make_photo(status=SocialImportPhotoStatus.APPROVED.value)
+
+    async def fake_list_items(db, *, job_id, photo_id, user_id):
+        raise AssertionError("items must not be touched for a non-reviewable photo")
+
+    patch_store(monkeypatch, get_photo=fake_get_photo, list_items_for_photo=fake_list_items)
+    service = make_service()
+    with pytest.raises(SocialImportPhotoStateError):
+        await service.reject_photo("job-1", "photo-1")
 
 
 @pytest.mark.asyncio
@@ -1948,6 +2157,162 @@ async def test_get_status_missing_job_raises(monkeypatch):
     service = make_service()
     with pytest.raises(SocialImportJobNotFoundError):
         await service.get_status("job-1")
+
+
+# ---------------------------------------------------------------------------
+# _recover_stale_job_if_needed (A4-04)
+# ---------------------------------------------------------------------------
+
+
+def _stale_job(**overrides):
+    data = {
+        "status": SocialImportJobStatus.PROCESSING.value,
+        "discovery_completed": True,
+        "updated_at": (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat(),
+    }
+    data.update(overrides)
+    return make_job(**data)
+
+
+@pytest.mark.asyncio
+async def test_recover_stale_job_requeues_stuck_photos_and_reschedules(monkeypatch):
+    """A4-04: a PROCESSING job untouched for >10min is recovered: stuck
+    photos are requeued, the run is re-scheduled (discovery already done so
+    the job stays processing and the queue is re-driven)."""
+    events = patch_event(monkeypatch)
+    updated_photos = []
+    scheduled = []
+
+    async def fake_list_photos(db, *, job_id, user_id, statuses=None, limit=None):
+        return [{"id": "photo-stuck", "status": SocialImportPhotoStatus.PROCESSING.value}]
+
+    async def fake_update_photo(db, *, job_id, user_id, photo_id, updates):
+        updated_photos.append((photo_id, dict(updates)))
+        return {"id": photo_id, **updates}
+
+    async def fake_schedule(cls, service, job_id):
+        scheduled.append(job_id)
+
+    patch_store(
+        monkeypatch,
+        list_photos=fake_list_photos,
+        update_photo=fake_update_photo,
+    )
+    monkeypatch.setattr(
+        SocialImportPipelineService, "schedule_job", classmethod(fake_schedule)
+    )
+    service = make_service()
+    recovered = await service._recover_stale_job_if_needed(_stale_job())
+
+    assert recovered is True
+    assert updated_photos == [
+        (
+            "photo-stuck",
+            {
+                "status": SocialImportPhotoStatus.QUEUED.value,
+                "error_message": "Interrupted by a service restart; queued for retry",
+                "processing_started_at": None,
+            },
+        )
+    ]
+    # Discovery completed -> job stays `processing` (no job-row update).
+    assert scheduled == ["job-1"]
+    job_events = [e for e in events if e["event_type"] == "job_updated"]
+    assert job_events
+    assert job_events[0]["payload"]["status"] == SocialImportJobStatus.PROCESSING.value
+
+
+@pytest.mark.asyncio
+async def test_recover_stale_job_resets_to_created_when_discovery_incomplete(monkeypatch):
+    events = patch_event(monkeypatch)
+    job_updates = []
+
+    async def fake_list_photos(db, *, job_id, user_id, statuses=None, limit=None):
+        return []
+
+    async def fake_update_job(db, *, job_id, user_id, updates):
+        job_updates.append(dict(updates))
+        return {"id": job_id}
+
+    async def fake_schedule(cls, service, job_id):
+        return None
+
+    patch_store(monkeypatch, list_photos=fake_list_photos, update_job=fake_update_job)
+    monkeypatch.setattr(
+        SocialImportPipelineService, "schedule_job", classmethod(fake_schedule)
+    )
+    service = make_service()
+    recovered = await service._recover_stale_job_if_needed(
+        _stale_job(
+            status=SocialImportJobStatus.DISCOVERING.value,
+            discovery_completed=False,
+        )
+    )
+
+    assert recovered is True
+    # Discovery not completed -> reset to `created` so run() re-enters
+    # discovery and resumes from the persisted cursor.
+    assert job_updates == [{"status": SocialImportJobStatus.CREATED.value}]
+    job_events = [e for e in events if e["event_type"] == "job_updated"]
+    assert job_events[0]["payload"]["status"] == SocialImportJobStatus.CREATED.value
+
+
+@pytest.mark.asyncio
+async def test_recover_stale_job_skips_fresh_and_terminal_jobs(monkeypatch):
+    """Freshly-updated or terminal jobs are never touched by the sweep."""
+    patch_store(monkeypatch, list_photos=_async_value([]))
+    service = make_service()
+    monkeypatch.setattr(
+        SocialImportPipelineService,
+        "schedule_job",
+        classmethod(lambda cls, service, job_id: (_ for _ in ()).throw(AssertionError("must not schedule"))),
+    )
+
+    fresh = make_job(
+        status=SocialImportJobStatus.PROCESSING.value,
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    assert await service._recover_stale_job_if_needed(fresh) is False
+    # No updated_at -> cannot judge staleness; leave untouched.
+    assert await service._recover_stale_job_if_needed(make_job()) is False
+    terminal = make_job(status=SocialImportJobStatus.FAILED.value)
+    assert await service._recover_stale_job_if_needed(terminal) is False
+
+
+@pytest.mark.asyncio
+async def test_get_status_triggers_recovery_for_stale_job(monkeypatch):
+    """Every get_status call sweeps for stale jobs; a recovered job is
+    re-read so the returned payload reflects its reset state."""
+    patch_event(monkeypatch)
+    calls = {"get": 0}
+
+    async def fake_get_job(db, *, job_id, user_id):
+        calls["get"] += 1
+        if calls["get"] == 1:
+            return _stale_job()
+        return _stale_job(status=SocialImportJobStatus.CREATED.value)
+
+    slots = {"awaiting": None, "buffered": None, "processing": None}
+
+    async def fake_schedule(cls, service, job_id):
+        return None
+
+    patch_store(
+        monkeypatch,
+        get_job=fake_get_job,
+        get_slots=_async_value(slots),
+        get_photo_with_items=_identity_photo,
+        count_by_status=_async_value({}),
+        list_photos=_async_value([]),
+    )
+    monkeypatch.setattr(
+        SocialImportPipelineService, "schedule_job", classmethod(fake_schedule)
+    )
+    service = make_service()
+    status = await service.get_status("job-1")
+
+    assert calls["get"] == 2
+    assert status["status"] == SocialImportJobStatus.CREATED.value
 
 
 # ---------------------------------------------------------------------------

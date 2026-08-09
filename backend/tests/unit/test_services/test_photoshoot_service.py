@@ -13,6 +13,27 @@ from app.core.exceptions import AIServiceError, ServiceError
 from app.models.subscription import PlanType
 from app.utils.json_utils import extract_json_block
 
+# 1x1 transparent PNG, base64 — provider image payloads are validated (strict
+# base64 + magic-byte sniff), so fakes must be a real PNG, not "Hello".
+_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+    "AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_job_registry():
+    """Each test starts with an empty in-memory job registry.
+
+    Jobs admitted via ``create_job`` are ACTIVE until they reach a terminal
+    status or are popped; a leaked job from one test would otherwise trip
+    the process-wide concurrency cap (MAX_CONCURRENT_PHOTOSHOOT_JOBS=2) in
+    a later test. Clearing between tests keeps the file order-independent.
+    """
+    PhotoshootJobService._jobs.clear()
+    yield
+    PhotoshootJobService._jobs.clear()
+
 
 class TestPromptJsonExtraction:
     def test_extract_json_object_from_prose(self):
@@ -443,7 +464,7 @@ class TestPhotoshootStreamingEvents:
     @pytest.fixture
     def fake_ai_service(self):
         class FakeChatResponse:
-            images = ["SGVsbG8="]  # "Hello" - valid base64 payload
+            images = [_PNG_B64]  # real 1x1 PNG — payloads are validated
             model = "fake-image-model"
             provider = "fake"
 
@@ -546,17 +567,21 @@ class TestDemoPhotoshootJob:
             self._fake_request("198.51.100.3")
         )
 
-    def test_demo_user_id_uses_trusted_client_host_not_xff(self):
-        """The pseudo-user must key on request.client.host (uvicorn proxy-
-        resolved), never the client-supplied X-Forwarded-For header — parsing
-        the header would let a caller mint a fresh pseudo-user per request and
-        bypass the per-IP demo limit."""
+    def test_demo_user_id_uses_trusted_last_forwarded_hop(self):
+        """The pseudo-user must key on the LAST X-Forwarded-For hop — the
+        value the demo rate limiter keys on (the trusted edge proxy appends
+        the real client IP there, A5-01) — never the client-supplied leading
+        hops, which a direct peer could forge to mint a fresh pseudo-user per
+        request and bypass the per-IP demo limit."""
         from app.api.v1.photoshoot import _demo_user_id
         from types import SimpleNamespace
 
         class SpoofedRequest:
-            client = SimpleNamespace(host="198.51.100.3")
-            headers = {"x-forwarded-for": "203.0.113.7"}
+            # uvicorn's ProxyHeadersMiddleware resolves client.host from the
+            # FIRST entry (client-controlled); the trusted proxy appends the
+            # real client IP as the LAST entry.
+            client = SimpleNamespace(host="203.0.113.7")
+            headers = {"x-forwarded-for": "203.0.113.7, 198.51.100.3"}
 
         assert _demo_user_id(SpoofedRequest()) == _demo_user_id(
             self._fake_request("198.51.100.3")

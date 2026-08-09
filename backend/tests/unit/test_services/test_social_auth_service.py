@@ -12,7 +12,6 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.core.exceptions import (
     SocialImportEncryptionConfigError,
     SocialImportLoginFailedError,
-    SocialImportMFARequiredError,
 )
 from app.services.social_auth_service import SocialAuthService
 from app.utils.crypto import legacy_derive_fernet_key
@@ -265,11 +264,20 @@ class TestStoreScraperSession:
         assert fake_db.ops_on("social_import_auth_sessions") == []
 
     @pytest.mark.asyncio
-    async def test_mfa_username_without_otp_raises(self, fake_db):
-        with pytest.raises(SocialImportMFARequiredError):
-            await SocialAuthService.store_scraper_session(
-                fake_db, job_id="j", user_id="u", username="MFA-user", password="pass", otp_code=None,
-            )
+    async def test_mfa_username_without_otp_does_not_raise(self, fake_db):
+        """A4-03 regression: MFA is detected from Instagram's login response
+        (_parse_login_response), never from a "mfa" substring of the
+        username — a legitimate handle like "mfa_stylist" must submit
+        scraper auth without an OTP."""
+        data = await SocialAuthService.store_scraper_session(
+            fake_db, job_id="j", user_id="u", username="MFA-user", password="pass", otp_code=None,
+        )
+        assert data["auth_type"] == "scraper"
+        stored = fake_db.rows["social_import_auth_sessions"][0]
+        payload = SocialAuthService.decrypt_session_payload(stored["encrypted_session_blob"])
+        assert payload["username"] == "MFA-user"
+        assert payload["password"] == "pass"
+        assert payload["otp_code"] is None
 
     @pytest.mark.asyncio
     async def test_upserts_encrypted_scraper_session(self, fake_db, monkeypatch):

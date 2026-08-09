@@ -315,10 +315,14 @@ async def check_rate_limit(
     Returns whether the operation is allowed and remaining quota.
     """
     try:
-        if operation_type not in ["extraction", "generation"]:
+        # "embedding" is a first-class operation (OperationType.EMBEDDING,
+        # used by /items/{id}/embeddings and reserve_usage) — the service and
+        # the daily-counter schema fully support it; the route must not 422
+        # (B3-02).
+        if operation_type not in ["extraction", "generation", "embedding"]:
             raise ValidationError(
                 "Invalid operation type",
-                details={"valid_types": ["extraction", "generation"]},
+                details={"valid_types": ["extraction", "generation", "embedding"]},
             )
 
         result = await AISettingsService.check_rate_limit(

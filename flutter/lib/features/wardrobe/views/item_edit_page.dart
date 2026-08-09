@@ -69,6 +69,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
   ];
 
   ItemModel? _item;
+  bool _loadFailed = false;
 
   @override
   void initState() {
@@ -78,6 +79,25 @@ class _ItemEditPageState extends State<ItemEditPage> {
     );
     if (_item != null) {
       _initializeControllers(_item!);
+    } else {
+      // A10b-04: a deep link or an edit tapped while the wardrobe list was
+      // still loading previously stranded the page on an infinite spinner
+      // (no fetch, no error, no retry). Fetch the single item instead.
+      _loadItem();
+    }
+  }
+
+  Future<void> _loadItem() async {
+    final item = await _wardrobeController.fetchItemById(widget.itemId);
+    if (!mounted) return;
+    if (item != null) {
+      setState(() {
+        _item = item;
+        _loadFailed = false;
+      });
+      _initializeControllers(item);
+    } else {
+      setState(() => _loadFailed = true);
     }
   }
 
@@ -248,7 +268,27 @@ class _ItemEditPageState extends State<ItemEditPage> {
     if (_item == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Edit Item')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: _loadFailed
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Could not load this item',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppConstants.spacing12),
+                    OutlinedButton(
+                      onPressed: () {
+                        setState(() => _loadFailed = false);
+                        _loadItem();
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                )
+              : const CircularProgressIndicator(),
+        ),
       );
     }
 

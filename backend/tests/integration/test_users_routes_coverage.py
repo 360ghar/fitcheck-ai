@@ -251,6 +251,30 @@ async def test_get_current_user_with_all_birth_fields_skips_metadata_fallback():
 
 
 @pytest.mark.asyncio
+async def test_get_current_user_tolerates_legacy_rows():
+    """B3-09: UserResponse must not run the input-side EmailStr/future
+    birth_date validators, or a legacy row 500s the whole GET /me."""
+    from datetime import datetime, timedelta, timezone
+
+    legacy_email = "legacy-row-without-email-format"
+    future_birth_date = (
+        datetime.now(timezone.utc).date() + timedelta(days=400)
+    ).isoformat()
+    row = user_row(email=legacy_email, birth_date=future_birth_date)
+    db = Mock()
+    db.table.return_value.select.return_value.eq.return_value.execute.return_value = SimpleNamespace(
+        data=[row]
+    )
+    db.auth = SimpleNamespace(admin=None)
+
+    result = await users_module.get_current_user(user_id=USER_ID, db=db)
+
+    assert result["message"] == "OK"
+    assert result["data"]["email"] == legacy_email
+    assert result["data"]["birth_date"] == future_birth_date
+
+
+@pytest.mark.asyncio
 async def test_get_current_user_fills_partial_birth_fields_from_metadata():
     """A row carrying some astrology fields still pulls the missing ones from
     auth metadata (pre-migration fallback)."""
@@ -693,6 +717,43 @@ async def test_create_body_profile_keeps_non_default_when_profiles_exist():
     assert result["message"] == "Created"
     assert result["data"]["is_default"] is False
     assert not db.updates, "no is_default unset/link writes for a non-default profile"
+
+
+@pytest.mark.asyncio
+async def test_create_body_profile_holds_per_user_lock(monkeypatch):
+    """A1-17: the first-profile-becomes-default decision is a
+    read-modify-write; concurrent creates must serialize per user. The route
+    acquires the per-user lock keyed by the user id."""
+    from tests.utils.fake_db import FakeDB
+
+    entered = []
+
+    class _CM:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, *exc):
+            return False
+
+    class _FakeLock:
+        def __call__(self, key):
+            entered.append(key)
+            return _CM()
+
+    monkeypatch.setattr(users_module, "PER_USER_LOCK", _FakeLock())
+    db = FakeDB()
+
+    result = await users_module.create_body_profile(
+        BodyProfileCreate(
+            name="Gym", height_cm=175, weight_kg=70, body_shape="rectangle", skin_tone="deep"
+        ),
+        user_id=USER_ID,
+        db=db,
+    )
+
+    assert result["message"] == "Created"
+    assert result["data"]["is_default"] is True  # first profile becomes default
+    assert entered == [USER_ID]
 
 
 @pytest.mark.asyncio

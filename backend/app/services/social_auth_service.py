@@ -21,7 +21,6 @@ from app.core.config import settings
 from app.core.exceptions import (
     SocialImportEncryptionConfigError,
     SocialImportLoginFailedError,
-    SocialImportMFARequiredError,
 )
 from app.models.social_import import SocialAuthType
 from app.utils.crypto import derive_fernet_key, legacy_derive_fernet_key
@@ -146,10 +145,11 @@ class SocialAuthService:
         if not username or not password:
             raise SocialImportLoginFailedError("Username and password are required")
 
-        lowered = username.lower()
-        if "mfa" in lowered and not otp_code:
-            raise SocialImportMFARequiredError("MFA code required for this account")
-
+        # A4-03: the old heuristic keyed on a "mfa" SUBSTRING of the username,
+        # so a legitimate handle like "mfa_stylist" could never submit
+        # scraper auth without an OTP. MFA is detected from Instagram's
+        # login response (_parse_login_response in the scraper service), not
+        # from the username.
         payload = {
             "username": username,
             "password": password,

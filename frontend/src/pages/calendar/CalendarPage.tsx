@@ -23,7 +23,13 @@ import { getUserSettings, updateUserSettings } from '@/api/users'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useOutfitStore } from '@/stores/outfitStore'
 import { getApiError } from '@/lib/errors'
+import { getAccessToken } from '@/lib/auth'
 import { ErrorState } from '@/components/ui/error-state'
+
+/** Storage key for the local-calendar connected flag, scoped per user. */
+function calendarConnectedKey(): string {
+  return `fitcheck_calendar_connected_${getAccessToken() || 'anon'}`
+}
 
 function formatDateOnly(date: Date): string {
   const y = date.getFullYear()
@@ -73,7 +79,10 @@ export default function CalendarPage() {
   const [isConnecting, setIsConnecting] = useState(false)
   const [isCalendarConnected, setIsCalendarConnected] = useState(() => {
     try {
-      return localStorage.getItem('fitcheck_calendar_connected') === '1'
+      // F2b-06: per-user key — the old unkeyed flag survived logout and left
+      // "Local calendar active" with the connect button disabled for the
+      // next account on the same browser.
+      return localStorage.getItem(calendarConnectedKey()) === '1'
     } catch {
       return false
     }
@@ -186,9 +195,19 @@ export default function CalendarPage() {
 
         const start = new Date(month.getFullYear(), month.getMonth(), 1)
         const end = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+        // F2b-04: events are stored as UTC instants, so bounding the query
+        // with the LOCAL month's calendar dates dropped events whose UTC
+        // instant fell in the adjacent month — e.g. 00:30 IST on Aug 1 is
+        // Jul 31 19:00 UTC and was excluded from August. Send the UTC dates
+        // of the local month boundaries instead: local midnight on the 1st
+        // through local end-of-month. That slightly widens the range in
+        // non-UTC timezones, which is safe — the UI groups by local day.
+        const startDate = formatDateOnly(new Date(start.toISOString()))
+        const endInstant = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999)
+        const endDate = formatDateOnly(new Date(endInstant.toISOString()))
         const data = await getCalendarEvents({
-          start_date: formatDateOnly(start),
-          end_date: formatDateOnly(end),
+          start_date: startDate,
+          end_date: endDate,
         })
 
         setEvents(
@@ -234,7 +253,7 @@ export default function CalendarPage() {
       await connectCalendar('local')
       setIsCalendarConnected(true)
       try {
-        localStorage.setItem('fitcheck_calendar_connected', '1')
+        localStorage.setItem(calendarConnectedKey(), '1')
       } catch {
         /* ignore */
       }

@@ -4,7 +4,8 @@ Feedback API endpoints for submitting bug reports, feature requests, and feedbac
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from pydantic import EmailStr, TypeAdapter
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
@@ -87,16 +88,37 @@ async def _create_feedback_ticket(
     if len(attachments) > 5:
         raise ValidationError("Maximum 5 attachments allowed")
 
-    # Upload attachments
+    # B3-01: contact_email arrives as a plain Form string (FastAPI cannot
+    # apply EmailStr to a Form field), so a malformed address used to surface
+    # as a raw pydantic ValidationError → 500 when CreateFeedbackRequest was
+    # built below. Validate at the boundary with the app's ValidationError
+    # (422); an empty string is treated as absent.
+    if contact_email is not None and contact_email.strip():
+        try:
+            TypeAdapter(EmailStr).validate_python(contact_email.strip())
+        except Exception:
+            raise ValidationError(
+                "Invalid contact email",
+                details={"field": "contact_email"},
+            )
+        contact_email = contact_email.strip()
+    elif contact_email is not None:
+        contact_email = None
+
+    # Upload attachments. A4-24: track per-attachment status so the client
+    # learns which files were actually stored (the old code swallowed upload
+    # failures and told the user everything was OK).
+    attachment_results: List[Dict[str, Any]] = []
     attachment_urls: List[str] = []
     attachment_storage_paths: List[str] = []
     for attachment in attachments:
+        entry: Dict[str, Any] = {"filename": attachment.filename, "uploaded": False, "error": None}
         if attachment.filename:
-            # Rejects before buffering past the cap, unlike read()-then-check.
-            file_data = await read_upload_capped(attachment, MAX_ATTACHMENT_BYTES)
-
-            # Upload to storage
             try:
+                # Rejects before buffering past the cap, unlike read()-then-check.
+                file_data = await read_upload_capped(attachment, MAX_ATTACHMENT_BYTES)
+
+                # Upload to storage
                 result = await StorageService.upload_feedback_attachment(
                     db=db,
                     user_id=user_id or "anonymous",
@@ -110,10 +132,18 @@ async def _create_feedback_ticket(
                 storage_path = result.get("storage_path")
                 if storage_path:
                     attachment_storage_paths.append(storage_path)
+                entry["uploaded"] = True
             except Exception as e:
                 logger.warning(f"Failed to upload attachment: {e}")
-                # Continue without this attachment
+                entry["error"] = str(e)[:200]
+        else:
+            entry["error"] = "empty filename"
+        attachment_results.append(entry)
 
+    # A4-24: attachments are best-effort - an upload failure must not reject
+    # the ticket (the user's report still reaches support). The per-attachment
+    # status entries below tell the client exactly which files were stored and
+    # which failed, instead of the old behavior of claiming success for all.
     # Parse device info if provided
     parsed_device_info = None
     if device_info:
@@ -134,22 +164,40 @@ async def _create_feedback_ticket(
         app_platform=app_platform,
     )
 
-    # Create ticket
-    result = await FeedbackService.create_ticket(
-        request=request,
-        user_id=user_id,
-        attachment_urls=attachment_urls,
-        attachment_storage_paths=attachment_storage_paths,
-        db=db,
-    )
+    # Create ticket. A4-24: when the ticket insert fails, clean up the
+    # uploaded objects so they do not orphan in storage (best-effort).
+    try:
+        result = await FeedbackService.create_ticket(
+            request=request,
+            user_id=user_id,
+            attachment_urls=attachment_urls,
+            attachment_storage_paths=attachment_storage_paths,
+            db=db,
+        )
+    except Exception:
+        if attachment_storage_paths:
+            try:
+                await StorageService.delete_temp_objects(attachment_storage_paths)
+            except Exception as cleanup_err:
+                logger.warning(
+                    "Failed to clean up feedback attachments after ticket insert failure: %s",
+                    cleanup_err,
+                )
+        raise
 
-    return {"data": result.model_dump(mode="json"), "message": "OK"}
+    return {
+        "data": result.model_dump(mode="json"),
+        "attachments": attachment_results,
+        "message": "OK",
+    }
 
 
 @router.get("/my-tickets", response_model=Dict[str, Any])
 async def get_my_tickets(
-    limit: int = 20,
-    offset: int = 0,
+    # A4-08: negatives flow into PostgREST's .range() and 500; clamp at the
+    # boundary instead.
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     user=Depends(get_current_user),
     db: Client = Depends(get_db),
 ):

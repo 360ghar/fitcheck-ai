@@ -17,7 +17,7 @@ async def test_get_current_user_returns_existing_profile():
     db = Mock()
     result = Mock()
     result.data = {"id": "user-1", "email": "user@example.com", "full_name": "Test"}
-    db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = result
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = result
 
     token_data = TokenData(sub="user-1")
     token_data.email = "user@example.com"
@@ -33,7 +33,7 @@ async def test_get_current_user_fills_in_email_from_token_if_missing():
     db = Mock()
     result = Mock()
     result.data = {"id": "user-1", "email": None, "full_name": "Test"}
-    db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = result
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = result
 
     token_data = TokenData(sub="user-1")
     token_data.email = "from-token@example.com"

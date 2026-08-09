@@ -92,13 +92,18 @@ BEGIN
     --    the window instead of restarting it, so stacking a referral on a
     --    running trial never shrinks it and a lapsed trial reactivates from
     --    NOW() via GREATEST.
+    --    A1-02: the EXTENSION is the grant — the bank is NOT incremented
+    --    here (or in branch 3). The bank is reserved for paying subscribers
+    --    (branch 1) whose credit cannot be granted as a trial; banking a
+    --    trial grant as well handed the same months out twice when
+    --    _consume_banked_referral_credit later spent the bank after the
+    --    trial lapsed.
     IF sub_row.plan_type <> 'free' AND sub_row.status = 'trial' THEN
         new_trial_end := GREATEST(COALESCE(sub_row.trial_end, NOW()), NOW())
             + make_interval(months => p_months);
         UPDATE public.subscriptions
         SET trial_end = new_trial_end,
             current_period_end = new_trial_end,
-            referral_credit_months = COALESCE(referral_credit_months, 0) + p_months,
             updated_at = NOW()
         WHERE user_id = p_user_id;
         RETURN;
@@ -120,7 +125,6 @@ BEGIN
         current_period_end = new_trial_end,
         cancel_at_period_end = FALSE,
         trial_end = new_trial_end,
-        referral_credit_months = COALESCE(referral_credit_months, 0) + p_months,
         updated_at = NOW()
     WHERE user_id = p_user_id;
 END;

@@ -12,6 +12,7 @@ events in Supabase tables so the user can plan outfits against events.
 
 import asyncio
 import uuid
+from datetime import timezone
 from app.utils.datetime_util import parse_utc_datetime, utcnow_iso
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,7 @@ from app.core.exceptions import (
     CalendarEventNotFoundError,
     DatabaseError,
     NotFoundError,
+    OutfitNotFoundError,
     ValidationError,
 )
 from app.core.logging_config import get_context_logger
@@ -316,6 +318,59 @@ def _parse_date_only(value: str, field_name: str) -> str:
     return parsed.date().isoformat()
 
 
+def _calendar_day_bound(value: str, *, is_end: bool) -> str:
+    """Turn a date-range filter value into a naive-UTC TIMESTAMP literal.
+
+    Date-only values (``YYYY-MM-DD``, the web client) mean UTC-midnight
+    boundaries. Full ISO instants (Flutter converts its local month-midnight
+    to UTC before sending, e.g. ``2026-08-01T18:30:00.000Z``) keep their
+    exact time — A4-02: truncating them to the UTC date shifted the window
+    by the device's UTC offset, so events near local midnight were grouped
+    on the wrong day in month views and dropped from week-range fetches.
+
+    Returns a timezone-free string because the column is
+    ``TIMESTAMP WITHOUT TIME ZONE`` holding UTC instants.
+    """
+    if "T" in value:
+        parsed = parse_utc_datetime(value)
+        if parsed is None:
+            raise ValidationError(f"Invalid date range bound: {value}")
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+    day = _parse_date_only(value, "date")
+    return f"{day}T23:59:59.999" if is_end else f"{day}T00:00:00"
+
+
+def _validate_event_time_window(
+    start_time: str,
+    end_time: str,
+    is_all_day: bool,
+) -> None:
+    """Validate an event's time window before it reaches the TIMESTAMP columns.
+
+    Raises ValidationError (422) when:
+    - either time does not parse as ISO-8601 ('Z' suffix normalized) — bare
+      strings used to 500 at the DB with 22007;
+    - a timed event ends before it starts;
+    - an all-day event's end date precedes its start date. All-day events
+      compare dates only: clients send date-only or picker-derived times
+      (e.g. 9:00-10:00) for those, so a same-day all-day event must not be
+      rejected on time-of-day alone.
+    """
+    start_dt = parse_utc_datetime(start_time)
+    if start_dt is None:
+        raise ValidationError(f"Invalid start_time: {start_time}")
+    end_dt = parse_utc_datetime(end_time)
+    if end_dt is None:
+        raise ValidationError(f"Invalid end_time: {end_time}")
+    if is_all_day:
+        if end_dt.date() < start_dt.date():
+            raise ValidationError(
+                "end_time must be on or after start_time for all-day events"
+            )
+    elif end_dt < start_dt:
+        raise ValidationError("end_time must be on or after start_time")
+
+
 @router.get("/events", response_model=Dict[str, Any])
 async def get_calendar_events(
     start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
@@ -336,9 +391,9 @@ async def get_calendar_events(
         query = db.table("calendar_events").select("*").eq("user_id", user_id)
 
         if start_date:
-            query = query.gte("start_time", f"{_parse_date_only(start_date, 'start_date')}T00:00:00")
+            query = query.gte("start_time", _calendar_day_bound(start_date, is_end=False))
         if end_date:
-            query = query.lte("start_time", f"{_parse_date_only(end_date, 'end_date')}T23:59:59")
+            query = query.lte("start_time", _calendar_day_bound(end_date, is_end=True))
 
         # Fetch one past the limit so has_more is known without a second
         # count query (items.py pays for count="exact" because it renders
@@ -404,6 +459,7 @@ async def create_calendar_event(
 ):
     """Create an in-app calendar event (local planning)."""
     try:
+        _validate_event_time_window(request.start_time, request.end_time, request.is_all_day)
         event_id = str(uuid.uuid4())
         now = utcnow_iso()
         insert = {
@@ -435,7 +491,7 @@ async def create_calendar_event(
             title=request.title
         )
         return {"data": row, "message": "Created"}
-    except DatabaseError:
+    except (DatabaseError, ValidationError):
         raise
     except Exception as e:
         logger.error(
@@ -471,24 +527,50 @@ async def update_calendar_event(
         if not existing or not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
 
-        # Build update dict with only provided fields
+        # Validate any provided times against the event's effective window —
+        # the row already loaded fills in for fields the client did not send,
+        # so a partial update cannot sneak an inverted window past the check.
+        if request.start_time is not None or request.end_time is not None:
+            effective_start = (
+                request.start_time
+                if request.start_time is not None
+                else existing.data.get("start_time")
+            )
+            effective_end = (
+                request.end_time
+                if request.end_time is not None
+                else existing.data.get("end_time")
+            )
+            effective_all_day = (
+                request.is_all_day
+                if request.is_all_day is not None
+                else bool(existing.data.get("is_all_day", False))
+            )
+            if effective_start is not None and effective_end is not None:
+                _validate_event_time_window(
+                    effective_start, effective_end, effective_all_day
+                )
+
+        # Build update dict from EXPLICITLY provided fields (exclude_unset
+        # semantics, A4-11): a field sent as explicit null CLEARS it, an
+        # absent field is left untouched. The old `is not None` checks made
+        # explicit null a silent no-op, so clients could never clear
+        # description/location/outfit_id once set. model_fields_set is the
+        # pydantic "was this key present in the payload" set.
+        provided = request.model_fields_set
         update_data: Dict[str, Any] = {}
-        if request.title is not None:
-            update_data["title"] = request.title
-        if request.description is not None:
-            update_data["description"] = request.description
-        if request.start_time is not None:
-            update_data["start_time"] = request.start_time
-        if request.end_time is not None:
-            update_data["end_time"] = request.end_time
-        if request.location is not None:
-            update_data["location"] = request.location
-        if request.is_all_day is not None:
-            update_data["is_all_day"] = request.is_all_day
-        if request.outfit_id is not None:
-            update_data["outfit_id"] = request.outfit_id
-        if request.event_type is not None:
-            update_data["event_type"] = request.event_type
+        for field_name in (
+            "title",
+            "description",
+            "start_time",
+            "end_time",
+            "location",
+            "is_all_day",
+            "outfit_id",
+            "event_type",
+        ):
+            if field_name in provided:
+                update_data[field_name] = getattr(request, field_name)
 
         if not update_data:
             # No fields to update, return existing event
@@ -527,7 +609,7 @@ async def update_calendar_event(
         )
         return {"data": {"event": row}, "message": "Updated"}
 
-    except (CalendarEventNotFoundError, DatabaseError):
+    except (CalendarEventNotFoundError, DatabaseError, ValidationError):
         raise
     except Exception as e:
         logger.error(
@@ -608,6 +690,20 @@ async def assign_outfit_to_event(
         if not existing or not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
 
+        # A4-05: verify the outfit exists AND belongs to the user before the
+        # FK write — a bogus or foreign outfit_id used to surface as a
+        # Postgres FK violation → 500 instead of a clean 404.
+        outfit = await asyncio.to_thread(
+            db.table("outfits")
+            .select("id")
+            .eq("id", str(request.outfit_id))
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute
+        )
+        if not outfit or not outfit.data:
+            raise OutfitNotFoundError(outfit_id=str(request.outfit_id))
+
         now = utcnow_iso()
         result = await asyncio.to_thread(
             db.table("calendar_events")
@@ -630,7 +726,7 @@ async def assign_outfit_to_event(
         )
         return {"data": {"id": event_id, "outfit_id": request.outfit_id, "updated_at": now}, "message": "OK"}
 
-    except (CalendarEventNotFoundError, DatabaseError):
+    except (CalendarEventNotFoundError, DatabaseError, OutfitNotFoundError):
         raise
     except Exception as e:
         logger.error(

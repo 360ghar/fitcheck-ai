@@ -30,6 +30,12 @@
     ALTER TABLE public.waitlist ENABLE ROW LEVEL SECURITY;
 
     -- Policy: Anyone can insert into waitlist (public endpoint)
+    -- DOCUMENTED DECISION (A5-02): the waitlist form is an anonymous
+    -- pre-launch marketing surface — a SECURITY DEFINER RPC gate would add
+    -- nothing a determined caller cannot bypass, and the anti-spam controls
+    -- live at the app layer (5/hour IP limit in api/v1/waitlist.py). The
+    -- anon INSERT is intentionally left in place; a DB-side rate guard can
+    -- be added if spam volume ever justifies it.
     DROP POLICY IF EXISTS "Anyone can join waitlist" ON public.waitlist;
     CREATE POLICY "Anyone can join waitlist"
         ON public.waitlist FOR INSERT

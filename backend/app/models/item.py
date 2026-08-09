@@ -74,7 +74,15 @@ class ItemImage(ItemImageBase):
 
 
 class ItemBase(BaseModel):
-    """Base item model with common fields."""
+    """Base item model with common fields.
+
+    Deliberately carries no rejecting validators: ItemResponse reuses this
+    base for serialization, so a legacy row must never 500 a read (same
+    documented pattern as OutfitBase/OutfitCreate). Input strictness —
+    category/condition whitelists, price bounds — lives on ItemCreate and
+    ItemUpdate. Tag-list normalization below is lenient (never raises), so it
+    is safe for both input and response sides.
+    """
     name: str = Field(..., min_length=1, max_length=255)
     category: str
     sub_category: Optional[str] = Field(None, max_length=50)
@@ -87,13 +95,39 @@ class ItemBase(BaseModel):
     seasonal_tags: List[str] = Field(default_factory=list)
     occasion_tags: List[str] = Field(default_factory=list)
     size: Optional[str] = Field(None, max_length=50)
-    price: Optional[float] = Field(None, ge=0)
+    # le=99_999_999.99 mirrors DECIMAL(10,2) (migration 001) — an unbounded
+    # float used to pass Pydantic (even inf) and 500 with 22001 at the DB.
+    price: Optional[float] = Field(None, ge=0, le=99_999_999.99, allow_inf_nan=False)
     purchase_date: Optional[datetime] = None
     purchase_location: Optional[str] = Field(None, max_length=255)
     tags: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
     condition: str = Field(default="clean")
     is_favorite: bool = False
+
+    @field_validator('colors', 'tags', 'seasonal_tags', 'occasion_tags', mode='before')
+    @classmethod
+    def validate_tag_lists(cls, v: Any) -> List[str]:
+        """Normalize tag-ish list fields: trim, lowercase, de-dupe, drop empties.
+
+        Keeps raw empty/duplicate/overlong entries from polluting the jsonb
+        arrays used in filters (same treatment occasion_tags already got).
+        """
+        return normalize_tag_list(v)
+
+
+class ItemCreate(ItemBase):
+    """Model for creating a new item."""
+    images: List[ItemImageBase] = Field(default_factory=list)
+    # Original source photo reference (set by AI extraction flows; optional for
+    # manual creation). Used as the reference image for product-image
+    # regeneration so the exact garment (pattern, texture, branding) is preserved.
+    source_image_url: Optional[str] = None
+    source_image_storage_path: Optional[str] = None
+    # Client-generated idempotency key (F1-07): transport retries re-issue the
+    # same body, and the create endpoint replays the original row for a
+    # repeated key instead of inserting a duplicate item.
+    client_request_id: Optional[str] = Field(None, max_length=64)
 
     @field_validator('category')
     @classmethod
@@ -126,22 +160,6 @@ class ItemBase(BaseModel):
             raise ValueError('Price must be non-negative')  # pragma: no cover - shadowed by Field(ge=0)
         return v
 
-    @field_validator('occasion_tags', mode='before')
-    @classmethod
-    def validate_occasion_tags(cls, v: Any) -> List[str]:
-        """Normalize occasion tags."""
-        return normalize_tag_list(v)
-
-
-class ItemCreate(ItemBase):
-    """Model for creating a new item."""
-    images: List[ItemImageBase] = Field(default_factory=list)
-    # Original source photo reference (set by AI extraction flows; optional for
-    # manual creation). Used as the reference image for product-image
-    # regeneration so the exact garment (pattern, texture, branding) is preserved.
-    source_image_url: Optional[str] = None
-    source_image_storage_path: Optional[str] = None
-
 
 class ItemUpdate(BaseModel):
     """Model for updating an item (all fields optional)."""
@@ -157,7 +175,8 @@ class ItemUpdate(BaseModel):
     seasonal_tags: Optional[List[str]] = None
     occasion_tags: Optional[List[str]] = None
     size: Optional[str] = Field(None, max_length=50)
-    price: Optional[float] = Field(None, ge=0)
+    # Same DECIMAL(10,2) bounds as ItemBase.price.
+    price: Optional[float] = Field(None, ge=0, le=99_999_999.99, allow_inf_nan=False)
     purchase_date: Optional[datetime] = None
     purchase_location: Optional[str] = Field(None, max_length=255)
     tags: Optional[List[str]] = None
@@ -188,10 +207,10 @@ class ItemUpdate(BaseModel):
             )
         return v
 
-    @field_validator('occasion_tags', mode='before')
+    @field_validator('colors', 'tags', 'seasonal_tags', 'occasion_tags', mode='before')
     @classmethod
-    def validate_occasion_tags(cls, v: Any) -> Optional[List[str]]:
-        """Normalize occasion tags if provided."""
+    def validate_tag_lists(cls, v: Any) -> Optional[List[str]]:
+        """Normalize tag-ish list fields if provided (None stays None)."""
         if v is None:
             return None
         return normalize_tag_list(v)
@@ -222,34 +241,3 @@ class ItemListResponse(BaseModel):
     total_pages: int
     has_next: bool = False
     has_prev: bool = False
-
-
-# ============================================================================
-# ITEM EXTRACTION MODELS (AI)
-# ============================================================================
-
-
-class ExtractedItem(BaseModel):
-    """Model for an item extracted by AI from an image."""
-    id: Optional[str] = None  # Temporary ID before saving
-    image_url: Optional[str] = None
-    category: str
-    sub_category: Optional[str] = None
-    colors: List[str] = Field(default_factory=list)
-    confidence: float = Field(..., ge=0, le=1)
-    bounding_box: Optional[dict] = None  # {x, y, width, height} as percentages
-
-
-class ItemExtractionResponse(BaseModel):
-    """Response model for AI item extraction."""
-    extraction_id: str
-    items: List[ExtractedItem]
-    status: str = "completed"
-
-
-class ItemUploadResponse(BaseModel):
-    """Response model for item upload request."""
-    upload_id: str
-    status: str = "processing"
-    uploaded_count: int
-    extracted_items: List[ExtractedItem] = Field(default_factory=list)

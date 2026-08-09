@@ -155,6 +155,61 @@ def test_key_from_path_does_not_reshape_an_external_url_into_our_key_space(monke
 
 
 # --------------------------------------------------------------------------- #
+# key_from_path worker-CDN URLs and the None fallback
+# --------------------------------------------------------------------------- #
+# With IMAGE_SERVING_MODE=worker the CDN serves keys directly at the path
+# root: a leading ``tmp|generated`` preview folder (whose second segment is
+# the user UUID) or a user UUID IS the key and is returned as-is — the preview
+# folder must never be dropped by the bucket-name rule. URLs that reduce to no
+# known key shape return None (never reshaped into a garbage key).
+
+
+def test_key_from_path_worker_cdn_preview_url_keeps_preview_folder(monkeypatch):
+    monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
+    assert StorageService.key_from_path(
+        f"https://cdn.fitcheck.ai/tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+    ) == f"tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+
+
+def test_key_from_path_worker_cdn_canonical_url_returns_path_as_key(monkeypatch):
+    monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
+    assert StorageService.key_from_path(
+        f"https://cdn.fitcheck.ai/{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png"
+    ) == f"{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png"
+
+
+def test_key_from_path_unconfigured_bucket_preview_url_keeps_preview_folder(monkeypatch):
+    monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
+    assert StorageService.key_from_path(
+        f"https://r2.example.com/somebucket/tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+    ) == f"tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+
+
+def test_key_from_path_bare_preview_key_passes_through(monkeypatch):
+    monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
+    assert StorageService.key_from_path(
+        f"tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+    ) == f"tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+
+
+def test_key_from_path_external_url_returns_none(monkeypatch):
+    monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
+    assert (
+        StorageService.key_from_path(
+            "https://lh3.googleusercontent.com/a/ACo8DcX/photo"
+        )
+        is None
+    )
+
+
+def test_key_from_path_configured_bucket_presigned_url_still_resolves(monkeypatch):
+    monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
+    assert StorageService.key_from_path(
+        f"https://acct.r2.cloudflarestorage.com/fitcheck-images/{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png?X-Amz-Signature=x"
+    ) == f"{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png"
+
+
+# --------------------------------------------------------------------------- #
 # promote_temp_image_to_item normalizes legacy preview keys
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio

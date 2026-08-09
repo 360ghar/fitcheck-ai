@@ -55,7 +55,7 @@ async def test_referral_routes_wrap_services(monkeypatch):
     async def _stats(user_id, db):
         return _StatsResult()
 
-    async def _validate(code, db):
+    async def _validate(code, db, neutral=False):
         return _CodeResult()
 
     async def _redeem(referred_user_id, code, db):

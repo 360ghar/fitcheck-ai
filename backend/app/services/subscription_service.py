@@ -20,7 +20,7 @@ from app.models.subscription import (
     SubscriptionWithUsage,
     UsageCheckResult,
 )
-from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
+from app.utils.datetime_util import parse_utc_datetime, utc_today, utcnow, utcnow_iso
 from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
     execute_with_reconnect,
@@ -233,10 +233,94 @@ class SubscriptionService:
             if not data:
                 raise DatabaseError("Subscription record could not be loaded after creation")
 
+            # Banked referral credit is consumed ONCE on the read path
+            # (A1-08): when the plan is effectively free and the bank is
+            # positive, claim it into a pro trial before building the
+            # response. Without this, referral_credit_months accumulated on
+            # paying rows were never spent after the paid plan lapsed.
+            consumed = await SubscriptionService._consume_banked_referral_credit(
+                user_id, db, data
+            )
+            if consumed is not None:
+                return SubscriptionService._response_from_row(consumed)
+
             return SubscriptionService._response_from_row(data)
         except Exception as e:
             logger.error(f"Error getting subscription for user {user_id}: {e}")
             raise DatabaseError(f"Failed to get subscription: {str(e)}")
+
+    @classmethod
+    async def _consume_banked_referral_credit(
+        cls,
+        user_id: str,
+        db: Client,
+        row: Dict[str, Any],
+        now: Optional[datetime] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """One-time consumption of banked referral credit (A1-08).
+
+        Banked months (``referral_credit_months``, accumulated by the
+        apply_referral_credit_atomic RPC while the user was paying) are spent
+        only when the plan is EFFECTIVELY free — no live trial, no active
+        paid period. The claim is a single conditional UPDATE whose WHERE
+        clause requires ``referral_credit_months > 0``: under Postgres READ
+        COMMITTED the loser of a concurrent claim re-checks the updated row
+        and matches nothing, so the bank can never be double-spent without a
+        new RPC (no migration needed).
+
+        Returns the updated row (for building the response) or None when no
+        consumption happened.
+        """
+        check_at = now or utcnow()
+        stored_plan_type = PlanType(row.get("plan_type", "free"))
+        status = SubscriptionStatus(row.get("status", "active"))
+        effective = cls.effective_plan_type(
+            stored_plan_type,
+            status,
+            cls._parse_datetime(row.get("current_period_end")),
+            cls._parse_datetime(row.get("trial_end")),
+            now=check_at,
+        )
+        banked = int(row.get("referral_credit_months") or 0)
+        if banked <= 0 or effective != PlanType.FREE:
+            return None
+
+        trial_end = check_at + relativedelta(months=banked)
+        try:
+            result = await asyncio.to_thread(
+                db.table("subscriptions")
+                .update({
+                    "plan_type": "pro_monthly",
+                    "status": "trial",
+                    "current_period_start": check_at.isoformat(),
+                    "current_period_end": trial_end.isoformat(),
+                    "trial_end": trial_end.isoformat(),
+                    "cancel_at_period_end": False,
+                    "referral_credit_months": 0,
+                    "updated_at": check_at.isoformat(),
+                })
+                .eq("user_id", user_id)
+                .gt("referral_credit_months", 0)
+                .execute
+            )
+        except Exception as e:
+            # Consumption is a read-path optimization, never a blocker: a
+            # failed claim leaves the bank in place for the next read.
+            logger.warning(
+                f"Failed to consume banked referral credit for user {user_id}: {e}"
+            )
+            return None
+        rows = getattr(result, "data", None) or []
+        if not rows:
+            # Lost the race or the bank was already spent — the row the
+            # caller read is still the truth for this response.
+            return None
+        logger.info(
+            "Consumed banked referral credit",
+            user_id=user_id,
+            months=banked,
+        )
+        return rows[0]
 
     @staticmethod
     async def create_default_subscription(user_id: str, db: Client) -> None:
@@ -282,8 +366,16 @@ class SubscriptionService:
                 "status": "active",
                 "current_period_start": now.isoformat(),
                 "current_period_end": period_end.isoformat(),
+                # A1-05: a Stripe purchase makes Stripe the billing rail. The
+                # old two-store syncs write billing_provider on every snapshot,
+                # so a Stripe snapshot that omits it would leave a stale
+                # store marker behind and lock the user out of web checkout.
+                "billing_provider": "stripe",
                 "stripe_customer_id": stripe_customer_id,
                 "stripe_subscription_id": stripe_subscription_id,
+                "apple_original_transaction_id": None,
+                "google_purchase_token": None,
+                "google_order_id": None,
                 "cancel_at_period_end": False,
                 "updated_at": now.isoformat(),
             }, on_conflict="user_id").execute)
@@ -394,8 +486,16 @@ class SubscriptionService:
             "user_id": user_id,
             "plan_type": plan_type.value,
             "status": status.value,
+            # A1-05: the Stripe rail is authoritative whenever a Stripe
+            # snapshot applies — carry the rail marker and clear store
+            # identities so a lapsed store marker can never lock the user out
+            # of web checkout or let a stale store refund downgrade the row.
+            "billing_provider": "stripe",
             "stripe_customer_id": value(stripe_subscription, "customer"),
             "stripe_subscription_id": value(stripe_subscription, "id"),
+            "apple_original_transaction_id": None,
+            "google_purchase_token": None,
+            "google_order_id": None,
             "current_period_start": timestamp(value(stripe_subscription, "current_period_start")) or now.isoformat(),
             "current_period_end": timestamp(value(stripe_subscription, "current_period_end")),
             "trial_end": timestamp(value(stripe_subscription, "trial_end")),
@@ -482,7 +582,10 @@ class SubscriptionService:
                 identity = maybe_single_data(
                     await asyncio.to_thread(
                         db.table("subscriptions")
-                        .select("apple_original_transaction_id,google_purchase_token")
+                        .select(
+                            "apple_original_transaction_id,google_purchase_token,"
+                            "plan_type,status"
+                        )
                         .eq("user_id", user_id)
                         .maybe_single()
                         .execute
@@ -490,15 +593,42 @@ class SubscriptionService:
                 )
                 if identity:
                     stale = False
+                    row_id = None
                     if provider == "apple" and apple_original_transaction_id:
                         row_id = identity.get("apple_original_transaction_id")
                         stale = row_id is not None and row_id != apple_original_transaction_id
+                        # The row belongs to a different rail (Google) — this
+                        # Apple refund cannot apply to it, and downgrading
+                        # would wipe the Google identity (A1-05).
+                        if not stale and row_id is None and identity.get("google_purchase_token"):
+                            stale = True
                     elif provider == "google" and google_purchase_token:
                         row_id = identity.get("google_purchase_token")
                         stale = row_id is not None and row_id != google_purchase_token
+                        if not stale and row_id is None and identity.get("apple_original_transaction_id"):
+                            stale = True
+                    if not stale:
+                        # The row is entitled on a rail that is not the
+                        # incoming store (a Stripe-billed row carries no store
+                        # identity): a refund/revocation for a transaction this
+                        # row does not own must not downgrade the active
+                        # entitlement (A1-03). The row owns the incoming
+                        # identifier when it matches - that is the normal
+                        # same-store expiry/refund case and must still
+                        # downgrade.
+                        row_plan = identity.get("plan_type")
+                        row_paid = row_plan not in (None, "free")
+                        row_owns_incoming = row_id == (
+                            apple_original_transaction_id
+                            if provider == "apple"
+                            else google_purchase_token
+                        )
+                        if row_paid and not row_owns_incoming:
+                            stale = True
                     if stale:
                         logger.info(
-                            "Ignoring stale store refund/revocation for superseded transaction",
+                            "Ignoring stale store refund/revocation for superseded "
+                            "transaction or different billing rail",
                             user_id=user_id,
                             provider=provider,
                             incoming_identifier=(
@@ -609,7 +739,13 @@ class SubscriptionService:
                 and incoming_start < existing_start
             )
 
-            if same_provider and is_older_purchase:
+            # A strictly OLDER purchase date is a late-arriving snapshot of a
+            # superseded transaction: never apply it. The guard is
+            # CROSS-PROVIDER (A1-05): a late notification from the OTHER store
+            # (e.g. a Google renewal snapshot arriving after the user moved to
+            # Apple) would otherwise bypass it, overwrite the newer rail's
+            # plan, and wipe the other provider's identity column.
+            if is_older_purchase:
                 logger.info(
                     "Skipping stale store snapshot with older purchase date",
                     user_id=user_id,
@@ -694,9 +830,23 @@ class SubscriptionService:
         )
         if claimed_identifier:
             try:
+                # Release is not just identity cleanup: the previous owner's
+                # row must LOSE the entitlement too, or one verified
+                # transaction would keep two accounts on the paid plan
+                # (A1-01). Best-effort downgrade to free alongside the
+                # identifier strip; the caller's entitlement write below is
+                # what the user is waiting on, so a failure here only logs.
                 released = await asyncio.to_thread(
                     db.table("subscriptions")
-                    .update({identity_column: None, "updated_at": check_at.isoformat()})
+                    .update({
+                        identity_column: None,
+                        "plan_type": "free",
+                        "status": "active",
+                        "current_period_end": None,
+                        "cancel_at_period_end": False,
+                        "billing_product_id": None,
+                        "updated_at": check_at.isoformat(),
+                    })
                     .eq(identity_column, claimed_identifier)
                     .neq("user_id", user_id)
                     .execute
@@ -704,7 +854,8 @@ class SubscriptionService:
                 stale_rows = getattr(released, "data", None) or []
                 if stale_rows:
                     logger.warning(
-                        "Released store identifier from a previous owner",
+                        "Released store identifier from a previous owner and "
+                        "downgraded their plan to free",
                         user_id=user_id,
                         provider=provider,
                         previous_user_ids=[r.get("user_id") for r in stale_rows],
@@ -737,61 +888,6 @@ class SubscriptionService:
         if upserted_rows:
             return cls._response_from_row(upserted_rows[0])
         return await cls.get_subscription(user_id, db)
-
-    @staticmethod
-    async def apply_referral_credit(user_id: str, months: int, db: Client) -> None:
-        """Apply referral credit months to a user's subscription."""
-        try:
-            # Get current subscription
-            result = await asyncio.to_thread(
-                db.table("subscriptions")
-                .select("*")
-                .eq("user_id", user_id)
-                .maybe_single()
-                .execute
-            )
-
-            current_data = maybe_single_data(result)
-            if not current_data:
-                await SubscriptionService.create_default_subscription(user_id, db)
-                result = await asyncio.to_thread(
-                    db.table("subscriptions")
-                    .select("*")
-                    .eq("user_id", user_id)
-                    .maybe_single()
-                    .execute
-                )
-                current_data = maybe_single_data(result)
-
-            if not current_data:
-                raise DatabaseError("Subscription record could not be loaded after creation")
-
-            current_credits = current_data.get("referral_credit_months", 0)
-
-            # If user is on free plan, upgrade them to trial Pro
-            if current_data.get("plan_type") == "free":
-                now = utcnow()
-                trial_end = now + relativedelta(months=months)
-
-                await asyncio.to_thread(db.table("subscriptions").update({
-                    "plan_type": "pro_monthly",  # Give them Pro benefits
-                    "status": "trial",
-                    "trial_end": trial_end.isoformat(),
-                    "referral_credit_months": current_credits + months,
-                    "updated_at": now.isoformat(),
-                }).eq("user_id", user_id).execute)
-            else:
-                # Just add to their credit balance
-                await asyncio.to_thread(db.table("subscriptions").update({
-                    "referral_credit_months": current_credits + months,
-                    "updated_at": utcnow_iso(),
-                }).eq("user_id", user_id).execute)
-
-            logger.info(f"Applied {months} referral credit months to user {user_id}")
-
-        except Exception as e:
-            logger.error(f"Error applying referral credit for user {user_id}: {e}")
-            raise DatabaseError(f"Failed to apply referral credit: {str(e)}")
 
     @staticmethod
     async def cancel_subscription(user_id: str, db: Client) -> SubscriptionResponse:
@@ -835,13 +931,13 @@ class SubscriptionService:
     @staticmethod
     def _get_current_period_start() -> date:
         """Get the start of the current billing period (first of the month)."""
-        today = date.today()
+        today = utc_today()
         return date(today.year, today.month, 1)
 
     @staticmethod
     def _get_current_period_end() -> date:
         """Get the end of the current billing period (last day of the month)."""
-        today = date.today()
+        today = utc_today()
         next_month = today + relativedelta(months=1)
         return date(next_month.year, next_month.month, 1) - timedelta(days=1)
 
@@ -1079,36 +1175,36 @@ class SubscriptionService:
 
             column = column_map[op]
 
-            async def _reserve(d):
-                """Full reservation against client `d` - rebuilt on retry so a
-                dead pooled connection (observed 2026-08-01: ConnectionTerminated
-                on this exact path) heals in-request instead of 500ing."""
-                # Ensure usage record exists
-                await SubscriptionService.get_or_create_usage_record(user_id, d)
+            # A1-07: deliberately NOT wrapped in execute_with_reconnect — the
+            # RPC is a non-idempotent conditional counter increment. If the
+            # first call committed server-side but the response was lost on a
+            # dead pooled connection, an automatic retry would reserve the
+            # same admission twice (double monthly quota + inflated totals)
+            # or return false against the now-inflated counter while the
+            # first reservation stays consumed. Fail closed instead: the
+            # connection error below becomes the friendly retryable 503, and
+            # callers already retry admission at a higher layer. (Mirrors the
+            # daily twin AISettingsService.reserve_usage.)
+            await SubscriptionService.get_or_create_usage_record(user_id, db)
 
-                subscription = await SubscriptionService.get_subscription(user_id, d)
-                limits = SubscriptionService.get_plan_limits(subscription.plan_type)
+            subscription = await SubscriptionService.get_subscription(user_id, db)
+            limits = SubscriptionService.get_plan_limits(subscription.plan_type)
 
-                result = await asyncio.to_thread(d.rpc("reserve_usage", {
-                    "p_user_id": user_id,
-                    "p_period_start": period_start.isoformat(),
-                    "p_field": column,
-                    "p_count": count,
-                    "p_limit": limits[column],
-                }).execute)
+            result = await asyncio.to_thread(db.rpc("reserve_usage", {
+                "p_user_id": user_id,
+                "p_period_start": period_start.isoformat(),
+                "p_field": column,
+                "p_count": count,
+                "p_limit": limits[column],
+            }).execute)
 
-                # `reserve_usage` returns a scalar BOOLEAN, so PostgREST keys the
-                # result by the function name rather than a column name.
-                reserved = unwrap_rpc_bool(result, "reserve_usage")
-                if reserved is not True:
-                    raise RateLimitError(
-                        f"You've reached your monthly {op.value} limit ({limits[column]})."
-                    )
-                return reserved
-
-            await execute_with_reconnect(
-                _reserve, db, extra={"operation": "increment_usage", "user_id": user_id}
-            )
+            # `reserve_usage` returns a scalar BOOLEAN, so PostgREST keys the
+            # result by the function name rather than a column name.
+            reserved = unwrap_rpc_bool(result, "reserve_usage")
+            if reserved is not True:
+                raise RateLimitError(
+                    f"You've reached your monthly {op.value} limit ({limits[column]})."
+                )
 
             logger.debug(f"Incremented {op.value} usage for user {user_id} by {count}")
 

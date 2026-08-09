@@ -119,7 +119,6 @@ class BatchExtractionController extends GetxController {
   final RxBool socialIsLoading = false.obs;
   final RxBool socialIsConnected = false.obs;
   final RxInt socialLastEventId = (-1).obs;
-  final RxBool showSocialDialogTrigger = false.obs;
 
   // 2FA / Scraper auth state
   final RxBool waitingForOtp = false.obs;
@@ -189,7 +188,6 @@ class BatchExtractionController extends GetxController {
     if (_socialModeInitialized) return;
     _socialModeInitialized = true;
     inputMode.value = BatchInputMode.social;
-    showSocialDialogTrigger.value = true;
   }
 
   /// Validate social profile URL
@@ -1386,8 +1384,14 @@ class BatchExtractionController extends GetxController {
     selectedUseCases.refresh();
   }
 
+  /// Names of items dropped during the last [saveSelectedItems] (A10b-06):
+  /// per-item save failures used to be debugPrint-only, so the review page
+  /// reported full success while items silently vanished.
+  final RxList<String> saveFailures = <String>[].obs;
+
   /// Save selected items to wardrobe
   Future<List<ItemModel>> saveSelectedItems() async {
+    saveFailures.clear();
     final selected = extractedItems
         .where(
           (item) =>
@@ -1493,6 +1497,9 @@ class BatchExtractionController extends GetxController {
         }
         savedItems.add(savedItem);
       } catch (e) {
+        // A10b-06: record the drop so the review page can report the
+        // partial failure instead of claiming everything was saved.
+        saveFailures.add(item.name);
         if (kDebugMode) {
           print('Failed to save item ${item.name}: $e');
         }

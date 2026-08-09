@@ -43,11 +43,15 @@ to `IMAGE_SERVING_MODE=worker`.
    `generated/` folders. Any mismatch → 404, indistinguishable from a missing
    object. The allowlist is what keeps `{user}/export/data.json` — the user's
    complete personal-data export — from being servable here.
-4. The object is streamed from the R2 binding with
-   `Cache-Control: public, max-age=86400, immutable` and stored in
-   `caches.default` keyed by path only, so repeat views hit the edge. An object
-   that carries its own `cache-control` keeps it, so a deliberately short-lived
-   object cannot be pinned at the edge for a day.
+4. The object is streamed from the R2 binding and stored in `caches.default`
+   keyed by path only, so repeat views hit the edge. The served `Cache-Control`
+   is `public, max-age=86400, immutable` for write-once canonical and `_thumb`
+   keys — this replaces the app's `max-age=3600` upload stamp — unless the
+   object's own value is MORE restrictive (`no-store`, `private`, `no-cache`,
+   `max-age=0`), in which case that value is kept so a deliberately
+   non-cacheable object cannot be pinned at the edge for a day. Nested `tmp/`
+   and `generated/` preview keys are short-lived, so there the object's own
+   `cache-control` is always kept.
 5. CORS: `ALLOWED_ORIGINS` (a `[vars]` entry in `wrangler.toml`) lists the
    origins allowed to read a response cross-origin. Required because the web app
    `fetch()`es image URLs to build Blobs (download / share) and reads one through
@@ -191,9 +195,11 @@ revert (URLs are materialized per response).
   a signed cookie and keep the cache key path-only.
 - Objects are write-once per key (uploads mint new UUID keys), so
   `immutable` caching is safe; overwriting a key in place requires a manual
-  purge (`caches.default` TTL will eventually evict). An object uploaded with
-  its own `cache-control` keeps that value instead of the immutable default, so
-  a short-TTL object cannot be pinned at the edge.
+  purge (`caches.default` TTL will eventually evict). On write-once keys the
+  immutable default replaces the app's `max-age=3600` upload stamp, and only a
+  MORE restrictive object value (`no-store`, `private`, `no-cache`,
+  `max-age=0`) is kept; `tmp/` / `generated/` preview keys always keep their
+  own `cache-control`, so a short-TTL object cannot be pinned at the edge.
 - Only allowlisted image keys are servable. Non-image objects that live under a
   user prefix — notably `{user}/export/data.json` — are 404 here, which is the
   reason the allowlist exists rather than a prefix check.

@@ -7,7 +7,7 @@ from typing import Any, Dict, Literal, Optional
 from fastapi import APIRouter, Depends, Query, Request
 from supabase import Client
 
-from app.api.v1.deps import get_db, require_admin, require_permission
+from app.api.v1.deps import get_db, require_permission
 from app.models.admin import AdminQuotaOverride, AdminQuotaUsageItem, PageResponse
 from app.services.admin_service import list_quota_usage, set_quota_override
 from app.services.audit_service import record_audit
@@ -50,12 +50,16 @@ async def admin_quota_override(
     body: AdminQuotaOverride,
     http_request: Request,
     db: Client = Depends(get_db),
-    actor: Dict[str, Any] = Depends(require_admin),
+    actor: Dict[str, Any] = Depends(require_permission("quotas.write")),
 ) -> Dict[str, Any]:
     """Set (or clear with null) a per-user daily AI quota override.
 
     The override lives on ``users.custom_daily_quota`` (migration 037);
     null restores the plan default. Audit: ``quota.override``.
+
+    A4-14/M2: gated by ``quotas.write`` (super_admin/admin) instead of the
+    blanket ``require_admin`` — a content_editor has no quotas surface and
+    must not be able to change another user's daily AI quota.
     """
     result = await set_quota_override(db, user_id, body.daily_limit)
     await record_audit(

@@ -42,9 +42,10 @@
  *   - ES256 / RS256 (Supabase "JWT Signing Keys") -> JWKS fetched from
  *     {SUPABASE_URL}/auth/v1/.well-known/jwks.json, cached 1h, verified via
  *     WebCrypto. The JWK `kid` must match the token header.
- *   - `exp` is REQUIRED and enforced (with a small clock-skew allowance), and
- *     `iss` must be the project's auth issuer. Verifying only the signature
- *     would make any leaked token valid forever.
+ *   - `exp` is REQUIRED and enforced (with a small clock-skew allowance),
+ *     `iss` is required to be the project's auth issuer, and `aud` must be
+ *     `authenticated` — the same claim contract as backend security.py.
+ *     Verifying only the signature would make any leaked token valid forever.
  *
  * Caching: responses are stored in `caches.default` keyed by the PATH ONLY
  * (query strings ignored), with `Cache-Control: public, max-age=86400,
@@ -55,8 +56,9 @@
  * `max-age=3600` on every upload, so honouring the object's own value there
  * would make this policy unreachable (see `cacheControlFor`). An object's own
  * value still wins when it is MORE restrictive (`no-store` / `private` /
- * `no-cache` / `max-age=0`), and short-lived nested `tmp/` + `generated/`
- * previews are always left on their own TTL.
+ * `no-cache` / `max-age=0`), when it is SHORTER-LIVED than the default (a
+ * `max-age=60` recompress backfill must refresh within a minute, not sit stale
+ * for 24h), and for all short-lived nested `tmp/` + `generated/` previews.
  *
  * CORS: the web app fetch()es image URLs to build Blobs (download / share) and
  * reads one through a canvas, both of which need
@@ -161,7 +163,16 @@ function getToken(request, env) {
   const cookies = cookieHeader.split(';').map((c) => c.trim());
   for (const cookie of cookies) {
     if (cookie.startsWith(AUTH_COOKIE_PREFIX) && cookie.includes('-auth-token=')) {
-      return cookie.slice(cookie.indexOf('=') + 1) || null;
+      const raw = cookie.slice(cookie.indexOf('=') + 1) || null;
+      if (raw === null) return null;
+      // Cookie values may be percent-encoded (the web app writes the session
+      // token itself); decode, falling back to the raw value on malformed
+      // escapes so a bad cookie cannot 500.
+      try {
+        return decodeURIComponent(raw) || null;
+      } catch {
+        return raw;
+      }
     }
   }
   return null;
@@ -311,12 +322,18 @@ function claimsAreValid(payload, env) {
   if (payload.exp + CLOCK_SKEW_SECONDS <= now) return false;
   if (typeof payload.nbf === 'number' && payload.nbf - CLOCK_SKEW_SECONDS > now) return false;
 
-  // iss pins the token to THIS Supabase project, so a token from any other
-  // project (or another Supabase-hosted app) cannot be replayed here.
-  if (env.SUPABASE_URL) {
-    const expected = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`;
-    if (payload.iss && payload.iss !== expected) return false;
-  }
+  // iss is REQUIRED and pins the token to THIS Supabase project, so a token
+  // from any other project (or another Supabase-hosted app) cannot be replayed
+  // here (backend security.py makes the issuer mandatory on both its paths).
+  // The expected issuer is derived from SUPABASE_URL, which the worker
+  // validates at startup (see validateEnv) — there is no configuration under
+  // which the check may be skipped.
+  const expected = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`;
+  if (payload.iss !== expected) return false;
+
+  // aud must be the Supabase "authenticated" audience, matching backend
+  // security.py (audience="authenticated" on both its HS256 and JWKS paths).
+  if (payload.aud !== 'authenticated') return false;
 
   return typeof payload.sub === 'string' && payload.sub.length > 0;
 }
@@ -379,6 +396,32 @@ function isOwnedByUser(storagePath, userId) {
 // request handler
 // --------------------------------------------------------------------------
 /**
+ * Validate the env bindings the worker cannot function without, once per
+ * isolate. Missing secrets used to fail as an opaque 500 (or, worse, silently
+ * skip the iss check) — now the first request throws a descriptive error that
+ * the fetch entry point logs.
+ */
+let envValidated = false;
+function validateEnv(env) {
+  if (envValidated) return;
+  if (!env || !env.SUPABASE_URL) {
+    throw new Error(
+      'images-worker misconfigured: SUPABASE_URL is required — deploy with ' +
+        '`npx wrangler secret put SUPABASE_URL` (token iss verification and ' +
+        'JWKS fetching both need it)',
+    );
+  }
+  if (!env.SUPABASE_JWT_SECRET) {
+    throw new Error(
+      'images-worker misconfigured: SUPABASE_JWT_SECRET is required — deploy ' +
+        'with `npx wrangler secret put SUPABASE_JWT_SECRET` (HS256 token ' +
+        'verification needs it)',
+    );
+  }
+  envValidated = true;
+}
+
+/**
  * Resolve the Cache-Control to serve for an R2 object.
  *
  * Preferring the object's own value unconditionally made the immutable default
@@ -387,13 +430,24 @@ function isOwnedByUser(storagePath, userId) {
  * thumbnails included, so `object.httpMetadata.cacheControl` is always set. The
  * edge then re-fetched every tile hourly and, with no `immutable`, browsers
  * revalidated on each reload — 24x the origin fetches the R2 cutover existed to
- * remove. (The unit test that "proved" the default only passed because it stubbed
- * `cacheControl: undefined`, which no real object has.)
+ * remove.
  *
- * So: canonical and `_thumb` keys are write-once (a new upload mints a new UUID),
- * which is exactly what `immutable` asserts — take the long TTL for them and let
- * the object's own value win only when it is MORE restrictive. Nested `tmp/` and
- * `generated/` keys are short-lived previews, so there the object still decides.
+ * But OVERRIDING every cacheable value was just as wrong: recompress_assets
+ * overwrites keys in place with `cache-control: 60` so CDNs/browsers refresh
+ * re-encoded bytes within a minute, and the blanket upgrade to
+ * `max-age=86400, immutable` pinned the stale pre-recompress bytes for 24h.
+ *
+ * So the upgrade to the immutable default is only applied when it cannot
+ * SHORTEN the object's declared freshness window:
+ *   - no own cache-control, or no max-age in it  -> immutable default;
+ *   - own max-age >= the default's 86400s        -> immutable default
+ *     (same or longer-lived, plus immutable revalidation);
+ *   - own max-age < 86400s (e.g. the app's 3600s upload stamp or a 60s
+ *     recompress backfill)                       -> the object's own value;
+ *   - own value is not cacheable (`no-store` / `private` / `no-cache` /
+ *     `max-age=0`)                                -> the object's own value;
+ *   - nested `tmp/` / `generated/` keys are never write-once              ->
+ *     the object's own value (the default only when absent).
  */
 function cacheControlFor(object, storagePath) {
   const own = object.httpMetadata && object.httpMetadata.cacheControl;
@@ -401,9 +455,24 @@ function cacheControlFor(object, storagePath) {
   const writeOnce =
     typeof storagePath === 'string' &&
     (CANONICAL_KEY_RE.test(storagePath) || CANONICAL_THUMB_KEY_RE.test(storagePath));
+  if (!writeOnce) return own || immutableDefault;
   if (!own) return immutableDefault;
-  if (writeOnce && isCacheable(own)) return immutableDefault;
+  if (!isCacheable(own)) return own; // more restrictive wins
+  const ownMaxAge = maxAgeOf(own);
+  if (ownMaxAge === null || ownMaxAge >= CACHE_TTL_SECONDS) return immutableDefault;
   return own;
+}
+
+/** Parse the max-age (seconds) from a Cache-Control value, or null when
+ * absent/unparseable. Accepts `max-age=NNN` (any position) and the bare
+ * numeric shorthand (`cache-control: 60`) that recompress_assets stamps. */
+function maxAgeOf(cacheControl) {
+  if (!cacheControl) return null;
+  const value = String(cacheControl).trim();
+  const match = value.toLowerCase().match(/max-age\s*=\s*(\d+)/);
+  if (match) return parseInt(match[1], 10);
+  if (/^\d+$/.test(value)) return parseInt(value, 10);
+  return null;
 }
 
 /** Whether a Cache-Control value allows storing the response in a shared cache. */
@@ -529,8 +598,16 @@ async function handleRequest(request, env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     try {
+      validateEnv(env);
       return await handleRequest(request, env, ctx);
     } catch (err) {
+      // Log the real failure so a misconfigured worker is diagnosable: a bare
+      // 500 with no message made a missing secret indistinguishable from a
+      // transient R2/JWKS failure.
+      console.error(
+        'images-worker error:',
+        err && err.message ? err.message : String(err),
+      );
       return new Response('Internal error', { status: 500 });
     }
   },

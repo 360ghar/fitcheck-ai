@@ -131,14 +131,32 @@ async def test_download_to_base64_returns_none_when_backend_fails():
 
 @pytest.mark.asyncio
 async def test_download_bytes_only_fetches_known_bucket_keys_not_arbitrary_urls():
-    """SSRF guard: an arbitrary URL is reduced to a bucket key and fetched from
-    the bucket, never from the URL's host."""
+    """SSRF guard: a URL is reduced to a bucket key and fetched from the bucket,
+    never from the URL's host. A URL that reduces to none of our key shapes
+    yields nothing at all — key_from_path returns None instead of reshaping an
+    arbitrary external URL into a garbage key."""
     payload = _image_bytes("PNG")
     backend = FakeS3Backend(download_bytes=payload)
 
     with patch("app.services.storage_service.get_storage_backend", return_value=backend):
-        content = await StorageService._download_bytes("https://attacker.example/private/secret.bin")
+        # Bucket-shaped URL: the non-UUID leading segment is dropped and the
+        # remaining UUID-led key is fetched from the bucket, never the host.
+        content = await StorageService._download_bytes(
+            "https://attacker.example/railway-bucket/"
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+            "0123456789abcdef0123456789abcdef.png"
+        )
 
     assert content == payload
-    # The attacker host was never contacted — only a bucket key was fetched.
-    assert backend.download_keys == ["private/secret.bin"]
+    assert backend.download_keys == [
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/0123456789abcdef0123456789abcdef.png"
+    ]
+
+    # A non-key external URL is NOT reshaped into a key: nothing is fetched.
+    backend2 = FakeS3Backend(download_bytes=payload)
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend2):
+        assert (
+            await StorageService._download_bytes("https://attacker.example/private/secret.bin")
+            is None
+        )
+    assert backend2.download_keys == []

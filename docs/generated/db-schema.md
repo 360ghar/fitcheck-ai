@@ -61,6 +61,10 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `040_admin_dashboard_top_users.sql`
 - `041_admin_trends.sql`
 - `042_outfit_wear_history.sql`
+- `043_scope_service_policies_and_harden_users.sql`
+- `044_atomic_counters_and_item_images.sql`
+- `045_shared_outfit_atomicity.sql`
+- `046_seed_ai_settings_and_harden_storage_buckets.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -227,6 +231,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `037_admin_roles.sql` → `support_tickets`
 - `038_audit_events.sql` → `audit_events`
 - `042_outfit_wear_history.sql` → `outfit_wear_history`
+- `045_shared_outfit_atomicity.sql` → `shared_outfits`
 
 ## Related
 

@@ -249,7 +249,7 @@ async def test_resolve_owned_storage_paths_includes_thumbs():
                 {
                     "id": "item-1",
                     "user_id": "user-1",
-                    "source_image_storage_path": "user-1/sources/shot.jpg",
+                    "source_image_storage_path": "user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
                 },
                 {"id": "item-2", "user_id": "user-2"},
             ],
@@ -268,8 +268,8 @@ async def test_resolve_owned_storage_paths_includes_thumbs():
     assert sorted(result["storage_paths"]) == [
         "user-1/items/a.jpg",
         "user-1/items/a_thumb.webp",
-        "user-1/sources/shot.jpg",
-        "user-1/sources/shot_thumb.webp",
+        "user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+        "user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ]
 
 

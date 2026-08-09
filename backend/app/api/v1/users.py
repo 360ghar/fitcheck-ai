@@ -21,8 +21,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
+from pydantic import ValidationError as PydanticValidationError
 from supabase import Client
 
+from app.core.concurrency import PER_USER_LOCK
 from app.core.exceptions import (
     BodyProfileNotFoundError,
     DatabaseError,
@@ -51,7 +53,7 @@ from app.models.user import (
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
 from app.services.weather_service import get_weather_service
-from app.api.v1.images import materialize_avatar_url, materialize_image_urls
+from app.api.v1.images import _is_owned_by_user, materialize_avatar_url, materialize_image_urls
 
 logger = get_context_logger(__name__)
 
@@ -451,7 +453,12 @@ async def delete_current_user(
         avatar_key = StorageService.key_from_path(
             (avatar_row or {}).get("avatar_url")
         )
-        if avatar_key:
+        # A2-02: ``users.avatar_url`` is user-settable (PUT /me persists it
+        # verbatim) and other users' avatar URLs are observable via the
+        # leaderboard's presigned re-mints — only delete an object this user
+        # actually owns. External OAuth picture URLs already yield no key
+        # from key_from_path; this guard closes the cross-user key case.
+        if avatar_key and _is_owned_by_user(avatar_key, user_id):
             storage_paths.append(avatar_key)
 
         # The data-export archive is a single deterministic key per user
@@ -640,7 +647,23 @@ async def upload_avatar(
             db=db, user_id=user_id, filename=file.filename or "avatar.png", file_data=file_bytes
         )
 
-        await asyncio.to_thread(db.table("users").update({"avatar_url": avatar_url, "updated_at": _now()}).eq("id", user_id).execute)
+        try:
+            await asyncio.to_thread(db.table("users").update({"avatar_url": avatar_url, "updated_at": _now()}).eq("id", user_id).execute)
+        except Exception:
+            # A2-07: the row update failed after the new avatar object was
+            # uploaded — best-effort delete of the orphan before surfacing
+            # the error, so a failed replace does not leak the object.
+            try:
+                new_key = StorageService.key_from_path(avatar_url)
+                if new_key and new_key.startswith(f"{user_id}/avatars/"):
+                    await StorageService.delete_image(db=db, storage_path=new_key)
+            except Exception as cleanup_error:
+                logger.warning(
+                    "Failed to clean up orphaned avatar after users row update failure",
+                    user_id=user_id,
+                    error=str(cleanup_error),
+                )
+            raise
 
         # Best-effort removal of the replaced avatar object. Only our own
         # bucket key is deleted: an external OAuth picture URL must pass
@@ -814,35 +837,40 @@ async def create_body_profile(
     db: Client = Depends(get_db),
 ):
     """Create a new body profile."""
-    try:
-        now = _now()
-        existing_count = await asyncio.to_thread(db.table("body_profiles").select("id", count="exact").eq("user_id", user_id).execute)
-        count = getattr(existing_count, "count", len(existing_count.data or []))
+    # The "first profile becomes the default" decision is a read-modify-write
+    # on the profile count: two concurrent creates both see count == 0 and
+    # both set is_default=True, leaving the user with TWO defaults (A1-17).
+    # The per-user lock serializes the check-and-insert within this process.
+    async with PER_USER_LOCK(user_id):
+        try:
+            now = _now()
+            existing_count = await asyncio.to_thread(db.table("body_profiles").select("id", count="exact").eq("user_id", user_id).execute)
+            count = getattr(existing_count, "count", len(existing_count.data or []))
 
-        payload = request.model_dump()
-        if count == 0:
-            payload["is_default"] = True
+            payload = request.model_dump()
+            if count == 0:
+                payload["is_default"] = True
 
-        if payload.get("is_default"):
-            await asyncio.to_thread(db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute)
+            if payload.get("is_default"):
+                await asyncio.to_thread(db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute)
 
-        profile_id = str(uuid.uuid4())
-        insert = {"id": profile_id, "user_id": user_id, **payload, "created_at": now, "updated_at": now}
-        res = await asyncio.to_thread(db.table("body_profiles").insert(insert).execute)
-        row = _first_row(res.data or [])
-        if not row:
-            raise DatabaseError("Failed to create body profile")
+            profile_id = str(uuid.uuid4())
+            insert = {"id": profile_id, "user_id": user_id, **payload, "created_at": now, "updated_at": now}
+            res = await asyncio.to_thread(db.table("body_profiles").insert(insert).execute)
+            row = _first_row(res.data or [])
+            if not row:
+                raise DatabaseError("Failed to create body profile")
 
-        if payload.get("is_default"):
-            await asyncio.to_thread(db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute)
+            if payload.get("is_default"):
+                await asyncio.to_thread(db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute)
 
-        profile = BodyProfile.model_validate(row)
-        return {"data": profile.model_dump(mode="json"), "message": "Created"}
+            profile = BodyProfile.model_validate(row)
+            return {"data": profile.model_dump(mode="json"), "message": "Created"}
 
-    except (UserNotFoundError, ValidationError, DatabaseError, BodyProfileNotFoundError):
-        raise
-    except Exception as e:
-        _handle_db_error("create body profile", user_id, e)
+        except (UserNotFoundError, ValidationError, DatabaseError, BodyProfileNotFoundError):
+            raise
+        except Exception as e:
+            _handle_db_error("create body profile", user_id, e)
 
 
 @router.put("/body-profiles/{profile_id}", response_model=Dict[str, Any])
@@ -972,8 +1000,22 @@ async def upsert_body_profile(
 
         now = _now()
         if not existing or not existing.data:
-            # Creating requires full payload; validate via BodyProfileCreate
-            create = BodyProfileCreate(**update_data.model_dump(exclude_unset=True))
+            # Creating requires full payload; validate via BodyProfileCreate.
+            # A partial payload raises pydantic's ValidationError, which is
+            # NOT the app's ValidationError — translate it so the client gets
+            # a clean 422 instead of a 500 (B3-09).
+            try:
+                create = BodyProfileCreate(**update_data.model_dump(exclude_unset=True))
+            except PydanticValidationError as exc:
+                invalid_fields = [
+                    list(e.get("loc", ()))
+                    for e in exc.errors()
+                ]
+                raise ValidationError(
+                    "First body-profile save requires a full profile "
+                    "(name, height_cm, weight_kg, body_shape, skin_tone)",
+                    details={"missing_or_invalid_fields": invalid_fields},
+                ) from exc
             insert = {
                 "user_id": user_id,
                 **create.model_dump(),

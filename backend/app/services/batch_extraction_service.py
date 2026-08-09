@@ -11,6 +11,7 @@ import base64
 import logging
 from app.utils.datetime_util import utcnow_iso
 from typing import Any, Awaitable, Callable, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -31,6 +32,39 @@ from app.utils.image_processing import downscale_base64_image, resolve_product_r
 from app.utils.retry import is_retryable_error, with_retry
 
 logger = logging.getLogger(__name__)
+
+# Hosts whose avatar URLs the extraction pipeline may fetch DIRECTLY with
+# httpx. ``users.avatar_url`` is user-controlled (an external OAuth picture is
+# possible), so a raw GET of the stored value would be an SSRF primitive.
+# Bucket keys are fetched through StorageService (bucket-only); any other URL
+# must be https AND on this allowlist, or the fetch is skipped (log + None).
+# The suffix rule covers the CDN families (scontent-*.fna.fbcdn.net,
+# scontent-*.cdninstagram.com, ...) whose subdomains rotate per region.
+_AVATAR_HOST_ALLOWLIST = frozenset({
+    "lh3.googleusercontent.com",
+    "lh4.googleusercontent.com",
+    "lh5.googleusercontent.com",
+    "lh6.googleusercontent.com",
+    "platform-lookaside.fbsbx.com",
+    "fbcdn.net",
+    "cdninstagram.com",
+    "pbs.twimg.com",
+    "avatars.githubusercontent.com",
+})
+
+
+def _avatar_host_allowed(url: str) -> bool:
+    """True when ``url`` is https and its host is on the avatar allowlist.
+
+    Exact match or a subdomain of an allowlisted base (the OAuth CDNs rotate
+    per-region subdomains). Any other scheme/host is rejected so the fetch
+    never leaves the allowlisted set.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        return False
+    host = (parsed.hostname or "").lower()
+    return any(host == base or host.endswith("." + base) for base in _AVATAR_HOST_ALLOWLIST)
 
 # EXTRACTION_SEMAPHORE / GENERATION_SEMAPHORE live in app.core.concurrency so
 # they are shared process-wide across all concurrent jobs AND the variation
@@ -136,6 +170,9 @@ class BatchExtractionService:
                 # TTL. Items whose upload failed keep their base64 (the URL is
                 # absent), so they still render from status polls.
                 await BatchJobService.release_generated_payloads(job.job_id)
+                # Admission reserved total_images*3 generation slots up front;
+                # hand back whatever this run did not consume (A2-02).
+                await BatchJobService.release_unused_generation_quota(job, db=self.db)
 
         except asyncio.CancelledError:
             # Shutdown / task cancellation: stop the consumer (which cancels its
@@ -172,6 +209,10 @@ class BatchExtractionService:
             await BatchJobService.release_image_payloads(job.job_id)
             await BatchJobService.clear_event_history(job.job_id)
             await BatchJobService.release_generated_payloads(job.job_id)
+            # The failed run never consumed its full generation reservation;
+            # hand the unused remainder back so the user's daily quota is not
+            # burned by a pipeline that did not finish (A2-02).
+            await BatchJobService.release_unused_generation_quota(job, db=self.db)
 
     async def _run_extraction_phase(
         self,
@@ -350,6 +391,14 @@ class BatchExtractionService:
 
                 items = result.get("items", [])
 
+                # A2-03: a successful extraction that detected zero items
+                # leaves the persisted {user}/sources/ photo orphaned forever
+                # (canonical category, no sweep) — the failure path cleans up,
+                # the zero-item success path must too. No-ops when no source
+                # photo was persisted for this image.
+                if not items:
+                    await self._delete_failed_source_image(job, image_id)
+
                 added = await BatchJobService.add_detected_items(job.job_id, image_id, items)
 
                 await BatchJobService.broadcast_event(job.job_id, "image_extraction_complete", {
@@ -418,6 +467,12 @@ class BatchExtractionService:
 
                 await BatchJobService.mark_extraction_failed(job.job_id, image_id, error_msg)
 
+                # This image's extraction failed: its source photo was already
+                # uploaded to {user}/sources/ before the vision call, and a
+                # failed extraction would otherwise leave it orphaned forever
+                # (canonical category, no sweep) — best-effort delete (A2-06).
+                await self._delete_failed_source_image(job, image_id)
+
                 await BatchJobService.broadcast_event(job.job_id, "image_extraction_failed", {
                     "job_id": job.job_id,
                     "image_id": image_id,
@@ -448,6 +503,13 @@ class BatchExtractionService:
 
         Non-blocking with aggressive 5-second timeout - if avatar fetch is slow,
         skip it and continue without avatar. Don't block extraction pipeline.
+
+        SSRF-safe (A2-07): the stored ``users.avatar_url`` is user-controlled
+        and may be an external OAuth picture. A URL that reduces to one of OUR
+        bucket keys is fetched via StorageService (bucket-only read, never an
+        arbitrary HTTP GET); any other URL must be https AND on the avatar-host
+        allowlist (``_avatar_host_allowed``), otherwise the fetch is skipped
+        (logged, returns None).
         """
         try:
             user_result = await asyncio.to_thread(
@@ -462,6 +524,23 @@ class BatchExtractionService:
 
             avatar_url = user_result.data.get("avatar_url")
             if not avatar_url:
+                return None
+
+            # Our own object (canonical {user}/avatars/... or a preview key):
+            # fetch through the bucket, never from the arbitrary URL.
+            key = StorageService.key_from_path(avatar_url)
+            if key:
+                return await StorageService.download_to_base64(key)
+
+            # External URL: https + allowlisted host only. Anything else is
+            # skipped - the avatar is an optimization, never worth an SSRF
+            # primitive.
+            if not _avatar_host_allowed(avatar_url):
+                logger.info(
+                    "Skipping avatar fetch: URL is neither a bucket key nor an "
+                    "allowlisted https host",
+                    extra={"user_id": self.user_id},
+                )
                 return None
 
             async with httpx.AsyncClient(
@@ -513,6 +592,36 @@ class BatchExtractionService:
                 extra={"image_id": image_id, "error": str(e)},
             )
             return None
+
+    async def _delete_failed_source_image(
+        self,
+        job: BatchJob,
+        image_id: str,
+    ) -> None:
+        """Best-effort delete of the uploaded source photo after a failed extraction.
+
+        ``_persist_source_image`` uploads to the canonical ``{user}/sources/``
+        prefix BEFORE the vision call, and failed extractions used to leave
+        the object behind permanently (canonical category, no sweep) — A2-06.
+        Success keeps the object: generation re-fetches it as the reference
+        image. No-ops when the upload never happened (upload failure or
+        capacity-skip paths mark the image failed before any upload).
+        """
+        image_data = job.images.get(image_id)
+        storage_path = image_data.source_image_storage_path if image_data else None
+        if not storage_path:
+            return
+        try:
+            await StorageService.delete_image(db=self.db, storage_path=storage_path)
+            logger.info(
+                "Deleted source image after failed extraction",
+                extra={"job_id": job.job_id, "image_id": image_id},
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to delete source image after failed extraction",
+                extra={"job_id": job.job_id, "image_id": image_id, "error": str(exc)},
+            )
 
     async def _generation_consumer(
         self,
@@ -878,7 +987,15 @@ class BatchExtractionService:
                 return
 
             result = {
-                "items": [item.to_dict() for item in job.detected_items],
+                # Never cache base64 payloads: with MAX_ENTRIES=200 and no
+                # byte bound, multi-MB generated_image_base64 values would pin
+                # hundreds of MB of process memory (A2-01). Durable storage
+                # paths/URLs survive, so restore_cached_items still delivers
+                # images (and a client saving a cached item re-fetches by URL).
+                "items": [
+                    {**item.to_dict(), "generated_image_base64": None}
+                    for item in job.detected_items
+                ],
                 "timestamp": utcnow_iso(),
             }
 

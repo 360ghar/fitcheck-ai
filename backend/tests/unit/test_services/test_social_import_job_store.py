@@ -286,7 +286,9 @@ async def test_add_discovered_photos_inserts_and_bumps_job_counts(fake_db):
     assert payload[1]["ordinal"] == 4
     assert payload[1]["source_photo_id"] is None
     assert payload[1]["metadata"] == {}
-    fake_db.assert_update("social_import_jobs", discovered_photos=4, total_photos=5)
+    # A4-05: counters are derived from a COUNT(*) over the photo rows (this
+    # batch alone = 2 rows), never a read-modify-write of the job row.
+    fake_db.assert_update("social_import_jobs", discovered_photos=2, total_photos=5)
 
 
 @pytest.mark.asyncio
@@ -303,7 +305,78 @@ async def test_add_discovered_photos_grows_total_photos_when_below(fake_db):
         photos=[{"source_photo_url": "https://cdn.example/3.jpg"}],
     )
 
-    fake_db.assert_update("social_import_jobs", discovered_photos=3, total_photos=3)
+    # One photo row exists after the insert -> discovered=1; total_photos
+    # never shrinks below its prior value (2).
+    fake_db.assert_update("social_import_jobs", discovered_photos=1, total_photos=2)
+
+
+@pytest.mark.asyncio
+async def test_add_discovered_photos_dedupes_by_source_photo_id(fake_db):
+    """A4-06: a source photo presented twice (pagination overlap or discovery
+    retry) is deleted before insert so the job never holds duplicates."""
+    fake_db.rows["social_import_jobs"] = [
+        _job_row(discovered_photos=1, total_photos=1)
+    ]
+    fake_db.rows["social_import_photos"] = [
+        {
+            "id": "photo-existing",
+            "job_id": JOB_ID,
+            "user_id": USER_ID,
+            "source_photo_id": "sp-1",
+            "source_photo_url": "https://cdn.example/old.jpg",
+            "status": SocialImportPhotoStatus.QUEUED.value,
+        }
+    ]
+
+    inserted = await SocialImportJobStore.add_discovered_photos(
+        fake_db,
+        job_id=JOB_ID,
+        user_id=USER_ID,
+        start_ordinal=2,
+        photos=[
+            {
+                "source_photo_id": "sp-1",
+                "source_photo_url": "https://cdn.example/1.jpg",
+            },
+            {
+                "source_photo_id": "sp-2",
+                "source_photo_url": "https://cdn.example/2.jpg",
+            },
+        ],
+    )
+
+    # The stale sp-1 row was deleted before the batch insert (and the delete
+    # was scoped to this job/user/source ids).
+    assert ("social_import_photos", "eq", "job_id", JOB_ID) in fake_db.filters
+    assert ("social_import_photos", "eq", "user_id", USER_ID) in fake_db.filters
+    assert ("social_import_photos", "in", "source_photo_id", ["sp-1", "sp-2"]) in fake_db.filters
+    assert len(fake_db.deletes) == 1
+    # Only the two fresh rows survive.
+    rows = fake_db.rows["social_import_photos"]
+    assert [r["source_photo_id"] for r in rows] == ["sp-1", "sp-2"]
+    assert len(inserted) == 2
+    fake_db.assert_update("social_import_jobs", discovered_photos=2, total_photos=2)
+
+
+@pytest.mark.asyncio
+async def test_add_discovered_photos_counter_failure_does_not_fail_insert(fake_db, monkeypatch):
+    """A4-05: a counter-sync failure must only log; the photos stay inserted."""
+    async def fake_get_job(db, *, job_id, user_id):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(SocialImportJobStore, "get_job", staticmethod(fake_get_job))
+
+    inserted = await SocialImportJobStore.add_discovered_photos(
+        fake_db,
+        job_id=JOB_ID,
+        user_id=USER_ID,
+        start_ordinal=0,
+        photos=[{"source_photo_url": "https://cdn.example/1.jpg"}],
+    )
+
+    assert len(inserted) == 1
+    assert len(fake_db.rows["social_import_photos"]) == 1
+    assert fake_db.updates == []
 
 
 @pytest.mark.asyncio
@@ -698,6 +771,100 @@ async def test_create_event_returns_empty_dict_when_no_rows():
     )
 
     assert event == {}
+
+
+@pytest.mark.asyncio
+async def test_create_event_trims_ledger_to_newest_max(fake_db):
+    """A4-08: every insert trims the per-job ledger to EVENTS_PER_JOB_MAX
+    rows (the oldest rows are deleted)."""
+    from app.services.social_import_job_store import EVENTS_PER_JOB_MAX
+
+    # (4-digit ids: the fake's lt filter compares strings, and multi-digit
+    # numbers need equal width to sort lexicographically like integers.)
+    fake_db.rows["social_import_events"] = [
+        {
+            "id": i,
+            "job_id": JOB_ID,
+            "user_id": USER_ID,
+            "event_type": f"e{i}",
+            "payload": {},
+        }
+        for i in range(1001, 1001 + EVENTS_PER_JOB_MAX + 10)
+    ]
+
+    await SocialImportJobStore.create_event(
+        fake_db,
+        job_id=JOB_ID,
+        user_id=USER_ID,
+        event_type="job_updated",
+        payload={"status": "processing"},
+    )
+
+    # The newest EVENTS_PER_JOB_MAX ids are kept (the trim is scoped to this
+    # job and deletes everything older than the oldest kept id). The new
+    # event carries the newest timestamp, so it is part of the kept window.
+    rows = fake_db.rows["social_import_events"]
+    assert len(rows) == EVENTS_PER_JOB_MAX
+    seeded_ids = [r["id"] for r in rows if r.get("id") is not None]
+    assert len(seeded_ids) == EVENTS_PER_JOB_MAX
+    assert seeded_ids[0] == 1011
+    assert seeded_ids[-1] == 1210
+    assert rows[-1]["event_type"] == "e1210"
+    assert ("social_import_events", "lt", "id", 1011) in fake_db.filters
+    assert len(fake_db.deletes) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_events_without_after_id_returns_newest_capped_ascending(fake_db):
+    """A4-08: a fresh connect replays at most REPLAY_EVENTS_MAX events, in
+    ascending id order for the SSE loop."""
+    from app.services.social_import_job_store import REPLAY_EVENTS_MAX
+
+    fake_db.rows["social_import_events"] = [
+        {
+            "id": i,
+            "job_id": JOB_ID,
+            "user_id": USER_ID,
+            "event_type": f"e{i}",
+            "payload": {},
+        }
+        for i in range(1, REPLAY_EVENTS_MAX + 25)
+    ]
+
+    events = await SocialImportJobStore.list_events(
+        fake_db, job_id=JOB_ID, user_id=USER_ID
+    )
+
+    assert len(events) == REPLAY_EVENTS_MAX
+    # Newest window, returned oldest-first (ascending).
+    assert events[0]["id"] == 25
+    assert events[-1]["id"] == REPLAY_EVENTS_MAX + 24
+
+
+@pytest.mark.asyncio
+async def test_list_events_after_id_caps_replay(fake_db):
+    """A4-08: replay from a very old id is capped at REPLAY_EVENTS_MAX."""
+    from app.services.social_import_job_store import REPLAY_EVENTS_MAX
+
+    fake_db.rows["social_import_events"] = [
+        {
+            "id": i,
+            "job_id": JOB_ID,
+            "user_id": USER_ID,
+            "event_type": f"e{i}",
+            "payload": {},
+        }
+        for i in range(1, REPLAY_EVENTS_MAX + 25)
+    ]
+
+    events = await SocialImportJobStore.list_events(
+        fake_db, job_id=JOB_ID, user_id=USER_ID, after_id=1
+    )
+
+    assert len(events) == REPLAY_EVENTS_MAX
+    assert events[0]["id"] == 2
+    assert events[-1]["id"] == REPLAY_EVENTS_MAX + 1
+    assert ("social_import_events", "gt", "id", 1) in fake_db.filters
 
 
 @pytest.mark.asyncio

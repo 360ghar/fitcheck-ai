@@ -495,6 +495,170 @@ async def test_sync_iap_subscription_release_without_previous_owner_is_silent():
 
 
 @pytest.mark.asyncio
+async def test_sync_iap_subscription_apple_refund_ignored_for_google_billed_row():
+    """A1-05: an Apple refund arriving for a Google-billed row must NOT
+    downgrade it — the downgrade would wipe the Google identity and leave the
+    user's paid plan dead while the Play subscription lives on."""
+    db = _fresh_db(
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    plan_type="plus_monthly",
+                    billing_provider="google",
+                    google_purchase_token="gp-1",
+                    apple_original_transaction_id=None,
+                    current_period_start=(
+                        datetime.now(timezone.utc) - timedelta(days=10)
+                    ).isoformat(),
+                    current_period_end=(
+                        datetime.now(timezone.utc) + timedelta(days=20)
+                    ).isoformat(),
+                )
+            ]
+        }
+    )
+
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,
+        status="free",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+        apple_original_transaction_id="orig-stale",
+    )
+
+    assert result.plan_type == PlanType.PLUS_MONTHLY
+    # The Google identity survived untouched.
+    assert db.rows["subscriptions"][0]["google_purchase_token"] == "gp-1"
+    assert db.rows["subscriptions"][0]["apple_original_transaction_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_google_refund_ignored_for_apple_billed_row():
+    """A1-05: mirror case — a Play refund must not touch an Apple-billed row."""
+    db = _fresh_db(
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    plan_type="pro_monthly",
+                    billing_provider="apple",
+                    apple_original_transaction_id="orig-1",
+                    google_purchase_token=None,
+                    current_period_start=(
+                        datetime.now(timezone.utc) - timedelta(days=10)
+                    ).isoformat(),
+                    current_period_end=(
+                        datetime.now(timezone.utc) + timedelta(days=20)
+                    ).isoformat(),
+                )
+            ]
+        }
+    )
+
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="google",
+        plan_type=PlanType.PLUS_MONTHLY,
+        status="free",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+        google_purchase_token="gp-stale",
+    )
+
+    assert result.plan_type == PlanType.PRO_MONTHLY
+    assert db.rows["subscriptions"][0]["apple_original_transaction_id"] == "orig-1"
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_older_purchase_date_skipped_cross_provider():
+    """A1-05: the older-purchase-date guard applies across providers — a late
+    Google snapshot (older start) must not overwrite a newer Apple purchase."""
+    db = _fresh_db(
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    plan_type="pro_monthly",
+                    billing_provider="apple",
+                    apple_original_transaction_id="orig-new",
+                    google_purchase_token=None,
+                    current_period_start=(
+                        datetime.now(timezone.utc) - timedelta(days=5)
+                    ).isoformat(),
+                    current_period_end=(
+                        datetime.now(timezone.utc) + timedelta(days=25)
+                    ).isoformat(),
+                )
+            ]
+        }
+    )
+
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="google",
+        plan_type=PlanType.PLUS_MONTHLY,
+        status="active",
+        current_period_start=(datetime.now(timezone.utc) - timedelta(days=20)).isoformat(),
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=10)).isoformat(),
+        google_purchase_token="gp-late",
+    )
+
+    assert result.plan_type == PlanType.PRO_MONTHLY
+    # No upsert replaced the row.
+    assert db.inserts == []
+    assert db.rows["subscriptions"][0]["billing_provider"] == "apple"
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_release_downgrades_previous_owner():
+    """A1-01: claiming an identifier held by ANOTHER user's row releases it —
+    and downgrades that row to free so one verified transaction cannot keep
+    two accounts on the paid plan."""
+    db = _fresh_db(
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    plan_type="pro_monthly",
+                    billing_provider="apple",
+                    apple_original_transaction_id="orig-shared",
+                    current_period_start=(
+                        datetime.now(timezone.utc) - timedelta(days=10)
+                    ).isoformat(),
+                    current_period_end=(
+                        datetime.now(timezone.utc) + timedelta(days=20)
+                    ).isoformat(),
+                )
+            ]
+        }
+    )
+    # The stored row belongs to user-2; USER_ID is the new owner.
+    db.rows["subscriptions"][0]["user_id"] = "user-2"
+
+    start = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,
+        status="active",
+        current_period_start=start,
+        current_period_end=end,
+        product_id="com.fitcheck.pro.monthly",
+        apple_original_transaction_id="orig-shared",
+    )
+
+    assert result.plan_type == PlanType.PRO_MONTHLY
+    previous_owner = db.rows["subscriptions"][0]
+    assert previous_owner["user_id"] == "user-2"
+    assert previous_owner["apple_original_transaction_id"] is None
+    assert previous_owner["plan_type"] == "free"
+    assert previous_owner["current_period_end"] is None
+
+
+@pytest.mark.asyncio
 async def test_sync_iap_subscription_falls_back_to_read_when_upsert_returns_no_row():
     db = _NoRowUpsertDB(
         rows={
@@ -530,26 +694,11 @@ async def test_sync_iap_subscription_falls_back_to_read_when_upsert_returns_no_r
 
 
 @pytest.mark.asyncio
-async def test_apply_referral_credit_creates_default_then_upgrades_free_plan():
-    db = FakeDB()
-
-    await SubscriptionService.apply_referral_credit(USER_ID, 3, db)
-
-    assert db.inserts[0][1]["plan_type"] == "free"
-    upgrade = db.updates[0][1]
-    assert upgrade["plan_type"] == "pro_monthly"
-    assert upgrade["status"] == "trial"
-    assert upgrade["referral_credit_months"] == 3
-    assert upgrade["trial_end"] is not None
-
-
 @pytest.mark.asyncio
-async def test_apply_referral_credit_raises_when_row_still_missing_after_creation(monkeypatch):
-    db = FakeDB()
-    monkeypatch.setattr(SubscriptionService, "create_default_subscription", AsyncMock())
-
-    with pytest.raises(DatabaseError, match="Failed to apply referral credit"):
-        await SubscriptionService.apply_referral_credit(USER_ID, 3, db)
+async def test_apply_referral_credit_removed_dead_code():
+    """A1-08: apply_referral_credit was dead (no app callers — the grant
+    runs through redeem_referral_atomic in SQL) and has been deleted."""
+    assert not hasattr(SubscriptionService, "apply_referral_credit")
 
 
 # =============================================================================

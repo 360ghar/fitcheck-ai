@@ -196,13 +196,15 @@ BEGIN
             referred_user_id,
             referral_code_id,
             referrer_credit_applied,
-            referred_credit_applied
+            referred_credit_applied,
+            credit_months
         ) VALUES (
             code_row.user_id,
             p_referred_user_id,
             code_row.id,
             FALSE,
-            FALSE
+            FALSE,
+            p_credit_months
         )
         RETURNING * INTO redemption_row;
 

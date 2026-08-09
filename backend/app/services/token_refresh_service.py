@@ -10,7 +10,9 @@ Architecture:
 - First request creates in-flight state → calls Supabase
 - Concurrent requests await same in-flight result (no second refresh call)
 - No long-lived token cache (preserves one-time refresh-token semantics)
-- 10-second lock timeout prevents deadlocks
+- 20-second lock timeout prevents deadlocks; on timeout the follower
+  re-checks the in-flight entry once so a leader that finished right at the
+  boundary is never mis-reported as a timeout ("already used" dead-end).
 
 Follows existing pattern from app/core/ip_rate_limit.py.
 """
@@ -27,7 +29,7 @@ from app.core.exceptions import AuthenticationError
 logger = get_context_logger(__name__)
 
 # Configuration
-LOCK_TIMEOUT_SECONDS = 10  # Max time to wait for in-flight refresh completion
+LOCK_TIMEOUT_SECONDS = 20  # Max time to wait for in-flight refresh completion
 
 # In-memory storage
 # Legacy placeholders kept for backward-compatible imports in tests.
@@ -73,6 +75,29 @@ async def _await_inflight(token_hash: str, inflight: _InflightRefresh) -> Dict[s
     try:
         await asyncio.wait_for(inflight.event.wait(), timeout=LOCK_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as exc:
+        # A leader that finished right at the timeout boundary may have set
+        # the event and popped the registry entry before this follower's
+        # wait_for cancellation won the wake-up race. Re-check ONCE before
+        # giving up: the in-flight object we hold is the same object the
+        # leader populated, so an already-completed refresh must return its
+        # tokens instead of dead-ending the follower with
+        # AUTH_REFRESH_TIMEOUT (which leaves the client retrying an
+        # already-used refresh token forever).
+        if inflight.event.is_set():
+            if inflight.error is not None:
+                raise inflight.error
+            if inflight.result is not None:
+                return inflight.result
+        # The registry may hold a NEW in-flight entry (the previous leader
+        # finished and a new leader started for the same token). Check it
+        # once; only raise the timeout when nothing completed.
+        async with _inflight_lock:
+            current = _inflight_refreshes.get(token_hash)
+        if current is not None and current is not inflight and current.event.is_set():
+            if current.error is not None:
+                raise current.error
+            if current.result is not None:
+                return current.result
         logger.error(
             f"Wait timeout ({LOCK_TIMEOUT_SECONDS}s) for in-flight token refresh",
             extra={"token_hash": token_hash},

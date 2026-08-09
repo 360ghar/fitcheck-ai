@@ -11,7 +11,7 @@
  * layout never jumps and you can see the outfit before you pay for it.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout'
@@ -72,19 +72,27 @@ export default function OutfitCreatePage() {
     saveOutfitFromDraft,
   } = useOutfitStore.getState()
 
-  // A draft is per-visit. Reset first, then honour `?items=` — the
+  // A draft is per-visit. Reset once on mount, then honour `?items=` — the
   // Recommendations page hands its chosen pieces over this way, which is what
   // stops "Save as outfit" from silently arriving empty.
   const prefill = searchParams.get('items')
+  const mountedRef = useRef(false)
   useEffect(() => {
-    resetOutfitDraft()
-    if (prefill) {
-      const ids = prefill.split(',').map((s) => s.trim()).filter(Boolean)
-      if (ids.length > 0) setCreationItems(ids)
+    if (!mountedRef.current) {
+      mountedRef.current = true
+      resetOutfitDraft()
     }
-    // Intentionally once per mount: a draft must not reset while being edited.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    // F2b-08: a same-session navigation to /outfits/new?items=… lands on the
+    // ALREADY-MOUNTED page, so the old empty-deps effect never re-applied the
+    // new prefill. Re-apply whenever the param changes — but only when it
+    // differs from the current selection, so a mid-edit draft is preserved.
+    const ids = prefill ? prefill.split(',').map((s) => s.trim()).filter(Boolean) : []
+    if (ids.length === 0) return
+    const current = useOutfitStore.getState().creationItems
+    const same = ids.length === current.size && ids.every((id) => current.has(id))
+    if (same) return
+    setCreationItems(ids)
+  }, [prefill, resetOutfitDraft, setCreationItems])
 
   const loadItems = useCallback(async () => {
     setItemsLoading(true)

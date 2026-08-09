@@ -206,6 +206,49 @@ def test_has_permission_star_and_role_maps():
     assert has_permission({"role": "user", "email": "p@example.com"}, "search") is False
 
 
+def test_write_permission_matrix_for_quotas_and_iap():
+    """A4-14: quotas.write is admin-only; iap.write is admin+ops (the
+    refund-capable roles). No lesser role holds either write gate."""
+    from app.core.permissions import ADMIN_ONLY_WRITE_PERMISSIONS, has_permission
+
+    assert ADMIN_ONLY_WRITE_PERMISSIONS == frozenset({"quotas.write"})
+    # quotas.write: super_admin/admin only (via the `*` marker).
+    assert has_permission({"role": "super_admin"}, "quotas.write") is True
+    assert has_permission({"role": "admin"}, "quotas.write") is True
+    assert has_permission({"role": "ops"}, "quotas.write") is False
+    assert has_permission({"role": "support"}, "quotas.write") is False
+    assert has_permission({"role": "content_editor"}, "quotas.write") is False
+    assert has_permission({"role": "user"}, "quotas.write") is False
+    # iap.write: super_admin/admin/ops.
+    assert has_permission({"role": "super_admin"}, "iap.write") is True
+    assert has_permission({"role": "admin"}, "iap.write") is True
+    assert has_permission({"role": "ops"}, "iap.write") is True
+    assert has_permission({"role": "support"}, "iap.write") is False
+    assert has_permission({"role": "content_editor"}, "iap.write") is False
+    assert has_permission({"role": "user"}, "iap.write") is False
+    # Read sides are unchanged: support keeps iap.read + quotas.read.
+    assert has_permission({"role": "support"}, "iap.read") is True
+    assert has_permission({"role": "support"}, "quotas.read") is True
+    assert has_permission({"role": "ops"}, "iap.read") is True
+
+
+def test_ops_can_mark_iap_refund_but_not_override_quotas(client):
+    """Route-level confirmation of the write matrix: ops reaches the
+    store-billed refund-marked endpoint (iap.write) and is 403 on the
+    quota-override endpoint (quotas.write)."""
+    db = FakeDB(rows={"subscriptions": [{"id": "txn-1", "user_id": "user-1"}]})
+    ops = {"id": "user-ops", "email": "ops@example.com", "full_name": "Ops", "is_active": True, "is_admin": False, "role": "ops"}
+    with _with_user(client, ops, db):
+        response = client.post("/api/v1/admin/iap/transactions/txn-1/mark-refunded")
+        assert response.status_code in (200, 404, 422), response.text[:200]
+    with _with_user(client, ops, db):
+        response = client.patch(
+            "/api/v1/admin/users/user-1/quota-override",
+            json={"daily_extraction_limit": 10},
+        )
+        assert response.status_code == 403, response.text[:200]
+
+
 # =============================================================================
 # Admin role/suspend edits (admin_service.update_user guards)
 # =============================================================================

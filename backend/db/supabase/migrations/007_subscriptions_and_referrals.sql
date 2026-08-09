@@ -109,12 +109,22 @@ CREATE TABLE IF NOT EXISTS public.referral_redemptions (
     -- Credit status
     referrer_credit_applied BOOLEAN DEFAULT FALSE,
     referred_credit_applied BOOLEAN DEFAULT FALSE,
+    -- A1-10: months granted at redemption time (recorded by the redeem RPC)
+    -- so referral stats reflect the actual grant even if
+    -- REFERRAL_CREDIT_MONTHS changes later. NULL on rows written before the
+    -- column existed.
+    credit_months INTEGER,
 
     -- Timestamps
     redeemed_at TIMESTAMPTZ DEFAULT NOW(),
 
     UNIQUE(referred_user_id)  -- Each user can only be referred once
 );
+
+-- A1-10: idempotent add for deployments where 007 already ran (CREATE TABLE
+-- IF NOT EXISTS does not add columns to an existing table).
+ALTER TABLE public.referral_redemptions
+    ADD COLUMN IF NOT EXISTS credit_months INTEGER;
 
 -- Indexes for referral_redemptions
 CREATE INDEX IF NOT EXISTS idx_referral_redemptions_referrer ON public.referral_redemptions(referrer_user_id);
@@ -182,7 +192,7 @@ BEGIN
         p_field, p_field
     ) USING p_count, p_user_id, p_period_start;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- =============================================================================
 -- FUNCTION: Atomic referral code times_used increment
@@ -198,7 +208,7 @@ BEGIN
     SET times_used = COALESCE(times_used, 0) + p_count
     WHERE id = p_referral_code_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- =============================================================================
 -- FUNCTION: Get current billing period start
@@ -239,6 +249,7 @@ CREATE POLICY "Users can view own subscription"
 DROP POLICY IF EXISTS "Service role can manage subscriptions" ON public.subscriptions;
 CREATE POLICY "Service role can manage subscriptions"
     ON public.subscriptions FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 
@@ -256,6 +267,7 @@ CREATE POLICY "Users can view own usage"
 DROP POLICY IF EXISTS "Service role can manage usage" ON public.subscription_usage;
 CREATE POLICY "Service role can manage usage"
     ON public.subscription_usage FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 
@@ -278,6 +290,7 @@ CREATE POLICY "Anyone can validate referral codes"
 DROP POLICY IF EXISTS "Service role can manage referral codes" ON public.referral_codes;
 CREATE POLICY "Service role can manage referral codes"
     ON public.referral_codes FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 
@@ -295,6 +308,7 @@ CREATE POLICY "Users can view own referral redemptions"
 DROP POLICY IF EXISTS "Service role can manage referral redemptions" ON public.referral_redemptions;
 CREATE POLICY "Service role can manage referral redemptions"
     ON public.referral_redemptions FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 

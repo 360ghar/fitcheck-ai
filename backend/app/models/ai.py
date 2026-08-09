@@ -141,12 +141,14 @@ class OutfitItemInput(BaseModel):
     stored image — degrades to the text-only inventory.
 
     Clients never send image URLs or base64 here: a client-supplied URL the
-    backend fetches is an SSRF primitive (StorageService.download_to_base64
-    follows redirects with no host allow-list), and inline base64 would
+    backend fetches would be an SSRF primitive, so references are resolved
+    server-side to a bucket key and read from object storage only
+    (StorageService.download_to_base64 reduces any input to a key via
+    key_from_path and never follows arbitrary URLs), and inline base64 would
     triple mobile request size.
     """
     item_id: Optional[UUID] = None
-    name: str
+    name: str = Field(..., max_length=500)
     category: Optional[str] = None
     colors: List[str] = Field(default_factory=list)
     brand: Optional[str] = None
@@ -173,18 +175,18 @@ class GenerateOutfitRequest(BaseModel):
                 f"At most {settings.AI_MAX_OUTFIT_ITEMS} outfit items are allowed"
             )
         return value
-    style: str = "casual"
+    style: str = Field("casual", max_length=500)
     # A short token, resolved to a prompt fragment by _resolve_background in
     # app/agents/image_generation_agent.py. Was "studio white"; the agent's own
     # default was the far worse "seamless clean light background", which invites
     # a gradient sweep the flat-lay matte cannot cut cleanly.
-    background: str = "transparent"
-    pose: str = "standing front"
-    lighting: str = "professional studio lighting"
-    view_angle: str = "full body"
+    background: str = Field("transparent", max_length=500)
+    pose: str = Field("standing front", max_length=500)
+    lighting: str = Field("professional studio lighting", max_length=500)
+    view_angle: str = Field("full body", max_length=500)
     include_model: bool = True
     model_gender: str = "female"
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = Field(None, max_length=2000)
     # URL-first by default: the generated render is persisted to object
     # storage (generated/{user}/...) and returned as image_url; image_base64
     # stays empty unless the storage write fails (fallback keeps renders
@@ -215,16 +217,16 @@ class GenerateOutfitResponse(BaseModel):
 
 class GenerateProductImageRequest(BaseModel):
     """Request to generate a product image."""
-    item_description: str
-    category: str
-    sub_category: Optional[str] = None
+    item_description: str = Field(..., max_length=500)
+    category: str = Field(..., max_length=500)
+    sub_category: Optional[str] = Field(None, max_length=500)
     colors: List[str] = Field(default_factory=list)
-    material: Optional[str] = None
+    material: Optional[str] = Field(None, max_length=500)
     # "transparent" == "render on matte-optimal flat white, then cut the alpha
     # server-side". Resolves to the same prompt fragment as "white" (which every
     # existing client still sends); see _resolve_background.
-    background: str = "transparent"
-    view_angle: str = "front"
+    background: str = Field("transparent", max_length=500)
+    view_angle: str = Field("front", max_length=500)
     include_shadows: bool = False
     # URL-first by default; see GenerateOutfitRequest.save_to_storage.
     save_to_storage: bool = True
@@ -377,11 +379,11 @@ class TryOnRequest(BaseModel):
     )
     clothing_storage_path: Optional[str] = Field(None, description="Owned clothing image storage key")
     avatar_storage_path: Optional[str] = Field(None, description="Owned avatar storage key; defaults to profile avatar")
-    clothing_description: Optional[str] = Field(None, description="Optional description to improve accuracy")
-    style: str = "casual"
-    background: str = "studio white"
-    pose: str = "standing front"
-    lighting: str = "professional studio lighting"
+    clothing_description: Optional[str] = Field(None, max_length=500, description="Optional description to improve accuracy")
+    style: str = Field("casual", max_length=500)
+    background: str = Field("studio white", max_length=500)
+    pose: str = Field("standing front", max_length=500)
+    lighting: str = Field("professional studio lighting", max_length=500)
     # URL-first by default; see GenerateOutfitRequest.save_to_storage.
     save_to_storage: bool = True
 

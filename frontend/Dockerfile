@@ -10,11 +10,30 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install ALL dependencies: the build (tsc && vite build) needs the
+# devDependencies (typescript, vite, tailwindcss, postcss, autoprefixer).
+RUN npm ci && npm cache clean --force
 
 # Copy source code
 COPY . .
+
+# VITE_* values are baked into the bundle at build time — without them the
+# build falls back to placeholder values in src/lib/supabase.ts and the
+# container ships a broken Google sign-in. Pass them with --build-arg, e.g.:
+#   docker build -t fitcheck-frontend \
+#     --build-arg VITE_SUPABASE_URL=https://your-project.supabase.co \
+#     --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_... \
+#     --build-arg VITE_API_BASE_URL= \
+#     --build-arg VITE_PUBLIC_POSTHOG_KEY= .
+# (or build: args: in docker-compose.yml — see the frontend service comment).
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
+ARG VITE_API_BASE_URL
+ARG VITE_PUBLIC_POSTHOG_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
+    VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY \
+    VITE_API_BASE_URL=$VITE_API_BASE_URL \
+    VITE_PUBLIC_POSTHOG_KEY=$VITE_PUBLIC_POSTHOG_KEY
 
 # Build the application
 RUN npm run build

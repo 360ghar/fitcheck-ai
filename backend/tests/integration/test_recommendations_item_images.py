@@ -84,6 +84,9 @@ class _Query:
     def not_(self):
         return self
 
+    def order(self, *_a, **_k):
+        return self
+
     def limit(self, _n):
         return self
 

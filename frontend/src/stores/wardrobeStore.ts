@@ -152,6 +152,8 @@ interface ClosetState {
   setSortBy: (sortBy: ClosetState['sortBy']) => void;
   setSortOrder: (order: 'asc' | 'desc') => void;
   setGridView: (isGrid: boolean) => void;
+  /** Reset all wardrobe state to the signed-out initial values (logout / user switch). */
+  reset: () => void;
   toggleItemFavorite: (itemId: string) => Promise<{ id: string; is_favorite: boolean }>;
   /** Rejects on failure so an inline edit form can stay open for a retry. */
   updateItem: (itemId: string, data: Partial<ItemFormData>) => Promise<Item>;
@@ -306,12 +308,42 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   totalItems: 0,
   hasMore: true,
 
+  // Reset every piece of in-memory wardrobe state (F1-04): logout / forced
+  // logout / user switch must never leave the previous account's items,
+  // filters, or pagination visible to the next sign-in. The wire cache is
+  // dropped separately (resetWardrobeRequestCache).
+  reset: () => {
+    set({
+      items: [],
+      filteredItems: [],
+      selectedItem: null,
+      selectedItems: new Set(),
+      filters: initialFilters,
+      isLoading: false,
+      hasLoaded: false,
+      isLoadingMore: false,
+      isDetailLoading: false,
+      isGridView: true,
+      viewMode: 'all',
+      sortBy: 'date_added',
+      sortOrder: 'desc',
+      error: null,
+      page: 1,
+      pageSize: 24,
+      totalItems: 0,
+      hasMore: true,
+    });
+  },
+
   // Fetch items
   fetchItems: async (refresh = false) => {
     const state = get();
-    const { filters, page, pageSize, items } = state;
+    const { filters, pageSize } = state;
 
-    const newPage = refresh ? 1 : page;
+    // Entry points always fetch page 1 — the store's `page` only advances via
+    // `fetchMore`, so a later plain `fetchItems()` must replace, not append.
+    // `refresh` stays the cache-busting flag (see `cacheRequest` below).
+    const newPage = 1;
     const apiFilters = buildItemApiFilters(filters, newPage, pageSize);
     const cacheKey = closetListKey(filters, newPage, pageSize);
 
@@ -329,7 +361,9 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       );
 
       set({
-        items: refresh || newPage === 1 ? response.items : [...items, ...response.items],
+        // Unconditional replacement: a non-paging caller must never append
+        // page N onto a list that already contains it (duplicate tiles).
+        items: response.items,
         totalItems: response.total,
         hasMore: response.has_next,
         page: newPage,
@@ -362,14 +396,26 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     set({ isLoadingMore: true, error: null });
     try {
       const nextPage = state.page + 1;
-      // Search is a client-side narrowing over the loaded universe, so paging
-      // must NOT send it to the server — otherwise page 2 offsets against a
-      // search-filtered set and the list can strand mid-search.
+      // F1-02: search is sent on EVERY page (fetchItems sends it on page 1),
+      // so offsets, totals and hasMore stay consistent. Stripping it here
+      // made page 2+ an unfiltered continuation of a search-filtered page 1,
+      // stranding matching items past the unfiltered offset.
       const apiFilters = buildItemApiFilters(state.filters, nextPage, state.pageSize);
-      delete apiFilters.search;
       const response = await itemsApi.getItems(apiFilters);
-      const newItems = [...state.items, ...response.items];
+      // F1-01: re-read AFTER the await — a concurrent fetchItems(true) that
+      // resolved meanwhile must not be clobbered by the pre-await snapshot
+      // (last-writer-wins race).
       const currentState = get();
+      // F1-09: dedupe by id so offset pagination cannot double tiles when a
+      // concurrent mutation (favorite toggle, worn bump) reordered the list
+      // between page fetches.
+      const seen = new Set(currentState.items.map((i) => i.id));
+      const fresh = response.items.filter((item) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+      const newItems = [...currentState.items, ...fresh];
       set({
         items: newItems,
         totalItems: response.total,
@@ -577,7 +623,13 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
           state.selectedItem?.id === itemId ? patch(state.selectedItem) : state.selectedItem,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
-      if (!updated) throw new Error('Item is no longer in the closet');
+      // F1-12: the server call succeeded; the item may simply not be in the
+      // loaded pages (e.g. worn from a deep link). Throwing here made
+      // callers surface a failure toast for a successful action — return a
+      // best-effort item instead.
+      if (!updated) {
+        return { ...result, id: itemId, usage_last_worn: wornAt } as Item;
+      }
       return updated;
     } catch (error) {
       const apiError = getApiError(error);

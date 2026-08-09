@@ -70,6 +70,25 @@ async def test_parallel_map_without_callback():
 
 
 @pytest.mark.asyncio
+async def test_parallel_map_callback_exception_is_swallowed():
+    """A failing on_item_complete callback must not raise through gather and
+    discard sibling results (B3-12, mirrors parallel_with_retry)."""
+    seen = []
+
+    async def double(item):
+        return item * 2
+
+    def on_item_complete(index, result):
+        seen.append(index)
+        if index == 1:
+            raise RuntimeError("callback boom")
+
+    results = await parallel_map([1, 2, 3], double, on_item_complete=on_item_complete)
+    assert results == [2, 4, 6]
+    assert seen == [0, 1, 2]
+
+
+@pytest.mark.asyncio
 async def test_parallel_map_settled_failure_path():
     async def flaky(item):
         if item == "bad":

@@ -196,6 +196,12 @@ BEGIN
         current_period_end = EXCLUDED.current_period_end,
         cancel_at_period_end = FALSE,
         trial_end = EXCLUDED.trial_end,
+        -- A1-09: a promo grant replaces the previous billing arrangement, so
+        -- a stale Stripe subscription/customer must not survive — a later
+        -- web upgrade would otherwise "modify" the old canceled Stripe
+        -- subscription instead of starting a fresh checkout.
+        stripe_subscription_id = NULL,
+        stripe_customer_id = NULL,
         updated_at = NOW();
 
     INSERT INTO public.promo_redemptions (
@@ -241,6 +247,7 @@ CREATE POLICY "Anyone can validate promo codes"
 DROP POLICY IF EXISTS "Service role can manage promo codes" ON public.promo_codes;
 CREATE POLICY "Service role can manage promo codes"
     ON public.promo_codes FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 
@@ -258,6 +265,7 @@ CREATE POLICY "Users can view own promo redemptions"
 DROP POLICY IF EXISTS "Service role can manage promo redemptions" ON public.promo_redemptions;
 CREATE POLICY "Service role can manage promo redemptions"
     ON public.promo_redemptions FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 

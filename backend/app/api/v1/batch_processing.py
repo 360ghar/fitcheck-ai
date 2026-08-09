@@ -337,6 +337,10 @@ async def _start_batch_job(
             generation_batch_size=generation_batch_size,
             db=persistence_db,
         )
+        # Track what admission reserved so the pipeline can hand back the
+        # unused generation slots at its terminal transition (A2-02). Must be
+        # set before _spawn_pipeline so the release helper always sees it.
+        job.reserved_generations = reservations.get("generation", 0)
     except Exception:
         # Admission succeeded but job creation did not. Return the reserved
         # daily capacity before surfacing the failure to the caller.
@@ -860,6 +864,10 @@ async def start_single_extraction(
                 generation_batch_size=settings.AI_GENERATION_CONCURRENCY,
                 db=_persistence_db(db),
             )
+            # Track the reserved generation slots so the pipeline returns the
+            # unused remainder at its terminal transition (A2-02); set before
+            # the pipeline is spawned below.
+            job.reserved_generations = reservations.get("generation", 0)
         except Exception:
             if reservations:  # pragma: no cover - admission always reserves before this
                 await asyncio.gather(*[

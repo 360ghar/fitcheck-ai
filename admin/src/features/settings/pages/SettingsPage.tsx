@@ -8,6 +8,16 @@ import { PageHeader } from '@/shared/ui/PageHeader'
 import { SkeletonTable } from '@/shared/ui/SkeletonTable'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 
+/**
+ * Backend limits keys (deployment_settings) → i18n section labels.
+ * The API emits `free_monthly` / `plus_monthly` / `pro_monthly`.
+ */
+const PLAN_LIMIT_LABELS: Record<string, string> = {
+  free_monthly: 'free',
+  plus_monthly: 'plus_monthly',
+  pro_monthly: 'pro_monthly',
+}
+
 /** Render a scalar (string | number | boolean) or a fallback dash. */
 function scalar(value: unknown): string {
   if (typeof value === 'string' && value.length > 0) return value
@@ -199,7 +209,7 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {['free', 'plus_monthly', 'pro_monthly'].map((plan) => {
+            {Object.keys(PLAN_LIMIT_LABELS).map((plan) => {
               const planLimits = limits[plan]
               const isObject = typeof planLimits === 'object' && planLimits !== null
               const limitsRecord = isObject
@@ -207,7 +217,9 @@ export function SettingsPage() {
                 : undefined
               return (
                 <div key={plan} className="rounded-md border border-border p-3">
-                  <h4 className="mb-2 text-sm font-semibold">{t(`sections.${plan}`)}</h4>
+                  <h4 className="mb-2 text-sm font-semibold">
+                    {t(`sections.${PLAN_LIMIT_LABELS[plan]}`)}
+                  </h4>
                   <dl className="space-y-1 text-sm">
                     <Row
                       label={t('sections.extractions')}

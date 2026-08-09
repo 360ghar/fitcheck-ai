@@ -518,6 +518,57 @@ class TestResolvePlatformIdentity:
                 platform=SocialPlatform.INSTAGRAM, access_token="tok",
             )
 
+    @pytest.mark.asyncio
+    async def test_instagram_multiple_accounts_require_selection(self, monkeypatch):
+        """A4-28: several business accounts must never be resolved silently -
+        the client gets the candidate list to offer a picker."""
+        def handler(request):
+            return httpx.Response(200, json={"data": [
+                {"id": "page-1", "name": "Fashion", "access_token": "tok-1",
+                 "instagram_business_account": {"id": "ig-1", "username": "fashion"}},
+                {"id": "page-2", "name": "Travel", "access_token": "tok-2",
+                 "instagram_business_account": {"id": "ig-2", "username": "travel"}},
+            ]}, request=request)
+
+        _patch_async_client(monkeypatch, handler)
+
+        with pytest.raises(SocialImportOAuthExchangeError) as exc_info:
+            await SocialOAuthService.resolve_platform_identity(
+                platform=SocialPlatform.INSTAGRAM, access_token="tok",
+            )
+        details = exc_info.value.details
+        assert details["requires_page_selection"] is True
+        assert details["accounts"] == [
+            {"provider_page_id": "page-1", "page_name": "Fashion", "username": "fashion"},
+            {"provider_page_id": "page-2", "page_name": "Travel", "username": "travel"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_instagram_multiple_accounts_prefers_bound_page(self, monkeypatch):
+        """A4-28: when the connection is already bound to a page
+        (provider_page_id stored on the auth session), that page wins."""
+        def handler(request):
+            return httpx.Response(200, json={"data": [
+                {"id": "page-1", "name": "Fashion", "access_token": "tok-1",
+                 "instagram_business_account": {"id": "ig-1", "username": "fashion"}},
+                {"id": "page-2", "name": "Travel", "access_token": "tok-2",
+                 "instagram_business_account": {"id": "ig-2", "username": "travel"}},
+            ]}, request=request)
+
+        _patch_async_client(monkeypatch, handler)
+
+        identity = await SocialOAuthService.resolve_platform_identity(
+            platform=SocialPlatform.INSTAGRAM,
+            access_token="tok",
+            preferred_page_id="page-2",
+        )
+        assert identity == {
+            "provider_user_id": "ig-2",
+            "provider_username": "travel",
+            "provider_page_access_token": "tok-2",
+            "provider_page_id": "page-2",
+        }
+
 
 class TestParseGraphResponse:
     def test_success_returns_payload(self):

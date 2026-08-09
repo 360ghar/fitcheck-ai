@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 import httpx
 import pytest
 
-from app.core.exceptions import DatabaseError
+from app.core.exceptions import AIServiceError, DatabaseError
 from app.models.subscription import PlanType
 from app.services.subscription_service import SubscriptionService
 
@@ -303,32 +303,6 @@ async def test_cancel_subscription_sets_cancel_at_period_end():
 
 
 @pytest.mark.asyncio
-async def test_apply_referral_credit_upgrades_free_plan_to_trial():
-    db = Mock()
-    _mock_maybe_single(db, _subscription_row(plan_type="free", referral_credit_months=0))
-
-    await SubscriptionService.apply_referral_credit(USER_ID, months=2, db=db)
-
-    update_call = db.table.return_value.update.call_args
-    assert update_call.args[0]["status"] == "trial"
-    assert update_call.args[0]["referral_credit_months"] == 2
-
-
-@pytest.mark.asyncio
-async def test_apply_referral_credit_adds_to_existing_pro_credit_balance():
-    db = Mock()
-    _mock_maybe_single(
-        db, _subscription_row(plan_type="pro_monthly", referral_credit_months=3)
-    )
-
-    await SubscriptionService.apply_referral_credit(USER_ID, months=1, db=db)
-
-    update_call = db.table.return_value.update.call_args
-    assert update_call.args[0]["referral_credit_months"] == 4
-    assert "status" not in update_call.args[0]
-
-
-@pytest.mark.asyncio
 async def test_check_limit_retries_once_on_dead_http2_connection():
     """Regression test: retry classification must use isinstance, not
     string-matching str(e), which silently breaks if an exception's repr
@@ -364,17 +338,19 @@ async def test_check_limit_does_not_retry_on_unrelated_error():
 
 
 @pytest.mark.asyncio
-async def test_increment_usage_retries_once_on_dead_http2_connection():
-    """increment_usage (observed 2026-08-01: ConnectionTerminated on this exact
-    path) rebuilds the Supabase singleton and retries the whole reservation
-    once through the fresh client instead of failing the request."""
+async def test_increment_usage_fails_closed_on_dead_http2_connection():
+    """A1-07: reserve_usage is a non-idempotent conditional increment, so a
+    dead pooled connection (observed 2026-08-01: ConnectionTerminated on this
+    exact path) must NOT auto-retry the RPC — the first attempt may have
+    committed server-side, and a retry would reserve the same admission twice
+    or deny against the now-inflated counter. Fail closed instead: the
+    connection error becomes the friendly retryable 503 and no client rebuild
+    happens."""
     call_count = {"n": 0}
 
     def fake_rpc():
         call_count["n"] += 1
-        if call_count["n"] == 1:
-            raise httpx.RemoteProtocolError("<ConnectionTerminated error_code:1>")
-        return Mock(data=[{"reserve_usage": True}])
+        raise httpx.RemoteProtocolError("<ConnectionTerminated error_code:1>")
 
     fake_db = Mock()
     fake_db.rpc.return_value.execute = fake_rpc
@@ -384,10 +360,12 @@ async def test_increment_usage_retries_once_on_dead_http2_connection():
              return_value=Mock(plan_type=PlanType.FREE),
          ),          patch.object(SubscriptionService, "get_plan_limits", return_value={"monthly_extractions": 10}),          patch("app.db.connection.SupabaseDB") as mock_supabase_db:
         mock_supabase_db.rebuild_service_client.return_value = fake_db
-        await SubscriptionService.increment_usage(USER_ID, "extraction", db=fake_db)
+        with pytest.raises(AIServiceError) as exc_info:
+            await SubscriptionService.increment_usage(USER_ID, "extraction", db=fake_db)
 
-    assert call_count["n"] == 2
-    mock_supabase_db.rebuild_service_client.assert_called_once()
+    assert call_count["n"] == 1
+    assert exc_info.value.retryable is True
+    mock_supabase_db.rebuild_service_client.assert_not_called()
 
 
 # =============================================================================

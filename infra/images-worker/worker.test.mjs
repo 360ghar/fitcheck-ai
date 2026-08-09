@@ -100,6 +100,7 @@ async function mintToken(claims = {}, { secret = JWT_SECRET } = {}) {
   const payload = {
     sub: USER,
     iss: `${SUPABASE_URL}/auth/v1`,
+    aud: 'authenticated',
     exp: now + 3600,
     iat: now,
     ...claims,
@@ -166,6 +167,27 @@ describe('token claims', () => {
     const res = await call(KEY, {
       token: await mintToken({ iss: 'https://someone-else.supabase.co/auth/v1' }),
     });
+    assert.equal(res.status, 404);
+  });
+
+  it('404s a signature-valid token with NO iss at all', async () => {
+    // Backend security.py requires the project issuer on both its paths; a
+    // token minted by any other service must not pass just because iss is
+    // absent rather than wrong.
+    const res = await call(KEY, { token: await mintToken({ iss: undefined }) });
+    assert.equal(res.status, 404, 'a token with no iss must not grant access');
+  });
+
+  it('404s a signature-valid token with NO aud claim', async () => {
+    // Backend security.py requires audience="authenticated"; a token minted
+    // for another audience (e.g. service_role) must not open the image
+    // namespace.
+    const res = await call(KEY, { token: await mintToken({ aud: undefined }) });
+    assert.equal(res.status, 404, 'a token with no aud must not grant access');
+  });
+
+  it('404s a token with a non-authenticated aud claim', async () => {
+    const res = await call(KEY, { token: await mintToken({ aud: 'service_role' }) });
     assert.equal(res.status, 404);
   });
 
@@ -299,16 +321,38 @@ describe('cache-control', () => {
     assert.equal(res.headers.get('Cache-Control'), 'public, max-age=86400, immutable');
   });
 
-  it('overrides the app default max-age=3600 on a write-once key', async () => {
-    // THE REAL-WORLD CASE. S3StorageBackend.upload stamps
-    // `max-age=<DEFAULT_CACHE_CONTROL>` (3600) on every object the app writes,
-    // thumbnails included, so httpMetadata.cacheControl is ALWAYS set. Honouring
-    // it unconditionally made the 24h immutable policy unreachable in production
-    // and cost 24x the origin fetches the R2 cutover existed to remove. The
-    // previous test only "passed" because it stubbed cacheControl: undefined,
-    // which no real object has.
+  it('honours the app default max-age=3600 on a write-once key', async () => {
+    // The real-world case: S3StorageBackend.upload stamps
+    // `max-age=<DEFAULT_CACHE_CONTROL>` (3600) on every object the app writes.
+    // The 24h immutable upgrade must NOT shorten that window — the object's
+    // own (shorter) max-age wins.
     const env = makeEnv({
       objects: { [KEY]: r2Object({ cacheControl: 'max-age=3600' }) },
+    });
+    const res = await call(KEY, { token: await mintToken(), env });
+    assert.equal(res.headers.get('Cache-Control'), 'max-age=3600');
+  });
+
+  it('honours a 60s recompress backfill ceiling on a write-once key', async () => {
+    // recompress_assets overwrites keys in place with `cache-control: 60` so
+    // any CDN/browser holding old bytes refreshes within a minute. Upgrading
+    // that to 24h immutable served stale re-encoded bytes for a day — the
+    // regression A5-06 fixed. Both the bare shorthand and max-age= form must
+    // be honoured.
+    for (const cacheControl of ['60', 'max-age=60']) {
+      const env = makeEnv({
+        objects: { [KEY]: r2Object({ cacheControl }) },
+      });
+      const res = await call(KEY, { token: await mintToken(), env });
+      assert.equal(res.headers.get('Cache-Control'), cacheControl);
+    }
+  });
+
+  it('upgrades a LONGER-lived own max-age to the immutable default', async () => {
+    // The upgrade only ever applies when it cannot shorten the object's
+    // declared freshness window.
+    const env = makeEnv({
+      objects: { [KEY]: r2Object({ cacheControl: 'public, max-age=604800' }) },
     });
     const res = await call(KEY, { token: await mintToken(), env });
     assert.equal(res.headers.get('Cache-Control'), 'public, max-age=86400, immutable');
@@ -317,7 +361,7 @@ describe('cache-control', () => {
   it('applies the immutable policy to thumbnail siblings too', async () => {
     const thumbKey = `${USER}/items/${NAME}_thumb.webp`;
     const env = makeEnv({
-      objects: { [thumbKey]: r2Object({ cacheControl: 'max-age=3600' }) },
+      objects: { [thumbKey]: r2Object({ cacheControl: 'public' }) },
     });
     const res = await call(thumbKey, { token: await mintToken(), env });
     assert.equal(res.headers.get('Cache-Control'), 'public, max-age=86400, immutable');
@@ -552,6 +596,7 @@ async function mintRs256(privateKey, kid, claims = {}) {
   const payload = {
     sub: USER,
     iss: `${SUPABASE_URL}/auth/v1`,
+    aud: 'authenticated',
     exp: now + 3600,
     iat: now,
     ...claims,
@@ -662,5 +707,77 @@ describe('JWKS (RS256)', () => {
     } finally {
       stub.restore();
     }
+  });
+});
+
+// ==========================================================================
+// 8. env validation — a missing secret must fail loudly, not as an opaque 500
+// ==========================================================================
+describe('env validation', () => {
+  /** Fresh module (fresh envValidated flag) + missing-secret env. */
+  async function missingSecretCall(missingKey) {
+    const env = makeEnv();
+    delete env[missingKey];
+    const mod = await freshWorker();
+    const request = new Request(`https://images.fitcheckaiapp.com/${KEY}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${await mintToken()}` },
+    });
+    return mod.fetch(request, env, ctx);
+  }
+
+  async function captureErrors(fn) {
+    const errors = [];
+    const original = console.error;
+    console.error = (...args) => errors.push(args.map(String).join(' '));
+    try {
+      return { res: await fn(), errors };
+    } finally {
+      console.error = original;
+    }
+  }
+
+  it('500s with a descriptive log when SUPABASE_JWT_SECRET is missing', async () => {
+    const { res, errors } = await captureErrors(() => missingSecretCall('SUPABASE_JWT_SECRET'));
+    assert.equal(res.status, 500);
+    assert.ok(
+      errors.some((e) => e.includes('SUPABASE_JWT_SECRET is required')),
+      `expected a descriptive error, got: ${errors.join(' | ')}`,
+    );
+  });
+
+  it('500s with a descriptive log when SUPABASE_URL is missing', async () => {
+    const { res, errors } = await captureErrors(() => missingSecretCall('SUPABASE_URL'));
+    assert.equal(res.status, 500);
+    assert.ok(
+      errors.some((e) => e.includes('SUPABASE_URL is required')),
+      `expected a descriptive error, got: ${errors.join(' | ')}`,
+    );
+  });
+});
+
+// ==========================================================================
+// 9. cookie token decoding — percent-encoded auth cookie values
+// ==========================================================================
+describe('cookie token decoding', () => {
+  it('decodes a percent-encoded auth cookie value', async () => {
+    // A JWT is [A-Za-z0-9_-.] plus literal '.' separators; a client that
+    // percent-encodes the cookie value turns the dots into %2E. The decoded
+    // token must verify and serve.
+    const token = await mintToken();
+    const encoded = token.replace(/\./g, '%2E');
+    const res = await call(KEY, {
+      headers: { Cookie: `sb-proj-auth-token=${encoded}` },
+    });
+    assert.equal(res.status, 200);
+  });
+
+  it('falls back to the raw value on malformed percent-encoding (404, not 500)', async () => {
+    // decodeURIComponent throws on `%zz`; the raw value is used instead and
+    // simply fails verification — indistinguishable from a bad token.
+    const res = await call(KEY, {
+      headers: { Cookie: 'sb-proj-auth-token=abc%zzdef' },
+    });
+    assert.equal(res.status, 404);
   });
 });

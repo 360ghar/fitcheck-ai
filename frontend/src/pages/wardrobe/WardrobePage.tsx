@@ -214,6 +214,16 @@ export default function WardrobePage() {
     publishBatchJob(lastBatchStatusRef.current, isUploadModalOpen)
   }, [isUploadModalOpen, publishBatchJob])
 
+  // F2b-02: the store's non-URL filters (category/color/occasion/condition/
+  // search) persist across visits and leak server-side into the next fetch,
+  // narrowing the list while the UI shows "All". The URL is this page's
+  // source of truth, so clear them once per mount; `favorites` below is the
+  // only filter the URL carries.
+  useEffect(() => {
+    setFilters({ search: '', category: 'all', color: '', occasion: '', condition: 'all', isFavorite: false })
+    useClosetStore.getState().resetFilters()
+  }, [])
+
   useEffect(() => {
     const action = searchParams.get('action')
     if (action === 'add') {

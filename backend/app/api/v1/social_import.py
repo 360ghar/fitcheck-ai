@@ -36,6 +36,7 @@ from app.models.social_import import (
 from app.services.social_import_event_service import SocialImportEventService
 from app.services.social_import_job_store import SocialImportJobStore
 from app.services.social_import_pipeline_service import SocialImportPipelineService
+from app.services.social_auth_service import SocialAuthService
 from app.services.social_oauth_service import SocialOAuthService
 from app.services.social_url_service import SocialURLService
 from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW, note_consumed
@@ -108,14 +109,21 @@ def _build_oauth_payload(
     job_id: str,
     status_value: str,
     message: str,
+    accounts: Optional[list] = None,
 ) -> Dict[str, str]:
     """Build the standard OAuth response payload."""
-    return {
+    payload = {
         "source": "fitcheck-social-oauth",
         "job_id": job_id,
         "status": status_value,
         "message": message,
     }
+    # A4-28: when identity resolution needs an account selection, the
+    # candidate pages ride along so the client can offer a picker instead of
+    # failing silently. Additive key; existing clients ignore it.
+    if accounts:
+        payload["accounts"] = accounts
+    return payload
 
 
 def _json_for_inline_script(obj: Any) -> str:
@@ -139,8 +147,9 @@ def _oauth_popup_response(
     status_value: str,
     message: str,
     target_origin: Optional[str] = None,
+    accounts: Optional[list] = None,
 ) -> HTMLResponse:
-    payload = _build_oauth_payload(job_id, status_value, message)
+    payload = _build_oauth_payload(job_id, status_value, message, accounts=accounts)
     target_origin = _validate_target_origin(target_origin).rstrip("/")
     payload_json = _json_for_inline_script(payload)
     target_origin_json = _json_for_inline_script(target_origin)
@@ -181,10 +190,11 @@ def _oauth_mobile_redirect_response(
     job_id: str,
     status_value: str,
     message: str,
+    accounts: Optional[list] = None,
 ) -> RedirectResponse:
     parsed = urlparse(redirect_uri)
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    query.update(_build_oauth_payload(job_id, status_value, message))
+    query.update(_build_oauth_payload(job_id, status_value, message, accounts=accounts))
     target = urlunparse(parsed._replace(query=urlencode(query), fragment=""))
     return RedirectResponse(url=target, status_code=status.HTTP_302_FOUND)
 
@@ -196,6 +206,7 @@ def _oauth_response(
     message: str,
     mobile_redirect_uri: Optional[str] = None,
     opener_origin: Optional[str] = None,
+    accounts: Optional[list] = None,
 ) -> HTMLResponse | RedirectResponse:
     """Return appropriate OAuth response based on client type (mobile vs web)."""
     if mobile_redirect_uri:
@@ -204,12 +215,14 @@ def _oauth_response(
             job_id=job_id,
             status_value=status_value,
             message=message,
+            accounts=accounts,
         )
     return _oauth_popup_response(
         job_id=job_id,
         status_value=status_value,
         message=message,
         target_origin=opener_origin,
+        accounts=accounts,
     )
 
 
@@ -482,9 +495,27 @@ async def social_oauth_callback(
             code=code,
             redirect_uri=redirect_uri,
         )
+        # A4-28: when the user has several Instagram business accounts, prefer
+        # the page the connection was already bound to (provider_page_id
+        # stored on the auth session from a previous connect/selection).
+        preferred_page_id = None
+        try:
+            existing_session = await SocialAuthService.get_active_session(
+                db,
+                job_id=state_payload.job_id,
+                user_id=state_payload.user_id,
+            )
+            session_payload = (existing_session or {}).get("session_payload") or {}
+            preferred_page_id = session_payload.get("provider_page_id")
+        except Exception as session_err:  # noqa: BLE001 - best-effort preference lookup
+            logger.debug(
+                "Could not load existing OAuth session for page preference",
+                extra={"job_id": state_payload.job_id, "error": str(session_err)},
+            )
         identity_payload = await SocialOAuthService.resolve_platform_identity(
             platform=state_payload.platform,
             access_token=token_payload["provider_access_token"],
+            preferred_page_id=preferred_page_id,
         )
 
         payload = {
@@ -499,12 +530,20 @@ async def social_oauth_callback(
         service = _service(state_payload.user_id, db)
         await service.accept_auth(job_id, "oauth", payload)
     except Exception as exc:
+        # A4-28: when identity resolution found multiple business accounts,
+        # surface the candidate list so the client can ask the user to select
+        # an account (the message also names the accounts).
+        accounts = None
+        details = getattr(exc, "details", None) or {}
+        if details.get("requires_page_selection") and details.get("accounts"):
+            accounts = details["accounts"]
         return _oauth_response(
             job_id=job_id,
             status_value="error",
             message=str(exc),
             mobile_redirect_uri=mobile_uri,
             opener_origin=opener,
+            accounts=accounts,
         )
 
     # Success response

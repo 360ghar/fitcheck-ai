@@ -230,7 +230,7 @@ def _extract_missing_users_column(err: Exception) -> Optional[str]:
     return None
 
 
-def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], bool]:
+async def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], bool]:
     """Read user birth profile from canonical columns."""
     profile: Dict[str, Any] = {}
     users_profile_columns_missing = False
@@ -238,13 +238,15 @@ def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], b
     # Happy path: one round-trip for all three columns. The per-column loop
     # below only exists to tolerate partially-migrated schemas, where a
     # combined select fails wholesale if any single column is absent.
+    # Sync supabase-py calls run in worker threads; the event loop is never
+    # blocked (see AGENTS.md "keep supabase-py sync + asyncio.to_thread").
     try:
-        row = (
+        row = await asyncio.to_thread(
             db.table("users")
             .select("birth_date, birth_time, birth_place")
             .eq("id", user_id)
             .maybe_single()
-            .execute()
+            .execute
         )
         if row and row.data:
             return (
@@ -257,12 +259,12 @@ def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], b
 
     for column in ("birth_date", "birth_time", "birth_place"):
         try:
-            row = (
+            row = await asyncio.to_thread(
                 db.table("users")
                 .select(column)
                 .eq("id", user_id)
                 .maybe_single()
-                .execute()
+                .execute
             )
             if row and row.data and column in row.data:
                 profile[column] = row.data.get(column)
@@ -276,13 +278,15 @@ def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], b
     return profile, users_profile_columns_missing
 
 
-def _get_auth_birth_profile(db: Client, user_id: str) -> Dict[str, Any]:
+async def _get_auth_birth_profile(db: Client, user_id: str) -> Dict[str, Any]:
     """Read birth fields from Supabase Auth metadata as schema-migration fallback."""
     try:
         admin = getattr(db.auth, "admin", None)
         if not admin or not hasattr(admin, "get_user_by_id"):
             return {}
-        auth_user = admin.get_user_by_id(user_id)
+        # admin.get_user_by_id is a blocking network call on the sync client;
+        # run it in a worker thread (same policy as the queries above).
+        auth_user = await asyncio.to_thread(admin.get_user_by_id, user_id)
         if not auth_user or not getattr(auth_user, "user", None):
             return {}
         meta = getattr(auth_user.user, "user_metadata", {}) or {}
@@ -380,7 +384,7 @@ def _build_complete_look_response(item: Dict[str, Any], position: int) -> Dict[s
         "item_name": item.get("name"),
         "image_url": _get_primary_image_url(item),
         "category": item.get("category"),
-        "position": item.get("category"),
+        "position": position,
         "confidence": 0.7,
     }
 
@@ -514,13 +518,16 @@ async def match_items(
     if not sources:
         raise ItemNotFoundError()
 
-    # Candidate pool: same wardrobe excluding sources
+    # Candidate pool: same wardrobe excluding sources. The query is ordered
+    # deterministically and the 500-row cap is surfaced in logs: a silent
+    # truncation would make the "best" matches depend on storage order.
     candidates_q = (
         db.table("items")
         .select("*, item_images(*)")
         .eq("user_id", user_id)
         .eq("is_deleted", False)
         .not_.in_("id", source_ids)
+        .order("created_at")
     )
     # Guard: when this endpoint is invoked directly by other routes (not via
     # FastAPI routing), the Query() defaults arrive as ParamInfo instances.
@@ -541,6 +548,13 @@ async def match_items(
         _prepare_item_for_response(i)
         for i in await _materialize_item_images(candidates_res.data or [], owner_user_id=user_id)
     ]
+    if len(candidates) >= 500:
+        logger.warning(
+            "Match candidate pool hit the 500-row cap; matches may be incomplete",
+            user_id=user_id,
+            source_count=len(source_ids),
+            candidate_count=len(candidates),
+        )
 
     matches: List[Dict[str, Any]] = []
     for source in sources:
@@ -848,14 +862,14 @@ async def astrology_recommendations(
             details={"allowed": ["daily", "important_meeting"]},
         )
 
-    user_profile, users_profile_columns_missing = _get_user_birth_profile(db, user_id)
+    user_profile, users_profile_columns_missing = await _get_user_birth_profile(db, user_id)
     if (
         users_profile_columns_missing
         or not user_profile.get("birth_date")
         or not user_profile.get("birth_time")
         or not user_profile.get("birth_place")
     ):
-        auth_profile = _get_auth_birth_profile(db, user_id)
+        auth_profile = await _get_auth_birth_profile(db, user_id)
         user_profile["birth_date"] = user_profile.get("birth_date") or auth_profile.get("birth_date")
         user_profile["birth_time"] = user_profile.get("birth_time") or auth_profile.get("birth_time")
         user_profile["birth_place"] = user_profile.get("birth_place") or auth_profile.get("birth_place")
@@ -886,6 +900,13 @@ async def astrology_recommendations(
     missing_fields: List[str] = []
     if birth_date is None:
         missing_fields.append("birth_date")
+    # A3b-04: birth_time/birth_place are required for the full profile too —
+    # reporting only birth_date meant a user with just a date silently got
+    # vedic_lite with no hint that the other fields unlock vedic_full.
+    if birth_time is None:
+        missing_fields.append("birth_time")
+    if not birth_place:
+        missing_fields.append("birth_place")
 
     if missing_fields:
         weekday = effective_date.strftime("%A")
@@ -1064,6 +1085,10 @@ async def similar_items(
                 db.table("items")
                 .select("*, item_images(*)")
                 .eq("user_id", user_id)
+                .eq("is_deleted", False)
+                # Same exclusion set as the vector path and the match route:
+                # laundry/repair/donate items must not surface as suggestions.
+                .not_.in_("condition", ["laundry", "repair", "donate"])
                 .neq("id", item_id)
                 .limit(200)
                 .execute
@@ -1251,8 +1276,8 @@ async def capsule_wardrobe(
         .execute
     )
     items = [
-        _build_complete_look_response(it, 0)
-        for it in await _materialize_item_images(items_res.data or [])
+        _build_complete_look_response(it, idx)
+        for idx, it in enumerate(await _materialize_item_images(items_res.data or []))
     ]
 
     logger.debug(
@@ -1288,14 +1313,20 @@ async def rate_recommendation(
     user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
-    """Store user feedback to improve future recommendations."""
-    await asyncio.to_thread(db.table("recommendation_logs").insert(
+    """Store user feedback to improve future recommendations.
+
+    The recommendation_id is client-supplied and used as the primary key; a
+    second rating for the same id must update the existing row (upsert), not
+    fail with a duplicate-key 500.
+    """
+    await asyncio.to_thread(db.table("recommendation_logs").upsert(
         {
             "id": str(recommendation_id),
             "user_id": user_id,
             "recommendation_type": "rating",
             "feedback": {"rating": request.rating},
-        }
+        },
+        on_conflict="id",
     ).execute)
     logger.info(
         "Recommendation rated",

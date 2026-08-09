@@ -38,7 +38,7 @@ from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
 from app.utils.parallel import ParallelResult
-from tests.utils.fake_db import FakeDB
+from tests.utils.fake_db import FakeDB, PGRSTDuplicateError
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
 ITEM_ID = "22222222-2222-2222-2222-222222222222"
@@ -406,6 +406,108 @@ async def test_create_item_wraps_unexpected_errors(monkeypatch):
         await items_module.create_item(
             item=ItemCreate(name="Tee", category="tops"), user_id=USER_ID, db=Mock()
         )
+
+
+@pytest.mark.asyncio
+async def test_create_item_persists_client_request_id(monkeypatch):
+    """F1-07: the idempotency key rides the insert payload."""
+    db = FakeDB()
+    reserve, generate, release = _patch_embedding(monkeypatch, reserved=False)
+    _patch_vector_service(monkeypatch)
+
+    await items_module.create_item(
+        item=ItemCreate(name="Tee", category="tops", client_request_id="req-abc"),
+        user_id=USER_ID,
+        db=db,
+    )
+
+    assert db.inserts[0][0] == "items"
+    assert db.inserts[0][1]["client_request_id"] == "req-abc"
+    reserve.assert_awaited_once()
+    generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_item_replays_existing_row_for_repeated_client_request_id(monkeypatch):
+    """F1-07: a transport retry that committed before the response was lost
+    must replay the original row instead of inserting a duplicate item."""
+    db = FakeDB(rows={"items": [_item_row(client_request_id="req-abc")]})
+    reserve, generate, release = _patch_embedding(monkeypatch)
+    _patch_vector_service(monkeypatch)
+
+    result = await items_module.create_item(
+        item=ItemCreate(
+            name="Tee",
+            category="tops",
+            images=[ItemImageBase(image_url="https://cdn/1.jpg", is_primary=True)],
+            client_request_id="req-abc",
+        ),
+        user_id=USER_ID,
+        db=db,
+    )
+
+    assert result["message"] == "Created"
+    assert result["data"]["id"] == ITEM_ID
+    assert result["data"]["name"] == "Crew-neck tee"
+    # No second items insert (the replay path returns before the write).
+    assert all(t != "items" for t, _p, _c in db.inserts)
+    reserve.assert_not_awaited()
+    generate.assert_not_awaited()
+    release.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_item_replay_ignores_deleted_rows(monkeypatch):
+    """A hard-deleted item with the same key is not a replay target — the
+    client gets a fresh insert (and its own key, but this pins the lookup's
+    is_deleted filter)."""
+    db = FakeDB(
+        rows={"items": [_item_row(client_request_id="req-abc", is_deleted=True)]}
+    )
+    reserve, generate, release = _patch_embedding(monkeypatch, reserved=False)
+    _patch_vector_service(monkeypatch)
+
+    result = await items_module.create_item(
+        item=ItemCreate(name="Tee", category="tops", client_request_id="req-abc"),
+        user_id=USER_ID,
+        db=db,
+    )
+
+    assert result["message"] == "Created"
+    assert result["data"]["id"] != ITEM_ID
+    assert db.inserts[0][0] == "items"
+    assert db.inserts[0][1]["client_request_id"] == "req-abc"
+
+
+@pytest.mark.asyncio
+async def test_create_item_race_collapses_onto_client_request_id_winner(monkeypatch):
+    """F1-07: two concurrent requests with the same key both miss the replay
+    lookup; the loser's insert hits the unique index (23505) and must replay
+    the winner's row instead of 500ing."""
+    winner = _item_row(client_request_id="req-abc")
+    calls = {"n": 0}
+
+    async def flaky_execute(builder, db, *, extra=None, max_retries=1, backoff_seconds=0.4):
+        calls["n"] += 1
+        if extra and extra.get("operation") == "create_item.insert":
+            raise PGRSTDuplicateError("items", ("user_id", "client_request_id"))
+        if extra and extra.get("operation") == "create_item.replay_lookup":
+            # First lookup (pre-insert) misses; the post-race lookup wins.
+            if calls["n"] > 1:
+                return SimpleNamespace(data=winner, count=1)
+            return SimpleNamespace(data=[], count=0)
+        raise AssertionError(f"unexpected operation: {extra}")
+
+    monkeypatch.setattr(items_module, "execute_with_reconnect", flaky_execute)
+
+    result = await items_module.create_item(
+        item=ItemCreate(name="Tee", category="tops", client_request_id="req-abc"),
+        user_id=USER_ID,
+        db=Mock(),
+    )
+
+    assert result["message"] == "Created"
+    assert result["data"]["id"] == ITEM_ID
 
 
 # ============================================================================
@@ -839,10 +941,14 @@ async def test_update_item_wraps_unexpected_errors():
 
 @pytest.mark.asyncio
 async def test_delete_item_removes_row_and_storage_paths(monkeypatch):
+    # A2-01: source keys are re-verified against the canonical key format
+    # (owner segment + 32-hex name) at deletion resolution time, so the
+    # fixture must use a real-shaped key, not "u/sources/shot.jpg".
+    source_key = f"{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
     db = FakeDB(
         rows={
             "items": [
-                _item_row(source_image_storage_path="u/sources/shot.jpg"),
+                _item_row(source_image_storage_path=source_key),
             ],
             "item_images": [
                 _image_row(storage_path="u/items/one.jpg"),
@@ -865,12 +971,12 @@ async def test_delete_item_removes_row_and_storage_paths(monkeypatch):
     assert result is None
     assert ("items", None) in db.deletes
     vector.delete_item.assert_awaited_once_with(ITEM_ID)
-    assert sorted(deleted_paths) == [
+    assert sorted(deleted_paths) == sorted([
         "u/items/one.jpg",
         "u/items/one_thumb.webp",
-        "u/sources/shot.jpg",
-        "u/sources/shot_thumb.webp",
-    ]
+        source_key,
+        f"{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
+    ])
 
 
 @pytest.mark.asyncio
@@ -986,36 +1092,84 @@ async def test_toggle_favorite_raises_database_error_when_update_returns_nothing
 
 @pytest.mark.asyncio
 async def test_mark_worn_increments_the_wear_count():
-    db = FakeDB(rows={"items": [_item_row(usage_times_worn=2)]})
+    """mark_worn now calls the atomic increment_item_worn RPC (migration 044)
+    and reports the count from the RETURNING * row."""
+
+    db = FakeDB(
+        rows={"items": [_item_row(usage_times_worn=2)]},
+        rpc_results={"increment_item_worn": [_item_row(usage_times_worn=3)]},
+    )
 
     result = await items_module.mark_worn(item_id=ITEM_ID, user_id=USER_ID, db=db)
 
     assert result["data"] == {"id": ITEM_ID, "usage_times_worn": 3}
-    assert db.updates[0][1]["usage_times_worn"] == 3
+    assert db.rpc_calls == [
+        ("increment_item_worn", {"item_uuid": ITEM_ID, "user_uuid": USER_ID})
+    ]
+    # No read-modify-write update anywhere: the RPC owns the increment.
+    assert db.updates == []
+    assert db.selects == []
 
 
 @pytest.mark.asyncio
 async def test_mark_worn_defaults_a_missing_count_to_zero():
+    """The RPC row is the single source of truth; a NULL count in the
+    returned row is coerced to 0 like the legacy path did."""
+
     row = _item_row()
-    del row["usage_times_worn"]  # column absent -> .get() default kicks in
-    db = FakeDB(rows={"items": [row]})
+    row["usage_times_worn"] = None  # RPC row with a NULL count
+    db = FakeDB(
+        rows={"items": [_item_row()]},
+        rpc_results={"increment_item_worn": [row]},
+    )
 
     result = await items_module.mark_worn(item_id=ITEM_ID, user_id=USER_ID, db=db)
 
-    assert result["data"]["usage_times_worn"] == 1
+    assert result["data"]["usage_times_worn"] == 0
 
 
 @pytest.mark.asyncio
 async def test_mark_worn_raises_not_found():
+    """The RPC returns zero rows for a missing/unowned item -> 404."""
+
     db = FakeDB(rows={"items": []})
 
     with pytest.raises(ItemNotFoundError):
         await items_module.mark_worn(item_id=ITEM_ID, user_id=USER_ID, db=db)
 
+    assert db.rpc_calls == [
+        ("increment_item_worn", {"item_uuid": ITEM_ID, "user_uuid": USER_ID})
+    ]
+
+
+@pytest.mark.asyncio
+async def test_mark_worn_falls_back_when_rpc_missing():
+    """Migration-gap fallback: when increment_item_worn is absent (PGRST202),
+    the endpoint degrades to the legacy read-modify-write instead of 500ing."""
+
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = RuntimeError(
+        "PGRST202 could not find the function public.increment_item_worn in "
+        "the schema cache"
+    )
+    db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = SimpleNamespace(
+        data={"id": ITEM_ID, "usage_times_worn": 4}
+    )
+
+    result = await items_module.mark_worn(item_id=ITEM_ID, user_id=USER_ID, db=db)
+
+    assert result["data"] == {"id": ITEM_ID, "usage_times_worn": 5}
+    # The legacy fallback wrote read+1 via the table update.
+    update_call = db.table.return_value.update.call_args[0][0]
+    assert update_call["usage_times_worn"] == 5
+    assert update_call["usage_last_worn"]
+    assert update_call["updated_at"]
+
 
 @pytest.mark.asyncio
 async def test_mark_worn_wraps_unexpected_errors():
-    db = _error_db(RuntimeError("boom"))
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = RuntimeError("boom")
 
     with pytest.raises(DatabaseError):
         await items_module.mark_worn(item_id=ITEM_ID, user_id=USER_ID, db=db)
@@ -1028,6 +1182,8 @@ async def test_mark_worn_wraps_unexpected_errors():
 
 @pytest.mark.asyncio
 async def test_upload_item_image_inserts_and_clears_other_primaries(monkeypatch):
+    """The primary flag is flipped atomically via set_primary_item_image
+    (migration 044); the two-step clear is no longer used on this path."""
     db = FakeDB(rows={"items": [_item_row()]})
 
     async def fake_upload(*, db, user_id, filename, file_data, is_primary=False):
@@ -1052,7 +1208,60 @@ async def test_upload_item_image_inserts_and_clears_other_primaries(monkeypatch)
     assert result["message"] == "Created"
     assert result["data"]["image_url"] == "https://cdn/new.jpg"
     assert db.inserts[0][0] == "item_images"
-    assert db.updates[0][1] == {"is_primary": False}
+    inserted_id = db.inserts[0][1]["id"]
+    assert db.rpc_calls == [
+        ("set_primary_item_image", {"item_uuid": ITEM_ID, "image_uuid": inserted_id})
+    ]
+    # The atomic RPC replaces the two-step clear: no second UPDATE.
+    assert db.updates == []
+
+
+@pytest.mark.asyncio
+async def test_upload_item_image_falls_back_to_two_step_clear_when_rpc_missing(monkeypatch):
+    """Migration-gap fallback: when set_primary_item_image is absent
+    (PGRST202), the old two-step clear keeps the endpoint working."""
+    db = Mock()
+    db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = SimpleNamespace(
+        data={"id": ITEM_ID}
+    )
+    db.table.return_value.insert.return_value.execute.return_value = Mock(
+        data=[{"id": "img-new"}]
+    )
+    db.rpc.return_value.execute.side_effect = RuntimeError(
+        "PGRST202 could not find the function public.set_primary_item_image in "
+        "the schema cache"
+    )
+    monkeypatch.setattr(
+        StorageService,
+        "upload_item_image",
+        staticmethod(
+            AsyncMock(
+                return_value={
+                    "image_url": "https://cdn/new.jpg",
+                    "thumbnail_url": None,
+                    "storage_path": "u/items/new.jpg",
+                }
+            )
+        ),
+    )
+
+    result = await items_module.upload_item_image(
+        item_id=ITEM_ID,
+        file=_FakeUpload(),
+        is_primary=True,
+        user_id=USER_ID,
+        db=db,
+    )
+
+    assert result["message"] == "Created"
+    db.rpc.assert_called_once_with(
+        "set_primary_item_image", {"item_uuid": ITEM_ID, "image_uuid": "img-new"}
+    )
+    # Fallback two-step clear ran (is_primary=False on the OTHER rows).
+    db.table.return_value.update.assert_called_once_with({"is_primary": False})
+    db.table.return_value.update.return_value.eq.return_value.neq.assert_called_once_with(
+        "id", "img-new"
+    )
 
 
 @pytest.mark.asyncio
@@ -1082,7 +1291,9 @@ async def test_upload_item_image_non_primary_skips_the_clear_step(monkeypatch):
 
     assert result["message"] == "Created"
     assert result["data"]["is_primary"] is False
+    # Non-primary uploads never touch the RPC or the clear step.
     assert db.updates == []
+    assert db.rpc_calls == []
 
 
 @pytest.mark.asyncio
@@ -1246,10 +1457,13 @@ async def test_batch_delete_requires_at_least_one_item_id():
 
 @pytest.mark.asyncio
 async def test_batch_delete_cleans_storage_and_embeddings(monkeypatch):
+    # A2-01: source keys must be canonical ({user}/sources/{32-hex}.{ext}) —
+    # see test_delete_item_removes_row_and_storage_paths.
+    source_key = f"{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
     db = FakeDB(
         rows={
             "items": [
-                _item_row(source_image_storage_path="u/sources/shot.jpg"),
+                _item_row(source_image_storage_path=source_key),
                 _item_row(id=OTHER_ITEM_ID),
             ],
             "item_images": [
@@ -1278,14 +1492,14 @@ async def test_batch_delete_cleans_storage_and_embeddings(monkeypatch):
 
     assert result["data"]["deleted_count"] == 2
     vector.batch_delete.assert_awaited_once_with([ITEM_ID, OTHER_ITEM_ID])
-    assert sorted(deleted_paths) == [
+    assert sorted(deleted_paths) == sorted([
         "u/items/one.jpg",
         "u/items/one_thumb.webp",
         "u/items/two.jpg",
         "u/items/two_thumb.webp",
-        "u/sources/shot.jpg",
-        "u/sources/shot_thumb.webp",
-    ]
+        source_key,
+        f"{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
+    ])
 
 
 @pytest.mark.asyncio
@@ -2157,3 +2371,165 @@ def test_generate_duplicate_reasons_returns_empty_for_no_matches():
     request = _duplicate_request(name="Blazer")
     item = {"name": "Shirt", "category": "bottoms", "sub_category": None, "colors": [], "brand": None}
     assert items_module._generate_duplicate_reasons(request, item, 0.1) == []
+# ============================================================================
+# Rollback / ilike-escaping regressions (A2-04, A2-19)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_item_rolls_back_promoted_images_when_image_insert_fails(monkeypatch):
+    """A failure AFTER promotion (here: the image-row batch insert) must roll
+    back the item row AND the objects this attempt promoted, so a client
+    retry cannot duplicate the item while partial state is left behind."""
+    db = FakeDB(rows={"items": []})
+    promoted = []
+    deleted = []
+
+    async def fake_promote(*, db, user_id, temp_storage_path, filename_hint="generated.png", source_content=None):
+        promoted.append(temp_storage_path)
+        return {
+            "image_url": "https://cdn/p.jpg",
+            "thumbnail_url": "https://cdn/p-t.jpg",
+            "storage_path": "u1/items/p.jpg",
+        }
+
+    async def fake_delete_image(*, db, storage_path, bucket=None):
+        deleted.append(storage_path)
+        return True
+
+    monkeypatch.setattr(StorageService, "promote_temp_image_to_item", staticmethod(fake_promote))
+    monkeypatch.setattr(StorageService, "delete_image", staticmethod(fake_delete_image))
+
+    real = items_module.execute_with_reconnect
+    state = {"calls": 0}
+
+    async def flaky(callable_, db_, **kwargs):
+        state["calls"] += 1
+        if state["calls"] == 2:  # item insert OK, image batch insert fails
+            raise RuntimeError("image insert boom")
+        return await real(callable_, db_, **kwargs)
+
+    monkeypatch.setattr(items_module, "execute_with_reconnect", flaky)
+
+    item = ItemCreate(
+        name="Tee",
+        category="tops",
+        images=[
+            ItemImageBase(
+                image_url="",
+                storage_path=f"{USER_ID}/tmp/photoshoot/{'a' * 32}.png",
+                is_primary=True,
+            )
+        ],
+    )
+    with pytest.raises(DatabaseError):
+        await items_module.create_item(item=item, user_id=USER_ID, db=db)
+
+    # The item row was deleted...
+    assert ("items", None) in db.deletes
+    # ...and every object THIS attempt promoted was deleted best-effort.
+    assert promoted == [f"{USER_ID}/tmp/photoshoot/{'a' * 32}.png"]
+    assert deleted == ["u1/items/p.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_search_items_escapes_ilike_wildcards():
+    """A search term containing %/_ must match literally: the escape helper
+    runs before the term is wrapped in %...% at the search site (A2-19)."""
+    calls = []
+
+    class _Builder:
+        def select(self, cols):
+            calls.append(("select", cols))
+            return self
+
+        def eq(self, col, val):
+            calls.append(("eq", col, val))
+            return self
+
+        def or_(self, expr):
+            calls.append(("or", expr))
+            return self
+
+        def limit(self, n):
+            calls.append(("limit", n))
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=[])
+
+    db = Mock()
+    db.table.return_value = _Builder()
+
+    result = await items_module.search_items(q="50% off_", user_id=USER_ID, db=db)
+
+    assert result["data"]["items"] == []
+    or_expr = next(c for c in calls if c[0] == "or")[1]
+    assert "%50\% off\_%" in or_expr
+    assert or_expr.startswith("name.ilike.")
+
+
+@pytest.mark.asyncio
+async def test_list_items_escapes_ilike_wildcards(monkeypatch):
+    """The list-items search filter escapes the term's own %/_ before the
+    or_() pattern is built."""
+    seen = []
+    real = items_module.escape_ilike_literal
+
+    def spy(value):
+        seen.append(value)
+        return real(value)
+
+    monkeypatch.setattr(items_module, "escape_ilike_literal", spy)
+    db = FakeDB(rows={"items": []})
+
+    # Pass every filter kwarg explicitly: the route's Query(...) defaults are
+    # objects, not None, when the handler is called directly.
+    result = await items_module.list_items(
+        page=1,
+        page_size=20,
+        category=None,
+        color=None,
+        occasion=None,
+        condition=None,
+        brand=None,
+        search="50% off",
+        is_favorite=None,
+        user_id=USER_ID,
+        db=db,
+    )
+
+    assert result["data"]["items"] == []
+    assert "50% off" in seen
+    or_filters = [f for f in db.filters if f[1] == "or"]
+    assert any("%50\% off%" in f[3] for f in or_filters)
+
+
+@pytest.mark.asyncio
+async def test_check_duplicates_fallback_escapes_ilike_wildcards(monkeypatch):
+    """The text fallback duplicate check escapes the name's %/_ so a name
+    containing them is not widened into a wildcard pattern."""
+    seen = []
+    real = items_module.escape_ilike_literal
+
+    def spy(value):
+        seen.append(value)
+        return real(value)
+
+    monkeypatch.setattr(items_module, "escape_ilike_literal", spy)
+    _patch_embedding(monkeypatch, reserved=False)
+    # A non-empty wardrobe so the early empty-wardrobe return is not taken.
+    db = FakeDB(rows={"items": [_item_row(name="Something else")]})
+
+    result = await items_module.check_duplicates(
+        request=_duplicate_request(name="50% tee"),
+        threshold=0.75,
+        limit=5,
+        user_id=USER_ID,
+        db=db,
+    )
+
+    assert result["message"] == "Fallback text-based duplicate check"
+    assert "50% tee" in seen
+    ilike_filters = [f for f in db.filters if f[1] == "ilike"]
+    assert any("%50\% tee%" in f[3] for f in ilike_filters)

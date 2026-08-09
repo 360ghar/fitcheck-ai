@@ -140,6 +140,10 @@ async def test_store_billed_subscription_refuses_stripe_checkout(provider):
             "stripe_subscription_id": None,
             "stripe_customer_id": None,
             "billing_provider": provider,
+            # A1-05: the store-billed guard fires only while the store
+            # entitlement is actually active — a lapsed/free row may move to
+            # Stripe. This fixture must be an active store subscription.
+            "status": "active",
         }
     )
     request = CreateCheckoutRequest(plan_type=PlanType.PLUS_MONTHLY)

@@ -9,7 +9,8 @@
 
 import { logger } from '@/lib/logger';
 import * as outfitsApi from '@/api/outfits';
-import { useOutfitStore } from '@/stores/outfitStore';
+import { invalidateOutfitList, outfitDetailKey, useOutfitStore } from '@/stores/outfitStore';
+import { invalidateRequest } from '@/lib/requestCache';
 import type { Category } from '@/types';
 
 /** Display label for a category (used to build outfit names). */
@@ -73,6 +74,10 @@ export async function createOutfitFromSavedItems(
     const store = useOutfitStore.getState();
     const generating = new Map(store.generatingOutfits);
     generating.set(outfit.id, { status: 'pending' });
+    // F1-05: without this, a later fetchOutfits() inside the 30s freshness
+    // window returns the pre-create cached list and hides the new outfit.
+    invalidateOutfitList();
+    invalidateRequest(outfitDetailKey(outfit.id));
     useOutfitStore.setState({
       outfits: [outfit, ...store.outfits],
       generatingOutfits: generating,

@@ -12,6 +12,7 @@ Covers, in order:
   6. The health check distinguishing "column absent" from "check failed".
 """
 import inspect
+import json
 import logging
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
@@ -46,8 +47,12 @@ async def _no_sleep(_delay):
 
 
 def _request(ip: str):
-    """Minimal stand-in for a Starlette Request (get_client_ip reads .client)."""
-    return SimpleNamespace(client=SimpleNamespace(host=ip))
+    """Minimal stand-in for a Starlette Request (get_client_ip reads .client
+    and the x-forwarded-for header)."""
+    return SimpleNamespace(
+        client=SimpleNamespace(host=ip),
+        headers={},
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -289,6 +294,10 @@ async def test_upload_item_images_rejects_an_oversized_file_across_all_retries(m
     Without an explicit seek(0), attempt 1 consumes ~11MB and raises, attempt 2
     consumes the next ~11MB and raises, and attempt 3 reads only the 3MB tail -
     which is under the cap, so a truncated image would be stored as a success.
+
+    An oversized file is a permanent 4xx (FileTooLargeError): it is excluded
+    from retries entirely (A2-12), and with every file failed the upload
+    endpoint answers 400 with envelope status "failed" (A2-20).
     """
     uploaded = []
 
@@ -306,8 +315,11 @@ async def test_upload_item_images_rejects_an_oversized_file_across_all_retries(m
     oversized = _FakeUpload(size=25 * 1024 * 1024, filename="huge.png")
     result = await upload_item_images(files=[oversized], user_id="user-1", db=Mock())
 
-    assert result["data"]["uploaded_count"] == 0
-    assert result["data"]["failed_count"] == 1
+    assert result.status_code == 400
+    body = json.loads(result.body)
+    assert body["data"]["status"] == "failed"
+    assert body["data"]["uploaded_count"] == 0
+    assert body["data"]["failed_count"] == 1
     assert uploaded == [], "an oversized file must never reach storage, even truncated"
 
 
@@ -452,12 +464,13 @@ class _BirthProfileDB:
         return _BirthProfileQuery(self, columns)
 
 
-def test_birth_profile_uses_one_round_trip_when_the_schema_is_current():
+@pytest.mark.asyncio
+async def test_birth_profile_uses_one_round_trip_when_the_schema_is_current():
     db = _BirthProfileDB(
         {"birth_date": "1990-01-01", "birth_time": "12:00", "birth_place": "Delhi"}
     )
 
-    profile, missing = _get_user_birth_profile(db, "user-1")
+    profile, missing = await _get_user_birth_profile(db, "user-1")
 
     # Was three selects, one per column.
     assert db.selects == [("birth_date", "birth_time", "birth_place")]
@@ -469,7 +482,8 @@ def test_birth_profile_uses_one_round_trip_when_the_schema_is_current():
     assert missing is False
 
 
-def test_birth_profile_falls_back_per_column_on_a_partial_schema():
+@pytest.mark.asyncio
+async def test_birth_profile_falls_back_per_column_on_a_partial_schema():
     """The combined select fails wholesale if any single column is absent, so
     the per-column loop has to survive as the migration-tolerant fallback."""
     db = _BirthProfileDB(
@@ -481,7 +495,7 @@ def test_birth_profile_falls_back_per_column_on_a_partial_schema():
         },
     )
 
-    profile, missing = _get_user_birth_profile(db, "user-1")
+    profile, missing = await _get_user_birth_profile(db, "user-1")
 
     assert db.selects[0] == ("birth_date", "birth_time", "birth_place")
     assert db.selects[1:] == [("birth_date",), ("birth_time",), ("birth_place",)]
@@ -489,7 +503,8 @@ def test_birth_profile_falls_back_per_column_on_a_partial_schema():
     assert missing is True
 
 
-def test_birth_profile_propagates_a_non_schema_error():
+@pytest.mark.asyncio
+async def test_birth_profile_propagates_a_non_schema_error():
     """A connectivity/permissions failure must not be swallowed as
     "columns absent" and retried three more times."""
     db = _BirthProfileDB(
@@ -502,7 +517,7 @@ def test_birth_profile_propagates_a_non_schema_error():
     )
 
     with pytest.raises(PostgrestAPIError):
-        _get_user_birth_profile(db, "user-1")
+        await _get_user_birth_profile(db, "user-1")
 
     assert db.selects == [("birth_date", "birth_time", "birth_place")]
 

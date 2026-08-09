@@ -224,12 +224,22 @@ class OutfitListController extends GetxController {
     try {
       final outfit = await _repository.getOutfit(outfitId);
 
-      // Add to cache
-      final existingIndex = outfits.indexWhere((o) => o.id == outfitId);
-      if (existingIndex == -1) {
-        outfits.add(outfit);
-      } else {
-        outfits[existingIndex] = outfit;
+      // Add to cache — but NOT into the paged list while a server-side
+      // filter is active (A10b-09): the grid would show an outfit that
+      // violates the active favorites/search/styles filter.
+      final hasServerFilters =
+          favoritesOnly.value ||
+          draftsOnly.value ||
+          searchQuery.value.isNotEmpty ||
+          selectedStyles.isNotEmpty ||
+          selectedSeasons.isNotEmpty;
+      if (!hasServerFilters) {
+        final existingIndex = outfits.indexWhere((o) => o.id == outfitId);
+        if (existingIndex == -1) {
+          outfits.add(outfit);
+        } else {
+          outfits[existingIndex] = outfit;
+        }
       }
 
       return outfit;

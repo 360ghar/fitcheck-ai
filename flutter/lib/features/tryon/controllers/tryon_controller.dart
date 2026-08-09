@@ -12,6 +12,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/services/ai_consent_service.dart';
 import '../../../core/utils/permission_helper.dart';
 import '../../wardrobe/models/item_model.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 import '../../../core/utils/error_handler.dart';
 
 /// Try-On controller
@@ -46,6 +47,10 @@ class TryOnController extends GetxController {
   final Rx<ItemModel?> selectedWardrobeItem = Rx<ItemModel?>(null);
   final RxList<ItemModel> selectedWardrobeItems =
       <ItemModel>[].obs; // Support multiple wardrobe items
+  /// Maps a wardrobe item id to the temp file downloaded for it, so removal
+  /// can resolve the exact image even when camera/gallery photos are mixed
+  /// into [clothingImages] (which otherwise makes index-based removal wrong).
+  final Map<String, File> _wardrobeItemFiles = {};
   final RxString userAvatarUrl = ''.obs;
   final RxBool isLoading = false.obs;
   final RxBool isUploadingAvatar = false.obs;
@@ -152,6 +157,8 @@ class TryOnController extends GetxController {
       clothingImages.clear();
       selectedWardrobeItem.value = null;
       selectedWardrobeItems.clear();
+      // Forget wardrobe item -> temp file associations (mirrors reset()).
+      _wardrobeItemFiles.clear();
 
       // Add all selected images
       for (final image in images) {
@@ -227,6 +234,9 @@ class TryOnController extends GetxController {
       currentImageIndex.value =
           (currentImageIndex.value + 1) % clothingImages.length;
       clothingImage.value = clothingImages[currentImageIndex.value];
+      selectedWardrobeItem.value = _wardrobeItemForImage(
+        clothingImages[currentImageIndex.value],
+      );
       _clearGeneratedResult(); // Clear previous result when switching
     }
   }
@@ -238,6 +248,9 @@ class TryOnController extends GetxController {
           (currentImageIndex.value - 1 + clothingImages.length) %
           clothingImages.length;
       clothingImage.value = clothingImages[currentImageIndex.value];
+      selectedWardrobeItem.value = _wardrobeItemForImage(
+        clothingImages[currentImageIndex.value],
+      );
       _clearGeneratedResult(); // Clear previous result when switching
     }
   }
@@ -250,7 +263,7 @@ class TryOnController extends GetxController {
   /// Remove clothing image at current index
   void removeCurrentImage() {
     if (clothingImages.isNotEmpty) {
-      clothingImages.removeAt(currentImageIndex.value);
+      final removedFile = clothingImages.removeAt(currentImageIndex.value);
       if (clothingImages.isEmpty) {
         clothingImage.value = null;
         currentImageIndex.value = 0;
@@ -260,6 +273,29 @@ class TryOnController extends GetxController {
         }
         clothingImage.value = clothingImages[currentImageIndex.value];
       }
+
+      // If the removed image came from a wardrobe item, drop the item from
+      // the selection too (so it can be re-added and is not reported as
+      // "already in your selection") and delete its temp file.
+      final removedItemId = _wardrobeItemIdForFile(removedFile);
+      if (removedItemId != null) {
+        _wardrobeItemFiles.remove(removedItemId);
+        selectedWardrobeItems.removeWhere((i) => i.id == removedItemId);
+        if (tempFiles.contains(removedFile)) {
+          try {
+            if (removedFile.existsSync()) {
+              removedFile.deleteSync();
+            }
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          tempFiles.remove(removedFile);
+        }
+      }
+
+      selectedWardrobeItem.value = clothingImages.isEmpty
+          ? null
+          : _wardrobeItemForImage(clothingImages[currentImageIndex.value]);
       _clearGeneratedResult();
     }
   }
@@ -297,11 +333,31 @@ class TryOnController extends GetxController {
           'tryon_${item.id}_${DateTime.now().millisecondsSinceEpoch}.png';
       final filePath = '${tempDir.path}/$fileName';
 
-      await _apiClient.dio.download(primaryImage.url, filePath);
+      try {
+        await _apiClient.dio.download(primaryImage.url, filePath);
+      } catch (_) {
+        // A10b-07: the wardrobe serves short-lived presigned URLs (1h TTL
+        // here; up to 7 days on the API), so a URL minted at list-fetch time
+        // can be expired when the user picks the item later. Re-mint from the
+        // durable storage key of the image being downloaded and retry once
+        // before giving up.
+        final storagePath = primaryImage.storagePath;
+        if (storagePath == null || storagePath.isEmpty) {
+          rethrow;
+        }
+        final freshUrl = await ItemRepository().remintImageUrl(storagePath);
+        if (freshUrl == null || freshUrl.isEmpty) {
+          rethrow;
+        }
+        await _apiClient.dio.download(freshUrl, filePath);
+      }
 
       // Track temp file for cleanup
       final tempFile = File(filePath);
       tempFiles.add(tempFile);
+      // Associate the item with its temp file so removal can find the exact
+      // image even when camera/gallery photos are mixed into clothingImages.
+      _wardrobeItemFiles[item.id] = tempFile;
 
       // Add to lists
       selectedWardrobeItems.add(item);
@@ -332,26 +388,49 @@ class TryOnController extends GetxController {
     return selectedWardrobeItems.any((i) => i.id == itemId);
   }
 
+  /// Find the wardrobe item id whose downloaded temp file is [file], if any.
+  String? _wardrobeItemIdForFile(File file) {
+    for (final entry in _wardrobeItemFiles.entries) {
+      if (identical(entry.value, file) || entry.value.path == file.path) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  /// Find the wardrobe item whose temp file is the current [image], or null
+  /// when the image is a camera/gallery photo (or the item is no longer in
+  /// the selection). Never indexes [selectedWardrobeItems] by an index derived
+  /// from [clothingImages], which can be offset when sources are mixed.
+  ItemModel? _wardrobeItemForImage(File image) {
+    final itemId = _wardrobeItemIdForFile(image);
+    if (itemId == null) return null;
+    final index = selectedWardrobeItems.indexWhere((i) => i.id == itemId);
+    return index != -1 ? selectedWardrobeItems[index] : null;
+  }
+
   /// Remove a wardrobe item from selection
   void removeWardrobeItem(String itemId) {
     final index = selectedWardrobeItems.indexWhere((i) => i.id == itemId);
     if (index != -1) {
       selectedWardrobeItems.removeAt(index);
 
-      // Clean up temp file if it exists
-      if (clothingImages.length > index) {
-        final imageToRemove = clothingImages[index];
-        if (tempFiles.contains(imageToRemove)) {
+      // Resolve the item's temp file by id (not by list index): camera/gallery
+      // photos mixed into clothingImages would otherwise shift indices and
+      // cause the WRONG image to be removed.
+      final fileToRemove = _wardrobeItemFiles.remove(itemId);
+      if (fileToRemove != null) {
+        clothingImages.remove(fileToRemove);
+        if (tempFiles.contains(fileToRemove)) {
           try {
-            if (imageToRemove.existsSync()) {
-              imageToRemove.deleteSync();
+            if (fileToRemove.existsSync()) {
+              fileToRemove.deleteSync();
             }
           } catch (e) {
             // Ignore cleanup errors
           }
-          tempFiles.remove(imageToRemove);
+          tempFiles.remove(fileToRemove);
         }
-        clothingImages.removeAt(index);
       }
 
       // Update current image
@@ -364,8 +443,9 @@ class TryOnController extends GetxController {
           currentImageIndex.value = clothingImages.length - 1;
         }
         clothingImage.value = clothingImages[currentImageIndex.value];
-        selectedWardrobeItem.value =
-            selectedWardrobeItems[currentImageIndex.value];
+        selectedWardrobeItem.value = _wardrobeItemForImage(
+          clothingImages[currentImageIndex.value],
+        );
       }
       _clearGeneratedResult();
     }
@@ -586,6 +666,8 @@ class TryOnController extends GetxController {
     selectedStyle.value = 'casual';
     selectedBackground.value = 'studio white';
     selectedPose.value = 'standing front';
+    // Forget wardrobe item -> temp file associations
+    _wardrobeItemFiles.clear();
     // Clean up temp files on reset
     _cleanupTempFiles();
   }

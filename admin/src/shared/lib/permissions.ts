@@ -39,6 +39,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly string[]> = {
     'subscriptions.read',
     'subscriptions.refund',
     'iap.read',
+    'iap.write',
     'ops.read',
     'storage.cleanup',
     'audit.read',

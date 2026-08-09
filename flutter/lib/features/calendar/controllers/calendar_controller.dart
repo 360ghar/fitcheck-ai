@@ -24,6 +24,10 @@ class CalendarController extends GetxController {
   final Rx<DateTime> focusedDate = DateTime.now().obs;
   final RxString calendarFormat = 'month'.obs;
 
+  /// Monotonic token so a slow response for month A cannot overwrite the
+  /// events of a month the user navigated to later (A10b-08).
+  int _fetchGeneration = 0;
+
   // Loading states
   final RxBool isLoadingConnections = false.obs;
   final RxBool isLoadingEvents = false.obs;
@@ -92,6 +96,9 @@ class CalendarController extends GetxController {
   /// Fetch events for a month range
   Future<void> fetchEventsForMonth(DateTime date) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+    // A10b-08: capture the generation BEFORE the await — responses are
+    // unordered, and a stale month must never clobber the focused one.
+    final generation = ++_fetchGeneration;
     try {
       isLoadingEvents.value = true;
       error.value = '';
@@ -99,17 +106,22 @@ class CalendarController extends GetxController {
       final startOfMonth = DateTime(date.year, date.month, 1);
       final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
 
-      events.value = await _repository.getEvents(
+      final fetched = await _repository.getEvents(
         startDate: startOfMonth,
         endDate: endOfMonth,
       );
+      if (generation != _fetchGeneration) return; // superseded — drop stale data
 
+      events.value = fetched;
       _groupEventsByDate();
     } catch (e) {
+      if (generation != _fetchGeneration) return;
       error.value = ErrorHandler.extractMessage(e);
       // Don't show snackbar on initial load
     } finally {
-      isLoadingEvents.value = false;
+      if (generation == _fetchGeneration) {
+        isLoadingEvents.value = false;
+      }
     }
   }
 

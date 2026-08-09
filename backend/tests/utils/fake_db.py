@@ -20,7 +20,41 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from postgrest.exceptions import APIError as PostgrestAPIError
+except ImportError:  # pragma: no cover - postgrest is a backend dependency
+    PostgrestAPIError = RuntimeError  # type: ignore[assignment,misc]
+
 from app.core.predicates import evaluate_predicate, resolve_dotted, split_or
+
+
+# Unique keys per table, mirroring the migrations' constraints (the fake can
+# only enforce uniqueness it knows about). The real client raises
+# APIError 409/SQLSTATE 23505 on a duplicate plain insert; only an
+# ``upsert(..., on_conflict=...)`` is idempotent. Enforcing both here is what
+# lets tests pin upsert-vs-insert regressions.
+UNIQUE_KEYS: Dict[str, Tuple[str, ...]] = {
+    # 007_subscriptions_and_referrals.sql: subscriptions UNIQUE(user_id)
+    "subscriptions": ("user_id",),
+    # 031_promo_codes.sql: promo_redemptions UNIQUE (user_id)
+    "promo_redemptions": ("user_id",),
+    # 011_shared_outfits_unique_constraint.sql: UNIQUE (outfit_id, user_id)
+    "shared_outfits": ("outfit_id", "user_id"),
+    # 001_full_schema.sql: user_preferences.user_id PRIMARY KEY
+    "user_preferences": ("user_id",),
+    # 001_full_schema.sql: user_settings.user_id PRIMARY KEY
+    "user_settings": ("user_id",),
+    # 003_remove_puter_add_ai_settings.sql: user_ai_settings.user_id PRIMARY KEY
+    "user_ai_settings": ("user_id",),
+    # 007_subscriptions_and_referrals.sql: referral_redemptions UNIQUE(referred_user_id)
+    "referral_redemptions": ("referred_user_id",),
+    # 005_waitlist.sql: waitlist_email_unique UNIQUE (email)
+    "waitlist": ("email",),
+}
+
+
+def _key_values(row: Dict[str, Any], keys: Tuple[str, ...]) -> Tuple[Any, ...]:
+    return tuple(row.get(key) for key in keys)
 
 
 class FakeResult:
@@ -29,6 +63,30 @@ class FakeResult:
     def __init__(self, data: Any = None, count: int = 0):
         self.data = data if data is not None else []
         self.count = count
+
+
+class PGRSTDuplicateError(PostgrestAPIError):
+    """Mirror of postgrest-py's unique-violation (SQLSTATE 23505) failure.
+
+    A plain ``.insert()`` that collides with an existing unique key raises on
+    the real client (409/PGRST23505); idempotent writes must use
+    ``.upsert(..., on_conflict=...)`` instead. Subclassing the real
+    ``APIError`` keeps service error handling (``except PostgrestAPIError``
+    / ``e.code == '23505'``) behaving identically to production.
+    """
+
+    def __init__(self, table: str, keys: Tuple[str, ...]):
+        super().__init__(
+            {
+                "code": "23505",
+                "message": (
+                    f'duplicate key value violates unique constraint '
+                    f'"{table}_pkey" ({", ".join(keys)})'
+                ),
+                "hint": None,
+                "details": None,
+            }
+        )
 
 
 class PGRST116Error(RuntimeError):
@@ -173,7 +231,14 @@ class FakeBuilder:
         self._add_filter("or", "", expression)
         return self
 
+    @property
     def not_(self) -> FakeNotBuilder:
+        # postgrest-py exposes `not_` as a PROPERTY (it flips a
+        # `negate_next` flag), so callers write `.not_.in_(...)` without
+        # parentheses. A method here diverges from the real client and makes
+        # `.not_.in_` fail with AttributeError ('function' object has no
+        # attribute 'in_') — a fake that is stricter than the real thing
+        # hides exactly the bug class this suite exists to catch.
         return self._not
 
     def order(self, column: str, desc: bool = False, nullsfirst: bool = False, **kwargs):
@@ -207,14 +272,18 @@ class FakeBuilder:
         return self
 
     def upsert(self, row: Dict[str, Any], on_conflict: Optional[str] = None):
-        """Idempotent write: insert semantics, recorded like an insert.
+        """Idempotent write: replace an existing row on the conflicting key.
 
-        Real PostgREST upserts on the unique constraint; the fake appends the
-        row (postgrest echoes it back either way), which is what handlers
-        branch on.
+        Real PostgREST upserts on the unique constraint; the fake mirrors it:
+        a row already holding the ``on_conflict`` key(s) is REPLACED in place
+        (postgrest echoes the written row back either way), and a row with no
+        match is appended. When ``on_conflict`` is omitted the table's
+        registry key (``UNIQUE_KEYS``) is used.
         """
         self._mode = "insert"
         self._payload = row
+        if on_conflict is None:
+            on_conflict = ",".join(UNIQUE_KEYS.get(self._table, ()))
         self._on_conflict = on_conflict
         return self
 
@@ -297,14 +366,38 @@ class FakeBuilder:
         if self._mode == "insert":
             db.inserts.append((self._table, self._payload, self._on_conflict))
             payloads = self._payload if isinstance(self._payload, list) else [self._payload]
+            rows = db._rows_for(self._table)
+            unique_keys = UNIQUE_KEYS.get(self._table)
             written = []
             for p in payloads:
                 row = dict(p)
                 for column, default in db.insert_defaults.items():
                     if row.get(column) is None:
                         row[column] = default
+                if self._on_conflict:
+                    # Upsert: replace the row holding the conflicting key(s);
+                    # append when nothing conflicts (PostgREST semantics).
+                    conflict_keys = tuple(
+                        c.strip() for c in self._on_conflict.split(",") if c.strip()
+                    )
+                    replaced = False
+                    for idx, existing in enumerate(rows):
+                        if all(existing.get(k) == row.get(k) for k in conflict_keys):
+                            rows[idx] = row
+                            replaced = True
+                            break
+                    if not replaced:
+                        rows.append(row)
+                else:
+                    # Plain insert: a duplicate unique key raises 23505 on the
+                    # real client — only upsert is idempotent.
+                    if unique_keys is not None and any(
+                        _key_values(existing, unique_keys) == _key_values(row, unique_keys)
+                        for existing in rows
+                    ):
+                        raise PGRSTDuplicateError(self._table, unique_keys)
+                    rows.append(row)
                 written.append(row)
-            db._rows_for(self._table).extend(written)
             return FakeResult(data=written, count=len(written))
 
         if self._mode == "update":
@@ -373,6 +466,12 @@ class FakeDB:
     ``insert_defaults`` maps column name -> default value; any ``None`` value
     in an inserted payload is filled with the default, mirroring the NOT NULL
     defaults a real Postgres table fills in for you.
+
+    Uniqueness: tables listed in ``UNIQUE_KEYS`` reject a plain ``insert``
+    that collides with an existing row (``PGRSTDuplicateError``, SQLSTATE
+    23505 — like the real client), while ``upsert(..., on_conflict=...)``
+    replaces the conflicting row in place. This is what lets the suite pin
+    upsert-vs-insert regressions instead of silently appending both.
     """
 
     def __init__(

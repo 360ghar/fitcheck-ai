@@ -50,8 +50,8 @@ from __future__ import annotations
 
 import asyncio
 import re
-from datetime import timedelta
-from typing import Any, Dict, Iterable, List, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -535,7 +535,10 @@ async def user_activity(db: Any, user_id: str) -> Dict[str, Any]:
         db,
         extra={"operation": "admin.user_activity.audit_entity", "user_id": user_id},
     )
-    seen: set = set()
+    # A4-09: seed `seen` with the actor-query ids so an event where the user
+    # is BOTH actor and entity is not appended twice (previously the entity
+    # loop's dedupe only saw rows added after it started).
+    seen: set = set(row.get("id") for row in audit_rows if row.get("id"))
     for row in entity_res.data or []:
         if row.get("id") in seen:
             continue
@@ -667,8 +670,31 @@ async def get_user_subscription(db: Any, user_id: str) -> Dict[str, Any]:
     return {"subscription": sub_row, "user": user_row or {}, "usage": usage_row or {}}
 
 
+def _parse_ts(value: Any) -> Optional[int]:
+    """Unix seconds for a PostgREST timestamp (str/datetime/int), or None."""
+    if isinstance(value, datetime):
+        return int(value.timestamp())
+    if isinstance(value, str):
+        try:
+            return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+        except ValueError:
+            return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    return None
+
+
 async def refund_subscription(db: Any, user_id: str) -> Dict[str, Any]:
-    """Refund the user's latest Stripe charge/payment intent (full refund).
+    """Refund the user's Stripe charge for THIS subscription (full refund).
+
+    A4-15/M3: the old implementation refunded the customer's MOST RECENT
+    PaymentIntent with no subscription/date/amount filter, so a later
+    unrelated purchase could be refunded instead of the subscription's own
+    charge. The charge is now resolved as: subscription latest_invoice ->
+    payment_intent (preferred), then the customer's most recent succeeded
+    intent/charge created within the subscription's lifetime window. The
+    refund amount/currency are taken from the resolved charge (refund <=
+    charged amount, no currency mixing, enforced by Stripe server-side too).
 
     Raises ``BillingNotConfiguredError`` when Stripe is not configured and
     ``ValidationError`` when the subscription has no Stripe customer (e.g.
@@ -704,7 +730,13 @@ async def refund_subscription(db: Any, user_id: str) -> Dict[str, Any]:
 
         stripe.api_key = settings.STRIPE_SECRET_KEY
 
-        def _create_refund(*, payment_intent: Optional[str] = None, charge: Optional[str] = None) -> Dict[str, Any]:
+        def _create_refund(
+            *,
+            payment_intent: Optional[str] = None,
+            charge: Optional[str] = None,
+            amount: Optional[int] = None,
+            currency: Optional[str] = None,
+        ) -> Dict[str, Any]:
             """Create a refund, idempotently.
 
             Reuses an existing succeeded/pending refund for the same intent or
@@ -728,7 +760,18 @@ async def refund_subscription(db: Any, user_id: str) -> Dict[str, Any]:
                         "currency": refund.currency,
                         "status": refund.status,
                     }
-            refund = stripe.Refund.create(**{k: v for k, v in (("payment_intent", payment_intent), ("charge", charge)) if v})
+            refund_kwargs: Dict[str, Any] = {}
+            if payment_intent:
+                refund_kwargs["payment_intent"] = payment_intent
+            if charge:
+                refund_kwargs["charge"] = charge
+            # Amount/currency sanity: refund exactly the resolved charge's
+            # amount and currency (refund <= charged, no currency mixing).
+            if amount is not None:
+                refund_kwargs["amount"] = amount
+            if currency:
+                refund_kwargs["currency"] = currency
+            refund = stripe.Refund.create(**refund_kwargs)
             return {
                 "refund_id": refund.id,
                 "payment_intent": payment_intent,
@@ -738,15 +781,77 @@ async def refund_subscription(db: Any, user_id: str) -> Dict[str, Any]:
                 "status": refund.status,
             }
 
+        def _resolve_charge() -> Tuple[Optional[str], Optional[str], Optional[int], Optional[str]]:
+            """Resolve the subscription's own charge.
+
+            Returns (payment_intent_id, charge_id, amount, currency).
+            """
+            subscription_id = sub_row.get("stripe_subscription_id")
+            if subscription_id:
+                try:
+                    subscription = stripe.Subscription.retrieve(
+                        subscription_id,
+                        expand=["latest_invoice.payment_intent"],
+                    )
+                    latest_invoice = getattr(subscription, "latest_invoice", None)
+                    if isinstance(latest_invoice, dict):
+                        intent = latest_invoice.get("payment_intent")
+                        if isinstance(intent, dict) and intent.get("id"):
+                            if intent.get("status") == "succeeded":
+                                return (
+                                    intent["id"],
+                                    None,
+                                    intent.get("amount"),
+                                    intent.get("currency"),
+                                )
+                except stripe.error.StripeError:
+                    # The subscription may be gone (deleted after churn);
+                    # fall through to the customer-level lookup.
+                    pass
+
+            # Fallback: the customer's most recent succeeded intent/charge,
+            # bounded to the subscription's creation window so an unrelated
+            # later purchase is never refunded instead.
+            list_kwargs: Dict[str, Any] = {"customer": customer_id, "limit": 5}
+            created_gte = _parse_ts(sub_row.get("created_at"))
+            if created_gte is not None:
+                list_kwargs["created"] = {"gte": created_gte}
+            for intent in stripe.PaymentIntent.list(**list_kwargs).data:
+                if getattr(intent, "status", None) == "succeeded":
+                    return (intent.id, None, intent.amount, intent.currency)
+            charge_kwargs: Dict[str, Any] = {
+                "customer": customer_id,
+                "limit": 5,
+                "status": "succeeded",
+            }
+            if created_gte is not None:
+                charge_kwargs["created"] = {"gte": created_gte}
+            for charge in stripe.Charge.list(**charge_kwargs).data:
+                return (None, charge.id, charge.amount, charge.currency)
+            return (None, None, None, None)
+
         try:
-            payment_intents = stripe.PaymentIntent.list(customer=customer_id, limit=1)
-            if payment_intents and payment_intents.data:
-                payment_intent = payment_intents.data[0]
-                return _create_refund(payment_intent=payment_intent.id)
-            charges = stripe.Charge.list(customer=customer_id, limit=1)
-            if charges and charges.data:
-                charge = charges.data[0]
-                return _create_refund(charge=charge.id)
+            payment_intent, charge, amount, currency = _resolve_charge()
+            if not payment_intent and not charge:
+                raise NotFoundError(
+                    message="No charge found for this Stripe customer to refund",
+                    resource_type="stripe_customer",
+                    resource_id=customer_id,
+                )
+            # Amount sanity check: a zero/absent amount means nothing was
+            # ever charged (uncaptured/voided) and there is nothing to refund.
+            if amount is None or amount <= 0:
+                raise NotFoundError(
+                    message="No payable charge found for this Stripe customer to refund",
+                    resource_type="stripe_customer",
+                    resource_id=customer_id,
+                )
+            return _create_refund(
+                payment_intent=payment_intent,
+                charge=charge,
+                amount=amount,
+                currency=currency,
+            )
         except stripe.error.StripeError as exc:
             # StripeError is not a FitCheckException; without this mapping the
             # catch-all handler turns e.g. an already-refunded InvalidRequestError
@@ -756,11 +861,6 @@ async def refund_subscription(db: Any, user_id: str) -> Dict[str, Any]:
                 message=str(exc),
                 details={"service": "stripe"},
             ) from exc
-        raise NotFoundError(
-            message="No charge found for this Stripe customer to refund",
-            resource_type="stripe_customer",
-            resource_id=customer_id,
-        )
 
     return await asyncio.to_thread(_refund)
 
@@ -1218,22 +1318,30 @@ async def dashboard_revenue(db: Any) -> Dict[str, Any]:
     trials = await _count(
         lambda d: d.table("subscriptions").select("id", count="exact").neq("plan_type", "free").eq("status", "trial")
     )
+    # A4-16: churn counts must reflect SUBSCRIBERS, not webhook volume. The
+    # dedupe ledgers are keyed by provider event id (no subscription column),
+    # so entity-level dedupe is not possible; at minimum only count events
+    # the webhook processor actually handled (status='processed', the ledger's
+    # success value) - unprocessed/retrying events double-count otherwise.
     churn_stripe = await _count(
         lambda d: d.table("stripe_webhook_events")
         .select("event_id", count="exact")
         .in_("event_type", STRIPE_CHURN_EVENT_TYPES)
+        .eq("status", "processed")
         .gte("received_at", d30)
     )
     churn_apple = await _count(
         lambda d: d.table("apple_iap_events")
         .select("notification_id", count="exact")
         .in_("event_type", APPLE_CHURN_EVENT_TYPES)
+        .eq("status", "processed")
         .gte("received_at", d30)
     )
     churn_google = await _count(
         lambda d: d.table("google_rtdn_events")
         .select("message_id", count="exact")
         .in_("event_type", GOOGLE_CHURN_EVENT_TYPES)
+        .eq("status", "processed")
         .gte("received_at", d30)
     )
     refunds = await _count(

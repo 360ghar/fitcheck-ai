@@ -6,12 +6,12 @@ and admin-only write access.
 """
 
 import asyncio
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from supabase import Client
 
-from app.api.v1.deps import get_current_user, get_db
+from app.api.v1.deps import get_db, require_permission
 from app.core.exceptions import NotFoundError, PermissionDeniedError, ValidationError
 from app.core.logging_config import get_context_logger
 from app.models.blog import (
@@ -22,6 +22,7 @@ from app.models.blog import (
     BlogPostSummary,
     BlogPostUpdate,
 )
+from app.services.audit_service import record_audit
 from app.utils import maybe_single_data
 from app.utils.db import safe_search_term
 
@@ -42,12 +43,41 @@ def verify_admin(user: Dict[str, Any]) -> None:
     Thin wrapper over the shared RBAC gate (app.core.permissions.get_user_role):
     an explicit admin ``role`` wins; otherwise the legacy ``is_admin`` flag
     grants admin (the email-domain bootstrap was removed 2026-08-08).
+
+    Legacy: admin CRUD routes now use the fine-grained
+    ``require_permission("content.read"/"content.write")`` dependency (A8-02);
+    this helper remains for the direct-call tests and as the coarse gate.
     """
     from app.core.permissions import ADMIN_ROLES, get_user_role
 
     if get_user_role(user) not in ADMIN_ROLES:
         logger.warning(f"Non-admin user {user.get('id')} attempted admin operation")
         raise PermissionDeniedError("Admin access required for this operation")
+
+
+def _require_content_permission(user: Dict[str, Any], permission: str) -> None:
+    """Fine-grained gate used inside the handlers (A8-02).
+
+    The router-level ``Depends(require_permission(...))`` enforces this at
+    request time; the in-handler check keeps direct calls (and tests) honest
+    and mirrors the old ``verify_admin`` placement.
+    """
+    from app.core.permissions import has_permission
+
+    if not has_permission(user, permission):
+        logger.warning(
+            f"User {user.get('id')} attempted blog operation without permission {permission}"
+        )
+        raise PermissionDeniedError(f"Permission required: {permission}")
+
+
+def _audit_context(http_request: Optional[Request]) -> Dict[str, Any]:
+    if http_request is None:
+        return {"ip": None, "user_agent": None}
+    return {
+        "ip": http_request.client.host if http_request.client else None,
+        "user_agent": http_request.headers.get("user-agent"),
+    }
 
 
 # =============================================================================
@@ -84,8 +114,12 @@ async def list_posts(
 
         # Apply search filter
         if params.search:
+            # The term is interpolated into postgrest's .or_() filter syntax;
+            # sanitize it exactly like the admin path (A4-20) so a crafted
+            # query cannot inject extra filter clauses or 500 the route.
+            safe_term = safe_search_term(params.search)
             # Search in title and excerpt (case-insensitive)
-            search_term = f"%{params.search}%"
+            search_term = f"%{safe_term}%"
             query = query.or_(f"title.ilike.{search_term},excerpt.ilike.{search_term}")
 
         # Order by date descending (newest first)
@@ -219,16 +253,18 @@ async def get_categories(
 @router.post("/posts", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_post(
     post_data: BlogPostCreate,
-    user=Depends(get_current_user),
+    http_request: Request = None,
+    user=Depends(require_permission("content.write")),
     db: Client = Depends(get_db),
 ):
     """
     Create a new blog post.
 
-    **Admin only.** Creates a new blog post with the provided data.
-    Slug must be unique.
+    **Content editors and admins only** (``content.write``, A8-02).
+    Creates a new blog post with the provided data. Slug must be unique.
+    Audited as ``blog.created``.
     """
-    verify_admin(user)
+    _require_content_permission(user, "content.write")
 
     try:
         # Check for duplicate slug
@@ -256,6 +292,15 @@ async def create_post(
         created_post = BlogPost(**result.data[0])
 
         logger.info(f"Admin {user.get('id')} created blog post: {post_data.slug}")
+        await record_audit(
+            db,
+            actor_id=user.get("id"),
+            action="blog.created",
+            entity_type="blog_post",
+            entity_id=str(created_post.id or created_post.slug),
+            payload={"slug": created_post.slug},
+            **_audit_context(http_request),
+        )
 
         return {
             "data": created_post.model_dump(mode="json"),
@@ -273,16 +318,19 @@ async def create_post(
 async def update_post(
     slug: str,
     post_data: BlogPostUpdate,
-    user=Depends(get_current_user),
+    http_request: Request = None,
+    user=Depends(require_permission("content.write")),
     db: Client = Depends(get_db),
 ):
     """
     Update an existing blog post.
 
-    **Admin only.** Updates the blog post identified by slug.
+    **Content editors and admins only** (``content.write``, A8-02).
+    Updates the blog post identified by slug.
     If slug is being changed, the new slug must be unique.
+    Audited as ``blog.updated``.
     """
-    verify_admin(user)
+    _require_content_permission(user, "content.write")
 
     try:
         # Check if post exists
@@ -336,6 +384,15 @@ async def update_post(
         updated_post = BlogPost(**result.data[0])
 
         logger.info(f"Admin {user.get('id')} updated blog post: {slug}")
+        await record_audit(
+            db,
+            actor_id=user.get("id"),
+            action="blog.updated",
+            entity_type="blog_post",
+            entity_id=str(updated_post.id or updated_post.slug),
+            payload={"slug": updated_post.slug, "updated_fields": list(update_data.keys())},
+            **_audit_context(http_request),
+        )
 
         return {
             "data": updated_post.model_dump(mode="json"),
@@ -352,16 +409,18 @@ async def update_post(
 @router.delete("/posts/{slug}", response_model=Dict[str, Any])
 async def delete_post(
     slug: str,
-    user=Depends(get_current_user),
+    http_request: Request = None,
+    user=Depends(require_permission("content.write")),
     db: Client = Depends(get_db),
 ):
     """
     Delete a blog post.
 
-    **Admin only.** Permanently deletes the blog post identified by slug.
-    This action cannot be undone.
+    **Content editors and admins only** (``content.write``, A8-02).
+    Permanently deletes the blog post identified by slug.
+    This action cannot be undone. Audited as ``blog.deleted``.
     """
-    verify_admin(user)
+    _require_content_permission(user, "content.write")
 
     try:
         # Check if post exists
@@ -379,11 +438,21 @@ async def delete_post(
                 resource_type="blog_post",
                 resource_id=slug,
             )
+        existing_row = maybe_single_data(existing)
 
         # Delete the post
         await asyncio.to_thread(db.table("blog_posts").delete().eq("slug", slug).execute)
 
         logger.info(f"Admin {user.get('id')} deleted blog post: {slug}")
+        await record_audit(
+            db,
+            actor_id=user.get("id"),
+            action="blog.deleted",
+            entity_type="blog_post",
+            entity_id=str(existing_row.get("id") or slug),
+            payload={"slug": slug},
+            **_audit_context(http_request),
+        )
 
         return {
             "data": {"slug": slug, "deleted": True},
@@ -410,16 +479,17 @@ async def list_all_posts(
     category: str | None = Query(None, min_length=1),
     search: str | None = Query(None, min_length=1),
     post_status: Literal["published", "draft", "all"] | None = Query(None, alias="status"),
-    user=Depends(get_current_user),
+    user=Depends(require_permission("content.read")),
     db: Client = Depends(get_db),
 ):
     """
     List all blog posts including unpublished ones.
 
-    **Admin only.** Returns all blog posts with pagination.
+    **Content readers and admins only** (``content.read``, A8-02).
+    Returns all blog posts with pagination.
     Useful for content management.
     """
-    verify_admin(user)
+    _require_content_permission(user, "content.read")
 
     try:
         # Build query - include all posts
@@ -439,8 +509,10 @@ async def list_all_posts(
             # the intended ilike wildcards.
             safe_term = safe_search_term(search)
             search_term = f"%{safe_term}%"
+            # A8-02: the admin console searches by slug too, so slug is part
+            # of the ilike set alongside title/excerpt/author.
             query = query.or_(
-                f"title.ilike.{search_term},excerpt.ilike.{search_term},author.ilike.{search_term}"
+                f"title.ilike.{search_term},excerpt.ilike.{search_term},author.ilike.{search_term},slug.ilike.{search_term}"
             )
 
         if post_status == "published":

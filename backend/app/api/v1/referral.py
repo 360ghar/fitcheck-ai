@@ -74,7 +74,10 @@ async def validate_referral_code(
     This endpoint is public and can be used during signup
     to verify a referral code before registration.
     """
-    result = await ReferralService.validate_referral_code(request.code, db)
+    # neutral=True: this is the unauthenticated endpoint - the response must
+    # use "A friend" so the public surface cannot harvest account full_names
+    # by probing codes (A1-06/A1-18).
+    result = await ReferralService.validate_referral_code(request.code, db, neutral=True)
     return {"data": result.model_dump(mode="json"), "message": "OK"}
 
 

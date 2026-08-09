@@ -212,6 +212,7 @@ async def test_images_api_preserves_remote_reference_urls():
         mock_health.return_value.check_provider_health = AsyncMock(
             return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
         )
+        mock_health.return_value.record_result = AsyncMock()
         await service._generate_image_via_images_api(
             "a cat", model="image-model",
             reference_images=["https://storage.example/item.jpg"],
@@ -251,6 +252,7 @@ async def test_chat_wraps_bare_base64_to_data_url_at_wire_boundary():
         mock_health.return_value.check_provider_health = AsyncMock(
             return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
         )
+        mock_health.return_value.record_result = AsyncMock()
         await service.chat(messages=messages, model="chat-model")
 
     sent_content = fake_client.payloads[0]["messages"][0]["content"]
@@ -286,6 +288,7 @@ async def test_chat_preserves_remote_storage_image_urls():
         mock_health.return_value.check_provider_health = AsyncMock(
             return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
         )
+        mock_health.return_value.record_result = AsyncMock()
         await service.chat(messages=messages, model="chat-model")
 
     assert fake_client.payloads[0]["messages"][0]["content"][0]["image_url"]["url"] == "https://storage.example/item.jpg"

@@ -188,7 +188,11 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+    // F2b-07: subscribe exactly once. `setState` is stable (useState setter),
+    // so depending on `[state]` only re-registered the listener on every
+    // toast change — O(N) push/cleanup churn per toast and a window where a
+    // dispatch between cleanup and re-push could miss this listener.
+  }, [])
 
   return {
     ...state,

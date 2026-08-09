@@ -145,6 +145,10 @@ export interface ItemCreate {
    * "as worn" reference so the render reproduces the real garments. */
   source_image_url?: string;
   source_image_storage_path?: string;
+  /** Client-generated idempotency key (F1-07): retries of the same logical
+   * create carry the same key and the backend replays the original row
+   * instead of inserting a duplicate item. */
+  client_request_id?: string;
 }
 
 export interface ItemImageBase {
@@ -334,7 +338,7 @@ export interface SuggestedItem {
   item_name: string;
   image_url?: string;
   category: Category;
-  position: string;
+  position: number;
   confidence: number;
 }
 
@@ -829,7 +833,7 @@ export interface ItemGenerationCompleteData {
   job_id: string;
   temp_id: string;
   image_id: string;
-  generated_image_base64: string;
+  generated_image_base64?: string;
   generated_image_url?: string;
   generated_image_storage_path?: string;
   completed_count: number;

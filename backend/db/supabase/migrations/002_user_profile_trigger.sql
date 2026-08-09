@@ -83,6 +83,7 @@ CREATE TRIGGER on_auth_user_created
 DROP POLICY IF EXISTS "Service role can insert users" ON public.users;
 CREATE POLICY "Service role can insert users"
     ON public.users FOR INSERT
+    TO service_role
     WITH CHECK (TRUE);
 
 -- Users can insert their own profile (if trigger doesn't handle it)

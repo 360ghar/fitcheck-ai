@@ -69,13 +69,35 @@ BEGIN
     )
     ON CONFLICT (user_id) DO NOTHING;
 
-    -- Generate referral code for new user
-    INSERT INTO public.referral_codes (user_id, code)
-    VALUES (
-        NEW.id,
-        public.generate_referral_code(NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'user'))
-    )
-    ON CONFLICT (user_id) DO NOTHING;
+    -- Generate referral code for new user. A5-10: the code UNIQUE
+    -- constraint is NOT covered by ON CONFLICT (user_id) — two signups with
+    -- the same name slug and the same 6-hex UUID prefix (same microsecond)
+    -- would raise inside this auth trigger and fail the whole signup.
+    -- Retry with a growing numeric suffix; the user_id conflict target keeps
+    -- re-fires idempotent.
+    DECLARE
+        _base_code TEXT := public.generate_referral_code(
+            NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'user')
+        );
+        _attempt INT := 0;
+    BEGIN
+        LOOP
+            BEGIN
+                INSERT INTO public.referral_codes (user_id, code)
+                VALUES (
+                    NEW.id,
+                    _base_code || CASE WHEN _attempt = 0 THEN '' ELSE '-' || _attempt::TEXT END
+                )
+                ON CONFLICT (user_id) DO NOTHING;
+                EXIT;
+            EXCEPTION WHEN unique_violation THEN
+                _attempt := _attempt + 1;
+                IF _attempt > 3 THEN
+                    RAISE;
+                END IF;
+            END;
+        END LOOP;
+    END;
 
     -- Create current month usage record
     INSERT INTO public.subscription_usage (user_id, period_start)

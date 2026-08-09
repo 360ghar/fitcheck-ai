@@ -121,10 +121,13 @@ class CalendarRepository {
     try {
       final queryParams = <String, dynamic>{};
       if (startDate != null) {
-        queryParams['start_date'] = startDate.toIso8601String();
+        // A10b-01: send the UTC instant. A naive local string was parsed by
+        // the backend as UTC, which shifted every event by the device offset
+        // and dropped month-boundary events from the grid.
+        queryParams['start_date'] = startDate.toUtc().toIso8601String();
       }
       if (endDate != null) {
-        queryParams['end_date'] = endDate.toIso8601String();
+        queryParams['end_date'] = endDate.toUtc().toIso8601String();
       }
 
       final response = await _apiClient.get(
@@ -157,8 +160,9 @@ class CalendarRepository {
         '${ApiConstants.calendar}/events',
         data: {
           'title': title,
-          'start_time': startTime.toIso8601String(),
-          'end_time': endTime.toIso8601String(),
+          // A10b-01: UTC on the wire — see getEvents.
+          'start_time': startTime.toUtc().toIso8601String(),
+          'end_time': endTime.toUtc().toIso8601String(),
           if (description != null) 'description': description,
           if (location != null) 'location': location,
           'is_all_day': isAllDay,
@@ -189,8 +193,9 @@ class CalendarRepository {
   }) {
     final data = <String, dynamic>{};
     if (title != null) data['title'] = title;
-    if (startTime != null) data['start_time'] = startTime.toIso8601String();
-    if (endTime != null) data['end_time'] = endTime.toIso8601String();
+    // A10b-01: UTC on the wire — see getEvents.
+    if (startTime != null) data['start_time'] = startTime.toUtc().toIso8601String();
+    if (endTime != null) data['end_time'] = endTime.toUtc().toIso8601String();
     if (description != null) data['description'] = description;
     if (location != null) data['location'] = location;
     if (isAllDay != null) data['is_all_day'] = isAllDay;

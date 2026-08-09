@@ -421,7 +421,7 @@ async def test_refund_subscription_reuses_existing_succeeded_refund(monkeypatch)
         charge="ch_existing",
     )
     stripe_fake = _FakeStripe(
-        intents=[SimpleNamespace(id="pi_1")],
+        intents=[SimpleNamespace(id="pi_1", status="succeeded", amount=900, currency="usd")],
         existing_refunds=[existing],
     )
     monkeypatch.setitem(sys.modules, "stripe", stripe_fake)
@@ -452,7 +452,7 @@ async def test_refund_subscription_creates_new_refund_when_existing_not_succeede
         charge="ch_failed",
     )
     stripe_fake = _FakeStripe(
-        intents=[SimpleNamespace(id="pi_1")],
+        intents=[SimpleNamespace(id="pi_1", status="succeeded", amount=900, currency="usd")],
         existing_refunds=[failed],
     )
     monkeypatch.setitem(sys.modules, "stripe", stripe_fake)
@@ -461,13 +461,18 @@ async def test_refund_subscription_creates_new_refund_when_existing_not_succeede
 
     assert result["refund_id"] == "re_created"
     assert result["payment_intent"] == "pi_1"
-    assert stripe_fake.created == [{"payment_intent": "pi_1"}]
+    # The refund carries the resolved charge's amount/currency (A4-15).
+    assert stripe_fake.created == [
+        {"payment_intent": "pi_1", "amount": 900, "currency": "usd"}
+    ]
 
 
 @pytest.mark.asyncio
 async def test_refund_subscription_creates_refund_via_charge(monkeypatch):
     monkeypatch.setattr(admin_service, "_billing_configured", lambda: True)
-    stripe_fake = _FakeStripe(charges=[SimpleNamespace(id="ch_1")])
+    stripe_fake = _FakeStripe(
+        charges=[SimpleNamespace(id="ch_1", status="succeeded", amount=1000, currency="usd")]
+    )
     monkeypatch.setitem(sys.modules, "stripe", stripe_fake)
 
     result = await refund_subscription(_refund_db(), "u1")
@@ -475,7 +480,9 @@ async def test_refund_subscription_creates_refund_via_charge(monkeypatch):
     assert result["refund_id"] == "re_created"
     assert result["charge_id"] == "ch_1"
     assert result["status"] == "succeeded"
-    assert stripe_fake.created == [{"charge": "ch_1"}]
+    assert stripe_fake.created == [
+        {"charge": "ch_1", "amount": 1000, "currency": "usd"}
+    ]
 
 
 @pytest.mark.asyncio

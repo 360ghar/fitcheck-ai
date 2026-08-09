@@ -635,7 +635,15 @@ async def test_google_notification_syncs_and_acknowledges():
     # The ledger must store the real RTDN notification type name (not a
     # blanket 'rtdn' label) so admin churn analytics can count
     # expiry/cancel/revoke pushes. notificationType 2 -> SUBSCRIPTION_RENEWED.
-    assert ("google_rtdn_events", {"message_id": "msg-1", "event_type": "SUBSCRIPTION_RENEWED", "status": "pending"}) in db.inserts
+    # The claim marks the row `processing` with a lease (A1-06), not `pending`.
+    ledger = next(
+        p for t, p in db.inserts
+        if t == "google_rtdn_events" and p.get("message_id") == "msg-1"
+    )
+    assert ledger["event_type"] == "SUBSCRIPTION_RENEWED"
+    assert ledger["status"] == "processing"
+    assert ledger["attempts"] == 1
+    assert ledger["processing_started_at"]
     assert sync.call_args.kwargs["google_purchase_token"] == "token-abc"
     ack.assert_awaited_once_with("com.fitcheck.plus.monthly", "token-abc")
 

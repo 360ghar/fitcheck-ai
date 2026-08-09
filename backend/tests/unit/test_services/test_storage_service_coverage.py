@@ -366,9 +366,9 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
     db = FakeDB(
         rows={
             "items": [
-                {"id": "item-1", "user_id": "u1", "source_image_storage_path": "u1/sources/s1.png"},
-                {"id": "item-2", "user_id": "u1", "source_image_storage_path": "u1/sources/s2.png"},
-                {"id": "item-3", "user_id": "u1", "source_image_storage_path": "u1/sources/s3.png"},
+                {"id": "item-1", "user_id": "u1", "source_image_storage_path": "u1/sources/11111111111111111111111111111111.png"},
+                {"id": "item-2", "user_id": "u1", "source_image_storage_path": "u1/sources/22222222222222222222222222222222.png"},
+                {"id": "item-3", "user_id": "u1", "source_image_storage_path": "u1/sources/33333333333333333333333333333333.png"},
             ],
             "outfits": [{"id": "outfit-1", "user_id": "u1"}],
             "item_images": [
@@ -390,9 +390,9 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
     assert result["item_ids"] == ["item-1", "item-2"]
     assert result["outfit_ids"] == ["outfit-1"]
     # Sources from the parent rows + child image rows + derived thumbs.
-    assert "u1/sources/s1.png" in result["storage_paths"]
-    assert "u1/sources/s2.png" in result["storage_paths"]
-    assert "u1/sources/s3.png" not in result["storage_paths"]
+    assert "u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
+    assert "u1/sources/22222222222222222222222222222222.png" in result["storage_paths"]
+    assert "u1/sources/33333333333333333333333333333333.png" not in result["storage_paths"]
     assert "u1/items/a.png" in result["storage_paths"]
     assert "u1/items/c.png" not in result["storage_paths"]
     assert "u1/items/a_thumb.webp" in result["storage_paths"]
@@ -402,7 +402,7 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
 async def test_resolve_owned_storage_paths_empty_scopes_return_empty():
     db = FakeDB(
         rows={
-            "items": [{"id": "item-1", "source_image_storage_path": "u1/sources/s1.png"}],
+            "items": [{"id": "item-1", "source_image_storage_path": "u1/sources/11111111111111111111111111111111.png"}],
         }
     )
     result = await StorageService.resolve_owned_storage_paths(
@@ -416,9 +416,9 @@ async def test_resolve_owned_storage_paths_unscoped_collects_everything():
     db = FakeDB(
         rows={
             "items": [
-                {"id": "item-1", "user_id": "u1", "source_image_storage_path": "u1/sources/s1.png"},
+                {"id": "item-1", "user_id": "u1", "source_image_storage_path": "u1/sources/11111111111111111111111111111111.png"},
                 # A row with no id is skipped from owned_ids (the continue arm).
-                {"user_id": "u1", "source_image_storage_path": "u1/sources/s2.png"},
+                {"user_id": "u1", "source_image_storage_path": "u1/sources/22222222222222222222222222222222.png"},
             ],
             "outfits": [{"id": "outfit-1", "user_id": "u1"}],
             "item_images": [{"item_id": "item-1", "storage_path": "u1/items/a.png"}],
@@ -428,7 +428,7 @@ async def test_resolve_owned_storage_paths_unscoped_collects_everything():
     result = await StorageService.resolve_owned_storage_paths(db, user_id="u1")
     assert result["item_ids"] == ["item-1"]
     assert result["outfit_ids"] == ["outfit-1"]
-    assert "u1/sources/s1.png" in result["storage_paths"]
+    assert "u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
     assert "u1/items/a.png" in result["storage_paths"]
     assert "u1/outfits/o.png" in result["storage_paths"]
     assert "u1/items/a_thumb.webp" in result["storage_paths"]
@@ -600,3 +600,113 @@ async def test_delete_temp_objects_deletes_through_backend():
         deleted = await StorageService.delete_temp_objects(["tmp/u1/x.png", "tmp/u1/y.png"])
     assert deleted == 2
     assert backend.delete_calls == ["tmp/u1/x.png", "tmp/u1/y.png"]
+# --------------------------------------------------------------------------- #
+# staged uploads (A2-02) / move_image idempotency (A2-14) / promote thumbs
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_upload_item_image_staged_writes_tmp_preview_path():
+    """stage=True keeps the object under tmp/{user}/upload/ so an item row
+    that is never created does not orphan a canonical object."""
+    backend = FakeS3Backend()
+    with patch.object(storage_module, "get_storage_backend", return_value=backend):
+        result = await StorageService.upload_item_image(
+            db=MagicMock(),
+            user_id="u1",
+            filename="shirt.png",
+            file_data=_valid_png_bytes(),
+            is_primary=True,
+            stage=True,
+        )
+    key = result["storage_path"]
+    assert key.startswith("tmp/u1/upload/")
+    assert len(key) > len("tmp/u1/upload/")
+    assert backend.upload_calls[0]["key"] == key
+    # tmp previews never get a _thumb sibling (thumb_key_for returns None).
+    assert len(backend.upload_calls) == 1
+    assert result["is_primary"] is True
+
+
+@pytest.mark.asyncio
+async def test_upload_item_image_unstaged_uses_canonical_items_path():
+    backend = FakeS3Backend()
+    with patch.object(storage_module, "get_storage_backend", return_value=backend):
+        result = await StorageService.upload_item_image(
+            db=MagicMock(),
+            user_id="u1",
+            filename="shirt.png",
+            file_data=_valid_png_bytes(),
+        )
+    assert result["storage_path"].startswith("u1/items/")
+
+
+class _CopyFailsBackend(FakeS3Backend):
+    """FakeS3Backend whose copy always raises (source-missing simulation)."""
+
+    def __init__(self, error, **kwargs):
+        super().__init__(**kwargs)
+        self.error = error
+
+    async def copy(self, src, dst):
+        raise self.error
+
+
+@pytest.mark.asyncio
+async def test_move_image_treats_missing_source_as_already_moved_when_destination_exists():
+    """A NoSuchKey copy whose destination already exists is a concurrent
+    promotion that already finished: success, not a 500."""
+    backend = _CopyFailsBackend(RuntimeError("NoSuchKey"), exists_default=True)
+    with patch.object(storage_module, "get_storage_backend", return_value=backend):
+        moved = await StorageService.move_image(
+            db=MagicMock(), old_path="tmp/u1/x.png", new_path="u1/items/y.png"
+        )
+    assert moved is True
+    assert backend.exists_calls == ["u1/items/y.png"]
+    assert backend.delete_calls == []
+
+
+@pytest.mark.asyncio
+async def test_move_image_raises_when_source_missing_and_destination_absent():
+    backend = _CopyFailsBackend(RuntimeError("NoSuchKey"), exists_default=False)
+    with patch.object(storage_module, "get_storage_backend", return_value=backend):
+        with pytest.raises(StorageServiceError, match="Failed to move image"):
+            await StorageService.move_image(
+                db=MagicMock(), old_path="tmp/u1/x.png", new_path="u1/items/y.png"
+            )
+
+
+@pytest.mark.asyncio
+async def test_move_image_downgrades_delete_failure_after_copy():
+    """A delete failure AFTER the copy committed must not fail the move:
+    raising would make the caller retry and duplicate the destination."""
+
+    class _DeleteFailsBackend(FakeS3Backend):
+        async def delete(self, key):
+            raise RuntimeError("delete boom")
+
+    backend = _DeleteFailsBackend()
+    with patch.object(storage_module, "get_storage_backend", return_value=backend):
+        moved = await StorageService.move_image(
+            db=MagicMock(), old_path="tmp/u1/x.png", new_path="u1/items/y.png"
+        )
+    assert moved is True
+    assert backend.copy_calls == [("tmp/u1/x.png", "u1/items/y.png")]
+
+
+@pytest.mark.asyncio
+async def test_promote_temp_image_uses_passed_source_content_for_thumb():
+    """When the caller hands over the promoted bytes, the thumbnail is
+    encoded from them - no extra full-object download of the promoted key."""
+    backend = FakeS3Backend()
+    with patch.object(storage_module, "get_storage_backend", return_value=backend):
+        result = await StorageService.promote_temp_image_to_item(
+            db=MagicMock(),
+            user_id="u1",
+            temp_storage_path="tmp/u1/photoshoot/x.png",
+            source_content=_valid_png_bytes(),
+        )
+    assert result["storage_path"].startswith("u1/items/")
+    # The thumb was uploaded from the passed bytes: no download happened.
+    assert backend.download_keys == []
+    assert any("_thumb" in c["key"] for c in backend.upload_calls)

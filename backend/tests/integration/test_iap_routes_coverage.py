@@ -90,6 +90,10 @@ class _Table:
         self._eq_col, self._eq_val = col, val
         return self
 
+    def neq(self, col, val):
+        self._neq_col, self._neq_val = col, val
+        return self
+
     def limit(self, n):
         return self
 
@@ -578,3 +582,213 @@ async def test_google_notification_http_exception_is_reraising():
                 _LedgerDB(),
             )
     assert exc_info.value.status_code == 418
+
+
+# ---------------------------------------------------------------------------
+# _claim_event reprocessing state machine (A1-06)
+# ---------------------------------------------------------------------------
+
+
+class _ClaimTable:
+    """Minimal postgrest-style double for iap._claim_event.
+
+    The last-called verb decides what execute() returns: the insert can be
+    made to fail (duplicate), the select returns a configured ledger row,
+    and the claim update returns configurable rows (empty = lost CAS race).
+    """
+
+    def __init__(self, db, name):
+        self.db = db
+        self.name = name
+        self.last = None
+
+    def insert(self, payload):
+        self.last = "insert"
+        self.db.last_payload = payload
+        return self
+
+    def select(self, _cols):
+        self.last = "select"
+        return self
+
+    def update(self, payload):
+        self.last = "update"
+        self.db.last_payload = payload
+        return self
+
+    def eq(self, col, val):
+        self.db.eq_calls.append((col, val))
+        return self
+
+    def is_(self, col, val):
+        self.db.is_calls.append((col, val))
+        return self
+
+    def maybe_single(self):
+        return self
+
+    def execute(self):
+        if self.last == "insert":
+            if self.db.insert_error is not None:
+                raise self.db.insert_error
+            return Mock(data=[{}])
+        if self.last == "select":
+            return Mock(data=self.db.row)
+        if self.last == "update":
+            return Mock(data=self.db.update_rows)
+        return Mock(data=[])
+
+
+class _ClaimDB:
+    def __init__(self, row=None, update_rows=None, insert_error=None):
+        self.row = row
+        self.update_rows = [] if update_rows is None else update_rows
+        self.insert_error = insert_error
+        self.last_payload = None
+        self.eq_calls = []
+        self.is_calls = []
+
+    def table(self, name):
+        return _ClaimTable(self, name)
+
+
+def _duplicate_error():
+    return Exception("duplicate key value violates unique constraint")
+
+
+@pytest.mark.asyncio
+async def test_claim_event_fresh_insert_is_claimed():
+    db = _ClaimDB()
+    outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert outcome == iap._CLAIM_CLAIMED
+    assert db.last_payload["status"] == iap._WEBHOOK_STATUS_PROCESSING
+    assert db.last_payload["attempts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_claim_event_processed_duplicate_is_acked():
+    db = _ClaimDB(
+        insert_error=_duplicate_error(),
+        row={"status": "processed", "processing_started_at": "2026-01-01T00:00:00+00:00"},
+    )
+    outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert outcome == iap._CLAIM_ACKED
+
+
+@pytest.mark.asyncio
+async def test_claim_event_fresh_processing_lease_is_acked():
+    from app.utils.datetime_util import utcnow_iso
+
+    db = _ClaimDB(
+        insert_error=_duplicate_error(),
+        row={
+            "status": "processing",
+            "processing_started_at": utcnow_iso(),
+            "attempts": 2,
+        },
+    )
+    outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert outcome == iap._CLAIM_ACKED
+
+
+@pytest.mark.asyncio
+async def test_claim_event_failed_row_is_reclaimed():
+    db = _ClaimDB(
+        insert_error=_duplicate_error(),
+        row={
+            "status": "failed",
+            "processing_started_at": "2026-01-01T00:00:00+00:00",
+            "attempts": 3,
+        },
+        update_rows=[{"status": "processing"}],
+    )
+    outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert outcome == iap._CLAIM_CLAIMED
+    assert db.last_payload["attempts"] == 4
+    # The CAS predicated on the observed processing_started_at.
+    assert ("processing_started_at", "2026-01-01T00:00:00+00:00") in db.eq_calls
+
+
+@pytest.mark.asyncio
+async def test_claim_event_stale_processing_lease_is_reclaimed():
+    from datetime import timedelta
+
+    from app.utils.datetime_util import utcnow
+
+    db = _ClaimDB(
+        insert_error=_duplicate_error(),
+        row={
+            "status": "processing",
+            "processing_started_at": (utcnow() - timedelta(minutes=30)).isoformat(),
+            "attempts": 1,
+        },
+        update_rows=[{"status": "processing"}],
+    )
+    outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert outcome == iap._CLAIM_CLAIMED
+
+
+@pytest.mark.asyncio
+async def test_claim_event_lost_cas_race_is_acked():
+    db = _ClaimDB(
+        insert_error=_duplicate_error(),
+        row={
+            "status": "failed",
+            "processing_started_at": "2026-01-01T00:00:00+00:00",
+            "attempts": 1,
+        },
+        update_rows=[],
+    )
+    outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert outcome == iap._CLAIM_ACKED
+
+
+@pytest.mark.asyncio
+async def test_claim_event_legacy_row_without_lease_uses_null_predicate():
+    db = _ClaimDB(
+        insert_error=_duplicate_error(),
+        row={"status": "failed", "processing_started_at": None, "attempts": 0},
+        update_rows=[{"status": "processing"}],
+    )
+    outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert outcome == iap._CLAIM_CLAIMED
+    assert ("processing_started_at", "null") in db.is_calls
+
+
+# ---------------------------------------------------------------------------
+# _ensure_identifier_available (A1-01): one verified transaction, one account
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_app_account_token_of_another_user():
+    with pytest.raises(ValidationError, match="different account"):
+        await iap._ensure_identifier_available(
+            Mock(), "apple", "orig-1", user_id="user-1", app_account_token="user-2"
+        )
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_identifier_claimed_by_another_account():
+    db = _LedgerDB(subscriptions_lookup={"orig-1": {"user_id": "user-2"}})
+    with pytest.raises(ValidationError, match="already been used"):
+        await iap._ensure_identifier_available(
+            db, "apple", "orig-1", user_id="user-1", app_account_token="user-1"
+        )
+
+
+@pytest.mark.asyncio
+async def test_register_allows_unclaimed_identifier():
+    db = _LedgerDB()
+    # No exception means the identifier is available.
+    await iap._ensure_identifier_available(db, "google", "tok-1", user_id="user-1")
+
+
+@pytest.mark.asyncio
+async def test_register_fails_closed_when_ownership_check_errors():
+    db = Mock()
+    db.table.return_value.select.return_value.eq.return_value.neq.return_value.limit.return_value.execute.side_effect = (
+        RuntimeError("db down")
+    )
+    with pytest.raises(ValidationError, match="verify purchase ownership"):
+        await iap._ensure_identifier_available(db, "google", "tok-1", user_id="user-1")

@@ -49,6 +49,27 @@ def _success_db():
 
 
 @pytest.mark.asyncio
+async def test_redeem_referral_rejects_unconfirmed_account():
+    """A1-03: an account with email_verified=False must not redeem — the RPC
+    never runs and no credit is granted. The durable retry hook IS persisted
+    first (A1-01) so process_pending_referral grants once the email is
+    confirmed instead of losing the code on a register-time rejection."""
+    db = _success_db()
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
+        Mock(data={"email_verified": False})
+    )
+
+    response = await ReferralService.redeem_referral("u-new", "FIT-ABC123", db)
+
+    assert response.success is False
+    assert "Confirm your email" in response.message
+    db.rpc.assert_not_called()
+    # Pending-code hook persisted (normalized), never cleared on rejection.
+    calls = [c.args[0] for c in db.table.return_value.update.call_args_list]
+    assert calls == [{"referred_by_code": "fit-abc123"}]
+
+
+@pytest.mark.asyncio
 async def test_redeem_referral_persists_pending_code_before_rpc():
     """The retry hook is written to users.referred_by_code before the RPC
     and cleared after the grant completes."""
@@ -172,6 +193,21 @@ async def test_process_pending_referral_noop_without_code():
 
     assert response is None
     db.rpc.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_pending_referral_defers_for_unconfirmed_account():
+    """A1-03: a pending code on an unconfirmed account is left in place (no
+    grant, no clear) so it lands after the email is confirmed."""
+    db, users_chain = _process_pending_db(
+        {"referred_by_code": "fit-abc123", "email_verified": False}, []
+    )
+
+    response = await ReferralService.process_pending_referral("u-new", db)
+
+    assert response is None
+    db.rpc.assert_not_called()
+    users_chain.update.assert_not_called()
 
 
 # =============================================================================

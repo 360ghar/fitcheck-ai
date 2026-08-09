@@ -177,7 +177,10 @@ async def test_single_item_delete_cleans_source_and_item_images(monkeypatch):
                 {
                     "id": OWNED_ITEM_ID,
                     "user_id": USER_ID,
-                    "source_image_storage_path": "user-a/sources/shot.jpg",
+                    # Canonical source key ({user}/sources/{32hex}.{ext}):
+                    # A2-01 re-verifies ownership via _is_owned_by_user before
+                    # deleting, so a non-canonical key is skipped.
+                    "source_image_storage_path": "user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
                 },
             ],
             "item_images": [
@@ -209,8 +212,8 @@ async def test_single_item_delete_cleans_source_and_item_images(monkeypatch):
         "user-a/items/one_thumb.webp",
         "user-a/items/two.png",
         "user-a/items/two_thumb.webp",
-        "user-a/sources/shot.jpg",
-        "user-a/sources/shot_thumb.webp",
+        "user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+        "user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ]
     # The parent row is deleted.
     assert ("items", "delete", [("eq", "id", OWNED_ITEM_ID), ("eq", "user_id", USER_ID)]) in db.queries
@@ -458,7 +461,7 @@ async def test_delete_current_user_heals_dead_pooled_connection(monkeypatch):
 @pytest.mark.asyncio
 async def test_profile_lookup_failure_does_not_trigger_auto_provisioning():
     db = Mock()
-    db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = RuntimeError(
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = RuntimeError(
         "temporary database timeout"
     )
 

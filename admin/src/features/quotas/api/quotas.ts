@@ -14,8 +14,9 @@ import { QUERY_RETRY, QUERY_STALE_TIMES } from '@/shared/lib/constants'
  *         → { user_id, custom_daily_quota } (null clears the override)
  *
  * sort_by vocabulary (backend): extraction | generation | embedding | user.
- * The write endpoint is gated by require_admin backend-side (any admin role),
- * so the UI gates the button on quotas.read to match.
+ * The write endpoint is gated by require_permission("quotas.write") backend-
+ * side (admin-only per ADMIN_ONLY_WRITE_PERMISSIONS), so the UI gates the
+ * button on quotas.write to match (A8-02).
  */
 
 export const quotaKeys = {

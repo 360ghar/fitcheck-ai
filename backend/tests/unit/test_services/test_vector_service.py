@@ -16,7 +16,7 @@ import pytest
 
 from app.core.config import settings
 from app.services import vector_service as svc
-from app.services.vector_service import VectorService
+from app.services.vector_service import VectorService, VectorStoreError
 
 
 @pytest.fixture(autouse=True)
@@ -234,10 +234,13 @@ async def test_find_similar_without_filters_passes_none_filter(service):
 
 
 @pytest.mark.asyncio
-async def test_find_similar_error_returns_empty(service):
+async def test_find_similar_error_raises_vector_store_error(service):
+    """A store outage must surface as VectorStoreError (HTTP 503), not a
+    silently-empty result list that looks identical to 'no matches' (A3-21)."""
     service._index.query.side_effect = RuntimeError("boom")
 
-    assert await service.find_similar([0.5]) == []
+    with pytest.raises(VectorStoreError):
+        await service.find_similar([0.5])
 
 
 @pytest.mark.asyncio

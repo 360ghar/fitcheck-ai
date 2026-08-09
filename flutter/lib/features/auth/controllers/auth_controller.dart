@@ -338,6 +338,9 @@ class AuthController extends GetxController {
     try {
       await _authService.logout();
       AnalyticsService.instance.reset();
+      // A9-02: a pending referral code must not be redeemed under whichever
+      // account signs in next on this device.
+      await _referralService.clearPendingReferral();
       user.value = null;
       error.value = '';
 

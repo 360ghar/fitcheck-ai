@@ -8,7 +8,7 @@ op runs on.
 """
 
 import asyncio
-import time
+import threading
 
 import pytest
 
@@ -24,17 +24,30 @@ def test_executor_width_is_bounded(monkeypatch):
     image_executor.shutdown()
 
     peak = {"n": 0}
+    # Handshake (no fixed sleeps): every op parks on `release` until the main
+    # coroutine has submitted all 8 ops to the pool, so the width bound is
+    # what limits concurrency — not timing luck.
+    release = threading.Event()
 
     def slow_op():
         peak["n"] += 1
         try:
-            time.sleep(0.3)
+            if not release.wait(5):
+                raise AssertionError("image op never released")
             return "ok"
         finally:
             peak["n"] -= 1
 
     async def main():
-        await asyncio.gather(*(image_executor.run_image_op(slow_op) for _ in range(8)))
+        # run_image_op returns a Future (loop.run_in_executor); calling it
+        # submits the op to the bounded pool immediately.
+        ops = [image_executor.run_image_op(slow_op) for _ in range(8)]
+        # Yield until every op is running or queued in the executor, then
+        # release the parked workers (queued ones drain 2 at a time).
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.gather(*ops)
         return peak["n"]
 
     assert asyncio.run(main()) == 0

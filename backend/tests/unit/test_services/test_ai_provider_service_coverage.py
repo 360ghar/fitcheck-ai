@@ -106,6 +106,7 @@ def _healthy_health_service():
     status = HealthStatus(available=True, last_check=0, consecutive_failures=0)
     fake = SimpleNamespace(
         check_provider_health=AsyncMock(return_value=status),
+        record_result=AsyncMock(),
         clear_cache=Mock(),
     )
     with patch("app.services.ai_provider_health_service.get_health_service", return_value=fake):

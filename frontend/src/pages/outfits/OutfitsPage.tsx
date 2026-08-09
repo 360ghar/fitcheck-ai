@@ -341,34 +341,47 @@ export default function OutfitsPage() {
       }}
     />
   ) : displayedOutfits.length === 0 ? (
-    <EmptyState
-      icon={Layers}
-      title={searchQuery || favoritesOnly ? 'No matching outfits' : 'No outfits yet'}
-      description={
-        searchQuery || favoritesOnly
-          ? 'Try a different search or clear filters'
-          : wardrobeItems.length === 0
-            ? 'Add clothes first — AI extracts items from your photos, then you can build outfits.'
-            : 'Combine items from your closet into a look you can wear.'
-      }
-      actionLabel={
-        searchQuery || favoritesOnly
-          ? 'Clear filters'
-          : wardrobeItems.length === 0
-            ? 'Upload photos'
-            : 'Create first outfit'
-      }
-      onAction={() => {
-        if (searchQuery || favoritesOnly) {
-          setSearchQuery('')
-          setFavoritesOnly(false)
-        } else if (wardrobeItems.length === 0) {
-          navigate('/wardrobe?action=add')
-        } else {
-          navigate('/outfits/new')
+    <>
+      <EmptyState
+        icon={Layers}
+        title={searchQuery || favoritesOnly ? 'No matching outfits' : 'No outfits yet'}
+        description={
+          searchQuery || favoritesOnly
+            ? 'Try a different search or clear filters'
+            : wardrobeItems.length === 0
+              ? 'Add clothes first — AI extracts items from your photos, then you can build outfits.'
+              : 'Combine items from your closet into a look you can wear.'
         }
-      }}
-    />
+        actionLabel={
+          searchQuery || favoritesOnly
+            ? 'Clear filters'
+            : wardrobeItems.length === 0
+              ? 'Upload photos'
+              : 'Create first outfit'
+        }
+        onAction={() => {
+          if (searchQuery || favoritesOnly) {
+            setSearchQuery('')
+            setFavoritesOnly(false)
+          } else if (wardrobeItems.length === 0) {
+            navigate('/wardrobe?action=add')
+          } else {
+            navigate('/outfits/new')
+          }
+        }}
+      />
+      {hasMore && (
+        // F2b-05: under favorites/search the first pages can legitimately
+        // contain no matches while matches exist on later pages — without
+        // this the "No matching outfits" state was a dead end (hasMore
+        // reflects the unfiltered server total).
+        <InfiniteScrollSentinel
+          onLoadMore={() => void fetchMore()}
+          hasMore={hasMore}
+          isLoading={isLoadingMore}
+        />
+      )}
+    </>
   ) : showMasonry ? (
     <>
       <MasonryGrid columnCount={columnCount} resetKey={masonryResetKey}>

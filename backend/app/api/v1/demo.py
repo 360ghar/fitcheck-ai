@@ -45,6 +45,11 @@ router = APIRouter()
 # gets a fast retryable 503 instead of a multi-minute hang.
 DEMO_EXTRACT_TIMEOUT_SECONDS = 90.0
 
+# Same hard budget for the try-on leg (A4-21): demo_extract_items was already
+# wrapped in asyncio.wait_for but demo_try_on had no time budget at all, so a
+# hanging provider could hold a public worker slot indefinitely.
+DEMO_TRY_ON_TIMEOUT_SECONDS = 90.0
+
 
 # =============================================================================
 # ITEM EXTRACTION DEMO
@@ -139,8 +144,13 @@ async def demo_extract_items(
     except FitCheckException:
         raise
     except Exception as e:
+        # A4-22: never echo raw provider error strings to anonymous callers -
+        # the detail is logged server-side, the client gets a generic message.
         logger.error("Demo extraction error", error=str(e), ip=ip)
-        raise AIServiceError(f"Failed to extract items: {str(e)}")
+        raise AIServiceError(
+            "Demo item extraction failed. Please try again in a few moments.",
+            retryable=True,
+        )
 
 
 # =============================================================================
@@ -176,30 +186,48 @@ async def demo_try_on(
             try:
                 agent = ImageGenerationAgent(ai_service)
 
-                # Generate try-on using both provided images
-                result = await with_retry(
-                    lambda: agent.generate_try_on(
-                        user_avatar_base64=request_body.person_image,
-                        clothing_image_base64=request_body.clothing_image,
-                        clothing_description=request_body.clothing_description,
-                        style=request_body.style,
-                        background="studio white",
-                        pose="standing front",
-                        lighting="professional studio lighting",
-                    ),
-                    max_retries=1,
-                    initial_delay=2.0,
-                    backoff_factor=2.0,
-                    retryable_exceptions=(AIServiceError,),
-                    should_retry=is_retryable_error,
-                    on_retry=lambda attempt, error, delay: logger.warning(
-                        "Retrying demo try-on",
-                        attempt=attempt,
-                        delay=delay,
-                        error=str(error),
+                # A4-21: the try-on leg needs the same hard time budget as
+                # demo_extract_items - without wait_for a hanging provider
+                # held the public slot for minutes. The provider layer still
+                # retries internally (in-transport retry + Gemini -> Agnes
+                # fallback); wait_for only caps the total.
+                try:
+                    result = await asyncio.wait_for(
+                        with_retry(
+                            lambda: agent.generate_try_on(
+                                user_avatar_base64=request_body.person_image,
+                                clothing_image_base64=request_body.clothing_image,
+                                clothing_description=request_body.clothing_description,
+                                style=request_body.style,
+                                background="studio white",
+                                pose="standing front",
+                                lighting="professional studio lighting",
+                            ),
+                            max_retries=1,
+                            initial_delay=2.0,
+                            backoff_factor=2.0,
+                            retryable_exceptions=(AIServiceError,),
+                            should_retry=is_retryable_error,
+                            on_retry=lambda attempt, error, delay: logger.warning(
+                                "Retrying demo try-on",
+                                attempt=attempt,
+                                delay=delay,
+                                error=str(error),
+                                ip=ip,
+                            ),
+                        ),
+                        timeout=DEMO_TRY_ON_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Demo try-on timed out",
+                        timeout_seconds=DEMO_TRY_ON_TIMEOUT_SECONDS,
                         ip=ip,
-                    ),
-                )
+                    )
+                    raise AIServiceError(
+                        "Demo try-on timed out. Please try again in a few moments.",
+                        retryable=True,
+                    ) from None
             finally:
                 # Close the pooled HTTP client even when the call fails, so a
                 # burst of failed demos cannot leak connections until GC.
@@ -220,5 +248,10 @@ async def demo_try_on(
     except FitCheckException:
         raise
     except Exception as e:
+        # A4-22: never echo raw provider error strings to anonymous callers -
+        # the detail is logged server-side, the client gets a generic message.
         logger.error("Demo try-on error", error=str(e), ip=ip)
-        raise AIServiceError(f"Failed to generate try-on: {str(e)}")
+        raise AIServiceError(
+            "Demo try-on generation failed. Please try again in a few moments.",
+            retryable=True,
+        )

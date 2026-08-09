@@ -21,6 +21,7 @@ from app.agents.image_generation_agent import (
     ImageGenerationAgent,
     _resolve_background,
     get_image_generation_agent,
+    is_retryable_error,
     save_generated_image,
 )
 from app.core.exceptions import AIServiceError
@@ -446,6 +447,24 @@ async def test_generate_variations_returns_only_successes():
         )
 
     assert returned == [good, good]
+
+
+@pytest.mark.asyncio
+async def test_generate_variations_only_retries_retryable_errors():
+    """(AIServiceError, Exception) collapsed to (Exception,), retrying
+    PERMANENT failures 3x with backoff; variations must opt into retries via
+    should_retry=is_retryable_error like batch_extraction_service."""
+    agent = _make_agent()
+    good = GeneratedImage("ZmFrZQ==", "p", "m", "prov")
+    with patch(
+        "app.agents.image_generation_agent.parallel_with_retry",
+        new=AsyncMock(return_value=[ParallelResult(success=True, data=good, index=0)]),
+    ) as pwr:
+        await agent.generate_variations(items=[_item("tee", "tops")], styles=["a"])
+
+    kwargs = pwr.await_args.kwargs
+    assert kwargs["retryable_exceptions"] == (AIServiceError,)
+    assert kwargs["should_retry"] is is_retryable_error
 
 
 # =============================================================================

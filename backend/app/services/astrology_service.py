@@ -20,9 +20,12 @@ from app.core.logging_config import get_context_logger
 logger = get_context_logger(__name__)
 
 # In-memory TTL cache for geocoding results (birth_place -> resolved data)
-# TTL: 1 hour (3600 seconds)
+# TTL: 1 hour (3600 seconds). A4-25: bounded to _GEOCODING_CACHE_MAX_ENTRIES
+# (LRU-by-insertion-order with expired-entry eviction on write) so arbitrary
+# user-supplied birth places cannot grow the dict without limit.
 _GEOCODING_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
 _GEOCODING_CACHE_TTL_SECONDS = 3600
+_GEOCODING_CACHE_MAX_ENTRIES = 1000
 
 
 _WEEKDAY_PLANETS = {
@@ -235,9 +238,28 @@ class AstrologyService:
             del _GEOCODING_CACHE[cache_key]
         return None
 
+    def _evict_expired_geocode_entries(self) -> None:
+        """Drop expired entries; called on cache writes (A4-25)."""
+        now = time.time()
+        expired = [
+            key
+            for key, (_data, timestamp) in _GEOCODING_CACHE.items()
+            if now - timestamp >= _GEOCODING_CACHE_TTL_SECONDS
+        ]
+        for key in expired:
+            del _GEOCODING_CACHE[key]
+
     def _set_cached_geocode(self, birth_place: str, data: Dict[str, Any]) -> None:
-        """Cache geocoding result with TTL."""
+        """Cache geocoding result with TTL, bounding the cache size."""
         cache_key = birth_place.lower().strip()
+        # A4-25: evict expired entries first, then drop the oldest entries
+        # (dicts preserve insertion order) so the cache never exceeds the cap.
+        self._evict_expired_geocode_entries()
+        while len(_GEOCODING_CACHE) >= _GEOCODING_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_GEOCODING_CACHE), None)
+            if oldest_key is None:
+                break
+            del _GEOCODING_CACHE[oldest_key]
         _GEOCODING_CACHE[cache_key] = (data, time.time())
 
     async def _resolve_birth_place(self, birth_place: str) -> Dict[str, Any]:

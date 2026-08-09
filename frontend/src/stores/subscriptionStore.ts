@@ -59,6 +59,22 @@ export function resetSubscriptionRequestCache(): void {
   clearRequestCache()
 }
 
+/**
+ * Drop ONLY the cached usage read for the current user. Call after
+ * quota-consuming mutations (extraction, generation, photoshoot, try-on
+ * starts) so usage bars and useIsNearLimit do not show pre-action numbers
+ * for the rest of the 60s freshness window (F1-10).
+ */
+export function invalidateUsageCache(): void {
+  const userId = getAccessToken() || 'anon'
+  const { cachedKeys, inFlightKeys } = __requestCacheInternals.debugSnapshot()
+  for (const key of [...cachedKeys, ...inFlightKeys]) {
+    if (key.startsWith(`subscription:usage:`) && key.endsWith(`:${userId}`)) {
+      invalidateRequest(key)
+    }
+  }
+}
+
 // ============================================================================
 // SUBSCRIPTION STATE INTERFACE
 // ============================================================================

@@ -41,7 +41,7 @@ from app.utils.image_processing import (
     validate_image_bytes,
 )
 from app.core.image_executor import run_image_op
-from app.core.storage_keys import USER_ID_SEGMENT_RE, normalize_preview_key
+from app.core.storage_keys import USER_ID_SEGMENT_RE, is_owned_storage_key, normalize_preview_key
 from app.services.object_storage import (
     get_storage_backend,
     close_storage_backend,
@@ -150,6 +150,24 @@ def _with_thumb_siblings(storage_paths: Iterable[str]) -> List[str]:
             seen.add(thumb_key)
             expanded.append(thumb_key)
     return expanded
+
+
+def _is_no_such_key_error(error: Exception) -> bool:
+    """True when ``error`` means the S3 source object does not exist.
+
+    botocore surfaces a missing key as ``ClientError`` whose response body
+    carries ``Error.Code == "NoSuchKey"`` (R2/S3) or ``"NotFound"`` (some
+    endpoints); tests and wrapped providers may only have the message text.
+    """
+    text = str(error).lower()
+    if "nosuchkey" in text or "not found" in text:
+        return True
+    response = getattr(error, "response", None)
+    if isinstance(response, dict):
+        code = str((response.get("Error") or {}).get("Code") or "").lower()
+        if code in ("nosuchkey", "notfound"):
+            return True
+    return False
 
 
 async def close_download_client() -> None:
@@ -410,6 +428,11 @@ class StorageService:
         top-level ``tmp|generated`` folder whose SECOND segment is the user
         UUID (preview keys), so a leading segment that is neither is a
         path-style bucket name and is dropped whatever it is called.
+        Worker-mode CDN URLs (``IMAGE_SERVING_MODE=worker``) carry no bucket
+        segment: the path is the key, so a leading ``tmp|generated`` preview
+        folder or user UUID is returned as-is (the preview folder is never
+        dropped). A URL that reduces to none of our key shapes returns None —
+        it is never reshaped into a garbage key.
         """
         if not value:
             return None
@@ -439,15 +462,40 @@ class StorageService:
                 and USER_ID_SEGMENT_RE.fullmatch(parts[2])
             ):
                 return "/".join(parts[1:])
+            # Worker-mode CDN URL (IMAGE_SERVING_MODE=worker): the CDN serves
+            # keys directly at the path root with no bucket segment, so a
+            # leading top-level preview folder (``tmp|generated``) whose
+            # SECOND segment is the user UUID is PART of the key — return the
+            # path as-is or the preview folder is lost (observed: worker CDN
+            # ``tmp/{uuid}/batch/{hex}.webp`` URLs fell into the bucket-drop
+            # branch below and came back as ``{uuid}/batch/{hex}.webp``).
+            if (
+                len(parts) >= 3
+                and parts[0] in ("tmp", "generated")
+                and USER_ID_SEGMENT_RE.fullmatch(parts[1])
+            ):
+                return "/".join(parts)
+            # Worker-mode CDN URL for a canonical key: a leading user UUID
+            # means the path IS the key (no bucket segment to drop).
+            if (
+                len(parts) >= 3
+                and USER_ID_SEGMENT_RE.fullmatch(parts[0])
+            ):
+                return "/".join(parts)
             # Path-style URL from a bucket that is no longer the configured one
             # (a pre-cutover URL persisted in the DB). Canonical keys begin with
-            # a user UUID, so a non-UUID leading segment is the bucket name.
-            # Only drop it when what remains still looks like one of our keys, so
-            # an unrelated external URL is never silently reshaped into a key.
-            if len(parts) >= 3 and not USER_ID_SEGMENT_RE.fullmatch(parts[0]):
+            # a user UUID, so a leading segment that is neither a preview
+            # folder nor a UUID is the bucket name. Only drop it when what
+            # remains still looks like one of our keys, so an unrelated
+            # external URL is never silently reshaped into a key.
+            if (
+                len(parts) >= 3
+                and parts[0] not in ("tmp", "generated")
+                and not USER_ID_SEGMENT_RE.fullmatch(parts[0])
+            ):
                 if USER_ID_SEGMENT_RE.fullmatch(parts[1]):
                     return "/".join(parts[1:])
-            return "/".join(parts)
+            return None
         return candidate
 
     @staticmethod
@@ -468,7 +516,8 @@ class StorageService:
         user_id: str,
         filename: str,
         file_data: bytes,
-        is_primary: bool = False
+        is_primary: bool = False,
+        stage: bool = False,
     ) -> dict:
         """Upload an item image to the object store.
 
@@ -478,6 +527,15 @@ class StorageService:
             filename: Original filename
             file_data: Raw file bytes
             is_primary: Whether this is the primary image
+            stage: When True, write under the temp preview layout
+                (``tmp/{user_id}/upload/...``) instead of the canonical
+                ``{user_id}/items/...`` path. Used by POST /items/upload,
+                which stores images BEFORE any item row exists: a canonical
+                object written there orphans forever if the client never
+                creates the item. Staged keys are preview keys, so the
+                item-create flow promotes them to canonical item objects
+                (``promote_temp_image_to_item``) and the weekly temp cleanup
+                covers abandoned uploads.
 
         Returns:
             Dict with image_url (presigned GET), thumbnail_url, storage_path,
@@ -501,7 +559,15 @@ class StorageService:
 
         content_type = StorageService._sniff_content_type(file_data, filename)
         ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
-        storage_path = StorageService._build_key(user_id, "items", ext)
+        if stage:
+            # Preview layout: tmp/{user_id}/upload/{uuid4hex}.{ext}. The
+            # second segment is the owning user (same rule as every other
+            # tmp/{user}/{source}/... key), so reads/promotion can verify
+            # ownership. No _thumb sibling: tmp previews stay full-size and
+            # thumb_key_for returns None for them anyway.
+            storage_path = f"tmp/{user_id}/upload/{uuid.uuid4().hex}{ext}"
+        else:
+            storage_path = StorageService._build_key(user_id, "items", ext)
 
         try:
             backend = get_storage_backend()
@@ -868,10 +934,17 @@ class StorageService:
                 child_table, fk_column = "item_images", "item_id"
                 # The item's source photo (the original upload it was
                 # extracted from) lives in Storage, not in item_images.
+                # A2-01: re-verify ownership of the source key at deletion
+                # resolution time — create-time validation covers new rows,
+                # but a pre-fix row with a poisoned cross-user key must never
+                # delete another user's object. The ownership check lives in
+                # app.core.storage_keys (the one layer both routes and
+                # services may import — ARCHITECTURE.md).
                 storage_paths.extend(
                     str(row["source_image_storage_path"])
                     for row in rows
                     if row.get("source_image_storage_path")
+                    and is_owned_storage_key(row["source_image_storage_path"], user_id)
                 )
             else:
                 owned_outfit_ids.extend(owned_ids)
@@ -938,6 +1011,22 @@ class StorageService:
         server-side ``copy`` followed by a ``delete`` — no bytes are
         downloaded/re-uploaded, so the stored content type is preserved.
 
+        Failure semantics are deliberately lenient for the two races that
+        make a "move" retry unsafe:
+
+        - A copy that fails because the SOURCE is missing (NoSuchKey) is
+          treated as success when the DESTINATION already exists: a
+          concurrent promotion (two item creates referencing the same tmp
+          preview key) already copied it, so re-uploading would only
+          duplicate the work (and the old code 500'd AFTER the first
+          attempt's row insert, orphaning the item). When the destination
+          does not exist the error is a genuine "source never existed" and
+          is raised.
+        - A delete that fails AFTER the copy succeeded is downgraded to a
+          warning: the move's intent (the object now lives at ``new_path``)
+          is satisfied, and raising here would make the caller retry the
+          whole move and end up with a duplicate at ``new_path``.
+
         Args:
             db: Supabase client (kept for signature compatibility; unused by S3)
             old_path: Current path (bucket key)
@@ -948,12 +1037,45 @@ class StorageService:
             True if moved successfully
 
         Raises:
-            StorageServiceError: If move fails
+            StorageServiceError: If the copy fails for a reason other than a
+                source-missing/destination-present idempotent retry
         """
         try:
             backend = get_storage_backend()
-            await backend.copy(old_path, new_path)
-            await backend.delete(old_path)
+            try:
+                await backend.copy(old_path, new_path)
+            except Exception as e:
+                if _is_no_such_key_error(e):
+                    # Idempotent promotion: a concurrent caller already moved
+                    # this source. Treat as success ONLY when the destination
+                    # is actually there; otherwise the source is genuinely
+                    # missing and this is a real failure.
+                    destination_exists = await backend.exists(new_path)
+                    if destination_exists:
+                        logger.warning(
+                            "Move source missing but destination exists; "
+                            "treating as already moved",
+                            old_path=old_path,
+                            new_path=new_path,
+                            bucket=bucket,
+                            error=str(e),
+                        )
+                        return True
+                raise
+            try:
+                await backend.delete(old_path)
+            except Exception as e:
+                # Copy committed; only the cleanup delete failed. The move's
+                # intent is satisfied and retrying the whole move would
+                # duplicate the object — log and succeed (A2-14).
+                logger.warning(
+                    "Move copy succeeded but source delete failed; "
+                    "source may need manual cleanup",
+                    old_path=old_path,
+                    new_path=new_path,
+                    bucket=bucket,
+                    error=str(e),
+                )
 
             logger.info(
                 "Moved image",
@@ -1272,6 +1394,7 @@ class StorageService:
         user_id: str,
         temp_storage_path: str,
         filename_hint: str = "generated.png",
+        source_content: Optional[bytes] = None,
     ) -> dict:
         """Move a temporary generated image into the canonical item image path.
 
@@ -1279,6 +1402,14 @@ class StorageService:
         ``{user_id}/items/...``), then creates the ``_thumb`` sibling for the
         promoted object (tmp objects never carry one). Best-effort thumb: a
         failure only costs the variant, never the promotion.
+
+        ``source_content`` avoids the extra full-object download that the
+        thumbnail build would otherwise trigger: when the caller already has
+        the promoted bytes in hand (e.g. an upload that staged them), they
+        are passed through and used to encode the thumb directly. When it is
+        None (or the object cannot be decoded from either source) the
+        existing download-then-encode fallback runs, so behavior is
+        identical for callers that do not hold the bytes.
         """
         # Legacy per-user preview keys ({user_id}/tmp/{sub}/... held in DB rows
         # from before the temp-key migration) are normalized to the shared
@@ -1305,7 +1436,12 @@ class StorageService:
         )
         try:
             backend = get_storage_backend()
-            content = await backend.download(new_path)
+            # Thumb from caller-supplied content when it is in hand (no extra
+            # download of the full promoted object); otherwise fall back to
+            # the download-then-encode path.
+            content = source_content
+            if not content:
+                content = await backend.download(new_path)
             if content:
                 await StorageService._upload_thumbnail(backend, new_path, content)
         except Exception as e:

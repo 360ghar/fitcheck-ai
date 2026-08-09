@@ -20,6 +20,7 @@ import { fileToReplayablePreview } from '@/lib/replayable-preview';
 import { fileToBase64 } from '@/lib/utils';
 import { ensureSessionRecording, setPersonProperties, trackEvent } from '@/lib/analytics';
 import { useJobUiStore } from '@/stores/jobUiStore';
+import { invalidateUsageCache } from '@/stores/subscriptionStore';
 
 // Types
 export type PhotoshootStep = 'upload' | 'configure' | 'generating' | 'results';
@@ -338,6 +339,10 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => {
         });
 
         set({ jobId: start.job_id, statusMessage: 'Planning your scenes…' });
+
+        // The job reserves today's photoshoot quota; the next usage read must
+        // hit the server, not the 60s-fresh cache (F1-10).
+        invalidateUsageCache();
 
         // Drive the run from SSE events. Returns a promise that resolves with
         // the final images on a terminal event, or rejects on failure.

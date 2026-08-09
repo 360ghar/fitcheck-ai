@@ -63,6 +63,7 @@ ALTER TABLE public.apple_iap_events ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Service role manages apple iap events" ON public.apple_iap_events;
 CREATE POLICY "Service role manages apple iap events"
     ON public.apple_iap_events FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 
@@ -90,6 +91,7 @@ ALTER TABLE public.google_rtdn_events ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Service role manages google rtdn events" ON public.google_rtdn_events;
 CREATE POLICY "Service role manages google rtdn events"
     ON public.google_rtdn_events FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 

@@ -7,6 +7,7 @@ stores items/images and maintains embeddings for recommendations.
 """
 
 import asyncio
+import json
 import uuid
 from app.utils.datetime_util import utc_today, utcnow_iso
 from datetime import date
@@ -14,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from supabase import Client
 
@@ -24,6 +26,7 @@ from app.core.exceptions import (
     ItemNotFoundError,
     ImageNotFoundError,
     ValidationError,
+    FileTooLargeError,
     StorageServiceError,
     DatabaseError,
     SchemaNotInitializedError,
@@ -47,6 +50,8 @@ from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
 from app.utils.db import (
     execute_with_reconnect,
+    escape_ilike_literal,
+    is_pgrst202_missing_rpc,
     items_schema_migration_hint,
     jsonb_contains,
     safe_search_term,
@@ -121,6 +126,44 @@ def _normalize_item_images(item: Dict[str, Any]) -> Dict[str, Any]:
     return item
 
 
+def _is_unique_violation(error: Exception) -> bool:
+    """True when a postgrest error reports a unique-constraint violation (23505)."""
+    error_info = getattr(error, "json", lambda: {})() or {}
+    code = error_info.get("code") or getattr(error, "code", None)
+    if code == "23505":
+        return True
+    text = str(error).lower()
+    return "duplicate key" in text or "unique constraint" in text
+
+
+async def _find_item_by_client_request_id(
+    db: Client, user_id: str, client_request_id: str
+) -> Optional[Dict[str, Any]]:
+    """Fetch the caller's non-deleted item created with an idempotency key.
+
+    Returns the item with the same ``images`` shape a fresh create returns
+    (row + ``item_images`` normalized to ``images``). ``None`` when no replay
+    target exists — the create proceeds normally.
+    """
+    result = await execute_with_reconnect(
+        lambda d: (
+            d.table("items")
+            .select("*, item_images(*)")
+            .eq("user_id", user_id)
+            .eq("client_request_id", client_request_id)
+            .eq("is_deleted", False)
+            .maybe_single()
+            .execute()
+        ),
+        db,
+        extra={"operation": "create_item.replay_lookup", "user_id": user_id},
+        max_retries=1,
+    )
+    if not result or not result.data:
+        return None
+    return _normalize_item_images(result.data)
+
+
 async def _normalize_create_image_row(img, db, user_id: str) -> Dict[str, Any]:
     """Normalize a client-supplied image reference into a durable DB row.
 
@@ -137,9 +180,11 @@ async def _normalize_create_image_row(img, db, user_id: str) -> Dict[str, Any]:
       URLs minted, so the reference survives the weekly temp cleanup;
     - canonical key owned by the caller -> kept, URLs left as supplied (they
       were minted at upload time);
-    - no ``storage_path`` but ``image_url`` reduces to an owned key -> the key
-      is derived (same rule as ``materialize_image_urls``) and promoted/stored;
-    - a key that is NOT owned by the caller -> 400: persisting it would make
+    - no ``storage_path`` but ``image_url`` reduces to a key -> the key is
+      derived (same rule as ``materialize_image_urls``) and promoted/stored,
+      or rejected with a 400 when it is not owned by the caller;
+    - a key that is NOT owned by the caller (explicit ``storage_path`` or
+      derived from ``image_url``) -> 400: persisting it would make
       every read path re-mint fresh presigned URLs for another user's object;
     - anything else (external/junk URL, e.g. an OAuth picture) -> legacy
       passthrough unchanged (no key to promote or re-mint from).
@@ -154,7 +199,18 @@ async def _normalize_create_image_row(img, db, user_id: str) -> Dict[str, Any]:
 
     if not storage_path:
         derived = StorageService.key_from_path(image_url)
-        if derived and _is_owned_by_user(derived, user_id):
+        if derived:
+            # With key_from_path now returning None for true external URLs,
+            # "derived" reliably means the URL embeds one of our key shapes —
+            # so an unowned derived key must be rejected exactly like an
+            # explicit unowned storage_path (persisting it would let every
+            # read path re-mint fresh presigned URLs for another user's
+            # object).
+            if not _is_owned_by_user(derived, user_id):
+                raise ValidationError(
+                    "image URL must reference the caller's own objects",
+                    details={"field": "images.image_url"},
+                )
             # The URL embeds the key (a presigned ``/<bucket>/<key>`` URL);
             # use the key as the durable reference and mint fresh URLs.
             storage_path = derived
@@ -234,12 +290,20 @@ async def upload_item_images(
             # after (StorageService._validate_image checks the same cap, but
             # only once the whole file is already resident).
             file_bytes = await read_upload_capped(file, MAX_FILE_SIZE)
+            # Stage under tmp/{user_id}/upload/... instead of a canonical
+            # {user_id}/items/... key: this endpoint runs BEFORE any item row
+            # exists, so a canonical object would orphan forever if the client
+            # never creates the item (abandoned uploads). Preview keys are
+            # promoted to canonical item objects by the create flow
+            # (promote_temp_image_to_item) and the weekly temp cleanup covers
+            # the abandoned ones.
             res = await StorageService.upload_item_image(
                 db=db,
                 user_id=user_id,
                 filename=file.filename or "upload.jpg",
                 file_data=file_bytes,
                 is_primary=(index == 0),  # First file is primary
+                stage=True,
             )
             return {
                 "image_url": res.get("image_url"),
@@ -262,12 +326,18 @@ async def upload_item_images(
             initial_delay=1.0,
             backoff_factor=2.0,
             retryable_exceptions=(StorageServiceError, Exception),
-            # A rejected file (invalid image bytes, unsupported type) can
-            # never succeed on retry - fail it once instead of burning 3
+            # A rejected file (invalid image bytes, unsupported type, or an
+            # oversized body that read_upload_capped rejects before buffering)
+            # can never succeed on retry - fail it once instead of burning 3
             # extra decode/upload cycles (observed 2026-08-03: "Uploaded
             # bytes are not a valid image" -> "All 4 attempts failed" per
-            # file). Transient storage errors still retry.
-            should_retry=lambda e: not isinstance(e, UnsupportedMediaTypeError),
+            # file; an oversized file likewise burns 3 futile attempts).
+            # FileTooLargeError subclasses ValidationError, so excluding
+            # ValidationError covers both. Transient storage errors still
+            # retry.
+            should_retry=lambda e: not isinstance(
+                e, (UnsupportedMediaTypeError, FileTooLargeError, ValidationError)
+            ),
         )
 
         # Collect successful uploads
@@ -291,16 +361,40 @@ async def upload_item_images(
             total=len(files),
         )
 
-        return {
-            "data": {
-                "upload_id": str(uuid.uuid4()),
-                "status": "completed" if not failed else "partial",
-                "uploaded_count": len(uploaded),
-                "failed_count": len(failed),
-                "images": uploaded,
+        if uploaded:
+            return {
+                "data": {
+                    "upload_id": str(uuid.uuid4()),
+                    "status": "completed" if not failed else "partial",
+                    "uploaded_count": len(uploaded),
+                    "failed_count": len(failed),
+                    "images": uploaded,
+                },
+                "message": "Uploaded",
+            }
+
+        # Every file failed: a 202 "partial" would lie about the outcome (the
+        # upload produced nothing). Return 400 with the envelope's status
+        # "failed"; mixed results keep "partial" and all-good keeps
+        # "completed", so the status field stays the single source of truth.
+        logger.warning(
+            "All uploads failed; returning 400",
+            user_id=user_id,
+            file_count=len(files),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "data": {
+                    "upload_id": str(uuid.uuid4()),
+                    "status": "failed",
+                    "uploaded_count": 0,
+                    "failed_count": len(failed),
+                    "images": [],
+                },
+                "message": "Upload failed",
             },
-            "message": "Uploaded",
-        }
+        )
 
     except (UnsupportedMediaTypeError, StorageServiceError):
         raise
@@ -324,6 +418,34 @@ async def create_item(
     try:
         item_id = str(uuid.uuid4())
         now = _now()
+
+        # F1-07: client idempotency. The save flow retries createItem on
+        # transport failures (408/429/5xx/network); when the first attempt
+        # committed but the response was lost, the retry used to insert a
+        # duplicate item (and duplicate promoted image objects). A repeated
+        # client_request_id replays the original row — same response shape
+        # as a fresh create — instead of inserting again.
+        if item.client_request_id:
+            existing = await _find_item_by_client_request_id(db, user_id, item.client_request_id)
+            if existing:
+                logger.info(
+                    "Create item replay via client_request_id",
+                    user_id=user_id,
+                    item_id=existing["id"],
+                )
+                return {"data": existing, "message": "Created"}
+
+        # A2-01: the client-supplied source photo key is collected verbatim by
+        # the delete paths (delete_item / batch_delete / account deletion) and
+        # deleted from Storage with no further ownership check. Reject a key
+        # the caller does not own at create time, exactly like images do.
+        if item.source_image_storage_path and not _is_owned_by_user(
+            item.source_image_storage_path, user_id
+        ):
+            raise ValidationError(
+                "source_image_storage_path must reference the caller's own objects",
+                details={"field": "source_image_storage_path"},
+            )
 
         item_data = {
             "id": item_id,
@@ -352,89 +474,160 @@ async def create_item(
             "cost_per_wear": None,
             "source_image_url": item.source_image_url,
             "source_image_storage_path": item.source_image_storage_path,
+            "client_request_id": item.client_request_id,
             "created_at": now,
             "updated_at": now,
             "is_deleted": False,
         }
 
-        inserted = await execute_with_reconnect(
-            lambda d: d.table("items").insert(item_data).execute(),
-            db,
-            extra={"operation": "create_item.insert", "user_id": user_id},
-            max_retries=1,
-        )
+        try:
+            inserted = await execute_with_reconnect(
+                lambda d: d.table("items").insert(item_data).execute(),
+                db,
+                extra={"operation": "create_item.insert", "user_id": user_id},
+                max_retries=1,
+            )
+        except Exception as e:
+            # Two concurrent requests with the SAME client_request_id can both
+            # miss the replay lookup above and race to insert; the loser hits
+            # the unique index (23505). Replay the winner's row rather than
+            # surfacing a 500 the client would retry into the same dead end
+            # (F1-07).
+            if item.client_request_id and _is_unique_violation(e):
+                winner = await _find_item_by_client_request_id(
+                    db, user_id, item.client_request_id
+                )
+                if winner:
+                    logger.info(
+                        "Create item race collapsed onto client_request_id winner",
+                        user_id=user_id,
+                        item_id=winner["id"],
+                    )
+                    return {"data": winner, "message": "Created"}
+            raise
         row = (inserted.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to create item", operation="insert")
 
-        # Insert images in a single batch. Each reference is normalized first:
-        # preview (tmp/generated) keys are promoted to canonical item objects
-        # and URL-only references get their key derived, so a row never stores
-        # a short-lived presigned URL as its durable image reference.
+        # From here on the item row exists and every step is individually
+        # reversible: image promotion writes storage objects, the image batch
+        # insert writes rows, and the embedding upsert is best-effort. On ANY
+        # failure the attempt must be rolled back (delete the item row +
+        # already-promoted objects, each step logged) so a client retry
+        # cannot duplicate the item while the first attempt's partial state
+        # (row + orphaned objects) is left behind (A2-04).
+        #
+        # Only objects THIS request promoted are rollback-eligible: a
+        # canonical storage_path passed through untouched points at a
+        # pre-existing object the caller owns (e.g. from a previous upload)
+        # and must never be deleted by the rollback.
+        promoted_storage_paths: List[str] = []
         images: List[Dict[str, Any]] = []
-        if item.images:
-            image_rows = []
-            for img in item.images:
-                img_id = str(uuid.uuid4())
-                img_row = await _normalize_create_image_row(img, db, user_id)
-                img_row.update({
-                    "id": img_id,
-                    "item_id": item_id,
-                    "is_primary": bool(img.is_primary),
-                    "width": img.width,
-                    "height": img.height,
-                    "created_at": now,
-                })
-                image_rows.append(img_row)
-
-            # Single batch insert for all images
-            await execute_with_reconnect(
-                lambda d: d.table("item_images").insert(image_rows).execute(),
-                db,
-                extra={"operation": "create_item.insert_images", "user_id": user_id},
-                max_retries=1,
-            )
-            images = image_rows
-
-        # Generate embedding + upsert to Pinecone (best-effort)
-        reserved = False
-        embedding_stored = False
-        # The day the slot was reserved: a release after midnight must not
-        # decrement the new day's counter.
-        reserved_on = utc_today()
         try:
-            reserved = await AISettingsService.reserve_usage(
-                user_id=user_id,
-                operation_type=OperationType.EMBEDDING,
-                db=db,
-            )
-            if not reserved:
-                logger.info(
-                    "Embedding rate limit exceeded for item create, skipping vector upsert",
-                    user_id=user_id,
-                    item_id=item_id,
+            # Insert images in a single batch. Each reference is normalized
+            # first: preview (tmp/generated) keys are promoted to canonical
+            # item objects and URL-only references get their key derived, so a
+            # row never stores a short-lived presigned URL as its durable
+            # image reference.
+            if item.images:
+                image_rows = []
+                for img in item.images:
+                    img_id = str(uuid.uuid4())
+                    reference = getattr(img, "storage_path", None)
+                    if not reference:
+                        reference = StorageService.key_from_path(
+                            getattr(img, "image_url", None) or ""
+                        )
+                    img_row = await _normalize_create_image_row(img, db, user_id)
+                    if reference and is_preview_key(reference):
+                        promoted_storage_paths.append(img_row.get("storage_path"))
+                    img_row.update({
+                        "id": img_id,
+                        "item_id": item_id,
+                        "is_primary": bool(img.is_primary),
+                        "width": img.width,
+                        "height": img.height,
+                        "created_at": now,
+                    })
+                    image_rows.append(img_row)
+
+                # Single batch insert for all images
+                await execute_with_reconnect(
+                    lambda d: d.table("item_images").insert(image_rows).execute(),
+                    db,
+                    extra={"operation": "create_item.insert_images", "user_id": user_id},
+                    max_retries=1,
                 )
-            else:
-                embedding = await AIService.generate_item_embedding({**item_data, "images": images})
-                if embedding:
-                    vector_service = get_vector_service()
-                    await vector_service.upsert_item(
+                images = image_rows
+
+            # Generate embedding + upsert to Pinecone (best-effort)
+            reserved = False
+            embedding_stored = False
+            # The day the slot was reserved: a release after midnight must not
+            # decrement the new day's counter.
+            reserved_on = utc_today()
+            try:
+                reserved = await AISettingsService.reserve_usage(
+                    user_id=user_id,
+                    operation_type=OperationType.EMBEDDING,
+                    db=db,
+                )
+                if not reserved:
+                    logger.info(
+                        "Embedding rate limit exceeded for item create, skipping vector upsert",
+                        user_id=user_id,
                         item_id=item_id,
-                        embedding=embedding,
-                        metadata={
-                            "user_id": user_id,
-                            "category": item.category,
-                            "colors": item.colors,
-                            "brand": item.brand or "",
-                            "name": item.name,
-                        },
                     )
-                    embedding_stored = True
-        except Exception as e:
-            logger.warning("Embedding generation failed", item_id=item_id, error=str(e))
-        finally:
-            if reserved and not embedding_stored:
-                await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
+                else:
+                    embedding = await AIService.generate_item_embedding({**item_data, "images": images})
+                    if embedding:
+                        vector_service = get_vector_service()
+                        await vector_service.upsert_item(
+                            item_id=item_id,
+                            embedding=embedding,
+                            metadata={
+                                "user_id": user_id,
+                                "category": item.category,
+                                "colors": item.colors,
+                                "brand": item.brand or "",
+                                "name": item.name,
+                            },
+                        )
+                        embedding_stored = True
+            except Exception as e:
+                logger.warning("Embedding generation failed", item_id=item_id, error=str(e))
+            finally:
+                if reserved and not embedding_stored:
+                    await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
+        except Exception:
+            # Best-effort reverse: delete the item row, then every object this
+            # attempt promoted, logging each step so a leftover orphan is
+            # recoverable by operators.
+            try:
+                await asyncio.to_thread(
+                    db.table("items")
+                    .delete()
+                    .eq("id", item_id)
+                    .eq("user_id", user_id)
+                    .execute
+                )
+            except Exception as rollback_error:
+                logger.error(
+                    "Create item rollback: failed to delete item row",
+                    item_id=item_id,
+                    error=str(rollback_error),
+                )
+            for storage_path in promoted_storage_paths:
+                try:
+                    await StorageService.delete_image(db=db, storage_path=storage_path)
+                except Exception as rollback_error:
+                    logger.warning(
+                        "Create item rollback: failed to delete promoted object",
+                        item_id=item_id,
+                        storage_path=storage_path,
+                        error=str(rollback_error),
+                    )
+            raise
 
         # Return full item with images
         row["images"] = images
@@ -502,11 +695,26 @@ async def list_items(
     brand: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     is_favorite: Optional[bool] = Query(None),
+    sort_by: Optional[str] = Query(None, description="created_at | name | worn_count"),
+    sort_order: Optional[str] = Query("desc", description="asc | desc"),
     user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Browse items with filtering and pagination."""
     try:
+        # A10b-02: the app's sort sheet sends sort_by/sort_order; unknown
+        # params were silently dropped by FastAPI and every sort rendered as
+        # newest-first. Allowlist columns so a bogus value degrades to the
+        # default instead of erroring.
+        _SORT_COLUMNS = {"created_at", "name", "worn_count"}
+        effective_sort_by = sort_by if sort_by in _SORT_COLUMNS else "created_at"
+        # isinstance guard: direct-call tests pass the raw Query(...) default,
+        # which FastAPI resolves to a string only at request time.
+        effective_sort_order = (
+            sort_order.lower()
+            if isinstance(sort_order, str) and sort_order.lower() in {"asc", "desc"}
+            else "desc"
+        )
         occasion_filter: Optional[str] = None
         if occasion is not None:
             normalized_occasion = normalize_tag_list([occasion])
@@ -535,13 +743,16 @@ async def list_items(
             if categories and not valid_categories:
                 return _empty_item_page(page, page_size, ignored_filters)
             category = ",".join(valid_categories) if valid_categories else None
-        if condition and condition not in VALID_CONDITIONS:
-            logger.warning(
-                "Ignoring unknown condition filter value",
-                extra={"condition": condition, "user_id": user_id},
-            )
-            ignored_filters["condition"] = [condition]
-            return _empty_item_page(page, page_size, ignored_filters)
+        if condition:
+            condition_values = [c.strip().lower() for c in condition.split(",") if c.strip()]
+            invalid_conditions = [c for c in condition_values if c not in VALID_CONDITIONS]
+            if invalid_conditions:
+                logger.warning(
+                    "Ignoring unknown condition filter values",
+                    extra={"condition": condition, "user_id": user_id},
+                )
+                ignored_filters["condition"] = invalid_conditions
+                return _empty_item_page(page, page_size, ignored_filters)
 
         def _apply_filters(q):
             """Apply every optional filter to a base query builder."""
@@ -549,7 +760,12 @@ async def list_items(
                 categories = [c.strip().lower() for c in category.split(",") if c.strip()]
                 q = q.in_("category", categories) if len(categories) > 1 else q.eq("category", categories[0])
             if condition:
-                q = q.eq("condition", condition)
+                condition_values = [c.strip().lower() for c in condition.split(",") if c.strip()]
+                q = (
+                    q.in_("condition", condition_values)
+                    if len(condition_values) > 1
+                    else q.eq("condition", condition_values[0])
+                )
             if is_favorite is not None:
                 q = q.eq("is_favorite", is_favorite)
             if brand:
@@ -559,12 +775,22 @@ async def list_items(
                 # literal (["red"]) - plain contains(list) would send a
                 # Postgres array literal ({red}) and PostgREST answers 22P02
                 # "invalid input syntax for type jsonb" (2026-08-07 /items
-                # 500 burst).
-                q = jsonb_contains(q, "colors", [color])
+                # 500 burst). A comma-joined value (multi-select) ORs the
+                # containments so an item matching ANY chosen color shows
+                # (A10b-12).
+                colors = [c.strip().lower() for c in color.split(",") if c.strip()]
+                if len(colors) > 1:
+                    q = q.or_(
+                        ",".join(f"colors.cs.{json.dumps([c])}" for c in colors)
+                    )
+                elif colors:
+                    q = jsonb_contains(q, "colors", [colors[0]])
             if occasion_filter:
                 q = jsonb_contains(q, "occasion_tags", [occasion_filter])
             if search:
-                like = f"%{safe_search_term(search)}%"
+                # escape_ilike_literal AFTER safe_search_term: a term's own
+                # %/_ must match literally, not widen into wildcards (A2-19).
+                like = f"%{escape_ilike_literal(safe_search_term(search))}%"
                 q = q.or_(f"name.ilike.{like},brand.ilike.{like}")
             return q
 
@@ -585,7 +811,7 @@ async def list_items(
                     _apply_filters(
                         d.table("items").select("*, item_images(*)").eq("user_id", user_id).eq("is_deleted", False)
                     )
-                    .order("created_at", desc=True)
+                    .order(effective_sort_by, desc=(effective_sort_order == "desc"))
                     .range(start, end)
                     .execute
                 ),
@@ -688,7 +914,21 @@ async def update_item(
 ):
     try:
         item_id_str = str(item_id)
-        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).maybe_single().execute)
+        # Both writes below go through execute_with_reconnect like the rest of
+        # this file: a dead pooled HTTP/2 connection must not turn the update
+        # into a permanent 500 until a process restart (A2-11).
+        existing = await execute_with_reconnect(
+            lambda d: (
+                d.table("items")
+                .select("id")
+                .eq("id", item_id_str)
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute()
+            ),
+            db,
+            extra={"operation": "update_item.exists", "user_id": user_id, "item_id": item_id_str},
+        )
         if not existing or not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
@@ -700,7 +940,17 @@ async def update_item(
             update_dict["purchase_date"] = update_dict["purchase_date"].date().isoformat()
         update_dict["updated_at"] = _now()
 
-        result = await asyncio.to_thread(db.table("items").update(update_dict).eq("id", item_id_str).eq("user_id", user_id).execute)
+        result = await execute_with_reconnect(
+            lambda d: (
+                d.table("items")
+                .update(update_dict)
+                .eq("id", item_id_str)
+                .eq("user_id", user_id)
+                .execute()
+            ),
+            db,
+            extra={"operation": "update_item.update", "user_id": user_id, "item_id": item_id_str},
+        )
         row = (result.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to update item", operation="update")
@@ -846,7 +1096,7 @@ async def toggle_favorite(
         if not existing or not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
         new_value = not bool(existing.data.get("is_favorite", False))
-        result = await asyncio.to_thread(db.table("items").update({"is_favorite": new_value, "updated_at": _now()}).eq("id", item_id_str).execute)
+        result = await asyncio.to_thread(db.table("items").update({"is_favorite": new_value, "updated_at": _now()}).eq("id", item_id_str).eq("user_id", user_id).execute)
         row = (result.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to update item", operation="update")
@@ -866,20 +1116,58 @@ async def mark_worn(
 ):
     try:
         item_id_str = str(item_id)
-        existing = await asyncio.to_thread(
-            db.table("items")
-            .select("usage_times_worn")
-            .eq("id", item_id_str)
-            .eq("user_id", user_id)
-            .maybe_single()
-            .execute
-        )
-        if not existing or not existing.data:
+        # Atomic increment via the service-role RPC (migration 044): the old
+        # Python read-modify-write lost increments under concurrency (two
+        # requests both read N and both wrote N+1). The RPC performs the +1
+        # inside one UPDATE under the row lock and returns the updated row
+        # (RETURNING *), so the response's count is the true post-increment
+        # value with no second read.
+        try:
+            result = await asyncio.to_thread(
+                db.rpc(
+                    "increment_item_worn",
+                    {"item_uuid": item_id_str, "user_uuid": user_id},
+                ).execute
+            )
+        except Exception as e:
+            if not is_pgrst202_missing_rpc(e):
+                raise
+            # Migration 044 not applied on the hosted DB: fall back to the
+            # legacy read-modify-write so the endpoint keeps working during
+            # the gap. The lost-increment window only exists until 044 lands
+            # (the fallback is deliberately non-atomic, mirroring
+            # set_primary_item_image's fallback policy).
+            logger.warning(
+                "increment_item_worn RPC missing (migration 044 not applied); "
+                "falling back to read-modify-write wear increment",
+                item_id=item_id_str,
+                user_id=user_id,
+            )
+            existing = await asyncio.to_thread(
+                db.table("items")
+                .select("usage_times_worn")
+                .eq("id", item_id_str)
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute
+            )
+            if not existing or not existing.data:
+                raise ItemNotFoundError(item_id=item_id_str)
+            current = int(existing.data.get("usage_times_worn", 0))
+            update = {"usage_times_worn": current + 1, "usage_last_worn": _now(), "updated_at": _now()}
+            await asyncio.to_thread(db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute)
+            return {"data": {"id": item_id_str, "usage_times_worn": current + 1}, "message": "OK"}
+
+        row = (getattr(result, "data", None) or [None])[0]
+        if not row:
+            # The RPC returns zero rows when the item is missing or not owned
+            # by the caller.
             raise ItemNotFoundError(item_id=item_id_str)
-        current = int(existing.data.get("usage_times_worn", 0))
-        update = {"usage_times_worn": current + 1, "usage_last_worn": _now(), "updated_at": _now()}
-        await asyncio.to_thread(db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute)
-        return {"data": {"id": item_id_str, "usage_times_worn": current + 1}, "message": "OK"}
+        # `or 0` also coerces a NULL count (defensive: the column is NOT NULL
+        # DEFAULT 0, but an old row may have slipped through) so the response
+        # never surfaces a None count.
+        new_count = int(row.get("usage_times_worn") or 0)
+        return {"data": {"id": item_id_str, "usage_times_worn": new_count}, "message": "OK"}
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
@@ -933,14 +1221,55 @@ async def upload_item_image(
             "created_at": now,
         }
 
-        # Insert new image first, then clear is_primary on other images
-        # This minimizes the race window where no primary exists
+        # Insert new image first, then flip the primary flag atomically.
+        # Insert-then-clear minimizes the window with NO primary; the old
+        # second UPDATE (clear is_primary on the other rows) left a window
+        # where TWO images were primary, or both stayed set if the process
+        # died between the statements. set_primary_item_image (migration 044)
+        # flips every flag for the item inside ONE statement/transaction:
+        # is_primary = (id = image_uuid). The two-step clear survives only as
+        # the fallback for the migration gap (RPC missing -> PGRST202).
         insert_result = await asyncio.to_thread(db.table("item_images").insert(img_row).execute)
         new_image_id = insert_result.data[0]["id"] if insert_result.data else None
 
         if is_primary and new_image_id:
-            # Clear is_primary on all OTHER images for this item
-            await asyncio.to_thread(db.table("item_images").update({"is_primary": False}).eq("item_id", item_id_str).neq("id", new_image_id).execute)
+            try:
+                await asyncio.to_thread(
+                    db.rpc(
+                        "set_primary_item_image",
+                        {"item_uuid": item_id_str, "image_uuid": new_image_id},
+                    ).execute
+                )
+            except Exception as e:
+                if not is_pgrst202_missing_rpc(e):
+                    # A2-04: the image row was already inserted with
+                    # is_primary=True — if the RPC fails for any reason other
+                    # than the migration gap, clear the flag on the
+                    # just-inserted row (best-effort) before raising, so the
+                    # item can never be left with two primary images.
+                    try:
+                        await asyncio.to_thread(
+                            db.table("item_images")
+                            .update({"is_primary": False})
+                            .eq("id", new_image_id)
+                            .execute
+                        )
+                    except Exception:
+                        logger.error(
+                            "Failed to clear is_primary on inserted image after "
+                            "set_primary_item_image failure",
+                            item_id=item_id_str,
+                            image_id=new_image_id,
+                        )
+                    raise
+                logger.warning(
+                    "set_primary_item_image RPC missing (migration 044 not "
+                    "applied); falling back to two-step primary clear",
+                    item_id=item_id_str,
+                    image_id=new_image_id,
+                )
+                # Clear is_primary on all OTHER images for this item
+                await asyncio.to_thread(db.table("item_images").update({"is_primary": False}).eq("item_id", item_id_str).neq("id", new_image_id).execute)
 
         return {"data": img_row, "message": "Created"}
     except (ItemNotFoundError, ImageNotFoundError, ValidationError, UnsupportedMediaTypeError, StorageServiceError, DatabaseError):
@@ -979,6 +1308,14 @@ async def delete_item_image(
         if not item or not item.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
+        # Delete the DB row FIRST, then best-effort the storage object (A2-08):
+        # the old order deleted the object before the row, so a row-delete
+        # failure left a permanently broken tile (row referencing a missing
+        # object) with no recovery path. With the row gone first, a storage
+        # failure only orphans an object, which the weekly temp/bucket cleanup
+        # can reclaim.
+        await asyncio.to_thread(db.table("item_images").delete().eq("id", image_id_str).eq("item_id", item_id_str).execute)
+
         storage_path = img.data.get("storage_path")
         if storage_path:
             try:
@@ -986,7 +1323,6 @@ async def delete_item_image(
             except Exception as e:
                 logger.warning("Failed to delete image from storage", storage_path=storage_path, error=str(e))
 
-        await asyncio.to_thread(db.table("item_images").delete().eq("id", image_id_str).eq("item_id", item_id_str).execute)
         return {"data": {"deleted": True}, "message": "OK"}
     except (ItemNotFoundError, ImageNotFoundError, ValidationError, StorageServiceError, DatabaseError):
         raise
@@ -1014,7 +1350,9 @@ async def batch_delete_items(
     try:
         # Resolve the parent rows under the caller's ownership before reading
         # child image paths. The service-role client bypasses RLS, so the
-        # child query cannot be authorized by item_id alone.
+        # child query cannot be authorized by item_id alone. This MUST run
+        # before the delete: the source photo path lives on the items row
+        # itself, which is gone after the delete.
         owned = await StorageService.resolve_owned_storage_paths(
             db, user_id, item_ids=item_ids
         )
@@ -1040,12 +1378,18 @@ async def batch_delete_items(
             except Exception as e:
                 logger.warning("Failed to delete item embeddings", item_count=len(item_ids), error=str(e))
 
-        # Storage and vector cleanup are independent; both are best-effort.
-        await asyncio.gather(_delete_storage(), _delete_embeddings())
-
-        # Delete items (FK cascade removes item_images)
+        # Delete items FIRST (FK cascade removes item_images), then run the
+        # storage/embedding cleanup best-effort (A2-09): the old order deleted
+        # objects/embeddings before the DB rows, so a failed DB delete left
+        # the rows pointing at already-deleted objects — permanently broken
+        # tiles with no recovery. With the rows gone first, a cleanup failure
+        # only orphans objects, which bucket cleanup can reclaim.
         delete_res = await asyncio.to_thread(db.table("items").delete().eq("user_id", user_id).in_("id", item_ids).execute)
         deleted_count = len(delete_res.data or [])
+
+        # Storage and vector cleanup are independent; both are best-effort
+        # (failures are logged inside, never raised).
+        await asyncio.gather(_delete_storage(), _delete_embeddings())
 
         return {"data": {"deleted_count": deleted_count}, "message": "OK"}
     except (ItemNotFoundError, ValidationError, StorageServiceError, DatabaseError):
@@ -1189,7 +1533,9 @@ async def search_items(
 ):
     """Search items by name/brand (best-effort; Supabase full-text can be added later)."""
     try:
-        like = f"%{safe_search_term(q)}%"
+        # escape_ilike_literal AFTER safe_search_term: a term's own %/_ must
+        # match literally, not widen into wildcards (A2-19).
+        like = f"%{escape_ilike_literal(safe_search_term(q))}%"
         res = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
@@ -1304,11 +1650,24 @@ async def update_item_categories(
 
         update = request.model_dump(exclude_unset=True)
         if "category" in update and update["category"] is not None:
-            update["category"] = update["category"].lower()
+            # Match ItemCreate/ItemUpdate validation (A2-06): an off-list
+            # category persists and the item then disappears from
+            # category-filtered lists while staying in unfiltered ones.
+            category = update["category"].strip().lower()
+            if category not in VALID_CATEGORIES:
+                raise ValidationError(
+                    "Invalid category",
+                    details={"valid_categories": VALID_CATEGORIES},
+                )
+            update["category"] = category
         if "sub_category" in update and update["sub_category"] is not None:
             update["sub_category"] = update["sub_category"]
-        if "occasion_tags" in update and update["occasion_tags"] is not None:
-            update["occasion_tags"] = normalize_tag_list(update["occasion_tags"])
+        # Tag lists go through the same normalization as ItemCreate/ItemUpdate:
+        # raw mixed-case values evade the case-sensitive jsonb_contains
+        # filters used by list_items (A2-06).
+        for list_field in ("colors", "materials", "seasonal_tags", "occasion_tags"):
+            if list_field in update and update[list_field] is not None:
+                update[list_field] = normalize_tag_list(update[list_field])
 
         update["updated_at"] = _now()
         res = await asyncio.to_thread(db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute)
@@ -1445,112 +1804,128 @@ async def check_duplicates(
             "tags": request.tags,
         }
 
-        # Generate embedding for the new item
+        # The slot stays reserved until the whole search flow finishes: a
+        # vector-search or detail-fetch failure previously leaked the
+        # reservation (the release only ran on the embedding-generation error
+        # path), so the finally below releases on EVERY exit (A2-05). The
+        # embedding is never persisted by this endpoint, so the slot is
+        # released on success too — embedding_stored mirrors the
+        # create/update pattern and stays False here.
+        embedding_stored = False
+        reservation_released = False
         try:
-            embedding = await AIService.generate_item_embedding(item_data)
-        except Exception as e:
-            logger.warning(
-                "Failed to generate embedding for duplicate check, falling back to text search",
-                error=str(e),
+            # Generate embedding for the new item
+            try:
+                embedding = await AIService.generate_item_embedding(item_data)
+            except Exception as e:
+                logger.warning(
+                    "Failed to generate embedding for duplicate check, falling back to text search",
+                    error=str(e),
+                    user_id=user_id,
+                )
+                # Release BEFORE the text fallback search (the slot is not
+                # needed there); the finally skips the double release.
+                await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
+                reservation_released = True
+                return await _fallback_duplicate_check(db, user_id, request, threshold, limit)
+
+            # Search for similar items using vector service
+            vector_service = get_vector_service()
+            similar_items = await vector_service.find_similar(
+                embedding=embedding,
                 user_id=user_id,
+                category=None,  # Search across all categories
+                top_k=limit * 2,  # Get more than needed for filtering
+                min_score=threshold,
             )
-            # Fallback: simple text-based duplicate check
-            await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
-            return await _fallback_duplicate_check(db, user_id, request, threshold, limit)
 
-        # Search for similar items using vector service
-        vector_service = get_vector_service()
-        similar_items = await vector_service.find_similar(
-            embedding=embedding,
-            user_id=user_id,
-            category=None,  # Search across all categories
-            top_k=limit * 2,  # Get more than needed for filtering
-            min_score=threshold,
-        )
+            if not similar_items:
+                return {
+                    "data": {
+                        "has_duplicates": False,
+                        "duplicates": [],
+                        "threshold": threshold,
+                    },
+                    "message": "No duplicates found"
+                }
 
-        if not similar_items:
+            # Fetch full item details for matches (read-only; rebuild + retry
+            # once on a dead pooled connection - the 2026-08-03
+            # /items/check-duplicates 500s happened during the same
+            # gateway-restart window as the other ConnectionTerminated
+            # bursts).
+            item_ids = [item["item_id"] for item in similar_items]
+            items_result = await execute_with_reconnect(
+                lambda d: d.table("items")
+                .select("*, item_images(*)")
+                .in_("id", item_ids)
+                .eq("user_id", user_id)
+                .execute(),
+                db,
+                extra={"operation": "check_duplicates_items", "user_id": user_id},
+            )
+
+            normalized_items = [
+                _normalize_item_images(item) for item in (items_result.data or [])
+            ]
+            # Private buckets: materialize fresh presigned URLs at read time.
+            await materialize_parent_images(normalized_items, owner_user_id=user_id)
+            items_by_id = {item["id"]: item for item in normalized_items}
+
+            # Build duplicate response with details
+            duplicates = []
+            for match in similar_items[:limit]:
+                item_id = match["item_id"]
+                if item_id not in items_by_id:
+                    continue
+
+                item = items_by_id[item_id]
+                score = match["score"]
+
+                # Get primary image URL
+                images = item.get("images", [])
+                primary_image = next(
+                    (img for img in images if img.get("is_primary")),
+                    images[0] if images else None
+                )
+                image_url = primary_image.get("image_url") if primary_image else None
+
+                # Generate reasons for similarity
+                reasons = _generate_duplicate_reasons(request, item, score)
+
+                duplicates.append({
+                    "id": item_id,
+                    "name": item.get("name", ""),
+                    "category": item.get("category", ""),
+                    "sub_category": item.get("sub_category"),
+                    "colors": item.get("colors", []),
+                    "brand": item.get("brand"),
+                    "similarity_score": round(score, 3),
+                    "image_url": image_url,
+                    "reasons": reasons,
+                })
+
+            has_duplicates = len(duplicates) > 0
+
+            logger.info(
+                "Duplicate check completed",
+                user_id=user_id,
+                item_name=request.name,
+                duplicates_found=len(duplicates),
+                threshold=threshold,
+            )
+
             return {
                 "data": {
-                    "has_duplicates": False,
-                    "duplicates": [],
+                    "has_duplicates": has_duplicates,
+                    "duplicates": duplicates,
                     "threshold": threshold,
                 },
-                "message": "No duplicates found"
+                "message": f"Found {len(duplicates)} potential duplicate(s)" if has_duplicates else "No duplicates found"
             }
-
-        # Fetch full item details for matches (read-only; rebuild + retry once
-        # on a dead pooled connection - the 2026-08-03 /items/check-duplicates
-        # 500s happened during the same gateway-restart window as the other
-        # ConnectionTerminated bursts).
-        item_ids = [item["item_id"] for item in similar_items]
-        items_result = await execute_with_reconnect(
-            lambda d: d.table("items")
-            .select("*, item_images(*)")
-            .in_("id", item_ids)
-            .eq("user_id", user_id)
-            .execute(),
-            db,
-            extra={"operation": "check_duplicates_items", "user_id": user_id},
-        )
-
-        normalized_items = [
-            _normalize_item_images(item) for item in (items_result.data or [])
-        ]
-        # Private buckets: materialize fresh presigned URLs at read time.
-        await materialize_parent_images(normalized_items, owner_user_id=user_id)
-        items_by_id = {item["id"]: item for item in normalized_items}
-
-        # Build duplicate response with details
-        duplicates = []
-        for match in similar_items[:limit]:
-            item_id = match["item_id"]
-            if item_id not in items_by_id:
-                continue
-
-            item = items_by_id[item_id]
-            score = match["score"]
-
-            # Get primary image URL
-            images = item.get("images", [])
-            primary_image = next(
-                (img for img in images if img.get("is_primary")),
-                images[0] if images else None
-            )
-            image_url = primary_image.get("image_url") if primary_image else None
-
-            # Generate reasons for similarity
-            reasons = _generate_duplicate_reasons(request, item, score)
-
-            duplicates.append({
-                "id": item_id,
-                "name": item.get("name", ""),
-                "category": item.get("category", ""),
-                "sub_category": item.get("sub_category"),
-                "colors": item.get("colors", []),
-                "brand": item.get("brand"),
-                "similarity_score": round(score, 3),
-                "image_url": image_url,
-                "reasons": reasons,
-            })
-
-        has_duplicates = len(duplicates) > 0
-
-        logger.info(
-            "Duplicate check completed",
-            user_id=user_id,
-            item_name=request.name,
-            duplicates_found=len(duplicates),
-            threshold=threshold,
-        )
-
-        return {
-            "data": {
-                "has_duplicates": has_duplicates,
-                "duplicates": duplicates,
-                "threshold": threshold,
-            },
-            "message": f"Found {len(duplicates)} potential duplicate(s)" if has_duplicates else "No duplicates found"
-        }
+        finally:
+            if not embedding_stored and not reservation_released:
+                await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
 
     except (ValidationError, DatabaseError, AIServiceError):
         raise
@@ -1619,72 +1994,85 @@ async def find_similar_items(
                 "Daily embedding limit exceeded. Requested 1 embedding."
             )
 
-        # Generate embedding for source item
+        # The slot stays reserved until the whole search flow finishes: a
+        # vector-search or detail-fetch failure previously leaked the
+        # reservation (the release only ran on the embedding-generation error
+        # path), so the finally below releases on EVERY exit (A2-05). The
+        # embedding is never persisted by this endpoint, so the slot is
+        # released on success too.
+        embedding_stored = False
+        reservation_released = False
         try:
-            embedding = await AIService.generate_item_embedding(source_item)
-        except Exception as e:
-            logger.warning(
-                "Failed to generate embedding for similar items search",
-                error=str(e),
-                item_id=item_id_str,
+            # Generate embedding for source item
+            try:
+                embedding = await AIService.generate_item_embedding(source_item)
+            except Exception as e:
+                logger.warning(
+                    "Failed to generate embedding for similar items search",
+                    error=str(e),
+                    item_id=item_id_str,
+                )
+                await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
+                reservation_released = True
+                return {
+                    "data": {"items": [], "source_item_id": item_id_str},
+                    "message": "Similarity search unavailable - AI service error"
+                }
+
+            # Search for similar items
+            vector_service = get_vector_service()
+            similar_items = await vector_service.find_similar(
+                embedding=embedding,
+                user_id=user_id,
+                exclude_item_ids=[item_id_str],  # Don't include the source item
+                top_k=limit,
+                min_score=min_score,
             )
-            await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
+
+            if not similar_items:
+                return {
+                    "data": {"items": [], "source_item_id": item_id_str},
+                    "message": "No similar items found"
+                }
+
+            # Fetch full item details
+            similar_ids = [item["item_id"] for item in similar_items]
+            items_result = await asyncio.to_thread(
+                db.table("items")
+                .select("*, item_images(*)")
+                .in_("id", similar_ids)
+                .eq("user_id", user_id)
+                .execute
+            )
+
+            normalized_items = [
+                _normalize_item_images(item) for item in (items_result.data or [])
+            ]
+            # Private buckets: materialize fresh presigned URLs at read time.
+            await materialize_parent_images(normalized_items, owner_user_id=user_id)
+            items_by_id = {item["id"]: item for item in normalized_items}
+
+            # Build response with scores
+            response_items = []
+            for match in similar_items:
+                item_id = match["item_id"]
+                if item_id not in items_by_id:
+                    continue
+
+                item = items_by_id[item_id]
+                item["similarity_score"] = round(match["score"], 3)
+                response_items.append(item)
+
             return {
-                "data": {"items": [], "source_item_id": item_id_str},
-                "message": "Similarity search unavailable - AI service error"
+                "data": {
+                    "items": response_items,
+                    "source_item_id": item_id_str,
+                },
+                "message": f"Found {len(response_items)} similar item(s)"
             }
-
-        # Search for similar items
-        vector_service = get_vector_service()
-        similar_items = await vector_service.find_similar(
-            embedding=embedding,
-            user_id=user_id,
-            exclude_item_ids=[item_id_str],  # Don't include the source item
-            top_k=limit,
-            min_score=min_score,
-        )
-
-        if not similar_items:
-            return {
-                "data": {"items": [], "source_item_id": item_id_str},
-                "message": "No similar items found"
-            }
-
-        # Fetch full item details
-        similar_ids = [item["item_id"] for item in similar_items]
-        items_result = await asyncio.to_thread(
-            db.table("items")
-            .select("*, item_images(*)")
-            .in_("id", similar_ids)
-            .eq("user_id", user_id)
-            .execute
-        )
-
-        normalized_items = [
-            _normalize_item_images(item) for item in (items_result.data or [])
-        ]
-        # Private buckets: materialize fresh presigned URLs at read time.
-        await materialize_parent_images(normalized_items, owner_user_id=user_id)
-        items_by_id = {item["id"]: item for item in normalized_items}
-
-        # Build response with scores
-        response_items = []
-        for match in similar_items:
-            item_id = match["item_id"]
-            if item_id not in items_by_id:
-                continue
-
-            item = items_by_id[item_id]
-            item["similarity_score"] = round(match["score"], 3)
-            response_items.append(item)
-
-        return {
-            "data": {
-                "items": response_items,
-                "source_item_id": item_id_str,
-            },
-            "message": f"Found {len(response_items)} similar item(s)"
-        }
+        finally:
+            if not embedding_stored and not reservation_released:
+                await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
 
     except (ItemNotFoundError, ValidationError, DatabaseError, RateLimitError, AIServiceError):
         raise
@@ -1707,8 +2095,9 @@ async def _fallback_duplicate_check(
 ) -> Dict[str, Any]:
     """Fallback duplicate check using text-based matching when embeddings unavailable."""
     try:
-        # Search by name similarity and same category
-        name_pattern = f"%{request.name}%"
+        # Search by name similarity and same category. escape_ilike_literal:
+        # a name containing %/_ must match literally (A2-19).
+        name_pattern = f"%{escape_ilike_literal(request.name)}%"
 
         items_result = await asyncio.to_thread(
             db.table("items")

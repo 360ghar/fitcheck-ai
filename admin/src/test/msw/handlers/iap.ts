@@ -29,7 +29,7 @@ export const iapTransactionListFixture: AdminIapTransactionListItem[] = [
     billing_product_id: 'plus_monthly_ios',
     plan_type: 'plus_monthly',
     status: 'active',
-    amount: 899,
+    amount: 8.99,
     created_at: '2026-07-15T10:00:00Z',
   },
   {
@@ -41,7 +41,7 @@ export const iapTransactionListFixture: AdminIapTransactionListItem[] = [
     billing_product_id: 'pro_monthly_android',
     plan_type: 'pro_monthly',
     status: 'refunded',
-    amount: 1999,
+    amount: 19.99,
     created_at: '2026-06-01T09:00:00Z',
   },
   {
@@ -68,7 +68,7 @@ export const iapDetailFixture: Record<string, unknown> = {
   billing_product_id: 'plus_monthly_ios',
   plan_type: 'plus_monthly',
   status: 'active',
-  amount: 899,
+  amount: 8.99,
   created_at: '2026-07-15T10:00:00Z',
   apple_original_transaction_id: '1000000000000001',
 }
@@ -130,7 +130,7 @@ export function createIapHandlers(initial?: Partial<IapHandlersState>) {
           { status: 404 },
         )
       }
-      return HttpResponse.json({ ...iapDetailFixture, transaction_id: txnId })
+      return HttpResponse.json({ ...iapDetailFixture, ...row, transaction_id: txnId })
     }),
 
     http.post('*/api/v1/admin/iap/transactions/:txnId/mark-refunded', ({ params }) => {

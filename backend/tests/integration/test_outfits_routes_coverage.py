@@ -57,7 +57,7 @@ from app.models.outfit import (
     OutfitUpdate,
 )
 from app.services.storage_service import StorageService
-from tests.utils.fake_db import FakeBuilder, FakeDB
+from tests.utils.fake_db import FakeBuilder, FakeDB, PGRSTDuplicateError
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
 ITEM_ID = "22222222-2222-2222-2222-222222222222"
@@ -238,6 +238,73 @@ class _RaisingDB(_OutfitsFakeDB):
         return super().table(name)
 
 
+class _RpcRaisingDB(_OutfitsFakeDB):
+    """FakeDB whose ``rpc`` raises — exercises the DatabaseError wrapper
+    around the atomic item add/remove RPCs (migration 044)."""
+
+    def rpc(self, name, params=None):
+        raise RuntimeError("supabase down")
+
+
+class _ToggleFavoriteDB(_OutfitsFakeDB):
+    """FakeDB whose ``toggle_outfit_favorite`` RPC actually flips the row.
+
+    Mirrors migration 044's atomic flip so the route's post-RPC re-read
+    reflects the new value (the shared FakeDB's canned RPC results cannot).
+    """
+
+    def rpc(self, name, params=None):
+        if name == "toggle_outfit_favorite":
+            for row in self._rows_for("outfits"):
+                row["is_favorite"] = not bool(row.get("is_favorite", False))
+        return super().rpc(name, params)
+
+
+class _PrimaryRpcDB(_OutfitsFakeDB):
+    """FakeDB whose ``set_primary_outfit_image`` RPC flips the primary flag.
+
+    Mirrors migration 045's atomic flip: the upload route no longer issues
+    the two-step UPDATE when the RPC exists, so tests must simulate it.
+    """
+
+    def rpc(self, name, params=None):
+        if name == "set_primary_outfit_image":
+            image_uuid = (params or {}).get("image_uuid")
+            for row in self._rows_for("outfit_images"):
+                row["is_primary"] = bool(image_uuid and row.get("id") == image_uuid)
+        return super().rpc(name, params)
+
+
+class _OutfitItemRpcDB(_OutfitsFakeDB):
+    """FakeDB whose item-list RPCs mutate the outfit row like migration 044.
+
+    ``add_outfit_item`` appends (no-op when already present, ownership
+    checked by the route beforehand); ``remove_outfit_item`` removes. The
+    handler re-fetches after the RPC, so the fake must persist the change for
+    the route-level tests to see it (canned rpc_results cannot).
+    """
+
+    def rpc(self, name, params=None):
+        params = params or {}
+        if name == "add_outfit_item":
+            outfit_id = params.get("outfit_uuid")
+            item_id = params.get("item_uuid")
+            for row in self._rows_for("outfits"):
+                if row.get("id") == outfit_id:
+                    item_ids = list(row.get("item_ids") or [])
+                    if item_id not in item_ids:
+                        row["item_ids"] = item_ids + [item_id]
+        elif name == "remove_outfit_item":
+            outfit_id = params.get("outfit_uuid")
+            item_id = params.get("item_uuid")
+            for row in self._rows_for("outfits"):
+                if row.get("id") == outfit_id:
+                    row["item_ids"] = [
+                        i for i in (row.get("item_ids") or []) if i != item_id
+                    ]
+        return super().rpc(name, params)
+
+
 class _FakeUpload:
     def __init__(self, data: bytes = b"png-bytes", filename: str = "outfit.png", content_type: str = "image/png"):
         self._data = data
@@ -300,6 +367,28 @@ def _outfit_row(outfit_id: str = OUTFIT_ID, **overrides: Any) -> Dict[str, Any]:
         "created_at": NOW,
         "updated_at": NOW,
         "outfit_images": [],
+    }
+    row.update(overrides)
+    return row
+
+
+def _outfit_image_row(**overrides: Any) -> Dict[str, Any]:
+    row: Dict[str, Any] = {
+        "id": IMAGE_ID,
+        "outfit_id": OUTFIT_ID,
+        "image_url": "https://cdn/uploaded.jpg",
+        "thumbnail_url": "https://cdn/uploaded-t.jpg",
+        "storage_path": "u/outfits/x.jpg",
+        "pose": "front",
+        "lighting": None,
+        "body_profile_id": None,
+        "generation_type": "ai",
+        "is_primary": True,
+        "width": 1024,
+        "height": 768,
+        "generation_metadata": None,
+        "client_request_id": None,
+        "created_at": NOW,
     }
     row.update(overrides)
     return row
@@ -793,7 +882,7 @@ async def test_get_public_outfit_returns_public_view_and_increments_views():
                 _outfit_row(is_public=True, item_ids=[ITEM_ID], outfit_images=[{"image_url": "https://cdn/o.jpg"}])
             ],
             "shared_outfits": [
-                {"id": "s1", "outfit_id": OUTFIT_ID, "expires_at": None, "view_count": 3, "created_at": NOW}
+                {"id": "s1", "outfit_id": OUTFIT_ID, "visibility": "public", "expires_at": None, "view_count": 3, "created_at": NOW}
             ],
             "items": [_item_row()],
         }
@@ -805,8 +894,9 @@ async def test_get_public_outfit_returns_public_view_and_increments_views():
     assert result["data"]["name"] == "Weekend Casual"
     assert result["data"]["images"] == [{"image_url": "https://cdn/o.jpg"}]
     assert result["data"]["items"][0]["id"] == ITEM_ID
-    update = [u for u in db.updates if u[0] == "shared_outfits"][0]
-    assert update[1]["view_count"] == 4
+    # View counting is atomic via the 044 RPC, not a Python read-modify-write.
+    assert ("increment_shared_outfit_views", {"share_uuid": "s1"}) in db.rpc_calls
+    assert all(u[0] != "shared_outfits" for u in db.updates)
 
 
 @pytest.mark.asyncio
@@ -838,7 +928,9 @@ async def test_get_public_outfit_forces_presigned_urls_in_worker_mode(monkeypatc
                     ],
                 )
             ],
-            "shared_outfits": [],
+            "shared_outfits": [
+                {"id": "s1", "outfit_id": OUTFIT_ID, "visibility": "public", "expires_at": None, "view_count": 0}
+            ],
         }
     )
     result = await outfits_module.get_public_outfit(outfit_id=UUID(OUTFIT_ID), db=db)
@@ -852,7 +944,14 @@ async def test_get_public_outfit_forces_presigned_urls_in_worker_mode(monkeypatc
 
 @pytest.mark.asyncio
 async def test_get_public_outfit_without_items_returns_empty_summary():
-    db = _OutfitsFakeDB({"outfits": [_outfit_row(is_public=True, item_ids=[])], "shared_outfits": []})
+    db = _OutfitsFakeDB(
+        {
+            "outfits": [_outfit_row(is_public=True, item_ids=[])],
+            "shared_outfits": [
+                {"id": "s1", "outfit_id": OUTFIT_ID, "visibility": "public", "expires_at": None, "view_count": 0}
+            ],
+        }
+    )
 
     result = await outfits_module.get_public_outfit(outfit_id=UUID(OUTFIT_ID), db=db)
 
@@ -861,9 +960,28 @@ async def test_get_public_outfit_without_items_returns_empty_summary():
 
 @pytest.mark.asyncio
 async def test_get_public_outfit_raises_not_found_when_missing_or_private():
-    db = _OutfitsFakeDB({"outfits": [_outfit_row(is_public=False)]})
+    # The share row is the source of truth: a private outfit (or no share row
+    # at all) is served as "not shared" (404), never as a public outfit.
+    db = _OutfitsFakeDB(
+        {
+            "outfits": [_outfit_row(is_public=False)],
+            "shared_outfits": [
+                {"id": "s1", "outfit_id": OUTFIT_ID, "visibility": "public", "expires_at": None, "view_count": 0}
+            ],
+        }
+    )
 
-    with pytest.raises(NotFoundError):
+    with pytest.raises(SharedOutfitNotFoundError):
+        await outfits_module.get_public_outfit(outfit_id=UUID(OUTFIT_ID), db=db)
+
+
+@pytest.mark.asyncio
+async def test_get_public_outfit_raises_not_found_without_share_row():
+    """An outfit without a shared_outfits row is not shared, even if
+    is_public somehow got set (legacy/crash residue)."""
+    db = _OutfitsFakeDB({"outfits": [_outfit_row(is_public=True)]})
+
+    with pytest.raises(SharedOutfitNotFoundError):
         await outfits_module.get_public_outfit(outfit_id=UUID(OUTFIT_ID), db=db)
 
 
@@ -873,7 +991,7 @@ async def test_get_public_outfit_raises_shared_not_found_when_expired():
         {
             "outfits": [_outfit_row(is_public=True)],
             "shared_outfits": [
-                {"id": "s1", "outfit_id": OUTFIT_ID, "expires_at": "2020-01-01T00:00:00Z", "view_count": 0}
+                {"id": "s1", "outfit_id": OUTFIT_ID, "visibility": "public", "expires_at": "2020-01-01T00:00:00Z", "view_count": 0}
             ],
         }
     )
@@ -884,7 +1002,9 @@ async def test_get_public_outfit_raises_shared_not_found_when_expired():
 
 @pytest.mark.asyncio
 async def test_get_public_outfit_degrades_unexpected_errors_to_database_error():
-    db = _RaisingDB("outfits")
+    # The share-row read is the endpoint's FIRST query; a store failure there
+    # must degrade to DatabaseError, not a fake 404.
+    db = _RaisingDB("shared_outfits")
 
     with pytest.raises(DatabaseError):
         await outfits_module.get_public_outfit(outfit_id=UUID(OUTFIT_ID), db=db)
@@ -988,7 +1108,20 @@ async def test_update_outfit_degrades_unexpected_errors_to_database_error():
 
 @pytest.mark.asyncio
 async def test_share_outfit_public_visibility_upserts_share_row():
-    db = _OutfitsFakeDB({"outfits": [_outfit_row()]})
+    # is_public=True is the POST-RPC state: migration 045's upsert RPC sets
+    # it inside the same transaction as the share-row upsert (the fake RPC
+    # only returns the row, it does not mutate). The route's job is to
+    # delegate to the RPC — which this test pins via db.rpc_calls — and
+    # re-read nothing else.
+    db = _OutfitsFakeDB(
+        {"outfits": [_outfit_row(is_public=True)]},
+        rpc_results={
+            # Migration 045 RPC: returns the upserted share row.
+            "upsert_shared_outfit": [
+                {"expires_at": None, "view_count": 0},
+            ],
+        },
+    )
 
     result = await outfits_module.share_outfit(
         outfit_id=UUID(OUTFIT_ID),
@@ -1000,25 +1133,36 @@ async def test_share_outfit_public_visibility_upserts_share_row():
     assert result["message"] == "Created"
     assert result["data"]["share_link"]["url"] == f"http://localhost:3000/shared/outfits/{OUTFIT_ID}"
     assert db.rows["outfits"][0]["is_public"] is True
-    assert db.inserts[0][0] == "shared_outfits"
-    assert db.inserts[0][1]["visibility"] == "public"
+    # The share row is written by the RPC (migration 045), not by a Python
+    # upsert on shared_outfits (which 500'd: the table has no updated_at).
+    assert ("upsert_shared_outfit", {
+        "outfit_uuid": OUTFIT_ID,
+        "user_uuid": USER_ID,
+        "p_visibility": "public",
+        "p_expires_at": None,
+        "p_caption": None,
+        "p_allow_feedback": True,
+        "p_share_url": f"http://localhost:3000/shared/outfits/{OUTFIT_ID}",
+    }) in db.rpc_calls
 
 
 @pytest.mark.asyncio
-async def test_share_outfit_non_public_visibility_keeps_outfit_private():
+async def test_share_outfit_non_public_visibility_is_rejected():
+    """MVP supports only public visibility; 'friends'/'private' must be
+    rejected instead of persisting a row the public route can never serve."""
     db = _OutfitsFakeDB({"outfits": [_outfit_row(is_public=True)]})
 
-    result = await outfits_module.share_outfit(
-        outfit_id=UUID(OUTFIT_ID),
-        request=outfits_module.ShareOutfitRequest(visibility="friends"),
-        user_id=USER_ID,
-        db=db,
-    )
+    with pytest.raises(ValidationError):
+        await outfits_module.share_outfit(
+            outfit_id=UUID(OUTFIT_ID),
+            request=outfits_module.ShareOutfitRequest(visibility="friends"),
+            user_id=USER_ID,
+            db=db,
+        )
 
-    assert result["message"] == "Created"
-    assert db.rows["outfits"][0]["is_public"] is False
-    assert result["data"]["share_link"]["expires_at"] is None
-    assert result["data"]["share_link"]["views"] == 0
+    # Nothing was written: the outfit stays as it was and no RPC fired.
+    assert db.rows["outfits"][0]["is_public"] is True
+    assert db.rpc_calls == []
 
 
 @pytest.mark.asyncio
@@ -1540,7 +1684,7 @@ async def test_delete_collection_degrades_unexpected_errors_to_database_error():
 
 @pytest.mark.asyncio
 async def test_toggle_favorite_turns_a_favorite_on():
-    db = _OutfitsFakeDB({"outfits": [_outfit_row(is_favorite=False)]})
+    db = _ToggleFavoriteDB({"outfits": [_outfit_row(is_favorite=False)]})
 
     result = await outfits_module.toggle_favorite(outfit_id=UUID(OUTFIT_ID), user_id=USER_ID, db=db)
 
@@ -1550,7 +1694,7 @@ async def test_toggle_favorite_turns_a_favorite_on():
 
 @pytest.mark.asyncio
 async def test_toggle_favorite_turns_a_favorite_off():
-    db = _OutfitsFakeDB({"outfits": [_outfit_row(is_favorite=True)]})
+    db = _ToggleFavoriteDB({"outfits": [_outfit_row(is_favorite=True)]})
 
     result = await outfits_module.toggle_favorite(outfit_id=UUID(OUTFIT_ID), user_id=USER_ID, db=db)
 
@@ -1697,7 +1841,12 @@ async def test_duplicate_outfit_degrades_unexpected_errors_to_database_error():
 
 @pytest.mark.asyncio
 async def test_add_item_to_outfit_appends_and_persists():
-    db = _OutfitsFakeDB({"outfits": [_outfit_row(item_ids=[ITEM_ID])], "items": [_item_row(), _item_row(ITEM_ID_2)]})
+    # _OutfitItemRpcDB emulates migration 044's row-locked append, so the
+    # handler's post-RPC re-fetch sees the new membership.
+    db = _OutfitItemRpcDB(
+        {"outfits": [_outfit_row(item_ids=[ITEM_ID])], "items": [_item_row(), _item_row(ITEM_ID_2)]},
+        rpc_results={"add_outfit_item": [True]},
+    )
 
     result = await outfits_module.add_item_to_outfit(
         outfit_id=UUID(OUTFIT_ID),
@@ -1709,6 +1858,14 @@ async def test_add_item_to_outfit_appends_and_persists():
     assert result["message"] == "Updated"
     assert result["data"]["item_ids"] == [ITEM_ID, ITEM_ID_2]
     assert db.rows["outfits"][0]["item_ids"] == [ITEM_ID, ITEM_ID_2]
+    # The append is atomic via the 044 RPC (row-locked), not a Python
+    # read-modify-write on the JSONB array.
+    assert ("add_outfit_item", {
+        "outfit_uuid": OUTFIT_ID,
+        "item_uuid": ITEM_ID_2,
+        "user_uuid": USER_ID,
+    }) in db.rpc_calls
+    assert all(u[0] != "outfits" for u in db.updates)
 
 
 @pytest.mark.asyncio
@@ -1770,8 +1927,11 @@ async def test_add_item_to_outfit_raises_when_item_missing():
 
 @pytest.mark.asyncio
 async def test_add_item_to_outfit_raises_database_error_when_refetch_misses():
+    # (Rename-adjusted for the RPC path: the DatabaseError now comes from a
+    # failed re-fetch after the RPC, not from an update returning nothing.)
     db = _OutfitsFakeDB(
-        {"outfits": [_outfit_row(item_ids=[ITEM_ID])], "items": [_item_row(), _item_row(ITEM_ID_2)]}
+        {"outfits": [_outfit_row(item_ids=[ITEM_ID])], "items": [_item_row(), _item_row(ITEM_ID_2)]},
+        rpc_results={"add_outfit_item": [True]},
     )
 
     with patch.object(outfits_module, "_fetch_outfit", return_value=None):
@@ -1785,8 +1945,10 @@ async def test_add_item_to_outfit_raises_database_error_when_refetch_misses():
 
 
 @pytest.mark.asyncio
-async def test_add_item_to_outfit_raises_database_error_when_update_returns_nothing():
-    db = _EmptyWriteDB("outfits", {"outfits": [_outfit_row(item_ids=[ITEM_ID])], "items": [_item_row(), _item_row(ITEM_ID_2)]})
+async def test_add_item_to_outfit_raises_database_error_when_rpc_raises():
+    db = _RpcRaisingDB(
+        {"outfits": [_outfit_row(item_ids=[ITEM_ID])], "items": [_item_row(), _item_row(ITEM_ID_2)]}
+    )
 
     with pytest.raises(DatabaseError):
         await outfits_module.add_item_to_outfit(
@@ -1812,7 +1974,12 @@ async def test_add_item_to_outfit_degrades_unexpected_errors_to_database_error()
 
 @pytest.mark.asyncio
 async def test_remove_item_from_outfit_removes_and_persists():
-    db = _OutfitsFakeDB({"outfits": [_outfit_row(item_ids=[ITEM_ID, ITEM_ID_2])], "items": [_item_row(), _item_row(ITEM_ID_2)]})
+    # _OutfitItemRpcDB emulates migration 044's row-locked removal, so the
+    # handler's post-RPC re-fetch sees the new membership.
+    db = _OutfitItemRpcDB(
+        {"outfits": [_outfit_row(item_ids=[ITEM_ID, ITEM_ID_2])], "items": [_item_row(), _item_row(ITEM_ID_2)]},
+        rpc_results={"remove_outfit_item": [True]},
+    )
 
     result = await outfits_module.remove_item_from_outfit(
         outfit_id=UUID(OUTFIT_ID),
@@ -1824,6 +1991,12 @@ async def test_remove_item_from_outfit_removes_and_persists():
     assert result["message"] == "Updated"
     assert result["data"]["item_ids"] == [ITEM_ID_2]
     assert db.rows["outfits"][0]["item_ids"] == [ITEM_ID_2]
+    assert ("remove_outfit_item", {
+        "outfit_uuid": OUTFIT_ID,
+        "item_uuid": ITEM_ID,
+        "user_uuid": USER_ID,
+    }) in db.rpc_calls
+    assert all(u[0] != "outfits" for u in db.updates)
 
 
 @pytest.mark.asyncio
@@ -1899,9 +2072,9 @@ async def test_remove_item_from_outfit_raises_database_error_when_refetch_misses
 
 
 @pytest.mark.asyncio
-async def test_remove_item_from_outfit_raises_database_error_when_update_returns_nothing():
-    db = _EmptyWriteDB(
-        "outfits", {"outfits": [_outfit_row(item_ids=[ITEM_ID, ITEM_ID_2])], "items": [_item_row(), _item_row(ITEM_ID_2)]}
+async def test_remove_item_from_outfit_raises_database_error_when_rpc_raises():
+    db = _RpcRaisingDB(
+        {"outfits": [_outfit_row(item_ids=[ITEM_ID, ITEM_ID_2])], "items": [_item_row(), _item_row(ITEM_ID_2)]}
     )
 
     with pytest.raises(DatabaseError):
@@ -2053,7 +2226,7 @@ _UPLOAD_RESPONSE = {
 
 @pytest.mark.asyncio
 async def test_upload_outfit_image_marks_generation_complete_when_primary():
-    db = _OutfitsFakeDB({"outfits": [_outfit_row()]})
+    db = _PrimaryRpcDB({"outfits": [_outfit_row()]})
 
     with patch.object(StorageService, "upload_outfit_image", new=AsyncMock(return_value=_UPLOAD_RESPONSE)):
         result = await outfits_module.upload_outfit_image(
@@ -2072,8 +2245,9 @@ async def test_upload_outfit_image_marks_generation_complete_when_primary():
     assert result["data"]["image_url"] == "https://cdn/uploaded.jpg"
     assert result["data"]["generation_metadata"] == {"model": "m1"}
     assert db.rows["outfit_images"][0]["id"] == result["data"]["id"]
-    # Primary flag is cleared on other images and the generation is completed.
-    assert any(u[0] == "outfit_images" for u in db.updates)
+    # Primary flag is flipped via the atomic RPC (migration 045) and the
+    # generation is completed.
+    assert any(name == "set_primary_outfit_image" for name, _ in db.rpc_calls)
     generation_update = [u for u in db.updates if u[0] == "outfit_generations"][0]
     assert generation_update[1]["status"] == "completed"
     assert generation_update[1]["progress"] == 100
@@ -2127,6 +2301,83 @@ async def test_upload_outfit_image_rejects_empty_content_type():
 
 
 @pytest.mark.asyncio
+async def test_upload_outfit_image_rejects_overlong_pose():
+    # The DB column is VARCHAR(20) (migration 001); an overlong pose used to
+    # 500 with 22001. Both the Form binding and the in-handler guard 422.
+    with pytest.raises(ValidationError, match="pose must be at most 20 characters"):
+        await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            pose="x" * 21,
+            user_id=USER_ID,
+            db=_OutfitsFakeDB({"outfits": [_outfit_row()]}),
+        )
+
+
+@pytest.mark.asyncio
+async def test_upload_outfit_image_accepts_exactly_20_char_pose():
+    db = _OutfitsFakeDB({"outfits": [_outfit_row()]})
+    with patch.object(StorageService, "upload_outfit_image", new=AsyncMock(return_value=_UPLOAD_RESPONSE)):
+        result = await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            pose="s" * 20,
+            user_id=USER_ID,
+            db=db,
+        )
+    assert result["message"] == "Created"
+    assert db.rows["outfit_images"][0]["pose"] == "s" * 20
+
+
+@pytest.mark.asyncio
+async def test_upload_outfit_image_rejects_malformed_body_profile_id():
+    # A non-UUID body_profile_id used to be written verbatim into the UUID
+    # column and 500 with 22P02; it must 422 instead.
+    with pytest.raises(ValidationError, match="body_profile_id must be a valid UUID"):
+        await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            body_profile_id="not-a-uuid",
+            user_id=USER_ID,
+            db=_OutfitsFakeDB({"outfits": [_outfit_row()]}),
+        )
+
+
+@pytest.mark.asyncio
+async def test_upload_outfit_image_rejects_foreign_body_profile():
+    db = _OutfitsFakeDB({
+        "outfits": [_outfit_row()],
+        "body_profiles": [{"id": IMAGE_ID, "user_id": "someone-else"}],
+    })
+    with pytest.raises(ValidationError, match="does not belong to the current user"):
+        await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            body_profile_id=IMAGE_ID,
+            user_id=USER_ID,
+            db=db,
+        )
+
+
+@pytest.mark.asyncio
+async def test_upload_outfit_image_writes_owned_body_profile_as_uuid_string():
+    db = _OutfitsFakeDB({
+        "outfits": [_outfit_row()],
+        "body_profiles": [{"id": IMAGE_ID, "user_id": USER_ID}],
+    })
+    with patch.object(StorageService, "upload_outfit_image", new=AsyncMock(return_value=_UPLOAD_RESPONSE)):
+        result = await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            body_profile_id=IMAGE_ID,
+            user_id=USER_ID,
+            db=db,
+        )
+    assert result["message"] == "Created"
+    assert db.rows["outfit_images"][0]["body_profile_id"] == IMAGE_ID
+
+
+@pytest.mark.asyncio
 async def test_upload_outfit_image_raises_when_outfit_missing():
     db = _OutfitsFakeDB({"outfits": []})
 
@@ -2154,6 +2405,156 @@ async def test_upload_outfit_image_tolerates_insert_returning_no_rows():
 
     assert result["message"] == "Created"
     assert all(u[0] != "outfit_images" for u in db.updates)
+
+
+@pytest.mark.asyncio
+async def test_upload_outfit_image_replays_existing_row_for_repeated_client_request_id():
+    """F1-07: a transport retry that committed before the response was lost
+    must replay the original image row instead of inserting a duplicate (and
+    must not upload a second storage object)."""
+    db = _OutfitsFakeDB(
+        {
+            "outfits": [_outfit_row()],
+            "outfit_images": [_outfit_image_row(client_request_id="img-req-1")],
+        }
+    )
+    upload = AsyncMock(return_value=_UPLOAD_RESPONSE)
+
+    with patch.object(StorageService, "upload_outfit_image", new=upload):
+        result = await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            pose="front",
+            lighting=None,
+            body_profile_id=None,
+            generation_id=None,
+            is_primary=False,
+            client_request_id="img-req-1",
+            user_id=USER_ID,
+            db=db,
+        )
+
+    assert result["message"] == "Created"
+    assert result["data"]["id"] == IMAGE_ID
+    assert result["data"]["image_url"] == "https://cdn/uploaded.jpg"
+    # No storage upload and no second outfit_images insert on the replay.
+    upload.assert_not_awaited()
+    assert all(t != "outfit_images" for t, _p in db.inserts)
+
+
+@pytest.mark.asyncio
+async def test_upload_outfit_image_replay_reissues_generation_complete_update():
+    """F1-07: a replay must still mark the generation complete when the first
+    attempt died between the image insert and the generation update."""
+    db = _OutfitsFakeDB(
+        {
+            "outfits": [_outfit_row()],
+            "outfit_images": [_outfit_image_row(client_request_id="img-req-1")],
+            "outfit_generations": [
+                {
+                    "id": GENERATION_ID,
+                    "user_id": USER_ID,
+                    "outfit_id": OUTFIT_ID,
+                    "status": "processing",
+                }
+            ],
+        }
+    )
+
+    with patch.object(StorageService, "upload_outfit_image", new=AsyncMock(return_value=_UPLOAD_RESPONSE)):
+        result = await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            pose="front",
+            lighting=None,
+            body_profile_id=None,
+            generation_id=GENERATION_ID,
+            is_primary=False,
+            client_request_id="img-req-1",
+            user_id=USER_ID,
+            db=db,
+        )
+
+    assert result["data"]["id"] == IMAGE_ID
+    assert db.rows["outfit_generations"][0]["status"] == "completed"
+    assert db.rows["outfit_generations"][0]["progress"] == 100
+
+
+@pytest.mark.asyncio
+async def test_upload_outfit_image_persists_client_request_id():
+    db = _OutfitsFakeDB({"outfits": [_outfit_row()]})
+
+    with patch.object(StorageService, "upload_outfit_image", new=AsyncMock(return_value=_UPLOAD_RESPONSE)):
+        result = await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            pose="front",
+            lighting=None,
+            body_profile_id=None,
+            generation_id=None,
+            is_primary=False,
+            client_request_id="img-req-1",
+            user_id=USER_ID,
+            db=db,
+        )
+
+    assert result["message"] == "Created"
+    assert db.rows["outfit_images"][0]["client_request_id"] == "img-req-1"
+
+
+@pytest.mark.asyncio
+async def test_upload_outfit_image_race_collapses_onto_client_request_id_winner():
+    """F1-07: two concurrent uploads with the same key both miss the replay
+    lookup; the loser's insert hits the unique index (23505) and must replay
+    the winner's row instead of 500ing."""
+
+    class _RacingOutfitImagesBuilder(_OutfitsFakeBuilder):
+        def execute(self):
+            if (
+                self._mode == "insert"
+                and self._table == "outfit_images"
+                and not self._db.raced_outfit_image_insert
+            ):
+                self._db.raced_outfit_image_insert = True
+                # The concurrent winner's row lands before the loser's
+                # insert fails with the unique violation.
+                self._db.rows.setdefault("outfit_images", []).append(
+                    _outfit_image_row(client_request_id="img-req-1")
+                )
+                raise PGRSTDuplicateError(
+                    "outfit_images", ("outfit_id", "client_request_id")
+                )
+            return super().execute()
+
+    class _RacingOutfitDB(_OutfitsFakeDB):
+        raced_outfit_image_insert = False
+
+        def table(self, name):
+            if name == "outfit_images":
+                return _RacingOutfitImagesBuilder(self, name)
+            return super().table(name)
+
+    db = _RacingOutfitDB({"outfits": [_outfit_row()]})
+
+    with patch.object(StorageService, "upload_outfit_image", new=AsyncMock(return_value=_UPLOAD_RESPONSE)):
+        result = await outfits_module.upload_outfit_image(
+            outfit_id=UUID(OUTFIT_ID),
+            file=_FakeUpload(),
+            pose="front",
+            lighting=None,
+            body_profile_id=None,
+            generation_id=None,
+            is_primary=False,
+            client_request_id="img-req-1",
+            user_id=USER_ID,
+            db=db,
+        )
+
+    assert result["message"] == "Created"
+    assert result["data"]["id"] == IMAGE_ID
+    assert db.raced_outfit_image_insert is True
+    # Exactly one row persisted — the winner's.
+    assert len(db.rows["outfit_images"]) == 1
 
 
 @pytest.mark.asyncio

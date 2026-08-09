@@ -1029,9 +1029,21 @@ CREATE POLICY "Users can read feedback for own shared outfits"
     )
   );
 
+-- A5-03: anonymous feedback is only accepted for a PUBLIC shared outfit
+-- that still has feedback enabled and has not expired — matching the API's
+-- own allow_feedback/expires_at checks that the old unconditional
+-- WITH CHECK (true) bypassed via direct PostgREST.
 CREATE POLICY "Anyone can insert share feedback"
   ON public.share_feedback FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.shared_outfits s
+      WHERE s.id = share_feedback.shared_outfit_id
+        AND s.visibility = 'public'
+        AND s.allow_feedback
+        AND (s.expires_at IS NULL OR s.expires_at > NOW())
+    )
+  );
 
 -- USER STREAKS
 DROP POLICY IF EXISTS "Users can read own streaks" ON public.user_streaks;

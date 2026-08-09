@@ -220,9 +220,11 @@ class _DashboardContentState extends State<DashboardContent> {
     }
 
     final subController = Get.find<SubscriptionController>();
-    final shouldShow =
-        !dashboardController.referralBannerDismissed.value ||
-        subController.isNearLimit;
+    // The controller persists a week-long dismissal; do not re-show the banner
+    // for near-limit users or the dismiss button would be pointless for the
+    // banner's primary audience. Near-limit urgency still drives styling via
+    // the isUrgent prop below.
+    final shouldShow = !dashboardController.referralBannerDismissed.value;
 
     if (!shouldShow) return const SizedBox.shrink();
 

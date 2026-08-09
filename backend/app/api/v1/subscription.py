@@ -65,6 +65,33 @@ def _first_subscription_item_id(subscription: object) -> Optional[str]:
     return getattr(item, "id", None)
 
 
+def _subscription_price_id(subscription: object) -> Optional[str]:
+    """Extract the first subscription item's price ID from either payload shape."""
+    if isinstance(subscription, dict):
+        items = subscription.get("items") or {}
+        data = items.get("data", []) if isinstance(items, dict) else []
+    else:
+        items = getattr(subscription, "items", None)
+        data = getattr(items, "data", []) if items is not None else []
+    if not isinstance(data, (list, tuple)) or not data:
+        return None
+    item = data[0]
+    if isinstance(item, dict):
+        price = item.get("price")
+    else:
+        price = getattr(item, "price", None)
+    if isinstance(price, str):
+        return price
+    if isinstance(price, dict):
+        return price.get("id")
+    return getattr(price, "id", None) if price is not None else None
+
+
+def _price_is_configured(price_id: Optional[str]) -> bool:
+    """True only for one of the four configured web billing price IDs."""
+    return price_id is not None and price_id in SubscriptionService.stripe_price_plan_map()
+
+
 def _absolute_checkout_url(url: str) -> str:
     """Convert API-relative checkout defaults into Stripe-compatible URLs."""
     if url.startswith(("http://", "https://")):
@@ -300,21 +327,36 @@ async def create_checkout_session(
             .execute
         )
         sub_data = maybe_single_data(sub_result) or {}
+        stored_plan = PlanType(sub_data.get("plan_type", "free"))
+        existing_subscription_id = sub_data.get("stripe_subscription_id")
         billing_provider = sub_data.get("billing_provider", "stripe")
         if billing_provider in ("apple", "google"):
             # App Store Guideline 3.1.1 / Play policy: a store-billed account
             # must not be steered to Stripe checkout from the mobile apps, and
             # a web Stripe purchase would silently double-bill alongside the
-            # store subscription. Fail closed.
-            raise ServiceError(
-                "This account is billed through the "
-                f"{'App Store' if billing_provider == 'apple' else 'Play Store'}; "
-                "web checkout is not available for store-billed subscriptions."
+            # store subscription. Fail closed — but only while the store
+            # entitlement is actually active: a lapsed/free row (plan free or
+            # a non-billing trial) has nothing left on the store side and may
+            # move to Stripe (A1-05).
+            active_store_entitlement = (
+                SubscriptionService.is_paid_plan(stored_plan)
+                and sub_data.get("status") in ("active", "past_due")
             )
-        stored_plan = PlanType(sub_data.get("plan_type", "free"))
-        existing_subscription_id = sub_data.get("stripe_subscription_id")
-
-        if SubscriptionService.is_paid_plan(stored_plan) and not existing_subscription_id:
+            if active_store_entitlement:
+                raise ServiceError(
+                    "This account is billed through the "
+                    f"{'App Store' if billing_provider == 'apple' else 'Play Store'}; "
+                    "web checkout is not available for store-billed subscriptions."
+                )
+        # A promo/referral/banked-credit trial row is a legitimate paid-plan
+        # state with no Stripe subscription: this checkout creates a fresh
+        # Stripe subscription instead of failing (A1-04). Only paid rows that
+        # are neither trial nor store-billed are unsafe to re-checkout.
+        if (
+            SubscriptionService.is_paid_plan(stored_plan)
+            and not existing_subscription_id
+            and sub_data.get("status") != "trial"
+        ):
             raise ServiceError(
                 "Your account has a paid billing state but no Stripe subscription ID. "
                 "Please contact support before starting another checkout."
@@ -642,12 +684,24 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
                 if isinstance(stripe_subscription_id, str):
                     expanded_subscription = stripe.Subscription.retrieve(stripe_subscription_id)
                 if _has_expanded_subscription_items(expanded_subscription):
-                    await SubscriptionService.sync_stripe_subscription(
-                        user_id,
-                        expanded_subscription,
-                        db,
-                        plan_type_hint=PlanType(plan_type),
-                    )
+                    # A1-09: an unknown price ID must not raise — the 500
+                    # would make Stripe retry this event forever. Ack with a
+                    # warning instead: the entitlement is NOT granted (fail
+                    # closed; the operator must configure the price ID), and
+                    # the local row keeps its previous state.
+                    if not _price_is_configured(_subscription_price_id(expanded_subscription)):
+                        logger.warning(
+                            "Ignoring checkout completion with unknown Stripe price",
+                            user_id=user_id,
+                            plan_type=plan_type,
+                        )
+                    else:
+                        await SubscriptionService.sync_stripe_subscription(
+                            user_id,
+                            expanded_subscription,
+                            db,
+                            plan_type_hint=PlanType(plan_type),
+                        )
                 else:
                     await SubscriptionService.upgrade_to_pro(
                         user_id=user_id,
@@ -675,9 +729,20 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
 
             if user_id:
                 if _has_expanded_subscription_items(subscription):
-                    await SubscriptionService.sync_stripe_subscription(
-                        user_id, subscription, db
-                    )
+                    # A1-09: an unknown price ID must not raise — the 500
+                    # would make Stripe retry this event forever. Ack with a
+                    # warning instead; the local row keeps its previous
+                    # state until the price ID is configured.
+                    if not _price_is_configured(_subscription_price_id(subscription)):
+                        logger.warning(
+                            "Ignoring Stripe subscription update with unknown price",
+                            user_id=user_id,
+                            stripe_subscription_id=subscription.get("id"),
+                        )
+                    else:
+                        await SubscriptionService.sync_stripe_subscription(
+                            user_id, subscription, db
+                        )
                 elif subscription.get("cancel_at_period_end"):
                     # Backward-compatible handling for minimal webhook
                     # payloads that omit expanded subscription items.

@@ -1,8 +1,20 @@
+import socket
+
 import pytest
 import httpx
 
 from app.models.social_import import SocialPlatform
 from app.services.social_scraper_service import InstagramLoginResult, SocialScraperService
+
+
+def _addrinfo(ip):
+    return (socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 443))
+
+
+def _patch_resolver(monkeypatch, *ips):
+    """A4-27: the anonymous profile fetch resolves + pins the host before
+    connecting; tests must can the resolver like the coverage suite does."""
+    monkeypatch.setattr("socket.getaddrinfo", lambda *a, **k: [_addrinfo(ip) for ip in ips])
 
 
 class _FakeResponse:
@@ -42,6 +54,7 @@ class _FakeAsyncClient:
 async def test_discovery_does_not_enqueue_non_image_fallback_urls(monkeypatch):
     response = _FakeResponse(status_code=200, text="<html><body>No media here</body></html>")
 
+    _patch_resolver(monkeypatch, "93.184.216.34")
     monkeypatch.setattr(
         "app.services.social_scraper_service.httpx.AsyncClient",
         lambda *args, **kwargs: _FakeAsyncClient(response),
@@ -61,6 +74,7 @@ async def test_discovery_does_not_enqueue_non_image_fallback_urls(monkeypatch):
 @pytest.mark.asyncio
 async def test_discovery_http_failure_is_not_reported_as_exhausted(monkeypatch):
     response = _FakeResponse(status_code=503, text="temporarily unavailable")
+    _patch_resolver(monkeypatch, "93.184.216.34")
     monkeypatch.setattr(
         "app.services.social_scraper_service.httpx.AsyncClient",
         lambda *args, **kwargs: _FakeAsyncClient(response),
@@ -82,6 +96,7 @@ async def test_discovery_transport_failure_is_not_reported_as_exhausted(monkeypa
         async def get(self, *_args, **_kwargs):
             raise httpx.ConnectError("offline")
 
+    _patch_resolver(monkeypatch, "93.184.216.34")
     monkeypatch.setattr(
         "app.services.social_scraper_service.httpx.AsyncClient",
         lambda *args, **kwargs: FailingClient(_FakeResponse(status_code=200, text="")),

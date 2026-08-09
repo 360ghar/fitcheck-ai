@@ -42,15 +42,16 @@ function outfitListKey(filters: OutfitState['filters'], page: number, pageSize: 
   ].join('|')
 }
 
-function outfitDetailKey(id: string): string {
+export function outfitDetailKey(id: string): string {
   return `outfits:detail:${getAccessToken() || 'anon'}:${id}`
 }
 
 /**
  * Drop every cached outfit list key for the current user (mutations change
- * list-affecting fields / totals).
+ * list-affecting fields / totals). Exported so auto-outfit creation outside
+ * the store (lib/outfit-from-upload) invalidates the same keys (F1-05).
  */
-function invalidateOutfitList(): void {
+export function invalidateOutfitList(): void {
   const userId = getAccessToken() || 'anon'
   const { cachedKeys, inFlightKeys } = __requestCacheInternals.debugSnapshot()
   for (const key of [...cachedKeys, ...inFlightKeys]) {
@@ -180,6 +181,8 @@ interface OutfitState {
   deleteOutfit: (outfitId: string) => Promise<void>;
   deleteSelectedOutfits: () => Promise<void>;
   setPage: (page: number) => void;
+  /** Reset all in-memory outfit state (logout / user switch). */
+  reset: () => void;
 
   // Draft actions
   resetOutfitDraft: () => void;
@@ -370,12 +373,47 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   totalOutfits: 0,
   hasMore: true,
 
+  // Reset every piece of in-memory outfit state (F1-04): logout / forced
+  // logout / user switch must never leave the previous account's outfits,
+  // draft, preview, or generation state visible to the next sign-in. The wire
+  // cache is dropped separately (resetOutfitRequestCache).
+  reset: () => {
+    set({
+      outfits: [],
+      selectedOutfit: null,
+      selectedOutfits: new Set(),
+      isGenerating: false,
+      generationStatus: 'idle',
+      generationId: null,
+      generatedImageUrl: null,
+      generatingOutfits: new Map(),
+      ...initialCreationState,
+      ...initialPreviewState,
+      filters: initialFilters,
+      isLoading: false,
+      isLoadingMore: false,
+      isDetailLoading: false,
+      isGridView: true,
+      viewMode: 'all',
+      sortBy: 'date_added',
+      sortOrder: 'desc',
+      error: null,
+      page: 1,
+      pageSize: 24,
+      totalOutfits: 0,
+      hasMore: true,
+    });
+  },
+
   // Fetch outfits
   fetchOutfits: async (refresh = false) => {
     const state = get();
-    const { filters, page, pageSize, outfits } = state;
+    const { filters, pageSize } = state;
 
-    const newPage = refresh ? 1 : page;
+    // Entry points always fetch page 1 — the store's `page` only advances via
+    // `fetchMore`, so a later plain `fetchOutfits()` must replace, not append.
+    // `refresh` stays the cache-busting flag (see `cacheRequest` below).
+    const newPage = 1;
     const apiFilters: ApiOutfitFilters = {
       page: newPage,
       page_size: pageSize,
@@ -401,7 +439,9 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       );
 
       set({
-        outfits: refresh || newPage === 1 ? response.outfits : [...outfits, ...response.outfits],
+        // Unconditional replacement: a non-paging caller must never append
+        // page N onto a list that already contains it (duplicate tiles).
+        outfits: response.outfits,
         totalOutfits: response.total,
         hasMore: response.has_next,
         page: newPage,
@@ -433,14 +473,25 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       const { filters } = state;
       if (filters.style !== 'all') apiFilters.style = filters.style;
       if (filters.season !== 'all') apiFilters.season = filters.season;
-      // Search is a client-side narrowing over the loaded universe (the page
-      // filters locally), so paging must NOT send it to the server — otherwise
-      // page 2 offsets against a search-filtered set and the list strands
-      // mid-search. Mirrors the wardrobe store's fetchMore.
+      // F1-02: search is sent on EVERY page, mirroring fetchOutfits page 1 —
+      // a page-2 fetch without it continued an unfiltered set and stranded
+      // matching outfits past the offset.
+      if (filters.search) apiFilters.search = filters.search;
       if (filters.isFavorite) apiFilters.is_favorite = true;
 
       const response = await outfitsApi.getOutfits(apiFilters);
-      const newOutfits = [...state.outfits, ...response.outfits];
+      // F1-01: re-read AFTER the await — a concurrent refresh that resolved
+      // meanwhile must not be clobbered by the pre-await snapshot. F1-09:
+      // dedupe by id so offset pagination cannot double tiles after a
+      // concurrent mutation reordered the list.
+      const currentState = get();
+      const seen = new Set(currentState.outfits.map((o) => o.id));
+      const fresh = response.outfits.filter((outfit) => {
+        if (seen.has(outfit.id)) return false;
+        seen.add(outfit.id);
+        return true;
+      });
+      const newOutfits = [...currentState.outfits, ...fresh];
       set({
         outfits: newOutfits,
         totalOutfits: response.total,
@@ -539,10 +590,13 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   // Toggle outfit favorite
   toggleOutfitFavorite: async (outfitId: string) => {
     try {
-      const state = get();
       const updated = await outfitsApi.toggleOutfitFavorite(outfitId);
       invalidateOutfitList();
       invalidateRequest(outfitDetailKey(outfitId));
+      // F1-06: re-read AFTER the await — the pre-await snapshot would clobber
+      // pages appended by a concurrent fetchOutfits/fetchMore (the wardrobe
+      // store's mutations were reworked the same way).
+      const state = get();
       const newOutfits = state.outfits.map((outfit) =>
         outfit.id === outfitId ? { ...outfit, is_favorite: updated.is_favorite } : outfit
       );
@@ -896,12 +950,18 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         `outfit-${outfit.id}-preview.png`
       );
 
+      // F1-07: one key per logical upload; every retry of this save reuses it
+      // so the backend replays the original row instead of inserting a
+      // duplicate outfit image when the first attempt committed but the
+      // response was lost.
+      const clientRequestId = `preview-${outfit.id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const uploaded = await withRetry(
         () =>
           outfitsApi.uploadOutfitImage(outfit.id, imageFile, {
             isPrimary: true,
             pose: 'front',
             lighting: 'studio',
+            client_request_id: clientRequestId,
           }),
         { maxRetries: 3, initialDelayMs: 1000, backoffFactor: 2 }
       );
@@ -1035,12 +1095,16 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         `outfit-${outfitId}-${Date.now()}.png`
       );
 
+      // F1-07: the generation_id is unique per generation, so it doubles as
+      // the idempotency key — retries of this upload replay the original
+      // row instead of inserting a duplicate outfit image.
       const uploaded = await outfitsApi.uploadOutfitImage(outfitId, imageFile, {
         isPrimary: true,
         pose: options.pose || 'front',
         lighting: options.lighting,
         body_profile_id: options.body_profile_id,
         generation_id: response.generation_id,
+        client_request_id: response.generation_id,
       });
 
       // A new look changes the outfit's images; drop cached list + detail.
@@ -1091,7 +1155,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       // built from `generatingOutfits`) shows the retry state consistently.
       const failedMap = new Map(get().generatingOutfits);
       failedMap.set(outfitId, { status: 'failed', error: apiError.message });
-      set({ error: apiError, isGenerating: false, generationStatus: 'failed', generatingOutfits: failedMap });
+      // F2b-03: generation failures must NOT clobber the store's list-level
+      // `error` — OutfitsPage swaps the whole list for the "Couldn't load
+      // outfits" ErrorState whenever it is set. The failedMap entry above is
+      // the designed channel for generation failures.
+      set({ isGenerating: false, generationStatus: 'failed', generatingOutfits: failedMap });
       try {
         const { useJobUiStore } = await import('@/stores/jobUiStore');
         useJobUiStore.getState().clearJob('outfit-generate');
@@ -1194,15 +1262,20 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           throw new Error('AI image generation returned no image');
         }
 
-        // Convert to file and upload
+        // Convert to file and upload. F1-07: stable key per upload attempt —
+        // the transport interceptor re-issues the identical multipart body,
+        // and the backend replays the original row for a repeated key
+        // instead of inserting a duplicate outfit image.
         const imageFile = await dataUrlToFile(
           imageUrl,
           `outfit-${outfitId}-${Date.now()}.png`
         );
 
+        const clientRequestId = `auto-${outfitId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         const uploaded = await outfitsApi.uploadOutfitImage(outfitId, imageFile, {
           isPrimary: true,
           pose: 'front',
+          client_request_id: clientRequestId,
         });
 
         invalidateOutfitList();

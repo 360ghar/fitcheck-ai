@@ -45,6 +45,12 @@ class WardrobeController extends GetxController {
   final RxString sortType = 'newest'.obs;
   final RxString viewMode = 'grid'.obs;
 
+  /// Favorites-only filter (A10b-03): the Dashboard "Favorites" pill used to
+  /// set sortType='favorite', which mapped to a nonexistent sort key and
+  /// rendered the full unfiltered wardrobe. The backend's real
+  /// `is_favorite` filter is what the pill means.
+  final RxBool favoritesOnly = false.obs;
+
   // Pagination
   final RxInt currentPage = 1.obs;
   final RxBool hasMore = true.obs;
@@ -62,6 +68,16 @@ class WardrobeController extends GetxController {
   /// The list shown to the user. Filtering is server-side, so this is the
   /// single item list — kept as a named getter for view compatibility.
   List<ItemModel> get filteredItems => items;
+
+  /// Whether any server-side filter is active. When one is, a deep-linked
+  /// item fetched by id must NOT be merged into [items]: the grid would
+  /// otherwise show an item that violates the active filter (A10b-09).
+  bool get _hasServerSideFilters =>
+      selectedCategories.isNotEmpty ||
+      selectedColors.isNotEmpty ||
+      selectedOccasion.value.isNotEmpty ||
+      selectedConditions.isNotEmpty ||
+      favoritesOnly.value;
 
   // Action-specific loading states (per-item)
   final RxMap<String, bool> isDeletingMap = <String, bool>{}.obs;
@@ -130,6 +146,11 @@ class WardrobeController extends GetxController {
         (_) => fetchItems(refresh: true),
         time: const Duration(milliseconds: 100),
       ),
+      debounce(
+        favoritesOnly,
+        (_) => fetchItems(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
     ]);
   }
 
@@ -194,6 +215,7 @@ class WardrobeController extends GetxController {
           conditions: requestConditions,
           sortBy: _mapSortTypeToApi(requestSortType),
           sortOrder: _getSortOrder(requestSortType),
+          isFavorite: favoritesOnly.value ? true : null,
         ),
         maxAttempts: 3,
       );
@@ -237,11 +259,15 @@ class WardrobeController extends GetxController {
     try {
       final item = await _itemRepository.getItem(itemId);
       if (isClosed) return null;
-      final index = items.indexWhere((existing) => existing.id == itemId);
-      if (index == -1) {
-        items.add(item);
-      } else {
-        items[index] = item;
+      // A10b-09: don't merge into the paged list while a server-side filter
+      // is active — the grid would show an item that violates it.
+      if (!_hasServerSideFilters) {
+        final index = items.indexWhere((existing) => existing.id == itemId);
+        if (index == -1) {
+          items.add(item);
+        } else {
+          items[index] = item;
+        }
       }
       return item;
     } catch (e) {
@@ -264,11 +290,14 @@ class WardrobeController extends GetxController {
     try {
       final item = await _itemRepository.getItem(itemId);
       if (isClosed) return;
-      final index = items.indexWhere((existing) => existing.id == itemId);
-      if (index == -1) {
-        items.add(item);
-      } else {
-        items[index] = item;
+      // A10b-09: same merge guard as fetchItemById.
+      if (!_hasServerSideFilters) {
+        final index = items.indexWhere((existing) => existing.id == itemId);
+        if (index == -1) {
+          items.add(item);
+        } else {
+          items[index] = item;
+        }
       }
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e));
@@ -285,8 +314,6 @@ class WardrobeController extends GetxController {
         return 'name';
       case 'most_worn':
         return 'worn_count';
-      case 'favorite':
-        return 'is_favorite';
       default:
         return 'created_at';
     }

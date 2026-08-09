@@ -1,6 +1,7 @@
 from datetime import date
 from types import SimpleNamespace
 from typing import Any, Dict, List
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -9,6 +10,25 @@ from app.api.v1.recommendations import (
     _coerce_time,
     astrology_recommendations,
 )
+from app.services.astrology_service import AstrologyService
+
+# Canned geocoding result: keeps the vedic-full path deterministic (no
+# network) — A3b-04 made birth_time/birth_place required, so the ready-path
+# fixtures now exercise _build_full_context.
+_CANNED_BIRTH_PLACE = {
+    "latitude": 28.6,
+    "longitude": 77.2,
+    "timezone": "Asia/Kolkata",
+    "display_name": "New Delhi",
+}
+
+
+def _patch_geocode(monkeypatch):
+    monkeypatch.setattr(
+        AstrologyService,
+        "_resolve_birth_place",
+        AsyncMock(return_value=dict(_CANNED_BIRTH_PLACE)),
+    )
 
 
 class _FakeNotQuery:
@@ -106,19 +126,22 @@ async def test_astrology_endpoint_returns_profile_required_when_dob_missing():
 
     data = response["data"]
     assert data["status"] == "profile_required"
-    assert data["missing_fields"] == ["birth_date"]
+    # A3b-04: the missing-fields list reports every required profile field,
+    # not just birth_date.
+    assert data["missing_fields"] == ["birth_date", "birth_time", "birth_place"]
     assert data["target_date"] == "2026-02-06"
 
 
 @pytest.mark.asyncio
-async def test_astrology_endpoint_returns_ready_and_excludes_unusable_items():
+async def test_astrology_endpoint_returns_ready_and_excludes_unusable_items(monkeypatch):
+    _patch_geocode(monkeypatch)
     db = _FakeDB(
         {
             "users": [
                 {
                     "id": "user-1",
                     "birth_date": "1995-01-14",
-                    "birth_time": None,
+                    "birth_time": "12:30:00",
                     "birth_place": "New Delhi",
                 }
             ],
@@ -159,7 +182,9 @@ async def test_astrology_endpoint_returns_ready_and_excludes_unusable_items():
     data = response["data"]
     assert data["status"] == "ready"
     assert data["mode"] == "important_meeting"
-    assert data["astrology_mode"] == "vedic_lite"
+    # A3b-04: with birth_date + birth_time + birth_place all present, the
+    # full profile unlocks (deterministic here — geocoding is stubbed).
+    assert data["astrology_mode"] == "vedic_full"
     assert len(data["lucky_colors"]) > 0
 
     picked_ids = {
@@ -172,15 +197,16 @@ async def test_astrology_endpoint_returns_ready_and_excludes_unusable_items():
 
 
 @pytest.mark.asyncio
-async def test_astrology_endpoint_meeting_mode_changes_color_weighting():
+async def test_astrology_endpoint_meeting_mode_changes_color_weighting(monkeypatch):
+    _patch_geocode(monkeypatch)
     db = _FakeDB(
         {
             "users": [
                 {
                     "id": "user-1",
                     "birth_date": "1995-01-14",
-                    "birth_time": None,
-                    "birth_place": None,
+                    "birth_time": "12:30:00",
+                    "birth_place": "New Delhi",
                 }
             ],
             "user_settings": [{"user_id": "user-1", "timezone": "America/New_York"}],

@@ -713,10 +713,13 @@ async def test_astrology_continues_when_items_query_fails(monkeypatch):
 @pytest.mark.asyncio
 async def test_astrology_uses_auth_metadata_fallback_for_missing_columns(monkeypatch):
     """When the users table lacks the astrology columns, the route fills the
-    profile from auth metadata; a birth_date found there unlocks the ready
-    path even though birth_time/birth_place stay null."""
+    profile from auth metadata; a complete profile found there unlocks the
+    ready path even though the DB columns are missing (A3b-04: a partial
+    profile now reports the missing fields instead of silently degrading)."""
     auth_user = SimpleNamespace(
-        user=SimpleNamespace(user_metadata={"birth_date": "1990-06-15", "birth_place": "Mumbai"})
+        user=SimpleNamespace(
+            user_metadata={"birth_date": "1990-06-15", "birth_time": "08:30:00", "birth_place": "Mumbai"}
+        )
     )
     admin = Mock()
     admin.get_user_by_id = Mock(return_value=auth_user)
@@ -775,7 +778,7 @@ async def test_astrology_profile_required_notes_missing_migration():
 
     data = result["data"]
     assert data["status"] == "profile_required"
-    assert data["missing_fields"] == ["birth_date"]
+    assert data["missing_fields"] == ["birth_date", "birth_time", "birth_place"]
     assert data["context"]["weekday"] == "Friday"
     assert data["context"]["ruling_planet"] == "Venus"
     assert any("Run migration 002_astrology_profile.sql" in note for note in data["notes"])
@@ -786,7 +789,8 @@ async def test_astrology_profile_required_notes_missing_migration():
 # ---------------------------------------------------------------------------
 
 
-def test_get_user_birth_profile_happy_path_reads_all_three_columns():
+@pytest.mark.asyncio
+async def test_get_user_birth_profile_happy_path_reads_all_three_columns():
     db = FakeDB(
         rows={
             "users": [
@@ -795,46 +799,50 @@ def test_get_user_birth_profile_happy_path_reads_all_three_columns():
         }
     )
 
-    profile, missing = _get_user_birth_profile(db, USER_ID)
+    profile, missing = await _get_user_birth_profile(db, USER_ID)
 
     assert missing is False
     assert profile == {"birth_date": "1995-01-14", "birth_time": "12:34:56", "birth_place": "Delhi"}
 
 
-def test_get_user_birth_profile_re_raises_unrelated_errors():
+@pytest.mark.asyncio
+async def test_get_user_birth_profile_re_raises_unrelated_errors():
     db = _FlakyDB(
         users={"birth_date": "1995-01-14"},
         combined_error=RuntimeError("connection reset"),
     )
 
     with pytest.raises(RuntimeError):
-        _get_user_birth_profile(db, USER_ID)
+        await _get_user_birth_profile(db, USER_ID)
 
 
-def test_get_user_birth_profile_falls_back_to_per_column_selects():
+@pytest.mark.asyncio
+async def test_get_user_birth_profile_falls_back_to_per_column_selects():
     db = _FlakyDB(
         users={"birth_date": "1995-01-14", "birth_time": "12:34:56", "birth_place": "Delhi"},
         missing_columns=("birth_time", "birth_place"),
     )
 
-    profile, missing = _get_user_birth_profile(db, USER_ID)
+    profile, missing = await _get_user_birth_profile(db, USER_ID)
 
     assert missing is True
     assert profile == {"birth_date": "1995-01-14"}
 
 
-def test_get_user_birth_profile_empty_users_returns_empty_profile():
+@pytest.mark.asyncio
+async def test_get_user_birth_profile_empty_users_returns_empty_profile():
     """A successful combined select with no row falls through to the
     per-column loop, which also finds nothing."""
     db = FakeDB(rows={"users": []})
 
-    profile, missing = _get_user_birth_profile(db, USER_ID)
+    profile, missing = await _get_user_birth_profile(db, USER_ID)
 
     assert profile == {}
     assert missing is False
 
 
-def test_get_user_birth_profile_re_raises_unexpected_per_column_errors():
+@pytest.mark.asyncio
+async def test_get_user_birth_profile_re_raises_unexpected_per_column_errors():
     """A per-column select failing with a non-migration error must propagate,
     not be treated as a missing column."""
     db = _FlakyDB(
@@ -843,27 +851,31 @@ def test_get_user_birth_profile_re_raises_unexpected_per_column_errors():
     )
 
     with pytest.raises(RuntimeError):
-        _get_user_birth_profile(db, USER_ID)
+        await _get_user_birth_profile(db, USER_ID)
 
 
-def test_get_auth_birth_profile_returns_empty_without_admin_api():
-    assert _get_auth_birth_profile(SimpleNamespace(auth=SimpleNamespace(admin=None)), USER_ID) == {}
+@pytest.mark.asyncio
+async def test_get_auth_birth_profile_returns_empty_without_admin_api():
+    assert await _get_auth_birth_profile(SimpleNamespace(auth=SimpleNamespace(admin=None)), USER_ID) == {}
 
 
-def test_get_auth_birth_profile_returns_empty_without_get_user_by_id():
+@pytest.mark.asyncio
+async def test_get_auth_birth_profile_returns_empty_without_get_user_by_id():
     admin = Mock(spec=[])
     db = SimpleNamespace(auth=SimpleNamespace(admin=admin))
-    assert _get_auth_birth_profile(db, USER_ID) == {}
+    assert await _get_auth_birth_profile(db, USER_ID) == {}
 
 
-def test_get_auth_birth_profile_returns_empty_when_user_missing():
+@pytest.mark.asyncio
+async def test_get_auth_birth_profile_returns_empty_when_user_missing():
     admin = Mock()
     admin.get_user_by_id = Mock(return_value=None)
     db = SimpleNamespace(auth=SimpleNamespace(admin=admin))
-    assert _get_auth_birth_profile(db, USER_ID) == {}
+    assert await _get_auth_birth_profile(db, USER_ID) == {}
 
 
-def test_get_auth_birth_profile_reads_user_metadata():
+@pytest.mark.asyncio
+async def test_get_auth_birth_profile_reads_user_metadata():
     auth_user = SimpleNamespace(
         user=SimpleNamespace(user_metadata={"birth_date": "1990-06-15", "birth_time": "08:00:00", "birth_place": "Mumbai"})
     )
@@ -871,19 +883,20 @@ def test_get_auth_birth_profile_reads_user_metadata():
     admin.get_user_by_id = Mock(return_value=auth_user)
     db = SimpleNamespace(auth=SimpleNamespace(admin=admin))
 
-    assert _get_auth_birth_profile(db, USER_ID) == {
+    assert await _get_auth_birth_profile(db, USER_ID) == {
         "birth_date": "1990-06-15",
         "birth_time": "08:00:00",
         "birth_place": "Mumbai",
     }
 
 
-def test_get_auth_birth_profile_swallows_admin_errors():
+@pytest.mark.asyncio
+async def test_get_auth_birth_profile_swallows_admin_errors():
     admin = Mock()
     admin.get_user_by_id = Mock(side_effect=RuntimeError("auth down"))
     db = SimpleNamespace(auth=SimpleNamespace(admin=admin))
 
-    assert _get_auth_birth_profile(db, USER_ID) == {}
+    assert await _get_auth_birth_profile(db, USER_ID) == {}
 
 
 def test_extract_missing_users_column_recognizes_42703_and_pgrst_codes():
@@ -1238,6 +1251,8 @@ async def test_capsule_wardrobe_builds_items_and_statistics():
     assert data["name"] == "Winter capsule"
     assert len(data["items"]) == 2
     assert data["items"][0]["item_id"] == "c-1"
+    # position is the 0-based index in the capsule list (int), not the category.
+    assert [i["position"] for i in data["items"]] == [0, 1]
     assert data["statistics"]["total_outfits_possible"] == 10
 
 

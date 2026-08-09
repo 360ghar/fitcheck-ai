@@ -73,17 +73,17 @@ async def test_revenue_mrr_split_and_counts():
                 _sub("pro_monthly", "stripe", status="trial"),  # not counted as paid
             ],
             "stripe_webhook_events": [
-                {"event_type": "customer.subscription.deleted", "received_at": now_iso},
-                {"event_type": "customer.subscription.updated", "received_at": now_iso},
-                {"event_type": "checkout.session.completed", "received_at": now_iso},
+                {"event_type": "customer.subscription.deleted", "received_at": now_iso, "status": "processed"},
+                {"event_type": "customer.subscription.updated", "received_at": now_iso, "status": "processed"},
+                {"event_type": "checkout.session.completed", "received_at": now_iso, "status": "processed"},
             ],
             "apple_iap_events": [
-                {"event_type": "EXPIRED", "received_at": now_iso},
-                {"event_type": "DID_RENEW", "received_at": now_iso},
+                {"event_type": "EXPIRED", "received_at": now_iso, "status": "processed"},
+                {"event_type": "DID_RENEW", "received_at": now_iso, "status": "processed"},
             ],
             "google_rtdn_events": [
-                {"event_type": "SUBSCRIPTION_CANCELED", "received_at": now_iso},
-                {"event_type": "SUBSCRIPTION_RESTARTED", "received_at": now_iso},
+                {"event_type": "SUBSCRIPTION_CANCELED", "received_at": now_iso, "status": "processed"},
+                {"event_type": "SUBSCRIPTION_RESTARTED", "received_at": now_iso, "status": "processed"},
             ],
             "audit_events": [
                 {"action": "subscription.refunded", "created_at": now_iso},
@@ -163,10 +163,10 @@ async def test_revenue_google_churn_requires_mapped_type_names():
     db = FakeDB(
         rows={
             "google_rtdn_events": [
-                {"event_type": "rtdn", "received_at": now_iso},  # legacy label
-                {"event_type": "SUBSCRIPTION_PURCHASED", "received_at": now_iso},
-                {"event_type": "SUBSCRIPTION_CANCELED", "received_at": now_iso},
-                {"event_type": "SUBSCRIPTION_EXPIRED", "received_at": now_iso},
+                {"event_type": "rtdn", "received_at": now_iso, "status": "processed"},  # legacy label
+                {"event_type": "SUBSCRIPTION_PURCHASED", "received_at": now_iso, "status": "processed"},
+                {"event_type": "SUBSCRIPTION_CANCELED", "received_at": now_iso, "status": "processed"},
+                {"event_type": "SUBSCRIPTION_EXPIRED", "received_at": now_iso, "status": "processed"},
             ],
         },
     )

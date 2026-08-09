@@ -5,6 +5,7 @@ Persistence layer for social import jobs.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, Iterable, List, Optional
@@ -14,6 +15,15 @@ from app.models.social_import import (
     SocialImportJobStatus,
     SocialImportPhotoStatus,
 )
+
+logger = logging.getLogger(__name__)
+
+# A4-08: bounded event ledger. Every event row carries a full photo payload,
+# so an unbounded ledger grows without limit and a reconnect replays the whole
+# history. Keep only the newest EVENTS_PER_JOB_MAX rows per job (trimmed on
+# insert) and cap every replay read to the same window.
+EVENTS_PER_JOB_MAX = 200
+REPLAY_EVENTS_MAX = 200
 
 
 def _utc_now_iso() -> str:
@@ -150,21 +160,63 @@ class SocialImportJobStore:
                 }
             )
 
+        # A4-06: dedupe discovered photos. Pagination overlaps and discovery
+        # retries can present the same source photo twice; without a guard the
+        # job ends up with duplicate rows (and later duplicate saved items).
+        # The durable fix is a partial unique index on (job_id,
+        # source_photo_id); no migration is added here, so delete existing
+        # rows for the incoming source ids before inserting. Photos without a
+        # source_photo_id cannot be deduped and are inserted as-is.
+        source_ids = [row["source_photo_id"] for row in rows if row.get("source_photo_id")]
+        if source_ids:
+            try:
+                await asyncio.to_thread(
+                    db.table("social_import_photos")
+                    .delete()
+                    .eq("job_id", job_id)
+                    .eq("user_id", user_id)
+                    .in_("source_photo_id", source_ids)
+                    .execute
+                )
+            except Exception as dedupe_err:  # noqa: BLE001 - dedupe must not fail the discovery
+                logger.warning(
+                    "Failed to dedupe discovered photos; inserting anyway",
+                    extra={"job_id": job_id, "error": str(dedupe_err)[:300]},
+                )
+
         result = await asyncio.to_thread(db.table("social_import_photos").insert(rows).execute)
         inserted = result.data or []
 
-        job = await SocialImportJobStore.get_job(db, job_id=job_id, user_id=user_id)
-        if job:
-            discovered_total = int(job.get("discovered_photos") or 0) + len(inserted)
-            total_photos = max(int(job.get("total_photos") or 0), discovered_total)
-            await SocialImportJobStore.update_job(
-                db,
-                job_id=job_id,
-                user_id=user_id,
-                updates={
-                    "discovered_photos": discovered_total,
-                    "total_photos": total_photos,
-                },
+        # A4-05: derive discovered_photos/total_photos from a single COUNT(*)
+        # over social_import_photos instead of a read-modify-write of the job
+        # row. The old two-statement pattern failed the whole job when the
+        # counter update hiccuped; a counter failure must only log (the
+        # counters are re-synced by _sync_job_counters on every status read).
+        try:
+            count_result = await asyncio.to_thread(
+                db.table("social_import_photos")
+                .select("id", count="exact")
+                .eq("job_id", job_id)
+                .eq("user_id", user_id)
+                .execute
+            )
+            total = getattr(count_result, "count", None)
+            if total is not None:
+                job = await SocialImportJobStore.get_job(db, job_id=job_id, user_id=user_id)
+                if job:
+                    await SocialImportJobStore.update_job(
+                        db,
+                        job_id=job_id,
+                        user_id=user_id,
+                        updates={
+                            "discovered_photos": total,
+                            "total_photos": max(int(job.get("total_photos") or 0), total),
+                        },
+                    )
+        except Exception as counter_err:  # noqa: BLE001 - counter failure must not fail the job
+            logger.warning(
+                "Failed to sync discovered-photo counters; continuing",
+                extra={"job_id": job_id, "error": str(counter_err)[:300]},
             )
 
         return inserted
@@ -446,7 +498,45 @@ class SocialImportJobStore:
             .execute
         )
         rows = result.data or []
-        return rows[0] if rows else {}
+        if not rows:
+            return {}
+
+        # A4-08: trim the per-job ledger to the newest EVENTS_PER_JOB_MAX rows.
+        # PostgREST cannot express "delete everything older than rank N" in
+        # one call, so find the id of the oldest row to keep and delete the
+        # rest. Bounded by the index on (job_id, created_at, id).
+        try:
+            keep_result = await asyncio.to_thread(
+                db.table("social_import_events")
+                .select("id")
+                .eq("job_id", job_id)
+                .eq("user_id", user_id)
+                .order("id", desc=True)
+                .limit(EVENTS_PER_JOB_MAX)
+                .execute
+            )
+            kept_ids = [
+                row["id"]
+                for row in keep_result.data or []
+                if row.get("id") is not None
+            ]
+            if kept_ids:
+                oldest_kept = min(kept_ids)
+                await asyncio.to_thread(
+                    db.table("social_import_events")
+                    .delete()
+                    .eq("job_id", job_id)
+                    .eq("user_id", user_id)
+                    .lt("id", oldest_kept)
+                    .execute
+                )
+        except Exception as trim_err:  # noqa: BLE001 - trimming must not fail the publish
+            logger.warning(
+                "Failed to trim social import event ledger",
+                extra={"job_id": job_id, "error": str(trim_err)[:300]},
+            )
+
+        return rows[0]
 
     @staticmethod
     async def list_events(
@@ -461,13 +551,20 @@ class SocialImportJobStore:
             .select("*")
             .eq("job_id", job_id)
             .eq("user_id", user_id)
-            .order("id")
         )
         if after_id is not None:
-            query = query.gt("id", after_id)
+            # Bounded replay after a known id: earliest-first, capped at
+            # REPLAY_EVENTS_MAX so a client reconnecting from a very old id
+            # cannot pull the entire retained history at once.
+            query = query.gt("id", after_id).order("id").limit(REPLAY_EVENTS_MAX)
+            result = await asyncio.to_thread(query.execute)
+            return result.data or []
 
+        # Fresh connect: newest REPLAY_EVENTS_MAX events, returned in
+        # ascending id order for the SSE replay loop.
+        query = query.order("id", desc=True).limit(REPLAY_EVENTS_MAX)
         result = await asyncio.to_thread(query.execute)
-        return result.data or []
+        return list(reversed(result.data or []))
 
     @staticmethod
     async def delete_job_artifacts(

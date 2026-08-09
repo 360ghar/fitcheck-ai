@@ -165,10 +165,17 @@ abstract class SharedOutfitModel with _$SharedOutfitModel {
     required String id,
     required String name,
     String? description,
-    required Style style,
-    required Season season,
+    // Nullable: the DB columns are nullable and the public endpoint passes
+    // raw values through — a web-created outfit (or one with no style/season)
+    // must still render instead of failing the parse (A10b-10 review).
+    Style? style,
+    Season? season,
     @JsonKey(name: 'item_images') required List<String> itemImages,
     @JsonKey(name: 'outfit_images') List<String>? outfitImages,
+    /// Durable bucket key of the primary outfit image (A10b-10): the share
+    /// endpoint serves short-lived presigned URLs, so the key lets the page
+    /// re-mint a fresh URL when a long-open share's cached one expires.
+    @JsonKey(name: 'outfit_storage_path') String? outfitStoragePath,
     @JsonKey(name: 'created_at') required DateTime createdAt,
     @JsonKey(name: 'share_count') @Default(0) int shareCount,
     @JsonKey(name: 'view_count') @Default(0) int viewCount,

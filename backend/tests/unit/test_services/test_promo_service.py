@@ -115,6 +115,26 @@ async def test_validate_promo_rejects_max_uses_reached():
     assert response.valid is False
     assert response.message == "This promo code has reached its usage limit"
 
+@pytest.mark.asyncio
+async def test_validate_promo_escapes_wildcards_before_ilike():
+    """A1-02: '%'/'_' in a crafted code must be escaped so the PUBLIC
+    validation endpoint cannot enumerate codes with a pattern match."""
+    db = Mock()
+    db.table.return_value.select.return_value.ilike.return_value.maybe_single.return_value.execute.return_value = Mock(
+        data=None
+    )
+
+    await PromoService.validate_promo("%", db)
+
+    ilike_call = db.table.return_value.select.return_value.ilike.call_args
+    # .ilike(column, pattern): the pattern is the second argument.
+    assert ilike_call.args[1] == r"\%"
+
+    await PromoService.validate_promo("launch_30%", db)
+    ilike_call = db.table.return_value.select.return_value.ilike.call_args
+    assert ilike_call.args[1] == r"launch\_30\%"
+
+
 # =============================================================================
 # redeem_promo
 # =============================================================================

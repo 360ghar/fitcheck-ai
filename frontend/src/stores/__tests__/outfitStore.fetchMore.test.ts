@@ -7,6 +7,7 @@ vi.mock('@/api/outfits', () => ({
 
 import { getOutfits } from '@/api/outfits'
 import { useOutfitStore } from '../outfitStore'
+import { clearRequestCache } from '@/lib/requestCache'
 import type { Outfit } from '@/types'
 
 function outfit(id: string): Outfit {
@@ -27,6 +28,9 @@ function page(outfits: Outfit[], hasNext: boolean) {
 describe('outfitStore.fetchMore (infinite scroll)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset the shared request cache so cached outfit lists do not leak
+    // between tests (mirrors wardrobeStore.test.ts).
+    clearRequestCache()
     useOutfitStore.setState({
       outfits: [],
       isLoading: false,
@@ -70,5 +74,53 @@ describe('outfitStore.fetchMore (infinite scroll)', () => {
     useOutfitStore.setState({ hasMore: false })
     await useOutfitStore.getState().fetchMore()
     expect(getOutfits).not.toHaveBeenCalled()
+  })
+
+  it('a plain fetchOutfits() replaces the loaded list instead of appending', async () => {
+    vi.mocked(getOutfits).mockResolvedValueOnce(page([outfit('a')], false))
+    await useOutfitStore.getState().fetchOutfits(true)
+    expect(useOutfitStore.getState().outfits.map((o) => o.id)).toEqual(['a'])
+
+    // Simulate a mutation (cache invalidated) so the next plain load goes to
+    // the wire with different page-1 content: replacement must not append the
+    // old rows.
+    clearRequestCache()
+    vi.mocked(getOutfits).mockResolvedValueOnce(page([outfit('c')], false))
+    await useOutfitStore.getState().fetchOutfits()
+
+    expect(useOutfitStore.getState().outfits.map((o) => o.id)).toEqual(['c'])
+    expect(useOutfitStore.getState().page).toBe(1)
+  })
+
+  it('a plain fetchOutfits() after fetchMore resets to page 1 with no duplicates', async () => {
+    vi.mocked(getOutfits).mockResolvedValueOnce(page([outfit('a')], true))
+    await useOutfitStore.getState().fetchOutfits(true)
+
+    vi.mocked(getOutfits).mockResolvedValueOnce(page([outfit('b')], false))
+    await useOutfitStore.getState().fetchMore()
+    expect(useOutfitStore.getState().outfits.map((o) => o.id)).toEqual(['a', 'b'])
+
+    // The forced page-1 result is still cached: the plain fetch replaces with
+    // page 1 only, so the page-2 rows cannot duplicate the list.
+    await useOutfitStore.getState().fetchOutfits()
+    expect(useOutfitStore.getState().outfits.map((o) => o.id)).toEqual(['a'])
+    expect(useOutfitStore.getState().page).toBe(1)
+    expect(useOutfitStore.getState().hasMore).toBe(true)
+  })
+
+  it('refresh=true also replaces instead of appending', async () => {
+    vi.mocked(getOutfits).mockResolvedValueOnce(page([outfit('a')], true))
+    await useOutfitStore.getState().fetchOutfits(true)
+
+    vi.mocked(getOutfits).mockResolvedValueOnce(page([outfit('b')], false))
+    await useOutfitStore.getState().fetchMore()
+    expect(useOutfitStore.getState().outfits.map((o) => o.id)).toEqual(['a', 'b'])
+
+    // Forced re-fetch returns a NEW page 1: must replace, not append.
+    vi.mocked(getOutfits).mockResolvedValueOnce(page([outfit('c')], false))
+    await useOutfitStore.getState().fetchOutfits(true)
+
+    expect(useOutfitStore.getState().outfits.map((o) => o.id)).toEqual(['c'])
+    expect(useOutfitStore.getState().page).toBe(1)
   })
 })

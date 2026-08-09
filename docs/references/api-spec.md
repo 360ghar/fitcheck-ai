@@ -763,6 +763,7 @@ Create a new wardrobe item.
 |---|---|---|---|
 | `brand` | string (nullable) | no |  |
 | `category` | string | yes |  |
+| `client_request_id` | string (nullable) | no | Idempotency key (F1-07): a repeated key replays the original row instead of inserting a duplicate item |
 | `colors` | array<string> | no |  |
 | `condition` | string | no |  |
 | `images` | array<`ItemImageBase`> | no |  |
@@ -1612,6 +1613,7 @@ Upload an outfit image and create an outfit_images record.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `body_profile_id` | string (nullable) | no |  |
+| `client_request_id` | string (nullable) | no | Idempotency key (F1-07): a repeated key replays the original row instead of inserting a duplicate image |
 | `file` | file (binary) | yes |  |
 | `generation_id` | string (nullable) | no |  |
 | `is_primary` | boolean | no |  |

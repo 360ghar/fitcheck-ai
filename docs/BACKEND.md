@@ -84,7 +84,12 @@ reconnect-protected delete), `feedback_service.py`, `promo_service.py`,
 
 Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`, `user_ai_settings`, `items`, `item_images`, `outfits`, `outfit_images`, `calendar_events`, `shared_outfits`, subscription/referral tables, photoshoot + social import tables.
 
-`user_streaks` / `user_achievements` exist in the schema but are **read-only in practice** — no code path writes them. They are required by the `/ready` schema check only when `ENABLE_GAMIFICATION=true` (`GAMIFICATION_TABLES` in `app/main.py`), which is off by default.
+`user_streaks` / `user_achievements` exist in the schema but are written only
+by the flag-ON `get_streak` path (B3-07: a first GET upserts a zeroed
+`user_streaks` row); with `ENABLE_GAMIFICATION=false` (the default) the
+handlers return neutral zeroed payloads without touching the tables. They are
+required by the `/ready` schema check only when `ENABLE_GAMIFICATION=true`
+(`GAMIFICATION_TABLES` in `app/main.py`), which is off by default.
 
 ## Storage
 
@@ -94,7 +99,7 @@ File storage is a **private S3-compatible bucket** — Railway Bucket (since the
 - **Service layer** — `app/services/storage_service.py` keeps its existing public method signatures and return shapes so callers change as little as possible; internals now talk to `S3StorageBackend`. `_build_key(user_id, category, ext)` replaces the old filename generator.
 - **Key layout** — `{user_id}/{category}/{uuid4hex}.{ext}` (no timestamps). Categories: `items`, `outfits`, `avatars`, `sources`, `feedback`. Temporary previews and user-saved renders live in shared **top-level folders** — `tmp/{user_id}/{source}/...` (photoshoot / batch / social-import review previews) and `generated/{user_id}/{image_type}/...` (try-on / outfit / product renders — `save_to_storage` defaults to **true** since 2026-08-09, so generation responses are URL-first and the multi-MB inline `image_base64` only appears as a storage-failure fallback) — so every preview in the bucket shares ONE common prefix and the whole folder can be listed or cleared in a single pass (`scripts/cleanup_temp_assets.py`). Extensions derive from sniffed bytes (`EXTENSION_BY_MIME`). `promote_temp_image_to_item` moves `tmp/...` → `items/...` via an S3 server-side copy. The serving allowlist (`app/api/v1/images.py`, `infra/images-worker/worker.js`) accepts both the top-level form and the legacy per-user form (`{user_id}/tmp|generated/...`) until `scripts/migrate_temp_keys_layout.py` has converted every old key.
 - **Accepted upload formats** — `SUPPORTED_UPLOAD_MIME_TYPES` (`app/utils/image_processing.py`) and `ALLOWED_IMAGE_EXTENSIONS` (`app/services/storage_service.py`) gate every upload: JPEG, PNG, WebP, GIF, AVIF, plus HEIC/HEIF, BMP, TIFF. Every stored image is normalized by `StorageService._normalize_upload_bytes` (run on the bounded image executor after `_validate_image`) to the **storage compression profile**: HEIC/HEIF/BMP/TIFF are transcoded to WebP (browsers cannot render them), and everything is downscaled to `STORAGE_MAX_EDGE` (2048px) and re-encoded as WebP at `STORAGE_QUALITY` (82) whenever that is strictly smaller than the input (keep-smaller — an already-optimized WebP or small PNG passes through byte-identical). Animated GIFs pass through untouched. Alpha survives (WebP), so background-removed cutouts stay transparent. The key/content-type are minted from the sniffed final bytes, so converted objects carry `.webp` / `image/webp`. Nothing downstream consumes more than 2048px (AI references are capped at 1568px before leaving the app), so this is lossless at display sizes while cutting stored bytes ~3-4x.
-- **Thumbnails** — every canonical upload (items/outfits/avatars/sources/feedback) writes a deterministic `{storage_path}_thumb` sibling (smaller of downscaled JPEG / original bytes; `THUMB_MAX_EDGE` / `THUMB_QUALITY`). Promote, delete, delete-multiple and account deletion (`resolve_owned_storage_paths`) all handle thumbs; the inventory script treats `_thumb` keys as referenced. `generate_thumbnails.py` backfills the legacy corpus.
+- **Thumbnails** — every canonical upload (items/outfits/avatars/sources/feedback) writes a deterministic `{storage_path}_thumb.webp` sibling (downscaled to `THUMB_MAX_EDGE` and re-encoded as WebP at `THUMB_QUALITY` 75 — `THUMB_EXTENSION = ".webp"` / `image/webp`; transparency survives, and the key extension, stored bytes and Content-Type always agree). Promote, delete, delete-multiple and account deletion (`resolve_owned_storage_paths`) all handle thumbs; the inventory script treats `_thumb` keys as referenced. `generate_thumbnails.py` backfills the legacy corpus.
 - **Private buckets, presigned URLs** — the bucket is private. The DB stores `storage_path` (the bucket key), never a URL. `image_url` / `thumbnail_url` / `public_url` are **short-lived presigned GET URLs** materialized at read time (default 7 days, `OBJECT_STORAGE_PRESIGN_TTL=604800`). `build_object_url` exists only as a stable locator for inventory scripts; the app does not serve public URLs. `materialize_image_urls` / `serve_url` in `app/api/v1/images.py` honor `IMAGE_SERVING_MODE` + `THUMBNAIL_SERVING` (see below).
 - **Worker serving mode (`IMAGE_SERVING_MODE=worker`)** — rotating presigned URLs defeat every cache, so the egress RCA adds an optional Cloudflare Worker (`infra/images-worker/`) fronting R2 with **stable path-only URLs**: token auth (HS256 `SUPABASE_JWT_SECRET` or JWKS ES256/RS256), per-user path ownership (404 on mismatch, indistinguishable from missing), path-keyed edge cache. See `docs/SECURITY.md` "Worker serving mode" for the threat model. AI provider-bound fetches always stay presigned (providers cannot send JWTs).
 - **SSRF-safe downloads** — `download_to_base64` / `download_and_downscale_to_base64` fetch via the S3 backend by bucket key (`key_from_path`), never from arbitrary URLs.
@@ -449,7 +454,8 @@ Flutter home screen still calls it (see TD-034 in
 attaches a per-future `onError` handler, so a streak failure returns `null`
 instead of rejecting the dashboard load). The flag is therefore enforced per
 handler in `app/api/v1/gamification.py` (which returns a neutral zeroed payload
-and also kills the write-on-GET that inserted a zeroed `user_streaks` row). Keep
+on the flag-off path; the flag-ON path still upserts a zeroed `user_streaks`
+row on the first GET — see "Key tables" above). Keep
 the router mounted while the feature remains flag-gated. Guarded by
 `backend/tests/test_gamification_flag.py`.
 

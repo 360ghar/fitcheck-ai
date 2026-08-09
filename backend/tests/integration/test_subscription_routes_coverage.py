@@ -786,13 +786,19 @@ async def test_webhook_checkout_completed_syncs_expanded_subscription():
             "object": {
                 "metadata": {"user_id": "user-1", "plan_type": "plus_monthly"},
                 "customer": "cus_1",
-                "subscription": {"id": "sub_1", "items": {"data": [{"id": "si1"}]}},
+                "subscription": {
+                    "id": "sub_1",
+                    "items": {"data": [{"id": "si1", "price": {"id": "price_plus_monthly"}}]},
+                },
             }
         },
     }
 
     with patch.multiple(
-        settings, STRIPE_SECRET_KEY="sk_test", STRIPE_WEBHOOK_SECRET="whsec_test"
+        settings,
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_WEBHOOK_SECRET="whsec_test",
+        STRIPE_PLUS_MONTHLY_PRICE_ID="price_plus_monthly",
     ), patch.object(stripe.Webhook, "construct_event", return_value=event), patch.object(
         stripe.Subscription, "retrieve"
     ) as retrieve, patch.object(
@@ -827,7 +833,10 @@ async def test_webhook_checkout_completed_retrieves_then_syncs():
     expanded = {"id": "sub_1", "items": {"data": [{"id": "si1", "price": {"id": "price_pro_monthly"}}]}}
 
     with patch.multiple(
-        settings, STRIPE_SECRET_KEY="sk_test", STRIPE_WEBHOOK_SECRET="whsec_test"
+        settings,
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_WEBHOOK_SECRET="whsec_test",
+        STRIPE_PRO_MONTHLY_PRICE_ID="price_pro_monthly",
     ), patch.object(stripe.Webhook, "construct_event", return_value=event), patch.object(
         stripe.Subscription, "retrieve", return_value=expanded
     ) as retrieve, patch.object(
@@ -875,7 +884,42 @@ async def test_webhook_subscription_updated_syncs_expanded_items():
         "data": {
             "object": {
                 "metadata": {"user_id": "user-1"},
-                "items": {"data": [{"id": "si1"}]},
+                "items": {"data": [{"id": "si1", "price": {"id": "price_pro_monthly"}}]},
+            }
+        },
+    }
+
+    with patch.multiple(
+        settings,
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_WEBHOOK_SECRET="whsec_test",
+        STRIPE_PRO_MONTHLY_PRICE_ID="price_pro_monthly",
+    ), patch.object(stripe.Webhook, "construct_event", return_value=event), patch.object(
+        SubscriptionService, "sync_stripe_subscription", new=AsyncMock()
+    ) as sync, patch.object(
+        SubscriptionService, "cancel_subscription", new=AsyncMock()
+    ) as cancel:
+        result = await stripe_webhook(_webhook_request(), ledger.db)
+
+    assert result == {"received": True}
+    sync.assert_awaited_once()
+    cancel.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_webhook_subscription_updated_with_unknown_price_is_acked():
+    """A1-09: an expanded subscription whose price is not one of the four
+    configured IDs must be ACKED (ledger marked processed), not raise — a 500
+    would make Stripe retry the event forever. The local row keeps its
+    previous state (no sync, no downgrade)."""
+    ledger = _WebhookDB()
+    event = {
+        "id": "evt_updated_unknown_price",
+        "type": "customer.subscription.updated",
+        "data": {
+            "object": {
+                "metadata": {"user_id": "user-1"},
+                "items": {"data": [{"id": "si1", "price": {"id": "price_unmapped"}}]},
             }
         },
     }
@@ -890,8 +934,50 @@ async def test_webhook_subscription_updated_syncs_expanded_items():
         result = await stripe_webhook(_webhook_request(), ledger.db)
 
     assert result == {"received": True}
-    sync.assert_awaited_once()
+    sync.assert_not_called()
     cancel.assert_not_called()
+    # The ledger row is marked processed so Stripe stops redelivering.
+    assert any(
+        call.args[0].get("status") == "processed"
+        for call in ledger.db.table.return_value.update.call_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_webhook_checkout_completed_with_unknown_price_is_acked():
+    """A1-09: checkout completion for an unconfigured price is acked without
+    granting entitlement (fail closed), and no retrieve/sync happens."""
+    ledger = _WebhookDB()
+    event = {
+        "id": "evt_checkout_unknown_price",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "metadata": {"user_id": "user-1", "plan_type": "pro_monthly"},
+                "customer": "cus_1",
+                "subscription": {
+                    "id": "sub_1",
+                    "items": {"data": [{"id": "si1", "price": {"id": "price_unmapped"}}]},
+                },
+            }
+        },
+    }
+
+    with patch.multiple(
+        settings, STRIPE_SECRET_KEY="sk_test", STRIPE_WEBHOOK_SECRET="whsec_test"
+    ), patch.object(stripe.Webhook, "construct_event", return_value=event), patch.object(
+        stripe.Subscription, "retrieve"
+    ) as retrieve, patch.object(
+        SubscriptionService, "sync_stripe_subscription", new=AsyncMock()
+    ) as sync, patch.object(
+        SubscriptionService, "upgrade_to_pro", new=AsyncMock()
+    ) as upgrade:
+        result = await stripe_webhook(_webhook_request(), ledger.db)
+
+    assert result == {"received": True}
+    retrieve.assert_not_called()
+    sync.assert_not_called()
+    upgrade.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -1119,10 +1205,16 @@ async def test_webhook_processing_failure_marks_ledger_failed_and_returns_500():
     }
 
     with patch.multiple(
-        settings, STRIPE_SECRET_KEY="sk_test", STRIPE_WEBHOOK_SECRET="whsec_test"
+        settings,
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_WEBHOOK_SECRET="whsec_test",
+        STRIPE_PRO_MONTHLY_PRICE_ID="price_pro_monthly",
     ), patch.object(stripe.Webhook, "construct_event", return_value=event), patch.object(
         stripe.Subscription, "retrieve",
-        return_value={"id": "sub_1", "items": {"data": [{"id": "si1"}]}},
+        return_value={
+            "id": "sub_1",
+            "items": {"data": [{"id": "si1", "price": {"id": "price_pro_monthly"}}]},
+        },
     ), patch.object(
         SubscriptionService, "sync_stripe_subscription",
         new=AsyncMock(side_effect=RuntimeError("db unavailable")),
@@ -1156,10 +1248,16 @@ async def test_webhook_processing_failure_survives_failed_marking_error():
     }
 
     with patch.multiple(
-        settings, STRIPE_SECRET_KEY="sk_test", STRIPE_WEBHOOK_SECRET="whsec_test"
+        settings,
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_WEBHOOK_SECRET="whsec_test",
+        STRIPE_PRO_MONTHLY_PRICE_ID="price_pro_monthly",
     ), patch.object(stripe.Webhook, "construct_event", return_value=event), patch.object(
         stripe.Subscription, "retrieve",
-        return_value={"id": "sub_1", "items": {"data": [{"id": "si1"}]}},
+        return_value={
+            "id": "sub_1",
+            "items": {"data": [{"id": "si1", "price": {"id": "price_pro_monthly"}}]},
+        },
     ), patch.object(
         SubscriptionService, "sync_stripe_subscription",
         new=AsyncMock(side_effect=RuntimeError("db unavailable")),

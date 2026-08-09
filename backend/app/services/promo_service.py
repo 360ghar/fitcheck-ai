@@ -18,6 +18,7 @@ from app.models.subscription import (
 from app.services.subscription_service import SubscriptionService
 from app.utils import maybe_single_data
 from app.utils.db import (
+    escape_ilike_literal,
     execute_with_reconnect,
     is_pgrst202_missing_rpc,
     unwrap_rpc_result,
@@ -64,10 +65,13 @@ class PromoService:
             # Read-only; rebuild + retry once on a dead pooled connection so a
             # gateway restart cannot 500 the public landing/register pages
             # (same incident class as the referral reads, 2026-08-03).
+            # The ilike stays case-insensitive, but the code's wildcard
+            # characters (% _ \) are escaped so a crafted code cannot match
+            # every row (enumeration on this PUBLIC endpoint, A1-02).
             result = await execute_with_reconnect(
                 lambda d: d.table("promo_codes")
                 .select("*")
-                .ilike("code", normalized)
+                .ilike("code", escape_ilike_literal(normalized))
                 .maybe_single()
                 .execute(),
                 db,

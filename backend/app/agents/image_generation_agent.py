@@ -44,6 +44,7 @@ from app.utils.image_processing import (
     sniff_image_mime_from_magic,
 )
 from app.utils.parallel import parallel_with_retry
+from app.utils.retry import is_retryable_error
 
 logger = get_context_logger(__name__)
 
@@ -894,14 +895,17 @@ Specs:
             async with image_gen_slot():
                 return await self.generate_outfit(items=items, style=style)
 
-        # Process all styles in parallel with retry
+        # Process all styles in parallel with retry. Only retryable
+        # AIServiceError opts into backoff: (AIServiceError, Exception)
+        # collapsed to (Exception,) and retried PERMANENT failures 3x.
         results = await parallel_with_retry(
             styles,
             _generate_one_style,
             max_retries=3,
             initial_delay=2.0,  # AI operations need longer delays
             backoff_factor=2.0,
-            retryable_exceptions=(AIServiceError, Exception),
+            retryable_exceptions=(AIServiceError,),
+            should_retry=is_retryable_error,
         )
 
         # Log failures

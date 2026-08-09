@@ -803,7 +803,7 @@ class PhotoshootController extends GetxController {
         usage.value = result.usage;
       }
 
-      ErrorHandler.showError('Failed slot #${failedIndex + 1} has been replaced', title: 'Slot Retried');
+      ErrorHandler.showSuccess('Failed slot #${failedIndex + 1} has been replaced', title: 'Slot Retried');
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Retry Failed');
     } finally {

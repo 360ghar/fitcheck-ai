@@ -843,7 +843,11 @@ class AIProviderService:
             has_response_format=bool(response_format),
         )
 
-        # Check provider health before first attempt (fail fast if unavailable)
+        # Check provider health before first attempt (fail fast if unavailable).
+        # The probe is skipped on a cold cache: this call is about to hit the
+        # provider itself, and its outcome is recorded via record_result below
+        # (a pre-call probe would add a full extra round-trip to the first
+        # request for every provider).
         from app.services.ai_provider_health_service import get_health_service
         health_service = get_health_service()
 
@@ -851,6 +855,7 @@ class AIProviderService:
             base_url=active_base_url,
             api_key=active_api_key,
             timeout_seconds=3.0,
+            probe_on_cold=False,
         )
 
         if not health_status.available:
@@ -904,6 +909,13 @@ class AIProviderService:
                         retryable=False,
                     )
 
+            # A3-01: a ``return`` inside the try body skips the else clause,
+            # so the circuit breaker never learned from chat successes — the
+            # else's record_result was dead code. Record the real outcome
+            # here (and on every other success/failure path below).
+            await health_service.record_result(
+                active_base_url, ok=True, api_key=active_api_key
+            )
             return self._parse_chat_response(data, use_model, active_base_url)
 
         except httpx.HTTPStatusError as e:
@@ -939,6 +951,9 @@ class AIProviderService:
                         latency_ms=round((time.monotonic() - started_at) * 1000, 2),
                         choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
                     )
+                    await health_service.record_result(
+                        active_base_url, ok=True, api_key=active_api_key
+                    )
                     return self._parse_chat_response(data, use_model, active_base_url)
                 except httpx.HTTPStatusError as fallback_error:
                     error_detail = self._http_error_detail(fallback_error.response)
@@ -955,6 +970,9 @@ class AIProviderService:
                 error=error_detail,
                 retryable=retryable,
                 exc_info=False,
+            )
+            await health_service.record_result(
+                active_base_url, ok=False, api_key=active_api_key
             )
             raise AIServiceError(
                 f"AI request failed ({status}): {error_detail}",
@@ -986,10 +1004,22 @@ class AIProviderService:
                         "client": client,
                         "base_url": active_base_url,
                     }]
-                    data, status_code = await self._call_with_retry_and_fallback(
-                        fallback_attempts
+                    try:
+                        data, status_code = await self._call_with_retry_and_fallback(
+                            fallback_attempts
+                        )
+                    except Exception:
+                        await health_service.record_result(
+                            active_base_url, ok=False, api_key=active_api_key
+                        )
+                        raise
+                    await health_service.record_result(
+                        active_base_url, ok=True, api_key=active_api_key
                     )
                     return self._parse_chat_response(data, use_model, active_base_url)
+            await health_service.record_result(
+                active_base_url, ok=False, api_key=active_api_key
+            )
             raise
 
         except (httpx.RequestError, httpx.TimeoutException, ValueError, KeyError, TypeError) as e:
@@ -1000,6 +1030,9 @@ class AIProviderService:
                     timeout=self.config.timeout,
                     error=error_message,
                     exc_info=True,
+                )
+                await health_service.record_result(
+                    active_base_url, ok=False, api_key=active_api_key
                 )
                 raise AIServiceError(
                     f"AI transport request failed after retries: {error_message}",
@@ -1013,7 +1046,20 @@ class AIProviderService:
                 error_type=type(e).__name__,
                 exc_info=True,
             )
+            await health_service.record_result(
+                active_base_url, ok=False, api_key=active_api_key
+            )
             raise AIServiceError(f"AI request failed: {error_message}", retryable=False)
+
+        except Exception:
+            # Record the real call outcome so the circuit breaker learns from
+            # actual failures (not just probes). CancelledError (BaseException)
+            # deliberately bypasses this - a cancellation is not a provider
+            # failure.
+            await health_service.record_result(active_base_url, ok=False)
+            raise
+        else:
+            await health_service.record_result(active_base_url, ok=True)
 
     @staticmethod
     def _append_chat_image(images: List[str], url: str) -> None:
@@ -1428,6 +1474,7 @@ class AIProviderService:
             base_url=image_url,
             api_key=image_key,
             timeout_seconds=3.0,
+            probe_on_cold=False,
         )
         if not health_status.available:
             # Retryable so the image-fallback host (which can have its own
@@ -1522,6 +1569,7 @@ class AIProviderService:
                 error_message=str(e)[:500],
                 exc_info=False,
             )
+            await health_service.record_result(image_url, ok=False, api_key=image_key)
             raise AIServiceError(
                 f"AI image provider overloaded after retries: {e}",
                 retryable=True,
@@ -1549,6 +1597,7 @@ class AIProviderService:
                 exc_info=False,
             )
             # Permanent 4xx (or any status that escaped the transient branch).
+            await health_service.record_result(image_url, ok=False, api_key=image_key)
             raise AIServiceError(
                 f"AI image request failed ({status}): {error_detail}",
                 retryable=retryable,
@@ -1567,6 +1616,7 @@ class AIProviderService:
                 error_type=type(e).__name__,
                 exc_info=False,
             )
+            await health_service.record_result(image_url, ok=False, api_key=image_key)
             raise AIServiceError(f"AI image request failed: {error_msg}", retryable=True)
         except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError) as e:
             error_msg = self._format_exception_message(e)
@@ -1579,6 +1629,7 @@ class AIProviderService:
             # e.g. response.json() parse failure - the primary call may have
             # already generated (and billed) an image server-side, so this is
             # not safe to retry against the fallback model.
+            await health_service.record_result(image_url, ok=False, api_key=image_key)
             raise AIServiceError(f"AI image request failed: {error_msg}")
 
         images = []
@@ -1600,6 +1651,7 @@ class AIProviderService:
                         "Failed to fetch generated image asset after generation succeeded",
                         asset_url=item.get("url"),
                     )
+                    await health_service.record_result(image_url, ok=False, api_key=image_key)
                     raise AIServiceError(
                         f"Failed to fetch generated image asset: {self._format_exception_message(e)}"
                     )
@@ -1609,9 +1661,12 @@ class AIProviderService:
             # Agnes returned 200 with no usable images - most commonly a silent
             # content-moderation refusal. Retryable so the fallback model gets
             # a chance, since no image was actually produced (nothing to double-bill).
+            await health_service.record_result(image_url, ok=False, api_key=image_key)
             raise AIServiceError(
                 f"AI image provider returned no images for model {model}", retryable=True
             )
+
+        await health_service.record_result(image_url, ok=True, api_key=image_key)
 
         logger.info(
             "AI image generation response received",

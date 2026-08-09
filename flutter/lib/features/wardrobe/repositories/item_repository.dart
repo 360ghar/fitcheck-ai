@@ -26,6 +26,7 @@ class ItemRepository {
     List<String>? conditions,
     String? sortBy,
     String? sortOrder,
+    bool? isFavorite,
   }) async {
     try {
       final queryParams = <String, dynamic>{
@@ -39,16 +40,19 @@ class ItemRepository {
         queryParams['category'] = categories.join(',');
       }
       if (colors != null && colors.isNotEmpty) {
-        queryParams['color'] = colors.first;
+        // A10b-12: comma-join multi-select values — the old colors.first /
+        // conditions.first silently dropped every value past the first.
+        queryParams['color'] = colors.join(',');
       }
       if (occasion != null && occasion.trim().isNotEmpty) {
         queryParams['occasion'] = UseCases.normalize(occasion);
       }
       if (conditions != null && conditions.isNotEmpty) {
-        queryParams['condition'] = conditions.first;
+        queryParams['condition'] = conditions.join(',');
       }
       if (sortBy != null) queryParams['sort_by'] = sortBy;
       if (sortOrder != null) queryParams['sort_order'] = sortOrder;
+      if (isFavorite != null) queryParams['is_favorite'] = isFavorite;
 
       final response = await _apiClient.get(
         ApiConstants.items,

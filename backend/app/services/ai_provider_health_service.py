@@ -12,6 +12,7 @@ Key features:
 """
 
 import asyncio
+import hashlib
 import time
 from typing import Dict, Optional
 from dataclasses import dataclass
@@ -34,6 +35,19 @@ def _is_non_openai_host(base_url: str) -> bool:
         return False
     host = (urlparse(base_url).hostname or "").lower()
     return any(host == bad or host.endswith("." + bad) for bad in _NON_OPENAI_HOSTS)
+
+
+def _cache_key(base_url: str, api_key: Optional[str]) -> str:
+    """Health/breaker cache key.
+
+    A3-10: keyed per (host, api key) — one user's bad BYOK key failing real
+    calls must never open the breaker for every other user on the same host.
+    No key (system-default legs) degrades to the host key, preserving the
+    shared default-provider breaker.
+    """
+    if not api_key:
+        return base_url
+    return f"{base_url}|{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
 
 logger = get_context_logger(__name__)
 
@@ -66,6 +80,7 @@ class AIProviderHealthService:
         base_url: str,
         api_key: str,
         timeout_seconds: float = HEALTH_CHECK_TIMEOUT,
+        probe_on_cold: bool = True,
     ) -> HealthStatus:
         """
         Check if provider is healthy with minimal timeout.
@@ -75,11 +90,16 @@ class AIProviderHealthService:
             base_url: Provider base URL (e.g., "https://apihub.agnes-ai.com/v1")
             api_key: API key for authentication
             timeout_seconds: Timeout for health check (default: 5s)
+            probe_on_cold: When False and the cache is COLD, skip the probe and
+                report available — the caller is about to make the real call
+                itself, and the outcome will be recorded via ``record_result``.
+                Probes stay the behavior for warm-cache reads and for callers
+                that only want availability (health endpoints).
 
         Returns:
             HealthStatus with availability, latency, and error information
         """
-        cache_key = base_url
+        cache_key = _cache_key(base_url, api_key)
 
         # Check cache first
         async with self._lock:
@@ -103,6 +123,17 @@ class AIProviderHealthService:
                         )
                         return cached  # Return cached failure status
 
+        if cache_key not in self._health_cache and not probe_on_cold:
+            # Cold cache and the caller is about to make the call itself: a
+            # probe would add a full extra round-trip before every first call
+            # to a provider. Report available and let the real call outcome
+            # (record_result) drive the circuit breaker.
+            return HealthStatus(
+                available=True,
+                last_check=time.time(),
+                consecutive_failures=0,
+            )
+
         # Perform actual health check
         start_time = time.time()
         try:
@@ -115,13 +146,21 @@ class AIProviderHealthService:
                 follow_redirects=False,
             ) as client:
                 headers = {}
-                # Non-OpenAI hosts (e.g. Google Generative Language API) do not
-                # accept Bearer auth tokens. Sending Bearer auth always fails with
-                # 401, which marks the provider unavailable and forces a fallback
-                # to the Agnes gateway on every vision call, adding ~5s latency.
-                # For these hosts we skip the Authorization header and rely on
-                # the actual request error handling instead.
-                if not is_non_openai:
+                if is_non_openai:
+                    # Google's Generative Language API authenticates via the
+                    # x-goog-api-key header, not Bearer (A3b-01): a probe
+                    # with NO auth header always answers 400, which would
+                    # accumulate failures and latch the circuit breaker for
+                    # an otherwise healthy provider.
+                    headers["x-goog-api-key"] = api_key
+                else:
+                    # Non-OpenAI hosts (e.g. Google Generative Language API)
+                    # do not accept Bearer auth tokens. Sending Bearer auth
+                    # always fails with 401, which marks the provider
+                    # unavailable and forces a fallback to the Agnes gateway
+                    # on every vision call, adding ~5s latency. For these
+                    # hosts we skip the Authorization header and rely on the
+                    # actual request error handling instead.
                     headers["Authorization"] = f"Bearer {api_key}"
 
                 response = await client.get(
@@ -148,10 +187,17 @@ class AIProviderHealthService:
                 else:
                     error_msg = f"Status {response.status_code}"
 
+                # A3-05: carry the previous counter forward for unhealthy
+                # HTTP statuses instead of resetting to 1 every time — a
+                # persistent 5xx/404 must accumulate toward the breaker
+                # threshold exactly like connection errors do below.
+                prev_failures = self._health_cache.get(cache_key)
+                failures = (prev_failures.consecutive_failures + 1) if prev_failures else 1
+
                 status = HealthStatus(
                     available=is_healthy,
                     last_check=time.time(),
-                    consecutive_failures=0 if is_healthy else 1,
+                    consecutive_failures=0 if is_healthy else failures,
                     latency_ms=latency,
                     error=None if is_healthy else error_msg,
                 )
@@ -225,6 +271,54 @@ class AIProviderHealthService:
 
         return status
 
+    async def record_result(
+        self, base_url: str, ok: bool, api_key: Optional[str] = None
+    ) -> None:
+        """Record the outcome of a REAL provider call (not a probe).
+
+        The circuit breaker previously only learned from probe failures: a
+        provider that only ever failed on actual requests (and never during
+        the /models probe) stayed "healthy" forever, so every call burned the
+        full retry budget before failing. Recording real outcomes makes the
+        breaker trip after CIRCUIT_BREAKER_THRESHOLD consecutive real
+        failures and reset on the first success.
+
+        ``last_check`` is refreshed on both outcomes so a just-recorded call
+        suppresses a redundant probe for the TTL window.
+
+        ``api_key`` must match the key used for the call (A3-10): the breaker
+        is keyed per (host, key), so a user-specific BYOK failure cannot open
+        the breaker for other users on the same host.
+        """
+        now = time.time()
+        cache_key = _cache_key(base_url, api_key)
+        async with self._lock:
+            prev = self._health_cache.get(cache_key)
+            if ok:
+                self._health_cache[cache_key] = HealthStatus(
+                    available=True,
+                    last_check=now,
+                    consecutive_failures=0,
+                )
+                return
+            failures = (prev.consecutive_failures + 1) if prev else 1
+            self._health_cache[cache_key] = HealthStatus(
+                available=failures < CIRCUIT_BREAKER_THRESHOLD,
+                last_check=now,
+                consecutive_failures=failures,
+                error=f"Provider call failed ({failures} consecutive)",
+            )
+            if not self._health_cache[cache_key].available:
+                logger.warning(
+                    f"Circuit breaker OPEN for {base_url} after "
+                    f"{failures} consecutive real call failures",
+                    extra={
+                        "base_url": base_url,
+                        "consecutive_failures": failures,
+                        "retry_in_seconds": CIRCUIT_BREAKER_RESET_TIMEOUT,
+                    },
+                )
+
     def clear_cache(self, base_url: Optional[str] = None) -> None:
         """
         Clear health cache for specific provider or all providers.
@@ -233,7 +327,15 @@ class AIProviderHealthService:
             base_url: Provider URL to clear. If None, clears all.
         """
         if base_url:
+            # A3b-02: entries live under `{base_url}` OR
+            # `{base_url}|{sha256(api_key)[:16]}` (per-key breaker, A3-10) —
+            # popping only the bare URL left every keyed entry in place, so
+            # the ConnectError "clear on retry" recovery was a no-op and the
+            # provider kept failing fast from stale state.
             self._health_cache.pop(base_url, None)
+            prefix = f"{base_url}|"
+            for key in [k for k in self._health_cache if k.startswith(prefix)]:
+                self._health_cache.pop(key, None)
         else:
             self._health_cache.clear()
 

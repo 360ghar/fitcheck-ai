@@ -48,7 +48,12 @@ trap cleanup SIGINT SIGTERM
 
 # Start backend
 echo -e "${GREEN}Starting backend on port $PORT...${NC}"
-uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload &
+# --proxy-headers --forwarded-allow-ips='*': identical to the production
+# backend/Dockerfile CMD so direct exposure (ngrok) resolves client IPs the
+# same way Railway's edge does — uvicorn's ProxyHeadersMiddleware takes the
+# trusted X-Forwarded-For value instead of the app trusting the raw header
+# from any peer (ngrok is the only peer reaching uvicorn here).
+uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload --proxy-headers --forwarded-allow-ips='*' &
 BACKEND_PID=$!
 sleep 3
 

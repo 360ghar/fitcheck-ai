@@ -168,6 +168,20 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                                   fit: BoxFit.contain,
                                   enableZoom: true,
                                   galleryUrls: images,
+                                  // A10b-10: share URLs are short-lived
+                                  // presigned links minted per load; a
+                                  // long-open page must re-mint instead of
+                                  // showing a permanent error tile.
+                                  storagePath: outfit.outfitStoragePath,
+                                  remintUrl: (storagePath) async {
+                                    try {
+                                      final fresh = await OutfitRepository()
+                                          .getSharedOutfit(widget.shareId);
+                                      return fresh.outfitImages?.firstOrNull;
+                                    } catch (_) {
+                                      return null;
+                                    }
+                                  },
                                 )
                               : Container(
                                   color: tokens.cardColor,

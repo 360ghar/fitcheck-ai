@@ -169,6 +169,30 @@ class S3StorageBackend:
         client = await self._get_client()
         await client.delete_object(Bucket=self.bucket, Key=key)
 
+    async def exists(self, key: str) -> bool:
+        """Return whether an object exists at ``key`` (HEAD request).
+
+        Used by idempotent move/promote paths to distinguish "the source is
+        gone AND the destination is already there" (a concurrent promotion
+        already finished — treat as success) from "the source never existed"
+        (a real error). Absence is surfaced as a False return, not an
+        exception.
+        """
+        client = await self._get_client()
+        try:
+            await client.head_object(Bucket=self.bucket, Key=key)
+            return True
+        except Exception as error:
+            code = str(
+                ((getattr(error, "response", None) or {}).get("Error") or {}).get("Code") or ""
+            ).lower()
+            # botocore surfaces missing keys as ClientError with code 404 /
+            # "NotFound"; anything else is a real storage failure and must
+            # not be read as "absent".
+            if code in ("404", "notfound"):
+                return False
+            raise
+
     async def delete_many(self, keys: List[str]) -> int:
         """Delete many objects (batched at S3's 1000-object limit).
 

@@ -75,8 +75,8 @@ def make_discovery_result(**overrides):
 
 def make_service(user_id="user-1", db=None):
     service = SocialImportPipelineService(user_id=user_id, db=db or SimpleNamespace())
-    # Keep any accidentally-untouched sleeps instant rather than 300s.
-    service.CAPACITY_RETRY_DELAY_SECONDS = 0
+    # Keep any accidentally-untouched sleeps instant rather than 60s+.
+    service.CAPACITY_RETRY_DELAYS_SECONDS = (0,)
     return service
 
 

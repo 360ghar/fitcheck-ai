@@ -18,12 +18,14 @@ import app.services.social_import_pipeline_service as pipeline_mod
 from app.core.exceptions import (
     SocialImportAuthRequiredError,
     SocialImportJobNotFoundError,
+    SocialImportPhotoNotFoundError,
 )
 from app.models.social_import import (
     SocialImportItemStatus,
     SocialImportJobStatus,
     SocialImportPhotoStatus,
 )
+from app.models.subscription import OperationType
 from app.services.ai_settings_service import AISettingsService
 from app.services.social_import_pipeline_service import SocialImportPipelineService
 from app.services.social_auth_service import SocialAuthService
@@ -428,6 +430,7 @@ async def test_run_queue_claim_empty_while_awaiting_syncs_and_returns(monkeypatc
 async def test_process_single_photo_outer_upstream_quota_marks_capacity(monkeypatch):
     events = patch_event(monkeypatch)
     updated = []
+    released = []
     patch_process_collaborators(
         monkeypatch,
         items=[{"temp_id": "t1", "category": "tops", "colors": ["blue"]}],
@@ -440,21 +443,27 @@ async def test_process_single_photo_outer_upstream_quota_marks_capacity(monkeypa
         updated.append(dict(updates))
         return {"id": photo_id, **updates}
 
+    async def fake_release(user_id, operation_type, db):
+        released.append(operation_type)
+
     patch_store(
         monkeypatch,
         upsert_photo_items=fake_upsert_photo_items,
         update_photo=fake_update_photo,
     )
+    monkeypatch.setattr(AISettingsService, "release_usage", staticmethod(fake_release))
     service = make_service()
     monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
     await service._process_single_photo("job-1", make_photo())
 
-    # The photo already reached the VLM, so the extraction reservation was
-    # consumed; the quota error marks capacity and fails the photo.
+    # The quota error marks capacity; A4-01: the photo is requeued, NOT
+    # failed, so the capped-backoff retry reprocesses it. The extraction
+    # reservation made this attempt is returned to the daily budget.
     assert service._capacity_exhausted is True
     cap_events = [e for e in events if e["event_type"] == "capacity_exhausted"]
     assert cap_events and cap_events[0]["payload"]["error_kind"] == "upstream_quota"
-    assert updated[0]["status"] == SocialImportPhotoStatus.FAILED.value
+    assert updated[0]["status"] == SocialImportPhotoStatus.QUEUED.value
+    assert released == [OperationType.EXTRACTION]
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +476,10 @@ async def test_approve_photo_handles_item_save_returning_none(monkeypatch):
     patch_event(monkeypatch)
 
     async def fake_get_photo(db, *, job_id, user_id, photo_id):
-        return {"id": photo_id}
+        return {
+            "id": photo_id,
+            "status": SocialImportPhotoStatus.AWAITING_REVIEW.value,
+        }
 
     async def fake_list_items_for_photo(db, *, job_id, photo_id, user_id):
         return [{"id": "item-1", "status": SocialImportItemStatus.GENERATED.value}]
@@ -502,7 +514,8 @@ async def test_approve_photo_handles_item_save_returning_none(monkeypatch):
 async def test_reject_photo_missing_photo_raises(monkeypatch):
     patch_store(monkeypatch, get_photo=_async_value(None))
     service = make_service()
-    with pytest.raises(SocialImportJobNotFoundError):
+    # A4-07: a bad photo id raises the photo-scoped error, not "job not found".
+    with pytest.raises(SocialImportPhotoNotFoundError):
         await service.reject_photo("job-1", "photo-1")
 
 

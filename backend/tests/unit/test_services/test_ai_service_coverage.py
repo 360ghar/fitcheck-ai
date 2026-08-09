@@ -155,6 +155,23 @@ async def test_batch_generate_embeddings_success():
 
 
 @pytest.mark.asyncio
+async def test_batch_generate_embeddings_only_retries_retryable_errors():
+    """(AIServiceError, Exception) collapsed to (Exception,), retrying
+    PERMANENT failures 3x with backoff; the batch path must opt into retries
+    via should_retry=is_retryable_error like batch_extraction_service."""
+    results = [
+        ParallelResult(success=True, data=[1.0], index=0),
+        ParallelResult(success=True, data=[2.0], index=1),
+    ]
+    with patch.object(ai_module, "parallel_with_retry", AsyncMock(return_value=results)) as pwr:
+        await EmbeddingService.batch_generate_embeddings(["a", "b"])
+
+    kwargs = pwr.await_args.kwargs
+    assert kwargs["retryable_exceptions"] == (AIServiceError,)
+    assert kwargs["should_retry"] is ai_module.is_retryable_error
+
+
+@pytest.mark.asyncio
 async def test_batch_generate_embeddings_failure_raises():
     results = [
         ParallelResult(success=True, data=[1.0], index=0),

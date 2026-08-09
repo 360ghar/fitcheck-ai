@@ -2,6 +2,7 @@
 Admin commerce tests: subscriptions list/detail/refund, IAP transactions,
 quota override, promo code create/update, feedback update.
 """
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -102,11 +103,21 @@ def test_subscription_detail_missing_404(client):
 
 
 def test_refund_uses_latest_payment_intent_and_audits(client, monkeypatch):
+    """A4-15: the refund resolves the subscription's own charge via
+    Subscription.latest_invoice.payment_intent (expanded), never the
+    customer's latest unrelated intent."""
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_dummy")
     db = FakeDB(rows={"subscriptions": [SUB_ROW]})
-
-    class _PI:
-        id = "pi_123"
+    subscription = SimpleNamespace(
+        latest_invoice={
+            "payment_intent": {
+                "id": "pi_123",
+                "status": "succeeded",
+                "amount": 2000,
+                "currency": "usd",
+            }
+        }
+    )
 
     class _Refund:
         id = "re_123"
@@ -115,7 +126,7 @@ def test_refund_uses_latest_payment_intent_and_audits(client, monkeypatch):
         status = "succeeded"
         charge = "ch_123"
 
-    with patch("stripe.PaymentIntent.list", return_value=type("List", (), {"data": [_PI()]})()):
+    with patch("stripe.Subscription.retrieve", return_value=subscription) as sub_retrieve:
         with patch("stripe.Refund.list", return_value=type("List", (), {"data": []})()):
             with patch("stripe.Refund.create", return_value=_Refund()) as refund_create:
                 response = _call(
@@ -125,12 +136,17 @@ def test_refund_uses_latest_payment_intent_and_audits(client, monkeypatch):
                     db=db,
                 )
 
+    sub_retrieve.assert_called_once_with(
+        "sub_stripe_1", expand=["latest_invoice.payment_intent"]
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["refund_id"] == "re_123"
     assert body["payment_intent"] == "pi_123"
     assert body["amount"] == 2000
-    refund_create.assert_called_once_with(payment_intent="pi_123")
+    refund_create.assert_called_once_with(
+        payment_intent="pi_123", amount=2000, currency="usd"
+    )
     db.assert_insert("audit_events", action="subscription.refunded", entity_id="user-1")
 
 
@@ -143,6 +159,9 @@ def test_refund_reuses_existing_succeeded_refund(client, monkeypatch):
 
     class _PI:
         id = "pi_123"
+        status = "succeeded"
+        amount = 2000
+        currency = "usd"
 
     class _Refund:
         id = "re_123"
@@ -151,15 +170,20 @@ def test_refund_reuses_existing_succeeded_refund(client, monkeypatch):
         status = "succeeded"
         charge = "ch_123"
 
-    with patch("stripe.PaymentIntent.list", return_value=type("List", (), {"data": [_PI()]})()):
-        with patch("stripe.Refund.list", return_value=type("List", (), {"data": [_Refund()]})()) as refund_list:
-            with patch("stripe.Refund.create") as refund_create:
-                response = _call(
-                    client,
-                    "POST",
-                    "/api/v1/admin/subscriptions/user/user-1/refund",
-                    db=db,
-                )
+    # A4-15: the subscription's own intent is preferred; when the
+    # subscription is gone (deleted after churn) the customer-level fallback
+    # runs, so Subscription.retrieve raising a StripeError is the trigger.
+    with patch("stripe.Subscription.retrieve", side_effect=stripe.error.APIConnectionError("offline")):
+        with patch("stripe.PaymentIntent.list", return_value=type("List", (), {"data": [_PI()]})()):
+            with patch("stripe.Charge.list", return_value=type("List", (), {"data": []})()):
+                with patch("stripe.Refund.list", return_value=type("List", (), {"data": [_Refund()]})()) as refund_list:
+                    with patch("stripe.Refund.create") as refund_create:
+                        response = _call(
+                            client,
+                            "POST",
+                            "/api/v1/admin/subscriptions/user/user-1/refund",
+                            db=db,
+                        )
 
     assert response.status_code == 200
     body = response.json()
@@ -206,6 +230,8 @@ def test_refund_falls_back_to_charge(client, monkeypatch):
 
     class _Charge:
         id = "ch_999"
+        amount = 1000
+        currency = "usd"
 
     class _Refund:
         id = "re_999"
@@ -227,7 +253,9 @@ def test_refund_falls_back_to_charge(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["charge_id"] == "ch_999"
-    refund_create.assert_called_once_with(charge="ch_999")
+    refund_create.assert_called_once_with(
+        charge="ch_999", amount=1000, currency="usd"
+    )
 
 
 def test_refund_billing_not_configured(client, monkeypatch):

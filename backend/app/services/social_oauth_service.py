@@ -289,10 +289,15 @@ class SocialOAuthService:
         *,
         platform: SocialPlatform,
         access_token: str,
+        preferred_page_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
             if platform == SocialPlatform.INSTAGRAM:
-                return await cls._resolve_instagram_identity(client, access_token=access_token)
+                return await cls._resolve_instagram_identity(
+                    client,
+                    access_token=access_token,
+                    preferred_page_id=preferred_page_id,
+                )
             return await cls._resolve_facebook_identity(client, access_token=access_token)
 
     @classmethod
@@ -321,6 +326,7 @@ class SocialOAuthService:
         client: httpx.AsyncClient,
         *,
         access_token: str,
+        preferred_page_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         response = await client.get(
             f"{cls._GRAPH_BASE_URL}/me/accounts",
@@ -336,19 +342,55 @@ class SocialOAuthService:
         )
 
         accounts = data.get("data") or []
+        candidates = []
         for account in accounts:
             ig_account = account.get("instagram_business_account") or {}
             ig_user_id = ig_account.get("id")
             if ig_user_id:
-                return {
-                    "provider_user_id": ig_user_id,
-                    "provider_username": ig_account.get("username"),
-                    "provider_page_access_token": account.get("access_token"),
-                    "provider_page_id": account.get("id"),
-                }
+                candidates.append(
+                    {
+                        "provider_user_id": ig_user_id,
+                        "provider_username": ig_account.get("username"),
+                        "provider_page_access_token": account.get("access_token"),
+                        "provider_page_id": account.get("id"),
+                        # For the account-selection error details.
+                        "page_name": account.get("name"),
+                    }
+                )
+
+        if not candidates:
+            raise SocialImportOAuthExchangeError(
+                "No connected Instagram business account found in your Meta Pages"
+            )
+
+        if len(candidates) == 1:
+            # Single business account: unambiguous, no selection needed.
+            return {k: v for k, v in candidates[0].items() if k != "page_name"}
+
+        # A4-28: multiple Instagram business accounts. Never silently pick the
+        # first one - the import would use the wrong page's feed. Prefer the
+        # page the connection was already bound to (provider_page_id stored on
+        # the auth session); otherwise fail with a clear message listing the
+        # candidates so the client can ask the user to select an account.
+        if preferred_page_id:
+            for candidate in candidates:
+                if candidate.get("provider_page_id") == preferred_page_id:
+                    return {k: v for k, v in candidate.items() if k != "page_name"}
 
         raise SocialImportOAuthExchangeError(
-            "No connected Instagram business account found in your Meta Pages"
+            "Multiple Instagram business accounts are connected to this Meta "
+            "account. Select which account to import and reconnect.",
+            details={
+                "accounts": [
+                    {
+                        "provider_page_id": c["provider_page_id"],
+                        "page_name": c.get("page_name"),
+                        "username": c.get("provider_username"),
+                    }
+                    for c in candidates
+                ],
+                "requires_page_selection": True,
+            },
         )
 
     @staticmethod
