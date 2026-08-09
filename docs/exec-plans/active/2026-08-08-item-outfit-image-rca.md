@@ -103,12 +103,12 @@ Items pushed to `docs/exec-plans/tech-debt-tracker.md`:
 
 ---
 
-# Part 2 — sibling-bug sweep (same two mechanisms, every remaining surface)
+## Part 2 — sibling-bug sweep (same two mechanisms, every remaining surface)
 
 Status: active
 Started: 2026-08-08 (continuation; same RCA family)
 
-## Goal
+### Goal
 
 After review of Part 1, sweep the rest of the app for the same two failure
 mechanisms — (1) save-time image handling misrouting a presigned URL into
@@ -117,7 +117,7 @@ blind from cached models without a re-mint fallback — and fix every surface.
 Includes one small **additive** backend change so dashboard images become
 re-mintable (approved by user: full Tier 1 + Tier 2 sweep).
 
-## Findings
+### Findings
 
 | # | Surface | Mechanism | Severity | Resolution |
 |---|---------|-----------|----------|------------|
@@ -133,7 +133,7 @@ re-mintable (approved by user: full Tier 1 + Tier 2 sweep).
 | 10 | Avatars (dashboard header, profile edit) | Presigned avatar URL cached in session `user` model | Cosmetic | Deferred (Tier 3): breaks only after 1h open session; try-on generation uses the server-side avatar |
 | 11 | `createItemWithImage()` / `batchCreateItems()` | Upload failure throws leaving an orphan item; dead code with silent image-loss | Debt | Deferred (Tier 3): visible failure, not silent loss |
 
-## Acceptance criteria
+### Acceptance criteria
 
 - [x] Single-item extraction save routes URL-only images via
       `uploadImageFromUrl` (regression test), data-URI via base64, falls back
@@ -153,7 +153,7 @@ re-mintable (approved by user: full Tier 1 + Tier 2 sweep).
       backend users-route tests green; `./scripts/check_all.sh` green
       (backend coverage 99.92%).
 
-## Additional files touched (Part 2)
+### Additional files touched (Part 2)
 
 - `flutter/lib/features/wardrobe/controllers/item_add_controller.dart`,
   `wardrobe_controller.dart` (+`refreshItemById`), `views/item_detail_page.dart`,
@@ -172,7 +172,7 @@ re-mintable (approved by user: full Tier 1 + Tier 2 sweep).
 - `backend/app/api/v1/users.py` (dashboard `storage_path`, additive),
   `backend/tests/integration/test_users_routes.py` (updated assertions)
 
-## Post-sweep review (self-review pass)
+### Post-sweep review (self-review pass)
 
 Re-audited every image surface after the sweep (grep of `AppImage(` /
 `AppNetworkImage(` / `appImageProvider(` / `CachedNetworkImage(` /
@@ -201,7 +201,7 @@ try-on generated-result previews (session-fresh, not persisted), photoshoot
 gallery (job-fresh), `tryon_content` PhotoView full-screen viewer (taps capture
 the post-re-mint URL from the rebuilt tile).
 
-## Notes / decision log (Part 2)
+### Notes / decision log (Part 2)
 
 | Date | Decision | Why |
 |------|----------|-----|
@@ -210,7 +210,7 @@ the post-re-mint URL from the rebuilt tile).
 | 2026-08-08 | Outfit-edit page has no widget test | Pre-existing debug-mode framework assertion ("ListTile background color or ink splashes may be invisible", ListTile in AppGlassCard) fires on every render of the edit page; the refresh-on-open logic is covered at the controller level (`refreshOutfitById`/`fetchOutfitById` tests). Tracked in tech-debt tracker |
 | 2026-08-08 | Shared-outfit page untouched | Backend materializes fresh URLs per read; model carries no `storagePath` — genuinely fresh-at-fetch |
 
-## Deferred debt (Tier 3, tracked in tech-debt tracker)
+### Deferred debt (Tier 3, tracked in tech-debt tracker)
 
 - Session-cached presigned avatar URL (cosmetic after 1h; refresh user on
   profile/dashboard open as follow-up)
