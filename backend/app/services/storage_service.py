@@ -16,9 +16,7 @@ path re-materializes them (``images.serve_url``), and the DB stores the
 import asyncio
 import base64
 import os
-import uuid
 from typing import Iterable, Optional, List
-from urllib.parse import urlparse
 
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
@@ -42,7 +40,16 @@ from app.utils.image_processing import (
     validate_image_bytes,
 )
 from app.core.image_executor import run_image_op
-from app.core.storage_keys import USER_ID_SEGMENT_RE, is_owned_storage_key, normalize_preview_key
+from app.core.storage_keys import (
+    TEMP_FOLDER,
+    build_object_url,
+    is_owned_storage_key,
+    key_from_path,
+    mint_key,
+    mint_preview_key,
+    normalize_preview_key,
+    thumb_key_for,
+)
 from app.services.object_storage import (
     get_storage_backend,
     close_storage_backend,
@@ -108,11 +115,19 @@ THUMB_QUALITY = 75
 THUMB_EXTENSION = ".webp"
 THUMB_CONTENT_TYPE = "image/webp"
 
-# Categories that get a thumbnail sibling object. Canonical durable images
-# only: `tmp/` generated previews are short-lived review flows and stay
-# full-size (they are deleted or promoted within their TTL), and `_thumb`
-# keys themselves must never re-derive.
-THUMB_CATEGORIES = frozenset({"items", "outfits", "avatars", "sources", "feedback"})
+
+def _is_temp_preview_key(key: str) -> bool:
+    """True for a ``tmp`` preview key in either layout (never ``generated/``).
+
+    Temp-object scans (admin inventory/cleanup) deliberately cover the ``tmp/``
+    previews only: ``generated/`` renders can be kept (they are what the user
+    asked to keep). First segment matches the top-level layout
+    (``tmp/{user}/...``), second segment the legacy per-user layout
+    (``{user}/tmp/...``) — same rule as ``is_preview_key`` but pinned to the
+    ``tmp`` folder.
+    """
+    parts = key.split("/", 2)
+    return parts[0] == TEMP_FOLDER or (len(parts) > 1 and parts[1] == TEMP_FOLDER)
 
 
 def _with_thumb_siblings(storage_paths: Iterable[str]) -> List[str]:
@@ -178,43 +193,13 @@ class StorageService:
 
     @staticmethod
     def _build_key(user_id: str, category: str, ext: str) -> str:
-        """Build a storage key under the new folder layout (no timestamps).
-
-        Layout: ``{user_id}/{category}/{uuid4hex}.{ext}``. ``ext`` is derived
-        from the sniffed content type (``EXTENSION_BY_MIME``). The ``tmp``
-        category is handled separately by ``upload_temp_generated_image`` (it
-        carries a ``source`` sub-path).
-        """
-        ext = ext if ext.startswith(".") else f".{ext}"
-        return f"{user_id}/{category}/{uuid.uuid4().hex}{ext}"
+        """Back-compat alias: the grammar lives in ``app.core.storage_keys.mint_key``."""
+        return mint_key(user_id, category, ext)
 
     @staticmethod
     def thumb_key_for(storage_path: str) -> Optional[str]:
-        """Derive the thumbnail object key for a canonical ``storage_path``.
-
-        Thumbnails are sibling objects named ``{stem}_thumb.webp`` (e.g.
-        ``u/items/abc.jpg`` -> ``u/items/abc_thumb.webp``), so the read path can
-        materialize a thumb URL from the durable ``storage_path`` with no schema
-        change and no per-object lookup. The extension is ALWAYS ``.webp``
-        because that is what is actually stored there — see THUMB_EXTENSION.
-
-        Returns None for non-canonical keys (``tmp/`` previews, keys without an
-        extension, ``_thumb`` keys themselves) — those images are served
-        full-size.
-        """
-        if not storage_path:
-            return None
-        parts = storage_path.split("/")
-        if len(parts) < 2 or parts[1] not in THUMB_CATEGORIES:
-            return None
-        name = parts[-1]
-        if not name or "_thumb" in name:
-            return None
-        stem, dot, _ext = name.rpartition(".")
-        if not dot:
-            return None
-        parts[-1] = f"{stem}_thumb{THUMB_EXTENSION}"
-        return "/".join(parts)
+        """Back-compat alias: the grammar lives in ``app.core.storage_keys.thumb_key_for``."""
+        return thumb_key_for(storage_path)
 
     @staticmethod
     async def _upload_thumbnail(
@@ -399,110 +384,13 @@ class StorageService:
 
     @staticmethod
     def key_from_path(value: Optional[str]) -> Optional[str]:
-        """Extract the bucket object key from a storage key or a served URL.
-
-        Accepts a bare bucket key (``user/items/abc.png``) or a URL that embeds
-        one (a Supabase ``/storage/v1/object/public/<bucket>/<key>`` URL, or an
-        S3 presigned ``/<bucket>/<key>`` URL) and returns the key. Returns None
-        for empty/None input.
-
-        Used by the download helpers so they only ever fetch known bucket keys
-        via the S3 backend (SSRF-safe): a caller-provided string is reduced to
-        a key and then read from the bucket, never from the arbitrary URL.
-
-        BUCKET NAMES ARE NOT ASSUMED TO BE CURRENT. Matching only the configured
-        bucket name was a latent data-loss bug that a provider cutover activates:
-        DB columns persist presigned URLs containing whatever bucket was live at
-        upload time, so after repointing ``OBJECT_STORAGE_BUCKET`` at R2 an old
-        Railway URL resolved to ``railway-bucket/{user}/avatars/x.png``. The real
-        object then looks unreferenced, and ``storage_inventory.py --delete``
-        would delete users' avatars as orphans. Every key we mint either begins
-        with a user UUID (canonical ``{user}/{category}/...``) or with a
-        top-level ``tmp|generated`` folder whose SECOND segment is the user
-        UUID (preview keys), so a leading segment that is neither is a
-        path-style bucket name and is dropped whatever it is called.
-        Worker-mode CDN URLs (``IMAGE_SERVING_MODE=worker``) carry no bucket
-        segment: the path is the key, so a leading ``tmp|generated`` preview
-        folder or user UUID is returned as-is (the preview folder is never
-        dropped). A URL that reduces to none of our key shapes returns None —
-        it is never reshaped into a garbage key.
-        """
-        if not value:
-            return None
-        candidate = value.strip()
-        if not candidate:
-            return None
-        if candidate.startswith(("http://", "https://")):
-            parsed = urlparse(candidate)
-            parts = [part for part in parsed.path.split("/") if part]
-            if len(parts) >= 5 and parts[:4] == ["storage", "v1", "object", "public"]:
-                # Legacy Supabase public object URL:
-                # /storage/v1/object/public/<bucket>/<key...> — pre-R2 rows
-                # (item_images/support_tickets) still store this shape; the
-                # bucket segment is dropped to recover the R2 key.
-                return "/".join(parts[5:])
-            if len(parts) >= 2 and parts[0] == settings.OBJECT_STORAGE_BUCKET:
-                return "/".join(parts[1:])
-            # Top-level preview folders (``tmp/`` and ``generated/`` — see
-            # upload_temp_generated_image / save_generated_image) embed the
-            # owning user in the SECOND segment, so a URL from a bucket that is
-            # no longer the configured one has a non-UUID first segment (the
-            # bucket name) followed by ``tmp|generated``, not a UUID. Same
-            # only-drop-when-it-looks-like-ours rule: parts[2] must be
-            # UUID-shaped.
-            if (
-                len(parts) >= 4
-                and parts[1] in ("tmp", "generated")
-                and USER_ID_SEGMENT_RE.fullmatch(parts[2])
-            ):
-                return "/".join(parts[1:])
-            # Worker-mode CDN URL (IMAGE_SERVING_MODE=worker): the CDN serves
-            # keys directly at the path root with no bucket segment, so a
-            # leading top-level preview folder (``tmp|generated``) whose
-            # SECOND segment is the user UUID is PART of the key — return the
-            # path as-is or the preview folder is lost (observed: worker CDN
-            # ``tmp/{uuid}/batch/{hex}.webp`` URLs fell into the bucket-drop
-            # branch below and came back as ``{uuid}/batch/{hex}.webp``).
-            if (
-                len(parts) >= 3
-                and parts[0] in ("tmp", "generated")
-                and USER_ID_SEGMENT_RE.fullmatch(parts[1])
-            ):
-                return "/".join(parts)
-            # Worker-mode CDN URL for a canonical key: a leading user UUID
-            # means the path IS the key (no bucket segment to drop).
-            if (
-                len(parts) >= 3
-                and USER_ID_SEGMENT_RE.fullmatch(parts[0])
-            ):
-                return "/".join(parts)
-            # Path-style URL from a bucket that is no longer the configured one
-            # (a pre-cutover URL persisted in the DB). Canonical keys begin with
-            # a user UUID, so a leading segment that is neither a preview
-            # folder nor a UUID is the bucket name. Only drop it when what
-            # remains still looks like one of our keys, so an unrelated
-            # external URL is never silently reshaped into a key.
-            if (
-                len(parts) >= 3
-                and parts[0] not in ("tmp", "generated")
-                and not USER_ID_SEGMENT_RE.fullmatch(parts[0])
-            ):
-                if USER_ID_SEGMENT_RE.fullmatch(parts[1]):
-                    return "/".join(parts[1:])
-            return None
-        return candidate
+        """Back-compat alias: the grammar lives in ``app.core.storage_keys.key_from_path``."""
+        return key_from_path(value)
 
     @staticmethod
     def build_object_url(key: str) -> str:
-        """Build the canonical S3 object URL for a key.
-
-        NOTE: the app does NOT serve public URLs; the read path uses
-        ``get_public_url`` (a short-lived presigned GET URL) instead. This
-        helper exists for callers that need a stable object locator (e.g.
-        inventory scripts) and for URL/key round-tripping.
-        """
-        base = settings.OBJECT_STORAGE_ENDPOINT.rstrip("/")
-        return f"{base}/{settings.OBJECT_STORAGE_BUCKET}/{key.lstrip('/')}"
+        """Back-compat alias: the grammar lives in ``app.core.storage_keys.build_object_url``."""
+        return build_object_url(key)
 
     @staticmethod
     async def upload_item_image(
@@ -559,9 +447,9 @@ class StorageService:
             # tmp/{user}/{source}/... key), so reads/promotion can verify
             # ownership. No _thumb sibling: tmp previews stay full-size and
             # thumb_key_for returns None for them anyway.
-            storage_path = f"tmp/{user_id}/upload/{uuid.uuid4().hex}{ext}"
+            storage_path = mint_preview_key(TEMP_FOLDER, user_id, "upload", ext)
         else:
-            storage_path = StorageService._build_key(user_id, "items", ext)
+            storage_path = mint_key(user_id, "items", ext)
 
         try:
             backend = get_storage_backend()
@@ -642,7 +530,7 @@ class StorageService:
 
         content_type = StorageService._sniff_content_type(file_data, filename)
         ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
-        storage_path = StorageService._build_key(user_id, "outfits", ext)
+        storage_path = mint_key(user_id, "outfits", ext)
 
         try:
             backend = get_storage_backend()
@@ -724,7 +612,7 @@ class StorageService:
 
         content_type = StorageService._sniff_content_type(file_data, filename)
         ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
-        storage_path = StorageService._build_key(user_id, "avatars", ext)
+        storage_path = mint_key(user_id, "avatars", ext)
 
         try:
             backend = get_storage_backend()
@@ -1125,7 +1013,7 @@ class StorageService:
 
         content_type = StorageService._sniff_content_type(file_data, filename)
         ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
-        storage_path = StorageService._build_key(user_id, "feedback", ext)
+        storage_path = mint_key(user_id, "feedback", ext)
 
         try:
             backend = get_storage_backend()
@@ -1245,7 +1133,7 @@ class StorageService:
         )
         content_type = StorageService._sniff_content_type(file_data, ext)
         ext = EXTENSION_BY_MIME.get(content_type, ext)
-        temp_name = f"tmp/{user_id}/{source}/{uuid.uuid4().hex}{ext}"
+        temp_name = mint_preview_key(TEMP_FOLDER, user_id, source, ext)
         upload = await StorageService.upload_file(
             db=db,
             file_data=file_data,
@@ -1287,7 +1175,7 @@ class StorageService:
         # Sniffed from the bytes, with the caller's extension only as a fallback.
         content_type = StorageService._sniff_content_type(file_data, ext)
         ext = EXTENSION_BY_MIME.get(content_type, ext)
-        path = StorageService._build_key(user_id, "sources", ext)
+        path = mint_key(user_id, "sources", ext)
         upload = await StorageService.upload_file(
             db=db,
             file_data=file_data,
@@ -1312,7 +1200,7 @@ class StorageService:
         """
         if not url:
             return None
-        key = StorageService.key_from_path(url)
+        key = key_from_path(url)
         if not key:
             return None
         try:
@@ -1422,7 +1310,7 @@ class StorageService:
         # keys with no extension.
         src_ext = os.path.splitext(source_path)[1].lower()
         ext = src_ext or os.path.splitext(filename_hint)[1].lower() or ".png"
-        new_path = StorageService._build_key(user_id, "items", ext)
+        new_path = mint_key(user_id, "items", ext)
         await StorageService.move_image(
             db=db,
             old_path=source_path,
@@ -1509,7 +1397,7 @@ class StorageService:
         temp = [
             o
             for o in objects
-            if (o.get("key") or "").startswith("tmp/") or "/tmp/" in (o.get("key") or "")
+            if _is_temp_preview_key(o.get("key") or "")
         ]
         count = len(temp)
         total_bytes = sum(int(o.get("size") or 0) for o in temp)

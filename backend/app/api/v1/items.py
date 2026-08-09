@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from supabase import Client
 
 from app.core.logging_config import get_context_logger
-from app.core.storage_keys import is_preview_key
+from app.core.storage_keys import is_preview_key, key_from_path
 from app.core.exceptions import (
     AIServiceError,
     ItemNotFoundError,
@@ -198,7 +198,7 @@ async def _normalize_create_image_row(img, db, user_id: str) -> Dict[str, Any]:
     thumbnail_url = getattr(img, "thumbnail_url", None)
 
     if not storage_path:
-        derived = StorageService.key_from_path(image_url)
+        derived = key_from_path(image_url)
         if derived:
             # With key_from_path now returning None for true external URLs,
             # "derived" reliably means the URL embeds one of our key shapes —
@@ -535,7 +535,7 @@ async def create_item(
                     img_id = str(uuid.uuid4())
                     reference = getattr(img, "storage_path", None)
                     if not reference:
-                        reference = StorageService.key_from_path(
+                        reference = key_from_path(
                             getattr(img, "image_url", None) or ""
                         )
                     img_row = await _normalize_create_image_row(img, db, user_id)
@@ -708,6 +708,12 @@ async def list_items(
         # default instead of erroring.
         _SORT_COLUMNS = {"created_at", "name", "worn_count"}
         effective_sort_by = sort_by if sort_by in _SORT_COLUMNS else "created_at"
+        # The public API advertises `worn_count` (matching the outfit model's
+        # field) but the items table column is `usage_times_worn` — ordering
+        # by the nonexistent `worn_count` made PostgREST reject the request
+        # instead of sorting. Map before calling .order().
+        if effective_sort_by == "worn_count":
+            effective_sort_by = "usage_times_worn"
         # isinstance guard: direct-call tests pass the raw Query(...) default,
         # which FastAPI resolves to a string only at request time.
         effective_sort_order = (

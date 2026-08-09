@@ -77,6 +77,42 @@ and `DELETE FROM` (span-aware, so function bodies are exempt), which fail on
 this bug class instead of letting it through (the checker previously never
 inspected DML).
 
+## Post-sweep follow-up (2026-08-10): single storage key-grammar module + R2 census
+
+**R2 census (read-only, 2026-08-10, bucket `fitcheck-images`, 2,981 objects):**
+the bucket is fully canonical — 227 UUID user folders + top-level `tmp/` (190)
+and `generated/` (39). Categories: items 1,402 / sources 612 / outfits 592 /
+avatars 116 / feedback 0. The legacy per-user `{user}/tmp/...` layout is gone,
+but **30 legacy `{user}/generated/product/...` keys remain** (the
+`migrate_temp_keys_layout.py` run finished for `tmp/` but not `generated/`);
+the worker still serves them via `LEGACY_NESTED_KEY_RE`.
+
+**Verified backfill (13 rows):** only 13 of 422 missing `item_images` rows
+have their object in R2 (all `{user}/generated/product/{hex}`). Those 13 were
+backfilled (R2-HEAD-gated; audit log `backend/logs/storage_paths_backfill.jsonl`)
+and post-verified: storage_path set, object present, presigned GET 200. The
+other **409 rows are orphaned** — the object is not in R2 under any filename
+(full-bucket index by filename) — plus **633 `items` source rows have a blank
+`source_image_url`** and **6 existing `storage_path`s point at objects missing
+from R2**. Decision: no old-host (Railway/Supabase) probes; documented only.
+Migration 048 will drop the Supabase buckets regardless, so any salvage must
+happen before it is applied to prod.
+
+**Single key-grammar module:** `app/core/storage_keys.py` is now the one owner
+of storage key shapes — constants (`CANONICAL_CATEGORIES`, `PREVIEW_FOLDERS`,
+`THUMB_*`), minters (`mint_key`, `mint_preview_key`, `mint_export_key`,
+`thumb_key_for`), structural `parse_key`, and the URL reducer/composer
+(`key_from_path`, `build_object_url`, moved from `StorageService`, which now
+re-exports them). All 5 minting sites (storage_service items/outfits/avatars/
+feedback/sources + staged `tmp/{user}/upload` + `upload_temp_generated_image`,
+`image_generation_agent` `generated/{user}/{type}`, `users.py` export) and the
+duplicated category vocabularies (storage_service `THUMB_CATEGORIES`,
+`backfill_storage_paths._CANONICAL_CATEGORIES`, `recompress_assets.CATEGORIES`,
+`users.py:675` avatar prefix) now import from the grammar. New
+`tests/unit/test_services/test_storage_keys.py` (63 tests) pins the mint
+formats and parse round-trips; the pre-existing shape-pinning suites pass
+unchanged (zero behavior change). `worker.js` remains a documented mirror.
+
 ## A3/A4 area status (backend AI/photoshoot + outfits/social slice)
 
 Implemented during this sweep (worker-scoped):

@@ -13,7 +13,6 @@ Features:
 import base64
 import binascii
 import re
-import uuid
 from typing import Any, Dict, List, Optional
 
 from app.agents.prompt_fidelity import (
@@ -30,6 +29,7 @@ from app.core.exceptions import AIServiceError
 from app.core.concurrency import image_gen_slot
 from app.core.config import settings
 from app.core.image_executor import run_image_op
+from app.core.storage_keys import GENERATED_FOLDER, mint_preview_key
 from app.services.ai_provider_service import AIProviderService, ChatMessage
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
@@ -1233,7 +1233,7 @@ async def save_generated_image(
         extension = EXTENSION_BY_MIME.get(content_type, ".png")
 
         # Generate unique filename
-        filename = f"generated/{user_id}/{image_type}/{uuid.uuid4().hex}{extension}"
+        filename = mint_preview_key(GENERATED_FOLDER, user_id, image_type, extension)
 
         # Upload to storage
         storage = StorageService()

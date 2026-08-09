@@ -79,6 +79,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts._common import _env, _fmt_bytes, _utc_now_iso, list_keys_with_mtime  # noqa: E402
+from app.core.storage_keys import CANONICAL_CATEGORIES, GENERATED_FOLDER  # noqa: E402
 from app.services.object_storage import (  # noqa: E402
     close_storage_backend,
     get_storage_backend,
@@ -107,7 +108,9 @@ _KEY_RE = re.compile(
     r"[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$"
 )
 
-CATEGORIES = ("items", "outfits", "avatars", "sources", "feedback", "generated")
+# Canonical durable categories + the generated/ preview folder (both layouts),
+# from the shared grammar (app.core.storage_keys).
+CATEGORIES = tuple(sorted(CANONICAL_CATEGORIES)) + (GENERATED_FOLDER,)
 
 ACTION_REENCODED = "reencoded"
 ACTION_UNCHANGED = "unchanged"

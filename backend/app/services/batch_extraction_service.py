@@ -21,6 +21,7 @@ from app.core.concurrency import EXTRACTION_SEMAPHORE, image_gen_slot
 from app.core.config import settings
 from app.core.exceptions import AIServiceError
 from app.core.image_executor import run_image_op
+from app.core.storage_keys import key_from_path
 from app.services.batch_job_service import (
     BatchJob,
     BatchJobService,
@@ -528,7 +529,7 @@ class BatchExtractionService:
 
             # Our own object (canonical {user}/avatars/... or a preview key):
             # fetch through the bucket, never from the arbitrary URL.
-            key = StorageService.key_from_path(avatar_url)
+            key = key_from_path(avatar_url)
             if key:
                 return await StorageService.download_to_base64(key)
 

@@ -28,7 +28,7 @@ from app.core.config import settings
 from app.core.exceptions import NotFoundError
 from app.core.logging_config import get_context_logger
 from app.api.v1.deps import get_active_user_id
-from app.core.storage_keys import USER_ID_SEGMENT_RE, is_owned_storage_key
+from app.core.storage_keys import USER_ID_SEGMENT_RE, is_owned_storage_key, key_from_path
 from app.services.storage_service import StorageService
 
 logger = get_context_logger(__name__)
@@ -88,7 +88,7 @@ async def materialize_avatar_url(
     """
     if not avatar_url or not isinstance(avatar_url, str):
         return None
-    key = StorageService.key_from_path(avatar_url)
+    key = key_from_path(avatar_url)
     if not key or not USER_ID_SEGMENT_RE.fullmatch(key.split("/", 1)[0]):
         return None
     if presigned:
@@ -154,7 +154,7 @@ async def materialize_image_urls(
             # embedded in the stored URL (a presigned ``/<bucket>/<key>``
             # URL). Derive it and re-mint so the tile renders again — but
             # only when the derived key is owned by the requesting user.
-            derived = StorageService.key_from_path(img.get("image_url"))
+            derived = key_from_path(img.get("image_url"))
             if derived and _is_owned_by_user(derived, owner_user_id):
                 storage_path = derived
         if not storage_path:
@@ -221,7 +221,7 @@ async def _remint_parent_source_url(
     never re-mint — source photos are not rendered there and re-minting
     without an ownership context is unsafe.
     """
-    path = parent.get("source_image_storage_path") or StorageService.key_from_path(
+    path = parent.get("source_image_storage_path") or key_from_path(
         parent.get("source_image_url")
     )
     if not path or not _is_owned_by_user(path, owner_user_id):

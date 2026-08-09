@@ -19,7 +19,7 @@ images never load" class of failures.
 The URL is not garbage, though: it embeds the same key the object now lives
 under in R2 (``/storage/v1/object/public/<bucket>/<key>``, a path-style
 presigned URL ``/<bucket>/<key>``, or a bare key). This script extracts the
-key with the app's own ``StorageService.key_from_path`` (the SSRF-safe
+key with the app's own ``key_from_path`` (the SSRF-safe
 reducer the read paths use), validates it against the canonical layout
 (``{user-uuid}/{items|outfits|sources|...}/...``), and writes it back — after
 which read paths materialize fresh URLs and the client re-mint works.
@@ -65,16 +65,17 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts._common import _env, _utc_now_iso  # noqa: E402
-from app.core.storage_keys import USER_ID_SEGMENT_RE  # noqa: E402
+from app.core.storage_keys import (
+    CANONICAL_CATEGORIES,
+    USER_ID_SEGMENT_RE,
+    key_from_path,
+)  # noqa: E402
 from app.db.connection import SupabaseDB  # noqa: E402
-from app.services.storage_service import StorageService  # noqa: E402
 
-# Canonical categories that can back a DB-referenced image row. Preview keys
-# (``tmp/``, ``generated/``) are never DB-referenced, so a derived key that
-# lands there means the URL is not one of ours and must NOT be written.
-_CANONICAL_CATEGORIES = frozenset(
-    {"items", "outfits", "avatars", "sources", "feedback"}
-)
+# Canonical categories that can back a DB-referenced image row come from the
+# shared grammar (app.core.storage_keys). Preview keys (``tmp/``,
+# ``generated/``) are never DB-referenced, so a derived key that lands there
+# means the URL is not one of ours and must NOT be written.
 
 # (table, storage column to fill, URL columns to derive from, label)
 _TABLES: Tuple[Tuple[str, str, Tuple[str, ...], str], ...] = (
@@ -95,13 +96,13 @@ def derive_storage_path(value: Optional[str]) -> Optional[str]:
     """
     if not value:
         return None
-    key = StorageService.key_from_path(value)
+    key = key_from_path(value)
     if not key:
         return None
     parts = key.split("/")
     if len(parts) < 2:
         return None
-    if USER_ID_SEGMENT_RE.fullmatch(parts[0]) and parts[1] in _CANONICAL_CATEGORIES:
+    if USER_ID_SEGMENT_RE.fullmatch(parts[0]) and parts[1] in CANONICAL_CATEGORIES:
         return key
     return None
 

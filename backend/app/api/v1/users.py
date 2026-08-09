@@ -36,6 +36,7 @@ from app.core.exceptions import (
 from app.core.logging_config import get_context_logger
 from app.api.v1.deps import get_active_user_id
 from app.core.uploads import read_upload_capped
+from app.core.storage_keys import key_from_path, mint_export_key, parse_key
 from app.db.connection import get_db
 from app.utils import maybe_single_data
 from app.utils.db import execute_with_reconnect, run_sync_with_reconnect
@@ -62,6 +63,23 @@ router = APIRouter()
 
 def _now() -> str:
     return utcnow_iso()
+
+
+def _is_owned_avatar_key(key: str, user_id: str) -> bool:
+    """True when ``key`` is a ``{user_id}/avatars/...`` key owned by ``user_id``.
+
+    Avatar cleanup must only ever delete the caller's own avatar object — an
+    external OAuth picture or another user's key is never touched. Canonical
+    keys are checked structurally (``avatars`` category via ``parse_key``);
+    legacy avatar keys with non-canonical (non-hex) names still live under the
+    same ``{user_id}/avatars/`` prefix and are matched the same way the old
+    prefix check did, so nothing that used to be deleted stops being deleted.
+    """
+    ref = parse_key(key)
+    if ref is not None and ref.layout == "canonical" and ref.user == user_id:
+        return ref.category == "avatars"
+    parts = key.split("/", 2)
+    return len(parts) >= 2 and parts[0] == user_id and parts[1] == "avatars"
 
 
 def _extract_missing_users_column(err: Exception) -> Optional[str]:
@@ -450,7 +468,7 @@ async def delete_current_user(
             extra={"operation": "delete_account.avatar", "user_id": user_id},
         )
         avatar_row = maybe_single_data(avatar_result)
-        avatar_key = StorageService.key_from_path(
+        avatar_key = key_from_path(
             (avatar_row or {}).get("avatar_url")
         )
         # A2-02: ``users.avatar_url`` is user-settable (PUT /me persists it
@@ -465,7 +483,7 @@ async def delete_current_user(
         # (POST /users/export overwrites it), so its object is known without a
         # bucket listing; delete it with the rest of the owned storage. A
         # missing object is a no-op delete on the S3 side.
-        storage_paths.append(f"{user_id}/export/data.json")
+        storage_paths.append(mint_export_key(user_id))
 
         async def _delete_storage() -> None:
             if storage_paths:  # pragma: no cover - export path always appended above
@@ -605,7 +623,7 @@ async def export_user_data(
         upload = await StorageService.upload_file(
             db=db,
             file_data=export_bytes,
-            file_path=f"{user_id}/export/data.json",
+            file_path=mint_export_key(user_id),
             content_type="application/json",
             # Short cache TTL: the archive is personal data, so a CDN edge
             # must never keep serving a previous export for long (upload_file
@@ -654,8 +672,8 @@ async def upload_avatar(
             # uploaded — best-effort delete of the orphan before surfacing
             # the error, so a failed replace does not leak the object.
             try:
-                new_key = StorageService.key_from_path(avatar_url)
-                if new_key and new_key.startswith(f"{user_id}/avatars/"):
+                new_key = key_from_path(avatar_url)
+                if new_key and _is_owned_avatar_key(new_key, user_id):
                     await StorageService.delete_image(db=db, storage_path=new_key)
             except Exception as cleanup_error:
                 logger.warning(
@@ -671,8 +689,8 @@ async def upload_avatar(
         # another user is never touched. Never fails the request.
         if old_avatar_url:
             try:
-                old_key = StorageService.key_from_path(old_avatar_url)
-                if old_key and old_key.startswith(f"{user_id}/avatars/") and old_key != StorageService.key_from_path(avatar_url):
+                old_key = key_from_path(old_avatar_url)
+                if old_key and _is_owned_avatar_key(old_key, user_id) and old_key != key_from_path(avatar_url):
                     await StorageService.delete_image(db=db, storage_path=old_key)
             except Exception as e:
                 logger.warning(
