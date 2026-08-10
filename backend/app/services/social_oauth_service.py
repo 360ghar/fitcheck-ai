@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import threading
 from dataclasses import dataclass
 from datetime import timedelta
 from app.utils.datetime_util import utcnow
@@ -29,6 +30,20 @@ from app.utils.crypto import derive_key
 
 
 logger = get_context_logger(__name__)
+
+
+# backend #16: account-selection tokens are stateless HMAC tokens, so without
+# an explicit consume step a single picker link is replayable for its full TTL.
+# Concurrent submissions of one picker token could otherwise bind a different
+# candidate page after the job already resumed. This module-level, lock-guarded
+# dict records each consumed nonce -> its token expiry timestamp. Entries are
+# pruned opportunistically on each consume so the set cannot grow unbounded
+# (every entry self-expires). This is replay protection only - it is NOT a
+# durable store, and a process restart loses the set (worst case: a token that
+# was already used once becomes reusable until its natural expiry, same as the
+# pre-fix behavior, but a second use within one process lifetime is blocked).
+_CONSUMED_SELECTION_NONCES: Dict[str, float] = {}
+_CONSUMED_SELECTION_NONCES_LOCK = threading.Lock()
 
 
 @dataclass
@@ -225,10 +240,14 @@ class SocialOAuthService:
 
     @classmethod
     def parse_selection_token(cls, token: str) -> Dict[str, str]:
-        """Validate a selection token; returns {user_id, job_id}.
+        """Validate a selection token; returns {user_id, job_id, nonce, exp}.
 
         Raises SocialImportOAuthStateError on malformed/expired/invalid
         tokens (same error class the OAuth state uses).
+
+        This validates signature + expiry only - it does NOT consume the
+        nonce. Use ``consume_selection_token`` at the point of use to get
+        single-use / replay protection (backend #16).
         """
         try:
             encoded, signature = token.split(".", 1)
@@ -248,13 +267,48 @@ class SocialOAuthService:
             user_id = str(payload["uid"])
             job_id = str(payload["jid"])
             exp = int(payload["exp"])
+            nonce = str(payload["nonce"])
         except Exception as exc:
             raise SocialImportOAuthStateError("Invalid account selection token payload") from exc
 
         if exp < int(utcnow().timestamp()):
             raise SocialImportOAuthStateError("Account selection expired, please retry")
 
-        return {"user_id": user_id, "job_id": job_id}
+        return {"user_id": user_id, "job_id": job_id, "nonce": nonce, "exp": exp}
+
+    @classmethod
+    def consume_selection_token(cls, token: str) -> Dict[str, str]:
+        """Validate AND single-use a selection token (backend #16).
+
+        Same validation as ``parse_selection_token`` (signature + expiry),
+        then atomically records the token's signed nonce in the
+        process-local consumed set. A second call with the same token raises
+        ``SocialImportOAuthStateError`` so a replayed picker link cannot bind
+        a different candidate page after the job already resumed.
+
+        The nonce is part of the signed token body (see
+        ``create_selection_token``), so it cannot be swapped without
+        invalidating the signature.
+        """
+        parsed = cls.parse_selection_token(token)
+        nonce = parsed["nonce"]
+        exp = parsed["exp"]
+
+        with _CONSUMED_SELECTION_NONCES_LOCK:
+            now_ts = utcnow().timestamp()
+            # Opportunistic GC: drop entries whose token already expired so
+            # the set is bounded by the live (un-expired) token population.
+            if _CONSUMED_SELECTION_NONCES:
+                expired = [k for k, v in _CONSUMED_SELECTION_NONCES.items() if v < now_ts]
+                for k in expired:
+                    _CONSUMED_SELECTION_NONCES.pop(k, None)
+            if nonce in _CONSUMED_SELECTION_NONCES:
+                raise SocialImportOAuthStateError(
+                    "This account selection has already been used. Please reconnect."
+                )
+            _CONSUMED_SELECTION_NONCES[nonce] = float(exp)
+
+        return {"user_id": parsed["user_id"], "job_id": parsed["job_id"]}
 
     @classmethod
     def build_authorize_url(

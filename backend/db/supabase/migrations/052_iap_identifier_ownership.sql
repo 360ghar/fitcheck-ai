@@ -27,6 +27,13 @@
 
 BEGIN;
 
+-- Hold an ACCESS EXCLUSIVE lock on subscriptions for the whole migration so a
+-- live IAP write (sync_iap_subscription upsert) cannot re-insert a duplicate
+-- store identifier in the gap between the dedupe UPDATEs and the unique-index
+-- build — that window would otherwise make CREATE UNIQUE INDEX fail with a
+-- duplicate-key error and abort the migration (A1-01).
+LOCK TABLE public.subscriptions IN ACCESS EXCLUSIVE MODE;
+
 DO $$
 DECLARE
     dup_id TEXT;
@@ -44,8 +51,19 @@ BEGIN
         GROUP BY apple_original_transaction_id
         HAVING COUNT(*) > 1
     LOOP
+        -- Release the OLDER duplicate (keep the most recently updated row per
+        -- identifier) AND downgrade it to free, mirroring the app's runtime
+        -- release path in subscription_service.sync_iap_subscription. A bare
+        -- identifier NULL would leave the released loser fully entitled
+        -- (paid plan_type, active status, current_period_end intact), so one
+        -- verified purchase could keep two accounts on the paid plan.
         UPDATE public.subscriptions
         SET apple_original_transaction_id = NULL,
+            plan_type = 'free',
+            status = 'active',
+            current_period_end = NULL,
+            cancel_at_period_end = FALSE,
+            billing_product_id = NULL,
             updated_at = NOW()
         WHERE apple_original_transaction_id = dup_id
           AND id NOT IN (
@@ -76,8 +94,17 @@ BEGIN
         GROUP BY google_purchase_token
         HAVING COUNT(*) > 1
     LOOP
+        -- Same full downgrade as the apple branch above: release the older
+        -- duplicate's identifier and revoke its entitlement so the loser
+        -- cannot stay on a paid plan without a store identity (A1-01).
         UPDATE public.subscriptions
         SET google_purchase_token = NULL,
+            google_order_id = NULL,
+            plan_type = 'free',
+            status = 'active',
+            current_period_end = NULL,
+            cancel_at_period_end = FALSE,
+            billing_product_id = NULL,
             updated_at = NOW()
         WHERE google_purchase_token = dup_token
           AND id NOT IN (

@@ -999,6 +999,14 @@ class SocialImportPipelineService:
             )
             processed_items: List[Dict[str, Any]] = []
             generation_success_count = 0
+            # provider_billed_count tracks items that actually consumed the
+            # AI generation provider's quota (generate_product_image returned
+            # successfully). generation_success_count only counts items that
+            # additionally decoded + uploaded. A provider-billed item whose
+            # decode/upload then fails has already consumed quota and must NOT
+            # be refunded on a later capacity pause - that would give back a
+            # slot the provider already used. (backend #15)
+            provider_billed_count = 0
 
             # Cache the source-photo download by URL: every item on a photo
             # shares the same source_image_url, so fetch it once instead of
@@ -1067,6 +1075,11 @@ class SocialImportPipelineService:
                         include_shadows=False,
                         reference_image=reference_image_base64,
                     )
+                    # The provider call succeeded: quota for this item is
+                    # consumed regardless of whether decode/upload then
+                    # fails. Count it as billed NOW so a later capacity
+                    # pause never refunds this slot (backend #15).
+                    provider_billed_count += 1
 
                     image_bytes = base64.b64decode(generated.image_base64)
                     uploaded = await StorageService.upload_temp_generated_image(
@@ -1136,7 +1149,14 @@ class SocialImportPipelineService:
                 # this, a first-item outage on a multi-item photo burns the
                 # user's daily generation allowance without delivering any
                 # reviewable result (and every retry cycle double-reserves).
-                unused_generation = len(raw_items) - generation_success_count
+                #
+                # Refund is based on provider_billed_count, NOT
+                # generation_success_count: an item whose provider call
+                # succeeded (quota consumed) but whose decode/upload then
+                # failed must NOT be refunded - the provider already used it
+                # (backend #15). Only never-attempted / provider-failed items
+                # genuinely have an unused slot to return.
+                unused_generation = len(raw_items) - provider_billed_count
                 if unused_generation > 0:
                     try:
                         await AISettingsService.release_usage(

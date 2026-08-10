@@ -195,6 +195,7 @@ from app.utils.background_removal import (  # noqa: E402
 # used for the row listing / metadata patch — the DB stays on Supabase; only
 # file storage moved.
 from app.services.object_storage import get_storage_backend  # noqa: E402
+from app.core.storage_keys import key_from_path  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # audit actions
@@ -329,11 +330,22 @@ def resolve_storage_key(row: dict[str, Any]) -> Optional[str]:
     `storage_path` is nullable - it was retrofitted onto both tables with
     `ADD COLUMN IF NOT EXISTS` - so rows written before that are NULL and have
     to be recovered from `image_url`.
+
+    The resolved key (from either branch) is reduced through
+    ``key_from_path`` so a legacy bare key (``{user}/items/{hex}.png``) or a
+    legacy Supabase URL resolves to its migrated ``users/`` home. Without this
+    the R2 download 404s on a post-``users/``-layout row whose DB value was
+    never rewritten. ``key_from_path`` applies ``migrate_key_to_users_layout``
+    and is a no-op for already-current keys.
     """
     path = (row.get("storage_path") or "").strip()
     if path:
-        return path.lstrip("/") or None
-    return storage_key_from_public_url(row.get("image_url"))
+        resolved = path.lstrip("/") or None
+    else:
+        resolved = storage_key_from_public_url(row.get("image_url"))
+    if not resolved:
+        return None
+    return key_from_path(resolved) or resolved
 
 
 def with_version(url: str | None, version: int) -> Optional[str]:

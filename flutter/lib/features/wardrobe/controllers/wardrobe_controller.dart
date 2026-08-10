@@ -26,6 +26,11 @@ class WardrobeController extends GetxController {
   // Workers for cleanup
   final List<Worker> _workers = [];
   int _fetchGeneration = 0;
+  // Monotonic token for single-item detail fetches (fetchItemById). Bumped
+  // before each fetch so an earlier detail fetch (A) resolving AFTER a newer
+  // one (B) cannot overwrite B's fetchedItem and leave B on a permanent
+  // shimmer — the stale completion sees a mismatched token and is dropped.
+  int _itemFetchGeneration = 0;
 
   // Reactive state
   final RxList<ItemModel> items = <ItemModel>[].obs;
@@ -261,9 +266,14 @@ class WardrobeController extends GetxController {
 
     isFetchingItem.value = true;
     itemFetchError.value = '';
+    final itemGeneration = ++_itemFetchGeneration;
     try {
       final item = await _itemRepository.getItem(itemId);
       if (isClosed) return null;
+      // Drop a stale completion: opening detail B while fetch A is still
+      // pending would otherwise let A (resolved last) overwrite B's
+      // fetchedItem and clear the spinner, leaving B on a permanent shimmer.
+      if (itemGeneration != _itemFetchGeneration) return null;
       // A10b-09: don't merge into the paged list while a server-side filter
       // is active — the grid would show an item that violates it. Hold it in
       // [fetchedItem] instead so the detail page can render it (without this,
@@ -281,10 +291,13 @@ class WardrobeController extends GetxController {
       return item;
     } catch (e) {
       if (isClosed) return null;
+      if (itemGeneration != _itemFetchGeneration) return null;
       itemFetchError.value = ErrorHandler.extractMessage(e);
       return null;
     } finally {
-      if (!isClosed) isFetchingItem.value = false;
+      if (!isClosed && itemGeneration == _itemFetchGeneration) {
+        isFetchingItem.value = false;
+      }
     }
   }
 
@@ -443,6 +456,12 @@ class WardrobeController extends GetxController {
       if (selectedItem.value?.id == itemId) {
         selectedItem.value = updatedItem;
       }
+      // A10b-09: a deep-linked detail page renders from fetchedItem when the
+      // item isn't in the paged list (filter active), so keep it in sync or
+      // the favorite icon never flips on that path.
+      if (fetchedItem.value?.id == itemId) {
+        fetchedItem.value = updatedItem;
+      }
 
       ErrorHandler.showInfo(
         updatedItem.isFavorite
@@ -471,6 +490,9 @@ class WardrobeController extends GetxController {
 
       if (selectedItem.value?.id == itemId) {
         selectedItem.value = updatedItem;
+      }
+      if (fetchedItem.value?.id == itemId) {
+        fetchedItem.value = updatedItem;
       }
 
       ErrorHandler.showInfo('Item marked as worn', title: 'Great choice!');
@@ -561,6 +583,9 @@ class WardrobeController extends GetxController {
     if (selectedItem.value?.id == updatedItem.id) {
       selectedItem.value = updatedItem;
     }
+    if (fetchedItem.value?.id == updatedItem.id) {
+      fetchedItem.value = updatedItem;
+    }
   }
 
   /// Remove an item from local state (without API call)
@@ -570,6 +595,9 @@ class WardrobeController extends GetxController {
     selectedIds.remove(itemId);
     if (selectedItem.value?.id == itemId) {
       selectedItem.value = null;
+    }
+    if (fetchedItem.value?.id == itemId) {
+      fetchedItem.value = null;
     }
     if (totalItems.value > 0) {
       totalItems.value--;

@@ -44,6 +44,9 @@ def test_tmp_key_re_matches_both_layouts(script):
     assert script._TMP_KEY_RE.fullmatch(f"tmp/u1/batch/{NAME}.webp")
     assert script._TMP_KEY_RE.fullmatch(f"tmp/u1/social-import/{NAME}.jpg")
     assert script._TMP_KEY_RE.fullmatch(f"u1/tmp/social-import/{NAME}.webp")
+    # Current users/ layout (the new layout this script must also clean).
+    assert script._TMP_KEY_RE.fullmatch(f"users/u1/tmp/photoshoot/{NAME}.png")
+    assert script._TMP_KEY_RE.fullmatch(f"users/u1/tmp/batch/{NAME}.webp")
 
 
 def test_tmp_key_re_rejects_canonical_and_generated_keys(script):
@@ -64,6 +67,9 @@ def test_temp_source_extraction(script):
     # The source segment is index 2 in BOTH layouts.
     assert script.temp_source(f"tmp/u1/photoshoot/{NAME}.png") == "photoshoot"
     assert script.temp_source(f"u1/tmp/social-import/{NAME}.png") == "social-import"
+    # Current users/ layout: the source segment is at index 3.
+    assert script.temp_source(f"users/u1/tmp/batch/{NAME}.png") == "batch"
+    assert script.temp_source(f"users/u1/tmp/social-import/{NAME}.webp") == "social-import"
 
 
 # --------------------------------------------------------------------------- #

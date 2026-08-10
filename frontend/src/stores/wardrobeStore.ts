@@ -146,7 +146,14 @@ interface ClosetState {
    * signs in.
    */
   resetEpoch: number;
-
+  /**
+   * Monotonic token bumped at the start of every page-1 `fetchItems`. Captured
+   * before the await and re-checked after, so an out-of-order list response
+   * (a slow earlier query resolving AFTER a newer one) is dropped instead of
+   * overwriting the grid with stale results. Distinct from `resetEpoch`, which
+   * only guards logout/reset, not same-session query races.
+   */
+  listFetchEpoch: number;
   // Actions
   fetchItems: (refresh?: boolean) => Promise<void>;
   /** Append the next page (Load-more). No-op while a fetch is in flight or the list is exhausted. */
@@ -317,6 +324,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   totalItems: 0,
   hasMore: true,
   resetEpoch: 0,
+  listFetchEpoch: 0,
 
   // Reset every piece of in-memory wardrobe state (F1-04): logout / forced
   // logout / user switch must never leave the previous account's items,
@@ -368,6 +376,11 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     // that lands while this request is in flight bumps it, and the response
     // must not repopulate the reset store with the prior account's items.
     const generation = get().resetEpoch;
+    // Bump the list-fetch token so a slow earlier query (e.g. a debounced
+    // search whose response arrives AFTER a newer query's) cannot overwrite
+    // the grid with stale results — its captured token no longer matches.
+    const listGeneration = get().listFetchEpoch + 1;
+    set({ listFetchEpoch: listGeneration });
 
     try {
       const response = await cacheRequest(
@@ -376,6 +389,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         { force: refresh, label: 'wardrobe.fetchItems' }
       );
       if (get().resetEpoch !== generation) return;
+      if (get().listFetchEpoch !== listGeneration) return;
 
       set({
         // Unconditional replacement: a non-paging caller must never append
@@ -399,6 +413,9 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         ),
       });
     } catch (error) {
+      // F1-11: a pre-logout rejection must not clear a new session's
+      // isLoading or write its error into the reset store.
+      if (get().resetEpoch !== generation) return;
       const apiError = getApiError(error);
       set({ error: apiError, isLoading: false });
     }
@@ -451,6 +468,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         ),
       });
     } catch (error) {
+      if (get().resetEpoch !== generation) return;
       const apiError = getApiError(error);
       set({ error: apiError, isLoadingMore: false });
     }
@@ -487,6 +505,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
     } catch {
+      // F1-11: a pre-logout rejection must not mutate the reset store.
+      if (get().resetEpoch !== generation) return;
       // Deliberately NOT stored in the global `error`: a bad deep link (404)
       // would otherwise hoist a full-page "Try again" banner over the whole
       // closet. The detail pane shows its own "This item isn't available" line.

@@ -26,7 +26,11 @@ import * as outfitsApi from '@/api/outfits'
 import { useOutfitStore } from '@/stores/outfitStore'
 import type { Outfit } from '@/types'
 
-const OUTFIT_ID = 'outfit-1'
+// A realistic 36-char backend UUID exercises the worst case for the
+// idempotency key length (the store comment assumes a UUID-sized id). The
+// old 8-char 'outfit-1' fixture always produced a short key and the <=64
+// assertion passed regardless of the real bound.
+const OUTFIT_ID = '550e8400-e29b-41d4-a716-446655440000'
 
 function seedCreationState(overrides: Partial<Parameters<typeof useOutfitStore.setState>[0]> = {}) {
   useOutfitStore.setState({

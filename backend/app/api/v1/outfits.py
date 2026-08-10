@@ -1454,8 +1454,15 @@ async def remove_item_from_outfit(
                 {"outfit_uuid": outfit_id_str, "item_uuid": item_id_str, "user_uuid": user_id},
             ).execute
         )
-        remove_rows = getattr(remove_result, "data", None) or []
-        if remove_rows and remove_rows[0] == 2:
+        # remove_outfit_item RETURNS INTEGER (scalar). PostgREST delivers a
+        # scalar RPC's result as a bare value in `data` (e.g. data == 2), not a
+        # list — subscripting it (`data[0]`) raised TypeError and turned every
+        # removal into a 500. Read the integer status directly and tolerate the
+        # legacy list shape some test doubles still emit.
+        remove_status = getattr(remove_result, "data", None)
+        if isinstance(remove_status, (list, tuple)):
+            remove_status = remove_status[0] if remove_status else None
+        if remove_status == 2:
             raise ValidationError(
                 "Outfit must contain at least one item",
                 details={"outfit_id": outfit_id_str}
@@ -1812,6 +1819,32 @@ async def upload_outfit_image(
             rpc_rows = getattr(rpc_result, "data", None) or []
             new_image_id = rpc_rows[0] if rpc_rows else img_row["id"]
 
+        # The RPC resolves a client_request_id replay to the WINNER row and
+        # returns its id, but the locally-built img_row is the LOSER's. If they
+        # differ, re-fetch the winner so the generation-complete update and the
+        # response reference the persisted/primary image rather than the loser
+        # the client never sees again (F1-07).
+        result_row = img_row
+        if new_image_id and new_image_id != img_row["id"]:
+            winner_result = await asyncio.to_thread(
+                db.table("outfit_images")
+                .select("*")
+                .eq("id", new_image_id)
+                .eq("outfit_id", outfit_id_str)
+                .maybe_single()
+                .execute
+            )
+            winner_row = getattr(winner_result, "data", None)
+            if winner_row:
+                result_row = winner_row
+                logger.info(
+                    "Upload outfit image returned RPC winner row",
+                    user_id=user_id,
+                    outfit_id=outfit_id_str,
+                    winner_image_id=new_image_id,
+                    loser_image_id=img_row["id"],
+                )
+
         # Mark generation complete if provided. The update is scoped by the
         # outfit as well as the id/user: a client-supplied generation_id from
         # a different outfit could otherwise mark a foreign generation
@@ -1821,12 +1854,12 @@ async def upload_outfit_image(
                 {
                     "status": GenerationStatus.COMPLETED.value,
                     "progress": 100,
-                    "image_urls": [img_row["image_url"]],
+                    "image_urls": [result_row["image_url"]],
                     "completed_at": now,
                 }
             ).eq("id", generation_id).eq("user_id", user_id).eq("outfit_id", outfit_id_str).execute)
 
-        return {"data": img_row, "message": "Created"}
+        return {"data": result_row, "message": "Created"}
 
     except (OutfitNotFoundError, UnsupportedMediaTypeError, ValidationError):
         raise

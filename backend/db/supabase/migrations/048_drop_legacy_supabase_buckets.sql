@@ -23,6 +23,33 @@
 
 BEGIN;
 
+-- Fail closed if any image row still carries a legacy Supabase public URL in
+-- its URL column while storage_path is NULL. Anonymous shared-outfit reads
+-- cannot derive an R2 key (no owner context), so they surface the stored URL
+-- verbatim; once the buckets below are dropped those URLs 404 permanently.
+-- The read path + scripts/backfill_storage_paths.py rescue such rows to an R2
+-- key, but only when storage_path is populated — so gate the DROP on that
+-- backfill having completed. (A001-11.) Idempotent: a clean DB has none.
+DO $$
+DECLARE
+    orphan_count INTEGER := 0;
+BEGIN
+    IF to_regclass('public.item_images') IS NOT NULL THEN
+        SELECT COUNT(*) INTO orphan_count FROM public.item_images
+        WHERE storage_path IS NULL
+          AND COALESCE(image_url, thumbnail_url) ILIKE '%/storage/v1/object/public/%';
+    END IF;
+    IF to_regclass('public.outfit_images') IS NOT NULL THEN
+        SELECT COUNT(*) + orphan_count INTO orphan_count FROM public.outfit_images
+        WHERE storage_path IS NULL
+          AND COALESCE(image_url, thumbnail_url) ILIKE '%/storage/v1/object/public/%';
+    END IF;
+    IF orphan_count > 0 THEN
+        RAISE EXCEPTION 'Aborting legacy bucket drop: % image row(s) still reference a Supabase public URL with NULL storage_path. Run scripts/backfill_storage_paths.py --apply before re-running this migration (A001-11).', orphan_count
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+END $$;
+
 -- Drop the four legacy buckets and any objects still tracked under them.
 -- storage.objects is deleted first because rows reference their bucket.
 DO $$

@@ -354,13 +354,27 @@ class _OutfitItemRpcDB(_OutfitsFakeDB):
                     if item_id not in item_ids:
                         row["item_ids"] = item_ids + [item_id]
         elif name == "remove_outfit_item":
+            # Mirror migration 044's scalar RETURNS INTEGER: 0 = missing/
+            # unowned, 1 = removed, 2 = would leave the outfit empty. The
+            # route reads the scalar directly (PostgREST delivers scalar RPCs
+            # as a bare value, not a list), so return a FakeResult with the
+            # integer as `data`.
             outfit_id = params.get("outfit_uuid")
             item_id = params.get("item_uuid")
+            status = 0
             for row in self._rows_for("outfits"):
                 if row.get("id") == outfit_id:
-                    row["item_ids"] = [
-                        i for i in (row.get("item_ids") or []) if i != item_id
-                    ]
+                    item_ids = list(row.get("item_ids") or [])
+                    if item_id not in item_ids:
+                        status = 1
+                    elif len(item_ids) <= 1:
+                        status = 2
+                    else:
+                        row["item_ids"] = [i for i in item_ids if i != item_id]
+                        status = 1
+                    break
+            self.rpc_calls.append((name, params))
+            return _FakeRpcResultBuilder(FakeResult(data=status))
         return super().rpc(name, params)
 
 
@@ -2056,6 +2070,28 @@ async def test_remove_item_from_outfit_removes_and_persists():
         "user_uuid": USER_ID,
     }) in db.rpc_calls
     assert all(u[0] != "outfits" for u in db.updates)
+
+
+@pytest.mark.asyncio
+async def test_remove_item_from_outfit_rejects_emptying_via_scalar_rpc_status():
+    # Regression: remove_outfit_item RETURNS INTEGER (scalar). PostgREST
+    # delivers scalar RPC results as a bare value in `data`, not a list, so
+    # `data[0]` raised TypeError and the route 500'd on the would-empty path
+    # instead of mapping status 2 to a validation error. The scalar read must
+    # surface the >=1-member guard.
+    db = _OutfitItemRpcDB(
+        {"outfits": [_outfit_row(item_ids=[ITEM_ID])], "items": [_item_row()]},
+    )
+
+    with pytest.raises(ValidationError):
+        await outfits_module.remove_item_from_outfit(
+            outfit_id=UUID(OUTFIT_ID),
+            item_id=UUID(ITEM_ID),
+            user_id=USER_ID,
+            db=db,
+        )
+    # The last-member row was not emptied.
+    assert db.rows["outfits"][0]["item_ids"] == [ITEM_ID]
 
 
 @pytest.mark.asyncio

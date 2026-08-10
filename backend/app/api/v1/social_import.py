@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 from html import escape
-from app.utils.datetime_util import utcnow_iso
+from app.utils.datetime_util import parse_utc_datetime, utcnow_iso
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -300,6 +300,7 @@ def _oauth_picker_response(
     <div class="card">
       <h1>Which Instagram account should FitCheck import?</h1>
       <p>{safe_message}</p>
+      <div id="picker-error" style="display:none;color:#b00020;font-size:13px;margin:0 0 12px;"></div>
       <form method="post" action="{select_url}" id="picker-form">
         <input type="hidden" name="selection_token" value="{safe_token}" />
         <input type="hidden" name="provider_page_id" id="selection-input" />
@@ -313,6 +314,26 @@ def _oauth_picker_response(
         var mobileRedirectUri = {mobile_redirect_json};
         var successPayload = {success_payload_json};
         var targetOrigin = {target_origin_json};
+        function finishWithError(errMessage) {{
+          // Surface a picker error instead of leaving the popup open. For
+          // mobile redirect clients, forward status=error; popup clients
+          // postMessage the failure so the app can show it before we close.
+          if (window.opener && !window.opener.closed) {{
+            try {{
+              window.opener.postMessage(Object.assign({{}}, successPayload,
+                {{ status: 'error', message: errMessage }}), targetOrigin);
+            }} catch (err) {{}}
+            window.setTimeout(function () {{ window.close(); }}, 150);
+          }} else if (mobileRedirectUri) {{
+            var sep = mobileRedirectUri.indexOf('?') >= 0 ? '&' : '?';
+            window.location.href = mobileRedirectUri + sep + 'status=error&job_id=' +
+              encodeURIComponent(successPayload.job_id) + '&message=' + encodeURIComponent(errMessage);
+          }} else {{
+            var err = document.getElementById('picker-error');
+            if (err) {{ err.textContent = errMessage; err.style.display = 'block'; }}
+            buttons.forEach(function (b) {{ b.disabled = false; }});
+          }}
+        }}
         function finish() {{
           if (window.opener && !window.opener.closed) {{
             try {{ window.opener.postMessage(successPayload, targetOrigin); }} catch (err) {{}}
@@ -327,7 +348,29 @@ def _oauth_picker_response(
           btn.addEventListener('click', function (ev) {{
             ev.preventDefault();
             document.getElementById('selection-input').value = btn.value;
-            form.submit();
+            // Submit via fetch (AJAX) and invoke finish() on success. A native
+            // form.submit() navigates the popup to the JSON response body and
+            // never closes it, so the app reports a login timeout. On failure
+            // show the error in-page (popup) or forward it (mobile redirect).
+            buttons.forEach(function (b) {{ b.disabled = true; }});
+            var data = new FormData(form);
+            data.set('provider_page_id', btn.value);
+            fetch(form.action, {{ method: 'POST', body: data }})
+              .then(function (res) {{ return res.json().then(function (body) {{
+                return {{ ok: res.ok, body: body }};
+              }}); }})
+              .then(function (out) {{
+                if (out.ok && out.body && out.body.data && out.body.data.success) {{
+                  finish();
+                }} else {{
+                  var msg = (out.body && (out.body.message || (out.body.detail && out.body.detail.message)))
+                    || 'Could not select that account. Please reconnect.';
+                  finishWithError(msg);
+                }}
+              }})
+              .catch(function () {{
+                finishWithError('Network error while selecting the account. Please reconnect.');
+              }});
           }});
         }});
       }})();
@@ -762,7 +805,11 @@ async def select_oauth_page(
     error asking the user to reconnect.
     """
     try:
-        selection = SocialOAuthService.parse_selection_token(selection_token)
+        # consume_selection_token (not parse) so the picker link is single-use:
+        # the signed nonce is recorded atomically and a replay raises, which
+        # stops a second submission from binding a different candidate page
+        # after the job already resumed (backend #16).
+        selection = SocialOAuthService.consume_selection_token(selection_token)
     except Exception as exc:
         raise ValidationError(
             "This account selection link has expired. Please connect your "
@@ -817,7 +864,12 @@ async def select_oauth_page(
         "provider_page_access_token": identity_payload.get("provider_page_access_token"),
         "provider_page_id": identity_payload.get("provider_page_id"),
         "provider_username": identity_payload.get("provider_username"),
-        "expires_at": session_payload.get("provider_expires_at"),
+        # The pending session stored the OAuth token expiry as an ISO string
+        # (store_selection_pending_session calls expires_at.isoformat()), but
+        # store_oauth_session expects a datetime and calls .isoformat() on it.
+        # Parse the stored value back to a datetime before handing it through,
+        # otherwise the multi-account selection path raises AttributeError.
+        "expires_at": parse_utc_datetime(session_payload.get("provider_expires_at")),
     }
     service = _service(user_id, db)
     await service.accept_auth(job_id, "oauth", payload)

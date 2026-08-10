@@ -82,6 +82,14 @@ _CATEGORY_ALT = "|".join(sorted(CANONICAL_CATEGORIES))
 _FOLDER_ALT = "|".join(sorted(PREVIEW_FOLDERS))
 _PUBLIC_GROUP_ALT = "|".join(sorted(PUBLIC_GROUPS))
 _NAME = r"[0-9a-f]{32}"
+# Legacy avatars may carry a non-hex filename (e.g. an OAuth-imported
+# ``old-name.jpg`` rewritten into ``users/{uid}/avatars/old-name.jpg`` by
+# ``key_from_path`` -> ``migrate_key_to_users_layout``). ``_NAME`` is still the
+# convention every NEW key is minted with (``mint_key``); only ``parse_key``
+# needs to tolerate the historical names so ``materialize_avatar_url`` can keep
+# serving them. The charset is bounded and excludes ``/`` so it cannot escape
+# the last path segment.
+_LEGACY_NAME = r"[0-9a-zA-Z._-]+"
 _SLUG = r"[^/\\]+"
 
 # --------------------------------------------------------------------------- #
@@ -109,6 +117,22 @@ _PUBLIC_KEY_RE = re.compile(
 _PUBLIC_THUMB_KEY_RE = re.compile(
     rf"^{PUBLIC_FOLDER}/(?P<group>{_PUBLIC_GROUP_ALT})/(?P<slug>{_SLUG})/"
     rf"(?P<name>{_NAME}){re.escape(THUMB_SUFFIX)}\.{THUMB_EXTENSION[1:]}$"
+)
+
+# Legacy-avatar tolerant variants of the canonical/thumb users regexes. The
+# ``avatars`` category is the ONLY one that may carry a pre-32-hex-convention
+# filename (OAuth imports, renamed uploads). New keys are always 32-hex
+# (``mint_key``); these exist purely so ``parse_key`` does not reject a legacy
+# avatar that ``key_from_path`` already rewrote into its ``users/`` home —
+# otherwise ``materialize_avatar_url`` returns None and the avatar stops
+# rendering. Checked BEFORE the strict regexes so a legacy name wins.
+_USERS_AVATAR_KEY_RE = re.compile(
+    rf"^{USERS_FOLDER}/(?P<user>[^/\\]+)/avatars/"
+    rf"(?P<name>{_LEGACY_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
+)
+_USERS_AVATAR_THUMB_KEY_RE = re.compile(
+    rf"^{USERS_FOLDER}/(?P<user>[^/\\]+)/avatars/"
+    rf"(?P<name>{_LEGACY_NAME}){re.escape(THUMB_SUFFIX)}\.{THUMB_EXTENSION[1:]}$"
 )
 
 
@@ -240,8 +264,11 @@ def parse_key(key: Optional[str]) -> Optional[KeyRef]:
                 layout=layout, group=d["group"], slug=d["slug"],
                 name=name, ext=ext,
             )
+        # The legacy-avatar tolerant regexes hardcode the avatars path (no
+        # ``category`` group); the strict users regexes always have one.
+        category = "avatars" if "category" not in d else d.get("category")
         return KeyRef(
-            layout=layout, user=d["user"], category=d.get("category"),
+            layout=layout, user=d["user"], category=category,
             name=name, ext=ext,
         )
 
@@ -249,14 +276,24 @@ def parse_key(key: Optional[str]) -> Optional[KeyRef]:
         if m:
             return _build(m, "export")
     for m in (
-        _USERS_KEY_RE.fullmatch(key),
+        # Legacy-avatar tolerant variants are tried FIRST so a pre-convention
+        # avatar filename (``old-name.jpg``) is accepted for the avatars
+        # category; the strict 32-hex regexes below still cover every other
+        # category and every newly-minted avatar. The THUMB variant precedes
+        # the canonical one because ``_LEGACY_NAME`` includes ``_``, so a
+        # ``old-name_thumb.webp`` key would otherwise be greedily matched by
+        # the canonical avatar regex (name ``old-name_thumb``) before the more
+        # specific thumb regex gets a chance.
+        _USERS_AVATAR_THUMB_KEY_RE.fullmatch(key),
+        _USERS_AVATAR_KEY_RE.fullmatch(key),
         _USERS_THUMB_KEY_RE.fullmatch(key),
-        _PUBLIC_KEY_RE.fullmatch(key),
+        _USERS_KEY_RE.fullmatch(key),
         _PUBLIC_THUMB_KEY_RE.fullmatch(key),
+        _PUBLIC_KEY_RE.fullmatch(key),
     ):
         if m:
             layout = "public" if m.re is _PUBLIC_KEY_RE or m.re is _PUBLIC_THUMB_KEY_RE else (
-                "thumb" if m.re is _USERS_THUMB_KEY_RE else "canonical"
+                "thumb" if m.re in (_USERS_THUMB_KEY_RE, _USERS_AVATAR_THUMB_KEY_RE) else "canonical"
             )
             return _build(m, layout)
     for m in (

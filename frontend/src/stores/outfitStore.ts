@@ -467,6 +467,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         // and job pills are not wiped while AI is still running.
       });
     } catch (error) {
+      // F1-11: a pre-logout rejection must not write into the reset store.
+      if (get().resetEpoch !== generation) return;
       const apiError = getApiError(error);
       set({ error: apiError, isLoading: false });
     }
@@ -521,6 +523,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         isLoadingMore: false,
       });
     } catch (error) {
+      if (get().resetEpoch !== generation) return;
       const apiError = getApiError(error);
       set({ error: apiError, isLoadingMore: false });
     }
@@ -554,6 +557,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         isDetailLoading: false,
       });
     } catch (error) {
+      if (get().resetEpoch !== generation) return;
       const apiError = getApiError(error);
       set({ error: apiError, isDetailLoading: false });
     }

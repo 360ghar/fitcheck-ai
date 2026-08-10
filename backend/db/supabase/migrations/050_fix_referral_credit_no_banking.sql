@@ -119,4 +119,30 @@ REVOKE EXECUTE ON FUNCTION public.apply_referral_credit_atomic(UUID, INTEGER)
 
 GRANT EXECUTE ON FUNCTION public.apply_referral_credit_atomic(UUID, INTEGER) TO service_role;
 
+-- A1-02 data remediation: deployments that ran the original banking 033 have
+-- already added referral_credit_months for trial/free-branch grants (branches
+-- 2 and 3 in the buggy body). The corrected function above only banks for
+-- paying subscribers (branch 1), so those erroneously banked months would
+-- otherwise be spent by _consume_banked_referral_credit after the trial
+-- lapses — handing the same referral out twice. Zero the bank for any row
+-- that is NOT a paying subscriber (mirrors the corrected branch-1 predicate:
+-- paying = non-free plan, active, with a future period end). Idempotent and
+-- guarded so it no-ops on fresh DBs and on re-runs.
+DO $$
+BEGIN
+    IF to_regclass('public.subscriptions') IS NULL THEN
+        RETURN;
+    END IF;
+    UPDATE public.subscriptions
+    SET referral_credit_months = 0,
+        updated_at = NOW()
+    WHERE COALESCE(referral_credit_months, 0) <> 0
+      AND NOT (
+        plan_type <> 'free'
+        AND status = 'active'
+        AND current_period_end IS NOT NULL
+        AND current_period_end > NOW()
+    );
+END $$;
+
 COMMIT;

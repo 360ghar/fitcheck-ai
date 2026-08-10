@@ -174,6 +174,37 @@ class TestParseKey:
         assert ref.name == HEX32
         assert ref.ext == "webp"
 
+    def test_legacy_avatar_filename_is_accepted(self):
+        # A pre-32-hex-convention avatar (OAuth import, renamed upload) that
+        # key_from_path has rewritten into ``users/{uid}/avatars/...`` must
+        # still parse so materialize_avatar_url can serve it. ``_NAME`` stays
+        # the convention for newly-minted keys; only parse_key is tolerant.
+        ref = parse_key(f"users/{USER}/avatars/old-name.jpg")
+        assert ref.layout == "canonical"
+        assert ref.category == "avatars"
+        assert ref.user == USER
+        assert ref.name == "old-name"
+        assert ref.ext == "jpg"
+
+    def test_legacy_avatar_thumb_filename_is_accepted(self):
+        ref = parse_key(f"users/{USER}/avatars/old-name_thumb.webp")
+        assert ref.layout == "thumb"
+        assert ref.category == "avatars"
+        assert ref.name == "old-name"
+
+    def test_legacy_avatar_with_dots_in_filename(self):
+        ref = parse_key(f"users/{USER}/avatars/profile.2024.png")
+        assert ref.layout == "canonical"
+        assert ref.category == "avatars"
+        assert ref.name == "profile.2024"
+        assert ref.ext == "png"
+
+    def test_only_avatars_category_accepts_legacy_filename(self):
+        # The tolerance is scoped to avatars only; other categories keep the
+        # strict 32-hex convention so a typo'd items key still fails loudly.
+        assert parse_key(f"users/{USER}/items/old-name.jpg") is None
+        assert parse_key(f"users/{USER}/outfits/old-name.png") is None
+
     @pytest.mark.parametrize(
         "key",
         [
@@ -316,6 +347,13 @@ class TestPredicates:
         # Legacy pre-restructure keys no longer parse; they are never owned.
         key = f"{USER}/items/{HEX32}.png"
         assert is_owned_storage_key(key, USER) is False
+
+    def test_owned_key_legacy_avatar_filename_is_owned(self):
+        # A legacy avatar filename under the current users/ layout is owned by
+        # the user in segment 1 (regression for the orphan-leak / 404 bug).
+        key = f"users/{USER}/avatars/old-name.jpg"
+        assert is_owned_storage_key(key, USER) is True
+        assert is_owned_storage_key(key, str(uuid.uuid4())) is False
 
 
 # --------------------------------------------------------------------------- #

@@ -1530,6 +1530,78 @@ async def test_process_single_photo_capacity_exhaustion_sets_flag(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_capacity_pause_does_not_refund_billed_but_not_uploaded_item(monkeypatch):
+    """backend #15: when a generation succeeds at the provider (quota
+    consumed) but the subsequent decode/upload fails, that item is marked
+    FAILED but its generation slot must NOT be refunded on a later capacity
+    pause - the provider already used it. Only never-billed items get their
+    slots back.
+
+    Two items: item 1 bills then fails upload; item 2 trips capacity.
+    Refund must be 1 (only item 2), not 2 (the old buggy math counted the
+    billed-but-not-uploaded item 1 as unused)."""
+    patch_event(monkeypatch)
+    updated = []
+
+    async def fake_update_photo(db, *, job_id, user_id, photo_id, updates):
+        updated.append(dict(updates))
+        return {"id": photo_id, **updates}
+
+    patch_store(
+        monkeypatch,
+        update_photo=fake_update_photo,
+        get_photo=_async_value(make_photo()),
+        get_slots=_async_value({"awaiting": None}),
+        get_photo_with_items=_identity_photo,
+    )
+    fake_extraction, fake_generation = patch_process_collaborators(
+        monkeypatch, items=[{"temp_id": "t1", "category": "tops"}, {"temp_id": "t2", "category": "tops"}]
+    )
+
+    call = {"n": 0}
+
+    async def _gen_then_quota(**kwargs):
+        call["n"] += 1
+        if call["n"] == 1:
+            # Provider succeeds (quota consumed) ...
+            return SimpleNamespace(image_base64="aGVsbG8=")
+        # ... but the second item trips capacity.
+        raise QuotaError("quota")
+
+    class QuotaError(Exception):
+        error_kind = "upstream_quota"
+        retry_after_seconds = 30
+
+    fake_generation.generate_product_image = _gen_then_quota
+
+    async def _fail_upload(db, user_id, file_data, source):
+        # The decode/upload for the first (billed) item blows up.
+        raise RuntimeError("upload failed")
+
+    monkeypatch.setattr(StorageService, "upload_temp_generated_image", staticmethod(_fail_upload))
+
+    released: list[tuple] = []
+
+    async def fake_release(user_id, operation_type, db, count=1):
+        released.append((operation_type, count))
+
+    monkeypatch.setattr(AISettingsService, "release_usage", staticmethod(fake_release))
+
+    service = make_service()
+    monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
+    await service._process_single_photo("job-1", make_photo())
+
+    # The capacity pause refunds generation slots for never-billed items
+    # only. Item 1 was billed (provider returned) so its slot is kept;
+    # only item 2 (never attempted at the provider) is returned.
+    gen_releases = [c for op, c in released if op == OperationType.GENERATION]
+    assert gen_releases == [1], (
+        "billed-but-not-uploaded item must not be refunded on capacity pause; "
+        f"got release count(s) {gen_releases}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_process_single_photo_outer_failure_marks_photo_failed(monkeypatch):
     events = patch_event(monkeypatch)
     updated = []

@@ -48,7 +48,17 @@ def _policy_to_roles(body: str) -> Optional[list[str]]:
     (which means PUBLIC). ``TO`` may be followed by an optional ``GROUP``/
     ``ROLE`` keyword, e.g. ``TO ROLE service_role, anon``.
     """
-    to_match = re.search(r"\bTO\s+(?:GROUP\s+|ROLE\s+)?([^;]+?)\s+(?:USING\b|WITH\b|FOR\b|$)", body, re.IGNORECASE | re.DOTALL)
+    # The role list runs up to the next clause keyword (USING/WITH/FOR) or the
+    # end of the body. The body has already had its trailing ``;`` stripped by
+    # POLICY_RE, so a policy whose TO clause ends the body
+    # (``... FOR ALL TO public``) must terminate the list WITHOUT requiring
+    # preceding whitespace: the ``\s+(?:USING|WITH|FOR)`` branch needs the gap,
+    # but the ``$`` (end-of-body) branch matches on its own.
+    to_match = re.search(
+        r"\bTO\s+(?:GROUP\s+|ROLE\s+)?([^;]+?)(?:\s+(?:USING|WITH|FOR)\b|$)",
+        body,
+        re.IGNORECASE | re.DOTALL,
+    )
     if not to_match:
         return None
     roles = [r.strip().strip('"').lower() for r in to_match.group(1).split(",")]

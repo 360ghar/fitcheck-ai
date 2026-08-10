@@ -455,6 +455,106 @@ async def test_resolve_owned_storage_paths_skips_child_queries_when_no_owned_ids
 
 
 @pytest.mark.asyncio
+async def test_resolve_owned_storage_paths_migrates_legacy_source_key():
+    """A pre-``users/``-layout source_image_storage_path (``{user}/items/...``)
+    is rejected by ``is_owned_storage_key`` -> ``parse_key`` (no users/ prefix),
+    so without reducing it through ``key_from_path`` first it would be dropped
+    from the cleanup set and orphaned on account deletion. The reduced
+    (migrated) key is what lands in storage_paths so the delete hits the
+    object where it now lives."""
+    db = FakeDB(
+        rows={
+            "items": [
+                {
+                    "id": "item-1",
+                    "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    # Legacy bare key (no users/ prefix), hex name.
+                    "source_image_storage_path": (
+                        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+                        "11111111111111111111111111111111.png"
+                    ),
+                },
+            ],
+            "item_images": [],
+            "outfit_images": [],
+        }
+    )
+    result = await StorageService.resolve_owned_storage_paths(
+        db, user_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    )
+    # The legacy key is migrated to its users/ home AND included in the
+    # cleanup set (not silently dropped by the ownership check).
+    assert (
+        "users/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+        "11111111111111111111111111111111.png"
+    ) in result["storage_paths"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_owned_storage_paths_migrates_legacy_child_storage_path():
+    """The child-table (item_images/outfit_images) ``storage_path`` column may
+    also hold a pre-migration bare key; it is reduced through ``key_from_path``
+    so the delete target matches the migrated object."""
+    db = FakeDB(
+        rows={
+            "items": [
+                {"id": "item-1", "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"},
+            ],
+            # Legacy bare key in the child row.
+            "item_images": [
+                {
+                    "item_id": "item-1",
+                    "storage_path": (
+                        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+                        "22222222222222222222222222222222.png"
+                    ),
+                }
+            ],
+            "outfit_images": [],
+        }
+    )
+    result = await StorageService.resolve_owned_storage_paths(
+        db, user_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    )
+    assert (
+        "users/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+        "22222222222222222222222222222222.png"
+    ) in result["storage_paths"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_owned_storage_paths_rejects_cross_user_source_key():
+    """Even after migration, a source key owned by ANOTHER user must not enter
+    the cleanup set (A2-01: a poisoned cross-user key must never delete someone
+    else's object). ``key_from_path`` migrates it but the ownership check still
+    rejects it."""
+    db = FakeDB(
+        rows={
+            "items": [
+                {
+                    "id": "item-1",
+                    "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    # A legacy key whose owner segment is a DIFFERENT user.
+                    "source_image_storage_path": (
+                        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/items/"
+                        "11111111111111111111111111111111.png"
+                    ),
+                },
+            ],
+            "item_images": [],
+            "outfit_images": [],
+        }
+    )
+    result = await StorageService.resolve_owned_storage_paths(
+        db, user_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    )
+    # The cross-user key (in either shape) is NOT in the cleanup set.
+    assert not any(
+        "11111111111111111111111111111111.png" in p for p in result["storage_paths"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_list_temp_objects_summarizes_scan():
     objects = [
         {"key": "tmp/u1/social-import/a.png", "size": 100, "last_modified": "2026-01-01T00:00:00Z"},

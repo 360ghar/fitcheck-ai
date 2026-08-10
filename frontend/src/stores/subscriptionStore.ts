@@ -168,6 +168,9 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
+      // F1-11: a pre-logout rejection must not clear a new session's
+      // isLoading or write its error into the reset store.
+      if (get().resetEpoch !== generation) return;
       const message = getApiError(error).message || 'Failed to fetch subscription';
       set({ isLoading: false, error: message });
     }

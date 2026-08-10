@@ -107,6 +107,44 @@ class TestStorageKeyRecovery:
     def test_neither_available_is_unresolvable(self):
         assert bf.resolve_storage_key({"storage_path": None, "image_url": None}) is None
 
+    def test_legacy_storage_path_is_migrated_to_users_home(self):
+        """A pre-``users/``-layout ``storage_path`` (``{user}/items/{hex}.png``)
+        is reduced through ``key_from_path`` so the R2 download resolves the
+        migrated object instead of 404ing on the legacy key."""
+        legacy = (
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+            "11111111111111111111111111111111.png"
+        )
+        row = {"storage_path": legacy, "image_url": None}
+        assert bf.resolve_storage_key(row) == (
+            "users/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+            "11111111111111111111111111111111.png"
+        )
+
+    def test_legacy_public_url_is_migrated_to_users_home(self):
+        """The URL-derived branch is also routed through ``key_from_path``: a
+        legacy Supabase URL whose key is a bare legacy canonical key resolves
+        to its ``users/`` home."""
+        url = (
+            "https://proj.supabase.co/storage/v1/object/public/fitcheck-images/"
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+            "22222222222222222222222222222222.png"
+        )
+        row = {"storage_path": None, "image_url": url}
+        assert bf.resolve_storage_key(row) == (
+            "users/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+            "22222222222222222222222222222222.png"
+        )
+
+    def test_current_users_storage_path_passes_through(self):
+        """An already-current ``users/`` key is a no-op for ``key_from_path``."""
+        current = (
+            "users/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+            "33333333333333333333333333333333.png"
+        )
+        row = {"storage_path": current, "image_url": None}
+        assert bf.resolve_storage_key(row) == current
+
 
 class TestVersionStamp:
     def test_appends_when_no_query(self):

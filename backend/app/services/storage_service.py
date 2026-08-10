@@ -826,12 +826,23 @@ class StorageService:
                 # delete another user's object. The ownership check lives in
                 # app.core.storage_keys (the one layer both routes and
                 # services may import — ARCHITECTURE.md).
-                storage_paths.extend(
-                    str(row["source_image_storage_path"])
-                    for row in rows
-                    if row.get("source_image_storage_path")
-                    and is_owned_storage_key(row["source_image_storage_path"], user_id)
-                )
+                #
+                # The DB value is reduced through ``key_from_path`` (which
+                # applies ``migrate_key_to_users_layout``) BEFORE the ownership
+                # check, mirroring the read path (materialize_image_urls). A
+                # bare legacy key (``{user}/items/{hex}.png``) is rejected by
+                # ``is_owned_storage_key`` -> ``parse_key`` (no ``users/``
+                # prefix), so without this reduction a pre-migration source
+                # photo would be silently dropped from the cleanup set and
+                # orphaned on account deletion. The reduced key is what we
+                # store for deletion so it matches the migrated object.
+                for row in rows:
+                    raw = row.get("source_image_storage_path")
+                    if not raw:
+                        continue
+                    reduced = key_from_path(str(raw))
+                    if reduced and is_owned_storage_key(reduced, user_id):
+                        storage_paths.append(reduced)
             else:
                 owned_outfit_ids.extend(owned_ids)
                 child_table, fk_column = "outfit_images", "outfit_id"
@@ -856,11 +867,20 @@ class StorageService:
                     )
                 )
             for child_rows in await asyncio.gather(*chunk_queries):
-                storage_paths.extend(
-                    str(row["storage_path"])
-                    for row in (getattr(child_rows, "data", None) or [])
-                    if row.get("storage_path")
-                )
+                # ``storage_path`` here is a bare DB value that may predate the
+                # ``users/`` layout migration (``{user}/items/{hex}.png``).
+                # Reduce it through ``key_from_path`` (mirrors the read path)
+                # so the deletion target matches the migrated object instead of
+                # being silently dropped by a later ownership/parse step. These
+                # rows are already scoped to owned parent ids via the IN clause
+                # above, so no per-row ownership re-check is needed.
+                for row in (getattr(child_rows, "data", None) or []):
+                    raw = row.get("storage_path")
+                    if not raw:
+                        continue
+                    reduced = key_from_path(str(raw))
+                    if reduced:
+                        storage_paths.append(reduced)
 
         return {
             "item_ids": owned_item_ids,

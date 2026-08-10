@@ -172,7 +172,12 @@ async def test_sync_stripe_subscription_persists_price_status_period_and_cancel_
     }
     result = Mock(data=row)
     db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = result
-    # The sync tail builds its response from the upsert result, not a re-read.
+    # The existing-row path uses a conditional UPDATE (A1-05 write-time
+    # current-rail guard) so a live store entitlement that commits after the
+    # snapshot read is not clobbered. The sync tail builds its response from
+    # that update result, not a re-read.
+    db.table.return_value.update.return_value.eq.return_value.neq.return_value.neq.return_value.execute.return_value = Mock(data=[row])
+    # The insert path (no existing row) still falls back to upsert.
     db.table.return_value.upsert.return_value.execute.return_value = Mock(data=[row])
 
     with patch.multiple(settings, **_stripe_settings()):
@@ -191,7 +196,8 @@ async def test_sync_stripe_subscription_persists_price_status_period_and_cancel_
             db,
         )
 
-    payload = db.table.return_value.upsert.call_args.args[0]
+    # The existing-row path writes via conditional UPDATE (not upsert).
+    payload = db.table.return_value.update.call_args.args[0]
     assert payload["plan_type"] == "pro_yearly"
     assert payload["status"] == "active"
     assert payload["stripe_subscription_id"] == "sub_stripe"

@@ -199,9 +199,15 @@ BEGIN
         -- A1-09: a promo grant replaces the previous billing arrangement, so
         -- a stale Stripe subscription/customer must not survive — a later
         -- web upgrade would otherwise "modify" the old canceled Stripe
-        -- subscription instead of starting a fresh checkout.
+        -- subscription instead of starting a fresh checkout. Also clear an
+        -- expired Apple/Google subscription's store rail + identifiers so a
+        -- delayed expiry/refund webhook cannot downgrade the new promo trial.
         stripe_subscription_id = NULL,
         stripe_customer_id = NULL,
+        apple_original_transaction_id = NULL,
+        google_purchase_token = NULL,
+        google_order_id = NULL,
+        billing_provider = NULL,
         updated_at = NOW();
 
     INSERT INTO public.promo_redemptions (

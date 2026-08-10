@@ -140,11 +140,19 @@ def _promotion_target(path: str, db_paths: set) -> Optional[str]:
     is promoted to ``users/{user}/items/{hex}.{ext}`` — the staging-only
     invariant. Returns the promoted key, or None when the key is not a
     DB-referenced preview.
+
+    ``path`` is the RAW legacy bucket key (not the migrated ``users/`` key),
+    so it is reduced to its ``users/`` home via ``migrate_key_to_users_layout``
+    BEFORE ``parse_key`` — every parse_key regex requires a ``users/`` /
+    ``public/`` prefix, so a bare legacy key would otherwise parse as None and
+    the preview would never be promoted.
     """
-    ref = parse_key(path)
+    if path not in db_paths:
+        return None
+    ref = parse_key(migrate_key_to_users_layout(path))
     if ref is None:
         return None
-    if ref.layout in ("preview", "legacy_preview") and path in db_paths:
+    if ref.layout == "preview":
         return mint_key(ref.user, "items", ref.ext)
     return None
 
@@ -186,6 +194,30 @@ async def _run(apply: bool, audit_path: Path) -> int:
             print("\nNo legacy keys to migrate (bucket already on users/ layout).")
             return 0
 
+        # Dedup duplicate DESTINATIONS before any copy. Two distinct legacy
+        # spellings can reduce to the same ``users/`` key (e.g. both
+        # ``tmp/{user}/batch/{hex}.png`` and ``{user}/tmp/batch/{hex}.png`` map
+        # to ``users/{user}/tmp/batch/{hex}.png``). Copying both concurrently
+        # would let S3 server-side copy race and last-writer-wins silently
+        # overwrite. Keep only the first source per destination and audit-log
+        # the rest as skipped-collisions so an operator sees them.
+        seen_dest: Dict[str, Tuple[str, str, bool]] = {}
+        dedup_skipped: List[Tuple[str, str]] = []  # (old, new) losers
+        deduped: List[Tuple[str, str, bool]] = []
+        for old, new, promoted in pairs:
+            if new in seen_dest:
+                dedup_skipped.append((old, new))
+                continue
+            seen_dest[new] = (old, new, promoted)
+            deduped.append((old, new, promoted))
+        if dedup_skipped:
+            pairs = deduped
+            print(
+                f"\n  WARNING: {len(dedup_skipped)} duplicate destination(s) "
+                f"detected; keeping first source, skipping the rest to avoid a "
+                f"concurrent-copy overwrite."
+            )
+
         existing_keys = set(mtime_map)
         collisions = [(old, new) for old, new, _promoted in pairs if new in existing_keys]
         if collisions:
@@ -212,10 +244,15 @@ async def _run(apply: bool, audit_path: Path) -> int:
         if not apply:
             print(
                 f"\nDRY-RUN: {len(pairs)} key(s) would be migrated "
-                f"({len(collisions)} collision(s) skipped). "
-                f"Re-run with --apply to execute."
+                f"({len(collisions)} collision(s) skipped"
+                + (f", {len(dedup_skipped)} duplicate destination(s) dropped" if dedup_skipped else "")
+                + "). Re-run with --apply to execute."
             )
             return 0
+
+        # Audit-log the deduped collisions now that the audit file is open.
+        for old, new in dedup_skipped:
+            _audit("skip", old, new, "duplicate destination (collision deduped)")
 
         # ---- 1) COPY + HEAD-VERIFY every pair (nothing DB-side yet). ----
         print(f"\nCOPYING {len(pairs)} key(s) (server-side copy + HEAD verify)...")
@@ -224,7 +261,7 @@ async def _run(apply: bool, audit_path: Path) -> int:
 
         async def _copy_pair(old: str, new: str, promoted: bool) -> Tuple[str, str, bool, str]:
             if new in existing_keys:
-                return ("skip", old, new, "")
+                return ("skip", old, new, promoted)
             try:
                 async with semaphore:
                     await backend.copy(old, new)
@@ -241,8 +278,22 @@ async def _run(apply: bool, audit_path: Path) -> int:
         failed = []
         for action, old, new, info in results:
             if action == "skip":
-                _audit("skip", old, new, "target already exists")
-                print(f"  SKIP   {old} -> {new} (target exists)")
+                # Target already exists. HEAD-verify it in R2 so a listing
+                # race or a ghost entry can't strand the pair: if the object
+                # is genuinely there, treat the prior copy as having
+                # succeeded and carry the pair through the DB rewrite + old
+                # key delete so a re-run after interruption finishes the job
+                # instead of leaving half-migrated rows (the old key would
+                # otherwise survive and the DB ref would never be rewritten).
+                promoted = bool(info)
+                target_present = await backend.exists(new)
+                if target_present:
+                    copied.append((old, new, promoted))
+                    _audit("resume", old, new, "target already exists (verified)")
+                    print(f"  RESUME {old} -> {new} (target exists, finishing DB rewrite)")
+                else:
+                    _audit("skip", old, new, "target listed but not found on HEAD")
+                    print(f"  SKIP   {old} -> {new} (target listed but not found)")
             elif action == "fail":
                 _audit("fail", old, new, info if isinstance(info, str) else "")
                 failed.append((old, new))

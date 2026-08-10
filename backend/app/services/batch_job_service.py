@@ -678,14 +678,47 @@ class BatchJobService:
             return
         actually_generated = len(job.generation_completed)
         unused = max(0, reserved - actually_generated)
-        if unused <= 0:
-            return
         db_client = db or getattr(job, "persistence_db", None)
         if db_client is None:
             logger.warning(
                 "Cannot release unused generation quota: no db client",
                 extra={"job_id": job.job_id, "user_id": job.user_id, "unused": unused},
             )
+            return
+        # Idempotency: a recovered poll-only shell is re-hydrated from the
+        # durable row on every poll, so without a marker the cleanup loop would
+        # re-release the same reservation each tick. Atomically zero the
+        # durable reserved_generations (conditional on its current value) and
+        # only release quota if the claim won — a concurrent caller / later
+        # poll sees reserved_generations = 0 and exits above. Also covers a
+        # terminal recovered job that crashed before its in-memory release ran.
+        try:
+            claim_result = await asyncio.to_thread(
+                db_client.table("extraction_jobs")
+                .update({"reserved_generations": 0})
+                .eq("job_id", job.job_id)
+                .eq("reserved_generations", reserved)
+                .execute
+            )
+            claim_rows = getattr(claim_result, "data", None) or []
+            if not claim_rows:
+                # Another caller already claimed/released this reservation.
+                job.reserved_generations = 0
+                return
+        except Exception as exc:
+            logger.warning(
+                "Failed to claim reserved generation quota for release; "
+                "skipping to avoid a possible double release",
+                extra={
+                    "job_id": job.job_id,
+                    "user_id": job.user_id,
+                    "reserved": reserved,
+                    "error": str(exc),
+                },
+            )
+            return
+        job.reserved_generations = 0
+        if unused <= 0:
             return
         try:
             await AISettingsService.release_usage(
@@ -1193,6 +1226,14 @@ class BatchJobService:
                     if age > _FINISHED_JOB_TTL:
                         for item in job.detected_items:
                             item.generated_image_base64 = None
+                        # A recovered terminal job (crashed after the terminal
+                        # persist but before its in-memory quota release) must
+                        # still reconcile its reservation — otherwise it leaks
+                        # the user's daily generation allowance forever.
+                        if job.recovered_from_persistence and (
+                            getattr(job, "reserved_generations", 0) or 0
+                        ) > 0:
+                            quota_release_jobs.append(job)
                         pending_eviction.append(job_id)
                 elif age > _ACTIVE_JOB_TTL:
                     if job.recovered_from_persistence:

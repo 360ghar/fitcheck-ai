@@ -310,7 +310,13 @@ class SubscriptionService:
                 # billing sync that made the row paid/trial after our snapshot
                 # must keep its entitlement — the conditional UPDATE then
                 # matches zero rows and the newer state survives untouched.
-                .eq("plan_type", "free")
+                # Match any row that is EFFECTIVELY free at write time (the
+                # same effective_plan_type derivation the read uses): a row
+                # whose stored plan_type is still 'pro_monthly' but whose
+                # current_period_end and trial_end are both in the past has
+                # lapsed to free, so its banked referral months must redeem.
+                # Requiring stored plan_type == 'free' here skipped exactly
+                # those lapsed-but-still-paid rows and stranded the bank.
                 .or_("current_period_end.is.null,current_period_end.lte." + check_at.isoformat())
                 .or_("trial_end.is.null,trial_end.lte." + check_at.isoformat())
                 .execute
@@ -561,6 +567,42 @@ class SubscriptionService:
             "cancel_at_period_end": bool(value(stripe_subscription, "cancel_at_period_end", False)),
             "updated_at": now.isoformat(),
         }
+        # Write-time current-rail guard (A1-05): the read above is a snapshot,
+        # and a store sync can commit a LIVE App Store/Play entitlement in the
+        # gap before this write. An unconditional on_conflict upsert would then
+        # clobber it (billing_provider='stripe', store identifiers nulled). Make
+        # the write conditional so a newer live store rail wins: when a row
+        # already exists, UPDATE only if billing_provider is not a live store
+        # rail; otherwise insert. PostgREST returns zero rows on a filtered
+        # miss, in which case a store entitlement is the survivor — re-read it.
+        if existing:
+            update_result = await asyncio.to_thread(
+                db.table("subscriptions")
+                .update(payload)
+                .eq("user_id", user_id)
+                .neq("billing_provider", "apple")
+                .neq("billing_provider", "google")
+                .execute
+            )
+            update_rows = getattr(update_result, "data", None) or []
+            if update_rows:
+                logger.info(
+                    "Synchronized Stripe subscription (conditional update)",
+                    user_id=user_id,
+                    stripe_subscription_id=payload["stripe_subscription_id"],
+                    plan_type=plan_type.value,
+                    status=status.value,
+                )
+                return cls._response_from_row(update_rows[0])
+            # Filtered out — a live store entitlement committed after our
+            # snapshot read. It is the survivor; do not clobber it.
+            logger.info(
+                "Stripe snapshot skipped at write time: a live store "
+                "entitlement committed after the snapshot read",
+                user_id=user_id,
+                incoming_subscription_id=incoming_id,
+            )
+            return await cls.get_subscription(user_id, db)
         upsert_result = await asyncio.to_thread(
             db.table("subscriptions").upsert(payload, on_conflict="user_id").execute
         )

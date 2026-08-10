@@ -91,7 +91,7 @@ This starts:
 
 1. Open your Supabase SQL Editor.
 2. Apply **all** migrations in numeric order from
-   `backend/db/supabase/migrations/` (49 files, numbered `001`..`048` — note
+   `backend/db/supabase/migrations/` (55 files, numbered `001`..`054` — note
    `002` has two files: `002_astrology_profile.sql` and
    `002_user_profile_trigger.sql`). Do not skip any: the backend treats a
    partial schema as broken (`GET /ready` fails closed on missing
@@ -110,7 +110,7 @@ This starts:
    pre-fix file), fix or finish the file, then re-run every not-yet-applied
    file in order — re-running an already-applied file is safe.
    (Regression-checked 2026-08-08: all 43 files applied twice in sequence on
-   a scratch Postgres 17; contract extended to 49 files 2026-08-10.)
+   a scratch Postgres 17; contract extended to 55 files 2026-08-10.)
 3. File storage does **not** live in Supabase. Uploads go to a private
    S3-compatible object-storage bucket (Cloudflare R2) configured by the
    `OBJECT_STORAGE_*` vars in `backend/.env.example`

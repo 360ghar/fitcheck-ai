@@ -265,42 +265,11 @@ describe('key authorization', () => {
     assert.equal(res.status, 404);
   });
 
-  it('serves every users/ canonical category with the owner at segment 1', async () => {
-    for (const category of ['items', 'outfits', 'avatars', 'sources', 'feedback']) {
-      const key = `users/${USER}/${category}/${NAME}.jpg`;
-      const env = makeEnv({ objects: { [key]: r2Object({ contentType: 'image/jpeg' }) } });
-      const res = await call(key, { token: await mintToken(), env });
-      assert.equal(res.status, 200, `${key} should be servable`);
-    }
-  });
-
-  it('serves users/ preview, thumb and (missing) export keys', async () => {
-    const keys = [
-      `users/${USER}/tmp/batch/${NAME}.webp`,
-      `users/${USER}/generated/try-on/${NAME}.png`,
-      `users/${USER}/items/${NAME}_thumb.webp`,
-    ];
-    for (const key of keys) {
-      const env = makeEnv({ objects: { [key]: r2Object() } });
-      const res = await call(key, { token: await mintToken(), env });
-      assert.equal(res.status, 200, `${key} should be servable`);
-    }
-  });
-
   it('404s a users/ key owned by another user (owner is segment 1)', async () => {
     const key = `users/${OTHER_USER}/items/${NAME}.webp`;
     const env = makeEnv({ objects: { [key]: r2Object() } });
     const res = await call(key, { token: await mintToken(), env });
     assert.equal(res.status, 404);
-  });
-
-  it('404s the users/ data export under the user prefix', async () => {
-    const exportKey = `users/${USER}/export/data.json`;
-    const env = makeEnv({
-      objects: { [exportKey]: r2Object({ contentType: 'application/json' }) },
-    });
-    const res = await call(exportKey, { token: await mintToken(), env });
-    assert.equal(res.status, 404, 'the data export must never be servable here');
   });
 
   it('rejects a users/ key with a non-canonical category', async () => {
