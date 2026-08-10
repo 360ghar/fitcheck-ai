@@ -109,7 +109,7 @@ feedback/sources + staged `tmp/{user}/upload` + `upload_temp_generated_image`,
 duplicated category vocabularies (storage_service `THUMB_CATEGORIES`,
 `backfill_storage_paths._CANONICAL_CATEGORIES`, `recompress_assets.CATEGORIES`,
 `users.py:675` avatar prefix) now import from the grammar. New
-`tests/unit/test_services/test_storage_keys.py` (63 tests) pins the mint
+`tests/unit/test_services/test_storage_keys.py` (90 tests) pins the mint
 formats and parse round-trips; the pre-existing shape-pinning suites pass
 unchanged (zero behavior change). `worker.js` remains a documented mirror.
 

@@ -101,7 +101,7 @@ def derive_storage_path(value: Optional[str]) -> Optional[str]:
     if not key:
         return None
     ref = parse_key(key)
-    if ref is None or ref.layout not in ("canonical", "legacy_canonical"):
+    if ref is None or ref.layout != "canonical":
         return None
     if ref.category not in CANONICAL_CATEGORIES:
         return None

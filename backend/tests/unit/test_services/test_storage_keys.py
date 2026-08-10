@@ -29,7 +29,6 @@ from app.core.storage_keys import (
     mint_key,
     mint_preview_key,
     mint_public_key,
-    normalize_preview_key,
     parse_key,
     thumb_key_for,
 )
@@ -299,15 +298,6 @@ class TestPredicates:
         assert is_public_key(f"public/misc/home/{HEX32}.webp") is False
         assert is_public_key(f"users/{USER}/items/{HEX32}.png") is False
         assert is_public_key(None) is False
-
-    def test_normalize_preview_key_legacy_to_top_level(self):
-        assert normalize_preview_key(f"{USER}/tmp/batch/{HEX32}.webp") == (
-            f"tmp/{USER}/batch/{HEX32}.webp"
-        )
-
-    def test_normalize_preview_key_passes_canonical_through(self):
-        key = f"users/{USER}/items/{HEX32}.png"
-        assert normalize_preview_key(key) == key
 
     def test_owned_key_checks_user(self):
         key = mint_key(USER, "items", ".png")

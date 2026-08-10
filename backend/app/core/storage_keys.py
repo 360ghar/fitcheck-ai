@@ -474,21 +474,3 @@ def is_public_key(key: Optional[str]) -> bool:
     """True when ``key`` is a public (no-auth) asset under ``public/``."""
     ref = parse_key(key)
     return ref is not None and ref.layout == "public"
-
-
-def normalize_preview_key(key: str) -> str:
-    """Map a legacy per-user preview key to the top-level-folder layout.
-
-    Legacy layout: ``{user_id}/{tmp|generated}/{sub}/...``
-    Top-level:     ``{tmp|generated}/{user_id}/{sub}/...``
-
-    This predates the ``users/`` restructure and is retained for the
-    transition window (the completed ``tmp`` layout migration and its callers).
-    New code should use ``migrate_key_to_users_layout``, which maps every
-    legacy shape straight to its ``users/`` home.
-    """
-    parts = key.split("/", 3)
-    if len(parts) >= 3 and parts[1] in PREVIEW_FOLDERS:
-        head = f"{parts[1]}/{parts[0]}/{parts[2]}"
-        return f"{head}/{parts[3]}" if len(parts) > 3 else head
-    return key
