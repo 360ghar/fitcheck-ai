@@ -27,12 +27,15 @@
 
 BEGIN;
 
--- Hold an ACCESS EXCLUSIVE lock on subscriptions for the whole migration so a
--- live IAP write (sync_iap_subscription upsert) cannot re-insert a duplicate
--- store identifier in the gap between the dedupe UPDATEs and the unique-index
--- build — that window would otherwise make CREATE UNIQUE INDEX fail with a
--- duplicate-key error and abort the migration (A1-01).
-LOCK TABLE public.subscriptions IN ACCESS EXCLUSIVE MODE;
+-- Hold a lock on subscriptions for the whole migration so a live IAP write
+-- (sync_iap_subscription upsert) cannot re-insert a duplicate store identifier
+-- in the gap between the dedupe UPDATEs and the unique-index build — that
+-- window would otherwise make CREATE UNIQUE INDEX fail with a duplicate-key
+-- error and abort the migration (A1-01). SHARE ROW EXCLUSIVE conflicts with
+-- INSERT/UPDATE/DELETE (the writers that could reopen the duplicate window)
+-- but does NOT conflict with plain SELECT (ACCESS SHARE), so subscription
+-- plan checks and other readers are not blocked for the migration's duration.
+LOCK TABLE public.subscriptions IN SHARE ROW EXCLUSIVE MODE;
 
 DO $$
 DECLARE

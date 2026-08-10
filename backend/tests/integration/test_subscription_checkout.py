@@ -160,25 +160,30 @@ async def test_store_billed_subscription_refuses_stripe_checkout(provider):
 @pytest.mark.asyncio
 async def test_sync_stripe_subscription_persists_price_status_period_and_cancel_flag():
     db = Mock()
-    row = {
+    # Pre-write snapshot deliberately carries a STALE plan_type ('free') and no
+    # stripe_subscription_id, so a re-read of the snapshot (instead of using
+    # the conditional-UPDATE result) could not satisfy the assertions below —
+    # proving the response really comes from the write result.
+    stale_row = {
         "id": "22222222-2222-2222-2222-222222222222",
         "user_id": "11111111-1111-1111-1111-111111111111",
-        "plan_type": "pro_yearly",
+        "plan_type": "free",
         "status": "active",
         "current_period_start": datetime.now(timezone.utc).isoformat(),
         "current_period_end": datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=30),
         "cancel_at_period_end": True,
         "trial_end": None,
     }
-    result = Mock(data=row)
+    result = Mock(data=stale_row)
     db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = result
     # The existing-row path uses a conditional UPDATE (A1-05 write-time
     # current-rail guard) so a live store entitlement that commits after the
     # snapshot read is not clobbered. The sync tail builds its response from
-    # that update result, not a re-read.
-    db.table.return_value.update.return_value.eq.return_value.neq.return_value.neq.return_value.execute.return_value = Mock(data=[row])
+    # that update result (which carries the NEW state), not a re-read.
+    updated_row = {**stale_row, "plan_type": "pro_yearly", "stripe_subscription_id": "sub_stripe"}
+    db.table.return_value.update.return_value.eq.return_value.or_.return_value.execute.return_value = Mock(data=[updated_row])
     # The insert path (no existing row) still falls back to upsert.
-    db.table.return_value.upsert.return_value.execute.return_value = Mock(data=[row])
+    db.table.return_value.upsert.return_value.execute.return_value = Mock(data=[updated_row])
 
     with patch.multiple(settings, **_stripe_settings()):
         synced = await SubscriptionService.sync_stripe_subscription(

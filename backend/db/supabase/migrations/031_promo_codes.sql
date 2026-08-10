@@ -202,12 +202,14 @@ BEGIN
         -- subscription instead of starting a fresh checkout. Also clear an
         -- expired Apple/Google subscription's store rail + identifiers so a
         -- delayed expiry/refund webhook cannot downgrade the new promo trial.
+        -- billing_provider is NOT NULL (migration 030, DEFAULT 'stripe'), so
+        -- the neutral "no live store rail" value is 'stripe', not NULL.
         stripe_subscription_id = NULL,
         stripe_customer_id = NULL,
         apple_original_transaction_id = NULL,
         google_purchase_token = NULL,
         google_order_id = NULL,
-        billing_provider = NULL,
+        billing_provider = 'stripe',
         updated_at = NOW();
 
     INSERT INTO public.promo_redemptions (

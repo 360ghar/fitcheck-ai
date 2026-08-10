@@ -1150,13 +1150,17 @@ class SocialImportPipelineService:
                 # user's daily generation allowance without delivering any
                 # reviewable result (and every retry cycle double-reserves).
                 #
-                # Refund is based on provider_billed_count, NOT
-                # generation_success_count: an item whose provider call
-                # succeeded (quota consumed) but whose decode/upload then
-                # failed must NOT be refunded - the provider already used it
-                # (backend #15). Only never-attempted / provider-failed items
-                # genuinely have an unused slot to return.
-                unused_generation = len(raw_items) - provider_billed_count
+                # The whole photo is requeued below and the retry RE-RESERVES
+                # the full reservation and re-bills every item — so the full
+                # reservation is returned here (the retry bills each item
+                # exactly once, not twice). Refunding only
+                # len(raw_items) - provider_billed_count would keep the
+                # already-billed slots held AND re-bill them on the retry,
+                # double-charging one item for a single delivered result. The
+                # provider_billed_count distinction (backend #15) belongs to
+                # the delivered-photo path where a billed-but-not-uploaded
+                # item is NOT refunded because the photo proceeds to review.
+                unused_generation = len(raw_items)
                 if unused_generation > 0:
                     try:
                         await AISettingsService.release_usage(

@@ -258,8 +258,8 @@ async def test_resolve_owned_storage_paths_includes_thumbs():
                 {"id": "item-2", "user_id": "user-2"},
             ],
             "item_images": [
-                {"id": "img-1", "item_id": "item-1", "storage_path": "users/user-1/items/a.jpg"},
-                {"id": "img-2", "item_id": "item-2", "storage_path": "users/user-2/items/b.jpg"},
+                {"id": "img-1", "item_id": "item-1", "storage_path": "users/user-1/items/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"},
+                {"id": "img-2", "item_id": "item-2", "storage_path": "users/user-2/items/cccccccccccccccccccccccccccccccc.jpg"},
             ],
             "outfits": [],
             "outfit_images": [],
@@ -270,8 +270,8 @@ async def test_resolve_owned_storage_paths_includes_thumbs():
 
     assert result["item_ids"] == ["item-1"]
     assert sorted(result["storage_paths"]) == [
-        "users/user-1/items/a.jpg",
-        "users/user-1/items/a_thumb.webp",
+        "users/user-1/items/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        "users/user-1/items/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_thumb.webp",
         "users/user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
         "users/user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ]

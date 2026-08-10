@@ -363,7 +363,12 @@ def _oauth_picker_response(
                 if (out.ok && out.body && out.body.data && out.body.data.success) {{
                   finish();
                 }} else {{
-                  var msg = (out.body && (out.body.message || (out.body.detail && out.body.detail.message)))
+                  // The API surfaces validation failures as {{error, code, details}}
+                  // (FitCheckException.to_dict) — surface that message so an
+                  // invalid/expired selection reaches the popup/mobile client
+                  // instead of always falling back to the generic reconnect text.
+                  var msg = (out.body && (out.body.error || out.body.message
+                    || (out.body.detail && out.body.detail.message)))
                     || 'Could not select that account. Please reconnect.';
                   finishWithError(msg);
                 }}
@@ -808,8 +813,12 @@ async def select_oauth_page(
         # consume_selection_token (not parse) so the picker link is single-use:
         # the signed nonce is recorded atomically and a replay raises, which
         # stops a second submission from binding a different candidate page
-        # after the job already resumed (backend #16).
-        selection = SocialOAuthService.consume_selection_token(selection_token)
+        # after the job already resumed (backend #16). Validate with the
+        # NON-destructive parse first so a transient failure later in this
+        # handler (e.g. a Meta Graph API hiccup in resolve_platform_identity)
+        # does not permanently burn a still-valid selection token — the
+        # single-use consume happens only right before accept_auth.
+        selection = SocialOAuthService.parse_selection_token(selection_token)
     except Exception as exc:
         raise ValidationError(
             "This account selection link has expired. Please connect your "
@@ -871,6 +880,18 @@ async def select_oauth_page(
         # otherwise the multi-account selection path raises AttributeError.
         "expires_at": parse_utc_datetime(session_payload.get("provider_expires_at")),
     }
+    # Single-use consume immediately before the write: all validations above
+    # (job match, pending session, candidate membership, identity resolution)
+    # passed, so only now should the token be burned. A concurrent second
+    # submission that also passed the checks loses the consume here and is
+    # rejected — replay protection is intact.
+    try:
+        SocialOAuthService.consume_selection_token(selection_token)
+    except Exception as exc:
+        raise ValidationError(
+            "This account selection link has already been used. Please "
+            "connect your Instagram account again."
+        ) from exc
     service = _service(user_id, db)
     await service.accept_auth(job_id, "oauth", payload)
     return {

@@ -141,12 +141,16 @@ BEGIN
         -- identifier on the row lets a delayed expiry/refund webhook target
         -- the new promo trial and downgrade it. Clear the full prior billing
         -- state (Stripe + store rails + identifiers) on promo redemption.
+        -- NOTE: billing_provider is NOT NULL (migration 030, DEFAULT 'stripe'),
+        -- so the neutral "no live store rail" value is 'stripe' — assigning
+        -- NULL here raised 23502 and rolled back every promo redemption for a
+        -- user who already had a subscription row.
         stripe_subscription_id = NULL,
         stripe_customer_id = NULL,
         apple_original_transaction_id = NULL,
         google_purchase_token = NULL,
         google_order_id = NULL,
-        billing_provider = NULL,
+        billing_provider = 'stripe',
         updated_at = NOW();
 
     INSERT INTO public.promo_redemptions (

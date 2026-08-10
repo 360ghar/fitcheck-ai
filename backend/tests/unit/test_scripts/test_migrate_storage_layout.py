@@ -15,6 +15,7 @@ Covers the three code-review fixes:
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import sys
 from datetime import datetime, timezone
@@ -57,6 +58,23 @@ def test_promotion_target_promotes_legacy_generated_key(script):
     assert target is not None
     assert target.startswith(f"users/{USER_ID}/items/")
     assert target.endswith(".png")
+
+
+def test_promotion_target_is_deterministic_across_runs(script):
+    # The promotion target must be recomputed identically on a rerun, or an
+    # interrupted run (copy done, DB rewrite not) strands the first copy as an
+    # orphan when the second run computes a fresh UUID. Both a canonical-shaped
+    # source name (reused as-is) and a legacy-shaped name (hashed) are stable.
+    legacy = f"{USER_ID}/generated/product/{NAME}.png"
+    db_paths = {legacy}
+    first = script._promotion_target(legacy, db_paths)
+    second = script._promotion_target(legacy, db_paths)
+    assert first is not None
+    assert first == second
+    # The canonical-shaped source name is reused, so the target is STABLE
+    # (and its 32-hex name parses as a canonical items key).
+    assert first == f"users/{USER_ID}/items/{NAME}.png"
+    assert script.parse_key(first) is not None
 
 
 def test_promotion_target_promotes_top_level_tmp_key(script):
@@ -120,14 +138,28 @@ class _FakeBackend:
     ``existing`` is the set of keys ``exists()`` reports as present so the
     resume path (Finding 3) can be exercised: a target already in ``existing``
     short-circuits the copy and is HEAD-verified against this same set.
+
+    ``metadata`` (``{key: {"size": int, "etag": str}}``) backs the new
+    ``head()`` provenance check: a key the test does not pin gets a stable
+    hash-derived identity, so two DIFFERENT keys never accidentally match.
+    ``copy()`` clones the source's metadata onto the destination, so a test
+    simulating a completed prior copy just seeds the target in ``keys`` with
+    the source's metadata.
     """
 
-    def __init__(self, keys):
+    def __init__(self, keys, metadata=None):
         self.keys = list(keys)
         self.existing = set(keys)
+        self.metadata = {}
+        for key in keys:
+            info = _default_head(key)
+            if metadata and key in metadata:
+                info.update(metadata[key])
+            self.metadata[key] = info
         self.copy_calls = []
         self.delete_calls = []
         self.exists_calls = []
+        self.head_calls = []
         self.bucket = "test-bucket"
         self.endpoint_url = "https://s3.example.com"
         self._client = _FakeClient(self.keys)
@@ -138,6 +170,7 @@ class _FakeBackend:
     async def copy(self, src_key, dst_key):
         self.copy_calls.append((src_key, dst_key))
         self.existing.add(dst_key)
+        self.metadata[dst_key] = dict(self.metadata[src_key])
 
     async def delete(self, key):
         self.delete_calls.append(key)
@@ -145,6 +178,18 @@ class _FakeBackend:
     async def exists(self, key):
         self.exists_calls.append(key)
         return key in self.existing
+
+    async def head(self, key):
+        self.head_calls.append(key)
+        if key not in self.existing:
+            return None
+        return dict(self.metadata[key])
+
+
+def _default_head(key: str) -> dict:
+    """Stable per-key identity so unrelated keys never accidentally match."""
+    digest = hashlib.sha256(key.encode()).hexdigest()
+    return {"size": int(digest[:8], 16), "etag": digest[:16]}
 
 
 async def _noop_close():
@@ -220,10 +265,13 @@ async def test_run_dry_run_dedups_without_writes(script, fake_db, tmp_path):
 async def test_run_resumes_when_target_already_exists(script, fake_db, tmp_path):
     # Simulate a prior interrupted run: the old key still exists, AND the
     # migrated target already exists (the copy succeeded, the rewrite did
-    # not). The DB still references the OLD key.
+    # not). The DB still references the OLD key. The target carries the
+    # SOURCE's metadata so the provenance check (size+etag match) accepts it
+    # as a prior copy of this source rather than a collision.
     old_key = f"{USER_ID}/items/{NAME}.png"
     new_key = f"users/{USER_ID}/items/{NAME}.png"
-    backend = _FakeBackend([old_key, new_key])  # both present
+    metadata = {new_key: _default_head(old_key)}  # prior copy => same identity
+    backend = _FakeBackend([old_key, new_key], metadata=metadata)  # both present
 
     fake_db.rows["item_images"] = [
         {"id": "row1", "storage_path": old_key}
@@ -247,6 +295,76 @@ async def test_run_resumes_when_target_already_exists(script, fake_db, tmp_path)
         for line in (tmp_path / "audit.jsonl").read_text().splitlines()
     ]
     assert any(r["action"] == "resume" and r["old_key"] == old_key for r in audit)
+
+
+@pytest.mark.asyncio
+async def test_run_unrelated_target_object_is_not_touched(script, fake_db, tmp_path):
+    # Finding 1 regression: an unrelated pre-existing users/ object at the
+    # target key must NOT be treated as a prior copy. Source and target have
+    # different size+etag, so the pair is left untouched: no DB retarget to
+    # the unrelated bytes, no delete of the source.
+    legacy = f"{USER_ID}/generated/product/{NAME}.png"
+    target = f"users/{USER_ID}/items/{NAME}.png"
+    # The target exists with its OWN identity (different from the source) —
+    # an unrelated object that happens to share the promotion key.
+    backend = _FakeBackend([legacy, target])
+    fake_db.rows["item_images"] = [{"id": "row1", "storage_path": legacy}]
+    _patch(script, backend, fake_db)
+
+    rc = await script._run(apply=True, audit_path=tmp_path / "audit.jsonl")
+    assert rc == 0
+
+    # Nothing was copied, deleted, or DB-retargeted: the collision is left
+    # alone and the source preserved.
+    assert backend.copy_calls == []
+    assert backend.delete_calls == []
+    assert fake_db.updates == []
+
+    # Audit-logged as a collision, source preserved.
+    audit = [
+        json.loads(line)
+        for line in (tmp_path / "audit.jsonl").read_text().splitlines()
+    ]
+    assert any(
+        r["action"] == "skip"
+        and r["old_key"] == legacy
+        and "collision" in (r["error"] or "")
+        for r in audit
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_promotion_target_is_stable_across_reruns(script, fake_db, tmp_path):
+    # Finding 2 regression: a rerun of a promoted preview must target the SAME
+    # key, or a run interrupted between copy and DB rewrite strands the first
+    # copy as an unreferenced orphan when the rerun computes a fresh UUID.
+    legacy = f"{USER_ID}/generated/product/{NAME}.png"
+    fake_db.rows["item_images"] = [{"id": "row1", "storage_path": legacy}]
+
+    backend1 = _FakeBackend([legacy])
+    _patch(script, backend1, fake_db)
+    rc = await script._run(apply=True, audit_path=tmp_path / "audit1.jsonl")
+    assert rc == 0
+    assert len(backend1.copy_calls) == 1
+    first_target = backend1.copy_calls[0][1]
+    assert first_target == f"users/{USER_ID}/items/{NAME}.png"
+
+    # Simulate the state a rerun sees: the copy materialized (target carries
+    # the source's identity), but the DB rewrite never happened, so the row
+    # still references the legacy key.
+    backend2 = _FakeBackend(
+        [legacy, first_target], metadata={first_target: _default_head(legacy)}
+    )
+    fake_db.rows["item_images"] = [{"id": "row1", "storage_path": legacy}]
+    _patch(script, backend2, fake_db)
+    rc = await script._run(apply=True, audit_path=tmp_path / "audit2.jsonl")
+    assert rc == 0
+
+    # The rerun recomputes the SAME target key (no fresh UUID, no orphan) and
+    # finishes the rewrite instead of copying to a new name.
+    assert backend2.copy_calls == []
+    fake_db.assert_update("item_images", storage_path=first_target)
+    assert legacy in backend2.delete_calls
 
 
 @pytest.mark.asyncio

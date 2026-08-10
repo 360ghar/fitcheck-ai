@@ -951,7 +951,7 @@ async def test_delete_item_removes_row_and_storage_paths(monkeypatch):
                 _item_row(source_image_storage_path=source_key),
             ],
             "item_images": [
-                _image_row(storage_path="u/items/one.jpg"),
+                _image_row(storage_path=f"users/{USER_ID}/items/11111111111111111111111111111111.jpg"),
             ],
         }
     )
@@ -974,8 +974,8 @@ async def test_delete_item_removes_row_and_storage_paths(monkeypatch):
     # Legacy fixture keys are mapped to their users/ home by the delete-path
     # normalizer (migrate_key_to_users_layout).
     assert sorted(deleted_paths) == sorted([
-        "users/u/items/one.jpg",
-        "users/u/items/one_thumb.webp",
+        f"users/{USER_ID}/items/11111111111111111111111111111111.jpg",
+        f"users/{USER_ID}/items/11111111111111111111111111111111_thumb.webp",
         f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
         f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ])
@@ -1471,11 +1471,11 @@ async def test_batch_delete_cleans_storage_and_embeddings(monkeypatch):
                 _item_row(id=OTHER_ITEM_ID),
             ],
             "item_images": [
-                _image_row(storage_path="u/items/one.jpg"),
+                _image_row(storage_path=f"users/{USER_ID}/items/11111111111111111111111111111111.jpg"),
                 _image_row(
                     id="55555555-5555-5555-5555-555555555555",
                     item_id=OTHER_ITEM_ID,
-                    storage_path="u/items/two.jpg",
+                    storage_path=f"users/{USER_ID}/items/22222222222222222222222222222222.jpg",
                 ),
             ],
         }
@@ -1499,10 +1499,10 @@ async def test_batch_delete_cleans_storage_and_embeddings(monkeypatch):
     # Legacy fixture keys are mapped to their users/ home by the delete-path
     # normalizer (migrate_key_to_users_layout).
     assert sorted(deleted_paths) == sorted([
-        "users/u/items/one.jpg",
-        "users/u/items/one_thumb.webp",
-        "users/u/items/two.jpg",
-        "users/u/items/two_thumb.webp",
+        f"users/{USER_ID}/items/11111111111111111111111111111111.jpg",
+        f"users/{USER_ID}/items/11111111111111111111111111111111_thumb.webp",
+        f"users/{USER_ID}/items/22222222222222222222222222222222.jpg",
+        f"users/{USER_ID}/items/22222222222222222222222222222222_thumb.webp",
         f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
         f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ])

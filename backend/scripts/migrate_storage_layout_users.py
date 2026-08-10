@@ -35,8 +35,12 @@ SAFETY GUARANTEES
    rewritten. A failed copy leaves the old key untouched — nothing is ever
    lost (the 048 lesson: never delete-first).
 
-3) NEVER OVERWRITE. If the target key already exists (a partial prior run),
-   the pair is skipped and reported instead of clobbered.
+3) NEVER OVERWRITE, AND RESUME ONLY ON PROVENANCE. If the target key already
+   exists (a partial prior run), the pair is skipped and reported instead of
+   clobbered. A pre-existing target is carried forward only when HEAD proves
+   it is a prior copy of THIS source (size + etag match); an unrelated object
+   sharing the target key is left alone and audit-logged as a collision, so
+   its bytes are never deleted and the DB ref is never retargeted to it.
 
 4) ONLY OUR KEY SHAPES ARE TOUCHED. Unknown keys (external junk, objects
    that reduce to nothing) are reported and left alone.
@@ -65,6 +69,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -77,7 +82,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts._common import _env, _utc_now_iso, list_keys_with_mtime  # noqa: E402
 from app.core.storage_keys import (  # noqa: E402
     migrate_key_to_users_layout,
-    mint_key,
     parse_key,
 )
 from app.db.connection import SupabaseDB  # noqa: E402
@@ -95,6 +99,14 @@ _DB_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
 )
 
 _PAGE_SIZE = 1000
+
+# The 32-hex name segment every canonical/mint-able key carries. Used to keep a
+# promotion target deterministic from its source (see _promotion_target).
+_HEX32_CHARS = frozenset("0123456789abcdef")
+
+
+def _is_hex32(name: str) -> bool:
+    return len(name) == 32 and all(c in _HEX32_CHARS for c in name)
 
 
 def _db_referenced_paths(db) -> Dict[str, List[Tuple[str, str, str]]]:
@@ -146,6 +158,14 @@ def _promotion_target(path: str, db_paths: set) -> Optional[str]:
     BEFORE ``parse_key`` — every parse_key regex requires a ``users/`` /
     ``public/`` prefix, so a bare legacy key would otherwise parse as None and
     the preview would never be promoted.
+
+    The promoted name is DETERMINISTIC from the source, never a fresh mint:
+    a uuid-per-invocation target would make a rerun (after a copy that was
+    interrupted before the DB rewrite) compute a DIFFERENT key, copy again,
+    and strand the first run's copy as an unreferenced orphan. Reusing the
+    source's own 32-hex name when it is already canonical-shaped keeps the
+    object's identity across the promotion; anything else is hashed from the
+    source identity so a rerun recomputes the identical target either way.
     """
     if path not in db_paths:
         return None
@@ -153,7 +173,13 @@ def _promotion_target(path: str, db_paths: set) -> Optional[str]:
     if ref is None:
         return None
     if ref.layout == "preview":
-        return mint_key(ref.user, "items", ref.ext)
+        if ref.name and _is_hex32(ref.name):
+            name = ref.name
+        else:
+            name = hashlib.sha256(
+                f"{ref.user}/{ref.name}.{ref.ext}".encode()
+            ).hexdigest()
+        return f"users/{ref.user}/items/{name}.{ref.ext}"
     return None
 
 
@@ -285,15 +311,33 @@ async def _run(apply: bool, audit_path: Path) -> int:
                 # key delete so a re-run after interruption finishes the job
                 # instead of leaving half-migrated rows (the old key would
                 # otherwise survive and the DB ref would never be rewritten).
+                #
+                # Existence alone is NOT provenance. ``existing_keys`` is the
+                # whole run-start bucket listing, so an unrelated pre-existing
+                # ``users/...`` object that happens to share the target key
+                # would otherwise be read as "our prior copy": the old key
+                # would be DELETED and the DB reference retargeted to bytes
+                # never derived from it — silent data loss. Only when the
+                # target's size AND etag match the source (HEAD both) can the
+                # pair be carried forward. Anything else is a collision: the
+                # pair is left untouched (no DB rewrite, no delete).
                 promoted = bool(info)
-                target_present = await backend.exists(new)
-                if target_present:
-                    copied.append((old, new, promoted))
-                    _audit("resume", old, new, "target already exists (verified)")
-                    print(f"  RESUME {old} -> {new} (target exists, finishing DB rewrite)")
-                else:
+                old_head = await backend.head(old)
+                new_head = await backend.head(new)
+                if new_head is None:
                     _audit("skip", old, new, "target listed but not found on HEAD")
                     print(f"  SKIP   {old} -> {new} (target listed but not found)")
+                elif (
+                    old_head is not None
+                    and old_head.get("size") == new_head.get("size")
+                    and old_head.get("etag") == new_head.get("etag")
+                ):
+                    copied.append((old, new, promoted))
+                    _audit("resume", old, new, "target is a prior copy of source (size+etag match)")
+                    print(f"  RESUME {old} -> {new} (target matches source; finishing DB rewrite)")
+                else:
+                    _audit("skip", old, new, "collision, source preserved (target not a copy of source)")
+                    print(f"  SKIP   {old} -> {new} (collision, source preserved)")
             elif action == "fail":
                 _audit("fail", old, new, info if isinstance(info, str) else "")
                 failed.append((old, new))

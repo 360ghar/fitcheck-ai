@@ -316,7 +316,11 @@ class _PrimaryRpcDB(_OutfitsFakeDB):
             if bool(params.get("p_is_primary")):
                 for row in self._rows_for("outfit_images"):
                     row["is_primary"] = row.get("id") == resolved_id
-            return _FakeRpcResultBuilder(FakeResult(data=[resolved_id]))
+            # add_outfit_image_and_set_primary RETURNS UUID (scalar), so
+            # PostgREST delivers the bare value in `data` — mirror that here
+            # so the route's scalar reader is exercised (a list-shaped fake
+            # masked the one-character truncation bug).
+            return _FakeRpcResultBuilder(FakeResult(data=resolved_id))
         if name == "set_primary_outfit_image":
             image_uuid = params.get("image_uuid")
             for row in self._rows_for("outfit_images"):
@@ -343,6 +347,14 @@ class _OutfitItemRpcDB(_OutfitsFakeDB):
     the route-level tests to see it (canned rpc_results cannot).
     """
 
+    def __init__(self, *args, force_remove_status=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Simulate the concurrent-removal loser hitting the row-locked check:
+        # the unlocked Python pre-check passes (2-item outfit) but the RPC
+        # reports status 2 (would-empty) without mutating the row — exactly the
+        # race migration 044's locked guard exists for.
+        self.force_remove_status = force_remove_status
+
     def rpc(self, name, params=None):
         params = params or {}
         if name == "add_outfit_item":
@@ -361,6 +373,9 @@ class _OutfitItemRpcDB(_OutfitsFakeDB):
             # integer as `data`.
             outfit_id = params.get("outfit_uuid")
             item_id = params.get("item_uuid")
+            if self.force_remove_status is not None:
+                self.rpc_calls.append((name, params))
+                return _FakeRpcResultBuilder(FakeResult(data=self.force_remove_status))
             status = 0
             for row in self._rows_for("outfits"):
                 if row.get("id") == outfit_id:
@@ -2079,8 +2094,16 @@ async def test_remove_item_from_outfit_rejects_emptying_via_scalar_rpc_status():
     # `data[0]` raised TypeError and the route 500'd on the would-empty path
     # instead of mapping status 2 to a validation error. The scalar read must
     # surface the >=1-member guard.
+    #
+    # The outfit holds TWO items so the route's unlocked Python pre-check
+    # passes (removing one leaves one) and the RPC is actually invoked — a
+    # single-item outfit raised the pre-check's ValidationError before the RPC,
+    # so the fake's scalar status-2 branch and the route's `remove_status == 2`
+    # mapping were never exercised. force_remove_status simulates the
+    # concurrent-removal loser hitting migration 044's row-locked guard.
     db = _OutfitItemRpcDB(
-        {"outfits": [_outfit_row(item_ids=[ITEM_ID])], "items": [_item_row()]},
+        {"outfits": [_outfit_row(item_ids=[ITEM_ID, ITEM_ID_2])], "items": [_item_row(), _item_row(ITEM_ID_2)]},
+        force_remove_status=2,
     )
 
     with pytest.raises(ValidationError):
@@ -2090,8 +2113,13 @@ async def test_remove_item_from_outfit_rejects_emptying_via_scalar_rpc_status():
             user_id=USER_ID,
             db=db,
         )
-    # The last-member row was not emptied.
-    assert db.rows["outfits"][0]["item_ids"] == [ITEM_ID]
+    # The RPC was invoked, and the row was NOT emptied.
+    assert ("remove_outfit_item", {
+        "outfit_uuid": OUTFIT_ID,
+        "item_uuid": ITEM_ID,
+        "user_uuid": USER_ID,
+    }) in db.rpc_calls
+    assert db.rows["outfits"][0]["item_ids"] == [ITEM_ID, ITEM_ID_2]
 
 
 @pytest.mark.asyncio

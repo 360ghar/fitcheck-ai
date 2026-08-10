@@ -87,8 +87,8 @@ class _DB:
             "item_images",
             FOREIGN_ITEM_ID,
             OWNED_ITEM_ID,
-            "user-b/item.jpg",
-            "user-a/item.jpg",
+            "user-b/items/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+            "user-a/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
         ),
         (
             outfits_module,
@@ -96,8 +96,8 @@ class _DB:
             "outfit_images",
             FOREIGN_OUTFIT_ID,
             OWNED_OUTFIT_ID,
-            "user-b/outfit.jpg",
-            "user-a/outfit.jpg",
+            "user-b/outfits/dddddddddddddddddddddddddddddddd.jpg",
+            "user-a/outfits/cccccccccccccccccccccccccccccccc.jpg",
         ),
     ],
 )
@@ -157,7 +157,11 @@ async def test_batch_delete_only_cleans_images_owned_by_requesting_user(
     else:
         await route_module.batch_delete_outfits(request=request, user_id=USER_ID, db=db)
 
-    assert deleted_paths == [owned_path]
+    # The owned row's path is a legacy key; resolve_owned_storage_paths
+    # migrates it to its users/ home and includes the derived thumb sibling.
+    migrated = "users/" + owned_path
+    base, _ext = migrated.rsplit(".", 1)
+    assert sorted(deleted_paths) == sorted([migrated, f"{base}_thumb.webp"])
 
 
 # --------------------------------------------------------------------------- #
@@ -184,8 +188,8 @@ async def test_single_item_delete_cleans_source_and_item_images(monkeypatch):
                 },
             ],
             "item_images": [
-                {"id": "img-1", "item_id": OWNED_ITEM_ID, "storage_path": "users/user-a/items/one.jpg"},
-                {"id": "img-2", "item_id": OWNED_ITEM_ID, "storage_path": "users/user-a/items/two.png"},
+                {"id": "img-1", "item_id": OWNED_ITEM_ID, "storage_path": "users/user-a/items/11111111111111111111111111111111.jpg"},
+                {"id": "img-2", "item_id": OWNED_ITEM_ID, "storage_path": "users/user-a/items/22222222222222222222222222222222.png"},
             ],
         }
     )
@@ -208,10 +212,10 @@ async def test_single_item_delete_cleans_source_and_item_images(monkeypatch):
 
     # Source photo + both item images, each with its derived _thumb sibling.
     assert sorted(deleted_paths) == [
-        "users/user-a/items/one.jpg",
-        "users/user-a/items/one_thumb.webp",
-        "users/user-a/items/two.png",
-        "users/user-a/items/two_thumb.webp",
+        "users/user-a/items/11111111111111111111111111111111.jpg",
+        "users/user-a/items/11111111111111111111111111111111_thumb.webp",
+        "users/user-a/items/22222222222222222222222222222222.png",
+        "users/user-a/items/22222222222222222222222222222222_thumb.webp",
         "users/user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
         "users/user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ]
@@ -225,7 +229,7 @@ async def test_single_outfit_delete_cleans_outfit_images(monkeypatch):
         {
             "outfits": [{"id": OWNED_OUTFIT_ID, "user_id": USER_ID}],
             "outfit_images": [
-                {"id": "oi-1", "outfit_id": OWNED_OUTFIT_ID, "storage_path": "users/user-a/outfits/one.jpg"},
+                {"id": "oi-1", "outfit_id": OWNED_OUTFIT_ID, "storage_path": "users/user-a/outfits/33333333333333333333333333333333.jpg"},
             ],
         }
     )
@@ -246,8 +250,8 @@ async def test_single_outfit_delete_cleans_outfit_images(monkeypatch):
     # Legacy fixture keys are mapped to their users/ home by the delete-path
     # normalizer (migrate_key_to_users_layout).
     assert sorted(deleted_paths) == [
-        "users/user-a/outfits/one.jpg",
-        "users/user-a/outfits/one_thumb.webp",
+        "users/user-a/outfits/33333333333333333333333333333333.jpg",
+        "users/user-a/outfits/33333333333333333333333333333333_thumb.webp",
     ]
     assert ("outfits", "delete", [("eq", "id", OWNED_OUTFIT_ID), ("eq", "user_id", USER_ID)]) in db.queries
 

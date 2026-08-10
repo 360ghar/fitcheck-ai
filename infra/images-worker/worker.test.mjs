@@ -245,6 +245,23 @@ describe('key authorization', () => {
     }
   });
 
+  it('serves legacy avatars with non-hex names (users-layout migration legacy)', async () => {
+    // The users-layout migration renames `{user}/avatars/*` to
+    // `users/{user}/avatars/*` without re-validating the filename, so names
+    // outside the 32-hex convention (old-name.jpg) are real keys that
+    // storage_keys.parse_key accepts — the worker allowlist must too.
+    const keys = [
+      `users/${USER}/avatars/old-name.jpg`,
+      `users/${USER}/avatars/my.avatar-1.webp`,
+      `users/${USER}/avatars/old-name_thumb.webp`,
+    ];
+    for (const key of keys) {
+      const env = makeEnv({ objects: { [key]: r2Object({ contentType: 'image/jpeg' }) } });
+      const res = await call(key, { token: await mintToken(), env });
+      assert.equal(res.status, 200, `${key} should be servable`);
+    }
+  });
+
   it('accepts preview keys (tmp/ and generated/) and thumb siblings', async () => {
     const keys = [
       `users/${USER}/tmp/social-import/${NAME}.webp`,

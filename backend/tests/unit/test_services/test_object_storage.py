@@ -333,6 +333,59 @@ async def test_exists_reraises_non_missing_errors(monkeypatch):
         await backend.exists("user-1/items/a.png")
 
 
+# head (size + etag provenance)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_head_returns_size_and_etag(monkeypatch):
+    client = _fake_client()
+    client.head_object.return_value = {
+        "ContentLength": 4321,
+        "ETag": '"abc123"',
+    }
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    info = await backend.head("user-1/items/a.png")
+    assert info == {"size": 4321, "etag": "abc123"}
+    client.head_object.assert_awaited_once_with(
+        Bucket=settings.OBJECT_STORAGE_BUCKET, Key="user-1/items/a.png"
+    )
+
+
+@pytest.mark.asyncio
+async def test_head_normalizes_quoted_etag(monkeypatch):
+    client = _fake_client()
+    client.head_object.return_value = {"ContentLength": 10, "ETag": "unquoted"}
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    assert await backend.head("k") == {"size": 10, "etag": "unquoted"}
+
+
+@pytest.mark.asyncio
+async def test_head_returns_none_on_missing_key(monkeypatch):
+    for code in ("404", "NotFound", "NoSuchKey"):
+        client = _fake_client()
+        client.head_object.side_effect = _ClientError(code)
+        _install_fake_session(monkeypatch, client)
+        backend = S3StorageBackend()
+
+        assert await backend.head("user-1/items/gone.png") is None
+
+
+@pytest.mark.asyncio
+async def test_head_reraises_non_missing_errors(monkeypatch):
+    client = _fake_client()
+    client.head_object.side_effect = _ClientError("SlowDown")
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    with pytest.raises(_ClientError, match="SlowDown"):
+        await backend.head("user-1/items/a.png")
+
+
 # Batch delete
 # ---------------------------------------------------------------------------
 

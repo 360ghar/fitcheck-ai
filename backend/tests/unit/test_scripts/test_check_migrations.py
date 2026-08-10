@@ -76,6 +76,22 @@ class TestPolicyToRoles:
         assert checker._policy_to_roles(" ON t FOR ALL USING (TRUE)") is None
 
 
+class TestCommentStripping:
+    """A trailing ``-- comment`` mentioning a role must not be parsed as a real
+    TO grant (the regex runs over the raw body otherwise)."""
+
+    def test_trailing_comment_with_role_word_is_ignored(self, checker):
+        body = " FOR ALL USING (TRUE) -- scoped to public"
+        stripped = checker._strip_sql_comments(body)
+        assert "public" not in stripped
+        assert checker._policy_to_roles(stripped) is None
+
+    def test_comment_after_real_to_clause_preserves_roles(self, checker):
+        body = " TO service_role USING (TRUE) -- note"
+        stripped = checker._strip_sql_comments(body)
+        assert checker._policy_to_roles(stripped) == ["service_role"]
+
+
 class TestEndOfBodyPublicIsFlagged:
     """A synthetic policy body that grants FOR ALL TO public at end-of-body
     must be detected as a violation by the full ``check_migrations`` run

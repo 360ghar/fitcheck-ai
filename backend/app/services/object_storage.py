@@ -195,6 +195,30 @@ class S3StorageBackend:
                 return False
             raise
 
+    async def head(self, key: str) -> Optional[dict]:
+        """Return ``{"size": ..., "etag": ...}`` for ``key``, or None if absent.
+
+        Metadata from a single HEAD request, used for provenance checks (e.g.
+        verifying a target object is a prior copy of a source before resuming
+        a migration). Absence is surfaced as None (same 404/NotFound/NoSuchKey
+        tolerance as ``exists``); anything else is a real storage failure and
+        is raised.
+        """
+        client = await self._get_client()
+        try:
+            response = await client.head_object(Bucket=self.bucket, Key=key)
+        except Exception as error:
+            code = str(
+                ((getattr(error, "response", None) or {}).get("Error") or {}).get("Code") or ""
+            ).lower()
+            if code in ("404", "notfound", "nosuchkey"):
+                return None
+            raise
+        return {
+            "size": int(response.get("ContentLength") or 0),
+            "etag": str(response.get("ETag") or "").strip('"'),
+        }
+
     async def delete_many(self, keys: List[str]) -> int:
         """Delete many objects (batched at S3's 1000-object limit).
 

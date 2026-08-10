@@ -416,6 +416,9 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       // F1-11: a pre-logout rejection must not clear a new session's
       // isLoading or write its error into the reset store.
       if (get().resetEpoch !== generation) return;
+      // A stale failed request from a superseded query must not clear the
+      // newer query's isLoading or leave its error banner visible.
+      if (get().listFetchEpoch !== listGeneration) return;
       const apiError = getApiError(error);
       set({ error: apiError, isLoading: false });
     }
@@ -430,6 +433,11 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     set({ isLoadingMore: true, error: null });
     // F1-11: capture the session generation before the await (see fetchItems).
     const generation = get().resetEpoch;
+    // Capture the list-fetch generation too: a page-2 request started before a
+    // filter change/refetch must not append its old-query rows after the new
+    // page-1 result (see fetchItems). Unlike fetchItems, fetchMore does NOT
+    // bump the token — only page-1 queries start a new query epoch.
+    const listGeneration = get().listFetchEpoch;
     try {
       const nextPage = state.page + 1;
       // F1-02: search is sent on EVERY page (fetchItems sends it on page 1),
@@ -440,6 +448,13 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       const response = await itemsApi.getItems(apiFilters);
       // F1-11: drop the response if a logout/reset happened while in flight.
       if (get().resetEpoch !== generation) return;
+      // Drop a stale page-2 response from a superseded query. Clear the
+      // load-more spinner explicitly: the newer page-1 fetchItems never
+      // touches isLoadingMore, so leaving it set would strand the spinner.
+      if (get().listFetchEpoch !== listGeneration) {
+        set({ isLoadingMore: false });
+        return;
+      }
       // F1-01: re-read AFTER the await — a concurrent fetchItems(true) that
       // resolved meanwhile must not be clobbered by the pre-await snapshot
       // (last-writer-wins race).
@@ -469,6 +484,10 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       });
     } catch (error) {
       if (get().resetEpoch !== generation) return;
+      if (get().listFetchEpoch !== listGeneration) {
+        set({ isLoadingMore: false });
+        return;
+      }
       const apiError = getApiError(error);
       set({ error: apiError, isLoadingMore: false });
     }

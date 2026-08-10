@@ -70,6 +70,17 @@ def _is_exactly_service_role(roles: Optional[list[str]]) -> bool:
     return roles is not None and len(roles) == 1 and roles[0] == "service_role"
 
 
+def _strip_sql_comments(body: str) -> str:
+    """Remove ``--`` line comments (and trailing `;` comments) from a policy body.
+
+    The role-list parser runs ``\\bTO\\s+`` over the raw body, so a trailing
+    ``-- scoped to public`` style comment (common after ``USING (true)``) would
+    otherwise be misread as a real ``TO public`` grant and fail the check on a
+    policy that is actually safe.
+    """
+    return re.sub(r"--[^\n]*", "", body)
+
+
 def check_migrations() -> int:
     if not MIGRATIONS_DIR.is_dir():
         print(f"error: migrations directory not found: {MIGRATIONS_DIR}")
@@ -93,6 +104,9 @@ def check_migrations() -> int:
         for policy_match in POLICY_RE.finditer(text):
             name = policy_match.group(1).strip()
             body = policy_match.group(2)
+            # Strip `--` comments first so a trailing "TO ... -- note" comment
+            # cannot be misread as a real role grant (see _strip_sql_comments).
+            body = _strip_sql_comments(body)
             has_for_all = re.search(r"\bFOR\s+ALL\b", body, re.IGNORECASE) is not None
             has_to = re.search(r"\bTO\s+\w+", body, re.IGNORECASE) is not None
             is_service_role_policy = name.lower().startswith("service role")

@@ -377,12 +377,12 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
             ],
             "outfits": [{"id": "outfit-1", "user_id": "u1"}],
             "item_images": [
-                {"item_id": "item-1", "storage_path": "users/u1/items/a.png"},
-                {"item_id": "item-2", "storage_path": "users/u1/items/b.png"},
-                {"item_id": "item-3", "storage_path": "users/u1/items/c.png"},
+                {"item_id": "item-1", "storage_path": "users/u1/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"},
+                {"item_id": "item-2", "storage_path": "users/u1/items/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png"},
+                {"item_id": "item-3", "storage_path": "users/u1/items/cccccccccccccccccccccccccccccccc.png"},
             ],
             "outfit_images": [
-                {"outfit_id": "outfit-1", "storage_path": "users/u1/outfits/o.png"}
+                {"outfit_id": "outfit-1", "storage_path": "users/u1/outfits/dddddddddddddddddddddddddddddddd.png"}
             ],
         }
     )
@@ -398,9 +398,9 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
     assert "users/u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
     assert "users/u1/sources/22222222222222222222222222222222.png" in result["storage_paths"]
     assert "users/u1/sources/33333333333333333333333333333333.png" not in result["storage_paths"]
-    assert "users/u1/items/a.png" in result["storage_paths"]
-    assert "users/u1/items/c.png" not in result["storage_paths"]
-    assert "users/u1/items/a_thumb.webp" in result["storage_paths"]
+    assert "users/u1/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png" in result["storage_paths"]
+    assert "users/u1/items/cccccccccccccccccccccccccccccccc.png" not in result["storage_paths"]
+    assert "users/u1/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp" in result["storage_paths"]
 
 
 @pytest.mark.asyncio
@@ -426,17 +426,17 @@ async def test_resolve_owned_storage_paths_unscoped_collects_everything():
                 {"user_id": "u1", "source_image_storage_path": "users/u1/sources/22222222222222222222222222222222.png"},
             ],
             "outfits": [{"id": "outfit-1", "user_id": "u1"}],
-            "item_images": [{"item_id": "item-1", "storage_path": "users/u1/items/a.png"}],
-            "outfit_images": [{"outfit_id": "outfit-1", "storage_path": "users/u1/outfits/o.png"}],
+            "item_images": [{"item_id": "item-1", "storage_path": "users/u1/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"}],
+            "outfit_images": [{"outfit_id": "outfit-1", "storage_path": "users/u1/outfits/dddddddddddddddddddddddddddddddd.png"}],
         }
     )
     result = await StorageService.resolve_owned_storage_paths(db, user_id="u1")
     assert result["item_ids"] == ["item-1"]
     assert result["outfit_ids"] == ["outfit-1"]
     assert "users/u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
-    assert "users/u1/items/a.png" in result["storage_paths"]
-    assert "users/u1/outfits/o.png" in result["storage_paths"]
-    assert "users/u1/items/a_thumb.webp" in result["storage_paths"]
+    assert "users/u1/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png" in result["storage_paths"]
+    assert "users/u1/outfits/dddddddddddddddddddddddddddddddd.png" in result["storage_paths"]
+    assert "users/u1/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp" in result["storage_paths"]
 
 
 @pytest.mark.asyncio

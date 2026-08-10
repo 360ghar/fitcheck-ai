@@ -101,6 +101,17 @@ const USERS_PREVIEW_KEY_RE =
 // path, never the worker (mirrors storage_keys.is_owned_storage_key).
 const USERS_THUMB_KEY_RE =
   /^users\/[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}_thumb\.webp$/;
+// Legacy avatars: the users-layout migration renames `{user}/avatars/*` to
+// `users/{user}/avatars/*` positionally WITHOUT re-validating the filename, so
+// pre-cutover avatar names outside the 32-hex convention (e.g. `old-name.jpg`)
+// exist under `users/`. storage_keys.parse_key accepts them (mirrored bounded
+// legacy grammar), so the worker allowlist must too or those avatars 404 in
+// IMAGE_SERVING_MODE=worker. Thumb must be matched before canonical because the
+// legacy name includes `_`.
+const USERS_AVATAR_KEY_RE =
+  /^users\/[^/\\]+\/avatars\/[0-9a-zA-Z._-]+\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
+const USERS_AVATAR_THUMB_KEY_RE =
+  /^users\/[^/\\]+\/avatars\/[0-9a-zA-Z._-]+_thumb\.webp$/;
 const PUBLIC_KEY_RE =
   /^public\/(?:banners|landing|blog|static)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
 const PUBLIC_THUMB_KEY_RE =
@@ -385,6 +396,10 @@ function isServableKey(storagePath) {
     USERS_KEY_RE.test(storagePath) ||
     USERS_PREVIEW_KEY_RE.test(storagePath) ||
     USERS_THUMB_KEY_RE.test(storagePath) ||
+    // Legacy-avatar tolerant variants (see the regex comments above). Thumb is
+    // tested before canonical because the legacy name grammar includes `_`.
+    USERS_AVATAR_THUMB_KEY_RE.test(storagePath) ||
+    USERS_AVATAR_KEY_RE.test(storagePath) ||
     PUBLIC_KEY_RE.test(storagePath) ||
     PUBLIC_THUMB_KEY_RE.test(storagePath)
   );
@@ -481,6 +496,8 @@ function cacheControlFor(object, storagePath) {
     typeof storagePath === 'string' &&
     (USERS_KEY_RE.test(storagePath) ||
       USERS_THUMB_KEY_RE.test(storagePath) ||
+      USERS_AVATAR_KEY_RE.test(storagePath) ||
+      USERS_AVATAR_THUMB_KEY_RE.test(storagePath) ||
       PUBLIC_KEY_RE.test(storagePath) ||
       PUBLIC_THUMB_KEY_RE.test(storagePath));
   if (!writeOnce) return own || immutableDefault;

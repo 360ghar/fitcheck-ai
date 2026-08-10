@@ -124,10 +124,14 @@ GRANT EXECUTE ON FUNCTION public.apply_referral_credit_atomic(UUID, INTEGER) TO 
 -- 2 and 3 in the buggy body). The corrected function above only banks for
 -- paying subscribers (branch 1), so those erroneously banked months would
 -- otherwise be spent by _consume_banked_referral_credit after the trial
--- lapses — handing the same referral out twice. Zero the bank for any row
--- that is NOT a paying subscriber (mirrors the corrected branch-1 predicate:
--- paying = non-free plan, active, with a future period end). Idempotent and
--- guarded so it no-ops on fresh DBs and on re-runs.
+-- lapses — handing the same referral out twice. Zero the bank ONLY for rows
+-- whose current state is free or trial — those are the shapes branches 2/3
+-- produced (and branch 1 never banks a free/trial row). A LAPSED paying
+-- subscriber (non-free plan, status='active', period ended) may have banked
+-- months LEGITIMATELY while paying, so those banks are preserved. This
+-- under-corrects a few trial-origin banks on later-converted rows rather than
+-- destroying a legitimate paid-origin bank — the correct bias for a
+-- destructive backfill. Idempotent and guarded: no-ops on fresh DBs/re-runs.
 DO $$
 BEGIN
     IF to_regclass('public.subscriptions') IS NULL THEN
@@ -137,12 +141,7 @@ BEGIN
     SET referral_credit_months = 0,
         updated_at = NOW()
     WHERE COALESCE(referral_credit_months, 0) <> 0
-      AND NOT (
-        plan_type <> 'free'
-        AND status = 'active'
-        AND current_period_end IS NOT NULL
-        AND current_period_end > NOW()
-    );
+      AND (plan_type = 'free' OR plan_type IS NULL OR status = 'trial');
 END $$;
 
 COMMIT;

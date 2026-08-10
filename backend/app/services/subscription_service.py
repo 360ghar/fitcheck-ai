@@ -572,16 +572,28 @@ class SubscriptionService:
         # gap before this write. An unconditional on_conflict upsert would then
         # clobber it (billing_provider='stripe', store identifiers nulled). Make
         # the write conditional so a newer live store rail wins: when a row
-        # already exists, UPDATE only if billing_provider is not a live store
-        # rail; otherwise insert. PostgREST returns zero rows on a filtered
-        # miss, in which case a store entitlement is the survivor — re-read it.
+        # already exists, UPDATE only if it does NOT hold a live store rail;
+        # otherwise insert. PostgREST returns zero rows on a filtered miss, in
+        # which case a store entitlement is the survivor — re-read it.
+        #
+        # Rows that are updateable: billing_provider IS NULL (fresh/promo rows),
+        # billing_provider = 'stripe', or a store row whose period has LAPSED
+        # (a delayed Stripe snapshot may legitimately replace it). Only a store
+        # row with a FUTURE period_end is protected. Two chained `.neq()` filters
+        # are wrong here: SQL three-valued logic makes `<> 'apple' AND <> 'google'`
+        # exclude NULL rows too, which would silently block a new Stripe
+        # subscription on promo/lapsed-store rows.
         if existing:
             update_result = await asyncio.to_thread(
                 db.table("subscriptions")
                 .update(payload)
                 .eq("user_id", user_id)
-                .neq("billing_provider", "apple")
-                .neq("billing_provider", "google")
+                .or_(
+                    "billing_provider.is.null,"
+                    "billing_provider.eq.stripe,"
+                    "current_period_end.is.null,"
+                    "current_period_end.lte." + now.isoformat()
+                )
                 .execute
             )
             update_rows = getattr(update_result, "data", None) or []

@@ -871,15 +871,17 @@ class StorageService:
                 # ``users/`` layout migration (``{user}/items/{hex}.png``).
                 # Reduce it through ``key_from_path`` (mirrors the read path)
                 # so the deletion target matches the migrated object instead of
-                # being silently dropped by a later ownership/parse step. These
-                # rows are already scoped to owned parent ids via the IN clause
-                # above, so no per-row ownership re-check is needed.
+                # being silently dropped by a later ownership/parse step. The
+                # IN clause above only proves the PARENT row is owned — a
+                # legacy cross-user key in a child row must be rejected here,
+                # exactly like the ``source_image_storage_path`` arm, or account
+                # deletion would delete another user's migrated object.
                 for row in (getattr(child_rows, "data", None) or []):
                     raw = row.get("storage_path")
                     if not raw:
                         continue
                     reduced = key_from_path(str(raw))
-                    if reduced:
+                    if reduced and is_owned_storage_key(reduced, user_id):
                         storage_paths.append(reduced)
 
         return {

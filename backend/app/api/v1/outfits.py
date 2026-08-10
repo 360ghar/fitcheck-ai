@@ -1816,8 +1816,16 @@ async def upload_outfit_image(
                         .execute
                     )
         else:
-            rpc_rows = getattr(rpc_result, "data", None) or []
-            new_image_id = rpc_rows[0] if rpc_rows else img_row["id"]
+            # add_outfit_image_and_set_primary RETURNS UUID (scalar) — PostgREST
+            # delivers a scalar RPC's result as a bare value in `data`, not a
+            # list. Subscripting it (`data[0]`) truncated a UUID to one
+            # character and broke the winner-resolution below. Read the scalar
+            # directly, tolerating the legacy list shape some test doubles emit.
+            rpc_value = getattr(rpc_result, "data", None)
+            if isinstance(rpc_value, (list, tuple)):
+                new_image_id = rpc_value[0] if rpc_value else img_row["id"]
+            else:
+                new_image_id = rpc_value or img_row["id"]
 
         # The RPC resolves a client_request_id replay to the WINNER row and
         # returns its id, but the locally-built img_row is the LOSER's. If they

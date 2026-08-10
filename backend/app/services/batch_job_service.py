@@ -696,7 +696,7 @@ class BatchJobService:
             claim_result = await asyncio.to_thread(
                 db_client.table("extraction_jobs")
                 .update({"reserved_generations": 0})
-                .eq("job_id", job.job_id)
+                .eq("id", job.job_id)
                 .eq("reserved_generations", reserved)
                 .execute
             )
@@ -728,15 +728,32 @@ class BatchJobService:
                 count=unused,
             )
         except Exception as exc:
+            # The CAS already zeroed the durable reservation, so a later poll
+            # would see reserved_generations = 0 and never retry — abandoning
+            # the user's daily quota permanently. Restore the durable value so
+            # the next eviction/cancel cycle retries the release.
             logger.warning(
-                "Failed to release unused generation quota",
+                "Failed to release unused generation quota; restoring the "
+                "durable reservation so a later poll can retry",
                 extra={
                     "job_id": job.job_id,
                     "user_id": job.user_id,
                     "unused": unused,
+                    "reserved": reserved,
                     "error": str(exc),
                 },
             )
+            try:
+                await asyncio.to_thread(
+                    db_client.table("extraction_jobs")
+                    .update({"reserved_generations": reserved})
+                    .eq("id", job.job_id)
+                    .execute
+                )
+            except Exception:
+                # Nothing else we can do — the in-memory value still reflects
+                # the reservation so a subsequent claim attempt can retry.
+                pass
 
     @classmethod
     async def cancel_job(cls, job_id: str, user_id: str, db: Any = None) -> bool:

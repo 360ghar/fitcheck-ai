@@ -1530,16 +1530,16 @@ async def test_process_single_photo_capacity_exhaustion_sets_flag(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_capacity_pause_does_not_refund_billed_but_not_uploaded_item(monkeypatch):
-    """backend #15: when a generation succeeds at the provider (quota
-    consumed) but the subsequent decode/upload fails, that item is marked
-    FAILED but its generation slot must NOT be refunded on a later capacity
-    pause - the provider already used it. Only never-billed items get their
-    slots back.
+async def test_capacity_pause_refunds_full_reservation_for_requeued_photo(monkeypatch):
+    """backend #15 + follow-up: when a capacity pause requeues a photo, the
+    WHOLE photo is re-reserved and regenerated on retry — so the full
+    reservation must be returned now, or every already-billed item is charged
+    twice (once now, once on retry). The provider_billed_count distinction
+    (keep billed-but-not-uploaded slots) applies only to the delivered-photo
+    path, where the photo proceeds to review and never re-bills.
 
     Two items: item 1 bills then fails upload; item 2 trips capacity.
-    Refund must be 1 (only item 2), not 2 (the old buggy math counted the
-    billed-but-not-uploaded item 1 as unused)."""
+    Refund must be 2 (the full photo reservation), not 1."""
     patch_event(monkeypatch)
     updated = []
 
@@ -1591,12 +1591,13 @@ async def test_capacity_pause_does_not_refund_billed_but_not_uploaded_item(monke
     monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
     await service._process_single_photo("job-1", make_photo())
 
-    # The capacity pause refunds generation slots for never-billed items
-    # only. Item 1 was billed (provider returned) so its slot is kept;
-    # only item 2 (never attempted at the provider) is returned.
+    # The requeued photo will re-reserve and re-bill every item on retry, so
+    # the full reservation (2) is returned now. Refunding only 1 would leave
+    # item 1's slot held AND re-bill it on the retry — a double charge for a
+    # single delivered result.
     gen_releases = [c for op, c in released if op == OperationType.GENERATION]
-    assert gen_releases == [1], (
-        "billed-but-not-uploaded item must not be refunded on capacity pause; "
+    assert gen_releases == [2], (
+        "capacity-requeued photo must return its full generation reservation; "
         f"got release count(s) {gen_releases}"
     )
 

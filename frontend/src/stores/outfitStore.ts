@@ -169,7 +169,14 @@ interface OutfitState {
    * signs in.
    */
   resetEpoch: number;
-
+  /**
+   * Monotonic token bumped at the start of every page-1 `fetchOutfits` and
+   * captured by `fetchMore` before its await. Guards against out-of-order list
+   * responses (a slow earlier query resolving AFTER a newer one) so stale
+   * results never overwrite/append onto the current grid. Mirrors the
+   * wardrobeStore.listFetchEpoch mechanism.
+   */
+  listFetchEpoch: number;
   // Actions
   fetchOutfits: (refresh?: boolean) => Promise<void>;
   /** Append the next page (infinite scroll). No-op while a fetch is in flight or the list is exhausted. */
@@ -382,6 +389,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   totalOutfits: 0,
   hasMore: true,
   resetEpoch: 0,
+  listFetchEpoch: 0,
 
   // Reset every piece of in-memory outfit state (F1-04): logout / forced
   // logout / user switch must never leave the previous account's outfits,
@@ -443,6 +451,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     // that lands while this request is in flight bumps it, and the response
     // must not repopulate the reset store with the prior account's outfits.
     const generation = get().resetEpoch;
+    // Bump the list-fetch token so a slow earlier query (e.g. a debounced
+    // search whose response arrives AFTER a newer query's) cannot overwrite
+    // the grid with stale results.
+    const listGeneration = get().listFetchEpoch + 1;
+    set({ listFetchEpoch: listGeneration });
 
     try {
       // Coalesce concurrent identical fetches (StrictMode double-mount, two
@@ -454,6 +467,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         { force: refresh, label: 'outfitStore.fetchOutfits' }
       );
       if (get().resetEpoch !== generation) return;
+      if (get().listFetchEpoch !== listGeneration) return;
 
       set({
         // Unconditional replacement: a non-paging caller must never append
@@ -469,6 +483,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     } catch (error) {
       // F1-11: a pre-logout rejection must not write into the reset store.
       if (get().resetEpoch !== generation) return;
+      if (get().listFetchEpoch !== listGeneration) return;
       const apiError = getApiError(error);
       set({ error: apiError, isLoading: false });
     }
@@ -485,6 +500,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     set({ isLoadingMore: true, error: null });
     // F1-11: capture the session generation before the await (see fetchOutfits).
     const generation = get().resetEpoch;
+    // Capture the list-fetch generation: a page-2 request started before a
+    // filter/refresh must not append its old-query rows after the new page-1
+    // result. fetchMore does NOT bump the token — only page-1 queries start a
+    // new query epoch (mirrors wardrobeStore).
+    const listGeneration = get().listFetchEpoch;
     try {
       const nextPage = state.page + 1;
       const apiFilters: ApiOutfitFilters = {
@@ -507,6 +527,13 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       // concurrent mutation reordered the list. F1-11: drop the response if a
       // logout/reset happened while it was in flight.
       if (get().resetEpoch !== generation) return;
+      // Drop a stale page-2 response from a superseded query; clear the
+      // load-more spinner explicitly since the newer page-1 fetch never
+      // touches it.
+      if (get().listFetchEpoch !== listGeneration) {
+        set({ isLoadingMore: false });
+        return;
+      }
       const currentState = get();
       const seen = new Set(currentState.outfits.map((o) => o.id));
       const fresh = response.outfits.filter((outfit) => {
@@ -524,6 +551,10 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       });
     } catch (error) {
       if (get().resetEpoch !== generation) return;
+      if (get().listFetchEpoch !== listGeneration) {
+        set({ isLoadingMore: false });
+        return;
+      }
       const apiError = getApiError(error);
       set({ error: apiError, isLoadingMore: false });
     }

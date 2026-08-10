@@ -37,12 +37,17 @@ BEGIN
     IF to_regclass('public.item_images') IS NOT NULL THEN
         SELECT COUNT(*) INTO orphan_count FROM public.item_images
         WHERE storage_path IS NULL
-          AND COALESCE(image_url, thumbnail_url) ILIKE '%/storage/v1/object/public/%';
+          -- Check EACH URL column independently with OR: a non-null
+          -- non-legacy image_url made COALESCE ignore a legacy thumbnail_url,
+          -- so those thumbnails survived the gate and 404'd after the drop.
+          AND (image_url ILIKE '%/storage/v1/object/public/%'
+               OR thumbnail_url ILIKE '%/storage/v1/object/public/%');
     END IF;
     IF to_regclass('public.outfit_images') IS NOT NULL THEN
         SELECT COUNT(*) + orphan_count INTO orphan_count FROM public.outfit_images
         WHERE storage_path IS NULL
-          AND COALESCE(image_url, thumbnail_url) ILIKE '%/storage/v1/object/public/%';
+          AND (image_url ILIKE '%/storage/v1/object/public/%'
+               OR thumbnail_url ILIKE '%/storage/v1/object/public/%');
     END IF;
     IF orphan_count > 0 THEN
         RAISE EXCEPTION 'Aborting legacy bucket drop: % image row(s) still reference a Supabase public URL with NULL storage_path. Run scripts/backfill_storage_paths.py --apply before re-running this migration (A001-11).', orphan_count
