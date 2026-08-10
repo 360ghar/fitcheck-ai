@@ -124,7 +124,7 @@ def _is_temp_preview_key(key: str) -> bool:
     asked to keep). Matches the current ``users/{user}/tmp/...`` layout and the
     legacy top-level ``tmp/{user}/...`` / per-user ``{user}/tmp/...`` shapes.
     """
-    parts = key.split("/", 2)
+    parts = key.split("/", 3)
     if parts[0] == TEMP_FOLDER or (len(parts) > 1 and parts[1] == TEMP_FOLDER):
         return True
     return len(parts) >= 3 and parts[0] == "users" and parts[2] == TEMP_FOLDER

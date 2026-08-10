@@ -199,13 +199,14 @@ def test_key_from_path_resolves_legacy_preview_url(monkeypatch):
     monkeypatch.setattr("app.services.storage_service.settings.OBJECT_STORAGE_BUCKET", "bucket")
     user = str(uuid.uuid4())
     # A path-style URL from a bucket that is no longer the configured one,
-    # embedding the user in the SECOND segment under tmp/.
+    # embedding the user in the SECOND segment under tmp/ — the legacy key
+    # maps to its users/ home.
     assert StorageService.key_from_path(
         f"https://old-storage.example/railway-bucket/tmp/{user}/social-import/x.png"
-    ) == f"tmp/{user}/social-import/x.png"
+    ) == f"users/{user}/tmp/social-import/x.png"
     assert StorageService.key_from_path(
-        f"https://old-storage.example/some-bucket/generated/{user}/y.webp"
-    ) == f"generated/{user}/y.webp"
+        f"https://old-storage.example/some-bucket/generated/{user}/try-on/y.webp"
+    ) == f"users/{user}/generated/try-on/y.webp"
 
 
 def test_build_object_url(monkeypatch):
@@ -370,18 +371,18 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
     db = FakeDB(
         rows={
             "items": [
-                {"id": "item-1", "user_id": "u1", "source_image_storage_path": "u1/sources/11111111111111111111111111111111.png"},
-                {"id": "item-2", "user_id": "u1", "source_image_storage_path": "u1/sources/22222222222222222222222222222222.png"},
-                {"id": "item-3", "user_id": "u1", "source_image_storage_path": "u1/sources/33333333333333333333333333333333.png"},
+                {"id": "item-1", "user_id": "u1", "source_image_storage_path": "users/u1/sources/11111111111111111111111111111111.png"},
+                {"id": "item-2", "user_id": "u1", "source_image_storage_path": "users/u1/sources/22222222222222222222222222222222.png"},
+                {"id": "item-3", "user_id": "u1", "source_image_storage_path": "users/u1/sources/33333333333333333333333333333333.png"},
             ],
             "outfits": [{"id": "outfit-1", "user_id": "u1"}],
             "item_images": [
-                {"item_id": "item-1", "storage_path": "u1/items/a.png"},
-                {"item_id": "item-2", "storage_path": "u1/items/b.png"},
-                {"item_id": "item-3", "storage_path": "u1/items/c.png"},
+                {"item_id": "item-1", "storage_path": "users/u1/items/a.png"},
+                {"item_id": "item-2", "storage_path": "users/u1/items/b.png"},
+                {"item_id": "item-3", "storage_path": "users/u1/items/c.png"},
             ],
             "outfit_images": [
-                {"outfit_id": "outfit-1", "storage_path": "u1/outfits/o.png"}
+                {"outfit_id": "outfit-1", "storage_path": "users/u1/outfits/o.png"}
             ],
         }
     )
@@ -393,9 +394,7 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
     )
     assert result["item_ids"] == ["item-1", "item-2"]
     assert result["outfit_ids"] == ["outfit-1"]
-    # Sources from the parent rows + child image rows + derived thumbs. Legacy
-    # fixture keys are mapped to their users/ home by the delete-path
-    # normalizer (migrate_key_to_users_layout).
+    # Sources from the parent rows + child image rows + derived thumbs.
     assert "users/u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
     assert "users/u1/sources/22222222222222222222222222222222.png" in result["storage_paths"]
     assert "users/u1/sources/33333333333333333333333333333333.png" not in result["storage_paths"]
@@ -408,7 +407,7 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
 async def test_resolve_owned_storage_paths_empty_scopes_return_empty():
     db = FakeDB(
         rows={
-            "items": [{"id": "item-1", "source_image_storage_path": "u1/sources/11111111111111111111111111111111.png"}],
+            "items": [{"id": "item-1", "source_image_storage_path": "users/u1/sources/11111111111111111111111111111111.png"}],
         }
     )
     result = await StorageService.resolve_owned_storage_paths(
@@ -422,21 +421,18 @@ async def test_resolve_owned_storage_paths_unscoped_collects_everything():
     db = FakeDB(
         rows={
             "items": [
-                {"id": "item-1", "user_id": "u1", "source_image_storage_path": "u1/sources/11111111111111111111111111111111.png"},
+                {"id": "item-1", "user_id": "u1", "source_image_storage_path": "users/u1/sources/11111111111111111111111111111111.png"},
                 # A row with no id is skipped from owned_ids (the continue arm).
-                {"user_id": "u1", "source_image_storage_path": "u1/sources/22222222222222222222222222222222.png"},
+                {"user_id": "u1", "source_image_storage_path": "users/u1/sources/22222222222222222222222222222222.png"},
             ],
             "outfits": [{"id": "outfit-1", "user_id": "u1"}],
-            "item_images": [{"item_id": "item-1", "storage_path": "u1/items/a.png"}],
-            "outfit_images": [{"outfit_id": "outfit-1", "storage_path": "u1/outfits/o.png"}],
+            "item_images": [{"item_id": "item-1", "storage_path": "users/u1/items/a.png"}],
+            "outfit_images": [{"outfit_id": "outfit-1", "storage_path": "users/u1/outfits/o.png"}],
         }
     )
     result = await StorageService.resolve_owned_storage_paths(db, user_id="u1")
     assert result["item_ids"] == ["item-1"]
     assert result["outfit_ids"] == ["outfit-1"]
-    # Legacy keys in the fixture are mapped to their users/ home by the
-    # delete-path normalizer (migrate_key_to_users_layout), so deletes always
-    # resolve the object where it now lives.
     assert "users/u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
     assert "users/u1/items/a.png" in result["storage_paths"]
     assert "users/u1/outfits/o.png" in result["storage_paths"]

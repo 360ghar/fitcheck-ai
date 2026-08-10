@@ -253,13 +253,13 @@ async def test_resolve_owned_storage_paths_includes_thumbs():
                 {
                     "id": "item-1",
                     "user_id": "user-1",
-                    "source_image_storage_path": "user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+                    "source_image_storage_path": "users/user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
                 },
                 {"id": "item-2", "user_id": "user-2"},
             ],
             "item_images": [
-                {"id": "img-1", "item_id": "item-1", "storage_path": "user-1/items/a.jpg"},
-                {"id": "img-2", "item_id": "item-2", "storage_path": "user-2/items/b.jpg"},
+                {"id": "img-1", "item_id": "item-1", "storage_path": "users/user-1/items/a.jpg"},
+                {"id": "img-2", "item_id": "item-2", "storage_path": "users/user-2/items/b.jpg"},
             ],
             "outfits": [],
             "outfit_images": [],
@@ -269,8 +269,6 @@ async def test_resolve_owned_storage_paths_includes_thumbs():
     result = await StorageService.resolve_owned_storage_paths(db, "user-1")
 
     assert result["item_ids"] == ["item-1"]
-    # Legacy fixture keys are mapped to their users/ home by the delete-path
-    # normalizer (migrate_key_to_users_layout).
     assert sorted(result["storage_paths"]) == [
         "users/user-1/items/a.jpg",
         "users/user-1/items/a_thumb.webp",
@@ -463,37 +461,30 @@ async def test_materialize_parent_images_passes_presigned_through(monkeypatch):
 def test_is_owned_by_user_accepts_generated_preview_keys():
     name = "0123456789abcdef0123456789abcdef"
     for image_type in ("try-on", "outfit"):
-        key = f"generated/user-a/{image_type}/{name}.png"
+        key = f"users/user-a/generated/{image_type}/{name}.png"
         assert images_module._is_owned_by_user(key, "user-a") is True
-        # The legacy per-user layout stays servable during the migration window
-        # (scripts/migrate_temp_keys_layout.py), then the regex is removed.
-        legacy = f"user-a/generated/{image_type}/{name}.png"
-        assert images_module._is_owned_by_user(legacy, "user-a") is True
 
 
 def test_is_owned_by_user_still_accepts_tmp_and_canonical_keys():
     name = "0123456789abcdef0123456789abcdef"
-    assert images_module._is_owned_by_user(f"user-a/items/{name}.webp", "user-a")
+    assert images_module._is_owned_by_user(f"users/user-a/items/{name}.webp", "user-a")
     assert images_module._is_owned_by_user(
-        f"tmp/user-a/social-import/{name}.webp", "user-a"
-    )
-    assert images_module._is_owned_by_user(
-        f"user-a/tmp/social-import/{name}.webp", "user-a"
+        f"users/user-a/tmp/social-import/{name}.webp", "user-a"
     )
 
 
 def test_is_owned_by_user_rejects_cross_user_and_malformed_generated_keys():
     name = "0123456789abcdef0123456789abcdef"
     # Another user's generated key (both layouts).
-    assert not images_module._is_owned_by_user(f"generated/user-b/outfit/{name}.png", "user-a")
-    assert not images_module._is_owned_by_user(f"user-b/generated/outfit/{name}.png", "user-a")
+    assert not images_module._is_owned_by_user(f"users/user-b/generated/outfit/{name}.png", "user-a")
+    assert not images_module._is_owned_by_user(f"users/user-b/tmp/outfit/{name}.png", "user-a")
     # Traversal / separator tricks and a wrong-shaped name must still fail.
-    assert not images_module._is_owned_by_user("generated/user-a/../items/x.png", "user-a")
-    assert not images_module._is_owned_by_user("generated/user-a/outfit/short.png", "user-a")
+    assert not images_module._is_owned_by_user("users/user-a/../items/x.png", "user-a")
+    assert not images_module._is_owned_by_user("users/user-a/generated/outfit/short.png", "user-a")
     assert not images_module._is_owned_by_user(f"generated/{name}.png", "user-a")
-    assert not images_module._is_owned_by_user(f"generated/user-a/{name}.png", "user-a")
+    assert not images_module._is_owned_by_user(f"users/user-a/generated/{name}.png", "user-a")
     # An unknown two-segment category is not in the allowlist.
-    assert not images_module._is_owned_by_user(f"user-a/export/{name}.png", "user-a")
+    assert not images_module._is_owned_by_user(f"users/user-a/export/{name}.png", "user-a")
 
 
 # --------------------------------------------------------------------------- #
@@ -616,17 +607,17 @@ async def test_uploaded_thumb_is_webp_with_a_matching_content_type():
 def test_is_owned_by_user_accepts_thumb_siblings_matching_the_worker():
     """The endpoint and infra/images-worker must agree on the servable key set."""
     name = "0123456789abcdef0123456789abcdef"
-    assert images_module._is_owned_by_user(f"user-a/items/{name}_thumb.webp", "user-a")
+    assert images_module._is_owned_by_user(f"users/user-a/items/{name}_thumb.webp", "user-a")
     # Thumbs are always .webp, so any other extension is not one of ours.
     assert not images_module._is_owned_by_user(
-        f"user-a/items/{name}_thumb.jpg", "user-a"
+        f"users/user-a/items/{name}_thumb.jpg", "user-a"
     )
     # Cross-user thumb stays a 404.
     assert not images_module._is_owned_by_user(
-        f"user-b/items/{name}_thumb.webp", "user-a"
+        f"users/user-b/items/{name}_thumb.webp", "user-a"
     )
     # A thumb key is exactly what thumb_key_for produces.
-    derived = StorageService.thumb_key_for(f"user-a/items/{name}.png")
+    derived = StorageService.thumb_key_for(f"users/user-a/items/{name}.png")
     assert images_module._is_owned_by_user(derived, "user-a")
 
 
@@ -634,16 +625,16 @@ def test_is_owned_by_user_accepts_thumb_siblings_matching_the_worker():
 # admin temp inventory scan (list_temp_objects)
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_list_temp_objects_matches_both_tmp_layouts():
-    """The admin inventory filter must see the top-level tmp/ folder AND the
-    legacy per-user one, and never canonical or generated/ objects."""
+async def test_list_temp_objects_matches_tmp_layouts():
+    """The admin inventory filter must see the users/{user}/tmp/ folder AND the
+    legacy top-level/per-user ones, and never canonical or generated/ objects."""
     backend = FakeS3Backend(
         objects=[
-            {"key": "tmp/u1/photoshoot/a.png", "size": 100, "last_modified": "2026-08-07T00:00:00+00:00"},
+            {"key": "users/u1/tmp/photoshoot/a.png", "size": 100, "last_modified": "2026-08-07T00:00:00+00:00"},
             {"key": "tmp/u2/batch/b.webp", "size": 200, "last_modified": "2026-08-07T00:00:00+00:00"},
             {"key": "u3/tmp/social-import/c.png", "size": 300, "last_modified": "2026-08-07T00:00:00+00:00"},
-            {"key": "u1/items/d.jpg", "size": 400, "last_modified": "2026-08-07T00:00:00+00:00"},
-            {"key": "generated/u1/try-on/e.png", "size": 500, "last_modified": "2026-08-07T00:00:00+00:00"},
+            {"key": "users/u1/items/d.jpg", "size": 400, "last_modified": "2026-08-07T00:00:00+00:00"},
+            {"key": "users/u1/generated/try-on/e.png", "size": 500, "last_modified": "2026-08-07T00:00:00+00:00"},
         ]
     )
     with patch("app.services.storage_service.get_storage_backend", return_value=backend):
@@ -651,9 +642,9 @@ async def test_list_temp_objects_matches_both_tmp_layouts():
 
     assert inventory["count"] == 3
     assert sorted(item["key"] for item in inventory["items"]) == [
-        "tmp/u1/photoshoot/a.png",
         "tmp/u2/batch/b.webp",
         "u3/tmp/social-import/c.png",
+        "users/u1/tmp/photoshoot/a.png",
     ]
     assert inventory["total_bytes"] == 600
     assert inventory["scanned_keys"] == 5

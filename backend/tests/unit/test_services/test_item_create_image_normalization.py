@@ -23,9 +23,9 @@ from app.services.storage_service import StorageService
 USER_ID = "11111111-1111-1111-1111-111111111111"
 FOREIGN = "22222222-2222-2222-2222-222222222222"
 HEX = "0123456789abcdef0123456789abcdef"
-OWNED_CANONICAL = f"{USER_ID}/items/{HEX}.png"
-FOREIGN_CANONICAL = f"{FOREIGN}/items/{HEX}.png"
-OWNED_PREVIEW = f"tmp/{USER_ID}/batch/{HEX}.webp"
+OWNED_CANONICAL = f"users/{USER_ID}/items/{HEX}.png"
+FOREIGN_CANONICAL = f"users/{FOREIGN}/items/{HEX}.png"
+OWNED_PREVIEW = f"users/{USER_ID}/tmp/batch/{HEX}.webp"
 OAUTH_URL = "https://lh3.googleusercontent.com/a/ACo8DcX/photo"
 
 

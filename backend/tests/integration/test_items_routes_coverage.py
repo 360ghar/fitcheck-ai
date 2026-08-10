@@ -944,7 +944,7 @@ async def test_delete_item_removes_row_and_storage_paths(monkeypatch):
     # A2-01: source keys are re-verified against the canonical key format
     # (owner segment + 32-hex name) at deletion resolution time, so the
     # fixture must use a real-shaped key, not "u/sources/shot.jpg".
-    source_key = f"{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+    source_key = f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
     db = FakeDB(
         rows={
             "items": [
@@ -1463,7 +1463,7 @@ async def test_batch_delete_requires_at_least_one_item_id():
 async def test_batch_delete_cleans_storage_and_embeddings(monkeypatch):
     # A2-01: source keys must be canonical ({user}/sources/{32-hex}.{ext}) —
     # see test_delete_item_removes_row_and_storage_paths.
-    source_key = f"{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+    source_key = f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
     db = FakeDB(
         rows={
             "items": [
@@ -2423,7 +2423,7 @@ async def test_create_item_rolls_back_promoted_images_when_image_insert_fails(mo
         images=[
             ItemImageBase(
                 image_url="",
-                storage_path=f"{USER_ID}/tmp/photoshoot/{'a' * 32}.png",
+                storage_path=f"users/{USER_ID}/tmp/photoshoot/{'a' * 32}.png",
                 is_primary=True,
             )
         ],
@@ -2434,7 +2434,7 @@ async def test_create_item_rolls_back_promoted_images_when_image_insert_fails(mo
     # The item row was deleted...
     assert ("items", None) in db.deletes
     # ...and every object THIS attempt promoted was deleted best-effort.
-    assert promoted == [f"{USER_ID}/tmp/photoshoot/{'a' * 32}.png"]
+    assert promoted == [f"users/{USER_ID}/tmp/photoshoot/{'a' * 32}.png"]
     assert deleted == ["u1/items/p.jpg"]
 
 

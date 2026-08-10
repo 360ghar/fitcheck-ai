@@ -29,7 +29,7 @@ const ORIGIN = 'https://www.fitcheckaiapp.com';
 const USER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_USER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const NAME = '0123456789abcdef0123456789abcdef';
-const KEY = `${USER}/items/${NAME}.webp`;
+const KEY = `users/${USER}/items/${NAME}.webp`;
 
 let worker;
 let putCalls;
@@ -228,7 +228,7 @@ describe('key authorization', () => {
   it('404s the personal-data export under the user own prefix', async () => {
     // The regression that motivated porting the backend allowlist here: a
     // prefix-only check served this.
-    const exportKey = `${USER}/export/data.json`;
+    const exportKey = `users/${USER}/export/data.json`;
     const env = makeEnv({
       objects: { [exportKey]: r2Object({ contentType: 'application/json' }) },
     });
@@ -236,24 +236,20 @@ describe('key authorization', () => {
     assert.equal(res.status, 404, 'the data export must never be servable here');
   });
 
-  it('accepts every canonical image category', async () => {
+  it('accepts every users/ canonical image category', async () => {
     for (const category of ['items', 'outfits', 'avatars', 'sources', 'feedback']) {
-      const key = `${USER}/${category}/${NAME}.jpg`;
+      const key = `users/${USER}/${category}/${NAME}.jpg`;
       const env = makeEnv({ objects: { [key]: r2Object({ contentType: 'image/jpeg' }) } });
       const res = await call(key, { token: await mintToken(), env });
       assert.equal(res.status, 200, `${category} should be servable`);
     }
   });
 
-  it('accepts nested preview keys (tmp/ and generated/) and thumb siblings', async () => {
-    // Top-level tmp/ and generated/ folders (new layout) plus the legacy
-    // per-user preview layout (served until migrate_temp_keys_layout.py runs).
+  it('accepts preview keys (tmp/ and generated/) and thumb siblings', async () => {
     const keys = [
-      `tmp/${USER}/social-import/${NAME}.webp`,
-      `generated/${USER}/try-on/${NAME}.png`,
-      `${USER}/tmp/social-import/${NAME}.webp`,
-      `${USER}/generated/try-on/${NAME}.png`,
-      `${USER}/items/${NAME}_thumb.webp`,
+      `users/${USER}/tmp/social-import/${NAME}.webp`,
+      `users/${USER}/generated/try-on/${NAME}.png`,
+      `users/${USER}/items/${NAME}_thumb.webp`,
     ];
     for (const key of keys) {
       const env = makeEnv({ objects: { [key]: r2Object() } });
@@ -262,9 +258,8 @@ describe('key authorization', () => {
     }
   });
 
-  it('rejects a cross-user top-level preview key', async () => {
-    // Ownership for tmp/ and generated/ keys is the SECOND segment.
-    const key = `tmp/${OTHER_USER}/social-import/${NAME}.webp`;
+  it('rejects a cross-user preview key (owner is segment 1)', async () => {
+    const key = `users/${OTHER_USER}/tmp/social-import/${NAME}.webp`;
     const env = makeEnv({ objects: { [key]: r2Object() } });
     const res = await call(key, { token: await mintToken(), env });
     assert.equal(res.status, 404);
@@ -345,11 +340,11 @@ describe('key authorization', () => {
 
   it('404s traversal, bad names and unknown categories', async () => {
     const bad = [
-      `${USER}/../${OTHER_USER}/items/${NAME}.webp`,
-      `${USER}/items/short.webp`,
-      `${USER}/items/${NAME}.exe`,
-      `${USER}/unknowncat/${NAME}.webp`,
-      `${USER}/items/${NAME}`,
+      `users/${USER}/../${OTHER_USER}/items/${NAME}.webp`,
+      `users/${USER}/items/short.webp`,
+      `users/${USER}/items/${NAME}.exe`,
+      `users/${USER}/unknowncat/${NAME}.webp`,
+      `users/${USER}/items/${NAME}`,
     ];
     for (const key of bad) {
       const env = makeEnv({ objects: { [key]: r2Object() } });
@@ -370,7 +365,7 @@ describe('key authorization', () => {
 
   it('404s a thumb key with a non-webp extension', async () => {
     // Thumbs are always .webp; a `_thumb.jpg` key cannot have been written by us.
-    const key = `${USER}/items/${NAME}_thumb.jpg`;
+    const key = `users/${USER}/items/${NAME}_thumb.jpg`;
     const env = makeEnv({ objects: { [key]: r2Object() } });
     const res = await call(key, { token: await mintToken(), env });
     assert.equal(res.status, 404);
@@ -432,7 +427,7 @@ describe('cache-control', () => {
   });
 
   it('applies the immutable policy to thumbnail siblings too', async () => {
-    const thumbKey = `${USER}/items/${NAME}_thumb.webp`;
+    const thumbKey = `users/${USER}/items/${NAME}_thumb.webp`;
     const env = makeEnv({
       objects: { [thumbKey]: r2Object({ cacheControl: 'public' }) },
     });
@@ -442,17 +437,13 @@ describe('cache-control', () => {
 
   it('leaves a short-lived nested preview key on its own TTL', async () => {
     // tmp/ and generated/ objects are NOT write-once-immutable in the same way,
-    // so the object still decides there (both layouts).
-    for (const previewKey of [
-      `tmp/${USER}/social-import/${NAME}.webp`,
-      `${USER}/tmp/social-import/${NAME}.webp`,
-    ]) {
-      const env = makeEnv({
-        objects: { [previewKey]: r2Object({ cacheControl: 'max-age=60' }) },
-      });
-      const res = await call(previewKey, { token: await mintToken(), env });
-      assert.equal(res.headers.get('Cache-Control'), 'max-age=60');
-    }
+    // so the object still decides there.
+    const previewKey = `users/${USER}/tmp/social-import/${NAME}.webp`;
+    const env = makeEnv({
+      objects: { [previewKey]: r2Object({ cacheControl: 'max-age=60' }) },
+    });
+    const res = await call(previewKey, { token: await mintToken(), env });
+    assert.equal(res.headers.get('Cache-Control'), 'max-age=60');
   });
 
   it('honours a MORE restrictive object cache-control on a write-once key', async () => {

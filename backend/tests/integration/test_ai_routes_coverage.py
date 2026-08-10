@@ -34,9 +34,9 @@ from tests.factories.row_factories import user_row
 from tests.utils.fake_db import FakeDB
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
-OWNED = f"{USER_ID}/items/0123456789abcdef0123456789abcdef.jpg"
-FOREIGN = "22222222-2222-2222-2222-222222222222/items/0123456789abcdef0123456789abcdef.jpg"
-OWNED_AVATAR = f"{USER_ID}/avatars/0123456789abcdef0123456789abcdef.jpg"
+OWNED = f"users/{USER_ID}/items/0123456789abcdef0123456789abcdef.jpg"
+FOREIGN = "users/22222222-2222-2222-2222-222222222222/items/0123456789abcdef0123456789abcdef.jpg"
+OWNED_AVATAR = f"users/{USER_ID}/avatars/0123456789abcdef0123456789abcdef.jpg"
 
 _PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="

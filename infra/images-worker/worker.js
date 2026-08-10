@@ -84,15 +84,14 @@ const CLOCK_SKEW_SECONDS = 60;
 // best-effort transcode can fail and store the original bytes, so those
 // extensions are servable too.
 //
-// Current layout (post `users/` restructure):
+// Current layout (post `users/` restructure — the legacy pre-restructure
+// shapes were retired after the re-key migration):
 //   users/{user_id}/{items|outfits|avatars|sources|feedback}/{name}.{ext}
 //   users/{user_id}/{tmp|generated}/{sub}/{name}.{ext}
 //   users/{user_id}/export/data.json
 //   public/{banners|landing|blog|static}/{slug}/{name}.{ext}
 // Ownership is a pure structural rule: segment 1 for `users/`, nobody for
-// `public/`. Legacy pre-restructure shapes below are served during the
-// transition window only; retire alongside storage_keys.py's legacy regexes
-// once the re-key migration is verified complete.
+// `public/`.
 const USERS_KEY_RE =
   /^users\/[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
 const USERS_PREVIEW_KEY_RE =
@@ -106,16 +105,6 @@ const PUBLIC_KEY_RE =
   /^public\/(?:banners|landing|blog|static)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
 const PUBLIC_THUMB_KEY_RE =
   /^public\/(?:banners|landing|blog|static)\/[^/\\]+\/[0-9a-f]{32}_thumb\.webp$/;
-// Legacy pre-restructure keys: {user}/{category}/..., {tmp|generated}/{user}/...,
-// {user}/{tmp|generated}/..., {user}/export/data.json.
-const CANONICAL_KEY_RE =
-  /^[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
-const NESTED_KEY_RE =
-  /^(?:tmp|generated)\/[^/\\]+\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
-const LEGACY_NESTED_KEY_RE =
-  /^[^/\\]+\/(?:tmp|generated)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
-const CANONICAL_THUMB_KEY_RE =
-  /^[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}_thumb\.webp$/;
 
 let jwksCache = { keys: null, fetchedAt: 0, forcedAt: 0 };
 
@@ -397,11 +386,7 @@ function isServableKey(storagePath) {
     USERS_PREVIEW_KEY_RE.test(storagePath) ||
     USERS_THUMB_KEY_RE.test(storagePath) ||
     PUBLIC_KEY_RE.test(storagePath) ||
-    PUBLIC_THUMB_KEY_RE.test(storagePath) ||
-    CANONICAL_KEY_RE.test(storagePath) ||
-    NESTED_KEY_RE.test(storagePath) ||
-    LEGACY_NESTED_KEY_RE.test(storagePath) ||
-    CANONICAL_THUMB_KEY_RE.test(storagePath)
+    PUBLIC_THUMB_KEY_RE.test(storagePath)
   );
 }
 
@@ -415,16 +400,8 @@ function isOwnedByUser(storagePath, userId) {
   // landing images, blog art, static) — the request handler short-circuits
   // before JWT for `public/` keys, so this is only a safety net.
   if (storagePath.startsWith('public/')) return true;
-  // Current `users/` layout: the owner is ALWAYS segment 1. Legacy shapes
-  // embed the owner in segment 0 (per-user canonical / per-user previews) or
-  // segment 1 (top-level tmp|generated previews).
-  if (storagePath.startsWith('users/')) {
-    return storagePath.split('/')[1] === userId;
-  }
-  const owner = NESTED_KEY_RE.test(storagePath)
-    ? storagePath.split('/')[1]
-    : storagePath.split('/')[0];
-  return owner === userId;
+  // Current `users/` layout: the owner is ALWAYS segment 1.
+  return storagePath.split('/')[1] === userId;
 }
 
 /** True when the key is a public (no-auth) asset under `public/`.
@@ -505,9 +482,7 @@ function cacheControlFor(object, storagePath) {
     (USERS_KEY_RE.test(storagePath) ||
       USERS_THUMB_KEY_RE.test(storagePath) ||
       PUBLIC_KEY_RE.test(storagePath) ||
-      PUBLIC_THUMB_KEY_RE.test(storagePath) ||
-      CANONICAL_KEY_RE.test(storagePath) ||
-      CANONICAL_THUMB_KEY_RE.test(storagePath));
+      PUBLIC_THUMB_KEY_RE.test(storagePath));
   if (!writeOnce) return own || immutableDefault;
   if (!own) return immutableDefault;
   if (!isCacheable(own)) return own; // more restrictive wins

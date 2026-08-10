@@ -138,10 +138,21 @@ under `public/` with zero code change beyond the allowlist.
   `outfit_images`, `items.source_image_storage_path`,
   `support_tickets.attachment_storage_paths`. Dry-run default; gated on
   explicit operator approval before `--apply`.
-- **Follow-up commit** (after the live migration is verified): retire the
-  legacy regexes in `storage_keys.py`/`worker.js` and enable the
-  `migrate_key_to_users_layout` flip inside `key_from_path` so stale legacy
-  URLs in DB columns self-heal to their `users/` home.
+- **Live migration applied 2026-08-10:** 2,992 objects re-keyed (0 failures),
+  13 DB-referenced `generated/product` rows promoted to `users/{user}/items/`,
+  4 DB columns rewritten, old keys deleted only after every copy + rewrite was
+  verified; post-verified 30/30 sampled rows (object in R2 + presigned GET
+  200) and zero legacy keys left in the bucket. Audit:
+  `backend/logs/migrate_storage_layout_users.jsonl`.
+- **Retirement (2026-08-10):** the legacy pre-restructure shapes are retired —
+  `storage_keys.py` dropped the legacy regexes/`legacy_*` layouts,
+  `key_from_path` now maps every reduced legacy key/URL to its `users/` home
+  (stale DB columns self-heal on read), and the worker allowlist serves only
+  `users/`/`public/` keys. `materialize_avatar_url` re-mint gate moved from
+  the UUID-first-segment heuristic to the structural `parse_key` (avatar
+  category required) — the old heuristic would have silently stopped
+  re-minting avatars under the `users/` layout. Worker deploy
+  (`wrangler deploy`) makes the retired allowlist live at the edge.
 
 ## A3/A4 area status (backend AI/photoshoot + outfits/social slice)
 

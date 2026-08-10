@@ -11,14 +11,12 @@ namespace roots decide ownership, so the serving rules are pure:
   images, blog, static). Served without auth; ``group`` must be one of
   ``PUBLIC_GROUPS``.
 
-The old layout (``{user_id}/{category}/...`` with ``tmp|generated`` as
-top-level or per-user folders) is still parsed and served during the
-transition window (legacy regexes below), and ``migrate_key_to_users_layout``
-maps every legacy shape to its ``users/`` home — used by the re-key migration
-script and, once the migration is verified, by the read path so legacy URLs
-self-heal. After the migration, the legacy regexes and the mapping flip are
-retired (delete the ``_LEGACY_*`` regexes and enable the mapping inside
-``key_from_path``).
+The ``users/`` layout migration is complete: the bucket holds only
+``users/``/``public/`` keys now. ``key_from_path`` still reduces legacy URLs
+and keys (``{user_id}/{category}/...``, top-level/per-user ``tmp|generated``
+previews, ``{user}/export/data.json``) that survive in DB columns by mapping
+them through ``migrate_key_to_users_layout`` to their ``users/`` home, so
+stale rows self-heal on read.
 
 Layouts (all regexes are built from the constants below so they cannot drift):
 
@@ -27,7 +25,6 @@ Layouts (all regexes are built from the constants below so they cannot drift):
 - preview:         ``users/{user}/tmp|generated/{sub}/{hex}.{ext}``
 - export:          ``users/{user}/export/data.json``
 - public:          ``public/banners|landing|blog|static/{slug}/{hex}.{ext}``
-- legacy (window): ``{user}/{category}/...``, ``{tmp|generated}/{user}/{sub}/...``,
                    ``{user}/{tmp|generated}/{sub}/...``, ``{user}/export/data.json``
 
 ``infra/images-worker/worker.js`` enforces an equivalent allowlist at the
@@ -113,31 +110,6 @@ _PUBLIC_THUMB_KEY_RE = re.compile(
     rf"^{PUBLIC_FOLDER}/(?P<group>{_PUBLIC_GROUP_ALT})/(?P<slug>{_SLUG})/"
     rf"(?P<name>{_NAME}){re.escape(THUMB_SUFFIX)}\.{THUMB_EXTENSION[1:]}$"
 )
-
-# --------------------------------------------------------------------------- #
-# Legacy layouts (pre-``users/`` restructure). Kept for the transition window:
-# existing objects still live there until the re-key migration moves them, and
-# the worker still serves them. Retire after the migration is verified.
-# --------------------------------------------------------------------------- #
-_LEGACY_KEY_RE = re.compile(
-    rf"^(?P<user>[^/\\]+)/(?P<category>{_CATEGORY_ALT})/"
-    rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
-)
-_LEGACY_THUMB_KEY_RE = re.compile(
-    rf"^(?P<user>[^/\\]+)/(?P<category>{_CATEGORY_ALT})/"
-    rf"(?P<name>{_NAME}){re.escape(THUMB_SUFFIX)}\.{THUMB_EXTENSION[1:]}$"
-)
-# Top-level preview folders: ``{tmp|generated}/{user}/{sub}/{name}.{ext}``.
-_LEGACY_TOP_LEVEL_PREVIEW_KEY_RE = re.compile(
-    rf"^(?P<folder>{_FOLDER_ALT})/(?P<user>[^/\\]+?)/(?P<sub>[^/\\]+?)/"
-    rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
-)
-# Per-user preview folders: ``{user}/{tmp|generated}/{sub}/{name}.{ext}``.
-_LEGACY_NESTED_KEY_RE = re.compile(
-    rf"^(?P<user>[^/\\]+?)/(?P<folder>{_FOLDER_ALT})/(?P<sub>[^/\\]+?)/"
-    rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
-)
-_LEGACY_EXPORT_KEY_RE = re.compile(rf"^(?P<user>[^/\\]+)/{EXPORT_CATEGORY}/data\.json$")
 
 
 def mint_key(user_id: str, category: str, ext: str) -> str:
@@ -225,7 +197,7 @@ def thumb_key_for(storage_path: Optional[str]) -> Optional[str]:
 class KeyRef(NamedTuple):
     """Structural parse of a storage key (see ``parse_key``)."""
 
-    layout: str  # canonical | thumb | preview | export | public | legacy_*
+    layout: str  # canonical | thumb | preview | export | public
     user: Optional[str] = None
     category: Optional[str] = None
     folder: Optional[str] = None
@@ -251,7 +223,7 @@ def parse_key(key: Optional[str]) -> Optional[KeyRef]:
 
     def _build(m, layout, is_preview=False):
         d = m.groupdict()
-        if layout in ("export", "legacy_export"):
+        if layout == "export":
             return KeyRef(
                 layout=layout, user=d["user"], category=EXPORT_CATEGORY,
                 name="data.json", ext="json",
@@ -292,22 +264,6 @@ def parse_key(key: Optional[str]) -> Optional[KeyRef]:
     ):
         if m:
             return _build(m, "preview", is_preview=True)
-    # Legacy layouts (transition window).
-    for m in (
-        _LEGACY_KEY_RE.fullmatch(key),
-        _LEGACY_THUMB_KEY_RE.fullmatch(key),
-    ):
-        if m:
-            return _build(m, "legacy_canonical" if m.re is _LEGACY_KEY_RE else "legacy_thumb")
-    for m in (
-        _LEGACY_TOP_LEVEL_PREVIEW_KEY_RE.fullmatch(key),
-        _LEGACY_NESTED_KEY_RE.fullmatch(key),
-    ):
-        if m:
-            return _build(m, "legacy_preview", is_preview=True)
-    m = _LEGACY_EXPORT_KEY_RE.fullmatch(key)
-    if m:
-        return _build(m, "legacy_export")
     return None
 
 
@@ -382,17 +338,17 @@ def key_from_path(value: Optional[str]) -> Optional[str]:
     a known namespace (``users``/``public``/``tmp``/``generated``) nor a user
     UUID is a path-style bucket name and is dropped whatever it is called.
 
-    During the transition window this returns keys in the layout the URL
-    embeds (old URLs reduce to legacy keys, which still exist until the re-key
-    migration moves them). Once the migration is verified, apply
-    ``migrate_key_to_users_layout`` to the result so stale legacy keys resolve
-    to their ``users/`` home.
+    The ``users/`` layout migration is complete, so the result is ALWAYS
+    mapped through ``migrate_key_to_users_layout``: a legacy URL or key still
+    held in a DB column resolves to the object's ``users/`` home. Current
+    ``users/``/``public/`` keys and unrecognized values pass through.
     """
     if not value:
         return None
     candidate = value.strip()
     if not candidate:
         return None
+    result = candidate
     if candidate.startswith(("http://", "https://")):
         parsed = urlparse(candidate)
         parts = [part for part in parsed.path.split("/") if part]
@@ -401,56 +357,60 @@ def key_from_path(value: Optional[str]) -> Optional[str]:
             # /storage/v1/object/public/<bucket>/<key...> — pre-R2 rows
             # (item_images/support_tickets) still store this shape; the
             # bucket segment is dropped to recover the key.
-            return "/".join(parts[5:])
-        if len(parts) >= 2 and parts[0] == settings.OBJECT_STORAGE_BUCKET:
-            return "/".join(parts[1:])
-        # Top-level preview folders (``tmp/`` and ``generated/`` — see
-        # upload_temp_generated_image / save_generated_image) embed the
-        # owning user in the SECOND segment, so a URL from a bucket that is
-        # no longer the configured one has a non-UUID first segment (the
-        # bucket name) followed by ``tmp|generated``, not a UUID. Same
-        # only-drop-when-it-looks-like-ours rule: parts[2] must be
-        # UUID-shaped.
-        if (
+            result = "/".join(parts[5:])
+        elif len(parts) >= 2 and parts[0] == settings.OBJECT_STORAGE_BUCKET:
+            result = "/".join(parts[1:])
+        elif (
             len(parts) >= 4
             and parts[1] in PREVIEW_FOLDERS
             and USER_ID_SEGMENT_RE.fullmatch(parts[2])
         ):
-            return "/".join(parts[1:])
-        # Worker-mode CDN URL (IMAGE_SERVING_MODE=worker): the CDN serves
-        # keys directly at the path root with no bucket segment.
-        # users/... and public/... paths ARE the keys (current layout);
-        # top-level preview folders embed the user in the SECOND segment.
-        if len(parts) >= 2 and parts[0] in (USERS_FOLDER, PUBLIC_FOLDER):
-            return "/".join(parts)
-        if (
+            # Path-style URL from a bucket that is no longer the configured
+            # one, with the owning user in the SECOND segment of a top-level
+            # preview folder (``{bucket}/tmp|generated/{user}/...``).
+            result = "/".join(parts[1:])
+        elif len(parts) >= 2 and parts[0] in (USERS_FOLDER, PUBLIC_FOLDER):
+            # Worker-mode CDN URL (IMAGE_SERVING_MODE=worker): the path IS the
+            # key for current-layout keys.
+            result = "/".join(parts)
+        elif (
             len(parts) >= 3
             and parts[0] in PREVIEW_FOLDERS
             and USER_ID_SEGMENT_RE.fullmatch(parts[1])
         ):
-            return "/".join(parts)
-        # Worker-mode CDN URL for a canonical legacy key: a leading user UUID
-        # means the path IS the key (no bucket segment to drop).
-        if (
+            # Worker-mode CDN URL for a legacy top-level preview
+            # (``tmp/{user}/...``) — the path is the key.
+            result = "/".join(parts)
+        elif (
             len(parts) >= 3
             and USER_ID_SEGMENT_RE.fullmatch(parts[0])
         ):
-            return "/".join(parts)
-        # Path-style URL from a bucket that is no longer the configured one
-        # (a pre-cutover URL persisted in the DB). Legacy canonical keys begin
-        # with a user UUID, so a leading segment that is neither a known
-        # namespace nor a UUID is the bucket name. Only drop it when what
-        # remains still looks like one of our keys, so an unrelated external
-        # URL is never silently reshaped into a key.
-        if (
+            # Worker-mode CDN URL for a legacy canonical key: a leading user
+            # UUID means the path IS the key (no bucket segment to drop).
+            result = "/".join(parts)
+        elif (
             len(parts) >= 3
             and parts[0] not in PREVIEW_FOLDERS | {USERS_FOLDER, PUBLIC_FOLDER}
             and not USER_ID_SEGMENT_RE.fullmatch(parts[0])
         ):
-            if USER_ID_SEGMENT_RE.fullmatch(parts[1]):
-                return "/".join(parts[1:])
-        return None
-    return candidate
+            # Path-style URL from a bucket that is no longer the configured
+            # one (a pre-cutover URL persisted in the DB). The bucket segment
+            # is dropped when what follows still looks like one of our keys —
+            # a user UUID (legacy canonical) or the users//public/ namespace
+            # (current layout) — so an unrelated external URL is never
+            # silently reshaped into a key.
+            if parts[1] in (USERS_FOLDER, PUBLIC_FOLDER):
+                result = "/".join(parts[1:])
+            elif USER_ID_SEGMENT_RE.fullmatch(parts[1]):
+                result = "/".join(parts[1:])
+            else:
+                return None
+        else:
+            return None
+    # Post-migration: map legacy keys to their ``users/`` home so stale
+    # storage URLs/paths in DB columns keep resolving. Current-layout keys and
+    # unrecognized values pass through unchanged.
+    return migrate_key_to_users_layout(result) or result
 
 
 def build_object_url(key: str) -> str:
@@ -470,7 +430,7 @@ def is_owned_storage_key(storage_path: str, user_id: str) -> bool:
 
     Ownership is a pure structural rule: every ``users/{user_id}/...`` key is
     owned by ``user_id`` (segment 1); ``public/...`` keys are owned by nobody
-    (never True here); legacy keys are owned by their embedded user. Preview
+    (never True here). Preview
     keys are owned exactly like canonical keys (the owner is still segment 1).
     The export key is deliberately NOT user-owned for serving: it is fetched
     only through the authenticated presigned path, never the worker.
@@ -507,7 +467,7 @@ def is_preview_key(key: Optional[str]) -> bool:
     before it can back a DB row (previews are never DB-referenced).
     """
     ref = parse_key(key)
-    return ref is not None and ref.layout in ("preview", "legacy_preview")
+    return ref is not None and ref.layout == "preview"
 
 
 def is_public_key(key: Optional[str]) -> bool:

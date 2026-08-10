@@ -159,19 +159,6 @@ class TestParseKey:
         assert ref.folder == "tmp"
         assert ref.sub == "social-import"
 
-    def test_legacy_preview(self):
-        ref = parse_key(f"{USER}/generated/product/{HEX32}.webp")
-        assert ref.layout == "legacy_preview"
-        assert ref.user == USER
-        assert ref.folder == "generated"
-        assert ref.sub == "product"
-
-    def test_legacy_canonical(self):
-        ref = parse_key(f"{USER}/items/{HEX32}.png")
-        assert ref.layout == "legacy_canonical"
-        assert ref.user == USER
-        assert ref.category == "items"
-
     def test_export(self):
         ref = parse_key(f"users/{USER}/export/data.json")
         assert ref.layout == "export"
@@ -201,6 +188,11 @@ class TestParseKey:
             "users/junk.webp",
             "public/misc/home/x.webp",
             f"http://example.com/{USER}/items/{HEX32}.png",  # URLs are not bare keys
+            # Legacy pre-restructure keys are retired: they no longer parse.
+            f"{USER}/items/{HEX32}.png",
+            f"{USER}/tmp/batch/{HEX32}.webp",
+            f"tmp/{USER}/batch/{HEX32}.webp",
+            f"{USER}/export/data.json",
         ],
     )
     def test_unparseable_returns_none(self, key):
@@ -208,12 +200,17 @@ class TestParseKey:
 
 
 # --------------------------------------------------------------------------- #
-# key_from_path — URL/key reducer (SSRF-safe)
+# key_from_path — URL/key reducer (SSRF-safe); legacy shapes map to users/
 # --------------------------------------------------------------------------- #
 class TestKeyFromPath:
-    def test_bare_key_passes_through(self):
-        key = f"{USER}/items/{HEX32}.png"
+    def test_bare_users_key_passes_through(self):
+        key = f"users/{USER}/items/{HEX32}.png"
         assert key_from_path(key) == key
+
+    def test_bare_legacy_key_maps_to_users_home(self):
+        assert key_from_path(f"{USER}/items/{HEX32}.png") == (
+            f"users/{USER}/items/{HEX32}.png"
+        )
 
     @pytest.mark.parametrize("value", ["", "   ", None])
     def test_empty_returns_none(self, value):
@@ -221,31 +218,32 @@ class TestKeyFromPath:
 
     def test_supabase_public_url(self):
         url = f"https://p.supabase.co/storage/v1/object/public/fitcheck-images/{USER}/items/{HEX32}.png"
-        assert key_from_path(url) == f"{USER}/items/{HEX32}.png"
+        assert key_from_path(url) == f"users/{USER}/items/{HEX32}.png"
 
     def test_configured_bucket_path_style_url(self, monkeypatch):
         monkeypatch.setattr("app.core.storage_keys.settings.OBJECT_STORAGE_BUCKET", "fitcheck-images")
         url = f"https://acct.r2.cloudflarestorage.com/fitcheck-images/{USER}/items/{HEX32}.png?X-Amz-Signature=abc"
-        assert key_from_path(url) == f"{USER}/items/{HEX32}.png"
+        assert key_from_path(url) == f"users/{USER}/items/{HEX32}.png"
 
     def test_foreign_bucket_name_is_dropped_by_position(self, monkeypatch):
         monkeypatch.setattr("app.core.storage_keys.settings.OBJECT_STORAGE_BUCKET", "fitcheck-images")
-        # A pre-cutover Railway URL: non-UUID bucket segment dropped by position.
+        # A pre-cutover Railway URL: non-UUID bucket segment dropped by position,
+        # then the legacy key maps to its users/ home.
         url = f"https://t3.storageapi.dev/collapsible-saddlebag-s0pyqr/{USER}/items/{HEX32}.png"
-        assert key_from_path(url) == f"{USER}/items/{HEX32}.png"
+        assert key_from_path(url) == f"users/{USER}/items/{HEX32}.png"
 
     def test_worker_cdn_url_is_key(self):
         url = f"https://images.fitcheckaiapp.com/{USER}/items/{HEX32}.png"
-        assert key_from_path(url) == f"{USER}/items/{HEX32}.png"
+        assert key_from_path(url) == f"users/{USER}/items/{HEX32}.png"
 
     def test_worker_cdn_top_level_preview_is_key(self):
         url = f"https://images.fitcheckaiapp.com/tmp/{USER}/batch/{HEX32}.webp"
-        assert key_from_path(url) == f"tmp/{USER}/batch/{HEX32}.webp"
+        assert key_from_path(url) == f"users/{USER}/tmp/batch/{HEX32}.webp"
 
     def test_foreign_bucket_top_level_preview_drops_bucket(self, monkeypatch):
         monkeypatch.setattr("app.core.storage_keys.settings.OBJECT_STORAGE_BUCKET", "fitcheck-images")
         url = f"https://t3.storageapi.dev/old-bucket/tmp/{USER}/batch/{HEX32}.webp"
-        assert key_from_path(url) == f"tmp/{USER}/batch/{HEX32}.webp"
+        assert key_from_path(url) == f"users/{USER}/tmp/batch/{HEX32}.webp"
 
     def test_foreign_url_returns_none(self):
         assert key_from_path("https://example.com/a.jpg") is None
@@ -275,10 +273,6 @@ class TestPredicates:
         [
             f"users/{USER}/tmp/batch/{HEX32}.webp",
             f"users/{USER}/generated/try-on/{HEX32}.webp",
-            f"tmp/{USER}/batch/{HEX32}.webp",
-            f"generated/{USER}/try-on/{HEX32}.webp",
-            f"{USER}/tmp/social-import/{HEX32}.png",
-            f"{USER}/generated/outfit/{HEX32}.png",
         ],
     )
     def test_is_preview_key_true(self, key):
@@ -289,7 +283,8 @@ class TestPredicates:
         [
             f"users/{USER}/items/{HEX32}.png",
             f"users/{USER}/items/{HEX32}_thumb.webp",
-            f"{USER}/items/{HEX32}.png",
+            f"{USER}/items/{HEX32}.png",  # legacy keys no longer parse
+            f"tmp/{USER}/batch/{HEX32}.webp",  # legacy preview no longer parses
             "public/banners/home/x.webp",
             "",
             None,
@@ -327,10 +322,10 @@ class TestPredicates:
     def test_owned_key_export_never_owned(self):
         assert is_owned_storage_key(mint_export_key(USER), USER) is False
 
-    def test_owned_key_legacy_owned(self):
+    def test_owned_key_legacy_not_owned(self):
+        # Legacy pre-restructure keys no longer parse; they are never owned.
         key = f"{USER}/items/{HEX32}.png"
-        assert is_owned_storage_key(key, USER) is True
-        assert is_owned_storage_key(key, str(uuid.uuid4())) is False
+        assert is_owned_storage_key(key, USER) is False
 
 
 # --------------------------------------------------------------------------- #

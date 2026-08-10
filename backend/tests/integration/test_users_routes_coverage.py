@@ -456,7 +456,7 @@ async def test_upload_avatar_tolerates_failed_read_of_previous_avatar():
 @pytest.mark.asyncio
 async def test_upload_avatar_deletes_replaced_owned_object(monkeypatch):
     """Replacing an owned avatar must remove the previous bucket object."""
-    old_key = f"{USER_ID}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
+    old_key = f"users/{USER_ID}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
     db = Mock()
     db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
         SimpleNamespace(data={"avatar_url": old_key})
@@ -479,7 +479,7 @@ async def test_upload_avatar_deletes_replaced_owned_object(monkeypatch):
 @pytest.mark.asyncio
 async def test_upload_avatar_delete_failure_is_best_effort(monkeypatch):
     """A failed removal of the replaced avatar must never fail the upload."""
-    old_key = f"{USER_ID}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
+    old_key = f"users/{USER_ID}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
     db = Mock()
     db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
         SimpleNamespace(data={"avatar_url": old_key})
@@ -1018,7 +1018,7 @@ async def test_delete_current_user_collects_ticket_attachments_and_avatar(monkey
     object (resolved from its stored URL), not just item images."""
     from tests.utils.fake_db import FakeDB
 
-    avatar_key = f"{USER_ID}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
+    avatar_key = f"users/{USER_ID}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
     db = FakeDB(
         rows={
             "users": [user_row(id=USER_ID, avatar_url=avatar_key)],
@@ -1026,7 +1026,7 @@ async def test_delete_current_user_collects_ticket_attachments_and_avatar(monkey
                 {
                     "id": "t1",
                     "user_id": USER_ID,
-                    "attachment_storage_paths": [f"{USER_ID}/tickets/t1.jpg", None, ""],
+                    "attachment_storage_paths": [f"users/{USER_ID}/tickets/t1.jpg", None, ""],
                     "contact_email": "a@b.c",
                 },
                 {"id": "t2", "user_id": USER_ID, "contact_email": None},
@@ -1039,7 +1039,7 @@ async def test_delete_current_user_collects_ticket_attachments_and_avatar(monkey
     monkeypatch.setattr(
         StorageService,
         "resolve_owned_storage_paths",
-        AsyncMock(return_value={"storage_paths": [f"{USER_ID}/items/i1.jpg"]}),
+        AsyncMock(return_value={"storage_paths": [f"users/{USER_ID}/items/i1.jpg"]}),
     )
 
     async def fake_delete_multiple_images(*, db, storage_paths, bucket=None):
@@ -1051,7 +1051,7 @@ async def test_delete_current_user_collects_ticket_attachments_and_avatar(monkey
 
     assert await users_module.delete_current_user(user_id=USER_ID, db=db) is None
 
-    assert f"{USER_ID}/tickets/t1.jpg" in deleted
+    assert f"users/{USER_ID}/tickets/t1.jpg" in deleted
     assert avatar_key in deleted
     assert f"users/{USER_ID}/export/data.json" in deleted
     assert db.auth.admin.deleted == [USER_ID]

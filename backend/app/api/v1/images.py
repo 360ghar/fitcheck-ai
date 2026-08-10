@@ -28,7 +28,7 @@ from app.core.config import settings
 from app.core.exceptions import NotFoundError
 from app.core.logging_config import get_context_logger
 from app.api.v1.deps import get_active_user_id
-from app.core.storage_keys import USER_ID_SEGMENT_RE, is_owned_storage_key, key_from_path
+from app.core.storage_keys import is_owned_storage_key, key_from_path, parse_key
 from app.services.storage_service import StorageService
 
 logger = get_context_logger(__name__)
@@ -89,7 +89,15 @@ async def materialize_avatar_url(
     if not avatar_url or not isinstance(avatar_url, str):
         return None
     key = key_from_path(avatar_url)
-    if not key or not USER_ID_SEGMENT_RE.fullmatch(key.split("/", 1)[0]):
+    if not key:
+        return None
+    # Only our own avatar objects are re-minted. The current users/ layout
+    # nests keys under `users/{user_id}/avatars/...` (first segment "users",
+    # not a UUID), so the ownership guard is the structural parser, not the
+    # old UUID-first-segment heuristic — that heuristic would silently stop
+    # re-minting every avatar after the layout migration.
+    ref = parse_key(key)
+    if ref is None or ref.layout not in ("canonical", "thumb") or ref.category != "avatars":
         return None
     if presigned:
         return await StorageService.get_public_url(key)

@@ -998,12 +998,12 @@ async def test_fetch_user_avatar_base64_paths(monkeypatch):
     # never an arbitrary HTTP GET (A2-07).
     bucket_service = BatchExtractionService(
         user_id="u1",
-        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "u1/avatars/abc.png"}]}),
+        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "users/u1/avatars/abc.png"}]}),
     )
     download = AsyncMock(return_value="bucket-b64")
     monkeypatch.setattr(StorageService, "download_to_base64", staticmethod(download))
     assert await bucket_service._fetch_user_avatar_base64() == "bucket-b64"
-    download.assert_awaited_once_with("u1/avatars/abc.png")
+    download.assert_awaited_once_with("users/u1/avatars/abc.png")
 
     # Allowlisted https host: the direct httpx fetch still works.
     service = BatchExtractionService(
@@ -1076,7 +1076,7 @@ async def test_fetch_user_avatar_bucket_read_failure_returns_none(monkeypatch):
     fetch of the stored URL."""
     service = BatchExtractionService(
         user_id="u1",
-        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "u1/avatars/abc.png"}]}),
+        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "users/u1/avatars/abc.png"}]}),
     )
     monkeypatch.setattr(
         StorageService,

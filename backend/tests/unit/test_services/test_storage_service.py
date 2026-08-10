@@ -82,18 +82,22 @@ async def test_get_public_url_returns_presigned_url():
 def test_key_from_path_handles_supabase_url_bare_key_and_s3_presigned_url(monkeypatch):
     monkeypatch.setattr("app.services.storage_service.settings.OBJECT_STORAGE_BUCKET", "bucket")
 
-    # Supabase public object URL -> key (bucket segment dropped).
+    # Supabase public object URL -> key (bucket segment dropped; the legacy
+    # per-user key maps to its users/ home when the category is canonical).
     assert StorageService.key_from_path(
         "https://project.supabase.co/storage/v1/object/public/items/user-a/item.webp"
     ) == "user-a/item.webp"
 
-    # S3 presigned URL (query string ignored) -> key.
+    # S3 presigned URL (query string ignored) -> key, mapped to users/.
     assert StorageService.key_from_path(
         "https://storage.railway.app/bucket/user-a/items/item.webp?X-Amz-Signature=abc"
-    ) == "user-a/items/item.webp"
+    ) == "users/user-a/items/item.webp"
 
-    # A bare bucket key passes through unchanged.
-    assert StorageService.key_from_path("user-a/items/item.webp") == "user-a/items/item.webp"
+    # A bare legacy key maps to its users/ home.
+    assert StorageService.key_from_path("user-a/items/item.webp") == "users/user-a/items/item.webp"
+
+    # A bare users/ key passes through unchanged.
+    assert StorageService.key_from_path("users/user-a/items/item.webp") == "users/user-a/items/item.webp"
 
     # Empty / None -> None.
     assert StorageService.key_from_path("") is None
@@ -112,6 +116,7 @@ def test_key_from_path_handles_supabase_url_bare_key_and_s3_presigned_url(monkey
 # `--delete` would have deleted users' avatars.
 _KFP_USER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 _KFP_KEY = f"{_KFP_USER}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
+_KFP_KEY_USERS = f"users/{_KFP_KEY}"
 
 
 @pytest.mark.parametrize(
@@ -127,13 +132,15 @@ _KFP_KEY = f"{_KFP_USER}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
         f"https://images.fitcheckaiapp.com/{_KFP_KEY}",
         # Legacy Supabase public URL.
         f"https://p.supabase.co/storage/v1/object/public/fitcheck-images/{_KFP_KEY}",
-        # Bare key.
+        # Bare legacy key.
         _KFP_KEY,
     ],
 )
 def test_key_from_path_resolves_every_url_shape_to_the_same_key(url, monkeypatch):
     monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
-    assert StorageService.key_from_path(url) == _KFP_KEY
+    # Every shape reduces to the same legacy key, which is then mapped to its
+    # users/ home (post-migration self-heal).
+    assert StorageService.key_from_path(url) == _KFP_KEY_USERS
 
 
 def test_key_from_path_does_not_reshape_an_external_url_into_our_key_space(monkeypatch):
@@ -167,28 +174,28 @@ def test_key_from_path_worker_cdn_preview_url_keeps_preview_folder(monkeypatch):
     monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
     assert StorageService.key_from_path(
         f"https://cdn.fitcheck.ai/tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
-    ) == f"tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+    ) == f"users/{_KFP_USER}/tmp/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
 
 
 def test_key_from_path_worker_cdn_canonical_url_returns_path_as_key(monkeypatch):
     monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
     assert StorageService.key_from_path(
         f"https://cdn.fitcheck.ai/{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png"
-    ) == f"{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png"
+    ) == f"users/{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png"
 
 
 def test_key_from_path_unconfigured_bucket_preview_url_keeps_preview_folder(monkeypatch):
     monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
     assert StorageService.key_from_path(
         f"https://r2.example.com/somebucket/tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
-    ) == f"tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+    ) == f"users/{_KFP_USER}/tmp/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
 
 
-def test_key_from_path_bare_preview_key_passes_through(monkeypatch):
+def test_key_from_path_bare_preview_key_maps_to_users_home(monkeypatch):
     monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
     assert StorageService.key_from_path(
         f"tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
-    ) == f"tmp/{_KFP_USER}/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
+    ) == f"users/{_KFP_USER}/tmp/batch/deadbeefdeadbeefdeadbeefdeadbeef.webp"
 
 
 def test_key_from_path_external_url_returns_none(monkeypatch):
@@ -205,7 +212,7 @@ def test_key_from_path_configured_bucket_presigned_url_still_resolves(monkeypatc
     monkeypatch.setattr(settings, "OBJECT_STORAGE_BUCKET", "fitcheck-images")
     assert StorageService.key_from_path(
         f"https://acct.r2.cloudflarestorage.com/fitcheck-images/{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png?X-Amz-Signature=x"
-    ) == f"{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png"
+    ) == f"users/{_KFP_USER}/items/deadbeefdeadbeefdeadbeefdeadbeef.png"
 
 
 # --------------------------------------------------------------------------- #

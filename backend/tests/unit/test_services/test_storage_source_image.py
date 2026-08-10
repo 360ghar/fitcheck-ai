@@ -140,16 +140,17 @@ async def test_download_bytes_only_fetches_known_bucket_keys_not_arbitrary_urls(
 
     with patch("app.services.storage_service.get_storage_backend", return_value=backend):
         # Bucket-shaped URL: the non-UUID leading segment is dropped and the
-        # remaining UUID-led key is fetched from the bucket, never the host.
+        # remaining key is fetched from the bucket (mapped to its users/ home),
+        # never the host.
         content = await StorageService._download_bytes(
             "https://attacker.example/railway-bucket/"
-            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
+            "users/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/"
             "0123456789abcdef0123456789abcdef.png"
         )
 
     assert content == payload
     assert backend.download_keys == [
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/0123456789abcdef0123456789abcdef.png"
+        "users/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/items/0123456789abcdef0123456789abcdef.png"
     ]
 
     # A non-key external URL is NOT reshaped into a key: nothing is fetched.
