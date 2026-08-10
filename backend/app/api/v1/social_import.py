@@ -11,13 +11,13 @@ from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
 from app.core.config import settings
-from app.core.exceptions import SocialImportJobNotFoundError
+from app.core.exceptions import SocialImportJobNotFoundError, ValidationError
 from app.core.logging_config import get_context_logger
 from app.api.v1.deps import get_active_user_id
 from app.db.connection import get_db
@@ -224,6 +224,117 @@ def _oauth_response(
         target_origin=opener_origin,
         accounts=accounts,
     )
+
+
+def _oauth_picker_response(
+    *,
+    job_id: str,
+    selection_token: str,
+    message: str,
+    accounts: list,
+    mobile_redirect_uri: Optional[str] = None,
+    opener_origin: Optional[str] = None,
+    select_url: Optional[str] = None,
+) -> HTMLResponse:
+    """Server-rendered account picker for the multi-Instagram-account flow.
+
+    First-time OAuth with several business pages needs a human to choose the
+    page (A4-28). This is served straight from the callback (no client code
+    change required): it lists the candidate pages and POSTs the selection to
+    ``{select_url}``, which resolves identity from the already-exchanged token
+    and resumes the job. Popup clients get a postMessage + close; mobile
+    redirect clients get a redirect back to their deep link with the standard
+    payload. The selection is authorized by the signed ``selection_token``
+    (the picker's browser cannot present the app's Authorization header).
+    """
+    target_origin = _validate_target_origin(opener_origin).rstrip("/")
+    safe_message = escape(message)
+    safe_job_id = escape(job_id)
+    safe_token = escape(selection_token)
+    # The router is mounted under /api/v1/ai (main.py), so the form target is
+    # resolved from the request (url_for) rather than hardcoded — a bare
+    # "/api/v1/social-import/..." here would 404 on the real prefix.
+    if not select_url:
+        select_url = f"/api/v1/ai/social-import/jobs/{safe_job_id}/auth/oauth/select-page"
+    select_url = escape(select_url)
+
+    options_html = "".join(
+        f"""
+        <button type="submit" name="provider_page_id" value="{escape(str(a.get('provider_page_id', '')))}"
+                class="page-option">
+          <span class="page-name">{escape(str(a.get('page_name') or a.get('provider_page_id') or ''))}</span>
+          <span class="page-handle">@{escape(str(a.get('username') or ''))}</span>
+        </button>"""
+        for a in accounts
+    )
+
+    mobile_redirect_json = _json_for_inline_script(mobile_redirect_uri or "")
+    success_payload_json = _json_for_inline_script(
+        _build_oauth_payload(job_id, "success", "Account connected. Import resumed.")
+    )
+    target_origin_json = _json_for_inline_script(target_origin)
+
+    html = f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Select Instagram account</title>
+    <style>
+      body {{ font-family: -apple-system, system-ui, sans-serif; margin: 0;
+              background: #fafafa; color: #262626; }}
+      .card {{ max-width: 420px; margin: 10vh auto; background: #fff;
+               border: 1px solid #dbdbdb; border-radius: 12px; padding: 24px; }}
+      h1 {{ font-size: 18px; margin: 0 0 8px; }}
+      p {{ font-size: 14px; color: #555; margin: 0 0 20px; }}
+      form {{ display: flex; flex-direction: column; gap: 10px; }}
+      .page-option {{ display: flex; flex-direction: column; gap: 2px; padding: 14px 16px;
+                      border: 1px solid #dbdbdb; border-radius: 8px; background: #fff;
+                      text-align: left; cursor: pointer; font: inherit; }}
+      .page-option:hover {{ background: #f5f5f5; }}
+      .page-name {{ font-weight: 600; }}
+      .page-handle {{ color: #888; font-size: 13px; }}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Which Instagram account should FitCheck import?</h1>
+      <p>{safe_message}</p>
+      <form method="post" action="{select_url}" id="picker-form">
+        <input type="hidden" name="selection_token" value="{safe_token}" />
+        <input type="hidden" name="provider_page_id" id="selection-input" />
+        {options_html}
+      </form>
+    </div>
+    <script>
+      (function () {{
+        var form = document.getElementById('picker-form');
+        var buttons = document.querySelectorAll('.page-option');
+        var mobileRedirectUri = {mobile_redirect_json};
+        var successPayload = {success_payload_json};
+        var targetOrigin = {target_origin_json};
+        function finish() {{
+          if (window.opener && !window.opener.closed) {{
+            try {{ window.opener.postMessage(successPayload, targetOrigin); }} catch (err) {{}}
+            window.setTimeout(function () {{ window.close(); }}, 150);
+          }} else if (mobileRedirectUri) {{
+            var sep = mobileRedirectUri.indexOf('?') >= 0 ? '&' : '?';
+            window.location.href = mobileRedirectUri + sep + 'status=success&job_id=' +
+              encodeURIComponent(successPayload.job_id);
+          }}
+        }}
+        buttons.forEach(function (btn) {{
+          btn.addEventListener('click', function (ev) {{
+            ev.preventDefault();
+            document.getElementById('selection-input').value = btn.value;
+            form.submit();
+          }});
+        }});
+      }})();
+    </script>
+  </body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 @router.post(
@@ -537,6 +648,59 @@ async def social_oauth_callback(
         details = getattr(exc, "details", None) or {}
         if details.get("requires_page_selection") and details.get("accounts"):
             accounts = details["accounts"]
+            # Persist the just-exchanged token (flagged selection_pending) so
+            # the picker can complete identity resolution from the chosen page
+            # WITHOUT re-doing the whole OAuth dance. Without this, first-time
+            # connects with several business accounts dead-ended here: the
+            # token existed only in this frame's locals and nothing could bind
+            # the user's selection to it (A4-28).
+            try:
+                await SocialAuthService.store_selection_pending_session(
+                    db,
+                    job_id=job_id,
+                    user_id=state_payload.user_id,
+                    provider_access_token=token_payload["provider_access_token"],
+                    provider_refresh_token=token_payload.get("provider_refresh_token"),
+                    expires_at=token_payload.get("expires_at"),
+                    candidates=details["accounts"],
+                )
+            except Exception as session_err:  # noqa: BLE001 - picker persistence is best-effort
+                logger.warning(
+                    "Could not persist pending account selection; picker will "
+                    "ask the user to reconnect",
+                    extra={"job_id": job_id, "error": str(session_err)},
+                )
+        if accounts:
+            try:
+                selection_token = SocialOAuthService.create_selection_token(
+                    user_id=state_payload.user_id,
+                    job_id=job_id,
+                )
+            except Exception as token_err:  # noqa: BLE001
+                logger.warning(
+                    "Could not sign account selection token; falling back to "
+                    "reconnect flow",
+                    extra={"job_id": job_id, "error": str(token_err)},
+                )
+                return _oauth_response(
+                    job_id=job_id,
+                    status_value="error",
+                    message=str(exc),
+                    mobile_redirect_uri=mobile_uri,
+                    opener_origin=opener,
+                    accounts=accounts,
+                )
+            return _oauth_picker_response(
+                job_id=job_id,
+                selection_token=selection_token,
+                message=str(exc),
+                accounts=accounts,
+                mobile_redirect_uri=mobile_uri,
+                opener_origin=opener,
+                # Resolve the select-page endpoint from the request so the
+                # form target carries the real /api/v1/ai mount prefix.
+                select_url=str(request.url_for("select_oauth_page", job_id=job_id)),
+            )
         return _oauth_response(
             job_id=job_id,
             status_value="error",
@@ -570,6 +734,98 @@ async def submit_oauth_auth(
             success=True,
             status="processing",
             message="OAuth auth accepted. Import resumed.",
+        ).model_dump(),
+        "message": "OK",
+    }
+
+
+@router.post("/social-import/jobs/{job_id}/auth/oauth/select-page", response_model=Dict[str, Any])
+async def select_oauth_page(
+    job_id: str,
+    selection_token: str = Form(...),
+    provider_page_id: str = Form(...),
+    db: Client = Depends(get_db),
+):
+    """Complete a multi-account Instagram OAuth by selecting the page.
+
+    The account picker (served by the callback when several business pages
+    are connected) POSTs the chosen ``provider_page_id`` with a signed
+    ``selection_token``. The token pins the job + user (short-TTL HMAC, same
+    construction as the OAuth state) because the picker's browser context
+    cannot present the app's Authorization header. Identity is resolved from
+    the token persisted by the callback (``store_selection_pending_session``)
+    using the selected page, then the real session is stored and the import
+    resumes — no re-run of the OAuth flow (A4-28).
+
+    Fails closed: an invalid/expired token, no pending session, a page id
+    outside the candidate list, or a resolution error all return a validation
+    error asking the user to reconnect.
+    """
+    try:
+        selection = SocialOAuthService.parse_selection_token(selection_token)
+    except Exception as exc:
+        raise ValidationError(
+            "This account selection link has expired. Please connect your "
+            "Instagram account again."
+        ) from exc
+    user_id = selection["user_id"]
+    token_job_id = selection["job_id"]
+    if token_job_id != job_id:
+        raise ValidationError(
+            "This account selection does not match the import. Please "
+            "connect your Instagram account again."
+        )
+
+    existing_session = await SocialAuthService.get_active_session(
+        db,
+        job_id=job_id,
+        user_id=user_id,
+    )
+    session_payload = (existing_session or {}).get("session_payload") or {}
+    access_token = session_payload.get("provider_access_token")
+    if not access_token or session_payload.get("selection_pending") is not True:
+        raise ValidationError(
+            "No pending account selection found. Please connect your "
+            "Instagram account again."
+        )
+
+    candidates = session_payload.get("candidates") or []
+    candidate_ids = {
+        str(c.get("provider_page_id")) for c in candidates if c.get("provider_page_id")
+    }
+    if provider_page_id not in candidate_ids:
+        raise ValidationError(
+            "The selected page is not among the connected Instagram accounts. "
+            "Please reconnect."
+        )
+
+    try:
+        identity_payload = await SocialOAuthService.resolve_platform_identity(
+            platform=SocialPlatform.INSTAGRAM,
+            access_token=access_token,
+            preferred_page_id=provider_page_id,
+        )
+    except Exception as exc:
+        raise ValidationError(
+            f"Could not complete account selection: {exc}"
+        ) from exc
+
+    payload = {
+        "provider_access_token": access_token,
+        "provider_refresh_token": session_payload.get("provider_refresh_token"),
+        "provider_user_id": identity_payload.get("provider_user_id"),
+        "provider_page_access_token": identity_payload.get("provider_page_access_token"),
+        "provider_page_id": identity_payload.get("provider_page_id"),
+        "provider_username": identity_payload.get("provider_username"),
+        "expires_at": session_payload.get("provider_expires_at"),
+    }
+    service = _service(user_id, db)
+    await service.accept_auth(job_id, "oauth", payload)
+    return {
+        "data": SocialImportAuthResponse(
+            success=True,
+            status="processing",
+            message="Instagram account selected. Import resumed.",
         ).model_dump(),
         "message": "OK",
     }

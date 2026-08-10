@@ -2466,6 +2466,38 @@ Create Oauth Connect Url
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 - **Errors:** 422 Unprocessable Entity
 
+### POST /api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page
+
+Complete a multi-account Instagram OAuth by selecting the page (A4-28).
+
+The account picker (served by the OAuth callback when several business pages
+are connected) POSTs the chosen `provider_page_id` with a signed
+`selection_token` (the picker's browser cannot present the app's Authorization
+header). The token pins the job + user (short-TTL HMAC, same construction as
+the OAuth state). Identity is resolved from the token persisted by the
+callback using the selected page, then the real session is stored and the
+import resumes — no re-run of the OAuth flow.
+
+**Auth:** none (the signed `selection_token` authorizes the request)
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `job_id` | path | string | yes |  |
+
+**Request body** (`application/x-www-form-urlencoded`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `selection_token` | string | yes | Short-lived HMAC token minted by the OAuth callback when multiple Instagram business accounts were detected |
+| `provider_page_id` | string | yes | The selected Meta page id (must be among the candidates returned by the callback) |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
 ### POST /api/v1/ai/social-import/jobs/{job_id}/auth/scraper-login
 
 Submit Scraper Login

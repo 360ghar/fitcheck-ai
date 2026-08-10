@@ -163,6 +163,9 @@ def test_refund_reuses_existing_succeeded_refund(client, monkeypatch):
         amount = 2000
         currency = "usd"
 
+    class _Invoice:
+        payment_intent = _PI()
+
     class _Refund:
         id = "re_123"
         amount = 2000
@@ -170,20 +173,21 @@ def test_refund_reuses_existing_succeeded_refund(client, monkeypatch):
         status = "succeeded"
         charge = "ch_123"
 
-    # A4-15: the subscription's own intent is preferred; when the
-    # subscription is gone (deleted after churn) the customer-level fallback
-    # runs, so Subscription.retrieve raising a StripeError is the trigger.
+    # A4-15: the subscription's own charge is preferred. When the subscription
+    # is gone (deleted after churn) Stripe still retains its historical
+    # invoices, so the subscription-linked Invoice.list recovers the charge
+    # WITHOUT falling back to a customer-wide lookup (which could refund an
+    # unrelated later purchase).
     with patch("stripe.Subscription.retrieve", side_effect=stripe.error.APIConnectionError("offline")):
-        with patch("stripe.PaymentIntent.list", return_value=type("List", (), {"data": [_PI()]})()):
-            with patch("stripe.Charge.list", return_value=type("List", (), {"data": []})()):
-                with patch("stripe.Refund.list", return_value=type("List", (), {"data": [_Refund()]})()) as refund_list:
-                    with patch("stripe.Refund.create") as refund_create:
-                        response = _call(
-                            client,
-                            "POST",
-                            "/api/v1/admin/subscriptions/user/user-1/refund",
-                            db=db,
-                        )
+        with patch("stripe.Invoice.list", return_value=type("List", (), {"data": [_Invoice()]})()):
+            with patch("stripe.Refund.list", return_value=type("List", (), {"data": [_Refund()]})()) as refund_list:
+                with patch("stripe.Refund.create") as refund_create:
+                    response = _call(
+                        client,
+                        "POST",
+                        "/api/v1/admin/subscriptions/user/user-1/refund",
+                        db=db,
+                    )
 
     assert response.status_code == 200
     body = response.json()
@@ -204,8 +208,22 @@ def test_refund_maps_stripe_error_to_4xx(client, monkeypatch):
 
     class _PI:
         id = "pi_123"
+        status = "succeeded"
+        amount = 2000
+        currency = "usd"
 
-    with patch("stripe.PaymentIntent.list", return_value=type("List", (), {"data": [_PI()]})()):
+    subscription = SimpleNamespace(
+        latest_invoice={
+            "payment_intent": {
+                "id": "pi_123",
+                "status": "succeeded",
+                "amount": 2000,
+                "currency": "usd",
+            }
+        }
+    )
+
+    with patch("stripe.Subscription.retrieve", return_value=subscription):
         with patch("stripe.Refund.list", return_value=type("List", (), {"data": []})()):
             with patch(
                 "stripe.Refund.create",
@@ -224,11 +242,15 @@ def test_refund_maps_stripe_error_to_4xx(client, monkeypatch):
     assert body["details"]["service"] == "stripe"
 
 
-def test_refund_falls_back_to_charge(client, monkeypatch):
+def test_refund_fails_closed_when_subscription_charge_unrecoverable(client, monkeypatch):
+    """A4-15: when the subscription's own charge cannot be recovered, the
+    refund FAILS CLOSED (404) instead of refunding the customer's most recent
+    succeeded charge — a deleted/unavailable subscription followed by an
+    unrelated later purchase must never refund that later purchase."""
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_dummy")
     db = FakeDB(rows={"subscriptions": [SUB_ROW]})
 
-    class _Charge:
+    class _UnrelatedCharge:
         id = "ch_999"
         amount = 1000
         currency = "usd"
@@ -240,22 +262,27 @@ def test_refund_falls_back_to_charge(client, monkeypatch):
         status = "succeeded"
         charge = "ch_999"
 
-    with patch("stripe.PaymentIntent.list", return_value=type("List", (), {"data": []})()):
-        with patch("stripe.Charge.list", return_value=type("List", (), {"data": [_Charge()]})()):
-            with patch("stripe.Refund.list", return_value=type("List", (), {"data": []})()):
-                with patch("stripe.Refund.create", return_value=_Refund()) as refund_create:
-                    response = _call(
-                        client,
-                        "POST",
-                        "/api/v1/admin/subscriptions/user/user-1/refund",
-                        db=db,
-                    )
+    # Subscription gone AND no subscription-linked invoices remain: the old
+    # code fell through to a customer-wide Charge.list and refunded ch_999 —
+    # the exact hazard (refunding an unrelated purchase). The corrected code
+    # must 404 and never consult the customer-wide lists.
+    with patch("stripe.Subscription.retrieve", side_effect=stripe.error.APIConnectionError("offline")):
+        with patch("stripe.Invoice.list", side_effect=stripe.error.APIConnectionError("offline")):
+            with patch("stripe.PaymentIntent.list", return_value=type("List", (), {"data": []})()) as pi_list:
+                with patch("stripe.Charge.list", return_value=type("List", (), {"data": [_UnrelatedCharge()]})()) as charge_list:
+                    with patch("stripe.Refund.list", return_value=type("List", (), {"data": []})()):
+                        with patch("stripe.Refund.create", return_value=_Refund()) as refund_create:
+                            response = _call(
+                                client,
+                                "POST",
+                                "/api/v1/admin/subscriptions/user/user-1/refund",
+                                db=db,
+                            )
 
-    assert response.status_code == 200
-    assert response.json()["charge_id"] == "ch_999"
-    refund_create.assert_called_once_with(
-        charge="ch_999", amount=1000, currency="usd"
-    )
+    assert response.status_code == 404
+    pi_list.assert_not_called()
+    charge_list.assert_not_called()
+    refund_create.assert_not_called()
 
 
 def test_refund_billing_not_configured(client, monkeypatch):
@@ -274,8 +301,8 @@ def test_refund_billing_not_configured(client, monkeypatch):
 def test_refund_no_charge_found_404(client, monkeypatch):
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_dummy")
     db = FakeDB(rows={"subscriptions": [SUB_ROW]})
-    with patch("stripe.PaymentIntent.list", return_value=type("List", (), {"data": []})()):
-        with patch("stripe.Charge.list", return_value=type("List", (), {"data": []})()):
+    with patch("stripe.Subscription.retrieve", side_effect=stripe.error.APIConnectionError("offline")):
+        with patch("stripe.Invoice.list", return_value=type("List", (), {"data": []})()):
             response = _call(
                 client,
                 "POST",

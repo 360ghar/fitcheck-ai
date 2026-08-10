@@ -110,6 +110,10 @@ export default function WardrobePage() {
   const clearJob = useJobUiStore((s) => s.clearJob)
   const lastBatchStatusRef = useRef<BatchJobUiStatus | null>(null)
   const favoritingIdsRef = useRef<Set<string>>(new Set())
+  // Debounce for the server-side search refetch (F2b): typing narrows the
+  // search box per keystroke, but the fetch only fires 300ms after the last
+  // key. Cleared on unmount so a pending fetch cannot fire after navigate.
+  const searchDebounceRef = useRef<number | null>(null)
   const [itemPendingDelete, setItemPendingDelete] = useState<Item | null>(null)
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -214,6 +218,14 @@ export default function WardrobePage() {
     publishBatchJob(lastBatchStatusRef.current, isUploadModalOpen)
   }, [isUploadModalOpen, publishBatchJob])
 
+  // F2b: clear the pending search-refetch timer on unmount so a deferred fetch
+  // cannot fire after the user has navigated away.
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current !== null) window.clearTimeout(searchDebounceRef.current)
+    }
+  }, [])
+
   // F2b-02: the store's non-URL filters (category/color/occasion/condition/
   // search) persist across visits and leak server-side into the next fetch,
   // narrowing the list while the UI shows "All". The URL is this page's
@@ -271,12 +283,23 @@ export default function WardrobePage() {
     setFilters((prev) => ({ ...prev, [key]: value }))
     // Update store filters
     useClosetStore.getState().setFilter(key, value)
-    // Server-side filters (category/color/occasion/condition) must re-fetch so
-    // the result set is authoritative and pagination stays in step — without
-    // this, a filter only narrows the already-loaded page(s), so e.g. the
-    // "Shoes" chip can report "No items match" on a big closet. Search stays
-    // client-side for instant feedback over loaded items.
-    if (key === 'search') return
+    // Server-side filters (category/color/occasion/condition/search) must
+    // re-fetch so the result set is authoritative and pagination stays in
+    // step — without this, a filter only narrows the already-loaded page(s),
+    // e.g. the "Shoes" chip can report "No items match" on a big closet. F2b:
+    // search used to stay client-side, which made page 1 client-filtered but
+    // page 2+ server-filtered: matching items in the first 24 UNfiltered rows
+    // were skipped by the server-filtered offset, and totals/hasMore broke
+    // mid-pagination. Search now refetches server-filtered too, debounced so
+    // typing doesn't hammer the API.
+    if (key === 'search') {
+      if (searchDebounceRef.current !== null) window.clearTimeout(searchDebounceRef.current)
+      searchDebounceRef.current = window.setTimeout(() => {
+        searchDebounceRef.current = null
+        void useClosetStore.getState().fetchItems(true)
+      }, 300)
+      return
+    }
     void useClosetStore.getState().fetchItems(true)
   }, [location, navigate])
 

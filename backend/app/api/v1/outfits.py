@@ -1441,13 +1441,25 @@ async def remove_item_from_outfit(
             )
 
         # Atomic removal via the service-role RPC (migration 044): the previous
-        # read-modify-write raced two concurrent removes into a lost item.
-        await asyncio.to_thread(
+        # read-modify-write raced two concurrent removes into a lost item. The
+        # RPC enforces the >=1-member rule UNDER the row lock and returns an
+        # integer status: 0 = missing/unowned, 1 = removed, 2 = would leave
+        # the outfit empty. The unlocked Python pre-check above is just a
+        # fast path; the RPC's locked check is authoritative (two concurrent
+        # removals of a 2-item outfit cannot both pass the pre-check and
+        # persist item_ids = []).
+        remove_result = await asyncio.to_thread(
             db.rpc(
                 "remove_outfit_item",
                 {"outfit_uuid": outfit_id_str, "item_uuid": item_id_str, "user_uuid": user_id},
             ).execute
         )
+        remove_rows = getattr(remove_result, "data", None) or []
+        if remove_rows and remove_rows[0] == 2:
+            raise ValidationError(
+                "Outfit must contain at least one item",
+                details={"outfit_id": outfit_id_str}
+            )
 
         updated = await _fetch_outfit(db=db, user_id=user_id, outfit_id=outfit_id_str)
         if not updated:
@@ -1715,57 +1727,90 @@ async def upload_outfit_image(
             "created_at": now,
         }
 
-        # Insert new image first, then flip the primary flag atomically.
-        # Insert-then-clear minimizes the window with NO primary; the old
-        # second UPDATE (clear is_primary on the other rows) left a window
-        # where TWO images were primary, or both stayed set if the process
-        # died between the statements. set_primary_outfit_image (migration
-        # 045) flips every flag for the outfit inside ONE
-        # statement/transaction: is_primary = (id = image_uuid). The two-step
-        # clear survives only as the fallback for the migration gap (RPC
-        # missing -> PGRST202).
+        # A4-17: the image insert and the primary reassignment are committed as
+        # ONE server-side transaction (add_outfit_image_and_set_primary,
+        # migration 045), so a crash between them can never leave two primary
+        # images (or a primary flag on a row that never committed). The RPC
+        # also resolves client_request_id replays without a 23505 collision.
+        # The two-step insert-then-clear survives only as the fallback for the
+        # migration gap (RPC missing -> PGRST202).
         try:
-            insert_result = await asyncio.to_thread(db.table("outfit_images").insert(img_row).execute)
+            rpc_result = await asyncio.to_thread(
+                db.rpc(
+                    "add_outfit_image_and_set_primary",
+                    {
+                        "p_outfit_uuid": outfit_id_str,
+                        "p_user_uuid": user_id,
+                        "p_image_id": img_row["id"],
+                        "p_image_url": img_row["image_url"],
+                        "p_thumbnail_url": img_row.get("thumbnail_url"),
+                        "p_storage_path": img_row.get("storage_path"),
+                        "p_pose": img_row["pose"],
+                        "p_lighting": img_row.get("lighting"),
+                        "p_body_profile_id": img_row.get("body_profile_id"),
+                        "p_generation_type": img_row.get("generation_type") or "ai",
+                        "p_is_primary": bool(is_primary),
+                        "p_width": img_row.get("width"),
+                        "p_height": img_row.get("height"),
+                        "p_generation_metadata": img_row.get("generation_metadata"),
+                        "p_client_request_id": img_row.get("client_request_id"),
+                        "p_created_at": now,
+                    },
+                ).execute
+            )
         except Exception as e:
+            if not is_pgrst202_missing_rpc(e):
+                raise
+            logger.warning(
+                "add_outfit_image_and_set_primary RPC missing (migration 045 "
+                "not applied); falling back to two-step insert + primary clear",
+                outfit_id=outfit_id_str,
+            )
             # Two concurrent uploads with the SAME client_request_id both
             # missed the replay lookup above and raced to insert; the loser
             # hits the unique index (23505). Replay the winner's row rather
             # than surfacing a 500 the client would retry into the same dead
             # end (F1-07).
-            if client_request_id and _is_unique_violation(e):
-                winner = await _find_outfit_image_by_client_request_id(
-                    db, outfit_id_str, client_request_id
-                )
-                if winner:
-                    logger.info(
-                        "Upload outfit image race collapsed onto client_request_id winner",
-                        user_id=user_id,
-                        outfit_id=outfit_id_str,
-                        image_id=winner["id"],
-                    )
-                    return {"data": winner, "message": "Created"}
-            raise
-        new_image_id = insert_result.data[0]["id"] if insert_result.data else None
-
-        if is_primary and new_image_id:
             try:
-                await asyncio.to_thread(
-                    db.rpc(
-                        "set_primary_outfit_image",
-                        {"outfit_uuid": outfit_id_str, "image_uuid": new_image_id},
-                    ).execute
-                )
-            except Exception as e:
-                if not is_pgrst202_missing_rpc(e):
-                    raise
-                logger.warning(
-                    "set_primary_outfit_image RPC missing (migration 045 not "
-                    "applied); falling back to two-step primary clear",
-                    outfit_id=outfit_id_str,
-                    image_id=new_image_id,
-                )
-                # Clear is_primary on all OTHER images for this outfit
-                await asyncio.to_thread(db.table("outfit_images").update({"is_primary": False}).eq("outfit_id", outfit_id_str).neq("id", new_image_id).execute)
+                insert_result = await asyncio.to_thread(db.table("outfit_images").insert(img_row).execute)
+            except Exception as insert_err:
+                if client_request_id and _is_unique_violation(insert_err):
+                    winner = await _find_outfit_image_by_client_request_id(
+                        db, outfit_id_str, client_request_id
+                    )
+                    if winner:
+                        logger.info(
+                            "Upload outfit image race collapsed onto client_request_id winner",
+                            user_id=user_id,
+                            outfit_id=outfit_id_str,
+                            image_id=winner["id"],
+                        )
+                        return {"data": winner, "message": "Created"}
+                raise
+            new_image_id = insert_result.data[0]["id"] if insert_result.data else None
+
+            if is_primary and new_image_id:
+                try:
+                    await asyncio.to_thread(
+                        db.rpc(
+                            "set_primary_outfit_image",
+                            {"outfit_uuid": outfit_id_str, "image_uuid": new_image_id},
+                        ).execute
+                    )
+                except Exception as primary_err:
+                    if not is_pgrst202_missing_rpc(primary_err):
+                        raise
+                    # Clear is_primary on all OTHER images for this outfit
+                    await asyncio.to_thread(
+                        db.table("outfit_images")
+                        .update({"is_primary": False})
+                        .eq("outfit_id", outfit_id_str)
+                        .neq("id", new_image_id)
+                        .execute
+                    )
+        else:
+            rpc_rows = getattr(rpc_result, "data", None) or []
+            new_image_id = rpc_rows[0] if rpc_rows else img_row["id"]
 
         # Mark generation complete if provided. The update is scoped by the
         # outfit as well as the id/user: a client-supplied generation_id from

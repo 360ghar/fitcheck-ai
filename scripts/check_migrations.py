@@ -8,11 +8,13 @@ and no TO clause exposes the table to anon/authenticated PostgREST access.
 
 Rules:
   1. Every CREATE POLICY whose statement contains "FOR ALL" must carry an
-     explicit ``TO <role>`` clause. A PUBLIC FOR ALL policy is effectively
-     never intended (the intentional PUBLIC read policies in 007/031 use
+     explicit ``TO <role>`` clause AND that clause must not grant PUBLIC,
+     anon, or authenticated (a PUBLIC FOR ALL policy is effectively never
+     intended - the intentional PUBLIC read policies in 007/031 use
      FOR SELECT, which is allowed without TO).
   2. Any policy whose name starts with "Service role" must be scoped either
-     with ``TO service_role`` or a guard such as ``auth.role() = 'service_role'``.
+     with exactly ``TO service_role`` (no anon/authenticated/PUBLIC mixed
+     in the role list) or a guard such as ``auth.role() = 'service_role'``.
   3. Migration numeric prefixes must be unique. Documented exception: two
      files intentionally share prefix 002 (docs/references/local-setup.md).
 
@@ -22,6 +24,7 @@ Usage (from repo root): python3 scripts/check_migrations.py
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 
 ROOT = Path(__file__).resolve().parent.parent
 MIGRATIONS_DIR = ROOT / "backend" / "db" / "supabase" / "migrations"
@@ -31,6 +34,30 @@ MIGRATIONS_DIR = ROOT / "backend" / "db" / "supabase" / "migrations"
 KNOWN_DUPLICATE_PREFIXES = {"002"}
 
 POLICY_RE = re.compile(r'CREATE\s+POLICY\s+"([^"]+)"(.*?);', re.DOTALL | re.IGNORECASE)
+
+# Roles that must never receive unrestricted access from a FOR ALL policy or a
+# "Service role" policy. The backend calls RPCs/reads with the service-role
+# client; anon/authenticated are the browser PostgREST roles.
+_PUBLIC_ROLES = {"public", "anon", "authenticated"}
+
+
+def _policy_to_roles(body: str) -> Optional[list[str]]:
+    """Parse the role list of a policy's ``TO <roles>`` clause.
+
+    Returns the list of role names, or None when the policy has no TO clause
+    (which means PUBLIC). ``TO`` may be followed by an optional ``GROUP``/
+    ``ROLE`` keyword, e.g. ``TO ROLE service_role, anon``.
+    """
+    to_match = re.search(r"\bTO\s+(?:GROUP\s+|ROLE\s+)?([^;]+?)\s+(?:USING\b|WITH\b|FOR\b|$)", body, re.IGNORECASE | re.DOTALL)
+    if not to_match:
+        return None
+    roles = [r.strip().strip('"').lower() for r in to_match.group(1).split(",")]
+    return [r for r in roles if r]
+
+
+def _is_exactly_service_role(roles: Optional[list[str]]) -> bool:
+    """True when the TO role list is exactly [service_role]."""
+    return roles is not None and len(roles) == 1 and roles[0] == "service_role"
 
 
 def check_migrations() -> int:
@@ -59,18 +86,35 @@ def check_migrations() -> int:
             has_for_all = re.search(r"\bFOR\s+ALL\b", body, re.IGNORECASE) is not None
             has_to = re.search(r"\bTO\s+\w+", body, re.IGNORECASE) is not None
             is_service_role_policy = name.lower().startswith("service role")
+            roles = _policy_to_roles(body)
 
             if has_for_all and not has_to and "auth.role()" not in body:
                 errors.append(
                     f"{path.name}: policy \"{name}\" is FOR ALL without an explicit "
                     f"TO clause or auth.role() guard - it applies to PUBLIC"
                 )
+            if has_for_all and roles is not None and not _is_exactly_service_role(roles):
+                # A FOR ALL policy scoped to PUBLIC (or anon/authenticated) is
+                # the same unrestricted grant the docstring forbids - the
+                # TO PUBLIC syntax passes a naive `TO <word>` check.
+                if any(r in _PUBLIC_ROLES for r in roles):
+                    errors.append(
+                        f"{path.name}: policy \"{name}\" is FOR ALL and grants "
+                        f"unrestricted access to {', '.join(sorted(roles))} - "
+                        f"reject public roles on FOR ALL policies"
+                    )
             if is_service_role_policy:
-                scoped = "service_role" in body or "auth.role()" in body
+                if "auth.role()" in body:
+                    continue
+                scoped = _is_exactly_service_role(roles)
                 if not scoped:
+                    detail = ""
+                    if roles is not None:
+                        detail = f" (TO {', '.join(sorted(roles))})"
                     errors.append(
                         f"{path.name}: policy \"{name}\" claims service-role-only "
-                        f"access but is not scoped (no TO service_role / auth.role() guard)"
+                        f"access but is not scoped to exactly TO service_role "
+                        f"(or an auth.role() guard){detail}"
                     )
 
     if errors:

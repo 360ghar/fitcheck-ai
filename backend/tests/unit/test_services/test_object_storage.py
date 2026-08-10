@@ -311,6 +311,18 @@ async def test_exists_returns_false_on_not_found_code(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_exists_returns_false_on_no_such_key_code(monkeypatch):
+    """R2/S3 report an absent HEAD target as NoSuchKey; the idempotent
+    move/promote paths read that as "absent", not a storage failure."""
+    client = _fake_client()
+    client.head_object.side_effect = _ClientError("NoSuchKey")
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    assert await backend.exists("user-1/items/gone.png") is False
+
+
+@pytest.mark.asyncio
 async def test_exists_reraises_non_missing_errors(monkeypatch):
     client = _fake_client()
     client.head_object.side_effect = _ClientError("SlowDown")

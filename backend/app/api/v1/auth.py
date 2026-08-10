@@ -552,10 +552,21 @@ async def login(
 
                     logger.info("Created missing user profile on login", user_id=user.id)
                 else:
-                    # Profile exists - just update last_login_at
-                    await asyncio.to_thread(db.table("users").update({
-                        "last_login_at": utcnow_iso()
-                    }).eq("id", user.id).execute)
+                    # Profile exists - just update last_login_at. A1-13: also
+                    # sync email_verified from the auth user — registration with
+                    # email confirmation enabled persisted email_verified=False
+                    # at signup, and nothing ever flipped it after the user
+                    # confirmed, so process_pending_referral deferred the grant
+                    # forever. The trigger on auth.users only fires on INSERT,
+                    # not on the confirmation UPDATE, so the login path is the
+                    # reliable place to reconcile the flag.
+                    profile_updates: Dict[str, Any] = {"last_login_at": utcnow_iso()}
+                    confirmed_at = getattr(user, "email_confirmed_at", None)
+                    if confirmed_at is not None:
+                        profile_updates["email_verified"] = True
+                    await asyncio.to_thread(
+                        db.table("users").update(profile_updates).eq("id", user.id).execute
+                    )
             except Exception as e:
                 logger.warning("Failed to ensure user profile", user_id=user.id, error=str(e))
 

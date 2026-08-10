@@ -99,3 +99,29 @@ describe('outfitStore.saveOutfitFromDraft stale preview', () => {
     expect(outfitsApi.uploadOutfitImage).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('outfitStore preview idempotency key length (F1-07)', () => {
+  it('keeps the client_request_id within the backend 64-char limit', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        blob: () => Promise.resolve(new Blob(['x'], { type: 'image/png' })),
+      })
+    )
+    let capturedKey = ''
+    vi.mocked(outfitsApi.uploadOutfitImage).mockImplementation(
+      async (_id, _file, opts) => {
+        capturedKey = opts?.client_request_id ?? ''
+        return { success: true, data: { id: 'img-1', is_primary: true } } as never
+      }
+    )
+    seedCreationState()
+
+    await useOutfitStore.getState().saveOutfitFromDraft()
+
+    expect(capturedKey).toBeTruthy()
+    // The backend contract is max_length=64 (outfits.py Form(... max_length=64)).
+    expect(capturedKey.length).toBeLessThanOrEqual(64)
+    expect(capturedKey).toMatch(/^pv-/)
+  })
+})

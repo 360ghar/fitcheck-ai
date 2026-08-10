@@ -182,6 +182,80 @@ class SocialOAuthService:
             nonce=nonce,
         )
 
+    # ---- account-selection tokens (A4-28) ----------------------------------
+    #
+    # The multi-account picker is a plain HTML form POSTed from the callback's
+    # browser context, which cannot carry the app's Authorization header. The
+    # selection is authorized by a short-lived HMAC token (same construction
+    # as the OAuth state) that pins the job + user; the select-page endpoint
+    # validates it and resolves the user from the token, not from a header.
+    _SELECTION_KEY_PURPOSE = b"fitcheck-social-oauth-selection-v1"
+    _SELECTION_TTL_SECONDS = 10 * 60
+
+    @classmethod
+    def _selection_secret(cls) -> bytes:
+        # Same fail-closed policy as _state_secret: purpose-scoped HKDF key
+        # derived from AI_ENCRYPTION_KEY, distinct from every other consumer.
+        secret = settings.AI_ENCRYPTION_KEY
+        if not secret:
+            raise SocialImportOAuthConfigError(
+                "Set AI_ENCRYPTION_KEY to enable account selection signing"
+            )
+        return derive_key(secret, cls._SELECTION_KEY_PURPOSE)
+
+    @classmethod
+    def create_selection_token(cls, *, user_id: str, job_id: str) -> str:
+        """Sign a short-lived selection token for the account picker."""
+        exp = int((utcnow() + timedelta(seconds=cls._SELECTION_TTL_SECONDS)).timestamp())
+        payload = {
+            "uid": user_id,
+            "jid": job_id,
+            "exp": exp,
+            "nonce": secrets.token_urlsafe(12),
+        }
+        encoded = cls._b64_url_encode(
+            json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        )
+        signature = hmac.new(
+            cls._selection_secret(),
+            encoded.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return f"{encoded}.{signature}"
+
+    @classmethod
+    def parse_selection_token(cls, token: str) -> Dict[str, str]:
+        """Validate a selection token; returns {user_id, job_id}.
+
+        Raises SocialImportOAuthStateError on malformed/expired/invalid
+        tokens (same error class the OAuth state uses).
+        """
+        try:
+            encoded, signature = token.split(".", 1)
+        except ValueError as exc:
+            raise SocialImportOAuthStateError("Malformed account selection token") from exc
+
+        expected = hmac.new(
+            cls._selection_secret(),
+            encoded.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise SocialImportOAuthStateError("Invalid account selection token")
+
+        try:
+            payload = json.loads(cls._b64_url_decode(encoded).decode("utf-8"))
+            user_id = str(payload["uid"])
+            job_id = str(payload["jid"])
+            exp = int(payload["exp"])
+        except Exception as exc:
+            raise SocialImportOAuthStateError("Invalid account selection token payload") from exc
+
+        if exp < int(utcnow().timestamp()):
+            raise SocialImportOAuthStateError("Account selection expired, please retry")
+
+        return {"user_id": user_id, "job_id": job_id}
+
     @classmethod
     def build_authorize_url(
         cls,

@@ -166,12 +166,21 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 -- =============================================================================
 -- RPC: remove_outfit_item
 -- =============================================================================
+-- Returns an INTEGER status instead of a boolean so the caller can tell a
+-- "not found/not owned" outcome from a "would leave the outfit empty"
+-- outcome:
+--   0 = outfit missing or not owned by the caller,
+--   1 = item removed,
+--   2 = the removal would leave item_ids empty ("Outfit must contain at
+--       least one item" - enforced UNDER the row lock so two concurrent
+--       removals of a 2-item outfit cannot both pass an unlocked Python
+--       pre-check and persist item_ids = []).
 CREATE OR REPLACE FUNCTION public.remove_outfit_item(
     outfit_uuid UUID,
     item_uuid UUID,
     user_uuid UUID
 )
-RETURNS BOOLEAN AS $$
+RETURNS INTEGER AS $$
 DECLARE
     current_ids public.outfits.item_ids%TYPE;
 BEGIN
@@ -181,7 +190,15 @@ BEGIN
     FOR UPDATE;
 
     IF NOT FOUND THEN
-        RETURN FALSE;
+        RETURN 0;
+    END IF;
+
+    IF item_uuid NOT IN (SELECT unnest(COALESCE(current_ids, ARRAY[]::UUID[]))) THEN
+        RETURN 1;
+    END IF;
+
+    IF array_length(COALESCE(current_ids, ARRAY[]::UUID[]), 1) <= 1 THEN
+        RETURN 2;
     END IF;
 
     UPDATE public.outfits
@@ -189,7 +206,7 @@ BEGIN
         updated_at = NOW() AT TIME ZONE 'UTC'
     WHERE id = outfit_uuid;
 
-    RETURN TRUE;
+    RETURN 1;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 

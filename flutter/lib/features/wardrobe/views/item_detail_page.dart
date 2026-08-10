@@ -63,8 +63,16 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
               // Content
               Obx(() {
                 final item = wardrobeController.items.firstWhereOrNull(
-                  (i) => i.id == itemId,
-                );
+                      (i) => i.id == itemId,
+                    ) ??
+                    // A10b-09: with a server-side filter active the fetched
+                    // item is held in `fetchedItem` instead of being merged
+                    // into the paged list; render it here so a deep link to
+                    // an item beyond the loaded page leaves the detail
+                    // shimmer instead of spinning forever.
+                    (wardrobeController.fetchedItem.value?.id == itemId
+                        ? wardrobeController.fetchedItem.value
+                        : null);
 
                 if (item == null &&
                     wardrobeController.itemFetchError.value.isNotEmpty) {

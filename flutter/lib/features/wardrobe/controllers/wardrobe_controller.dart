@@ -59,6 +59,11 @@ class WardrobeController extends GetxController {
   // Single-item fetch state (deep links, items beyond the loaded page)
   final RxBool isFetchingItem = false.obs;
   final RxString itemFetchError = ''.obs;
+  /// The item fetched by id when it is NOT on the loaded page and cannot be
+  /// merged (a server-side filter is active — A10b-09). ItemDetailPage renders
+  /// this directly so a deep link to an item beyond the current page leaves
+  /// the detail shimmer instead of spinning forever.
+  final Rx<ItemModel?> fetchedItem = Rx<ItemModel?>(null);
 
   // Getters
   bool get hasError => error.value.isNotEmpty;
@@ -260,7 +265,10 @@ class WardrobeController extends GetxController {
       final item = await _itemRepository.getItem(itemId);
       if (isClosed) return null;
       // A10b-09: don't merge into the paged list while a server-side filter
-      // is active — the grid would show an item that violates it.
+      // is active — the grid would show an item that violates it. Hold it in
+      // [fetchedItem] instead so the detail page can render it (without this,
+      // a deep link to an item beyond the loaded page with any filter active
+      // stayed on the detail shimmer forever).
       if (!_hasServerSideFilters) {
         final index = items.indexWhere((existing) => existing.id == itemId);
         if (index == -1) {
@@ -269,6 +277,7 @@ class WardrobeController extends GetxController {
           items[index] = item;
         }
       }
+      fetchedItem.value = item;
       return item;
     } catch (e) {
       if (isClosed) return null;
@@ -401,6 +410,11 @@ class WardrobeController extends GetxController {
     selectedColors.clear();
     selectedOccasion.value = '';
     sortType.value = 'newest';
+    // A10b-03: favoritesOnly is a filter like any other — the Dashboard
+    // "Favorites" pill sets it, so "All" / "Clear All" must clear it too,
+    // otherwise the user stays stuck on a favorites-only wardrobe with no
+    // visible way out. Matches OutfitListController.clearAllFilters.
+    favoritesOnly.value = false;
   }
 
   /// Set view mode

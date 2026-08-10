@@ -8,7 +8,12 @@ import '../../../core/utils/error_handler.dart';
 
 /// Calendar controller - manages calendar state and operations
 class CalendarController extends GetxController {
-  final CalendarRepository _repository = CalendarRepository();
+  final CalendarRepository _repository;
+
+  /// [repository] is injectable for unit tests; defaults to the live
+  /// repository in production (same pattern as WardrobeController).
+  CalendarController({CalendarRepository? repository})
+      : _repository = repository ?? CalendarRepository();
 
   // Workers for cleanup
   final List<Worker> _workers = [];
@@ -95,10 +100,13 @@ class CalendarController extends GetxController {
 
   /// Fetch events for a month range
   Future<void> fetchEventsForMonth(DateTime date) async {
-    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
-    // A10b-08: capture the generation BEFORE the await — responses are
-    // unordered, and a stale month must never clobber the focused one.
+    // A10b-08: reserve the generation BEFORE the first await. Responses are
+    // unordered, and a stale month must never clobber the focused one — but
+    // reserving AFTER `settleBuildPhase` meant a navigation during a build
+    // frame could not invalidate an already-running request until the deferred
+    // call resumed, so the previous month's response could briefly land.
     final generation = ++_fetchGeneration;
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoadingEvents.value = true;
       error.value = '';

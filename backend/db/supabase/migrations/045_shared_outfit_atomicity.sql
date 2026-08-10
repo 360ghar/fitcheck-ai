@@ -195,6 +195,84 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- =============================================================================
+-- RPC: add_outfit_image_and_set_primary
+-- =============================================================================
+-- POST /outfits/{id}/images (upload_outfit_image) inserted the image row and
+-- then reassigned the primary flag in a SEPARATE transaction: a crash between
+-- them left two primary images (or a primary image on a missing row). This
+-- RPC commits the insert AND the primary reassignment in ONE transaction, so
+-- the two can never disagree.
+--
+-- Returns the image id that is now primary (the freshly inserted row, or the
+-- already-existing row when p_client_request_id replays a prior upload), or
+-- NULL when the outfit is missing or not owned by the caller.
+CREATE OR REPLACE FUNCTION public.add_outfit_image_and_set_primary(
+    p_outfit_uuid UUID,
+    p_user_uuid UUID,
+    p_image_id UUID,
+    p_image_url VARCHAR,
+    p_thumbnail_url VARCHAR,
+    p_storage_path TEXT,
+    p_pose VARCHAR,
+    p_lighting VARCHAR,
+    p_body_profile_id UUID,
+    p_generation_type VARCHAR,
+    p_is_primary BOOLEAN,
+    p_width INTEGER,
+    p_height INTEGER,
+    p_generation_metadata JSONB,
+    p_client_request_id TEXT,
+    p_created_at TIMESTAMP
+)
+RETURNS UUID AS $$
+DECLARE
+    v_image_id UUID;
+BEGIN
+    -- Ownership: an image may only be attached to an outfit the caller owns.
+    IF NOT EXISTS (
+        SELECT 1 FROM public.outfits
+        WHERE id = p_outfit_uuid AND user_id = p_user_uuid
+    ) THEN
+        RETURN NULL;
+    END IF;
+
+    -- ON CONFLICT DO NOTHING (no target): a replay of a prior upload with the
+    -- same client_request_id must not raise 23505 - resolve the existing row
+    -- below instead. The id PK conflict is practically unreachable (the route
+    -- mints a fresh UUID per attempt).
+    INSERT INTO public.outfit_images (
+        id, outfit_id, image_url, thumbnail_url, storage_path, pose, lighting,
+        body_profile_id, generation_type, is_primary, width, height,
+        generation_metadata, client_request_id, created_at
+    ) VALUES (
+        p_image_id, p_outfit_uuid, p_image_url, p_thumbnail_url, p_storage_path,
+        p_pose, p_lighting, p_body_profile_id, p_generation_type,
+        p_is_primary, p_width, p_height, p_generation_metadata,
+        p_client_request_id, p_created_at
+    )
+    ON CONFLICT DO NOTHING
+    RETURNING id INTO v_image_id;
+
+    IF v_image_id IS NULL AND p_client_request_id IS NOT NULL THEN
+        SELECT id INTO v_image_id
+        FROM public.outfit_images
+        WHERE outfit_id = p_outfit_uuid
+          AND client_request_id = p_client_request_id;
+    END IF;
+
+    -- Reassign the primary flag in the SAME transaction: exactly one row of
+    -- the outfit's images is primary afterwards.
+    IF v_image_id IS NOT NULL AND p_is_primary THEN
+        UPDATE public.outfit_images
+        SET is_primary = (id = v_image_id)
+        WHERE outfit_id = p_outfit_uuid;
+    END IF;
+
+    RETURN v_image_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- =============================================================================
 -- Harden RPC privileges (same policy as 022/024/026/031/044)
 -- =============================================================================
 
@@ -204,9 +282,18 @@ REVOKE EXECUTE ON FUNCTION public.remove_shared_outfit(UUID, UUID)
     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.set_primary_outfit_image(UUID, UUID)
     FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.add_outfit_image_and_set_primary(
+    UUID, UUID, UUID, VARCHAR, VARCHAR, TEXT, VARCHAR, VARCHAR, UUID, VARCHAR,
+    BOOLEAN, INTEGER, INTEGER, JSONB, TEXT, TIMESTAMP
+)
+    FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.upsert_shared_outfit(UUID, UUID, VARCHAR, TIMESTAMP, TEXT, BOOLEAN, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.remove_shared_outfit(UUID, UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.set_primary_outfit_image(UUID, UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.add_outfit_image_and_set_primary(
+    UUID, UUID, UUID, VARCHAR, VARCHAR, TEXT, VARCHAR, VARCHAR, UUID, VARCHAR,
+    BOOLEAN, INTEGER, INTEGER, JSONB, TEXT, TIMESTAMP
+) TO service_role;
 
 COMMIT;

@@ -922,3 +922,132 @@ async def test_get_subscription_with_usage_combines_both():
     assert combined.usage.monthly_extractions_remaining == (
         settings.PLAN_FREE_MONTHLY_EXTRACTIONS - 4
     )
+
+
+# =============================================================================
+# A1-08 write-time still-free guard + A1-05 cross-rail Stripe guard
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_consume_banked_referral_credit_skips_when_plan_now_paid():
+    """A1-08 race fix: the banked-credit claim re-checks the CURRENT row at
+    write time. A concurrent referral grant or billing sync that made the row
+    paid/trial after the read-path snapshot must NOT be clobbered — the
+    conditional UPDATE matches zero rows and the newer entitlement survives."""
+    now_paid = _subscription_row(
+        plan_type="pro_monthly",
+        status="trial",
+        current_period_end=(
+            datetime.now(timezone.utc) + timedelta(days=30)
+        ).isoformat(),
+        trial_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+        referral_credit_months=2,
+    )
+    db = FakeDB(rows={"subscriptions": [dict(now_paid)]})
+
+    # The read-path snapshot (row passed in) still says free + banked.
+    result = await SubscriptionService._consume_banked_referral_credit(
+        USER_ID,
+        db,
+        _subscription_row(plan_type="free", status="active", referral_credit_months=2),
+    )
+
+    # No consumption happened and the (now paid) row was NOT modified — the
+    # conditional UPDATE matched zero rows.
+    assert result is None
+    assert db.rows["subscriptions"][0] == now_paid
+
+
+@pytest.mark.asyncio
+async def test_consume_banked_referral_credit_applies_when_still_free():
+    """The claim proceeds when the row is STILL free at write time."""
+    row = _subscription_row(
+        plan_type="free",
+        status="active",
+        current_period_end=None,
+        trial_end=None,
+        referral_credit_months=2,
+    )
+    db = FakeDB(rows={"subscriptions": [row]})
+
+    result = await SubscriptionService._consume_banked_referral_credit(
+        USER_ID, db, row
+    )
+
+    assert result is not None
+    assert result["plan_type"] == "pro_monthly"
+    assert result["referral_credit_months"] == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_stripe_subscription_skips_when_live_store_entitlement():
+    """A1-05 cross-rail guard: a delayed Stripe snapshot must not replace a
+    NEWER live App Store/Play entitlement (which would also erase its
+    reconciliation identifiers)."""
+    db = FakeDB(
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    plan_type="plus_monthly",
+                    billing_provider="apple",
+                    current_period_end=(
+                        datetime.now(timezone.utc) + timedelta(days=30)
+                    ).isoformat(),
+                    apple_original_transaction_id="txn_apple_1",
+                )
+            ]
+        }
+    )
+    stripe_subscription = {
+        "id": "sub_new",
+        "status": "active",
+        "customer": "cus_new",
+        "items": {"data": [{"price": {"id": "price_pro_monthly"}}]},
+        "current_period_start": str(int(time.time()) - 86400),
+        "current_period_end": str(int(time.time()) + 30 * 86400),
+        "trial_end": None,
+        "cancel_at_period_end": False,
+    }
+
+    with patch.multiple(settings, **_STRIPE_PRICE_IDS):
+        result = await SubscriptionService.sync_stripe_subscription(
+            USER_ID, stripe_subscription, db
+        )
+
+    # The store entitlement is untouched — no Stripe write happened.
+    assert result.billing_provider == "apple"
+    assert result.plan_type == PlanType.PLUS_MONTHLY
+    assert db.inserts == []
+
+
+@pytest.mark.asyncio
+async def test_upgrade_to_pro_skips_when_live_store_entitlement():
+    """A1-05: upgrade_to_pro must not blind-overwrite a newer live store
+    entitlement either."""
+    db = FakeDB(
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    plan_type="plus_monthly",
+                    billing_provider="google",
+                    current_period_end=(
+                        datetime.now(timezone.utc) + timedelta(days=30)
+                    ).isoformat(),
+                    google_purchase_token="tok_1",
+                )
+            ]
+        }
+    )
+
+    result = await SubscriptionService.upgrade_to_pro(
+        USER_ID,
+        PlanType.PRO_MONTHLY,
+        "cus_1",
+        "sub_1",
+        db,
+    )
+
+    assert result.billing_provider == "google"
+    assert result.plan_type == PlanType.PLUS_MONTHLY
+    assert db.inserts == []

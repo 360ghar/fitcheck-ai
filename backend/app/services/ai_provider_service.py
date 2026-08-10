@@ -1651,7 +1651,13 @@ class AIProviderService:
                         "Failed to fetch generated image asset after generation succeeded",
                         asset_url=item.get("url"),
                     )
-                    await health_service.record_result(image_url, ok=False, api_key=image_key)
+                    # The image API call itself SUCCEEDED (200, billed). A
+                    # CDN/client-side download failure must not record a
+                    # provider failure — three such failures would open the
+                    # circuit for the image provider and block unrelated
+                    # image generations. Record the API result as healthy and
+                    # surface only the download error.
+                    await health_service.record_result(image_url, ok=True, api_key=image_key)
                     raise AIServiceError(
                         f"Failed to fetch generated image asset: {self._format_exception_message(e)}"
                     )

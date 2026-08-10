@@ -29,6 +29,48 @@ from app.services.subscription_service import SubscriptionService
 from app.utils import maybe_single_data
 from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
 
+
+def _is_unique_violation(error: Exception) -> bool:
+    """True when a postgrest error reports a unique-constraint violation (23505)."""
+    error_info = getattr(error, "json", lambda: {})() or {}
+    code = error_info.get("code") or getattr(error, "code", None)
+    if code == "23505":
+        return True
+    text = str(error).lower()
+    return "duplicate key" in text or "unique constraint" in text
+
+
+async def _sync_entitlement_claiming_identifier(
+    db: Client,
+    user_id: str,
+    *,
+    provider: str,
+    sync_kwargs: Dict[str, Any],
+    identifier: Optional[str],
+) -> Any:
+    """Run the entitlement sync, mapping a concurrent-claim collision to 400.
+
+    ``_ensure_identifier_available`` is a fast-path pre-check; the authoritative
+    atomic claim is the partial unique index from migration 052 on the store
+    identifier column. Two concurrent registrations of the SAME verified
+    transaction from different accounts both pass the SELECT, then the loser's
+    upsert raises 23505 — surface the same "already used on another account"
+    validation error instead of a 500 the client would retry into the same race.
+    """
+    try:
+        return await SubscriptionService.sync_iap_subscription(
+            user_id,
+            db,
+            provider=provider,
+            **sync_kwargs,
+        )
+    except Exception as error:
+        if identifier and _is_unique_violation(error):
+            raise ValidationError(
+                "This purchase has already been used on another account"
+            ) from error
+        raise
+
 logger = get_context_logger(__name__)
 
 router = APIRouter(prefix="/subscription", tags=["Subscription", "IAP"])
@@ -113,13 +155,19 @@ async def _claim_event(db: Client, table: str, pk_column: str, pk_value: str, ev
             .execute
         )
     except Exception:
-        # Cannot inspect the ledger (missing table / dead connection): ack so
-        # the store stops redelivering rather than looping forever.
+        # Cannot inspect the ledger (missing table / dead connection). A
+        # ack here would be final for rows that still need processing: a
+        # failed/stale-processing event depends on THIS delivery to reclaim
+        # and retry it, so acknowledging a read failure would suppress the
+        # store's redelivery and strand the event forever. Raise 500 so the
+        # store retries; a truly duplicate PROCESSED event is cheap to
+        # re-acknowledge on the next delivery.
         logger.warning(
-            "Could not inspect duplicate webhook event; acking",
+            "Could not inspect duplicate webhook event; returning 500 so the "
+            "store retries",
             extra={"table": table, "pk": pk_value},
         )
-        return _CLAIM_ACKED
+        raise HTTPException(status_code=500, detail="Failed to inspect webhook event") from None
     row = maybe_single_data(existing)
     if not row:
         return _CLAIM_ACKED
@@ -381,7 +429,8 @@ async def register_iap_transaction(
             )
         entitlement = AppleIAPService.transaction_to_entitlement(tx_info)
         # One verified transaction -> one account (A1-01): reject when the
-        # purchase already belongs to a different user.
+        # purchase already belongs to a different user. The unique index from
+        # migration 052 is the atomic claim; the SELECT above is the fast path.
         await _ensure_identifier_available(
             db,
             "apple",
@@ -389,17 +438,20 @@ async def register_iap_transaction(
             user["id"],
             app_account_token=tx_info.get("appAccountToken"),
         )
-        result = await SubscriptionService.sync_iap_subscription(
-            user["id"],
+        result = await _sync_entitlement_claiming_identifier(
             db,
+            user["id"],
             provider="apple",
-            plan_type=entitlement["plan_type"],
-            status=entitlement["status"],
-            current_period_start=entitlement["current_period_start"],
-            current_period_end=entitlement["current_period_end"],
-            cancel_at_period_end=entitlement["cancel_at_period_end"],
-            product_id=entitlement["product_id"],
-            apple_original_transaction_id=entitlement["original_transaction_id"],
+            identifier=entitlement["original_transaction_id"],
+            sync_kwargs={
+                "plan_type": entitlement["plan_type"],
+                "status": entitlement["status"],
+                "current_period_start": entitlement["current_period_start"],
+                "current_period_end": entitlement["current_period_end"],
+                "cancel_at_period_end": entitlement["cancel_at_period_end"],
+                "product_id": entitlement["product_id"],
+                "apple_original_transaction_id": entitlement["original_transaction_id"],
+            },
         )
         return {"data": result.model_dump(mode="json"), "message": "OK"}
 
@@ -410,24 +462,28 @@ async def register_iap_transaction(
         GooglePlayService.plan_for_product(product_id)
         purchase = await GooglePlayService.get_subscription(product_id, request.transaction_id)
         entitlement = GooglePlayService.subscription_to_entitlement(purchase, product_id)
-        # One verified purchase token -> one account (A1-01).
+        # One verified purchase token -> one account (A1-01); the migration 052
+        # unique index makes the claim atomic under concurrency.
         await _ensure_identifier_available(
             db, "google", request.transaction_id, user["id"]
         )
         # Acknowledge so Play does not refund the purchase after 3 days.
         await GooglePlayService.acknowledge(product_id, request.transaction_id)
-        result = await SubscriptionService.sync_iap_subscription(
-            user["id"],
+        result = await _sync_entitlement_claiming_identifier(
             db,
+            user["id"],
             provider="google",
-            plan_type=entitlement["plan_type"],
-            status=entitlement["status"],
-            current_period_start=entitlement["current_period_start"],
-            current_period_end=entitlement["current_period_end"],
-            cancel_at_period_end=entitlement["cancel_at_period_end"],
-            product_id=entitlement["product_id"],
-            google_purchase_token=request.transaction_id,
-            google_order_id=entitlement.get("order_id"),
+            identifier=request.transaction_id,
+            sync_kwargs={
+                "plan_type": entitlement["plan_type"],
+                "status": entitlement["status"],
+                "current_period_start": entitlement["current_period_start"],
+                "current_period_end": entitlement["current_period_end"],
+                "cancel_at_period_end": entitlement["cancel_at_period_end"],
+                "product_id": entitlement["product_id"],
+                "google_purchase_token": request.transaction_id,
+                "google_order_id": entitlement.get("order_id"),
+            },
         )
         return {"data": result.model_dump(mode="json"), "message": "OK"}
 

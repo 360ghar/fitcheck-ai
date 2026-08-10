@@ -52,6 +52,10 @@ logger = get_context_logger(__name__)
 # or hostile URL cannot make a request consume unbounded memory.
 _MAX_REMOTE_IMAGE_BYTES = 10 * 1024 * 1024
 _REMOTE_IMAGE_TIMEOUT = httpx.Timeout(20.0, connect=5.0)
+# A3-04: maximum manual redirect hops when fetching a remote image asset.
+# Matches httpx's default follow_redirects cap (20) with headroom removed:
+# a redirect chain longer than this is pathological, not a legit CDN.
+_MAX_REMOTE_IMAGE_REDIRECTS = 5
 
 # Host suffixes that must never be fetched from the backend: cloud metadata
 # (``*.internal``), mDNS (``*.local``) and the loopback name itself.
@@ -413,13 +417,21 @@ class GeminiProvider:
             async with httpx.AsyncClient(timeout=_REMOTE_IMAGE_TIMEOUT, follow_redirects=False) as client:
                 current_url = img
                 response = None
+                redirect_count = 0
                 while True:
+                    # A3-04: bound the manual redirect loop — a host that keeps
+                    # returning fast safe 3xx redirects would otherwise spin
+                    # this request indefinitely (each hop's 20s timeout bounds
+                    # the hop, not the chain).
+                    if redirect_count >= _MAX_REMOTE_IMAGE_REDIRECTS:
+                        raise ValueError("Remote image URL exceeds the redirect limit")
                     async with client.stream("GET", current_url) as stream:
                         if stream.status_code in (301, 302, 303, 307, 308):
                             location = stream.headers.get("location")
                             if not location or not _is_safe_remote_url(location):
                                 raise ValueError("Remote image URL redirects outside the provider boundary")
                             current_url = location
+                            redirect_count += 1
                             continue
                         response = stream
                         stream.raise_for_status()

@@ -263,10 +263,15 @@ class SubscriptionService:
         apply_referral_credit_atomic RPC while the user was paying) are spent
         only when the plan is EFFECTIVELY free — no live trial, no active
         paid period. The claim is a single conditional UPDATE whose WHERE
-        clause requires ``referral_credit_months > 0``: under Postgres READ
-        COMMITTED the loser of a concurrent claim re-checks the updated row
-        and matches nothing, so the bank can never be double-spent without a
-        new RPC (no migration needed).
+        clause requires ``referral_credit_months > 0`` AND that the row is
+        STILL effectively free at write time (no live trial, no active paid
+        period). Under Postgres READ COMMITTED the loser of a concurrent claim
+        re-checks the updated row and matches nothing, so the bank can never
+        be double-spent without a new RPC (no migration needed). The write-time
+        effective-free guard is the A1-08 race fix: a concurrent referral grant
+        or billing sync that lands between the read and the claim must not be
+        clobbered by a stale "effectively free" computed from the earlier
+        snapshot.
 
         Returns the updated row (for building the response) or None when no
         consumption happened.
@@ -301,6 +306,13 @@ class SubscriptionService:
                 })
                 .eq("user_id", user_id)
                 .gt("referral_credit_months", 0)
+                # The write-time effective-free re-check: a concurrent grant or
+                # billing sync that made the row paid/trial after our snapshot
+                # must keep its entitlement — the conditional UPDATE then
+                # matches zero rows and the newer state survives untouched.
+                .eq("plan_type", "free")
+                .or_("current_period_end.is.null,current_period_end.lte." + check_at.isoformat())
+                .or_("trial_end.is.null,trial_end.lte." + check_at.isoformat())
                 .execute
             )
         except Exception as e:
@@ -353,6 +365,35 @@ class SubscriptionService:
         """Upgrade user to Pro plan after successful Stripe payment."""
         try:
             now = utcnow()
+
+            # A1-05: never blind-overwrite a newer LIVE store entitlement with
+            # a Stripe snapshot — the payload below would null the store's
+            # reconciliation identifiers and could downgrade a paid period to
+            # a shorter trial. A delayed checkout callback racing a store
+            # sync must not clobber the rail that is actually entitled.
+            existing_result = await asyncio.to_thread(
+                db.table("subscriptions")
+                .select("billing_provider,current_period_end")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute
+            )
+            existing = maybe_single_data(existing_result)
+            if existing:
+                provider = existing.get("billing_provider")
+                period_end = SubscriptionService._parse_datetime(
+                    existing.get("current_period_end")
+                )
+                if provider in {"apple", "google"} and period_end and period_end > now:
+                    logger.info(
+                        "Skipping Stripe upgrade: a newer live store entitlement "
+                        "is active",
+                        user_id=user_id,
+                        existing_provider=provider,
+                        existing_period_end=period_end.isoformat(),
+                        incoming_stripe_subscription_id=stripe_subscription_id,
+                    )
+                    return await SubscriptionService.get_subscription(user_id, db)
 
             # Calculate period end based on plan type (any *_yearly plan = 1 year)
             if plan_type.value.endswith("_yearly"):
@@ -453,15 +494,33 @@ class SubscriptionService:
         # Refuse to regress the local entitlement: a snapshot for a replaced
         # Stripe subscription (different ID) or with an older period end than
         # the row we already recorded is stale and must not overwrite it.
+        # A1-05: the same out-of-order hazard crosses RAILS — a delayed Stripe
+        # delivery must not replace a NEWER live App Store/Play entitlement
+        # (which would also erase its reconciliation identifiers when the
+        # payload below nulls them). When the existing row is entitled on a
+        # store rail that has not lapsed, ignore the Stripe snapshot.
         existing_result = await asyncio.to_thread(
             db.table("subscriptions")
-            .select("stripe_subscription_id,current_period_end")
+            .select("stripe_subscription_id,current_period_end,billing_provider,plan_type")
             .eq("user_id", user_id)
             .maybe_single()
             .execute
         )
         existing = maybe_single_data(existing_result)
         if existing:
+            existing_provider = existing.get("billing_provider")
+            if existing_provider in {"apple", "google"}:
+                existing_period_end = cls._parse_datetime(existing.get("current_period_end"))
+                if existing_period_end and existing_period_end > now:
+                    logger.info(
+                        "Skipping Stripe snapshot: a newer live store entitlement "
+                        "is active",
+                        user_id=user_id,
+                        incoming_subscription_id=incoming_id,
+                        existing_provider=existing_provider,
+                        existing_period_end=existing_period_end.isoformat(),
+                    )
+                    return await cls.get_subscription(user_id, db)
             existing_sub_id = existing.get("stripe_subscription_id")
             if existing_sub_id and incoming_id and existing_sub_id != incoming_id:
                 logger.info(

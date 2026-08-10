@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from app.core.config import settings
@@ -670,20 +670,6 @@ async def get_user_subscription(db: Any, user_id: str) -> Dict[str, Any]:
     return {"subscription": sub_row, "user": user_row or {}, "usage": usage_row or {}}
 
 
-def _parse_ts(value: Any) -> Optional[int]:
-    """Unix seconds for a PostgREST timestamp (str/datetime/int), or None."""
-    if isinstance(value, datetime):
-        return int(value.timestamp())
-    if isinstance(value, str):
-        try:
-            return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
-        except ValueError:
-            return None
-    if isinstance(value, (int, float)):
-        return int(value)
-    return None
-
-
 async def refund_subscription(db: Any, user_id: str) -> Dict[str, Any]:
     """Refund the user's Stripe charge for THIS subscription (full refund).
 
@@ -785,6 +771,14 @@ async def refund_subscription(db: Any, user_id: str) -> Dict[str, Any]:
             """Resolve the subscription's own charge.
 
             Returns (payment_intent_id, charge_id, amount, currency).
+
+            The subscription's own Stripe association is the ONLY thing that
+            may be refunded here: a customer-level "most recent succeeded
+            charge" fallback bounded only by the subscription's creation time
+            can match an UNRELATED later purchase (a second checkout, a
+            one-off charge) made after the subscription churned, and refund
+            it. When the subscription's own charge cannot be recovered the
+            function fails closed (raises) instead of refunding anything.
             """
             subscription_id = sub_row.get("stripe_subscription_id")
             if subscription_id:
@@ -806,29 +800,80 @@ async def refund_subscription(db: Any, user_id: str) -> Dict[str, Any]:
                                 )
                 except stripe.error.StripeError:
                     # The subscription may be gone (deleted after churn);
-                    # fall through to the customer-level lookup.
+                    # recover its own charge through the invoice list before
+                    # giving up — never fall through to a customer-wide lookup.
                     pass
+                try:
+                    invoices = stripe.Invoice.list(
+                        subscription=subscription_id,
+                        limit=5,
+                    )
+                    for invoice in invoices.data:
+                        intent = getattr(invoice, "payment_intent", None)
+                        # Stripe objects are attribute-access; plain dicts
+                        # appear when the list came from a cached/JSON shape.
+                        if isinstance(intent, str) and intent:
+                            # Payment intent expanded on a previous fetch may
+                            # come back as a plain id on this one; resolve it.
+                            try:
+                                resolved = stripe.PaymentIntent.retrieve(intent)
+                            except stripe.error.StripeError:
+                                continue
+                            if resolved.get("status") == "succeeded":
+                                return (
+                                    resolved.get("id"),
+                                    None,
+                                    resolved.get("amount"),
+                                    resolved.get("currency"),
+                                )
+                            continue
+                        if isinstance(intent, dict):
+                            intent_id = intent.get("id")
+                            intent_status = intent.get("status")
+                            intent_amount = intent.get("amount")
+                            intent_currency = intent.get("currency")
+                        else:
+                            intent_id = getattr(intent, "id", None)
+                            intent_status = getattr(intent, "status", None)
+                            intent_amount = getattr(intent, "amount", None)
+                            intent_currency = getattr(intent, "currency", None)
+                        if intent_id and intent_status == "succeeded":
+                            return (
+                                intent_id,
+                                None,
+                                intent_amount,
+                                intent_currency,
+                            )
+                except stripe.error.StripeError as exc:
+                    raise NotFoundError(
+                        message="Could not recover the Stripe subscription's own "
+                        "charge to refund; refusing to guess at a customer-level "
+                        "charge (a later unrelated purchase could be refunded "
+                        "instead)",
+                        resource_type="stripe_subscription",
+                        resource_id=subscription_id,
+                    ) from exc
 
-            # Fallback: the customer's most recent succeeded intent/charge,
-            # bounded to the subscription's creation window so an unrelated
-            # later purchase is never refunded instead.
-            list_kwargs: Dict[str, Any] = {"customer": customer_id, "limit": 5}
-            created_gte = _parse_ts(sub_row.get("created_at"))
-            if created_gte is not None:
-                list_kwargs["created"] = {"gte": created_gte}
-            for intent in stripe.PaymentIntent.list(**list_kwargs).data:
-                if getattr(intent, "status", None) == "succeeded":
-                    return (intent.id, None, intent.amount, intent.currency)
-            charge_kwargs: Dict[str, Any] = {
-                "customer": customer_id,
-                "limit": 5,
-                "status": "succeeded",
-            }
-            if created_gte is not None:
-                charge_kwargs["created"] = {"gte": created_gte}
-            for charge in stripe.Charge.list(**charge_kwargs).data:
-                return (None, charge.id, charge.amount, charge.currency)
-            return (None, None, None, None)
+                # Subscription exists but no succeeded charge was recoverable.
+                raise NotFoundError(
+                    message="No succeeded charge found for this Stripe "
+                    "subscription to refund; refusing to refund an unrelated "
+                    "customer charge instead",
+                    resource_type="stripe_subscription",
+                    resource_id=subscription_id,
+                )
+
+            # No Stripe association on the row: the subscription's own charge
+            # cannot be identified, so fail closed. The old behavior refunded
+            # the customer's most recent succeeded charge, which could be a
+            # purchase unrelated to this subscription.
+            raise NotFoundError(
+                message="This subscription has no Stripe subscription link, so "
+                "its own charge cannot be identified for a refund; refusing "
+                "to refund a customer-level charge that may be unrelated",
+                resource_type="subscription",
+                resource_id=user_id,
+            )
 
         try:
             payment_intent, charge, amount, currency = _resolve_charge()

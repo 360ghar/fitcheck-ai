@@ -79,21 +79,42 @@ _IP_SWEEP_THRESHOLD = 512
 _MAX_TRACKED_IPS = 10_000
 
 
+def _cutoff_for_operation(operation: str, now: datetime) -> datetime:
+    """Rate-limit window boundary for one operation key.
+
+    Auth operations use the strict 1-hour window; demo operations (and
+    anything else) use the 24-hour demo window. Per-operation cutoffs matter
+    for pruning: an auth check prunes with its 1h boundary, but an IP whose
+    only entries are still-valid 24h demo reservations must NOT be evicted by
+    that narrower cutoff — otherwise a caller could reset their daily demo
+    quota just by making an auth request.
+    """
+    if operation.startswith("auth_"):
+        return now - AUTH_RATE_LIMIT_WINDOW
+    return now - RATE_LIMIT_WINDOW
+
+
 def _prune_ip_usage_locked(cutoff: datetime) -> None:
     """Drop expired/empty tracked IP keys and enforce the key cap.
 
-    Callers hold ``_lock``. ``cutoff`` is the rate-limit window boundary;
-    keys whose per-operation lists contain no timestamp newer than it are
-    dead weight and are removed. When the map still exceeds
+    Callers hold ``_lock``. Each operation key is pruned against its OWN
+    window boundary (1h for auth_*, 24h otherwise) — never the caller's
+    narrower cutoff — so an auth check can't evict an IP whose only entries
+    are still-valid daily demo reservations (which would silently reset the
+    caller's demo quota). Keys with no timestamp newer than their own
+    boundary are dead weight and are removed. When the map still exceeds
     ``_MAX_TRACKED_IPS`` after pruning, the least-recently-active keys are
     evicted so memory stays bounded regardless of traffic shape.
     """
     if len(_ip_usage) >= _IP_SWEEP_THRESHOLD:
+        now = utcnow()
         stale_keys = [
             ip
             for ip, operations in _ip_usage.items()
             if not any(
-                any(ts > cutoff for ts in entries) for entries in operations.values()
+                ts > _cutoff_for_operation(operation, now)
+                for operation, entries in operations.items()
+                for ts in entries
             )
         ]
         for ip in stale_keys:

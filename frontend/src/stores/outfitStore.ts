@@ -161,6 +161,15 @@ interface OutfitState {
   totalOutfits: number;
   hasMore: boolean;
 
+  /**
+   * Session/request generation guard (F1-11): bumped on every `reset()`. Async
+   * reads capture the generation BEFORE their await and drop the response when
+   * it no longer matches — so a request begun before logout cannot repopulate
+   * the reset store with the previous account's outfits after another account
+   * signs in.
+   */
+  resetEpoch: number;
+
   // Actions
   fetchOutfits: (refresh?: boolean) => Promise<void>;
   /** Append the next page (infinite scroll). No-op while a fetch is in flight or the list is exhausted. */
@@ -372,6 +381,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   pageSize: 24,
   totalOutfits: 0,
   hasMore: true,
+  resetEpoch: 0,
 
   // Reset every piece of in-memory outfit state (F1-04): logout / forced
   // logout / user switch must never leave the previous account's outfits,
@@ -402,6 +412,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       pageSize: 24,
       totalOutfits: 0,
       hasMore: true,
+      // Invalidate every in-flight read started before this reset (F1-11).
+      resetEpoch: get().resetEpoch + 1,
     });
   },
 
@@ -427,6 +439,10 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     const cacheKey = outfitListKey(filters, newPage, pageSize);
 
     set({ isLoading: true, error: null });
+    // F1-11: capture the session generation BEFORE the await; a logout/reset
+    // that lands while this request is in flight bumps it, and the response
+    // must not repopulate the reset store with the prior account's outfits.
+    const generation = get().resetEpoch;
 
     try {
       // Coalesce concurrent identical fetches (StrictMode double-mount, two
@@ -437,6 +453,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         () => outfitsApi.getOutfits(apiFilters),
         { force: refresh, label: 'outfitStore.fetchOutfits' }
       );
+      if (get().resetEpoch !== generation) return;
 
       set({
         // Unconditional replacement: a non-paging caller must never append
@@ -464,6 +481,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
 
     set({ isLoadingMore: true, error: null });
+    // F1-11: capture the session generation before the await (see fetchOutfits).
+    const generation = get().resetEpoch;
     try {
       const nextPage = state.page + 1;
       const apiFilters: ApiOutfitFilters = {
@@ -483,7 +502,9 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       // F1-01: re-read AFTER the await — a concurrent refresh that resolved
       // meanwhile must not be clobbered by the pre-await snapshot. F1-09:
       // dedupe by id so offset pagination cannot double tiles after a
-      // concurrent mutation reordered the list.
+      // concurrent mutation reordered the list. F1-11: drop the response if a
+      // logout/reset happened while it was in flight.
+      if (get().resetEpoch !== generation) return;
       const currentState = get();
       const seen = new Set(currentState.outfits.map((o) => o.id));
       const fresh = response.outfits.filter((outfit) => {
@@ -509,12 +530,15 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   fetchOutfitById: async (id: string) => {
     // isDetailLoading, not isLoading: see the field comment.
     set({ isDetailLoading: true, error: null });
+    // F1-11: capture the session generation before the await (see fetchOutfits).
+    const generation = get().resetEpoch;
     try {
       const outfit = await cacheRequest(
         outfitDetailKey(id),
         () => outfitsApi.getOutfit(id),
         { label: 'outfitStore.fetchOutfitById' }
       );
+      if (get().resetEpoch !== generation) return;
       const state = get();
       const index = state.outfits.findIndex((o) => o.id === id);
       const newOutfits = [...state.outfits];
@@ -953,8 +977,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       // F1-07: one key per logical upload; every retry of this save reuses it
       // so the backend replays the original row instead of inserting a
       // duplicate outfit image when the first attempt committed but the
-      // response was lost.
-      const clientRequestId = `preview-${outfit.id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      // response was lost. The backend caps client_request_id at 64 chars
+      // (outfits.py: `client_request_id: str = Form(None, max_length=64)`), so
+      // the prefix is kept short: `pv-` + 36-char UUID + base36 timestamp +
+      // 6-char random = 53 chars, always within the contract.
+      const clientRequestId = `pv-${outfit.id}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
       const uploaded = await withRetry(
         () =>
           outfitsApi.uploadOutfitImage(outfit.id, imageFile, {

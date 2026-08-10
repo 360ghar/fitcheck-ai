@@ -515,10 +515,13 @@ async def update_calendar_event(
 ):
     """Update a calendar event."""
     try:
-        # Verify event exists and belongs to user
+        # Verify event exists and belongs to user. The existing time/all-day
+        # fields are loaded too so the window validation below can use them:
+        # selecting only `id` made one-sided updates (and is_all_day-only
+        # updates) skip the guard because omitted values resolved to None.
         existing = await asyncio.to_thread(
             db.table("calendar_events")
-            .select("id")
+            .select("id,start_time,end_time,is_all_day")
             .eq("id", event_id)
             .eq("user_id", user_id)
             .maybe_single()
@@ -530,7 +533,14 @@ async def update_calendar_event(
         # Validate any provided times against the event's effective window —
         # the row already loaded fills in for fields the client did not send,
         # so a partial update cannot sneak an inverted window past the check.
-        if request.start_time is not None or request.end_time is not None:
+        # Runs whenever ANY of the window-affecting fields is supplied (time
+        # OR is_all_day): an is_all_day-only update can still change the
+        # window semantics, so it must not skip the guard.
+        if (
+            request.start_time is not None
+            or request.end_time is not None
+            or request.is_all_day is not None
+        ):
             effective_start = (
                 request.start_time
                 if request.start_time is not None

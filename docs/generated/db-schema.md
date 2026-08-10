@@ -67,6 +67,12 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `046_seed_ai_settings_and_harden_storage_buckets.sql`
 - `047_items_client_request_id.sql`
 - `048_drop_legacy_supabase_buckets.sql`
+- `049_fix_redeem_promo_atomic_null_stripe.sql`
+- `050_fix_referral_credit_no_banking.sql`
+- `051_add_referral_redemptions_credit_months.sql`
+- `052_iap_identifier_ownership.sql`
+- `053_extraction_jobs_reserved_generations.sql`
+- `054_drop_overbroad_blog_manage_policy.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -130,6 +136,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `035_add_photoshoot_jobs_image_failures.sql` | `photoshoot_jobs` | `image_failures` |
 | `037_admin_roles.sql` | `users` | `is_admin` |
 | `037_admin_roles.sql` | `users` | `role` |
+| `053_extraction_jobs_reserved_generations.sql` | `extraction_jobs` | `reserved_generations` |
 
 These columns are added after their table's CREATE TABLE and are required (NOT NULL DEFAULT), so inserts rely on the default until a value is supplied.
 
@@ -237,6 +244,8 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `045_shared_outfit_atomicity.sql` → `shared_outfits`
 - `047_items_client_request_id.sql` → `items`
 - `047_items_client_request_id.sql` → `outfit_images`
+- `051_add_referral_redemptions_credit_months.sql` → `referral_redemptions`
+- `053_extraction_jobs_reserved_generations.sql` → `extraction_jobs`
 
 ## Related
 

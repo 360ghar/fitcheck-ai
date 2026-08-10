@@ -111,6 +111,7 @@ def _build_persisted_payload(
         "generations_failed": len(job.generation_failed),
         "auto_generate": job.auto_generate,
         "generation_batch_size": job.generation_batch_size,
+        "reserved_generations": getattr(job, "reserved_generations", 0) or 0,
         "error_message": error_message if error_message is not None else job.error_message,
         "items": items,
         "images": images,
@@ -359,6 +360,12 @@ class BatchJobService:
                 persistence_db=db,
                 recovered_from_persistence=True,
                 _persisted_status=status,
+                # Restore the admission reservation (migration 053) so a
+                # restart cannot strand it: the recovered shell can then
+                # release the unused remainder when it is cancelled or
+                # evicted, instead of leaking the user's daily generation
+                # quota forever.
+                reserved_generations=int(row.get("reserved_generations") or 0),
             )
             job.extraction_completed = {
                 image_id for image_id, image in images.items()
@@ -388,8 +395,15 @@ class BatchJobService:
         auto_generate: bool = True,
         generation_batch_size: int = 30,
         db: Any = None,
+        reserved_generations: int = 0,
     ) -> BatchJob:
         """Create a new batch job.
+
+        ``reserved_generations`` is the daily GENERATION quota reserved at
+        admission (total_images x 3). It is persisted with the durable row
+        (migration 053) so a process restart can restore and reconcile it;
+        without persistence the recovered shell carried 0 and the unused
+        reservation was never released (A3-xx).
 
         Raises:
             RateLimitError: If process-wide concurrent batch job cap is hit.
@@ -442,6 +456,7 @@ class BatchJobService:
             generation_batch_size=generation_batch_size,
             images=image_dict,
             persistence_db=db,
+            reserved_generations=reserved_generations,
         )
 
         payload_mb = estimate_base64_mb(payload_sizes)
@@ -1157,6 +1172,12 @@ class BatchJobService:
             BatchJobStatus.FAILED,
         }
         pending_eviction: List[str] = []
+        # Recovered non-terminal shells carry a restored admission reservation
+        # (migration 053); release the unused remainder before evicting them,
+        # otherwise the daily generation quota stays burned forever (A3-xx).
+        # The release RPC runs outside the lock (snapshot under it, like the
+        # dirty-jobs flush above).
+        quota_release_jobs: List[BatchJob] = []
 
         async with cls._lock:
             for job_id, job in list(cls._jobs.items()):
@@ -1178,6 +1199,8 @@ class BatchJobService:
                         # Poll-only shell hydrated from a durable row: no
                         # pipeline owns it, so eviction is safe (the row
                         # remains the polling source of truth).
+                        if (getattr(job, "reserved_generations", 0) or 0) > 0:
+                            quota_release_jobs.append(job)
                         pending_eviction.append(job_id)
                     else:
                         logger.warning(
@@ -1219,6 +1242,11 @@ class BatchJobService:
             async with cls._lock:
                 for job_id in evictable:
                     cls._jobs.pop(job_id, None)
+
+        # Release the restored reservation of evicted recovered shells
+        # (best-effort; the release helper never raises).
+        for job in quota_release_jobs:
+            await cls.release_unused_generation_quota(job)
 
         if evictable:
             logger.info(f"Cleaned up {len(evictable)} expired batch jobs")

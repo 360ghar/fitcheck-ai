@@ -2,11 +2,34 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'calendar_event_model.g.dart';
 
-/// Safely parse DateTime from JSON, with fallback to current time
+/// Safely parse DateTime from JSON, with fallback to current time.
+///
+/// The backend stores UTC wall-clock instants in TIMESTAMP columns WITHOUT a
+/// timezone (calendar_events.start_time/end_time). PostgREST returns those as
+/// naive strings — `DateTime.tryParse` would treat them as LOCAL time and
+/// shift every event by the device's UTC offset (and all-day events onto an
+/// adjacent date). Treat a string WITHOUT a timezone designator as UTC so the
+/// parsed instant matches the instant the client originally sent.
 DateTime _dateTimeFromJson(dynamic value) {
   if (value == null) return DateTime.now();
   if (value is DateTime) return value;
-  return DateTime.tryParse(value.toString()) ?? DateTime.now();
+  final raw = value.toString();
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return DateTime.now();
+  if (!raw.endsWith('Z') && !raw.contains('+')) {
+    // Naive string from a timezone-free column holding UTC wall-clock.
+    return DateTime.utc(
+      parsed.year,
+      parsed.month,
+      parsed.day,
+      parsed.hour,
+      parsed.minute,
+      parsed.second,
+      parsed.millisecond,
+      parsed.microsecond,
+    );
+  }
+  return parsed;
 }
 
 @JsonSerializable()

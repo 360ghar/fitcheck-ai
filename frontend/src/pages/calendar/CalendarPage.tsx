@@ -31,13 +31,6 @@ function calendarConnectedKey(): string {
   return `fitcheck_calendar_connected_${getAccessToken() || 'anon'}`
 }
 
-function formatDateOnly(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
 function toDateTimeLocalValue(date: Date): string {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -202,9 +195,14 @@ export default function CalendarPage() {
         // of the local month boundaries instead: local midnight on the 1st
         // through local end-of-month. That slightly widens the range in
         // non-UTC timezones, which is safe — the UI groups by local day.
-        const startDate = formatDateOnly(new Date(start.toISOString()))
+        //
+        // The slice(0, 10) reads the UTC date components directly: the old
+        // `formatDateOnly(new Date(...toISOString()))` round-tripped the UTC
+        // instant through a Date and then read LOCAL getters, re-deriving the
+        // local calendar date and undoing the whole conversion.
+        const startDate = start.toISOString().slice(0, 10)
         const endInstant = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999)
-        const endDate = formatDateOnly(new Date(endInstant.toISOString()))
+        const endDate = endInstant.toISOString().slice(0, 10)
         const data = await getCalendarEvents({
           start_date: startDate,
           end_date: endDate,

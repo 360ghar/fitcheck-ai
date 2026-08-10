@@ -168,6 +168,23 @@ async def test_decode_image_part_follows_safe_redirect():
 
 
 @pytest.mark.asyncio
+async def test_decode_image_part_bounds_redirect_loop():
+    """A3-04: a host that keeps returning safe 3xx redirects must not spin
+    the download forever — the manual redirect loop is bounded by
+    _MAX_REMOTE_IMAGE_REDIRECTS."""
+    redirect = _remote_response(
+        status_code=302,
+        headers={"location": "https://storage.example.com/loop/img.png"},
+        chunks=(),
+    )
+    # One more safe redirect than the cap allows.
+    chain = [redirect] * (gp_module._MAX_REMOTE_IMAGE_REDIRECTS + 1)
+    with patch("app.services.gemini_provider.httpx.AsyncClient", lambda *a, **k: _FakeRemoteClient(chain)):
+        with pytest.raises(ValueError, match="redirect limit"):
+            await GeminiProvider._decode_image_part("https://remote.example.com/x.png")
+
+
+@pytest.mark.asyncio
 async def test_decode_image_part_rejects_oversized_stream(monkeypatch):
     monkeypatch.setattr(gp_module, "_MAX_REMOTE_IMAGE_BYTES", 100)
     response = _remote_response(chunks=(b"x" * 60, b"y" * 60))

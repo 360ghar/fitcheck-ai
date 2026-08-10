@@ -138,6 +138,15 @@ interface ClosetState {
   totalItems: number;
   hasMore: boolean;
 
+  /**
+   * Session/request generation guard (F1-11): bumped on every `reset()`. Async
+   * reads capture the generation BEFORE their await and drop the response when
+   * it no longer matches — so a request begun before logout cannot repopulate
+   * the reset store with the previous account's wardrobe after another account
+   * signs in.
+   */
+  resetEpoch: number;
+
   // Actions
   fetchItems: (refresh?: boolean) => Promise<void>;
   /** Append the next page (Load-more). No-op while a fetch is in flight or the list is exhausted. */
@@ -307,6 +316,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   pageSize: 24,
   totalItems: 0,
   hasMore: true,
+  resetEpoch: 0,
 
   // Reset every piece of in-memory wardrobe state (F1-04): logout / forced
   // logout / user switch must never leave the previous account's items,
@@ -332,6 +342,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       pageSize: 24,
       totalItems: 0,
       hasMore: true,
+      // Invalidate every in-flight read started before this reset (F1-11).
+      resetEpoch: get().resetEpoch + 1,
     });
   },
 
@@ -352,6 +364,10 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     // fresh result instead of re-requesting on every mount. `refresh` (or
     // invalidate after a mutation) forces one new request.
     set({ isLoading: true, error: null });
+    // F1-11: capture the session generation BEFORE the await; a logout/reset
+    // that lands while this request is in flight bumps it, and the response
+    // must not repopulate the reset store with the prior account's items.
+    const generation = get().resetEpoch;
 
     try {
       const response = await cacheRequest(
@@ -359,6 +375,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         () => itemsApi.getItems(apiFilters),
         { force: refresh, label: 'wardrobe.fetchItems' }
       );
+      if (get().resetEpoch !== generation) return;
 
       set({
         // Unconditional replacement: a non-paging caller must never append
@@ -394,6 +411,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
 
     set({ isLoadingMore: true, error: null });
+    // F1-11: capture the session generation before the await (see fetchItems).
+    const generation = get().resetEpoch;
     try {
       const nextPage = state.page + 1;
       // F1-02: search is sent on EVERY page (fetchItems sends it on page 1),
@@ -402,6 +421,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       // stranding matching items past the unfiltered offset.
       const apiFilters = buildItemApiFilters(state.filters, nextPage, state.pageSize);
       const response = await itemsApi.getItems(apiFilters);
+      // F1-11: drop the response if a logout/reset happened while in flight.
+      if (get().resetEpoch !== generation) return;
       // F1-01: re-read AFTER the await — a concurrent fetchItems(true) that
       // resolved meanwhile must not be clobbered by the pre-await snapshot
       // (last-writer-wins race).
@@ -439,6 +460,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   fetchItemById: async (id: string) => {
     // isDetailLoading, not isLoading: see the field comment.
     set({ isDetailLoading: true, error: null });
+    // F1-11: capture the session generation before the await (see fetchItems).
+    const generation = get().resetEpoch;
     try {
       // Coalesce concurrent detail fetches for the same item (deep link
       // effect + detail pane) onto one request.
@@ -447,6 +470,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         () => itemsApi.getItem(id),
         { label: 'wardrobe.fetchItemById' }
       );
+      if (get().resetEpoch !== generation) return;
       const state = get();
       const index = state.items.findIndex((i) => i.id === id);
       const newItems = [...state.items];

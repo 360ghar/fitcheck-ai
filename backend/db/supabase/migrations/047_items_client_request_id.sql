@@ -17,9 +17,13 @@ ALTER TABLE public.items
 
 -- One idempotency key per user. Partial so historical rows (NULL keys) never
 -- collide; the create endpoint only replays rows that are not deleted.
+-- Soft-deleted rows (is_deleted = TRUE) must NOT occupy the key: the replay
+-- lookup filters them out, so a fresh create after a delete with the same key
+-- has to take the insert path instead of colliding on 23505 (or replaying the
+-- deleted row's wrong data).
 CREATE UNIQUE INDEX IF NOT EXISTS items_user_client_request_id_key
     ON public.items (user_id, client_request_id)
-    WHERE client_request_id IS NOT NULL;
+    WHERE client_request_id IS NOT NULL AND is_deleted = FALSE;
 
 ALTER TABLE public.outfit_images
     ADD COLUMN IF NOT EXISTS client_request_id TEXT;

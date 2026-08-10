@@ -187,9 +187,11 @@ class S3StorageBackend:
                 ((getattr(error, "response", None) or {}).get("Error") or {}).get("Code") or ""
             ).lower()
             # botocore surfaces missing keys as ClientError with code 404 /
-            # "NotFound"; anything else is a real storage failure and must
+            # "NotFound"; R2 and S3 also report HEAD on an absent object as
+            # "NoSuchKey" (see storage_service._is_no_such_key_error for the
+            # same class). Anything else is a real storage failure and must
             # not be read as "absent".
-            if code in ("404", "notfound"):
+            if code in ("404", "notfound", "nosuchkey"):
                 return False
             raise
 

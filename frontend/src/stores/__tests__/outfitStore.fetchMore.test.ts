@@ -124,3 +124,56 @@ describe('outfitStore.fetchMore (infinite scroll)', () => {
     expect(useOutfitStore.getState().page).toBe(1)
   })
 })
+
+describe('outfitStore logout/reset epoch guard (F1-11)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRequestCache()
+    useOutfitStore.setState({
+      outfits: [],
+      isLoading: false,
+      isLoadingMore: false,
+      hasMore: true,
+      page: 1,
+      pageSize: 24,
+      error: null,
+      resetEpoch: 0,
+    })
+  })
+
+  it('drops an in-flight fetch response when reset() runs mid-flight', async () => {
+    let resolveFetch!: (value: Awaited<ReturnType<typeof getOutfits>>) => void
+    vi.mocked(getOutfits).mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve
+      }) as ReturnType<typeof getOutfits>
+    )
+
+    const pending = useOutfitStore.getState().fetchOutfits(true)
+    // Logout resets the store while the request is in flight.
+    useOutfitStore.getState().reset()
+    resolveFetch(page([outfit('stale-account')], false))
+    await pending
+
+    // The stale response must not repopulate the reset store.
+    expect(useOutfitStore.getState().outfits).toEqual([])
+    expect(useOutfitStore.getState().isLoading).toBe(false)
+  })
+
+  it('drops a stale fetchMore append after reset()', async () => {
+    let resolveFetch!: (value: Awaited<ReturnType<typeof getOutfits>>) => void
+    vi.mocked(getOutfits).mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve
+      }) as ReturnType<typeof getOutfits>
+    )
+
+    useOutfitStore.setState({ outfits: [outfit('a')], hasMore: true, page: 1 })
+    const pending = useOutfitStore.getState().fetchMore()
+    useOutfitStore.getState().reset()
+    resolveFetch(page([outfit('stale')], false))
+    await pending
+
+    expect(useOutfitStore.getState().outfits).toEqual([])
+  })
+})

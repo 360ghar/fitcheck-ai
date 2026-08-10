@@ -1128,6 +1128,33 @@ class SocialImportPipelineService:
                 # extraction result and requeue it so the retry re-generates
                 # instead of burning a fresh extraction slot on a photo that
                 # was already extracted.
+                #
+                # A4-03: the generation reservation at the top of this photo
+                # covered ALL items, but capacity stopped the loop early —
+                # items never attempted must hand their reserved slots back
+                # NOW, before the retry re-reserves the full photo. Without
+                # this, a first-item outage on a multi-item photo burns the
+                # user's daily generation allowance without delivering any
+                # reviewable result (and every retry cycle double-reserves).
+                unused_generation = len(raw_items) - generation_success_count
+                if unused_generation > 0:
+                    try:
+                        await AISettingsService.release_usage(
+                            user_id=self.user_id,
+                            operation_type=OperationType.GENERATION,
+                            db=self.db,
+                            count=unused_generation,
+                        )
+                    except Exception as release_err:
+                        logger.warning(
+                            "Failed to release generation reservation after capacity pause",
+                            extra={
+                                "job_id": job_id,
+                                "photo_id": photo_id,
+                                "unused": unused_generation,
+                                "error": str(release_err),
+                            },
+                        )
                 await self._store_pending_extraction(
                     job_id=job_id,
                     photo_id=photo_id,

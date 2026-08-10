@@ -115,14 +115,42 @@ async def test_prune_hard_cap_evicts_least_recently_active(monkeypatch):
     least-recently-active keys so memory stays bounded."""
     monkeypatch.setattr(ip_rate_limit, "_IP_SWEEP_THRESHOLD", 0)
     monkeypatch.setattr(ip_rate_limit, "_MAX_TRACKED_IPS", 3)
-    # Key 10.0.0.1 is least recently active; 10.0.0.4 the most.
-    _seed_ip("10.0.0.1", age_hours=5.0)
-    _seed_ip("10.0.0.2", age_hours=3.0)
-    _seed_ip("10.0.0.3", age_hours=1.0)
-    _seed_ip("10.0.0.4", age_hours=0.5)
+    # Key 10.0.0.1 is least recently active; 10.0.0.4 the most. All entries
+    # are kept within the auth (1h) window so the per-operation prune does not
+    # drop them first — the cap must do the eviction.
+    _seed_ip("10.0.0.1", age_hours=0.9)
+    _seed_ip("10.0.0.2", age_hours=0.5)
+    _seed_ip("10.0.0.3", age_hours=0.2)
+    _seed_ip("10.0.0.4", age_hours=0.05)
     cutoff = utcnow() - ip_rate_limit.RATE_LIMIT_WINDOW
     async with ip_rate_limit._lock:
         ip_rate_limit._prune_ip_usage_locked(cutoff)
     assert len(ip_rate_limit._ip_usage) == 3
     assert "10.0.0.1" not in ip_rate_limit._ip_usage
     assert "10.0.0.4" in ip_rate_limit._ip_usage
+
+
+@pytest.mark.asyncio
+async def test_auth_prune_preserves_still_valid_demo_reservations(monkeypatch):
+    """A5-10: an auth-rate-limit check prunes with the 1h auth window, but it
+    must NOT evict an IP whose only entries are still-valid 24h demo
+    reservations — otherwise a caller could reset their daily demo quota just
+    by making an auth request."""
+    monkeypatch.setattr(ip_rate_limit, "_IP_SWEEP_THRESHOLD", 1)
+    # A demo extraction reservation made 2h ago is outside the 1h auth window
+    # but INSIDE the 24h demo window — it is still valid quota.
+    await increment_ip_usage("198.51.100.7", "extraction")
+    ip_rate_limit._ip_usage["198.51.100.7"]["extraction"] = [
+        utcnow() - timedelta(hours=2)
+    ]
+    # An unrelated IP with only a stale 25h-old auth entry must be swept.
+    ip_rate_limit._ip_usage["198.51.100.8"]["auth_login"].append(
+        utcnow() - timedelta(hours=25)
+    )
+
+    await ip_rate_limit.check_auth_rate_limit("198.51.100.9", "login")
+
+    # The demo-only IP survived the auth-triggered sweep (its demo slot is
+    # still valid); the genuinely stale auth IP was dropped.
+    assert "198.51.100.7" in ip_rate_limit._ip_usage
+    assert "198.51.100.8" not in ip_rate_limit._ip_usage
