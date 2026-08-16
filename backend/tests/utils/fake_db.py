@@ -164,6 +164,10 @@ class FakeNotBuilder:
         self._builder._add_filter("not_like", col, str(value))
         return self._builder
 
+    def is_(self, col: str, value: Any) -> "FakeBuilder":
+        self._builder._add_filter("not_is", col, value)
+        return self._builder
+
 
 class FakeBuilder:
     """Chainable fake query builder backed by FakeDB rows."""
@@ -341,6 +345,12 @@ class FakeBuilder:
                     if want_null and row_value is not None:
                         keep = False
                     elif not want_null and row_value is None:
+                        keep = False
+                elif op == "not_is":
+                    want_null = value is None or str(value).lower() == "null"
+                    if want_null and row_value is None:
+                        keep = False
+                    elif not want_null and row_value is not None:
                         keep = False
                 elif op == "not_in" and str(row_value or "") in [str(v) for v in value]:
                     keep = False

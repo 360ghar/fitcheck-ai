@@ -107,15 +107,6 @@ class _OutfitsFakeDB(FakeDB):
 
             builder.contains = _contains
 
-        not_builder = builder.not_
-        if not hasattr(not_builder, "is_"):
-
-            def _is_(column, value):
-                not_builder._builder._add_filter("is", column, value)
-                return not_builder._builder
-
-            not_builder.is_ = _is_
-
         # PostgREST's `return=representation` updates echo the merged rows
         # back AND the change is committed; the shared fake persists the
         # merged rows itself (update execute replaces matched rows), so a
