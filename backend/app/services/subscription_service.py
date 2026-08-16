@@ -2,7 +2,7 @@
 Subscription service for managing user subscriptions and usage tracking.
 """
 from datetime import datetime, date, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 from dateutil.relativedelta import relativedelta
 
 import asyncio
@@ -964,7 +964,7 @@ class SubscriptionService:
                     .neq("user_id", user_id)
                     .execute
                 )
-                stale_user_ids: List[str] = []
+                stale_rows: list = []
                 for row in getattr(others, "data", None) or []:
                     other_id = row.get("user_id")
                     if not other_id:
@@ -972,8 +972,7 @@ class SubscriptionService:
                     try:
                         other_plan = PlanType(row.get("plan_type") or PlanType.FREE.value)
                     except ValueError:
-                        stale_user_ids.append(other_id)
-                        continue
+                        other_plan = PlanType.FREE
                     try:
                         other_status = SubscriptionStatus(
                             row.get("status") or SubscriptionStatus.ACTIVE.value
@@ -986,11 +985,12 @@ class SubscriptionService:
                         cls._parse_datetime(row.get("current_period_end")),
                         cls._parse_datetime(row.get("trial_end")),
                         check_at,
-                    ) == PlanType.FREE:
-                        stale_user_ids.append(other_id)
-                stale_rows: list = []
-                if stale_user_ids:
-                    released = await asyncio.to_thread(
+                    ) != PlanType.FREE:
+                        continue
+                    # Guard the downgrade with the snapshot we classified so a
+                    # concurrent IAP sync that just entitled this row cannot
+                    # be revoked by a stale classification.
+                    builder = (
                         db.table("subscriptions")
                         .update({
                             identity_column: None,
@@ -1002,11 +1002,15 @@ class SubscriptionService:
                             "updated_at": check_at.isoformat(),
                         })
                         .eq(identity_column, claimed_identifier)
-                        .neq("user_id", user_id)
-                        .in_("user_id", stale_user_ids)
-                        .execute
+                        .eq("user_id", other_id)
+                        .eq("plan_type", row.get("plan_type"))
+                        .eq("status", row.get("status"))
                     )
-                    stale_rows = getattr(released, "data", None) or []
+                    period_end = row.get("current_period_end")
+                    if period_end:
+                        builder = builder.eq("current_period_end", period_end)
+                    released = await asyncio.to_thread(builder.execute)
+                    stale_rows.extend(getattr(released, "data", None) or [])
                 if stale_rows:
                     logger.warning(
                         "Released store identifier from a previous owner and "

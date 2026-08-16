@@ -930,7 +930,11 @@ async def select_oauth_page(
             )
         except Exception:
             session = None
-        if session:
+        payload = (session or {}).get("session_payload") or {}
+        # A selection_pending session is the pre-accept picker state, not a
+        # committed OAuth bind. Only skip the release when accept_auth
+        # actually replaced that payload.
+        if session and not payload.get("selection_pending"):
             return
         SocialOAuthService.release_selection_token(selection_token)
 

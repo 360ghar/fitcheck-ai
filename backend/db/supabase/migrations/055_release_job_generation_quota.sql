@@ -77,7 +77,8 @@ BEGIN
     SELECT last_reset_date
     INTO v_last_reset
     FROM public.user_ai_settings
-    WHERE user_id = p_user_id;
+    WHERE user_id = p_user_id
+    FOR UPDATE;
 
     UPDATE public.user_ai_settings
     SET daily_generation_count = CASE

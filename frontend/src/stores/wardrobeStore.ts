@@ -610,7 +610,9 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         item.id === itemId ? { ...item, is_favorite: updated.is_favorite } : item
       );
       const leftFavoriteFilter =
-        state.filters.isFavorite && !updated.is_favorite
+        state.filters.isFavorite &&
+        !updated.is_favorite &&
+        state.filteredItems.some((item) => item.id === itemId)
       set({
         items: newItems,
         selectedItem:
