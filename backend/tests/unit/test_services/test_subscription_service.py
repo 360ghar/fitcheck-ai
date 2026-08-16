@@ -970,6 +970,8 @@ async def test_release_failure_does_not_block_the_entitlement_write():
     assert result.plan_type == PlanType.PRO_MONTHLY
     claimed = next(r for r in db.rows["subscriptions"] if r["user_id"] == USER_ID)
     assert claimed["google_purchase_token"] == "token-shared"
+    previous = next(r for r in db.rows["subscriptions"] if r["user_id"] == "old-owner")
+    assert previous["google_purchase_token"] == "token-shared"
 
 
 @pytest.mark.asyncio
