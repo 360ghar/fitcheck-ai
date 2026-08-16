@@ -929,32 +929,32 @@ async def test_new_store_purchase_releases_identifier_from_previous_owner():
 @pytest.mark.asyncio
 async def test_release_failure_does_not_block_the_entitlement_write():
     """The user is waiting on the entitlement; a failed cleanup is logged only."""
-    db = Mock()
-    existing = _subscription_row(plan_type="free")
-    updated = _subscription_row(
-        plan_type="pro_monthly",
-        status="active",
-        billing_provider="google",
-        # A paid plan with no period end reads as expired, so give it a live one.
-        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+
+    class _ReleaseBoomDB(FakeDB):
+        def table(self, name):
+            builder = super().table(name)
+            inner = builder.update
+
+            def update(payload):
+                if payload.get("plan_type") == "free" and "billing_product_id" in payload:
+                    raise Exception("permission denied")
+                return inner(payload)
+
+            builder.update = update
+            return builder
+
+    db = _ReleaseBoomDB(
+        insert_defaults={"id": "22222222-2222-2222-2222-222222222222"},
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    user_id="old-owner",
+                    plan_type="free",
+                    google_purchase_token="token-shared",
+                )
+            ]
+        },
     )
-    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
-    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
-    _mock_write_result(db, updated)
-    sel = db.table.return_value.select.return_value
-    sel.eq.return_value = sel
-    sel.neq.return_value = sel
-    sel.execute.return_value = Mock(data=[{
-        "user_id": "old-owner",
-        "plan_type": "free",
-        "status": "active",
-        "current_period_end": None,
-        "trial_end": None,
-    }])
-    upd = db.table.return_value.update.return_value
-    upd.eq.return_value = upd
-    upd.is_.return_value = upd
-    upd.execute.side_effect = Exception("permission denied")
 
     result = await SubscriptionService.sync_iap_subscription(
         USER_ID,
@@ -962,12 +962,14 @@ async def test_release_failure_does_not_block_the_entitlement_write():
         provider="google",
         plan_type=PlanType.PRO_MONTHLY,
         status="active",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
         product_id="com.fitcheck.pro.monthly",
         google_purchase_token="token-shared",
     )
 
     assert result.plan_type == PlanType.PRO_MONTHLY
-    db.table.return_value.upsert.assert_called_once()
+    claimed = next(r for r in db.rows["subscriptions"] if r["user_id"] == USER_ID)
+    assert claimed["google_purchase_token"] == "token-shared"
 
 
 @pytest.mark.asyncio
