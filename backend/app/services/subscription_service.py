@@ -1009,6 +1009,8 @@ class SubscriptionService:
                     period_end = row.get("current_period_end")
                     if period_end:
                         builder = builder.eq("current_period_end", period_end)
+                    else:
+                        builder = builder.is_("current_period_end", "null")
                     released = await asyncio.to_thread(builder.execute)
                     stale_rows.extend(getattr(released, "data", None) or [])
                 if stale_rows:

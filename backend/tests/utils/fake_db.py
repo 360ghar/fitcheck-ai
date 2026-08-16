@@ -227,6 +227,10 @@ class FakeBuilder:
         self._add_filter("in", col, list(values))
         return self
 
+    def is_(self, col: str, value: Any):
+        self._add_filter("is", col, value)
+        return self
+
     def or_(self, expression: str):
         self._add_filter("or", "", expression)
         return self
@@ -332,6 +336,12 @@ class FakeBuilder:
                         keep = False
                 elif op == "in" and str(row_value or "") not in [str(v) for v in value]:
                     keep = False
+                elif op == "is":
+                    want_null = value is None or str(value).lower() == "null"
+                    if want_null and row_value is not None:
+                        keep = False
+                    elif not want_null and row_value is None:
+                        keep = False
                 elif op == "not_in" and str(row_value or "") in [str(v) for v in value]:
                     keep = False
                 elif op == "not_eq" and row_value == value:

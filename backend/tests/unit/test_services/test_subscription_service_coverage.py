@@ -750,6 +750,42 @@ async def test_sync_iap_subscription_releases_refunded_paid_previous_owner():
 
 
 @pytest.mark.asyncio
+async def test_sync_iap_subscription_null_period_snapshot_does_not_revoke_new_entitlement():
+    """A null current_period_end snapshot must IS NULL the update so a
+    concurrent sync that just wrote a period end is not downgraded."""
+    db = _fresh_db(
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    plan_type="pro_monthly",
+                    status="refunded",
+                    billing_provider="apple",
+                    apple_original_transaction_id="orig-shared",
+                    current_period_end=None,
+                )
+            ]
+        }
+    )
+    db.rows["subscriptions"][0]["user_id"] = "user-2"
+
+    await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,
+        status="active",
+        current_period_start=(datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+        product_id="com.fitcheck.pro.monthly",
+        apple_original_transaction_id="orig-shared",
+    )
+
+    previous_owner = db.rows["subscriptions"][0]
+    assert previous_owner["user_id"] == "user-2"
+    assert previous_owner["apple_original_transaction_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_sync_iap_subscription_falls_back_to_read_when_upsert_returns_no_row():
     db = _NoRowUpsertDB(
         rows={
