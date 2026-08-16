@@ -9,9 +9,15 @@
 
 BEGIN;
 
-UPDATE public.user_ai_settings
-  SET default_provider = 'custom'
-  WHERE default_provider = 'gemini';
+-- Natural no-op on rerun (no 'gemini' rows left); wrapped in a DO block to
+-- keep top-level DML out of the migration (re-runnability contract).
+DO $$
+BEGIN
+  UPDATE public.user_ai_settings
+    SET default_provider = 'custom'
+    WHERE default_provider = 'gemini';
+END;
+$$;
 
 ALTER TABLE public.user_ai_settings
   ALTER COLUMN default_provider SET DEFAULT 'custom';

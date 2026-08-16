@@ -29,6 +29,7 @@ from app.services.batch_job_service import (
     BatchJobStatus,
     DetectedItemData,
 )
+from app.services.storage_service import StorageService
 from tests.utils.fake_db import FakeDB
 
 
@@ -992,10 +993,31 @@ async def test_cache_extraction_results_paths():
 
 
 @pytest.mark.asyncio
-async def test_fetch_user_avatar_base64_paths():
+async def test_fetch_user_avatar_base64_paths(monkeypatch):
+    # Bucket-key avatar: routed through StorageService (bucket-only read),
+    # never an arbitrary HTTP GET (A2-07).
+    bucket_service = BatchExtractionService(
+        user_id="u1",
+        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "users/u1/avatars/abc.png"}]}),
+    )
+    download = AsyncMock(return_value="bucket-b64")
+    monkeypatch.setattr(StorageService, "download_to_base64", staticmethod(download))
+    assert await bucket_service._fetch_user_avatar_base64() == "bucket-b64"
+    download.assert_awaited_once_with("users/u1/avatars/abc.png")
+
+    # Allowlisted https host: the direct httpx fetch still works.
     service = BatchExtractionService(
         user_id="u1",
-        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "https://cdn.test/avatar.png"}]}),
+        db=FakeDB(
+            rows={
+                "users": [
+                    {
+                        "id": "u1",
+                        "avatar_url": "https://lh3.googleusercontent.com/a/photo",
+                    }
+                ]
+            }
+        ),
     )
     response = Mock(content=b"raw-avatar", raise_for_status=Mock())
     with patch(
@@ -1015,10 +1037,23 @@ async def test_fetch_user_avatar_base64_paths():
     )
     assert await no_url._fetch_user_avatar_base64() is None
 
-    # Timeout is swallowed.
+    # A non-allowlisted https host is skipped (SSRF guard) -> None.
+    skipped = BatchExtractionService(
+        user_id="u1",
+        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "https://cdn.test/avatar.png"}]}),
+    )
+    assert await skipped._fetch_user_avatar_base64() is None
+
+    # Timeout is swallowed (on an allowlisted host).
     timed_out = BatchExtractionService(
         user_id="u1",
-        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "https://cdn.test/a.png"}]}),
+        db=FakeDB(
+            rows={
+                "users": [
+                    {"id": "u1", "avatar_url": "https://lh3.googleusercontent.com/a.png"}
+                ]
+            }
+        ),
     )
     with patch(
         "app.services.batch_extraction_service.httpx.AsyncClient",
@@ -1033,6 +1068,22 @@ async def test_fetch_user_avatar_base64_paths():
 
     broken = BatchExtractionService(user_id="u1", db=_BrokenDb())
     assert await broken._fetch_user_avatar_base64() is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_user_avatar_bucket_read_failure_returns_none(monkeypatch):
+    """A failing bucket download degrades to no avatar, never to an HTTP
+    fetch of the stored URL."""
+    service = BatchExtractionService(
+        user_id="u1",
+        db=FakeDB(rows={"users": [{"id": "u1", "avatar_url": "users/u1/avatars/abc.png"}]}),
+    )
+    monkeypatch.setattr(
+        StorageService,
+        "download_to_base64",
+        staticmethod(AsyncMock(side_effect=RuntimeError("bucket down"))),
+    )
+    assert await service._fetch_user_avatar_base64() is None
 
 
 @pytest.mark.asyncio
@@ -1054,3 +1105,288 @@ async def test_persist_source_image_empty_and_data_url():
 
     assert result == {"image_url": "https://cdn/s.jpg", "storage_path": "u/s.jpg"}
     assert captured["file_data"] == b"fake"
+
+
+# ---------------------------------------------------------------------------
+# Failed-extraction source cleanup (A2-06)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_extract_failure_deletes_uploaded_source_image():
+    """A failed extraction must not leave its canonical {user}/sources/ upload
+    orphaned (no sweep): the object uploaded before the vision call is deleted
+    best-effort where mark_extraction_failed happens."""
+    job = _make_job(["img-1"])
+    await _register(job)
+    agent = MagicMock()
+    agent.extract_multiple_items = AsyncMock(
+        side_effect=AIServiceError("bad prompt", retryable=False)
+    )
+    service = BatchExtractionService(user_id="u1", db=Mock())
+    deleted = []
+
+    async def fake_delete(db, storage_path, **kwargs):
+        deleted.append(storage_path)
+        return True
+
+    with (
+        patch.object(
+            BatchExtractionService, "_fetch_user_avatar_base64", AsyncMock(return_value=None)
+        ),
+        patch("app.services.batch_extraction_service.with_retry", new=_call_once),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_source_image",
+            new=AsyncMock(
+                return_value={
+                    "image_url": "https://cdn/s.jpg",
+                    "storage_path": "u1/sources/s.jpg",
+                }
+            ),
+        ),
+        patch(
+            "app.services.batch_extraction_service.StorageService.delete_image",
+            new=fake_delete,
+        ),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+    ):
+        result = await service._extract_single_image(job, "img-1", _make_photo_b64(), agent)
+
+    assert result == []
+    assert job.extraction_failed["img-1"] == "bad prompt"
+    assert deleted == ["u1/sources/s.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_extract_failure_delete_is_best_effort():
+    """A failing delete RPC must not mask the extraction failure."""
+    job = _make_job(["img-1"])
+    await _register(job)
+    agent = MagicMock()
+    agent.extract_multiple_items = AsyncMock(
+        side_effect=AIServiceError("bad prompt", retryable=False)
+    )
+    service = BatchExtractionService(user_id="u1", db=Mock())
+
+    with (
+        patch.object(
+            BatchExtractionService, "_fetch_user_avatar_base64", AsyncMock(return_value=None)
+        ),
+        patch("app.services.batch_extraction_service.with_retry", new=_call_once),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_source_image",
+            new=AsyncMock(
+                return_value={
+                    "image_url": "https://cdn/s.jpg",
+                    "storage_path": "u1/sources/s.jpg",
+                }
+            ),
+        ),
+        patch(
+            "app.services.batch_extraction_service.StorageService.delete_image",
+            new=AsyncMock(side_effect=RuntimeError("delete rpc down")),
+        ),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+    ):
+        result = await service._extract_single_image(job, "img-1", _make_photo_b64(), agent)
+
+    assert result == []
+    assert job.extraction_failed["img-1"] == "bad prompt"
+
+
+@pytest.mark.asyncio
+async def test_extract_success_keeps_source_upload():
+    """A successful extraction keeps the source object (generation re-fetches
+    it as the reference image) and never calls delete."""
+    job = _make_job(["img-1"])
+    await _register(job)
+    items = [{"temp_id": "t1", "category": "tops"}]
+    agent = _make_extraction_agent(items)
+    service = BatchExtractionService(user_id="u1", db=None)
+    delete = AsyncMock()
+
+    with (
+        patch.object(
+            BatchExtractionService, "_fetch_user_avatar_base64", AsyncMock(return_value=None)
+        ),
+        patch("app.services.batch_extraction_service.with_retry", new=_call_once),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_source_image",
+            new=AsyncMock(
+                return_value={
+                    "image_url": "https://cdn/s.jpg",
+                    "storage_path": "u1/sources/s.jpg",
+                }
+            ),
+        ),
+        patch(
+            "app.services.batch_extraction_service.StorageService.delete_image", delete
+        ),
+        patch(
+            "app.services.extraction_cache_service.ExtractionCacheService.set_cached_result",
+            new=AsyncMock(),
+        ),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+    ):
+        result = await service._extract_single_image(job, "img-1", _make_photo_b64(), agent)
+
+    assert result == items
+    delete.assert_not_awaited()
+    assert job.images["img-1"].source_image_storage_path == "u1/sources/s.jpg"
+
+
+@pytest.mark.asyncio
+async def test_capacity_skip_without_upload_does_not_delete():
+    """A capacity-skip marks the image failed before any upload: there is no
+    storage path, so nothing is deleted."""
+    job = _make_job(["img-1"])
+    await _register(job)
+    agent = MagicMock()
+    agent.extract_multiple_items = AsyncMock(return_value={"items": []})
+    service = BatchExtractionService(user_id="u1", db=None)
+    delete = AsyncMock()
+
+    with (
+        patch.object(
+            service, "_skip_due_to_capacity", AsyncMock(side_effect=[False, True])
+        ),
+        patch(
+            "app.services.batch_extraction_service.StorageService.delete_image", delete
+        ),
+    ):
+        result = await service._extract_single_image(job, "img-1", "b64", agent)
+
+    assert result == []
+    delete.assert_not_awaited()
+    assert job.images["img-1"].source_image_storage_path is None
+
+
+# ---------------------------------------------------------------------------
+# Extraction cache base64 stripping (A2-01)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cache_extraction_results_strips_generated_base64():
+    """Cached item dicts must never carry multi-MB generated_image_base64
+    (MAX_ENTRIES=200, no byte bound): the durable URL/storage path survive so
+    restore_cached_items still delivers images."""
+    service = BatchExtractionService(user_id="u1", db=None)
+    job = _make_job(["img-1"])
+    job.detected_items = [
+        DetectedItemData(
+            temp_id="t1",
+            image_id="img-1",
+            category="tops",
+            generated_image_base64="Z2lnYS1iNjQ=",
+            generated_image_url="https://cdn/1.png",
+            generated_image_storage_path="tmp/u1/batch/1.png",
+        )
+    ]
+    captured = {}
+
+    async def set_cached(image_base64, user_id, result):
+        captured["result"] = result
+
+    with patch(
+        "app.services.extraction_cache_service.ExtractionCacheService.set_cached_result",
+        new=set_cached,
+    ):
+        await service._cache_extraction_results(job)
+
+    items = captured["result"]["items"]
+    assert items[0]["generated_image_base64"] is None
+    assert items[0]["generated_image_url"] == "https://cdn/1.png"
+    assert items[0]["generated_image_storage_path"] == "tmp/u1/batch/1.png"
+
+
+# ---------------------------------------------------------------------------
+# Terminal quota release (A2-02)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_success_releases_unused_generation_quota():
+    """The success arm hands back the generation slots the run never consumed."""
+    job = _make_job(["img-1"], auto_generate=False)
+    job.reserved_generations = 3
+    await _register(job)
+    released = []
+
+    async def fake_phase(self, job_arg, consumer_task=None, on_items_ready=None):
+        await BatchJobService.update_status(job_arg.job_id, BatchJobStatus.EXTRACTING)
+
+    async def fake_release(job_arg, db=None):
+        released.append((job_arg.job_id, db))
+
+    service = BatchExtractionService(user_id="u1", db=object())
+    with (
+        patch.object(BatchExtractionService, "_run_extraction_phase", fake_phase),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+        patch.object(
+            BatchJobService, "release_unused_generation_quota", fake_release
+        ),
+    ):
+        await service.run_pipeline(job)
+
+    assert job.status == BatchJobStatus.COMPLETED
+    assert released == [(job.job_id, service.db)]
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_failure_releases_unused_generation_quota():
+    """The failure arm hands back the generation slots the failed run never
+    consumed."""
+    job = _make_job(["img-1"], auto_generate=False)
+    job.reserved_generations = 3
+    await _register(job)
+    released = []
+
+    async def fake_phase(self, job_arg, consumer_task=None, on_items_ready=None):
+        raise RuntimeError("phase died")
+
+    async def fake_release(job_arg, db=None):
+        released.append((job_arg.job_id, db))
+
+    service = BatchExtractionService(user_id="u1", db=object())
+    with (
+        patch.object(BatchExtractionService, "_run_extraction_phase", fake_phase),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+        patch.object(
+            BatchJobService, "release_unused_generation_quota", fake_release
+        ),
+    ):
+        await service.run_pipeline(job)
+
+    assert job.status == BatchJobStatus.FAILED
+    assert released == [(job.job_id, service.db)]
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_cancelled_job_does_not_release_from_pipeline():
+    """A cancelled job's release happens in cancel_job, not the pipeline: the
+    success arm is skipped for cancelled jobs (no double release)."""
+    job = _make_job(["img-1"], auto_generate=False)
+    job.reserved_generations = 3
+    await _register(job)
+    released = []
+
+    async def fake_phase(self, job_arg, consumer_task=None, on_items_ready=None):
+        job_arg.cancelled = True
+        job_arg.cancel_event.set()
+
+    async def fake_release(job_arg, db=None):
+        released.append(job_arg.job_id)
+
+    service = BatchExtractionService(user_id="u1", db=object())
+    with (
+        patch.object(BatchExtractionService, "_run_extraction_phase", fake_phase),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+        patch.object(
+            BatchJobService, "release_unused_generation_quota", fake_release
+        ),
+    ):
+        await service.run_pipeline(job)
+
+    assert job.status == BatchJobStatus.PENDING
+    assert released == []

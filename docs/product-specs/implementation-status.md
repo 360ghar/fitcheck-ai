@@ -245,7 +245,7 @@ Based on user impact and AI capability:
 | Style learning not ML-based | Medium | UserPreferences exists but static |
 | No trend data source | Low | Need fashion trend API or scraping |
 | Flutter local verification can be blocked | Medium | Active hardening plan records an SDK cache write-permission failure; CI remains the available verification boundary |
-| Public storage buckets/raw URLs remain | High | Ownership checks exist, but migration to private buckets/signed URLs is deferred; see `SECURITY.md` and the active hardening plan |
+| Public storage buckets/raw URLs remain | High | Legacy Supabase Storage buckets dropped (migration 048; R2-only serving); pre-R2 rows storing Supabase public URLs are rescued to R2 keys at read time (`storage_service.key_from_path`) and backfilled by `scripts/backfill_storage_paths.py` |
 | Plan/document lifecycle drift | Medium | Completed work can remain under `exec-plans/active/`; status is tracked in the debt ledger |
 
 ---

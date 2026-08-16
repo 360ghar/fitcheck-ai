@@ -41,7 +41,8 @@ def test_correlation_id_isolated_between_requests(client):
 
 
 def test_correlation_id_extracted_from_bearer_for_log_context(client, db, caplog):
-    """The middleware decodes the token (unverified) to enrich log context."""
+    """The middleware verifies the token (signature + claims) and only then
+    uses its sub to enrich the log context."""
     from app.core.middleware import CorrelationIdLogFilter
 
     token = make_hs256_token(sub="user-log-context")
@@ -56,12 +57,12 @@ def test_correlation_id_extracted_from_bearer_for_log_context(client, db, caplog
     records_with_user = [
         r for r in caplog.records if getattr(r, "user_id", None) == "user-log-context"
     ]
-    assert records_with_user, "middleware log context must include the token's sub"
+    assert records_with_user, "middleware log context must include the verified token's sub"
 
 
-def test_bearer_token_without_sub_is_ignored(client, caplog):
-    """A token that decodes (unverified) but carries no sub must not set a
-    user_id in the log context."""
+def test_invalid_bearer_token_logs_anonymous(client, caplog):
+    """A token that fails verification must never put an unverified claim in
+    the log context — the middleware records a fixed 'anonymous' value."""
     from jose import jwt
 
     from app.core.middleware import CorrelationIdLogFilter
@@ -74,10 +75,35 @@ def test_bearer_token_without_sub_is_ignored(client, caplog):
         response = client.get("/api/v1/definitely-not-a-route", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 404
-    records_with_user = [
-        r for r in caplog.records if getattr(r, "user_id", None) is not None
+    records_with_anonymous = [
+        r for r in caplog.records if getattr(r, "user_id", None) == "anonymous"
     ]
-    assert not records_with_user, "no log record may carry a user_id without a token sub"
+    assert records_with_anonymous, "an unverifiable bearer token must log user_id='anonymous'"
+    # And no record may carry any other (unverified) user_id value.
+    assert not any(
+        getattr(r, "user_id", None) not in (None, "anonymous")
+        for r in caplog.records
+    )
+
+
+def test_correlation_id_rejects_log_injection(client):
+    """A client-supplied X-Correlation-ID outside the safe charset/length is
+    replaced by a generated UUID — it must never be echoed into logs."""
+    response = client.get("/health", headers={"X-Correlation-ID": "edge-id\nInjected: x"})
+
+    assert response.status_code == 200
+    header = response.headers.get("X-Correlation-ID")
+    assert header, "response must still carry a correlation id"
+    assert header != "edge-id\nInjected: x"
+    assert len(header) == 36  # a generated uuid4
+
+
+def test_correlation_id_rejects_overlong_value(client):
+    response = client.get("/health", headers={"X-Correlation-ID": "a" * 65})
+
+    header = response.headers.get("X-Correlation-ID")
+    assert len(header) == 36
+    assert header != "a" * 65
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +124,23 @@ def test_request_logging_logs_method_path_and_status(client, db, caplog):
     assert request_lines, "request start must be logged"
     assert response_lines, "response must be logged"
     assert any("401" in line for line in response_lines)
+
+
+def test_request_logging_never_logs_query_string(client, db, caplog):
+    """Query strings can carry search terms, storage_path keys and tokens;
+    they must not appear in request logs."""
+    with caplog.at_level(logging.INFO, logger="app.core.middleware"):
+        client.get("/api/v1/users/me?search=secret-term&storage_path=secret-key")
+
+    middleware_messages = [
+        r.getMessage() for r in caplog.records if r.name == "app.core.middleware"
+    ]
+    assert any(
+        "--> GET /api/v1/users/me" in line for line in middleware_messages
+    ), "request start must be logged"
+    assert not any(
+        "secret-term" in line or "storage_path" in line for line in middleware_messages
+    )
 
 
 def test_request_logging_skips_health_paths(client, caplog):

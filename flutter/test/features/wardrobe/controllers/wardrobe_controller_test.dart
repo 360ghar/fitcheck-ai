@@ -51,6 +51,7 @@ class FakeItemRepository extends ItemRepository {
     List<String>? colors,
     String? occasion,
     List<String>? conditions,
+    bool? isFavorite,
     String? sortBy,
     String? sortOrder,
   }) {

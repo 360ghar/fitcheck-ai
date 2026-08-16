@@ -104,7 +104,6 @@ class Settings(BaseSettings):
 
     SUPABASE_SECRET_KEY: str
     SUPABASE_JWT_SECRET: str
-    SUPABASE_STORAGE_BUCKET: str = "fitcheck-images"
 
     # ==========================================================================
     # Object storage (S3-compatible: Cloudflare R2)

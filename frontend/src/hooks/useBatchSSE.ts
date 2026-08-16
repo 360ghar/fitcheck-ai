@@ -58,6 +58,12 @@ export function useBatchSSE({
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastEventAtRef = useRef(0);
   const lastEventIdRef = useRef(0);
+  // F1-11: wall-clock window (ms) for reconnects of one connection. Even with
+  // the heartbeat reset fixed below, a flapping stream could otherwise
+  // reconnect forever; once the window lapses, the drop path hands off to
+  // onStreamEnded so the caller reconciles via /status polling.
+  const reconnectWindowMs = 90_000;
+  const connectionStartedAtRef = useRef(0);
 
   // Store callbacks in refs to avoid reconnecting on every callback change
   const onEventRef = useRef(onEvent);
@@ -95,6 +101,7 @@ export function useBatchSSE({
 
     setError(null);
     lastEventAtRef.current = Date.now();
+    connectionStartedAtRef.current = Date.now();
 
     const stopWatchdog = () => {
       if (watchdogRef.current) {
@@ -106,12 +113,15 @@ export function useBatchSSE({
     // Shared path for any connection drop - a real error OR a silent stream
     // end with no terminal event. Try reconnecting (the backend replays the
     // terminal event if the job already finished); if reconnects are
-    // exhausted, hand off to the caller to reconcile by polling /status.
+    // exhausted — or the wall-clock reconnect window lapses (F1-11) — hand
+    // off to the caller to reconcile by polling /status.
     const handleDrop = (err: Error | null) => {
       setIsConnected(false);
       stopWatchdog();
 
-      if (reconnectAttempts.current < maxReconnects) {
+      const withinWindow =
+        Date.now() - connectionStartedAtRef.current < reconnectWindowMs;
+      if (reconnectAttempts.current < maxReconnects && withinWindow) {
         reconnectAttempts.current++;
         const delay = 1000 * reconnectAttempts.current;
 
@@ -131,7 +141,13 @@ export function useBatchSSE({
       jobId,
       (event) => {
         setIsConnected(true);
-        reconnectAttempts.current = 0;
+        // F1-11: a heartbeat is not evidence of progress — resetting the
+        // reconnect budget on it let a heartbeat-only stream (job still
+        // running, connection flapping) reconnect forever without ever
+        // reconciling via onStreamEnded. Only real events earn the reset.
+        if (event.type !== 'heartbeat') {
+          reconnectAttempts.current = 0;
+        }
         lastEventAtRef.current = Date.now();
         if (event.id != null) lastEventIdRef.current = event.id;
         onEventRef.current({

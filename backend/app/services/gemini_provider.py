@@ -52,6 +52,10 @@ logger = get_context_logger(__name__)
 # or hostile URL cannot make a request consume unbounded memory.
 _MAX_REMOTE_IMAGE_BYTES = 10 * 1024 * 1024
 _REMOTE_IMAGE_TIMEOUT = httpx.Timeout(20.0, connect=5.0)
+# A3-04: maximum manual redirect hops when fetching a remote image asset.
+# Matches httpx's default follow_redirects cap (20) with headroom removed:
+# a redirect chain longer than this is pathological, not a legit CDN.
+_MAX_REMOTE_IMAGE_REDIRECTS = 5
 
 # Host suffixes that must never be fetched from the backend: cloud metadata
 # (``*.internal``), mDNS (``*.local``) and the loopback name itself.
@@ -99,6 +103,10 @@ def _is_safe_remote_url(url: str) -> bool:
         or ip.is_unspecified
     )
 
+
+# The native SDK talks to Google's endpoint directly (no per-config URL);
+# the health service keys circuit-breaker state by this fixed base host.
+GEMINI_BASE_HOST = "https://generativelanguage.googleapis.com/v1beta"
 
 # =============================================================================
 # Daily-quota circuit breaker
@@ -401,16 +409,40 @@ class GeminiProvider:
             if not _is_safe_remote_url(img):
                 raise ValueError("Remote image URL is not fetchable by the provider boundary")
             data = bytearray()
-            async with httpx.AsyncClient(timeout=_REMOTE_IMAGE_TIMEOUT, follow_redirects=True) as client:
-                async with client.stream("GET", img) as response:
-                    response.raise_for_status()
-                    content_length = response.headers.get("content-length")
-                    if content_length and int(content_length) > _MAX_REMOTE_IMAGE_BYTES:
-                        raise ValueError("Remote image exceeds Gemini provider size limit")
-                    async for chunk in response.aiter_bytes():
-                        data.extend(chunk)
-                        if len(data) > _MAX_REMOTE_IMAGE_BYTES:
+            # A3-04: SSRF via redirects — the safety check above validates
+            # only the initial URL. Disable redirect following and re-validate
+            # any Location the server hands back, so a user-controllable URL
+            # can never 3xx into the metadata service or loopback. Each hop is
+            # streamed once (headers are inspected before the body is read).
+            async with httpx.AsyncClient(timeout=_REMOTE_IMAGE_TIMEOUT, follow_redirects=False) as client:
+                current_url = img
+                response = None
+                redirect_count = 0
+                while True:
+                    # A3-04: bound the manual redirect loop — a host that keeps
+                    # returning fast safe 3xx redirects would otherwise spin
+                    # this request indefinitely (each hop's 20s timeout bounds
+                    # the hop, not the chain).
+                    if redirect_count >= _MAX_REMOTE_IMAGE_REDIRECTS:
+                        raise ValueError("Remote image URL exceeds the redirect limit")
+                    async with client.stream("GET", current_url) as stream:
+                        if stream.status_code in (301, 302, 303, 307, 308):
+                            location = stream.headers.get("location")
+                            if not location or not _is_safe_remote_url(location):
+                                raise ValueError("Remote image URL redirects outside the provider boundary")
+                            current_url = location
+                            redirect_count += 1
+                            continue
+                        response = stream
+                        stream.raise_for_status()
+                        content_length = stream.headers.get("content-length")
+                        if content_length and int(content_length) > _MAX_REMOTE_IMAGE_BYTES:
                             raise ValueError("Remote image exceeds Gemini provider size limit")
+                        async for chunk in stream.aiter_bytes():
+                            data.extend(chunk)
+                            if len(data) > _MAX_REMOTE_IMAGE_BYTES:
+                                raise ValueError("Remote image exceeds Gemini provider size limit")
+                        break
             raw = bytes(data)
             mime_type = sniff_image_mime_from_magic(raw[:96]) or response.headers.get("content-type", "").split(";", 1)[0] or "image/jpeg"
             # Keep the existing AVIF/HEIF provider safety behavior. This path
@@ -502,6 +534,30 @@ class GeminiProvider:
                 error_kind="upstream_quota",
             )
         await self._wait_for_rate_slot()
+
+        # Health gate (parity with AIProviderService.chat): the circuit
+        # breaker is keyed by the Gemini base host, learns from REAL call
+        # outcomes via record_result below, and skips the cold-cache probe
+        # because this call is about to hit the provider itself. An open
+        # breaker fails fast so the hybrid vision leg falls over to Agnes
+        # immediately instead of burning a guaranteed-failing Gemini call.
+        from app.services.ai_provider_health_service import get_health_service
+
+        health_service = get_health_service()
+        health_status = await health_service.check_provider_health(
+            base_url=GEMINI_BASE_HOST,
+            api_key=self.config.api_key,
+            timeout_seconds=3.0,
+            probe_on_cold=False,
+        )
+        if not health_status.available:
+            raise AIServiceError(
+                f"Gemini provider is unavailable. Error: {health_status.error}. "
+                "Using the configured fallback provider until it recovers.",
+                retryable=True,
+                error_kind="transient",
+            )
+
         client = self._get_client()
         use_model = model or self.config.chat_model
         system_instruction, contents = await self._messages_to_contents(messages)
@@ -569,12 +625,25 @@ class GeminiProvider:
                 retry_after_seconds=retry_after,
                 exc_info=False,
             )
+            # Feed the shared circuit breaker so Gemini's availability is
+            # learned from real outcomes, not just the quota latch.
+            await health_service.record_result(GEMINI_BASE_HOST, ok=False, api_key=self.config.api_key)
             raise AIServiceError(
                 f"Gemini request failed: {e}",
                 retryable=retryable,
                 error_kind=error_kind,
                 retry_after_seconds=retry_after,
             )
+        except Exception:
+            # SDK-level network/parse failures (not APIError) are also real
+            # provider failures; record them for the breaker and preserve the
+            # original exception for the caller's own wrapping.
+            await health_service.record_result(GEMINI_BASE_HOST, ok=False, api_key=self.config.api_key)
+            raise
+        else:
+            # The response was received, so the provider is reachable; parse
+            # failures (blocked/truncated) are request-level, not availability.
+            await health_service.record_result(GEMINI_BASE_HOST, ok=True, api_key=self.config.api_key)
 
         return self._parse_response(response, use_model, structured_output_requested=wants_json)
 

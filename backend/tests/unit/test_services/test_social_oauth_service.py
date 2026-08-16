@@ -6,6 +6,8 @@ Time is frozen (via monkeypatched utcnow) wherever an assertion depends on
 expiry arithmetic.
 """
 
+import hashlib
+import hmac
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -19,6 +21,7 @@ from app.core.exceptions import (
     SocialImportOAuthStateError,
 )
 from app.models.social_import import SocialPlatform
+from app.services import social_oauth_service as oauth_mod
 from app.services.social_oauth_service import SocialOAuthService
 
 FIXED_NOW = datetime(2026, 8, 7, 12, 0, 0, tzinfo=timezone.utc)
@@ -518,6 +521,57 @@ class TestResolvePlatformIdentity:
                 platform=SocialPlatform.INSTAGRAM, access_token="tok",
             )
 
+    @pytest.mark.asyncio
+    async def test_instagram_multiple_accounts_require_selection(self, monkeypatch):
+        """A4-28: several business accounts must never be resolved silently -
+        the client gets the candidate list to offer a picker."""
+        def handler(request):
+            return httpx.Response(200, json={"data": [
+                {"id": "page-1", "name": "Fashion", "access_token": "tok-1",
+                 "instagram_business_account": {"id": "ig-1", "username": "fashion"}},
+                {"id": "page-2", "name": "Travel", "access_token": "tok-2",
+                 "instagram_business_account": {"id": "ig-2", "username": "travel"}},
+            ]}, request=request)
+
+        _patch_async_client(monkeypatch, handler)
+
+        with pytest.raises(SocialImportOAuthExchangeError) as exc_info:
+            await SocialOAuthService.resolve_platform_identity(
+                platform=SocialPlatform.INSTAGRAM, access_token="tok",
+            )
+        details = exc_info.value.details
+        assert details["requires_page_selection"] is True
+        assert details["accounts"] == [
+            {"provider_page_id": "page-1", "page_name": "Fashion", "username": "fashion"},
+            {"provider_page_id": "page-2", "page_name": "Travel", "username": "travel"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_instagram_multiple_accounts_prefers_bound_page(self, monkeypatch):
+        """A4-28: when the connection is already bound to a page
+        (provider_page_id stored on the auth session), that page wins."""
+        def handler(request):
+            return httpx.Response(200, json={"data": [
+                {"id": "page-1", "name": "Fashion", "access_token": "tok-1",
+                 "instagram_business_account": {"id": "ig-1", "username": "fashion"}},
+                {"id": "page-2", "name": "Travel", "access_token": "tok-2",
+                 "instagram_business_account": {"id": "ig-2", "username": "travel"}},
+            ]}, request=request)
+
+        _patch_async_client(monkeypatch, handler)
+
+        identity = await SocialOAuthService.resolve_platform_identity(
+            platform=SocialPlatform.INSTAGRAM,
+            access_token="tok",
+            preferred_page_id="page-2",
+        )
+        assert identity == {
+            "provider_user_id": "ig-2",
+            "provider_username": "travel",
+            "provider_page_access_token": "tok-2",
+            "provider_page_id": "page-2",
+        }
+
 
 class TestParseGraphResponse:
     def test_success_returns_payload(self):
@@ -553,3 +607,173 @@ class TestParseGraphResponse:
 
         with pytest.raises(SocialImportOAuthExchangeError, match="default message"):
             SocialOAuthService._parse_graph_response(response, "default message")
+
+
+# ---------------------------------------------------------------------------
+# account-selection tokens (create / parse / consume) - backend #16
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=False)
+def _clear_consumed_nonces():
+    """Isolate selection-token consume tests from the module-level store.
+
+    The consumed-nonce set is module-global (process-local replay store). Each
+    test that consumes a token must start from an empty set and leave it clean
+    so test order can't matter.
+    """
+    oauth_mod._CONSUMED_SELECTION_NONCES.clear()
+    yield
+    oauth_mod._CONSUMED_SELECTION_NONCES.clear()
+
+
+class TestSelectionToken:
+    def test_roundtrip_create_and_parse(self):
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        parsed = SocialOAuthService.parse_selection_token(token)
+        assert parsed["user_id"] == "user-1"
+        assert parsed["job_id"] == "job-1"
+        # parse now surfaces the signed nonce + expiry for the consume path.
+        assert parsed["nonce"]
+        assert isinstance(parsed["exp"], int)
+
+    def test_consume_returns_user_and_job(self, _clear_consumed_nonces):
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result == {"user_id": "user-1", "job_id": "job-1"}
+
+    def test_replay_after_consume_is_rejected(self, _clear_consumed_nonces):
+        """backend #16: a picker link must be single-use. Consuming the same
+        token a second time must raise, not bind a different page."""
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        first = SocialOAuthService.consume_selection_token(token)
+        assert first == {"user_id": "user-1", "job_id": "job-1"}
+
+        with pytest.raises(SocialImportOAuthStateError, match="already been used"):
+            SocialOAuthService.consume_selection_token(token)
+
+    def test_two_distinct_tokens_both_consumable(self, _clear_consumed_nonces):
+        """Consuming one valid token must not block a different valid token."""
+        t1 = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        t2 = SocialOAuthService.create_selection_token(user_id="user-2", job_id="job-2")
+        r1 = SocialOAuthService.consume_selection_token(t1)
+        r2 = SocialOAuthService.consume_selection_token(t2)
+        assert r1["job_id"] == "job-1"
+        assert r2["job_id"] == "job-2"
+
+    def test_parse_does_not_consume(self, _clear_consumed_nonces):
+        """parse_selection_token is the non-destructive check; it must not
+        mark the nonce used, so a later consume still succeeds."""
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        SocialOAuthService.parse_selection_token(token)
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result == {"user_id": "user-1", "job_id": "job-1"}
+
+    def test_invalid_signature_not_consumed(self, _clear_consumed_nonces):
+        """A token whose signature fails must raise without touching the
+        consumed set - otherwise an attacker could burn a victim's nonce."""
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        encoded, signature = token.split(".", 1)
+        tampered = f"{encoded}.{signature[:-1]}x"
+
+        with pytest.raises(SocialImportOAuthStateError, match="Invalid account selection token"):
+            SocialOAuthService.consume_selection_token(tampered)
+        # The valid token still consumes cleanly afterwards.
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result["user_id"] == "user-1"
+
+    def test_expired_token_pruned_from_store(self, _clear_consumed_nonces, monkeypatch):
+        """An expired consumed entry is GC'd on the next consume so the store
+        is bounded by the live token population."""
+        monkeypatch.setattr(oauth_mod, "utcnow", lambda: FIXED_NOW)
+        # Mint a token that is already expired relative to FIXED_NOW.
+        encoded = SocialOAuthService._b64_url_encode(
+            json.dumps(
+                {"uid": "user-1", "jid": "job-1", "exp": FIXED_NOW_TS - 1, "nonce": "old-nonce"},
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        signature = hmac.new(
+            SocialOAuthService._selection_secret(),
+            encoded.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        expired_token = f"{encoded}.{signature}"
+
+        with pytest.raises(SocialImportOAuthStateError, match="expired"):
+            SocialOAuthService.consume_selection_token(expired_token)
+        # Manually plant the expired nonce to simulate a prior consume that
+        # has since aged out, then consume a fresh valid token and confirm
+        # the stale entry is evicted during that consume's GC pass.
+        oauth_mod._CONSUMED_SELECTION_NONCES["stale-nonce"] = float(FIXED_NOW_TS - 100)
+        fresh = SocialOAuthService.create_selection_token(user_id="user-2", job_id="job-2")
+        SocialOAuthService.consume_selection_token(fresh)
+        assert "stale-nonce" not in oauth_mod._CONSUMED_SELECTION_NONCES
+        # The just-consumed fresh nonce is retained.
+        assert len(oauth_mod._CONSUMED_SELECTION_NONCES) == 1
+
+    def test_token_missing_nonce_rejected(self, _clear_consumed_nonces):
+        """A signed token without a nonce field (e.g. a legacy/mauled body)
+        is rejected fail-closed rather than consumed."""
+        encoded = SocialOAuthService._b64_url_encode(
+            json.dumps(
+                {"uid": "user-1", "jid": "job-1", "exp": FIXED_NOW_TS + 600},
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        signature = hmac.new(
+            SocialOAuthService._selection_secret(),
+            encoded.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        token = f"{encoded}.{signature}"
+
+        with pytest.raises(SocialImportOAuthStateError, match="payload"):
+            SocialOAuthService.consume_selection_token(token)
+
+    def test_is_consumed_is_false_before_consume(self, _clear_consumed_nonces):
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        assert SocialOAuthService.is_selection_token_consumed(token) is False
+        SocialOAuthService.consume_selection_token(token)
+        assert SocialOAuthService.is_selection_token_consumed(token) is True
+
+    def test_is_consumed_does_not_burn_the_token(self, _clear_consumed_nonces):
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        assert SocialOAuthService.is_selection_token_consumed(token) is False
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result == {"user_id": "user-1", "job_id": "job-1"}
+
+    def test_is_consumed_rejects_invalid_and_expired(self, _clear_consumed_nonces, monkeypatch):
+        monkeypatch.setattr(oauth_mod, "utcnow", lambda: FIXED_NOW)
+        with pytest.raises(SocialImportOAuthStateError, match="Malformed"):
+            SocialOAuthService.is_selection_token_consumed("not-a-token")
+
+        encoded = SocialOAuthService._b64_url_encode(
+            json.dumps(
+                {"uid": "user-1", "jid": "job-1", "exp": FIXED_NOW_TS - 1, "nonce": "old"},
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        signature = hmac.new(
+            SocialOAuthService._selection_secret(),
+            encoded.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        expired = f"{encoded}.{signature}"
+        with pytest.raises(SocialImportOAuthStateError, match="expired"):
+            SocialOAuthService.is_selection_token_consumed(expired)
+
+    def test_release_makes_token_reusable(self, _clear_consumed_nonces):
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        SocialOAuthService.consume_selection_token(token)
+        assert SocialOAuthService.is_selection_token_consumed(token) is True
+        SocialOAuthService.release_selection_token(token)
+        assert SocialOAuthService.is_selection_token_consumed(token) is False
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result == {"user_id": "user-1", "job_id": "job-1"}
+
+    def test_release_of_invalid_token_is_a_noop(self, _clear_consumed_nonces):
+        SocialOAuthService.release_selection_token("not-a-token")
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result == {"user_id": "user-1", "job_id": "job-1"}

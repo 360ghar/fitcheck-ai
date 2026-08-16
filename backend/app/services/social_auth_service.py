@@ -21,7 +21,6 @@ from app.core.config import settings
 from app.core.exceptions import (
     SocialImportEncryptionConfigError,
     SocialImportLoginFailedError,
-    SocialImportMFARequiredError,
 )
 from app.models.social_import import SocialAuthType
 from app.utils.crypto import derive_fernet_key, legacy_derive_fernet_key
@@ -128,6 +127,56 @@ class SocialAuthService:
         return data
 
     @classmethod
+    async def store_selection_pending_session(
+        cls,
+        db,
+        *,
+        job_id: str,
+        user_id: str,
+        provider_access_token: str,
+        provider_refresh_token: Optional[str],
+        expires_at: Optional[datetime],
+        candidates: list,
+    ) -> Dict[str, Any]:
+        """Persist an exchanged token while the user picks among multiple
+        Instagram business accounts (A4-28).
+
+        First-time OAuth with several business pages ends in a
+        ``requires_page_selection`` error: the code is exchanged but identity
+        resolution needs the user to choose a page. The token lives only in
+        the callback's locals, so the picker had no way to complete the flow
+        without re-doing OAuth. This stores a short-TTL session flagged
+        ``selection_pending`` (no page binding yet); the select-page endpoint
+        resolves identity from the stored token with the chosen
+        ``provider_page_id`` and then persists the real session.
+        """
+        payload = {
+            "provider_access_token": provider_access_token,
+            "provider_refresh_token": provider_refresh_token,
+            "provider_user_id": None,
+            "provider_page_access_token": None,
+            "provider_page_id": None,
+            "provider_username": None,
+            "provider_expires_at": expires_at.isoformat() if expires_at else None,
+            "selection_pending": True,
+            "candidates": candidates,
+            "saved_at": utcnow_iso(),
+        }
+
+        data = {
+            "job_id": job_id,
+            "user_id": user_id,
+            "auth_type": SocialAuthType.OAUTH.value,
+            "encrypted_session_blob": cls.encrypt_session_payload(payload),
+            "expires_at": cls._expiry().isoformat(),
+        }
+        await asyncio.to_thread(db.table("social_import_auth_sessions").upsert(
+            data,
+            on_conflict="job_id,auth_type",
+        ).execute)
+        return data
+
+    @classmethod
     async def store_scraper_session(
         cls,
         db,
@@ -146,10 +195,11 @@ class SocialAuthService:
         if not username or not password:
             raise SocialImportLoginFailedError("Username and password are required")
 
-        lowered = username.lower()
-        if "mfa" in lowered and not otp_code:
-            raise SocialImportMFARequiredError("MFA code required for this account")
-
+        # A4-03: the old heuristic keyed on a "mfa" SUBSTRING of the username,
+        # so a legitimate handle like "mfa_stylist" could never submit
+        # scraper auth without an OTP. MFA is detected from Instagram's
+        # login response (_parse_login_response in the scraper service), not
+        # from the username.
         payload = {
             "username": username,
             "password": password,

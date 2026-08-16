@@ -40,12 +40,18 @@ def _clear_latch():
 
 
 class _FakeRemoteClient:
-    """httpx.AsyncClient stand-in for the remote-image download path."""
+    """httpx.AsyncClient stand-in for the remote-image download path.
+
+    Accepts a single response or a list (popped per stream() call) so
+    redirect sequences can be simulated.
+    """
 
     def __init__(self, response=None, *args, **kwargs):
         self._response = response
 
     def stream(self, *args, **kwargs):
+        if isinstance(self._response, list):
+            return self._response.pop(0)
         return self._response
 
     async def __aenter__(self):
@@ -55,7 +61,7 @@ class _FakeRemoteClient:
         return None
 
 
-def _remote_response(headers=None, chunks=()):
+def _remote_response(headers=None, chunks=(), status_code=200):
     class _Response:
         def raise_for_status(self):
             pass
@@ -71,6 +77,7 @@ def _remote_response(headers=None, chunks=()):
                 yield chunk
 
     resp = _Response()
+    resp.status_code = status_code
     resp.headers = headers or {}
     return resp
 
@@ -127,6 +134,53 @@ async def test_decode_image_part_rejects_oversized_content_length(monkeypatch):
     response = _remote_response(headers={"content-length": "200"}, chunks=(b"x",))
     with patch("app.services.gemini_provider.httpx.AsyncClient", lambda *a, **k: _FakeRemoteClient(response)):
         with pytest.raises(ValueError, match="size limit"):
+            await GeminiProvider._decode_image_part("https://remote.example.com/x.png")
+
+
+@pytest.mark.asyncio
+async def test_decode_image_part_rejects_redirect_outside_boundary():
+    """A3-04: a 3xx handing back a private/internal Location must be refused
+    even though the ORIGINAL URL was safe — otherwise a user-controllable
+    presigned URL could 3xx into the metadata service."""
+    redirect = _remote_response(
+        status_code=302,
+        headers={"location": "http://169.254.169.254/latest/meta-data/"},
+        chunks=(),
+    )
+    with patch("app.services.gemini_provider.httpx.AsyncClient", lambda *a, **k: _FakeRemoteClient(redirect)):
+        with pytest.raises(ValueError, match="redirects outside"):
+            await GeminiProvider._decode_image_part("https://remote.example.com/x.png")
+
+
+@pytest.mark.asyncio
+async def test_decode_image_part_follows_safe_redirect():
+    """A3-04: a 3xx to a still-safe public Location is followed once and the
+    body is read from the redirected URL only."""
+    redirect = _remote_response(
+        status_code=301,
+        headers={"location": "https://storage.example.com/bucket/img.png"},
+        chunks=(),
+    )
+    body = _remote_response(headers={"content-type": "image/png"}, chunks=(b"\x89PNG\r\n",))
+    with patch("app.services.gemini_provider.httpx.AsyncClient", lambda *a, **k: _FakeRemoteClient([redirect, body])):
+        part = await GeminiProvider._decode_image_part("https://remote.example.com/x.png")
+    assert part.inline_data.data == b"\x89PNG\r\n"
+
+
+@pytest.mark.asyncio
+async def test_decode_image_part_bounds_redirect_loop():
+    """A3-04: a host that keeps returning safe 3xx redirects must not spin
+    the download forever — the manual redirect loop is bounded by
+    _MAX_REMOTE_IMAGE_REDIRECTS."""
+    redirect = _remote_response(
+        status_code=302,
+        headers={"location": "https://storage.example.com/loop/img.png"},
+        chunks=(),
+    )
+    # One more safe redirect than the cap allows.
+    chain = [redirect] * (gp_module._MAX_REMOTE_IMAGE_REDIRECTS + 1)
+    with patch("app.services.gemini_provider.httpx.AsyncClient", lambda *a, **k: _FakeRemoteClient(chain)):
+        with pytest.raises(ValueError, match="redirect limit"):
             await GeminiProvider._decode_image_part("https://remote.example.com/x.png")
 
 

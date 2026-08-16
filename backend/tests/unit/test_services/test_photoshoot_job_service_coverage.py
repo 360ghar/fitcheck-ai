@@ -314,7 +314,11 @@ async def test_set_usage_missing_job_is_noop():
 
 
 @pytest.mark.asyncio
-async def test_set_error_returns_early_when_persisted_cas_loses():
+async def test_set_error_records_error_in_memory_when_persisted_cas_loses():
+    """When the FAILED transition loses the CAS but no external terminal
+    writer adopted the job, the error is still recorded in memory and the
+    job stays dirty so the next flush tick retries the persist (A3-08) —
+    otherwise the job hangs in PROCESSING with the failure never surfaced."""
     job = await _make_job()
     job.persistence_db = Mock()
     job.status = PhotoshootJobStatus.PROCESSING
@@ -324,8 +328,9 @@ async def test_set_error_returns_early_when_persisted_cas_loses():
     ):
         await PhotoshootJobService.set_error(job.job_id, "boom")
 
-    assert job.status == PhotoshootJobStatus.PROCESSING
-    assert job.error_message is None
+    assert job.status == PhotoshootJobStatus.FAILED
+    assert job.error_message == "boom"
+    assert job.persistence_dirty is True
 
 
 # =============================================================================

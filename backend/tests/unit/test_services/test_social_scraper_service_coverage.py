@@ -1251,7 +1251,9 @@ def _three_image_html():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_public_scrape_with_pagination():
     client = _fake_client(get=_response(200, text=_three_image_html()))
-    with _patch_client(client):
+    # A4-27: the anonymous fetch resolves + pins the host before connecting,
+    # so the resolver must be canned like the fetch_photo_as_base64 tests.
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.instagram.com/user1/",
             platform=SocialPlatform.INSTAGRAM,
@@ -1272,7 +1274,7 @@ async def test_discover_profile_photos_public_scrape_with_pagination():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_public_scrape_with_cursor():
     client = _fake_client(get=_response(200, text=_three_image_html()))
-    with _patch_client(client):
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.instagram.com/user1/",
             platform=SocialPlatform.INSTAGRAM,
@@ -1290,7 +1292,7 @@ async def test_discover_profile_photos_public_scrape_with_cursor():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_invalid_cursor_defaults_to_zero():
     client = _fake_client(get=_response(200, text=_three_image_html()))
-    with _patch_client(client):
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.instagram.com/user1/",
             platform=SocialPlatform.INSTAGRAM,
@@ -1305,7 +1307,7 @@ async def test_discover_profile_photos_invalid_cursor_defaults_to_zero():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_401_requires_auth():
     client = _fake_client(get=_response(401, json={}))
-    with _patch_client(client):
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.instagram.com/user1/",
             platform=SocialPlatform.INSTAGRAM,
@@ -1318,7 +1320,7 @@ async def test_discover_profile_photos_401_requires_auth():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_500_fetch_failure():
     client = _fake_client(get=_response(500, json={}))
-    with _patch_client(client):
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.instagram.com/user1/",
             platform=SocialPlatform.INSTAGRAM,
@@ -1333,7 +1335,7 @@ async def test_discover_profile_photos_500_fetch_failure():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_private_profile_without_auth():
     client = _fake_client(get=_response(200, text="This account is private"))
-    with _patch_client(client):
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.instagram.com/user1/",
             platform=SocialPlatform.INSTAGRAM,
@@ -1346,7 +1348,7 @@ async def test_discover_profile_photos_private_profile_without_auth():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_private_html_with_auth_proceeds():
     client = _fake_client(get=_response(200, text="You must log in to view. No images here."))
-    with _patch_client(client):
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.facebook.com/user1/",
             platform=SocialPlatform.FACEBOOK,
@@ -1360,7 +1362,7 @@ async def test_discover_profile_photos_private_html_with_auth_proceeds():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_request_error():
     client = _fake_client(get_exc=httpx.ConnectError("boom", request=httpx.Request("GET", "https://x")))
-    with _patch_client(client):
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.instagram.com/user1/",
             platform=SocialPlatform.INSTAGRAM,
@@ -1407,7 +1409,12 @@ async def test_discover_profile_photos_meta_api_path():
 
 
 @pytest.mark.asyncio
-async def test_discover_profile_photos_meta_api_none_falls_through_to_public():
+async def test_discover_profile_photos_meta_api_none_returns_fetch_failure():
+    """A4-04: a Meta API failure must NOT fall through to the anonymous HTML
+    scrape — for an OAuth-only profile that silently "completes" with 0
+    photos and masks the auth/retry need. Surface a retryable fetch_failure
+    instead; the pipeline maps it to DISCOVERY_RETRY_ATTEMPTS and fails the
+    job rather than completing it empty."""
     client = _fake_client(get=_response(200, text=_three_image_html()))
     with (
         patch.object(
@@ -1415,6 +1422,7 @@ async def test_discover_profile_photos_meta_api_none_falls_through_to_public():
             "_discover_with_meta_api",
             new=AsyncMock(return_value=None),
         ),
+        _patch_resolver("93.184.216.34"),
         _patch_client(client),
     ):
         result = await SocialScraperService.discover_profile_photos(
@@ -1424,8 +1432,9 @@ async def test_discover_profile_photos_meta_api_none_falls_through_to_public():
         )
 
     assert result.requires_auth is False
-    assert len(result.photos) == 3
-    client.get.assert_awaited_once()
+    assert result.photos == []
+    assert result.metadata["error_type"] == "fetch_failure"
+    client.get.assert_not_awaited()
 
 
 # =============================================================================
@@ -1584,7 +1593,7 @@ async def test_discover_profile_photos_scraper_existing_session_skips_login():
 @pytest.mark.asyncio
 async def test_discover_profile_photos_non_scraper_platform_falls_to_public():
     client = _fake_client(get=_response(200, text=_three_image_html()))
-    with _patch_client(client):
+    with _patch_resolver("93.184.216.34"), _patch_client(client):
         result = await SocialScraperService.discover_profile_photos(
             normalized_url="https://www.facebook.com/u/",
             platform=SocialPlatform.FACEBOOK,

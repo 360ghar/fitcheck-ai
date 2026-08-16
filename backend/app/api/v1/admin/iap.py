@@ -12,7 +12,7 @@ from typing import Any, Dict, Literal, Optional
 from fastapi import APIRouter, Depends, Query, Request
 from supabase import Client
 
-from app.api.v1.deps import get_db, require_admin, require_permission
+from app.api.v1.deps import get_db, require_permission
 from app.models.admin import (
     AdminIapTransactionListItem,
     PageResponse,
@@ -69,12 +69,16 @@ async def admin_iap_mark_refunded(
     txn_id: str,
     http_request: Request,
     db: Client = Depends(get_db),
-    user: Dict[str, Any] = Depends(require_admin),
+    user: Dict[str, Any] = Depends(require_permission("iap.write")),
 ) -> Dict[str, Any]:
     """Mark a store transaction refunded (status-only update + audit).
 
     Store-side refunds arrive via webhooks; this endpoint only records the
     refunded state for the admin UI.
+
+    A4-14/M2: gated by ``iap.write`` (super_admin/admin/ops) instead of the
+    blanket ``require_admin`` — a content_editor has no IAP surface and must
+    not be able to flip store transactions to refunded.
     """
     result = await mark_iap_refunded(db, txn_id)
     await record_audit(

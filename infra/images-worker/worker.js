@@ -42,9 +42,10 @@
  *   - ES256 / RS256 (Supabase "JWT Signing Keys") -> JWKS fetched from
  *     {SUPABASE_URL}/auth/v1/.well-known/jwks.json, cached 1h, verified via
  *     WebCrypto. The JWK `kid` must match the token header.
- *   - `exp` is REQUIRED and enforced (with a small clock-skew allowance), and
- *     `iss` must be the project's auth issuer. Verifying only the signature
- *     would make any leaked token valid forever.
+ *   - `exp` is REQUIRED and enforced (with a small clock-skew allowance),
+ *     `iss` is required to be the project's auth issuer, and `aud` must be
+ *     `authenticated` — the same claim contract as backend security.py.
+ *     Verifying only the signature would make any leaked token valid forever.
  *
  * Caching: responses are stored in `caches.default` keyed by the PATH ONLY
  * (query strings ignored), with `Cache-Control: public, max-age=86400,
@@ -55,8 +56,9 @@
  * `max-age=3600` on every upload, so honouring the object's own value there
  * would make this policy unreachable (see `cacheControlFor`). An object's own
  * value still wins when it is MORE restrictive (`no-store` / `private` /
- * `no-cache` / `max-age=0`), and short-lived nested `tmp/` + `generated/`
- * previews are always left on their own TTL.
+ * `no-cache` / `max-age=0`), when it is SHORTER-LIVED than the default (a
+ * `max-age=60` recompress backfill must refresh within a minute, not sit stale
+ * for 24h), and for all short-lived nested `tmp/` + `generated/` previews.
  *
  * CORS: the web app fetch()es image URLs to build Blobs (download / share) and
  * reads one through a canvas, both of which need
@@ -75,28 +77,45 @@ const AUTH_COOKIE_PREFIX = 'sb-'; // sb-<project-ref>-auth-token
 // Small on purpose: this is the window in which an expired token still works.
 const CLOCK_SKEW_SECONDS = 60;
 
-// Key allowlist, ported from backend/app/api/v1/images.py (_KEY_RE /
-// _NESTED_KEY_RE). Keep the two in sync: this Worker and the presigned endpoint
-// must not disagree about what a servable key is.
-const CANONICAL_KEY_RE =
-  /^[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$/;
-// Preview keys under the shared top-level folders:
-//   {tmp|generated}/{user_id}/{sub}/{name}.{ext}
-// Top-level folder so scripts/cleanup_temp_assets.py can list/clear every
-// preview with one prefix (backend storage_service mints this shape).
-const NESTED_KEY_RE =
-  /^(?:tmp|generated)\/[^/\\]+\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$/;
-// Pre-migration preview keys: {user_id}/{tmp|generated}/{sub}/{name}.{ext}.
-// Accepted ONLY until scripts/migrate_temp_keys_layout.py has rewritten every
-// old key; delete this alongside images.py's _LEGACY_NESTED_KEY_RE afterwards.
-const LEGACY_NESTED_KEY_RE =
-  /^[^/\\]+\/(?:tmp|generated)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$/;
-// Thumbnail siblings: same layout, `_thumb.webp`. Always .webp regardless of the
-// parent's format (StorageService.THUMB_EXTENSION), because the read path derives
-// the thumb key from the parent key with no lookup, so the format has to be
-// predictable. Keep this in step with THUMB_EXTENSION if it ever changes.
-const CANONICAL_THUMB_KEY_RE =
-  /^[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}_thumb\.webp$/;
+// Key allowlist, ported from backend/app/core/storage_keys.py. Keep the two in
+// sync: this Worker and the presigned endpoint must not disagree about what a
+// servable key is. The extension set mirrors StorageService's
+// EXTENSION_BY_MIME: HEIC/TIFF/BMP uploads usually transcode to WebP but the
+// best-effort transcode can fail and store the original bytes, so those
+// extensions are servable too.
+//
+// Current layout (post `users/` restructure — the legacy pre-restructure
+// shapes were retired after the re-key migration):
+//   users/{user_id}/{items|outfits|avatars|sources|feedback}/{name}.{ext}
+//   users/{user_id}/{tmp|generated}/{sub}/{name}.{ext}
+//   users/{user_id}/export/data.json
+//   public/{banners|landing|blog|static}/{slug}/{name}.{ext}
+// Ownership is a pure structural rule: segment 1 for `users/`, nobody for
+// `public/`.
+const USERS_KEY_RE =
+  /^users\/[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
+const USERS_PREVIEW_KEY_RE =
+  /^users\/[^/\\]+\/(?:tmp|generated)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
+// The per-user data export (`users/{user}/export/data.json`) is deliberately
+// NOT servable here: it is fetched only through the authenticated presigned
+// path, never the worker (mirrors storage_keys.is_owned_storage_key).
+const USERS_THUMB_KEY_RE =
+  /^users\/[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}_thumb\.webp$/;
+// Legacy avatars: the users-layout migration renames `{user}/avatars/*` to
+// `users/{user}/avatars/*` positionally WITHOUT re-validating the filename, so
+// pre-cutover avatar names outside the 32-hex convention (e.g. `old-name.jpg`)
+// exist under `users/`. storage_keys.parse_key accepts them (mirrored bounded
+// legacy grammar), so the worker allowlist must too or those avatars 404 in
+// IMAGE_SERVING_MODE=worker. Thumb must be matched before canonical because the
+// legacy name includes `_`.
+const USERS_AVATAR_KEY_RE =
+  /^users\/[^/\\]+\/avatars\/[0-9a-zA-Z._-]+\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
+const USERS_AVATAR_THUMB_KEY_RE =
+  /^users\/[^/\\]+\/avatars\/[0-9a-zA-Z._-]+_thumb\.webp$/;
+const PUBLIC_KEY_RE =
+  /^public\/(?:banners|landing|blog|static)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
+const PUBLIC_THUMB_KEY_RE =
+  /^public\/(?:banners|landing|blog|static)\/[^/\\]+\/[0-9a-f]{32}_thumb\.webp$/;
 
 let jwksCache = { keys: null, fetchedAt: 0, forcedAt: 0 };
 
@@ -161,7 +180,16 @@ function getToken(request, env) {
   const cookies = cookieHeader.split(';').map((c) => c.trim());
   for (const cookie of cookies) {
     if (cookie.startsWith(AUTH_COOKIE_PREFIX) && cookie.includes('-auth-token=')) {
-      return cookie.slice(cookie.indexOf('=') + 1) || null;
+      const raw = cookie.slice(cookie.indexOf('=') + 1) || null;
+      if (raw === null) return null;
+      // Cookie values may be percent-encoded (the web app writes the session
+      // token itself); decode, falling back to the raw value on malformed
+      // escapes so a bad cookie cannot 500.
+      try {
+        return decodeURIComponent(raw) || null;
+      } catch {
+        return raw;
+      }
     }
   }
   return null;
@@ -311,12 +339,18 @@ function claimsAreValid(payload, env) {
   if (payload.exp + CLOCK_SKEW_SECONDS <= now) return false;
   if (typeof payload.nbf === 'number' && payload.nbf - CLOCK_SKEW_SECONDS > now) return false;
 
-  // iss pins the token to THIS Supabase project, so a token from any other
-  // project (or another Supabase-hosted app) cannot be replayed here.
-  if (env.SUPABASE_URL) {
-    const expected = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`;
-    if (payload.iss && payload.iss !== expected) return false;
-  }
+  // iss is REQUIRED and pins the token to THIS Supabase project, so a token
+  // from any other project (or another Supabase-hosted app) cannot be replayed
+  // here (backend security.py makes the issuer mandatory on both its paths).
+  // The expected issuer is derived from SUPABASE_URL, which the worker
+  // validates at startup (see validateEnv) — there is no configuration under
+  // which the check may be skipped.
+  const expected = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`;
+  if (payload.iss !== expected) return false;
+
+  // aud must be the Supabase "authenticated" audience, matching backend
+  // security.py (audience="authenticated" on both its HS256 and JWKS paths).
+  if (payload.aud !== 'authenticated') return false;
 
   return typeof payload.sub === 'string' && payload.sub.length > 0;
 }
@@ -334,6 +368,12 @@ async function verifyToken(token, env) {
 
   let payload = null;
   if (header.alg === 'HS256') {
+    if (!env.SUPABASE_JWT_SECRET) {
+      // JWKS-only deployments omit the legacy secret (README); an HS256 token
+      // cannot be verified without it, so reject descriptively instead of
+      // crashing on undefined inside hmacVerifyKey.
+      return null;
+    }
     const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
     const key = await hmacVerifyKey(env.SUPABASE_JWT_SECRET);
     const ok = await crypto.subtle.verify('HMAC', key, base64urlToBytes(sigB64), data);
@@ -353,10 +393,15 @@ async function verifyToken(token, env) {
 // --------------------------------------------------------------------------
 function isServableKey(storagePath) {
   return (
-    CANONICAL_KEY_RE.test(storagePath) ||
-    NESTED_KEY_RE.test(storagePath) ||
-    LEGACY_NESTED_KEY_RE.test(storagePath) ||
-    CANONICAL_THUMB_KEY_RE.test(storagePath)
+    USERS_KEY_RE.test(storagePath) ||
+    USERS_PREVIEW_KEY_RE.test(storagePath) ||
+    USERS_THUMB_KEY_RE.test(storagePath) ||
+    // Legacy-avatar tolerant variants (see the regex comments above). Thumb is
+    // tested before canonical because the legacy name grammar includes `_`.
+    USERS_AVATAR_THUMB_KEY_RE.test(storagePath) ||
+    USERS_AVATAR_KEY_RE.test(storagePath) ||
+    PUBLIC_KEY_RE.test(storagePath) ||
+    PUBLIC_THUMB_KEY_RE.test(storagePath)
   );
 }
 
@@ -366,18 +411,56 @@ function isOwnedByUser(storagePath, userId) {
   if (/\\|\r|\n/.test(storagePath)) return false; // no encoded separators
   if (storagePath.includes('..')) return false; // no traversal
   if (!isServableKey(storagePath)) return false;
-  // Canonical keys and legacy per-user preview keys embed the owner in the
-  // FIRST segment; top-level tmp/generated preview keys embed it in the
-  // SECOND segment (mirrors images.py `_is_owned_by_user`).
-  const owner = NESTED_KEY_RE.test(storagePath)
-    ? storagePath.split('/')[1]
-    : storagePath.split('/')[0];
-  return owner === userId;
+  // Public assets are owned by nobody and served without auth (banners,
+  // landing images, blog art, static) — the request handler short-circuits
+  // before JWT for `public/` keys, so this is only a safety net.
+  if (storagePath.startsWith('public/')) return true;
+  // Current `users/` layout: the owner is ALWAYS segment 1.
+  return storagePath.split('/')[1] === userId;
+}
+
+/** True when the key is a public (no-auth) asset under `public/`.
+ *
+ * The allowlist, not a prefix, decides: `public/anything/...` must not
+ * bypass the JWT check (the regexes pin the group to banners|landing|blog|
+ * static and the name to a 32-hex + image extension).
+ */
+function isPublicKey(storagePath) {
+  return (
+    typeof storagePath === 'string' &&
+    (PUBLIC_KEY_RE.test(storagePath) || PUBLIC_THUMB_KEY_RE.test(storagePath))
+  );
 }
 
 // --------------------------------------------------------------------------
 // request handler
 // --------------------------------------------------------------------------
+/**
+ * Validate the env bindings the worker cannot function without, once per
+ * isolate. Missing secrets used to fail as an opaque 500 (or, worse, silently
+ * skip the iss check) — now the first request throws a descriptive error that
+ * the fetch entry point logs.
+ */
+let envValidated = false;
+function validateEnv(env) {
+  if (envValidated) return;
+  if (!env || !env.SUPABASE_URL) {
+    throw new Error(
+      'images-worker misconfigured: SUPABASE_URL is required — deploy with ' +
+        '`npx wrangler secret put SUPABASE_URL` (token iss verification and ' +
+        'JWKS fetching both need it)',
+    );
+  }
+  if (!env.SUPABASE_JWT_SECRET) {
+    // Deliberately NOT an error: the secret is only used for legacy HS256
+    // tokens (README: "needed only for legacy HS256 tokens; ES256/RS256
+    // tokens verify against the project JWKS automatically"). A JWKS-only
+    // deployment keeps working without it; the HS256 branch in verifyToken
+    // rejects those tokens descriptively.
+  }
+  envValidated = true;
+}
+
 /**
  * Resolve the Cache-Control to serve for an R2 object.
  *
@@ -387,23 +470,54 @@ function isOwnedByUser(storagePath, userId) {
  * thumbnails included, so `object.httpMetadata.cacheControl` is always set. The
  * edge then re-fetched every tile hourly and, with no `immutable`, browsers
  * revalidated on each reload — 24x the origin fetches the R2 cutover existed to
- * remove. (The unit test that "proved" the default only passed because it stubbed
- * `cacheControl: undefined`, which no real object has.)
+ * remove.
  *
- * So: canonical and `_thumb` keys are write-once (a new upload mints a new UUID),
- * which is exactly what `immutable` asserts — take the long TTL for them and let
- * the object's own value win only when it is MORE restrictive. Nested `tmp/` and
- * `generated/` keys are short-lived previews, so there the object still decides.
+ * But OVERRIDING every cacheable value was just as wrong: recompress_assets
+ * overwrites keys in place with `cache-control: 60` so CDNs/browsers refresh
+ * re-encoded bytes within a minute, and the blanket upgrade to
+ * `max-age=86400, immutable` pinned the stale pre-recompress bytes for 24h.
+ *
+ * So the upgrade to the immutable default is only applied when it cannot
+ * SHORTEN the object's declared freshness window:
+ *   - no own cache-control, or no max-age in it  -> immutable default;
+ *   - own max-age >= the default's 86400s        -> immutable default
+ *     (same or longer-lived, plus immutable revalidation);
+ *   - own max-age < 86400s (e.g. the app's 3600s upload stamp or a 60s
+ *     recompress backfill)                       -> the object's own value;
+ *   - own value is not cacheable (`no-store` / `private` / `no-cache` /
+ *     `max-age=0`)                                -> the object's own value;
+ *   - nested `tmp/` / `generated/` keys are never write-once              ->
+ *     the object's own value (the default only when absent).
  */
 function cacheControlFor(object, storagePath) {
   const own = object.httpMetadata && object.httpMetadata.cacheControl;
   const immutableDefault = `public, max-age=${CACHE_TTL_SECONDS}, immutable`;
   const writeOnce =
     typeof storagePath === 'string' &&
-    (CANONICAL_KEY_RE.test(storagePath) || CANONICAL_THUMB_KEY_RE.test(storagePath));
+    (USERS_KEY_RE.test(storagePath) ||
+      USERS_THUMB_KEY_RE.test(storagePath) ||
+      USERS_AVATAR_KEY_RE.test(storagePath) ||
+      USERS_AVATAR_THUMB_KEY_RE.test(storagePath) ||
+      PUBLIC_KEY_RE.test(storagePath) ||
+      PUBLIC_THUMB_KEY_RE.test(storagePath));
+  if (!writeOnce) return own || immutableDefault;
   if (!own) return immutableDefault;
-  if (writeOnce && isCacheable(own)) return immutableDefault;
+  if (!isCacheable(own)) return own; // more restrictive wins
+  const ownMaxAge = maxAgeOf(own);
+  if (ownMaxAge === null || ownMaxAge >= CACHE_TTL_SECONDS) return immutableDefault;
   return own;
+}
+
+/** Parse the max-age (seconds) from a Cache-Control value, or null when
+ * absent/unparseable. Accepts `max-age=NNN` (any position) and the bare
+ * numeric shorthand (`cache-control: 60`) that recompress_assets stamps. */
+function maxAgeOf(cacheControl) {
+  if (!cacheControl) return null;
+  const value = String(cacheControl).trim();
+  const match = value.toLowerCase().match(/max-age\s*=\s*(\d+)/);
+  if (match) return parseInt(match[1], 10);
+  if (/^\d+$/.test(value)) return parseInt(value, 10);
+  return null;
 }
 
 /** Whether a Cache-Control value allows storing the response in a shared cache. */
@@ -440,12 +554,17 @@ async function handleRequest(request, env, ctx) {
     return notFound();
   }
 
-  const token = getToken(request, env);
-  const payload = token ? await verifyToken(token, env) : null;
-  const userId = payload && payload.sub ? String(payload.sub) : null;
-  if (!isOwnedByUser(storagePath, userId)) {
-    // Indistinguishable 404: never reveal whether the object exists.
-    return notFound();
+  // Public assets (banners, landing, blog, static) are served without auth:
+  // they are owned by nobody and must be reachable by anonymous visitors.
+  // Everything else requires a valid, ownership-checked token.
+  if (!isPublicKey(storagePath)) {
+    const token = getToken(request, env);
+    const payload = token ? await verifyToken(token, env) : null;
+    const userId = payload && payload.sub ? String(payload.sub) : null;
+    if (!isOwnedByUser(storagePath, userId)) {
+      // Indistinguishable 404: never reveal whether the object exists.
+      return notFound();
+    }
   }
 
   const rangeHeader = request.headers.get('Range');
@@ -529,8 +648,16 @@ async function handleRequest(request, env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     try {
+      validateEnv(env);
       return await handleRequest(request, env, ctx);
     } catch (err) {
+      // Log the real failure so a misconfigured worker is diagnosable: a bare
+      // 500 with no message made a missing secret indistinguishable from a
+      // transient R2/JWKS failure.
+      console.error(
+        'images-worker error:',
+        err && err.message ? err.message : String(err),
+      );
       return new Response('Internal error', { status: 500 });
     }
   },

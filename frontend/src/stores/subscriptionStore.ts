@@ -59,6 +59,22 @@ export function resetSubscriptionRequestCache(): void {
   clearRequestCache()
 }
 
+/**
+ * Drop ONLY the cached usage read for the current user. Call after
+ * quota-consuming mutations (extraction, generation, photoshoot, try-on
+ * starts) so usage bars and useIsNearLimit do not show pre-action numbers
+ * for the rest of the 60s freshness window (F1-10).
+ */
+export function invalidateUsageCache(): void {
+  const userId = getAccessToken() || 'anon'
+  const { cachedKeys, inFlightKeys } = __requestCacheInternals.debugSnapshot()
+  for (const key of [...cachedKeys, ...inFlightKeys]) {
+    if (key.startsWith(`subscription:usage:`) && key.endsWith(`:${userId}`)) {
+      invalidateRequest(key)
+    }
+  }
+}
+
 // ============================================================================
 // SUBSCRIPTION STATE INTERFACE
 // ============================================================================
@@ -79,6 +95,14 @@ interface SubscriptionState {
   isPromoValidating: boolean;
   isRedeemingPromo: boolean;
   promoError: string | null;
+
+  /**
+   * Session/request generation guard (F1-11): bumped on every `reset()`. Async
+   * reads capture the generation BEFORE their await and drop the response when
+   * it no longer matches — so a read begun before logout cannot repopulate the
+   * reset store with the previous account's subscription/usage/referral data.
+   */
+  resetEpoch: number;
 
   // Actions
   fetchSubscription: () => Promise<void>;
@@ -114,6 +138,7 @@ const initialState = {
   isPromoValidating: false,
   isRedeemingPromo: false,
   promoError: null,
+  resetEpoch: 0,
 };
 
 // ============================================================================
@@ -126,18 +151,26 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   // Fetch subscription with usage
   fetchSubscription: async () => {
     set({ isLoading: true, error: null });
+    // F1-11: capture the session generation before the await; a logout/reset
+    // that lands while this request is in flight bumps it, and the response
+    // must not repopulate the reset store with the prior account's data.
+    const generation = get().resetEpoch;
     try {
       const data = await cacheRequest(
         subKey('subscription'),
         () => subscriptionApi.getSubscription(),
         { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchSubscription' }
       );
+      if (get().resetEpoch !== generation) return;
       set({
         subscription: data.subscription,
         usage: data.usage,
         isLoading: false,
       });
     } catch (error) {
+      // F1-11: a pre-logout rejection must not clear a new session's
+      // isLoading or write its error into the reset store.
+      if (get().resetEpoch !== generation) return;
       const message = getApiError(error).message || 'Failed to fetch subscription';
       set({ isLoading: false, error: message });
     }
@@ -145,12 +178,14 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
 
   // Fetch just usage (for lightweight updates)
   fetchUsage: async () => {
+    const generation = get().resetEpoch;
     try {
       const usage = await cacheRequest(
         subKey('usage'),
         () => subscriptionApi.getUsage(),
         { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchUsage' }
       );
+      if (get().resetEpoch !== generation) return;
       set({ usage });
     } catch (error) {
       logger.error('Failed to fetch usage:', error);
@@ -159,12 +194,14 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
 
   // Fetch available plans
   fetchPlans: async () => {
+    const generation = get().resetEpoch;
     try {
       const plans = await cacheRequest(
         subKey('plans'),
         () => subscriptionApi.getPlans(),
         { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchPlans' }
       );
+      if (get().resetEpoch !== generation) return;
       set({ plans });
     } catch (error) {
       logger.error('Failed to fetch plans:', error);
@@ -173,12 +210,14 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
 
   // Fetch referral code
   fetchReferralCode: async () => {
+    const generation = get().resetEpoch;
     try {
       const referralCode = await cacheRequest(
         referralKey('code'),
         () => subscriptionApi.getReferralCode(),
         { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchReferralCode' }
       );
+      if (get().resetEpoch !== generation) return;
       set({ referralCode });
     } catch (error) {
       logger.error('Failed to fetch referral code:', error);
@@ -187,12 +226,14 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
 
   // Fetch referral stats
   fetchReferralStats: async () => {
+    const generation = get().resetEpoch;
     try {
       const referralStats = await cacheRequest(
         referralKey('stats'),
         () => subscriptionApi.getReferralStats(),
         { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchReferralStats' }
       );
+      if (get().resetEpoch !== generation) return;
       set({ referralStats });
     } catch (error) {
       logger.error('Failed to fetch referral stats:', error);
@@ -339,7 +380,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
 
   // Reset store (on logout)
   reset: () => {
-    set(initialState);
+    set({ ...initialState, resetEpoch: get().resetEpoch + 1 });
     // Drop every cached subscription/referral read so the next user cannot
     // reuse the previous user's cached data.
     clearRequestCache();

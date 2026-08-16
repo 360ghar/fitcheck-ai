@@ -26,7 +26,11 @@ import * as outfitsApi from '@/api/outfits'
 import { useOutfitStore } from '@/stores/outfitStore'
 import type { Outfit } from '@/types'
 
-const OUTFIT_ID = 'outfit-1'
+// A realistic 36-char backend UUID exercises the worst case for the
+// idempotency key length (the store comment assumes a UUID-sized id). The
+// old 8-char 'outfit-1' fixture always produced a short key and the <=64
+// assertion passed regardless of the real bound.
+const OUTFIT_ID = '550e8400-e29b-41d4-a716-446655440000'
 
 function seedCreationState(overrides: Partial<Parameters<typeof useOutfitStore.setState>[0]> = {}) {
   useOutfitStore.setState({
@@ -97,5 +101,31 @@ describe('outfitStore.saveOutfitFromDraft stale preview', () => {
 
     expect(outfit.id).toBe(OUTFIT_ID)
     expect(outfitsApi.uploadOutfitImage).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('outfitStore preview idempotency key length (F1-07)', () => {
+  it('keeps the client_request_id within the backend 64-char limit', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        blob: () => Promise.resolve(new Blob(['x'], { type: 'image/png' })),
+      })
+    )
+    let capturedKey = ''
+    vi.mocked(outfitsApi.uploadOutfitImage).mockImplementation(
+      async (_id, _file, opts) => {
+        capturedKey = opts?.client_request_id ?? ''
+        return { success: true, data: { id: 'img-1', is_primary: true } } as never
+      }
+    )
+    seedCreationState()
+
+    await useOutfitStore.getState().saveOutfitFromDraft()
+
+    expect(capturedKey).toBeTruthy()
+    // The backend contract is max_length=64 (outfits.py Form(... max_length=64)).
+    expect(capturedKey.length).toBeLessThanOrEqual(64)
+    expect(capturedKey).toMatch(/^pv-/)
   })
 })

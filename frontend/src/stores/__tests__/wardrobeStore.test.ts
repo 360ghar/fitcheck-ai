@@ -199,10 +199,95 @@ describe('wardrobe store', () => {
     mocks.deleteItem.mockResolvedValue(undefined)
 
     await useClosetStore.getState().fetchItems()
+    expect(useClosetStore.getState().totalItems).toBe(1)
     await useClosetStore.getState().deleteItem('item-1')
+    expect(useClosetStore.getState().totalItems).toBe(0)
     await useClosetStore.getState().fetchItems()
 
     // Initial load + post-delete re-read (cache was invalidated).
     expect(mocks.getItems).toHaveBeenCalledTimes(2)
+  })
+
+  it('a plain fetchItems() replaces the loaded list instead of appending', async () => {
+    mocks.getItems.mockResolvedValueOnce(paginated([item()]))
+    await useClosetStore.getState().fetchItems(true)
+    expect(useClosetStore.getState().items.map((i) => i.id)).toEqual(['item-1'])
+
+    // Simulate a mutation (cache invalidated) so the next plain load goes to
+    // the wire with different page-1 content: replacement must not append the
+    // old rows.
+    clearRequestCache()
+    mocks.getItems.mockResolvedValueOnce(paginated([item({ id: 'item-2', name: 'Jeans' })]))
+    await useClosetStore.getState().fetchItems()
+
+    expect(useClosetStore.getState().items.map((i) => i.id)).toEqual(['item-2'])
+    expect(useClosetStore.getState().page).toBe(1)
+  })
+
+  it('a plain fetchItems() after fetchMore resets to page 1 with no duplicates', async () => {
+    mocks.getItems.mockResolvedValueOnce({
+      items: [item()],
+      total: 2,
+      page: 1,
+      total_pages: 2,
+      has_prev: false,
+      has_next: true,
+    })
+    await useClosetStore.getState().fetchItems(true)
+
+    mocks.getItems.mockResolvedValueOnce({
+      items: [item({ id: 'item-2', name: 'Jeans' })],
+      total: 2,
+      page: 2,
+      total_pages: 2,
+      has_prev: true,
+      has_next: false,
+    })
+    await useClosetStore.getState().fetchMore()
+    expect(useClosetStore.getState().items.map((i) => i.id)).toEqual(['item-1', 'item-2'])
+
+    // The forced page-1 result is still cached: the plain fetch replaces with
+    // page 1 only, so the page-2 rows cannot duplicate the list.
+    await useClosetStore.getState().fetchItems()
+    expect(useClosetStore.getState().items.map((i) => i.id)).toEqual(['item-1'])
+    expect(useClosetStore.getState().page).toBe(1)
+    expect(useClosetStore.getState().hasMore).toBe(true)
+  })
+
+  it('refresh=true also replaces instead of appending', async () => {
+    mocks.getItems.mockResolvedValueOnce({
+      items: [item()],
+      total: 2,
+      page: 1,
+      total_pages: 2,
+      has_prev: false,
+      has_next: true,
+    })
+    await useClosetStore.getState().fetchItems(true)
+
+    mocks.getItems.mockResolvedValueOnce({
+      items: [item({ id: 'item-2', name: 'Jeans' })],
+      total: 2,
+      page: 2,
+      total_pages: 2,
+      has_prev: true,
+      has_next: false,
+    })
+    await useClosetStore.getState().fetchMore()
+    expect(useClosetStore.getState().items.map((i) => i.id)).toEqual(['item-1', 'item-2'])
+
+    // Forced re-fetch returns a NEW page 1: must replace, not append.
+    mocks.getItems.mockResolvedValueOnce({
+      items: [item({ id: 'item-3', name: 'Shirt' })],
+      total: 1,
+      page: 1,
+      total_pages: 1,
+      has_prev: false,
+      has_next: false,
+    })
+    await useClosetStore.getState().fetchItems(true)
+
+    expect(useClosetStore.getState().items.map((i) => i.id)).toEqual(['item-3'])
+    expect(useClosetStore.getState().page).toBe(1)
   })
 })

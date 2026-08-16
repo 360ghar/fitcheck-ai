@@ -13,6 +13,7 @@ so the store retries. Entitlements are only written from provider-verified
 data.
 """
 import asyncio
+from datetime import timedelta
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -25,7 +26,50 @@ from app.models.subscription import PlanType, RegisterIapTransactionRequest, Sto
 from app.services.apple_iap_service import AppleIAPService, AppleIAPSignatureError
 from app.services.google_play_service import GooglePlayService, GooglePlayVerificationError
 from app.services.subscription_service import SubscriptionService
-from app.utils.datetime_util import utcnow_iso
+from app.utils import maybe_single_data
+from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
+
+
+def _is_unique_violation(error: Exception) -> bool:
+    """True when a postgrest error reports a unique-constraint violation (23505)."""
+    error_info = getattr(error, "json", lambda: {})() or {}
+    code = error_info.get("code") or getattr(error, "code", None)
+    if code == "23505":
+        return True
+    text = str(error).lower()
+    return "duplicate key" in text or "unique constraint" in text
+
+
+async def _sync_entitlement_claiming_identifier(
+    db: Client,
+    user_id: str,
+    *,
+    provider: str,
+    sync_kwargs: Dict[str, Any],
+    identifier: Optional[str],
+) -> Any:
+    """Run the entitlement sync, mapping a concurrent-claim collision to 400.
+
+    ``_ensure_identifier_available`` is a fast-path pre-check; the authoritative
+    atomic claim is the partial unique index from migration 052 on the store
+    identifier column. Two concurrent registrations of the SAME verified
+    transaction from different accounts both pass the SELECT, then the loser's
+    upsert raises 23505 — surface the same "already used on another account"
+    validation error instead of a 500 the client would retry into the same race.
+    """
+    try:
+        return await SubscriptionService.sync_iap_subscription(
+            user_id,
+            db,
+            provider=provider,
+            **sync_kwargs,
+        )
+    except Exception as error:
+        if identifier and _is_unique_violation(error):
+            raise ValidationError(
+                "This purchase has already been used on another account"
+            ) from error
+        raise
 
 logger = get_context_logger(__name__)
 
@@ -38,8 +82,20 @@ router = APIRouter(prefix="/subscription", tags=["Subscription", "IAP"])
 _ENTITLEMENT_LOSS_TYPES = frozenset({"EXPIRED", "GRACE_PERIOD_EXPIRED", "REVOKE", "REFUND"})
 
 _WEBHOOK_STATUS_PENDING = "pending"
+_WEBHOOK_STATUS_PROCESSING = "processing"
 _WEBHOOK_STATUS_PROCESSED = "processed"
 _WEBHOOK_STATUS_FAILED = "failed"
+
+# A webhook ledger row whose processing_started_at is older than this is a
+# worker that died mid-processing; a redelivery may reclaim it (A1-06). Same
+# lease idea as the Stripe webhook's 15-minute window, shorter because the
+# store handlers are quick.
+_WEBHOOK_LEASE_STALE_SECONDS = 5 * 60
+
+# Outcome of _claim_event: the caller must process the event.
+_CLAIM_CLAIMED = "claimed"
+# Outcome of _claim_event: duplicate; the caller must ack without processing.
+_CLAIM_ACKED = "acked"
 
 
 def _verified_renewal_info(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -60,24 +116,99 @@ def _verified_renewal_info(data: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
 
-async def _claim_event(db: Client, table: str, pk_column: str, pk_value: str, event_type: str) -> bool:
-    """Insert a webhook event row; False when it is a duplicate.
+async def _claim_event(db: Client, table: str, pk_column: str, pk_value: str, event_type: str) -> str:
+    """Claim a webhook event row for processing; returns _CLAIM_CLAIMED or _CLAIM_ACKED.
 
     Mirrors stripe_webhook_events: the primary key is the store's own event
-    ID so retried deliveries collapse onto one row. Returns True when this
-    caller won the insert and must process the event.
+    ID so retried deliveries collapse onto one row. A duplicate is NOT acked
+    blindly (A1-06): only an already-``processed`` row (or one a live worker
+    is currently processing) is acked. A ``failed`` row — or a
+    ``processing`` row whose lease is stale (> 5 minutes, i.e. a worker died
+    mid-handling) — is reclaimed with a compare-and-swap on
+    ``processing_started_at`` so the store retry actually reprocesses it
+    instead of being acknowledged forever.
     """
     try:
         await asyncio.to_thread(
             db.table(table)
-            .insert({pk_column: pk_value, "event_type": event_type, "status": _WEBHOOK_STATUS_PENDING})
+            .insert({
+                pk_column: pk_value,
+                "event_type": event_type,
+                "status": _WEBHOOK_STATUS_PROCESSING,
+                "processing_started_at": utcnow_iso(),
+                "attempts": 1,
+            })
             .execute
         )
-        return True
+        return _CLAIM_CLAIMED
     except Exception as exc:
-        if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
-            return False
-        raise HTTPException(status_code=500, detail="Failed to record webhook event") from exc
+        if "duplicate" not in str(exc).lower() and "unique" not in str(exc).lower():
+            raise HTTPException(status_code=500, detail="Failed to record webhook event") from exc
+
+    # Duplicate: inspect the existing row before deciding.
+    try:
+        existing = await asyncio.to_thread(
+            db.table(table)
+            .select("status,processing_started_at,attempts")
+            .eq(pk_column, pk_value)
+            .maybe_single()
+            .execute
+        )
+    except Exception:
+        # Cannot inspect the ledger (missing table / dead connection). A
+        # ack here would be final for rows that still need processing: a
+        # failed/stale-processing event depends on THIS delivery to reclaim
+        # and retry it, so acknowledging a read failure would suppress the
+        # store's redelivery and strand the event forever. Raise 500 so the
+        # store retries; a truly duplicate PROCESSED event is cheap to
+        # re-acknowledge on the next delivery.
+        logger.warning(
+            "Could not inspect duplicate webhook event; returning 500 so the "
+            "store retries",
+            extra={"table": table, "pk": pk_value},
+        )
+        raise HTTPException(status_code=500, detail="Failed to inspect webhook event") from None
+    row = maybe_single_data(existing)
+    if not row:
+        return _CLAIM_ACKED
+
+    status = row.get("status")
+    if status == _WEBHOOK_STATUS_PROCESSED:
+        return _CLAIM_ACKED
+    started_at = parse_utc_datetime(row.get("processing_started_at"))
+    if (
+        status == _WEBHOOK_STATUS_PROCESSING
+        and started_at is not None
+        and started_at > utcnow() - timedelta(seconds=_WEBHOOK_LEASE_STALE_SECONDS)
+    ):
+        # A live worker holds the lease; this delivery is a duplicate.
+        return _CLAIM_ACKED
+
+    # failed, pending, or stale-processing: reclaim with a CAS on the lease.
+    previous_started = row.get("processing_started_at")
+    claim_query = (
+        db.table(table)
+        .update({
+            "status": _WEBHOOK_STATUS_PROCESSING,
+            "processing_started_at": utcnow_iso(),
+            "attempts": int(row.get("attempts") or 0) + 1,
+        })
+        .eq(pk_column, pk_value)
+    )
+    if previous_started is not None:
+        claim_query = claim_query.eq("processing_started_at", previous_started)
+    else:
+        claim_query = claim_query.is_("processing_started_at", "null")
+    claim = await asyncio.to_thread(claim_query.execute)
+    claim_data = getattr(claim, "data", None)
+    if claim_data is not None and not claim_data:
+        # Lost the CAS race to a concurrent retry.
+        return _CLAIM_ACKED
+    logger.info(
+        "Reprocessing previously failed/stale webhook event",
+        extra={"table": table, "pk": pk_value, "previous_status": status},
+    )
+    return _CLAIM_CLAIMED
 
 
 async def _finish_event(db: Client, table: str, pk_column: str, pk_value: str, status: str, error: Optional[str] = None) -> None:
@@ -212,6 +343,70 @@ async def _user_id_for_store_purchase(
 # =============================================================================
 
 
+async def _ensure_identifier_available(
+    db: Client,
+    provider: str,
+    identifier: Optional[str],
+    user_id: str,
+    app_account_token: Optional[str] = None,
+) -> None:
+    """Reject a store-verified purchase already claimed by another account.
+
+    A verified transaction belongs to exactly one account (A1-01): Apple's
+    ``appAccountToken`` is the user id the client attached at purchase time,
+    and a Play purchase token is single-use. Without this check, one
+    verified transaction id could be re-registered under N accounts, each
+    getting a paid entitlement from the same store purchase.
+
+    Two gates:
+    - Apple: when the verified transaction carries an appAccountToken, it
+      must equal the registering user's id.
+    - Both stores: when the transaction identifier is already bound to a
+      DIFFERENT user's subscription row, reject the registration.
+
+    Fails closed: a lookup error raises instead of granting.
+    """
+    if not identifier:
+        return
+    if provider == "apple" and app_account_token:
+        if str(app_account_token) != str(user_id):
+            raise ValidationError(
+                "This App Store purchase belongs to a different account"
+            )
+    column = (
+        "apple_original_transaction_id" if provider == "apple" else "google_purchase_token"
+    )
+    try:
+        result = await asyncio.to_thread(
+            db.table("subscriptions")
+            .select("user_id")
+            .eq(column, identifier)
+            .neq("user_id", user_id)
+            .limit(1)
+            .execute
+        )
+    except Exception as exc:
+        logger.warning(
+            "Could not verify store purchase ownership (fail closed)",
+            extra={"provider": provider, "identifier": identifier, "error": str(exc)},
+        )
+        raise ValidationError(
+            "Could not verify purchase ownership. Please try again."
+        ) from exc
+    rows = getattr(result, "data", None) or []
+    if rows:
+        logger.warning(
+            "Rejected store purchase already claimed by another account",
+            extra={
+                "provider": provider,
+                "identifier": identifier,
+                "claimant_user_id": rows[0].get("user_id"),
+                "requesting_user_id": user_id,
+            },
+        )
+        raise ValidationError("This purchase has already been used on another account")
+
+
 @router.post("/iap/transaction", response_model=Dict[str, Any])
 async def register_iap_transaction(
     request: RegisterIapTransactionRequest,
@@ -233,17 +428,30 @@ async def register_iap_transaction(
                 "Product ID does not match the verified App Store transaction"
             )
         entitlement = AppleIAPService.transaction_to_entitlement(tx_info)
-        result = await SubscriptionService.sync_iap_subscription(
-            user["id"],
+        # One verified transaction -> one account (A1-01): reject when the
+        # purchase already belongs to a different user. The unique index from
+        # migration 052 is the atomic claim; the SELECT above is the fast path.
+        await _ensure_identifier_available(
             db,
+            "apple",
+            entitlement["original_transaction_id"],
+            user["id"],
+            app_account_token=tx_info.get("appAccountToken"),
+        )
+        result = await _sync_entitlement_claiming_identifier(
+            db,
+            user["id"],
             provider="apple",
-            plan_type=entitlement["plan_type"],
-            status=entitlement["status"],
-            current_period_start=entitlement["current_period_start"],
-            current_period_end=entitlement["current_period_end"],
-            cancel_at_period_end=entitlement["cancel_at_period_end"],
-            product_id=entitlement["product_id"],
-            apple_original_transaction_id=entitlement["original_transaction_id"],
+            identifier=entitlement["original_transaction_id"],
+            sync_kwargs={
+                "plan_type": entitlement["plan_type"],
+                "status": entitlement["status"],
+                "current_period_start": entitlement["current_period_start"],
+                "current_period_end": entitlement["current_period_end"],
+                "cancel_at_period_end": entitlement["cancel_at_period_end"],
+                "product_id": entitlement["product_id"],
+                "apple_original_transaction_id": entitlement["original_transaction_id"],
+            },
         )
         return {"data": result.model_dump(mode="json"), "message": "OK"}
 
@@ -254,20 +462,28 @@ async def register_iap_transaction(
         GooglePlayService.plan_for_product(product_id)
         purchase = await GooglePlayService.get_subscription(product_id, request.transaction_id)
         entitlement = GooglePlayService.subscription_to_entitlement(purchase, product_id)
+        # One verified purchase token -> one account (A1-01); the migration 052
+        # unique index makes the claim atomic under concurrency.
+        await _ensure_identifier_available(
+            db, "google", request.transaction_id, user["id"]
+        )
         # Acknowledge so Play does not refund the purchase after 3 days.
         await GooglePlayService.acknowledge(product_id, request.transaction_id)
-        result = await SubscriptionService.sync_iap_subscription(
-            user["id"],
+        result = await _sync_entitlement_claiming_identifier(
             db,
+            user["id"],
             provider="google",
-            plan_type=entitlement["plan_type"],
-            status=entitlement["status"],
-            current_period_start=entitlement["current_period_start"],
-            current_period_end=entitlement["current_period_end"],
-            cancel_at_period_end=entitlement["cancel_at_period_end"],
-            product_id=entitlement["product_id"],
-            google_purchase_token=request.transaction_id,
-            google_order_id=entitlement.get("order_id"),
+            identifier=request.transaction_id,
+            sync_kwargs={
+                "plan_type": entitlement["plan_type"],
+                "status": entitlement["status"],
+                "current_period_start": entitlement["current_period_start"],
+                "current_period_end": entitlement["current_period_end"],
+                "cancel_at_period_end": entitlement["cancel_at_period_end"],
+                "product_id": entitlement["product_id"],
+                "google_purchase_token": request.transaction_id,
+                "google_order_id": entitlement.get("order_id"),
+            },
         )
         return {"data": result.model_dump(mode="json"), "message": "OK"}
 
@@ -327,7 +543,7 @@ async def apple_notifications(request: Request, db: Client = Depends(get_db)):
             "environment": notification_env,
         },
     )
-    if not await _claim_event(db, "apple_iap_events", "notification_id", notification_id, notification_type):
+    if await _claim_event(db, "apple_iap_events", "notification_id", notification_id, notification_type) != _CLAIM_CLAIMED:
         return {"received": True, "duplicate": True}
 
     try:
@@ -483,13 +699,13 @@ async def google_notifications(request: Request, db: Client = Depends(get_db)):
     # label): the admin revenue endpoint counts Google churn from these
     # names, so 'SUBSCRIPTION_EXPIRED'/'CANCELED'/'REVOKED' rows must be
     # distinguishable from renewals and purchases.
-    if not await _claim_event(
+    if await _claim_event(
         db,
         "google_rtdn_events",
         "message_id",
         message_id,
         GooglePlayService.notification_type_name(notification),
-    ):
+    ) != _CLAIM_CLAIMED:
         return {"received": True, "duplicate": True}
 
     try:

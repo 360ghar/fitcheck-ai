@@ -22,6 +22,16 @@ from app.models.subscription import (
 logger = get_context_logger(__name__)
 
 
+def _is_unique_violation(error: Exception) -> bool:
+    """True when a postgrest error reports a unique-constraint violation (23505)."""
+    error_info = getattr(error, "json", lambda: {})() or {}
+    code = error_info.get("code") or getattr(error, "code", None)
+    if code == "23505":
+        return True
+    text = str(error).lower()
+    return "duplicate key" in text or "unique constraint" in text
+
+
 class ReferralService:
     """Service for managing referral codes and redemptions."""
 
@@ -171,7 +181,7 @@ class ReferralService:
 
             redemptions = await execute_with_reconnect(
                 lambda d: d.table("referral_redemptions").select(
-                    "referred_user_id, redeemed_at, referrer_credit_applied"
+                    "referred_user_id, redeemed_at, referrer_credit_applied, credit_months"
                 ).eq("referrer_user_id", user_id).execute(),
                 db,
                 extra={"operation": "get_referral_stats_redemptions", "user_id": user_id},
@@ -213,7 +223,15 @@ class ReferralService:
 
                     if credit_applied:
                         successful_referrals += 1
-                        total_credits += settings.REFERRAL_CREDIT_MONTHS
+                        # A1-10: use the months actually granted at redemption
+                        # time (recorded by the redeem RPC) so totals do not
+                        # drift when REFERRAL_CREDIT_MONTHS changes. Rows
+                        # written before the credit_months column fall back to
+                        # the current setting.
+                        total_credits += int(
+                            redemption.get("credit_months")
+                            or settings.REFERRAL_CREDIT_MONTHS
+                        )
 
             total_referrals = len(referrals)
             pending_referrals = max(0, total_referrals - successful_referrals)
@@ -239,8 +257,16 @@ class ReferralService:
     # ==========================================================================
 
     @staticmethod
-    async def validate_referral_code(code: str, db: Client) -> ValidateReferralResponse:
-        """Validate a referral code without redeeming it."""
+    async def validate_referral_code(
+        code: str, db: Client, *, neutral: bool = False
+    ) -> ValidateReferralResponse:
+        """Validate a referral code without redeeming it.
+
+        ``neutral=True`` hides the referrer's identity (public endpoint):
+        the response uses "A friend" for both the name and the message so
+        the endpoint cannot be used to harvest account names (A1-18). The
+        authenticated stats path keeps the real name.
+        """
         normalized_code = ReferralService._normalize_code(code)
         try:
             # Case-insensitive lookup (read-only; rebuild + retry once on a
@@ -281,6 +307,18 @@ class ReferralService:
             credit_months = settings.REFERRAL_CREDIT_MONTHS
             month_label = "month" if credit_months == 1 else "months"
 
+            if neutral:
+                # Public validation must not reveal the referrer's account
+                # name ("A friend") — the endpoint is unauthenticated.
+                return ValidateReferralResponse(
+                    valid=True,
+                    referrer_name="A friend",
+                    message=(
+                        f"Referred by a friend! You'll both get {credit_months} "
+                        f"{month_label} of Pro free."
+                    ),
+                )
+
             return ValidateReferralResponse(
                 valid=True,
                 referrer_name=referrer_name or "A friend",
@@ -305,13 +343,14 @@ class ReferralService:
         try:
             credit_months = settings.REFERRAL_CREDIT_MONTHS
 
-            # Durable retry hook (RCA 2026-08-04): persist the intent BEFORE
-            # the RPC so a transient failure (missing RPC from an unapplied
-            # migration, dead pooled connection - both observed in
-            # production) can be retried by process_pending_referral on the
-            # next login instead of being lost forever. Best-effort: a write
-            # failure here must not fail the redemption itself. The RPC
-            # re-writes the same field inside its transaction on success.
+            # Referral credit must not be granted to an account that has not
+            # confirmed its email (A1-03): an unconfirmed signup could burn
+            # the referrer's credit before the account is real. Explicitly
+            # False is the gate (legacy rows without the flag pass, matching
+            # the is_active convention). The durable retry hook IS persisted
+            # BEFORE this gate (A1-01): process_pending_referral defers the
+            # grant and keeps the hook until the email is confirmed, so a
+            # register-time rejection is not a permanent loss.
             try:
                 await asyncio.to_thread(
                     db.table("users")
@@ -322,6 +361,30 @@ class ReferralService:
             except Exception as e:
                 logger.warning(
                     f"Failed to persist pending referral code for user {referred_user_id}: {e}"
+                )
+
+            account_result = await execute_with_reconnect(
+                lambda d: d.table("users")
+                .select("email_verified")
+                .eq("id", referred_user_id)
+                .maybe_single()
+                .execute(),
+                db,
+                extra={"operation": "redeem_referral_check_confirmed", "referred_user_id": referred_user_id},
+            )
+            if (
+                account_result
+                and account_result.data
+                and account_result.data.get("email_verified") is False
+            ):
+                logger.info(
+                    "Rejected referral redemption for unconfirmed account",
+                    referred_user_id=referred_user_id,
+                )
+                return RedeemReferralResponse(
+                    success=False,
+                    message="Confirm your email address before redeeming a referral code",
+                    credit_months=0,
                 )
 
             # The RPC is one transaction (row locks + writes), so a reconnect
@@ -382,6 +445,25 @@ class ReferralService:
             )
 
         except Exception as e:
+            if _is_unique_violation(e):
+                # Two concurrent redemptions of DIFFERENT codes by the same
+                # user (or a retry racing the original) each lock a different
+                # referral_codes row, so neither sees the other's redemption
+                # row and the loser hits the referral_redemptions unique
+                # constraint (23505) instead of the RPC's
+                # already-redeemed path (A1-07). The grant DID land for the
+                # winner, so surface the already-redeemed shape instead of a
+                # 500 the client would retry into the same dead end.
+                logger.info(
+                    "Concurrent referral redemption collapsed onto already-redeemed",
+                    referred_user_id=referred_user_id,
+                    code=normalized_code,
+                )
+                return RedeemReferralResponse(
+                    success=True,
+                    message="Referral already applied",
+                    credit_months=int(settings.REFERRAL_CREDIT_MONTHS),
+                )
             logger.error(f"Error redeeming referral code {code} for user {referred_user_id}: {e}")
             raise DatabaseError(f"Failed to redeem referral code: {str(e)}")
 
@@ -403,7 +485,7 @@ class ReferralService:
             # of the referral service).
             result = await execute_with_reconnect(
                 lambda d: d.table("users")
-                .select("referred_by_code")
+                .select("referred_by_code,email_verified")
                 .eq("id", user_id)
                 .maybe_single()
                 .execute(),
@@ -412,6 +494,16 @@ class ReferralService:
             )
 
             if not result or not result.data or not result.data.get("referred_by_code"):
+                return None
+
+            # A1-03: an unconfirmed account must not receive the grant. Keep
+            # the hook so the grant lands on the next sign-in AFTER the email
+            # is confirmed.
+            if result.data.get("email_verified") is False:
+                logger.info(
+                    "Deferring pending referral until email is confirmed",
+                    user_id=user_id,
+                )
                 return None
 
             # Check if already redeemed

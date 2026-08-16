@@ -190,11 +190,20 @@ DEFAULT_MIN_AGE_HOURS = 2.0
 # user asked to save. 30 days is a retention decision, not a transient-window
 # decision; override with GENERATED_MIN_AGE_HOURS.
 #
+# ``export`` (``users/{user}/export/data.json``) and ``public``
+# (``public/{group}/...``) must NEVER be deleted as orphans: the data-export
+# archive is overwritten deterministically and may sit unreferenced between
+# requests, and public assets (banners/landing/blog) are long-lived with no
+# per-object DB row. ``float("inf")`` is the sentinel — ``split_by_age`` treats
+# an infinite window as permanent protection.
+#
 # The real fix is to make these DB-referenced (then they stop being orphans at
 # all) — tracked as debt. Until then this stops the cleanup script from being the
 # thing that deletes them.
 CATEGORY_MIN_AGE_HOURS = {
     "generated": float(_env("GENERATED_MIN_AGE_HOURS", "720")),  # 30 days
+    "export": float("inf"),  # data-export archive: never auto-delete
+    "public": float("inf"),  # banners/landing/blog/static: never auto-delete
 }
 
 
@@ -209,6 +218,7 @@ CATEGORY_KEYWORDS = {
     "feedback",
     "tmp",
     "generated",
+    "export",
 }
 
 # Old-style keys embed a category in the filename prefix:
@@ -228,13 +238,24 @@ def classify_category(key: str) -> str:
 
     Top-level preview folders (``tmp/{user}/{source}/...`` and
     ``generated/{user}/{type}/...``) -> FIRST segment.
-    Canonical layout (``{user_id}/{category}/{uuid}.{ext}``) and the legacy
-    per-user preview layout (``{user_id}/tmp|generated/{sub}/...``) -> second
-    segment.
+    ``users/`` layout (``users/{user}/{category}/...``) -> THIRD segment, and
+    ``users/{user}/tmp|generated/...`` -> ``tmp`` / ``generated``. The
+    ``users/{user}/export/...`` archive classifies as ``export``.
+    ``public/{group}/...`` (banners/landing/blog/static) -> ``public``: these
+    are long-lived no-auth assets with no per-object DB row, so they must NOT
+    be binned as ``legacy-other`` (which is deletable on the 2h grace) — they
+    are never auto-deleted (see CATEGORY_MIN_AGE_HOURS).
+    Canonical legacy layout (``{user_id}/{category}/{uuid}.{ext}``) and the
+    legacy per-user preview layout (``{user_id}/tmp|generated/{sub}/...``) ->
+    second segment.
     Oldest layout: ``{user_id}/{timestamp}/{prefix}_{uuid}{ext}`` -> infer from
     the filename prefix. Anything else is ``legacy-other``.
     """
     parts = key.split("/")
+    if parts and parts[0] == "users":
+        return parts[2] if len(parts) >= 3 and parts[2] in CATEGORY_KEYWORDS else "legacy-other"
+    if parts and parts[0] == "public":
+        return "public"
     if parts and parts[0] in CATEGORY_KEYWORDS:
         return parts[0]
     if len(parts) >= 2:
@@ -480,6 +501,13 @@ def split_by_age(
             protected.append(key)
             continue
         window = CATEGORY_MIN_AGE_HOURS.get(classify_category(key), min_age_hours)
+        # An infinite window (``float("inf")``) means the category is never
+        # auto-deleted (``export`` archives, ``public`` assets): the timedelta
+        # math would overflow, and semantically the key is permanently
+        # protected regardless of age.
+        if window == float("inf"):
+            protected.append(key)
+            continue
         if _to_aware_utc(mtime) <= now_utc - timedelta(hours=window):
             deletable.append(key)
         else:

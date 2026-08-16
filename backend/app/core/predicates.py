@@ -45,7 +45,9 @@ _OP_RE = re.compile(r"^[a-z_]+$")
 
 # Operators the emulation can evaluate against an in-memory row. Anything
 # else parses fine but evaluates to False (a PostgREST feature we never use).
-_EVALUATABLE_OPS = frozenset({"eq", "neq", "gte", "lte", "gt", "lt", "ilike", "like", "in"})
+_EVALUATABLE_OPS = frozenset(
+    {"eq", "neq", "gte", "lte", "gt", "lt", "ilike", "like", "in", "is"}
+)
 
 
 class PredicateError(ValueError):
@@ -147,6 +149,14 @@ def evaluate_predicate(row: Dict[str, Any], predicate: str) -> bool:
         return value == _coerce_literal(raw)
     if op == "neq":
         return value != _coerce_literal(raw)
+    if op == "is":
+        # PostgREST `is.null` / `is.not.null` — used by the subscription
+        # banked-credit claim's still-effectively-free guards.
+        if raw == "null":
+            return value is None
+        if raw == "not.null":
+            return value is not None
+        return False
     if op == "gte":
         return str(value or "") >= raw
     if op == "lte":

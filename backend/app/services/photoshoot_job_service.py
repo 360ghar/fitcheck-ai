@@ -626,16 +626,30 @@ class PhotoshootJobService:
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if job and job.status not in _TERMINAL_STATUSES:
-                if (
-                    job.persistence_db is not None
-                    and not await _store.transition(
+                if job.persistence_db is not None:
+                    transitioned = await _store.transition(
                         job,
                         status=PhotoshootJobStatus.FAILED,
                         error_message=error,
                     )
-                    and job.status != PhotoshootJobStatus.FAILED
-                ):
-                    return
+                    if not transitioned:
+                        # A3-08: distinguish "CAS lost to a concurrent
+                        # terminal writer" (transition already adopted the
+                        # external status; dropping the late error is
+                        # correct) from a transition failure that leaves the
+                        # job non-terminal in memory. The latter must still
+                        # record the error in memory and stay dirty so the
+                        # next flush tick retries — otherwise the job hangs
+                        # in PROCESSING with the failure never surfaced
+                        # until TTL cleanup.
+                        if job.status in _TERMINAL_STATUSES:
+                            return
+                        logger.warning(
+                            "Failed to persist FAILED transition; recording "
+                            "error in memory and keeping the job dirty for retry",
+                            extra={"job_id": job.job_id, "error": str(error)},
+                        )
+                        job.persistence_dirty = True
                 job.error_message = error
                 job.status = PhotoshootJobStatus.FAILED
 

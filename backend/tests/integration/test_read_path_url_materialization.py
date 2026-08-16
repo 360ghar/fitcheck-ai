@@ -81,6 +81,11 @@ class _DB:
     def table(self, table_name):
         return _Query(self, table_name)
 
+    def rpc(self, name, params=None):
+        # The public-outfit route counts views via the 044 RPC; the fake
+        # accepts the call and returns no rows (the count itself is SQL).
+        return SimpleNamespace(execute=lambda: SimpleNamespace(data=[]))
+
 
 def _image(storage_path: Optional[str], stale_url: str, is_primary: bool = True) -> Dict[str, Any]:
     img: Dict[str, Any] = {
@@ -178,7 +183,14 @@ async def test_outfits_recently_worn_materializes_urls(monkeypatch):
 @pytest.mark.asyncio
 async def test_public_outfit_materializes_shared_image_urls(monkeypatch):
     _fake_presign(monkeypatch)
-    db = _DB({"outfits": [_outfit(OUTFIT_ID)], "shared_outfits": []})
+    # The share row is the source of truth for the public route (migration
+    # 045 era): a row must exist or the outfit is treated as not shared.
+    db = _DB({
+        "outfits": [_outfit(OUTFIT_ID)],
+        "shared_outfits": [
+            {"id": "s1", "outfit_id": OUTFIT_ID, "expires_at": None, "view_count": 0}
+        ],
+    })
 
     result = await outfits_module.get_public_outfit(outfit_id=UUID(OUTFIT_ID), db=db)
     assert result["data"]["images"][0]["image_url"] == "https://presigned.example/u/outfits/o.jpg"

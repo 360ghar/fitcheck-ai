@@ -652,8 +652,12 @@ class _CalendarPageState extends State<CalendarPage> {
       descriptionController.dispose();
     }
 
-    DateTime startTime = event.startTime;
-    DateTime endTime = event.endTime;
+    // A10b-05: seed from the LOCAL wall-clock time. Event times travel as
+    // UTC instants (A10b-01), so the raw value's hour is UTC; TimeOfDay must
+    // reflect the hour the calendar grid shows, and the date must be editable
+    // (the old dialog had no date picker at all).
+    DateTime startTime = event.startTime.toLocal();
+    DateTime endTime = event.endTime.toLocal();
     bool isAllDay = event.isAllDay;
 
     Get.dialog(
@@ -697,15 +701,27 @@ class _CalendarPageState extends State<CalendarPage> {
                       title: const Text('Start Time'),
                       trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
                       onTap: () async {
-                        final time = await showTimePicker(
+                        // A10b-05: date + time, mirroring the Add dialog —
+                        // the old edit dialog only offered a time picker, so
+                        // an event's date could never be changed.
+                        final picked = await showDatePicker(
                           context: context,
-                          initialTime: TimeOfDay.fromDateTime(startTime),
+                          initialDate: startTime,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
                         );
-                        if (time != null) {
-                          setDialogState(() {
-                            startTime = DateTime(startTime.year, startTime.month,
-                                startTime.day, time.hour, time.minute);
-                          });
+                        if (picked != null) {
+                          if (!context.mounted) return;
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.fromDateTime(startTime),
+                          );
+                          if (time != null) {
+                            setDialogState(() {
+                              startTime = DateTime(
+                                  picked.year, picked.month, picked.day, time.hour, time.minute);
+                            });
+                          }
                         }
                       },
                     ),
@@ -713,15 +729,24 @@ class _CalendarPageState extends State<CalendarPage> {
                       title: const Text('End Time'),
                       trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
                       onTap: () async {
-                        final time = await showTimePicker(
+                        final picked = await showDatePicker(
                           context: context,
-                          initialTime: TimeOfDay.fromDateTime(endTime),
+                          initialDate: endTime,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
                         );
-                        if (time != null) {
-                          setDialogState(() {
-                            endTime = DateTime(endTime.year, endTime.month,
-                                endTime.day, time.hour, time.minute);
-                          });
+                        if (picked != null) {
+                          if (!context.mounted) return;
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.fromDateTime(endTime),
+                          );
+                          if (time != null) {
+                            setDialogState(() {
+                              endTime = DateTime(
+                                  picked.year, picked.month, picked.day, time.hour, time.minute);
+                            });
+                          }
                         }
                       },
                     ),

@@ -239,14 +239,15 @@ _SharedOutfitModel _$SharedOutfitModelFromJson(Map<String, dynamic> json) =>
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
-      style: $enumDecode(_$StyleEnumMap, json['style']),
-      season: $enumDecode(_$SeasonEnumMap, json['season']),
+      style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
+      season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
       itemImages: (json['item_images'] as List<dynamic>)
           .map((e) => e as String)
           .toList(),
       outfitImages: (json['outfit_images'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
+      outfitStoragePath: json['outfit_storage_path'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       shareCount: (json['share_count'] as num?)?.toInt() ?? 0,
       viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
@@ -257,10 +258,11 @@ Map<String, dynamic> _$SharedOutfitModelToJson(_SharedOutfitModel instance) =>
       'id': instance.id,
       'name': instance.name,
       'description': instance.description,
-      'style': _$StyleEnumMap[instance.style]!,
-      'season': _$SeasonEnumMap[instance.season]!,
+      'style': _$StyleEnumMap[instance.style],
+      'season': _$SeasonEnumMap[instance.season],
       'item_images': instance.itemImages,
       'outfit_images': instance.outfitImages,
+      'outfit_storage_path': instance.outfitStoragePath,
       'created_at': instance.createdAt.toIso8601String(),
       'share_count': instance.shareCount,
       'view_count': instance.viewCount,

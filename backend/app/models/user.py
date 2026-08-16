@@ -97,7 +97,25 @@ class UserUpdate(BaseModel):
         return v
 
 
-class UserResponse(UserBase):
+class UserResponseBase(BaseModel):
+    """Response-side user fields (no input validators).
+
+    Deliberately avoids EmailStr and the birth_date future-check: response
+    models reuse this base so a legacy row can never 500 a read (same
+    documented pattern as OutfitBase/OutfitResponse). Create/update models
+    keep the strict input-side validation.
+    """
+    email: str
+    full_name: Optional[str] = Field(None, max_length=255)
+    avatar_url: Optional[str] = None
+    gender: Optional[str] = None
+    birth_date: Optional[date] = None
+    birth_time: Optional[dt_time] = None
+    birth_place: Optional[str] = Field(None, max_length=255)
+    is_active: bool = True
+
+
+class UserResponse(UserResponseBase):
     """Model for user response with all fields."""
     id: UUID
     email_verified: bool = False
@@ -129,8 +147,9 @@ class UserPreferencesBase(BaseModel):
     liked_brands: List[str] = Field(default_factory=list)
     disliked_patterns: List[str] = Field(default_factory=list)
     preferred_occasions: List[str] = Field(default_factory=list)
-    color_temperature: Optional[str] = None
-    style_personality: Optional[str] = None
+    # Max lengths mirror the DB columns (VARCHAR(20) / VARCHAR(50), migration 001).
+    color_temperature: Optional[str] = Field(None, max_length=20)
+    style_personality: Optional[str] = Field(None, max_length=50)
     data_points_collected: int = 0
 
 
@@ -141,8 +160,8 @@ class UserPreferencesUpdate(BaseModel):
     liked_brands: Optional[List[str]] = None
     disliked_patterns: Optional[List[str]] = None
     preferred_occasions: Optional[List[str]] = None
-    color_temperature: Optional[str] = None
-    style_personality: Optional[str] = None
+    color_temperature: Optional[str] = Field(None, max_length=20)
+    style_personality: Optional[str] = Field(None, max_length=50)
     data_points_collected: Optional[int] = None
 
 
@@ -162,9 +181,12 @@ class UserPreferences(UserPreferencesBase):
 
 class UserSettingsBase(BaseModel):
     """Base user settings model."""
-    default_location: Optional[str] = None
-    timezone: Optional[str] = None
-    language: str = "en"
+    # Max lengths mirror the DB columns (VARCHAR(255) / VARCHAR(50) /
+    # VARCHAR(10), migration 001). default_location is VARCHAR(255) — an
+    # overlong value would otherwise 500 with PostgREST 22001 (B3-04).
+    default_location: Optional[str] = Field(None, max_length=255)
+    timezone: Optional[str] = Field(None, max_length=50)
+    language: str = Field("en", max_length=10)
     measurement_units: str = "imperial"  # 'imperial' or 'metric'
     notifications_enabled: bool = True
     email_marketing: bool = False
@@ -173,9 +195,9 @@ class UserSettingsBase(BaseModel):
 
 class UserSettingsUpdate(BaseModel):
     """Model for updating user settings (all fields optional)."""
-    default_location: Optional[str] = None
-    timezone: Optional[str] = None
-    language: Optional[str] = None
+    default_location: Optional[str] = Field(None, max_length=255)
+    timezone: Optional[str] = Field(None, max_length=50)
+    language: Optional[str] = Field(None, max_length=10)
     measurement_units: Optional[str] = None
     notifications_enabled: Optional[bool] = None
     email_marketing: Optional[bool] = None

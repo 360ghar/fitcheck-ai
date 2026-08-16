@@ -34,11 +34,17 @@ class GenerationStatus(str, Enum):
 
 
 class OutfitImageBase(BaseModel):
-    """Base model for outfit images."""
+    """Base model for outfit images.
+
+    Response-side model: no ``min_length`` on ``pose`` because legacy rows
+    may carry an empty string, and the DB column is VARCHAR(20) (migration
+    001) so ``max_length`` must match — an overlong pose would otherwise 500
+    the whole outfit list at response validation with a 22001.
+    """
     image_url: str
     thumbnail_url: Optional[str] = None
     storage_path: Optional[str] = None
-    pose: str = Field(..., min_length=1, max_length=50)
+    pose: str = Field(..., max_length=20)
     lighting: Optional[str] = Field(None, max_length=50)
     body_profile_id: Optional[UUID] = None
     generation_type: Optional[str] = Field(default="ai", max_length=20)
@@ -73,7 +79,11 @@ class OutfitBase(BaseModel):
     individually removed), and reusing an input validator for response
     serialization would 500 on any such outfit instead of returning it.
     """
-    name: str = Field(..., min_length=1, max_length=255)
+    # B3-08: no min_length on the shared base — the DB has no CHECK, so a
+    # legacy row with name='' must serialize instead of 500ing the whole
+    # outfit list. min_length lives only on the input models (OutfitCreate /
+    # OutfitUpdate).
+    name: str = Field(..., max_length=255)
     description: Optional[str] = None
     item_ids: List[UUID] = Field(default_factory=list)
     style: Optional[str] = Field(None, max_length=50)

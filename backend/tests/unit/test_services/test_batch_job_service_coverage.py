@@ -780,16 +780,35 @@ async def test_cleanup_expired_jobs_evicts_and_frees_payloads():
     await BatchJobService.broadcast_event(young_finished.job_id, "e", {"x": 1})
     young_finished.status = BatchJobStatus.COMPLETED
 
+    # A stale non-terminal job is NEVER evicted (A2-03): the pipeline owns
+    # its terminal transition, and evicting it would strand the durable row
+    # non-terminal forever.
     old_active = await _make_job("u3")
     old_active.status = BatchJobStatus.EXTRACTING
     old_active.created_at = datetime.now(timezone.utc) - timedelta(minutes=40)
     young_active = await _make_job("u4")
     young_active.status = BatchJobStatus.EXTRACTING
 
+    # A stale non-terminal job hydrated from a durable row IS evictable: no
+    # pipeline owns a recovered job (poll-only shells are never resumed), so
+    # evicting it cannot strand a live pipeline. Constructed directly (not via
+    # create_job) because the two in-memory jobs above already occupy the
+    # process-wide concurrency cap.
+    recovered_stale = BatchJob(
+        job_id="recovered-stale",
+        user_id="u5",
+        status=BatchJobStatus.EXTRACTING,
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=40),
+    )
+    recovered_stale.recovered_from_persistence = True
+    async with BatchJobService._lock:
+        BatchJobService._jobs[recovered_stale.job_id] = recovered_stale
+
     await BatchJobService._cleanup_expired_jobs()
 
     assert old_finished.job_id not in BatchJobService._jobs
-    assert old_active.job_id not in BatchJobService._jobs
+    assert old_active.job_id in BatchJobService._jobs
+    assert recovered_stale.job_id not in BatchJobService._jobs
     assert young_finished.job_id in BatchJobService._jobs
     assert young_active.job_id in BatchJobService._jobs
     # Finished jobs free source base64 and history immediately.
@@ -799,3 +818,215 @@ async def test_cleanup_expired_jobs_evicts_and_frees_payloads():
     assert young_finished.detected_items[0].generated_image_base64 == "c2Vjb25k"
     # The old finished job's generated payload was freed before eviction.
     assert old_finished.detected_items[0].generated_image_base64 is None
+
+
+# ---------------------------------------------------------------------------
+# Terminal eviction flush gate (A2-21)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cleanup_keeps_terminal_job_when_final_flush_fails():
+    """A terminal job whose durable row is still non-terminal (the CAS keeps
+    losing) must NOT be evicted: a status poll after eviction would hydrate
+    the stale row and report a non-terminal job forever."""
+    job = await _make_job()
+    job.status = BatchJobStatus.FAILED
+    job.error_message = "boom"
+    job.created_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    job.persistence_db = Mock()
+    job.persistence_dirty = True
+    job._persisted_status = BatchJobStatus.FAILED
+
+    with patch.object(bjs._store, "flush", AsyncMock(return_value=False)) as flush:
+        await BatchJobService._cleanup_expired_jobs()
+
+    assert job.job_id in BatchJobService._jobs
+    assert flush.await_count >= 1  # bulk flush + final flush both attempted
+
+
+@pytest.mark.asyncio
+async def test_cleanup_evicts_terminal_job_after_final_flush_succeeds():
+    """The last-chance synchronous flush succeeds: the durable row is terminal
+    and the job is safe to evict."""
+    job = await _make_job()
+    job.status = BatchJobStatus.COMPLETED
+    job.created_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    job.persistence_db = Mock()
+    job.persistence_dirty = True
+    job._persisted_status = BatchJobStatus.PENDING  # durable row still pending
+
+    async def flush_ok(target):
+        target.persistence_dirty = False
+        target._persisted_status = BatchJobStatus.COMPLETED
+        return True
+
+    with patch.object(bjs._store, "flush", flush_ok):
+        await BatchJobService._cleanup_expired_jobs()
+
+    assert job.job_id not in BatchJobService._jobs
+
+
+@pytest.mark.asyncio
+async def test_cleanup_keeps_terminal_job_when_final_flush_raises():
+    """A DB failure on the last flush must keep the job in memory; the next
+    cleanup tick retries the transition."""
+    job = await _make_job()
+    job.status = BatchJobStatus.COMPLETED
+    job.created_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    job.persistence_db = Mock()
+    job.persistence_dirty = True
+    job._persisted_status = BatchJobStatus.COMPLETED
+
+    with patch.object(bjs._store, "flush", AsyncMock(side_effect=RuntimeError("db down"))):
+        await BatchJobService._cleanup_expired_jobs()
+
+    assert job.job_id in BatchJobService._jobs
+
+
+# ---------------------------------------------------------------------------
+# Unused generation quota release (A2-02)
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# release_unused_generation_quota (atomic RPC path, migration 055)
+# ---------------------------------------------------------------------------
+
+
+class _RpcRecorder:
+    """Minimal fake Supabase client recording rpc() invocations.
+
+    ``execute_with_reconnect`` calls ``d.rpc(name, params).execute()``; the
+    returned payload is truthy so the claim is treated as won.
+    """
+
+    def __init__(self):
+        self.rpc_calls = []
+
+    def rpc(self, name, params=None):
+        self.rpc_calls.append((name, params or {}))
+        return _ExecuteChain()
+
+
+class _ExecuteChain:
+    def execute(self):
+        return Mock(data=True)
+
+
+@pytest.mark.asyncio
+async def test_release_unused_generation_quota_releases_difference_only():
+    """Release is max(0, reserved - actually_generated): a job that generated
+    1 of 9 reserved images hands back 8 slots via the atomic RPC."""
+    job = await _make_job()
+    job.reserved_generations = 9
+    await BatchJobService.add_detected_items(
+        job.job_id,
+        "img-1",
+        [
+            {"temp_id": "t1", "category": "tops"},
+            {"temp_id": "t2", "category": "bottoms"},
+        ],
+    )
+    await BatchJobService.update_item_generation(
+        job.job_id, "t1", generated_image_url="https://cdn/1.png"
+    )
+    db = _RpcRecorder()
+    await BatchJobService.release_unused_generation_quota(job, db=db)
+
+    assert db.rpc_calls == [
+        (
+            "release_job_generation_quota",
+            {"p_job_id": job.job_id, "p_user_id": job.user_id, "p_count": 8},
+        )
+    ]
+    assert job.reserved_generations == 0
+
+
+@pytest.mark.asyncio
+async def test_release_unused_generation_quota_failed_generations_count_as_unused():
+    """Failed generations are not consumed quota: they are handed back."""
+    job = await _make_job()
+    job.reserved_generations = 3
+    await BatchJobService.add_detected_items(
+        job.job_id, "img-1", [{"temp_id": "t1", "category": "tops"}]
+    )
+    await BatchJobService.update_item_generation(job.job_id, "t1", error="gen boom")
+    db = _RpcRecorder()
+    await BatchJobService.release_unused_generation_quota(job, db=db)
+
+    assert db.rpc_calls[0][1]["p_count"] == 3
+    assert job.reserved_generations == 0
+
+
+@pytest.mark.asyncio
+async def test_release_unused_generation_quota_noops():
+    """No reservation (cache-hit jobs, auto_generate off) skips the RPC; a
+    fully consumed reservation still claims (zeroes) the durable marker but
+    releases no quota (p_count=0)."""
+    job = await _make_job()
+    job.reserved_generations = 0
+    db = _RpcRecorder()
+    await BatchJobService.release_unused_generation_quota(job, db=db)
+    assert db.rpc_calls == []
+
+    full = await _make_job("u2")
+    full.reserved_generations = 1
+    await BatchJobService.add_detected_items(
+        full.job_id, "img-1", [{"temp_id": "t1", "category": "tops"}]
+    )
+    await BatchJobService.update_item_generation(
+        full.job_id, "t1", generated_image_url="https://cdn/1.png"
+    )
+    full_db = _RpcRecorder()
+    await BatchJobService.release_unused_generation_quota(full, db=full_db)
+    assert full_db.rpc_calls[0][1]["p_count"] == 0
+    assert full.reserved_generations == 0
+
+
+@pytest.mark.asyncio
+async def test_release_unused_generation_quota_best_effort():
+    """A failing release RPC must never raise (the pipeline/cancel must not
+    fail because quota reconciliation failed), and the reservation is KEPT so
+    a later cycle retries instead of losing the user's quota."""
+    job = await _make_job()
+    job.reserved_generations = 3
+    with patch(
+        "app.services.batch_job_service.execute_with_reconnect",
+        AsyncMock(side_effect=RuntimeError("release rpc down")),
+    ):
+        await BatchJobService.release_unused_generation_quota(job, db=Mock())
+
+    # The in-memory reservation survives a transient RPC failure (the durable
+    # row still holds it), so the next eviction/cancel cycle retries.
+    assert job.reserved_generations == 3
+
+    # Without a db client the helper logs and returns instead of raising.
+    job2 = await _make_job("u2")
+    job2.reserved_generations = 3
+    await BatchJobService.release_unused_generation_quota(job2)
+
+
+@pytest.mark.asyncio
+async def test_cancel_job_releases_unused_generation_quota():
+    """Cancelling a job hands back the generation slots it never consumed."""
+    job = await _make_job()
+    job.reserved_generations = 3
+    db = _RpcRecorder()
+
+    assert await BatchJobService.cancel_job(job.job_id, "u1", db=db) is True
+
+    assert job.status == BatchJobStatus.CANCELLED
+    assert ("release_job_generation_quota", {"p_job_id": job.job_id, "p_user_id": job.user_id, "p_count": 3}) in db.rpc_calls
+
+
+@pytest.mark.asyncio
+async def test_cancel_job_terminal_does_not_release_twice():
+    """A completed job cannot be cancelled: no second release happens."""
+    job = await _make_job()
+    job.reserved_generations = 3
+    await BatchJobService.update_status(job.job_id, BatchJobStatus.COMPLETED)
+    db = _RpcRecorder()
+
+    assert await BatchJobService.cancel_job(job.job_id, "u1", db=db) is False
+    assert db.rpc_calls == []

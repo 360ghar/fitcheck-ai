@@ -10,6 +10,7 @@ Following the server-side architecture:
 @see https://docs.fitcheck.ai/technical/architecture
 """
 
+import asyncio
 from typing import Any, Dict, List
 
 from google import genai
@@ -18,6 +19,7 @@ from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.utils.parallel import parallel_with_retry
+from app.utils.retry import is_retryable_error
 
 logger = get_context_logger(__name__)
 
@@ -74,7 +76,11 @@ class EmbeddingService:
             raise AIServiceError("AI service not configured. AI_GEMINI_API_KEY is required.")
 
         try:
-            result = _client.models.embed_content(
+            # The google-genai module-level client is the SYNC client; the
+            # blocking embed_content call must never run on the event loop
+            # (it would stall every other coroutine for the request duration).
+            result = await asyncio.to_thread(
+                _client.models.embed_content,
                 model=settings.AI_GEMINI_EMBEDDING_MODEL,
                 contents=text,
                 config=types.EmbedContentConfig(
@@ -165,14 +171,17 @@ class EmbeddingService:
         if not texts:
             return []
 
-        # Process all embeddings in parallel with retry
+        # Process all embeddings in parallel with retry. Only retryable
+        # AIServiceError opts into backoff: (AIServiceError, Exception)
+        # collapsed to (Exception,) and retried PERMANENT failures 3x.
         results = await parallel_with_retry(
             texts,
             lambda text, _: EmbeddingService.generate_embedding(text),
             max_retries=3,
             initial_delay=1.0,
             backoff_factor=2.0,
-            retryable_exceptions=(AIServiceError, Exception),
+            retryable_exceptions=(AIServiceError,),
+            should_retry=is_retryable_error,
         )
 
         # Check for failures
@@ -254,6 +263,19 @@ class SmartMatcher:
                 logger.debug(
                     "Skipping candidate without embedding",
                     candidate_id=candidate.get("id"),
+                )
+                continue
+
+            # Dimension mismatch (e.g. a legacy 384-dim row against a
+            # 768-dim model) silently produced a garbage cosine score when
+            # zipped. Skip and log instead: a wrong score is worse than no
+            # match.
+            if len(source_embedding) != len(candidate_embedding):
+                logger.warning(
+                    "Skipping candidate with mismatched embedding dimension",
+                    candidate_id=candidate.get("id"),
+                    source_dimension=len(source_embedding),
+                    candidate_dimension=len(candidate_embedding),
                 )
                 continue
 

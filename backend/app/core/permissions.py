@@ -45,6 +45,10 @@ ROLE_PERMISSIONS: Dict[str, List[str]] = {
         "subscriptions.read",
         "subscriptions.refund",
         "iap.read",
+        # iap.write: ops owns store-billed refunds in the panel (its
+        # subscriptions.refund covers the Stripe side; mark-refunded is the
+        # store-billed analogue, so the refund-capable role holds it).
+        "iap.write",
         "ops.read",
         "storage.cleanup",
         "audit.read",
@@ -72,6 +76,14 @@ ROLE_PERMISSIONS: Dict[str, List[str]] = {
         "search",
     ],
 }
+
+# Write permissions held only by the full-admin roles via the ``*`` marker
+# (super_admin/admin). Support/ops/content_editor do NOT hold them per the
+# 2026-08-06 admin panel spec: ops is "IAP" (read + the refund analogue
+# iap.write) but not quotas; support is "quotas"/"IAP" read-only; a
+# content_editor has no quotas/iap surface at all. Listed here so the
+# permission strings are discoverable/testable alongside the map.
+ADMIN_ONLY_WRITE_PERMISSIONS = frozenset({"quotas.write"})
 
 
 def get_user_role(user: Dict[str, Any]) -> str:

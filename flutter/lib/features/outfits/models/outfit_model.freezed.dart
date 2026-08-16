@@ -2098,7 +2098,13 @@ as DateTime?,
 /// @nodoc
 mixin _$SharedOutfitModel {
 
- String get id; String get name; String? get description; Style get style; Season get season;@JsonKey(name: 'item_images') List<String> get itemImages;@JsonKey(name: 'outfit_images') List<String>? get outfitImages;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'share_count') int get shareCount;@JsonKey(name: 'view_count') int get viewCount;
+ String get id; String get name; String? get description;// Nullable: the DB columns are nullable and the public endpoint passes
+// raw values through — a web-created outfit (or one with no style/season)
+// must still render instead of failing the parse (A10b-10 review).
+ Style? get style; Season? get season;@JsonKey(name: 'item_images') List<String> get itemImages;@JsonKey(name: 'outfit_images') List<String>? get outfitImages;/// Durable bucket key of the primary outfit image (A10b-10): the share
+/// endpoint serves short-lived presigned URLs, so the key lets the page
+/// re-mint a fresh URL when a long-open share's cached one expires.
+@JsonKey(name: 'outfit_storage_path') String? get outfitStoragePath;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'share_count') int get shareCount;@JsonKey(name: 'view_count') int get viewCount;
 /// Create a copy of SharedOutfitModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -2111,16 +2117,16 @@ $SharedOutfitModelCopyWith<SharedOutfitModel> get copyWith => _$SharedOutfitMode
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SharedOutfitModel&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.style, style) || other.style == style)&&(identical(other.season, season) || other.season == season)&&const DeepCollectionEquality().equals(other.itemImages, itemImages)&&const DeepCollectionEquality().equals(other.outfitImages, outfitImages)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.shareCount, shareCount) || other.shareCount == shareCount)&&(identical(other.viewCount, viewCount) || other.viewCount == viewCount));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SharedOutfitModel&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.style, style) || other.style == style)&&(identical(other.season, season) || other.season == season)&&const DeepCollectionEquality().equals(other.itemImages, itemImages)&&const DeepCollectionEquality().equals(other.outfitImages, outfitImages)&&(identical(other.outfitStoragePath, outfitStoragePath) || other.outfitStoragePath == outfitStoragePath)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.shareCount, shareCount) || other.shareCount == shareCount)&&(identical(other.viewCount, viewCount) || other.viewCount == viewCount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,style,season,const DeepCollectionEquality().hash(itemImages),const DeepCollectionEquality().hash(outfitImages),createdAt,shareCount,viewCount);
+int get hashCode => Object.hash(runtimeType,id,name,description,style,season,const DeepCollectionEquality().hash(itemImages),const DeepCollectionEquality().hash(outfitImages),outfitStoragePath,createdAt,shareCount,viewCount);
 
 @override
 String toString() {
-  return 'SharedOutfitModel(id: $id, name: $name, description: $description, style: $style, season: $season, itemImages: $itemImages, outfitImages: $outfitImages, createdAt: $createdAt, shareCount: $shareCount, viewCount: $viewCount)';
+  return 'SharedOutfitModel(id: $id, name: $name, description: $description, style: $style, season: $season, itemImages: $itemImages, outfitImages: $outfitImages, outfitStoragePath: $outfitStoragePath, createdAt: $createdAt, shareCount: $shareCount, viewCount: $viewCount)';
 }
 
 
@@ -2131,7 +2137,7 @@ abstract mixin class $SharedOutfitModelCopyWith<$Res>  {
   factory $SharedOutfitModelCopyWith(SharedOutfitModel value, $Res Function(SharedOutfitModel) _then) = _$SharedOutfitModelCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String? description, Style style, Season season,@JsonKey(name: 'item_images') List<String> itemImages,@JsonKey(name: 'outfit_images') List<String>? outfitImages,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'share_count') int shareCount,@JsonKey(name: 'view_count') int viewCount
+ String id, String name, String? description, Style? style, Season? season,@JsonKey(name: 'item_images') List<String> itemImages,@JsonKey(name: 'outfit_images') List<String>? outfitImages,@JsonKey(name: 'outfit_storage_path') String? outfitStoragePath,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'share_count') int shareCount,@JsonKey(name: 'view_count') int viewCount
 });
 
 
@@ -2148,16 +2154,17 @@ class _$SharedOutfitModelCopyWithImpl<$Res>
 
 /// Create a copy of SharedOutfitModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? style = null,Object? season = null,Object? itemImages = null,Object? outfitImages = freezed,Object? createdAt = null,Object? shareCount = null,Object? viewCount = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? style = freezed,Object? season = freezed,Object? itemImages = null,Object? outfitImages = freezed,Object? outfitStoragePath = freezed,Object? createdAt = null,Object? shareCount = null,Object? viewCount = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
-as String?,style: null == style ? _self.style : style // ignore: cast_nullable_to_non_nullable
-as Style,season: null == season ? _self.season : season // ignore: cast_nullable_to_non_nullable
-as Season,itemImages: null == itemImages ? _self.itemImages : itemImages // ignore: cast_nullable_to_non_nullable
+as String?,style: freezed == style ? _self.style : style // ignore: cast_nullable_to_non_nullable
+as Style?,season: freezed == season ? _self.season : season // ignore: cast_nullable_to_non_nullable
+as Season?,itemImages: null == itemImages ? _self.itemImages : itemImages // ignore: cast_nullable_to_non_nullable
 as List<String>,outfitImages: freezed == outfitImages ? _self.outfitImages : outfitImages // ignore: cast_nullable_to_non_nullable
-as List<String>?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as List<String>?,outfitStoragePath: freezed == outfitStoragePath ? _self.outfitStoragePath : outfitStoragePath // ignore: cast_nullable_to_non_nullable
+as String?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,shareCount: null == shareCount ? _self.shareCount : shareCount // ignore: cast_nullable_to_non_nullable
 as int,viewCount: null == viewCount ? _self.viewCount : viewCount // ignore: cast_nullable_to_non_nullable
 as int,
@@ -2245,10 +2252,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  Style style,  Season season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  Style? style,  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SharedOutfitModel() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.createdAt,_that.shareCount,_that.viewCount);case _:
+return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.outfitStoragePath,_that.createdAt,_that.shareCount,_that.viewCount);case _:
   return orElse();
 
 }
@@ -2266,10 +2273,10 @@ return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  Style style,  Season season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  Style? style,  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)  $default,) {final _that = this;
 switch (_that) {
 case _SharedOutfitModel():
-return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.createdAt,_that.shareCount,_that.viewCount);case _:
+return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.outfitStoragePath,_that.createdAt,_that.shareCount,_that.viewCount);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -2286,10 +2293,10 @@ return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  Style style,  Season season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  Style? style,  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)?  $default,) {final _that = this;
 switch (_that) {
 case _SharedOutfitModel() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.createdAt,_that.shareCount,_that.viewCount);case _:
+return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.outfitStoragePath,_that.createdAt,_that.shareCount,_that.viewCount);case _:
   return null;
 
 }
@@ -2301,14 +2308,17 @@ return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_
 @JsonSerializable()
 
 class _SharedOutfitModel implements SharedOutfitModel {
-  const _SharedOutfitModel({required this.id, required this.name, this.description, required this.style, required this.season, @JsonKey(name: 'item_images') required final  List<String> itemImages, @JsonKey(name: 'outfit_images') final  List<String>? outfitImages, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'share_count') this.shareCount = 0, @JsonKey(name: 'view_count') this.viewCount = 0}): _itemImages = itemImages,_outfitImages = outfitImages;
+  const _SharedOutfitModel({required this.id, required this.name, this.description, this.style, this.season, @JsonKey(name: 'item_images') required final  List<String> itemImages, @JsonKey(name: 'outfit_images') final  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path') this.outfitStoragePath, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'share_count') this.shareCount = 0, @JsonKey(name: 'view_count') this.viewCount = 0}): _itemImages = itemImages,_outfitImages = outfitImages;
   factory _SharedOutfitModel.fromJson(Map<String, dynamic> json) => _$SharedOutfitModelFromJson(json);
 
 @override final  String id;
 @override final  String name;
 @override final  String? description;
-@override final  Style style;
-@override final  Season season;
+// Nullable: the DB columns are nullable and the public endpoint passes
+// raw values through — a web-created outfit (or one with no style/season)
+// must still render instead of failing the parse (A10b-10 review).
+@override final  Style? style;
+@override final  Season? season;
  final  List<String> _itemImages;
 @override@JsonKey(name: 'item_images') List<String> get itemImages {
   if (_itemImages is EqualUnmodifiableListView) return _itemImages;
@@ -2325,6 +2335,10 @@ class _SharedOutfitModel implements SharedOutfitModel {
   return EqualUnmodifiableListView(value);
 }
 
+/// Durable bucket key of the primary outfit image (A10b-10): the share
+/// endpoint serves short-lived presigned URLs, so the key lets the page
+/// re-mint a fresh URL when a long-open share's cached one expires.
+@override@JsonKey(name: 'outfit_storage_path') final  String? outfitStoragePath;
 @override@JsonKey(name: 'created_at') final  DateTime createdAt;
 @override@JsonKey(name: 'share_count') final  int shareCount;
 @override@JsonKey(name: 'view_count') final  int viewCount;
@@ -2342,16 +2356,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SharedOutfitModel&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.style, style) || other.style == style)&&(identical(other.season, season) || other.season == season)&&const DeepCollectionEquality().equals(other._itemImages, _itemImages)&&const DeepCollectionEquality().equals(other._outfitImages, _outfitImages)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.shareCount, shareCount) || other.shareCount == shareCount)&&(identical(other.viewCount, viewCount) || other.viewCount == viewCount));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SharedOutfitModel&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&(identical(other.style, style) || other.style == style)&&(identical(other.season, season) || other.season == season)&&const DeepCollectionEquality().equals(other._itemImages, _itemImages)&&const DeepCollectionEquality().equals(other._outfitImages, _outfitImages)&&(identical(other.outfitStoragePath, outfitStoragePath) || other.outfitStoragePath == outfitStoragePath)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.shareCount, shareCount) || other.shareCount == shareCount)&&(identical(other.viewCount, viewCount) || other.viewCount == viewCount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,style,season,const DeepCollectionEquality().hash(_itemImages),const DeepCollectionEquality().hash(_outfitImages),createdAt,shareCount,viewCount);
+int get hashCode => Object.hash(runtimeType,id,name,description,style,season,const DeepCollectionEquality().hash(_itemImages),const DeepCollectionEquality().hash(_outfitImages),outfitStoragePath,createdAt,shareCount,viewCount);
 
 @override
 String toString() {
-  return 'SharedOutfitModel(id: $id, name: $name, description: $description, style: $style, season: $season, itemImages: $itemImages, outfitImages: $outfitImages, createdAt: $createdAt, shareCount: $shareCount, viewCount: $viewCount)';
+  return 'SharedOutfitModel(id: $id, name: $name, description: $description, style: $style, season: $season, itemImages: $itemImages, outfitImages: $outfitImages, outfitStoragePath: $outfitStoragePath, createdAt: $createdAt, shareCount: $shareCount, viewCount: $viewCount)';
 }
 
 
@@ -2362,7 +2376,7 @@ abstract mixin class _$SharedOutfitModelCopyWith<$Res> implements $SharedOutfitM
   factory _$SharedOutfitModelCopyWith(_SharedOutfitModel value, $Res Function(_SharedOutfitModel) _then) = __$SharedOutfitModelCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String? description, Style style, Season season,@JsonKey(name: 'item_images') List<String> itemImages,@JsonKey(name: 'outfit_images') List<String>? outfitImages,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'share_count') int shareCount,@JsonKey(name: 'view_count') int viewCount
+ String id, String name, String? description, Style? style, Season? season,@JsonKey(name: 'item_images') List<String> itemImages,@JsonKey(name: 'outfit_images') List<String>? outfitImages,@JsonKey(name: 'outfit_storage_path') String? outfitStoragePath,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'share_count') int shareCount,@JsonKey(name: 'view_count') int viewCount
 });
 
 
@@ -2379,16 +2393,17 @@ class __$SharedOutfitModelCopyWithImpl<$Res>
 
 /// Create a copy of SharedOutfitModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? style = null,Object? season = null,Object? itemImages = null,Object? outfitImages = freezed,Object? createdAt = null,Object? shareCount = null,Object? viewCount = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? style = freezed,Object? season = freezed,Object? itemImages = null,Object? outfitImages = freezed,Object? outfitStoragePath = freezed,Object? createdAt = null,Object? shareCount = null,Object? viewCount = null,}) {
   return _then(_SharedOutfitModel(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
-as String?,style: null == style ? _self.style : style // ignore: cast_nullable_to_non_nullable
-as Style,season: null == season ? _self.season : season // ignore: cast_nullable_to_non_nullable
-as Season,itemImages: null == itemImages ? _self._itemImages : itemImages // ignore: cast_nullable_to_non_nullable
+as String?,style: freezed == style ? _self.style : style // ignore: cast_nullable_to_non_nullable
+as Style?,season: freezed == season ? _self.season : season // ignore: cast_nullable_to_non_nullable
+as Season?,itemImages: null == itemImages ? _self._itemImages : itemImages // ignore: cast_nullable_to_non_nullable
 as List<String>,outfitImages: freezed == outfitImages ? _self._outfitImages : outfitImages // ignore: cast_nullable_to_non_nullable
-as List<String>?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as List<String>?,outfitStoragePath: freezed == outfitStoragePath ? _self.outfitStoragePath : outfitStoragePath // ignore: cast_nullable_to_non_nullable
+as String?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,shareCount: null == shareCount ? _self.shareCount : shareCount // ignore: cast_nullable_to_non_nullable
 as int,viewCount: null == viewCount ? _self.viewCount : viewCount // ignore: cast_nullable_to_non_nullable
 as int,

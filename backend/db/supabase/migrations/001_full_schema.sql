@@ -1029,9 +1029,21 @@ CREATE POLICY "Users can read feedback for own shared outfits"
     )
   );
 
+-- A5-03: anonymous feedback is only accepted for a PUBLIC shared outfit
+-- that still has feedback enabled and has not expired — matching the API's
+-- own allow_feedback/expires_at checks that the old unconditional
+-- WITH CHECK (true) bypassed via direct PostgREST.
 CREATE POLICY "Anyone can insert share feedback"
   ON public.share_feedback FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.shared_outfits s
+      WHERE s.id = share_feedback.shared_outfit_id
+        AND s.visibility = 'public'
+        AND s.allow_feedback
+        AND (s.expires_at IS NULL OR s.expires_at > NOW())
+    )
+  );
 
 -- USER STREAKS
 DROP POLICY IF EXISTS "Users can read own streaks" ON public.user_streaks;
@@ -1173,18 +1185,16 @@ CREATE TRIGGER update_user_preferences_last_updated
     EXECUTE FUNCTION public.update_last_updated_column();
 
 -- =============================================================================
--- STORAGE BUCKETS (optional, but required for app uploads)
+-- STORAGE BUCKETS (legacy Supabase Storage — intentionally NOT created)
 -- =============================================================================
 
--- Buckets used by backend/app/services/storage_service.py
--- If these tables don't exist (non-Supabase Postgres), comment this section out.
-INSERT INTO storage.buckets (id, name, public)
-VALUES
-  ('fitcheck-images', 'fitcheck-images', true),
-  ('items', 'items', true),
-  ('outfits', 'outfits', true),
-  ('avatars', 'avatars', true)
-ON CONFLICT (id) DO NOTHING;
+-- FitCheck migrated file storage to a private S3-compatible bucket (Cloudflare
+-- R2, see backend/.env.example OBJECT_STORAGE_*). The legacy Supabase Storage
+-- buckets (fitcheck-images/items/outfits/avatars) are no longer created here
+-- and are dropped on environments that have them by migration 048; nothing in
+-- the app reads or writes them (backend/app/services/storage_service.py talks
+-- to the S3 backend only). Pre-R2 rows that still store Supabase public URLs
+-- are rescued to R2 keys at read time (storage_service.key_from_path).
 
 -- =============================================================================
 -- GRANTS

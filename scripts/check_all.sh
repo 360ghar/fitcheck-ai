@@ -32,6 +32,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_architecture.py
 echo "== docs structure =="
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_docs_structure.py
 
+echo "== migrations =="
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_migrations.py
+
 echo "== theme tokens =="
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_theme_tokens.py
 

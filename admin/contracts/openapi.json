@@ -12270,7 +12270,7 @@
     },
     "/api/v1/items/upload": {
       "post": {
-        "description": "Upload one or more images to Supabase Storage for later item creation.",
+        "description": "Upload one or more images to object storage for later item creation.",
         "operationId": "upload_item_images_api_v1_items_upload_post",
         "requestBody": {
           "content": {

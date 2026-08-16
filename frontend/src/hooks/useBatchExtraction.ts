@@ -12,6 +12,7 @@ import {
   getBatchJobStatus,
 } from '@/api/batch';
 import { initialState, useBatchExtractionStore } from '@/stores/batchExtractionStore';
+import { invalidateUsageCache } from '@/stores/subscriptionStore';
 import { compressImageFile } from '@/lib/image-compress';
 import { getBatchExtractionErrorMessage } from '@/lib/batch-extraction-errors';
 import { cropImageFromBoundingBox } from '@/lib/crop-from-bounding-box';
@@ -665,7 +666,11 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
                   ? {
                       ...item,
                       status: 'generated' as const,
-                      generatedImageUrl: `data:image/png;base64,${data.generated_image_base64}`,
+                      generatedImageUrl: data.generated_image_base64
+                        ? `data:image/png;base64,${data.generated_image_base64}`
+                        : data.generated_image_url,
+                      generatedImageStoragePath:
+                        data.generated_image_storage_path ?? item.generatedImageStoragePath,
                     }
                   : item
               ),
@@ -1083,6 +1088,10 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           status: 'extracting' as const,
         })),
       }));
+
+      // The job reserves/consumes daily AI quota; the next usage read must
+      // hit the server, not the 60s-fresh cache (F1-10).
+      invalidateUsageCache();
     } catch (error) {
       useBatchExtractionStore.setState((prev) => ({
         ...prev,

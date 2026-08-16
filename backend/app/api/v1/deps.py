@@ -56,39 +56,46 @@ async def get_current_user(
         # the sync client (a much larger, separately-planned effort - see
         # app/db/connection.py for the full migration path this stops short
         # of). asyncio.to_thread offloads just this call to a worker thread.
-        user = await execute_with_reconnect(
-            lambda d: d.table("users").select("*").eq("id", token_data.sub).single().execute(),
+        # `.maybe_single()` (not `.single()`, A2-17): a missing profile is a
+        # bare None result, so the no-row case is a VALUE, not an exception —
+        # the PGRST116 code attribute is not guaranteed by postgrest-py and
+        # must not be the provisioning signal.
+        result = await execute_with_reconnect(
+            lambda d: d.table("users").select("*").eq("id", token_data.sub).maybe_single().execute(),
             db,
             extra={"operation": "get_current_user.lookup", "user_id": token_data.sub},
         )
     except Exception as error:
-        # Only a confirmed no-row response may enter OAuth profile
-        # auto-provisioning. Timeouts, permissions, and other database errors
-        # must not be misclassified as a missing profile.
+        # With maybe_single, a raised error is NEVER a missing profile (the
+        # id lookup is on the PK, so PGRST116/multi-row is impossible) —
+        # timeouts, permissions and other database errors must not be
+        # misclassified as a missing profile. `_is_missing_profile_error` is
+        # kept for legacy error surfaces that still raise PGRST116.
         if not _is_missing_profile_error(error):
             logger.warning("Failed to load user profile for %s: %s", token_data.sub, error)
             raise AuthenticationError(
                 message="User profile lookup failed",
                 error_code="AUTH_PROFILE_LOOKUP_ERROR",
             ) from error
-        user = None
+        result = None
 
-    if user is not None and user.data:
+    user = maybe_single_data(result)
+    if user is not None:
         # Suspended accounts are rejected before anything else: the admin
         # panel (and every client) must not keep serving a user whose
         # account was disabled by an admin. is_active defaults to True for
         # rows created before the flag existed, so only an explicit False
         # counts as suspended. Raised OUTSIDE the lookup try/except so it is
         # not re-wrapped as AUTH_PROFILE_LOOKUP_ERROR.
-        if user.data.get("is_active") is False:
+        if user.get("is_active") is False:
             raise AuthenticationError(
                 message="Account is suspended",
                 error_code="ACCOUNT_SUSPENDED",
             )
         # Add email from token if not in database
-        if not user.data.get("email") and token_data.email:
-            user.data["email"] = token_data.email
-        return user.data
+        if not user.get("email") and token_data.email:
+            user["email"] = token_data.email
+        return user
 
     # Profile doesn't exist - attempt auto-creation for OAuth users.
     # All sync Supabase calls run in a worker thread so first-login does not
@@ -99,22 +106,32 @@ async def get_current_user(
         def _create_profile():
             client = SupabaseDB.get_service_client()
             auth_user = client.auth.admin.get_user_by_id(token_data.sub)
+            if not auth_user or not auth_user.user:
+                # The Supabase Auth user no longer exists (account deleted)
+                # while the access token is still valid. Do NOT resurrect the
+                # profile: a deleted account must stay deleted (A1-04).
+                raise AuthenticationError(
+                    "User account no longer exists",
+                    error_code="AUTH_PROFILE_NOT_FOUND",
+                )
             user_metadata = {}
             email = token_data.email
 
-            if auth_user and auth_user.user:
-                user_metadata = auth_user.user.user_metadata or {}
-                email = auth_user.user.email or email
+            user_metadata = auth_user.user.user_metadata or {}
+            email = auth_user.user.email or email
 
             full_name = (
                 user_metadata.get("full_name")
                 or user_metadata.get("name")  # Google OAuth
                 or ""
-            )
+            )[:255]  # users.full_name is VARCHAR(255); an overlong OAuth name
+            # would otherwise 500 the very first login with 22001.
             avatar_url = (
                 user_metadata.get("avatar_url")
                 or user_metadata.get("picture")  # Google OAuth
             )
+            if avatar_url is not None:
+                avatar_url = avatar_url[:500]  # users.avatar_url is VARCHAR(500)
 
             now = utcnow_iso()
             profile = {
@@ -162,6 +179,10 @@ async def get_current_user(
         logger.info(f"Auto-created profile for OAuth user {token_data.sub}")
         return profile
 
+    except AuthenticationError:
+        # A deleted Auth user (AUTH_PROFILE_NOT_FOUND) must surface as-is, not
+        # be re-wrapped into the generic provisioning error.
+        raise
     except Exception as e:
         logger.warning(f"Failed to auto-create user profile: {e}")
         raise AuthenticationError(

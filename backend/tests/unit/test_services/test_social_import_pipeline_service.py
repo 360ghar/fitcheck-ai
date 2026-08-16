@@ -218,7 +218,7 @@ async def test_approve_photo_continues_when_one_item_save_fails(monkeypatch):
     update_item_calls = []
 
     async def fake_get_photo(db, *, job_id, user_id, photo_id):  # noqa: ANN001
-        return {"id": photo_id}
+        return {"id": photo_id, "status": "awaiting_review"}
 
     async def fake_list_items_for_photo(db, *, job_id, photo_id, user_id):  # noqa: ANN001
         return [

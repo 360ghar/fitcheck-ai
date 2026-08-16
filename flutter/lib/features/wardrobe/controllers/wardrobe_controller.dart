@@ -26,6 +26,11 @@ class WardrobeController extends GetxController {
   // Workers for cleanup
   final List<Worker> _workers = [];
   int _fetchGeneration = 0;
+  // Monotonic token for single-item detail fetches (fetchItemById). Bumped
+  // before each fetch so an earlier detail fetch (A) resolving AFTER a newer
+  // one (B) cannot overwrite B's fetchedItem and leave B on a permanent
+  // shimmer — the stale completion sees a mismatched token and is dropped.
+  int _itemFetchGeneration = 0;
 
   // Reactive state
   final RxList<ItemModel> items = <ItemModel>[].obs;
@@ -45,6 +50,12 @@ class WardrobeController extends GetxController {
   final RxString sortType = 'newest'.obs;
   final RxString viewMode = 'grid'.obs;
 
+  /// Favorites-only filter (A10b-03): the Dashboard "Favorites" pill used to
+  /// set sortType='favorite', which mapped to a nonexistent sort key and
+  /// rendered the full unfiltered wardrobe. The backend's real
+  /// `is_favorite` filter is what the pill means.
+  final RxBool favoritesOnly = false.obs;
+
   // Pagination
   final RxInt currentPage = 1.obs;
   final RxBool hasMore = true.obs;
@@ -53,6 +64,11 @@ class WardrobeController extends GetxController {
   // Single-item fetch state (deep links, items beyond the loaded page)
   final RxBool isFetchingItem = false.obs;
   final RxString itemFetchError = ''.obs;
+  /// The item fetched by id when it is NOT on the loaded page and cannot be
+  /// merged (a server-side filter is active — A10b-09). ItemDetailPage renders
+  /// this directly so a deep link to an item beyond the current page leaves
+  /// the detail shimmer instead of spinning forever.
+  final Rx<ItemModel?> fetchedItem = Rx<ItemModel?>(null);
 
   // Getters
   bool get hasError => error.value.isNotEmpty;
@@ -62,6 +78,16 @@ class WardrobeController extends GetxController {
   /// The list shown to the user. Filtering is server-side, so this is the
   /// single item list — kept as a named getter for view compatibility.
   List<ItemModel> get filteredItems => items;
+
+  /// Whether any server-side filter is active. When one is, a deep-linked
+  /// item fetched by id must NOT be merged into [items]: the grid would
+  /// otherwise show an item that violates the active filter (A10b-09).
+  bool get _hasServerSideFilters =>
+      selectedCategories.isNotEmpty ||
+      selectedColors.isNotEmpty ||
+      selectedOccasion.value.isNotEmpty ||
+      selectedConditions.isNotEmpty ||
+      favoritesOnly.value;
 
   // Action-specific loading states (per-item)
   final RxMap<String, bool> isDeletingMap = <String, bool>{}.obs;
@@ -130,6 +156,11 @@ class WardrobeController extends GetxController {
         (_) => fetchItems(refresh: true),
         time: const Duration(milliseconds: 100),
       ),
+      debounce(
+        favoritesOnly,
+        (_) => fetchItems(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
     ]);
   }
 
@@ -194,6 +225,7 @@ class WardrobeController extends GetxController {
           conditions: requestConditions,
           sortBy: _mapSortTypeToApi(requestSortType),
           sortOrder: _getSortOrder(requestSortType),
+          isFavorite: favoritesOnly.value ? true : null,
         ),
         maxAttempts: 3,
       );
@@ -234,22 +266,38 @@ class WardrobeController extends GetxController {
 
     isFetchingItem.value = true;
     itemFetchError.value = '';
+    final itemGeneration = ++_itemFetchGeneration;
     try {
       final item = await _itemRepository.getItem(itemId);
       if (isClosed) return null;
-      final index = items.indexWhere((existing) => existing.id == itemId);
-      if (index == -1) {
-        items.add(item);
-      } else {
-        items[index] = item;
+      // Drop a stale completion: opening detail B while fetch A is still
+      // pending would otherwise let A (resolved last) overwrite B's
+      // fetchedItem and clear the spinner, leaving B on a permanent shimmer.
+      if (itemGeneration != _itemFetchGeneration) return null;
+      // A10b-09: don't merge into the paged list while a server-side filter
+      // is active — the grid would show an item that violates it. Hold it in
+      // [fetchedItem] instead so the detail page can render it (without this,
+      // a deep link to an item beyond the loaded page with any filter active
+      // stayed on the detail shimmer forever).
+      if (!_hasServerSideFilters) {
+        final index = items.indexWhere((existing) => existing.id == itemId);
+        if (index == -1) {
+          items.add(item);
+        } else {
+          items[index] = item;
+        }
       }
+      fetchedItem.value = item;
       return item;
     } catch (e) {
       if (isClosed) return null;
+      if (itemGeneration != _itemFetchGeneration) return null;
       itemFetchError.value = ErrorHandler.extractMessage(e);
       return null;
     } finally {
-      if (!isClosed) isFetchingItem.value = false;
+      if (!isClosed && itemGeneration == _itemFetchGeneration) {
+        isFetchingItem.value = false;
+      }
     }
   }
 
@@ -264,11 +312,14 @@ class WardrobeController extends GetxController {
     try {
       final item = await _itemRepository.getItem(itemId);
       if (isClosed) return;
-      final index = items.indexWhere((existing) => existing.id == itemId);
-      if (index == -1) {
-        items.add(item);
-      } else {
-        items[index] = item;
+      // A10b-09: same merge guard as fetchItemById.
+      if (!_hasServerSideFilters) {
+        final index = items.indexWhere((existing) => existing.id == itemId);
+        if (index == -1) {
+          items.add(item);
+        } else {
+          items[index] = item;
+        }
       }
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e));
@@ -285,8 +336,6 @@ class WardrobeController extends GetxController {
         return 'name';
       case 'most_worn':
         return 'worn_count';
-      case 'favorite':
-        return 'is_favorite';
       default:
         return 'created_at';
     }
@@ -374,6 +423,11 @@ class WardrobeController extends GetxController {
     selectedColors.clear();
     selectedOccasion.value = '';
     sortType.value = 'newest';
+    // A10b-03: favoritesOnly is a filter like any other — the Dashboard
+    // "Favorites" pill sets it, so "All" / "Clear All" must clear it too,
+    // otherwise the user stays stuck on a favorites-only wardrobe with no
+    // visible way out. Matches OutfitListController.clearAllFilters.
+    favoritesOnly.value = false;
   }
 
   /// Set view mode
@@ -401,6 +455,12 @@ class WardrobeController extends GetxController {
 
       if (selectedItem.value?.id == itemId) {
         selectedItem.value = updatedItem;
+      }
+      // A10b-09: a deep-linked detail page renders from fetchedItem when the
+      // item isn't in the paged list (filter active), so keep it in sync or
+      // the favorite icon never flips on that path.
+      if (fetchedItem.value?.id == itemId) {
+        fetchedItem.value = updatedItem;
       }
 
       ErrorHandler.showInfo(
@@ -430,6 +490,9 @@ class WardrobeController extends GetxController {
 
       if (selectedItem.value?.id == itemId) {
         selectedItem.value = updatedItem;
+      }
+      if (fetchedItem.value?.id == itemId) {
+        fetchedItem.value = updatedItem;
       }
 
       ErrorHandler.showInfo('Item marked as worn', title: 'Great choice!');
@@ -520,6 +583,9 @@ class WardrobeController extends GetxController {
     if (selectedItem.value?.id == updatedItem.id) {
       selectedItem.value = updatedItem;
     }
+    if (fetchedItem.value?.id == updatedItem.id) {
+      fetchedItem.value = updatedItem;
+    }
   }
 
   /// Remove an item from local state (without API call)
@@ -529,6 +595,9 @@ class WardrobeController extends GetxController {
     selectedIds.remove(itemId);
     if (selectedItem.value?.id == itemId) {
       selectedItem.value = null;
+    }
+    if (fetchedItem.value?.id == itemId) {
+      fetchedItem.value = null;
     }
     if (totalItems.value > 0) {
       totalItems.value--;

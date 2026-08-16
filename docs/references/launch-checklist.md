@@ -9,9 +9,15 @@
 ## Production hygiene
 
 - [ ] Apply **all** migrations from `backend/db/supabase/migrations/` in
-      numeric order (001..042, 43 files) on the hosted Supabase instance;
+      numeric order (001..054, 55 files) on the hosted Supabase instance;
       verify `GET /ready` returns `"schema_ready": true` (it fails closed on
       gaps).
+- [ ] Legacy pre-R2 image rows: run
+      `backend/scripts/backfill_storage_paths.py` BEFORE/alongside migration
+      048+ on any environment that served public Supabase Storage URLs, so
+      rows holding legacy URL-only images get durable `storage_path` keys
+      before the legacy buckets are dropped (048) and private-bucket reads
+      (presigned re-mints) depend on them.
 - [ ] Check the boot log for config-health issues (startup validation in
       `backend/app/core/config_health.py` — e.g. missing
       `AI_ENCRYPTION_KEY`, wrong `FRONTEND_URL`, non-OpenAI

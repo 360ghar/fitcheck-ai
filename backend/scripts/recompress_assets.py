@@ -79,6 +79,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts._common import _env, _fmt_bytes, _utc_now_iso, list_keys_with_mtime  # noqa: E402
+from app.core.storage_keys import CANONICAL_CATEGORIES, GENERATED_FOLDER  # noqa: E402
 from app.services.object_storage import (  # noqa: E402
     close_storage_backend,
     get_storage_backend,
@@ -100,14 +101,24 @@ REWRITE_CACHE_CONTROL = "60"
 
 # Canonical durable images + the generated/ preview folder (both layouts).
 # Thumb keys (``{32hex}_thumb.webp``) never match: the name regex requires the
-# extension directly after the 32-hex name.
+# extension directly after the 32-hex name. Current ``users/`` layout:
+#   users/{user}/{items|outfits|avatars|sources|feedback}/{hex}.{ext}
+#   users/{user}/generated/{type}/{hex}.{ext}
+# plus the legacy per-user and top-level shapes.
 _KEY_RE = re.compile(
-    r"^(?:[^/\\]+/(?:items|outfits|avatars|sources|feedback)|"
-    r"generated/[^/\\]+/[^/\\]+|[^/\\]+/generated/[^/\\]+)/"
+    r"^(?:"
+    r"users/[^/\\]+/(?:items|outfits|avatars|sources|feedback)"
+    r"|users/[^/\\]+/generated/[^/\\]+"
+    r"|[^/\\]+/(?:items|outfits|avatars|sources|feedback)"
+    r"|generated/[^/\\]+/[^/\\]+"
+    r"|[^/\\]+/generated/[^/\\]+"
+    r")/"
     r"[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$"
 )
 
-CATEGORIES = ("items", "outfits", "avatars", "sources", "feedback", "generated")
+# Canonical durable categories + the generated/ preview folder (both layouts),
+# from the shared grammar (app.core.storage_keys).
+CATEGORIES = tuple(sorted(CANONICAL_CATEGORIES)) + (GENERATED_FOLDER,)
 
 ACTION_REENCODED = "reencoded"
 ACTION_UNCHANGED = "unchanged"
@@ -123,11 +134,14 @@ TERMINAL_ACTIONS = frozenset(
 
 
 def category_of(key: str) -> str:
-    """Category of a key: second segment for canonical, first for top-level
-    ``generated/`` (matches scripts/storage_inventory.py's classifier)."""
+    """Category of a key: third segment for ``users/``, second for legacy
+    canonical, first for top-level ``generated/`` (matches
+    scripts/storage_inventory.py's classifier)."""
     parts = key.split("/")
     if parts and parts[0] in CATEGORIES:
         return parts[0]
+    if parts and parts[0] == "users" and len(parts) >= 3 and parts[2] in CATEGORIES:
+        return parts[2]
     if len(parts) >= 2 and parts[1] in CATEGORIES:
         return parts[1]
     return "?"

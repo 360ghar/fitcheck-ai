@@ -29,7 +29,7 @@ const ORIGIN = 'https://www.fitcheckaiapp.com';
 const USER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_USER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const NAME = '0123456789abcdef0123456789abcdef';
-const KEY = `${USER}/items/${NAME}.webp`;
+const KEY = `users/${USER}/items/${NAME}.webp`;
 
 let worker;
 let putCalls;
@@ -100,6 +100,7 @@ async function mintToken(claims = {}, { secret = JWT_SECRET } = {}) {
   const payload = {
     sub: USER,
     iss: `${SUPABASE_URL}/auth/v1`,
+    aud: 'authenticated',
     exp: now + 3600,
     iat: now,
     ...claims,
@@ -169,6 +170,27 @@ describe('token claims', () => {
     assert.equal(res.status, 404);
   });
 
+  it('404s a signature-valid token with NO iss at all', async () => {
+    // Backend security.py requires the project issuer on both its paths; a
+    // token minted by any other service must not pass just because iss is
+    // absent rather than wrong.
+    const res = await call(KEY, { token: await mintToken({ iss: undefined }) });
+    assert.equal(res.status, 404, 'a token with no iss must not grant access');
+  });
+
+  it('404s a signature-valid token with NO aud claim', async () => {
+    // Backend security.py requires audience="authenticated"; a token minted
+    // for another audience (e.g. service_role) must not open the image
+    // namespace.
+    const res = await call(KEY, { token: await mintToken({ aud: undefined }) });
+    assert.equal(res.status, 404, 'a token with no aud must not grant access');
+  });
+
+  it('404s a token with a non-authenticated aud claim', async () => {
+    const res = await call(KEY, { token: await mintToken({ aud: 'service_role' }) });
+    assert.equal(res.status, 404);
+  });
+
   it('404s a token not yet valid (nbf in the future)', async () => {
     const now = Math.floor(Date.now() / 1000);
     const res = await call(KEY, { token: await mintToken({ nbf: now + 3600 }) });
@@ -206,7 +228,7 @@ describe('key authorization', () => {
   it('404s the personal-data export under the user own prefix', async () => {
     // The regression that motivated porting the backend allowlist here: a
     // prefix-only check served this.
-    const exportKey = `${USER}/export/data.json`;
+    const exportKey = `users/${USER}/export/data.json`;
     const env = makeEnv({
       objects: { [exportKey]: r2Object({ contentType: 'application/json' }) },
     });
@@ -214,24 +236,37 @@ describe('key authorization', () => {
     assert.equal(res.status, 404, 'the data export must never be servable here');
   });
 
-  it('accepts every canonical image category', async () => {
+  it('accepts every users/ canonical image category', async () => {
     for (const category of ['items', 'outfits', 'avatars', 'sources', 'feedback']) {
-      const key = `${USER}/${category}/${NAME}.jpg`;
+      const key = `users/${USER}/${category}/${NAME}.jpg`;
       const env = makeEnv({ objects: { [key]: r2Object({ contentType: 'image/jpeg' }) } });
       const res = await call(key, { token: await mintToken(), env });
       assert.equal(res.status, 200, `${category} should be servable`);
     }
   });
 
-  it('accepts nested preview keys (tmp/ and generated/) and thumb siblings', async () => {
-    // Top-level tmp/ and generated/ folders (new layout) plus the legacy
-    // per-user preview layout (served until migrate_temp_keys_layout.py runs).
+  it('serves legacy avatars with non-hex names (users-layout migration legacy)', async () => {
+    // The users-layout migration renames `{user}/avatars/*` to
+    // `users/{user}/avatars/*` without re-validating the filename, so names
+    // outside the 32-hex convention (old-name.jpg) are real keys that
+    // storage_keys.parse_key accepts — the worker allowlist must too.
     const keys = [
-      `tmp/${USER}/social-import/${NAME}.webp`,
-      `generated/${USER}/try-on/${NAME}.png`,
-      `${USER}/tmp/social-import/${NAME}.webp`,
-      `${USER}/generated/try-on/${NAME}.png`,
-      `${USER}/items/${NAME}_thumb.webp`,
+      `users/${USER}/avatars/old-name.jpg`,
+      `users/${USER}/avatars/my.avatar-1.webp`,
+      `users/${USER}/avatars/old-name_thumb.webp`,
+    ];
+    for (const key of keys) {
+      const env = makeEnv({ objects: { [key]: r2Object({ contentType: 'image/jpeg' }) } });
+      const res = await call(key, { token: await mintToken(), env });
+      assert.equal(res.status, 200, `${key} should be servable`);
+    }
+  });
+
+  it('accepts preview keys (tmp/ and generated/) and thumb siblings', async () => {
+    const keys = [
+      `users/${USER}/tmp/social-import/${NAME}.webp`,
+      `users/${USER}/generated/try-on/${NAME}.png`,
+      `users/${USER}/items/${NAME}_thumb.webp`,
     ];
     for (const key of keys) {
       const env = makeEnv({ objects: { [key]: r2Object() } });
@@ -240,21 +275,62 @@ describe('key authorization', () => {
     }
   });
 
-  it('rejects a cross-user top-level preview key', async () => {
-    // Ownership for tmp/ and generated/ keys is the SECOND segment.
-    const key = `tmp/${OTHER_USER}/social-import/${NAME}.webp`;
+  it('rejects a cross-user preview key (owner is segment 1)', async () => {
+    const key = `users/${OTHER_USER}/tmp/social-import/${NAME}.webp`;
     const env = makeEnv({ objects: { [key]: r2Object() } });
     const res = await call(key, { token: await mintToken(), env });
     assert.equal(res.status, 404);
   });
 
+  it('404s a users/ key owned by another user (owner is segment 1)', async () => {
+    const key = `users/${OTHER_USER}/items/${NAME}.webp`;
+    const env = makeEnv({ objects: { [key]: r2Object() } });
+    const res = await call(key, { token: await mintToken(), env });
+    assert.equal(res.status, 404);
+  });
+
+  it('rejects a users/ key with a non-canonical category', async () => {
+    const key = `users/${USER}/unknowncat/${NAME}.webp`;
+    const env = makeEnv({ objects: { [key]: r2Object() } });
+    const res = await call(key, { token: await mintToken(), env });
+    assert.equal(res.status, 404);
+  });
+
+  it('serves public/ assets WITHOUT a token (no-auth)', async () => {
+    const keys = [
+      `public/banners/home/${NAME}.webp`,
+      `public/landing/hero/${NAME}.png`,
+      `public/blog/post-1/${NAME}.jpg`,
+      `public/static/logo/${NAME}.webp`,
+    ];
+    for (const key of keys) {
+      const env = makeEnv({ objects: { [key]: r2Object() } });
+      const res = await call(key, { env }); // no token
+      assert.equal(res.status, 200, `${key} must be servable without auth`);
+    }
+  });
+
+  it('serves public/ thumb siblings without a token', async () => {
+    const key = `public/banners/home/${NAME}_thumb.webp`;
+    const env = makeEnv({ objects: { [key]: r2Object() } });
+    const res = await call(key, { env });
+    assert.equal(res.status, 200);
+  });
+
+  it('rejects a public/ key with an unknown group', async () => {
+    const key = `public/misc/${NAME}.webp`;
+    const env = makeEnv({ objects: { [key]: r2Object() } });
+    const res = await call(key, { env });
+    assert.equal(res.status, 404);
+  });
+
   it('404s traversal, bad names and unknown categories', async () => {
     const bad = [
-      `${USER}/../${OTHER_USER}/items/${NAME}.webp`,
-      `${USER}/items/short.webp`,
-      `${USER}/items/${NAME}.exe`,
-      `${USER}/unknowncat/${NAME}.webp`,
-      `${USER}/items/${NAME}`,
+      `users/${USER}/../${OTHER_USER}/items/${NAME}.webp`,
+      `users/${USER}/items/short.webp`,
+      `users/${USER}/items/${NAME}.exe`,
+      `users/${USER}/unknowncat/${NAME}.webp`,
+      `users/${USER}/items/${NAME}`,
     ];
     for (const key of bad) {
       const env = makeEnv({ objects: { [key]: r2Object() } });
@@ -275,7 +351,7 @@ describe('key authorization', () => {
 
   it('404s a thumb key with a non-webp extension', async () => {
     // Thumbs are always .webp; a `_thumb.jpg` key cannot have been written by us.
-    const key = `${USER}/items/${NAME}_thumb.jpg`;
+    const key = `users/${USER}/items/${NAME}_thumb.jpg`;
     const env = makeEnv({ objects: { [key]: r2Object() } });
     const res = await call(key, { token: await mintToken(), env });
     assert.equal(res.status, 404);
@@ -299,25 +375,47 @@ describe('cache-control', () => {
     assert.equal(res.headers.get('Cache-Control'), 'public, max-age=86400, immutable');
   });
 
-  it('overrides the app default max-age=3600 on a write-once key', async () => {
-    // THE REAL-WORLD CASE. S3StorageBackend.upload stamps
-    // `max-age=<DEFAULT_CACHE_CONTROL>` (3600) on every object the app writes,
-    // thumbnails included, so httpMetadata.cacheControl is ALWAYS set. Honouring
-    // it unconditionally made the 24h immutable policy unreachable in production
-    // and cost 24x the origin fetches the R2 cutover existed to remove. The
-    // previous test only "passed" because it stubbed cacheControl: undefined,
-    // which no real object has.
+  it('honours the app default max-age=3600 on a write-once key', async () => {
+    // The real-world case: S3StorageBackend.upload stamps
+    // `max-age=<DEFAULT_CACHE_CONTROL>` (3600) on every object the app writes.
+    // The 24h immutable upgrade must NOT shorten that window — the object's
+    // own (shorter) max-age wins.
     const env = makeEnv({
       objects: { [KEY]: r2Object({ cacheControl: 'max-age=3600' }) },
+    });
+    const res = await call(KEY, { token: await mintToken(), env });
+    assert.equal(res.headers.get('Cache-Control'), 'max-age=3600');
+  });
+
+  it('honours a 60s recompress backfill ceiling on a write-once key', async () => {
+    // recompress_assets overwrites keys in place with `cache-control: 60` so
+    // any CDN/browser holding old bytes refreshes within a minute. Upgrading
+    // that to 24h immutable served stale re-encoded bytes for a day — the
+    // regression A5-06 fixed. Both the bare shorthand and max-age= form must
+    // be honoured.
+    for (const cacheControl of ['60', 'max-age=60']) {
+      const env = makeEnv({
+        objects: { [KEY]: r2Object({ cacheControl }) },
+      });
+      const res = await call(KEY, { token: await mintToken(), env });
+      assert.equal(res.headers.get('Cache-Control'), cacheControl);
+    }
+  });
+
+  it('upgrades a LONGER-lived own max-age to the immutable default', async () => {
+    // The upgrade only ever applies when it cannot shorten the object's
+    // declared freshness window.
+    const env = makeEnv({
+      objects: { [KEY]: r2Object({ cacheControl: 'public, max-age=604800' }) },
     });
     const res = await call(KEY, { token: await mintToken(), env });
     assert.equal(res.headers.get('Cache-Control'), 'public, max-age=86400, immutable');
   });
 
   it('applies the immutable policy to thumbnail siblings too', async () => {
-    const thumbKey = `${USER}/items/${NAME}_thumb.webp`;
+    const thumbKey = `users/${USER}/items/${NAME}_thumb.webp`;
     const env = makeEnv({
-      objects: { [thumbKey]: r2Object({ cacheControl: 'max-age=3600' }) },
+      objects: { [thumbKey]: r2Object({ cacheControl: 'public' }) },
     });
     const res = await call(thumbKey, { token: await mintToken(), env });
     assert.equal(res.headers.get('Cache-Control'), 'public, max-age=86400, immutable');
@@ -325,17 +423,13 @@ describe('cache-control', () => {
 
   it('leaves a short-lived nested preview key on its own TTL', async () => {
     // tmp/ and generated/ objects are NOT write-once-immutable in the same way,
-    // so the object still decides there (both layouts).
-    for (const previewKey of [
-      `tmp/${USER}/social-import/${NAME}.webp`,
-      `${USER}/tmp/social-import/${NAME}.webp`,
-    ]) {
-      const env = makeEnv({
-        objects: { [previewKey]: r2Object({ cacheControl: 'max-age=60' }) },
-      });
-      const res = await call(previewKey, { token: await mintToken(), env });
-      assert.equal(res.headers.get('Cache-Control'), 'max-age=60');
-    }
+    // so the object still decides there.
+    const previewKey = `users/${USER}/tmp/social-import/${NAME}.webp`;
+    const env = makeEnv({
+      objects: { [previewKey]: r2Object({ cacheControl: 'max-age=60' }) },
+    });
+    const res = await call(previewKey, { token: await mintToken(), env });
+    assert.equal(res.headers.get('Cache-Control'), 'max-age=60');
   });
 
   it('honours a MORE restrictive object cache-control on a write-once key', async () => {
@@ -552,6 +646,7 @@ async function mintRs256(privateKey, kid, claims = {}) {
   const payload = {
     sub: USER,
     iss: `${SUPABASE_URL}/auth/v1`,
+    aud: 'authenticated',
     exp: now + 3600,
     iat: now,
     ...claims,
@@ -662,5 +757,114 @@ describe('JWKS (RS256)', () => {
     } finally {
       stub.restore();
     }
+  });
+});
+
+// ==========================================================================
+// 8. env validation — a missing secret must fail loudly, not as an opaque 500
+// ==========================================================================
+describe('env validation', () => {
+  /** Fresh module (fresh envValidated flag) + missing-secret env. */
+  async function missingSecretCall(missingKey) {
+    const env = makeEnv();
+    delete env[missingKey];
+    const mod = await freshWorker();
+    const request = new Request(`https://images.fitcheckaiapp.com/${KEY}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${await mintToken()}` },
+    });
+    return mod.fetch(request, env, ctx);
+  }
+
+  async function captureErrors(fn) {
+    const errors = [];
+    const original = console.error;
+    console.error = (...args) => errors.push(args.map(String).join(' '));
+    try {
+      return { res: await fn(), errors };
+    } finally {
+      console.error = original;
+    }
+  }
+
+  it('serves requests in a JWKS-only deployment without SUPABASE_JWT_SECRET', async () => {
+    // The legacy secret is only needed for HS256 tokens (README); an
+    // ES256/RS256 deployment must keep serving with it unset.
+    const env = makeEnv();
+    delete env.SUPABASE_JWT_SECRET;
+    const mod = await freshWorker();
+    const { pair, jwk } = await rsaKeypair('kid-rs256');
+    const stub = installJwksStub([{ keys: [jwk] }]);
+    try {
+      const token = await mintRs256(pair.privateKey, 'kid-rs256');
+      const res = await mod.fetch(
+        new Request(`https://images.fitcheckaiapp.com/${KEY}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        env,
+        ctx,
+      );
+      assert.equal(res.status, 200, 'RS256 tokens verify via JWKS without the secret');
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('rejects HS256 tokens indistinguishably when SUPABASE_JWT_SECRET is missing', async () => {
+    const env = makeEnv();
+    delete env.SUPABASE_JWT_SECRET;
+    const mod = await freshWorker();
+    const token = await mintToken();
+    const { res, errors } = await captureErrors(() =>
+      mod.fetch(
+        new Request(`https://images.fitcheckaiapp.com/${KEY}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        env,
+        ctx,
+      ),
+    );
+    assert.equal(res.status, 404, 'an unverifiable HS256 token must not reveal existence');
+    assert.ok(
+      !errors.some((e) => e.includes('SUPABASE_JWT_SECRET is required')),
+      `must not 500 with a misconfiguration error: ${errors.join(' | ')}`,
+    );
+  });
+
+  it('500s with a descriptive log when SUPABASE_URL is missing', async () => {
+    const { res, errors } = await captureErrors(() => missingSecretCall('SUPABASE_URL'));
+    assert.equal(res.status, 500);
+    assert.ok(
+      errors.some((e) => e.includes('SUPABASE_URL is required')),
+      `expected a descriptive error, got: ${errors.join(' | ')}`,
+    );
+  });
+});
+
+// ==========================================================================
+// 9. cookie token decoding — percent-encoded auth cookie values
+// ==========================================================================
+describe('cookie token decoding', () => {
+  it('decodes a percent-encoded auth cookie value', async () => {
+    // A JWT is [A-Za-z0-9_-.] plus literal '.' separators; a client that
+    // percent-encodes the cookie value turns the dots into %2E. The decoded
+    // token must verify and serve.
+    const token = await mintToken();
+    const encoded = token.replace(/\./g, '%2E');
+    const res = await call(KEY, {
+      headers: { Cookie: `sb-proj-auth-token=${encoded}` },
+    });
+    assert.equal(res.status, 200);
+  });
+
+  it('falls back to the raw value on malformed percent-encoding (404, not 500)', async () => {
+    // decodeURIComponent throws on `%zz`; the raw value is used instead and
+    // simply fails verification — indistinguishable from a bad token.
+    const res = await call(KEY, {
+      headers: { Cookie: 'sb-proj-auth-token=abc%zzdef' },
+    });
+    assert.equal(res.status, 404);
   });
 });

@@ -88,9 +88,10 @@ async def _insert_waitlist_entry(
     db: Client,
 ) -> Dict[str, Any]:
     try:
-        # Insert waitlist entry
+        # Insert waitlist entry. Emails are normalized so the case-sensitive
+        # unique constraint (005) cannot be bypassed by casing variants.
         insert_data = {
-            "email": request.email,
+            "email": (request.email or "").strip().lower(),
             "full_name": request.full_name,
             "source": "landing_page",
         }

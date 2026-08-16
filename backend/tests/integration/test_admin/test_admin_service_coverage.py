@@ -345,18 +345,42 @@ class _FakeStripe:
     """Minimal stripe stand-in: canned PaymentIntent/Charge/Refund lists.
 
     Records every ``Refund.create`` call so tests can assert the idempotent
-    reuse path never creates a second refund.
+    reuse path never creates a second refund. ``subscription_retrieve`` and
+    ``invoices`` mirror the new fail-closed refund resolution: the refund is
+    resolved from the subscription's OWN charge (Subscription.latest_invoice
+    expanded, then subscription-linked Invoice.list), never a customer-wide
+    lookup.
     """
 
-    def __init__(self, *, intents=None, charges=None, existing_refunds=None):
+    def __init__(
+        self,
+        *,
+        intents=None,
+        charges=None,
+        existing_refunds=None,
+        subscription_retrieve=None,
+        invoices=None,
+    ):
         self.intents = list(intents or [])
         self.charges = list(charges or [])
         self.existing_refunds = list(existing_refunds or [])
         self.created = []  # kwargs passed to Refund.create
+        self._subscription_retrieve = subscription_retrieve
+        self._invoices = list(invoices or [])
         self.Refund = SimpleNamespace(list=self._refund_list, create=self._refund_create)
         self.PaymentIntent = SimpleNamespace(list=self._intent_list)
         self.Charge = SimpleNamespace(list=self._charge_list)
+        self.Subscription = SimpleNamespace(retrieve=self._subscription_retrieve_call)
+        self.Invoice = SimpleNamespace(list=self._invoice_list)
         self.error = SimpleNamespace(StripeError=_StripeError)
+
+    def _subscription_retrieve_call(self, subscription_id, **kwargs):
+        if self._subscription_retrieve is None:
+            raise _StripeError("No such subscription")
+        return self._subscription_retrieve
+
+    def _invoice_list(self, **kwargs):
+        return SimpleNamespace(data=self._invoices)
 
     def _intent_list(self, **kwargs):
         return SimpleNamespace(data=self.intents)
@@ -380,7 +404,15 @@ class _FakeStripe:
 
 def _refund_db() -> FakeDB:
     return FakeDB(
-        rows={"subscriptions": [{"user_id": "u1", "stripe_customer_id": "cus_1"}]}
+        rows={
+            "subscriptions": [
+                {
+                    "user_id": "u1",
+                    "stripe_customer_id": "cus_1",
+                    "stripe_subscription_id": "sub_1",
+                }
+            ]
+        }
     )
 
 
@@ -420,8 +452,13 @@ async def test_refund_subscription_reuses_existing_succeeded_refund(monkeypatch)
         currency="usd",
         charge="ch_existing",
     )
+    # Subscription.retrieve expands latest_invoice.payment_intent (dict shape
+    # mirrors the Stripe API surface) and resolves the own charge directly.
+    subscription = SimpleNamespace(
+        latest_invoice={"payment_intent": {"id": "pi_1", "status": "succeeded", "amount": 900, "currency": "usd"}}
+    )
     stripe_fake = _FakeStripe(
-        intents=[SimpleNamespace(id="pi_1")],
+        subscription_retrieve=subscription,
         existing_refunds=[existing],
     )
     monkeypatch.setitem(sys.modules, "stripe", stripe_fake)
@@ -451,8 +488,11 @@ async def test_refund_subscription_creates_new_refund_when_existing_not_succeede
         currency="usd",
         charge="ch_failed",
     )
+    subscription = SimpleNamespace(
+        latest_invoice={"payment_intent": {"id": "pi_1", "status": "succeeded", "amount": 900, "currency": "usd"}}
+    )
     stripe_fake = _FakeStripe(
-        intents=[SimpleNamespace(id="pi_1")],
+        subscription_retrieve=subscription,
         existing_refunds=[failed],
     )
     monkeypatch.setitem(sys.modules, "stripe", stripe_fake)
@@ -461,21 +501,33 @@ async def test_refund_subscription_creates_new_refund_when_existing_not_succeede
 
     assert result["refund_id"] == "re_created"
     assert result["payment_intent"] == "pi_1"
-    assert stripe_fake.created == [{"payment_intent": "pi_1"}]
+    # The refund carries the resolved charge's amount/currency (A4-15).
+    assert stripe_fake.created == [
+        {"payment_intent": "pi_1", "amount": 900, "currency": "usd"}
+    ]
 
 
 @pytest.mark.asyncio
-async def test_refund_subscription_creates_refund_via_charge(monkeypatch):
+async def test_refund_subscription_recovers_charge_via_subscription_invoices(monkeypatch):
+    """When Subscription.retrieve fails (deleted after churn), the own charge
+    is recovered from the subscription-linked Invoice.list — never from a
+    customer-wide lookup that could refund an unrelated later purchase."""
     monkeypatch.setattr(admin_service, "_billing_configured", lambda: True)
-    stripe_fake = _FakeStripe(charges=[SimpleNamespace(id="ch_1")])
+    invoice = SimpleNamespace(
+        payment_intent=SimpleNamespace(
+            id="pi_1", status="succeeded", amount=1000, currency="usd"
+        )
+    )
+    stripe_fake = _FakeStripe(invoices=[invoice])
     monkeypatch.setitem(sys.modules, "stripe", stripe_fake)
 
     result = await refund_subscription(_refund_db(), "u1")
 
     assert result["refund_id"] == "re_created"
-    assert result["charge_id"] == "ch_1"
-    assert result["status"] == "succeeded"
-    assert stripe_fake.created == [{"charge": "ch_1"}]
+    assert result["payment_intent"] == "pi_1"
+    assert stripe_fake.created == [
+        {"payment_intent": "pi_1", "amount": 1000, "currency": "usd"}
+    ]
 
 
 @pytest.mark.asyncio
@@ -483,7 +535,7 @@ async def test_refund_subscription_without_charges_raises_not_found(monkeypatch)
     monkeypatch.setattr(admin_service, "_billing_configured", lambda: True)
     monkeypatch.setitem(sys.modules, "stripe", _FakeStripe())
 
-    with pytest.raises(NotFoundError, match="No charge found"):
+    with pytest.raises(NotFoundError, match="No succeeded charge found"):
         await refund_subscription(_refund_db(), "u1")
 
 
@@ -491,11 +543,16 @@ async def test_refund_subscription_without_charges_raises_not_found(monkeypatch)
 async def test_refund_subscription_maps_stripe_errors_to_validation(monkeypatch):
     monkeypatch.setattr(admin_service, "_billing_configured", lambda: True)
 
+    subscription = SimpleNamespace(
+        latest_invoice={"payment_intent": {"id": "pi_1", "status": "succeeded", "amount": 1000, "currency": "usd"}}
+    )
+
     class _RaisingStripe(_FakeStripe):
-        def _intent_list(self, **kwargs):
+        def _refund_create(self, **kwargs):
             raise _StripeError("No such payment_intent: pi_xyz")
 
-    monkeypatch.setitem(sys.modules, "stripe", _RaisingStripe())
+    stripe_fake = _RaisingStripe(subscription_retrieve=subscription)
+    monkeypatch.setitem(sys.modules, "stripe", stripe_fake)
 
     with pytest.raises(ValidationError, match="No such payment_intent"):
         await refund_subscription(_refund_db(), "u1")

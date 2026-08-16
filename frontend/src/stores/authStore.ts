@@ -14,6 +14,9 @@ import { logger } from '../lib/logger';
 import { resetForcedLogoutFlag, setTokens } from '../lib/auth';
 import { clearRequestCache, request } from '../lib/requestCache';
 import { getSupabase } from '../lib/supabase';
+import { useClosetStore } from './wardrobeStore';
+import { useOutfitStore } from './outfitStore';
+import { useSubscriptionStore } from './subscriptionStore';
 
 // ============================================================================
 // AUTH STATE INTERFACE
@@ -159,6 +162,13 @@ export const useAuthStore = create<AuthState>()(
           // Drop every cached read (items/outfits/subscription/referral/etc.)
           // so the next sign-in can never reuse the previous user's data.
           clearRequestCache();
+          // F1-04: the wire cache alone is not enough — the in-memory stores
+          // (closet items, outfits + draft/preview, subscription/gating state)
+          // survive a same-SPA logout + re-login and would render the previous
+          // account's data (including plan-gating decisions) until refetched.
+          useClosetStore.getState().reset();
+          useOutfitStore.getState().reset();
+          useSubscriptionStore.getState().reset();
         }
       },
 

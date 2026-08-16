@@ -18,6 +18,8 @@ class FakeS3Backend:
         self,
         download_bytes: Optional[bytes] = None,
         objects: Optional[List[dict]] = None,
+        exists_default: bool = True,
+        existing_keys: Optional[List[str]] = None,
     ):
         self.download_bytes = download_bytes
         # Objects served by scan_keys: [{"key", "size", "last_modified"}, ...]
@@ -30,6 +32,12 @@ class FakeS3Backend:
         self.list_calls: List[str] = []
         self.scan_calls: List[tuple] = []
         self.closed = False
+        # exists() answers from existing_keys when non-empty, else
+        # exists_default — tests flip these to simulate idempotent
+        # move/promote races (source missing, destination present).
+        self.exists_default = exists_default
+        self.existing_keys = set(existing_keys or [])
+        self.exists_calls: List[str] = []
 
     async def upload(self, key: str, data: bytes, content_type: str, cache_control: str) -> None:
         self.upload_calls.append(
@@ -56,6 +64,12 @@ class FakeS3Backend:
     async def delete_many(self, keys: List[str]) -> int:
         self.delete_calls.extend(keys)
         return len(keys)
+
+    async def exists(self, key: str) -> bool:
+        self.exists_calls.append(key)
+        if self.existing_keys:
+            return key in self.existing_keys
+        return self.exists_default
 
     async def presign_get(self, key: str, expires: int = 900) -> str:
         self.presign_calls.append(key)

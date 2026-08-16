@@ -89,8 +89,13 @@ def test_schema_missing_generic_exception_is_reported_missing():
     assert missing  # nothing is silently dropped
 
 
-def test_schema_missing_accepts_alternative_column():
-    """birth_date missing but the legacy date_of_birth alternative present."""
+def test_schema_missing_reports_birth_date_when_only_legacy_column_present():
+    """birth_date is required; the legacy date_of_birth alternative was dropped.
+
+    Migration 015 removed date_of_birth, so its presence in an environment
+    must NOT satisfy readiness for users.birth_date — the alternative map is
+    empty and readiness fails closed instead of probing a dead column.
+    """
     db = Mock()
 
     def _select(column, *_a, **_k):
@@ -103,7 +108,7 @@ def test_schema_missing_accepts_alternative_column():
 
     db.table.side_effect = lambda table: Mock(select=_select)
     missing = main_module._schema_missing(db)
-    assert "users.birth_date" not in missing
+    assert "users.birth_date" in missing
 
 
 # ---------------------------------------------------------------------------

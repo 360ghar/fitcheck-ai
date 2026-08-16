@@ -44,6 +44,14 @@ from app.services.subscription_service import SubscriptionService
 from app.utils.datetime_util import utc_today, utcnow
 
 
+# 1x1 transparent PNG, base64 — provider payloads are validated (strict
+# base64 + magic-byte sniff, A3-06), so fake "images" must be a real PNG.
+_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+    "AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
@@ -809,7 +817,7 @@ async def test_generate_images_requires_reference_photo():
 
 @pytest.mark.asyncio
 async def test_generate_images_success_with_user_ai_settings():
-    ai = _ImageAI(["img-b64-0"], ["img-b64-1"])
+    ai = _ImageAI([_PNG_B64], [_PNG_B64])
     prompts = [_prompt(0), _prompt(1)]
     with (
         patch(
@@ -834,7 +842,7 @@ async def test_generate_images_success_with_user_ai_settings():
 
     assert len(images) == 2
     assert [img.index for img in images] == [0, 1]
-    assert images[0].image_base64 == "img-b64-0"
+    assert images[0].image_base64 == _PNG_B64
     assert failures == []
     assert ai.closed is True
     # The image-generation model is passed through.
@@ -844,7 +852,7 @@ async def test_generate_images_success_with_user_ai_settings():
 
 @pytest.mark.asyncio
 async def test_generate_images_success_with_default_ai_service():
-    ai = _ImageAI(["img-b64"])
+    ai = _ImageAI([_PNG_B64])
     with (
         patch("app.services.ai_provider_service.get_ai_service", new=AsyncMock(return_value=ai)),
         patch(
@@ -866,7 +874,7 @@ async def test_generate_images_success_with_default_ai_service():
 
 @pytest.mark.asyncio
 async def test_generate_images_skips_empty_reference_photos():
-    ai = _ImageAI(["img-b64"])
+    ai = _ImageAI([_PNG_B64])
     with (
         patch("app.services.ai_provider_service.get_ai_service", new=AsyncMock(return_value=ai)),
         patch(
@@ -909,7 +917,7 @@ async def test_generate_images_all_silent_refusals_raise():
 
 @pytest.mark.asyncio
 async def test_generate_images_records_exceptions_and_partial_success():
-    ai = _ImageAI(RuntimeError("provider exploded"), ["img-b64"])
+    ai = _ImageAI(RuntimeError("provider exploded"), [_PNG_B64])
     with (
         patch("app.services.ai_provider_service.get_ai_service", new=AsyncMock(return_value=ai)),
         patch(
@@ -952,7 +960,7 @@ async def test_generate_images_records_slot_acquisition_failures():
     """A failure outside generate_single (semaphore acquisition) is NOT
     swallowed by the per-image handler: the gather surfaces it as an Exception
     result and it is recorded as an exception failure."""
-    ai = _ImageAI(["img-b64"])
+    ai = _ImageAI([_PNG_B64])
     with (
         patch("app.services.photoshoot_service.image_gen_slot", return_value=_BoomSlot()),
         patch("app.services.ai_provider_service.get_ai_service", new=AsyncMock(return_value=ai)),
@@ -1092,6 +1100,104 @@ async def test_generate_photoshoot_releases_unused_quota():
     release.assert_awaited_once_with("u1", 1, db)
     assert result.partial_success is True
     assert result.failed_count == 1
+
+
+@pytest.mark.asyncio
+async def test_generate_photoshoot_reports_post_release_usage():
+    """The completion payload carries POST-release usage, not the
+    reservation-time snapshot: a partial run releases quota mid-pipeline, so
+    reusing the snapshot would report full quota consumed (parity with the
+    streaming pipeline's post-release re-read)."""
+    usage = _usage()
+    post_release = PhotoshootUsage(
+        used_today=1,
+        limit_today=10,
+        remaining=9,
+        plan_type="free",
+        resets_at=utcnow() + timedelta(hours=12),
+    )
+    image = GeneratedImage(id="img_1", index=0, image_base64="b64")
+    db = Mock()
+    with (
+        patch.object(
+            PhotoshootService,
+            "reserve_daily_usage",
+            new=AsyncMock(return_value=(True, usage)),
+        ),
+        patch.object(
+            PhotoshootService,
+            "generate_prompts",
+            new=AsyncMock(return_value=[_prompt(0), _prompt(1)]),
+        ),
+        patch.object(
+            PhotoshootService,
+            "generate_images",
+            new=AsyncMock(
+                return_value=([image], [ImageGenerationFailure(index=1, error="nope")])
+            ),
+        ),
+        patch.object(PhotoshootService, "release_daily_usage", new=AsyncMock()),
+        patch.object(
+            PhotoshootService,
+            "get_usage",
+            new=AsyncMock(return_value=post_release),
+        ) as get_usage,
+    ):
+        result = await PhotoshootService.generate_photoshoot(
+            user_id="u1",
+            photos=["data:image/jpeg;base64,aGVsbG8="],
+            use_case=PhotoshootUseCase.LINKEDIN,
+            num_images=2,
+            db=db,
+        )
+
+    # The response reflects the post-release read, not the reservation snapshot.
+    get_usage.assert_awaited_once_with("u1", db)
+    assert result.usage is post_release
+
+
+@pytest.mark.asyncio
+async def test_generate_photoshoot_usage_reread_failure_falls_back_to_snapshot():
+    """A failed usage re-read must not kill the completion: the reservation-
+    time snapshot is used instead (pre-RCA behavior)."""
+    usage = _usage()
+    images = [
+        GeneratedImage(id="img_0", index=0, image_base64="b64"),
+        GeneratedImage(id="img_1", index=1, image_base64="b64"),
+    ]
+    with (
+        patch.object(
+            PhotoshootService,
+            "reserve_daily_usage",
+            new=AsyncMock(return_value=(True, usage)),
+        ),
+        patch.object(
+            PhotoshootService,
+            "generate_prompts",
+            new=AsyncMock(return_value=[_prompt(0), _prompt(1)]),
+        ),
+        patch.object(
+            PhotoshootService,
+            "generate_images",
+            new=AsyncMock(return_value=(images, [])),
+        ),
+        patch.object(PhotoshootService, "release_daily_usage", new=AsyncMock()),
+        patch.object(
+            PhotoshootService,
+            "get_usage",
+            new=AsyncMock(side_effect=RuntimeError("usage read down")),
+        ),
+    ):
+        result = await PhotoshootService.generate_photoshoot(
+            user_id="u1",
+            photos=["data:image/jpeg;base64,aGVsbG8="],
+            use_case=PhotoshootUseCase.LINKEDIN,
+            num_images=2,
+            db=Mock(),
+        )
+
+    assert result.status == PhotoshootStatus.COMPLETE
+    assert result.usage is usage
 
 
 @pytest.mark.asyncio
@@ -1475,7 +1581,7 @@ async def test_streaming_pipeline_cancelled_after_full_release():
 
 @pytest.mark.asyncio
 async def test_generate_images_streaming_demo_batches_success():
-    ai = _ImageAI(["img-b64-1"], ["img-b64-2"])
+    ai = _ImageAI([_PNG_B64], [_PNG_B64])
     job = await PhotoshootJobService.create_job(
         user_id="demo_1",
         photos=["data:image/jpeg;base64,aGVsbG8=", "plain-ref"],
@@ -1510,7 +1616,7 @@ async def test_generate_images_streaming_demo_batches_success():
 
 @pytest.mark.asyncio
 async def test_generate_images_streaming_skips_downscale_when_photos_empty():
-    ai = _ImageAI(["img-b64"])
+    ai = _ImageAI([_PNG_B64])
     job = await PhotoshootJobService.create_job(
         user_id="u1",
         photos=["", "   "],
@@ -1573,7 +1679,7 @@ async def test_generate_images_streaming_no_image_response_marks_failed():
 
 @pytest.mark.asyncio
 async def test_generate_single_image_persists_durable_url():
-    ai = _ImageAI(["data:image/png;base64,aGVsbG8="])
+    ai = _ImageAI([_PNG_B64])
     job = await PhotoshootJobService.create_job(
         user_id="u1",
         photos=["data:image/jpeg;base64,aGVsbG8="],
@@ -1603,7 +1709,7 @@ async def test_generate_single_image_persists_durable_url():
 
 @pytest.mark.asyncio
 async def test_generate_single_image_tolerates_persistence_failure():
-    ai = _ImageAI(["plain-b64"])
+    ai = _ImageAI([_PNG_B64])
     job = await PhotoshootJobService.create_job(
         user_id="u1",
         photos=["data:image/jpeg;base64,aGVsbG8="],
@@ -1622,7 +1728,7 @@ async def test_generate_single_image_tolerates_persistence_failure():
 
         # Best-effort persistence: the image still succeeds base64-only.
         assert image is not None
-        assert image.image_base64 == "plain-b64"
+        assert image.image_base64 == _PNG_B64
         assert job.generated_count == 1
     finally:
         await _cleanup_job(job.job_id)
@@ -1630,7 +1736,7 @@ async def test_generate_single_image_tolerates_persistence_failure():
 
 @pytest.mark.asyncio
 async def test_generate_images_streaming_stops_when_cancelled_mid_batch():
-    ai = _ImageAI(["img-b64"])
+    ai = _ImageAI([_PNG_B64])
     job = await PhotoshootJobService.create_job(
         user_id="u1",
         photos=["data:image/jpeg;base64,aGVsbG8="],

@@ -20,6 +20,7 @@ from app.models.blog import BlogPostCreate, BlogPostUpdate
 from app.models.item import ItemBase, ItemUpdate
 from app.models.outfit import OutfitCreate, OutfitUpdate
 from app.models.photoshoot import StartPhotoshootRequest
+from app.models.recommendation import StyleAnalysisResponse
 from app.models.user import UserBase, UserSettingsUpdate, UserUpdate
 
 
@@ -206,6 +207,23 @@ def test_photoshoot_request_valid_aspect_ratio_accepted():
         use_case="instagram", photos=[tiny_png], aspect_ratio="9:16"
     )
     assert request.aspect_ratio == "9:16"
+
+
+# ---------------------------------------------------------------------------
+# app/models/recommendation.py
+# ---------------------------------------------------------------------------
+
+
+def test_style_analysis_analyzed_at_default_is_aware_utc():
+    # default_factory=datetime.now produced a naive local timestamp (B3-19);
+    # it must come from the shared UTC helper.
+    from datetime import timezone
+
+    from app.models.recommendation import StyleAnalysis
+
+    analyzed_at = StyleAnalysisResponse(analysis=StyleAnalysis()).analyzed_at
+    assert analyzed_at.tzinfo is not None
+    assert analyzed_at.utcoffset() == timezone.utc.utcoffset(None)
 
 
 def test_blog_slug_regex_shape():

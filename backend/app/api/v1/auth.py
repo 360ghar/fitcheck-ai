@@ -282,6 +282,17 @@ async def register(
             session = auth_response.session
             requires_email_confirmation = not bool(getattr(session, "access_token", None))
 
+            # A1-01: mirror the login path - the flag reflects the account's
+            # real confirmation state, not a hardcoded False. With email
+            # confirmation disabled the user is already signed in (session
+            # present) and may redeem a referral code immediately; with it
+            # enabled the flag stays False until confirmation, and the
+            # redeem_referral service persists its retry hook so the grant
+            # lands after confirmation (see process_pending_referral).
+            email_verified = bool(session) or bool(
+                getattr(auth_response.user, "email_confirmed_at", None)
+            )
+
             # Create/update user profile in public.users table
             # Note: The database trigger (002_user_profile_trigger.sql) may have already
             # created the profile. We use upsert to handle both cases gracefully.
@@ -290,7 +301,7 @@ async def register(
                     "id": user_id,
                     "email": normalized_email,
                     "full_name": register_request.full_name,
-                    "email_verified": False,
+                    "email_verified": email_verified,
                     "is_active": True,
                     "created_at": utcnow_iso(),
                     "updated_at": utcnow_iso(),
@@ -481,13 +492,19 @@ async def login(
                     "password": login_request.password
                 })
             except AuthApiError as e:
-                message = str(e) or "Login failed"
-                lower = message.lower()
-                if "email not confirmed" in lower:
-                    raise AuthenticationError("Email not confirmed", error_code="AUTH_EMAIL_NOT_CONFIRMED")
-                if "invalid login credentials" in lower:
-                    raise AuthenticationError("Invalid email or password", error_code="AUTH_INVALID_CREDENTIALS")
-                raise AuthenticationError(message, error_code="AUTH_LOGIN_FAILED")
+                # Anti-enumeration (A1-13): every sign-in failure is ONE
+                # uniform error. Supabase's "Email not confirmed" and
+                # "Invalid login credentials" both reveal whether the email is
+                # registered, so neither may be surfaced with its own shape.
+                logger.info(
+                    "Sign-in rejected with uniform invalid-credentials error",
+                    email=normalized_email,
+                    supabase_message=str(e)[:200],
+                )
+                raise AuthenticationError(
+                    "Invalid email or password",
+                    error_code="AUTH_INVALID_CREDENTIALS",
+                )
 
             if auth_response.user is None:
                 raise AuthenticationError("Invalid email or password", error_code="AUTH_INVALID_CREDENTIALS")
@@ -535,10 +552,21 @@ async def login(
 
                     logger.info("Created missing user profile on login", user_id=user.id)
                 else:
-                    # Profile exists - just update last_login_at
-                    await asyncio.to_thread(db.table("users").update({
-                        "last_login_at": utcnow_iso()
-                    }).eq("id", user.id).execute)
+                    # Profile exists - just update last_login_at. A1-13: also
+                    # sync email_verified from the auth user — registration with
+                    # email confirmation enabled persisted email_verified=False
+                    # at signup, and nothing ever flipped it after the user
+                    # confirmed, so process_pending_referral deferred the grant
+                    # forever. The trigger on auth.users only fires on INSERT,
+                    # not on the confirmation UPDATE, so the login path is the
+                    # reliable place to reconcile the flag.
+                    profile_updates: Dict[str, Any] = {"last_login_at": utcnow_iso()}
+                    confirmed_at = getattr(user, "email_confirmed_at", None)
+                    if confirmed_at is not None:
+                        profile_updates["email_verified"] = True
+                    await asyncio.to_thread(
+                        db.table("users").update(profile_updates).eq("id", user.id).execute
+                    )
             except Exception as e:
                 logger.warning("Failed to ensure user profile", user_id=user.id, error=str(e))
 
@@ -547,6 +575,24 @@ async def login(
             profile_result = await asyncio.to_thread(db.table("users").select("*").eq("id", user.id).execute)
             if profile_result.data and len(profile_result.data) > 0:
                 profile = profile_result.data[0]
+                # Suspended accounts must not receive fresh tokens (A1-14):
+                # Supabase Auth still authenticates them, so the gate is the
+                # public.users row — same is_active semantics as
+                # get_current_user (explicit False only). The just-created
+                # session is revoked so the tokens cannot be used later.
+                if profile.get("is_active") is False:
+                    if session is not None:
+                        try:
+                            await _revoke_supabase_session(session.access_token)
+                        except Exception:
+                            logger.warning(
+                                "Could not revoke session for suspended user",
+                                user_id=user.id,
+                            )
+                    raise AuthenticationError(
+                        message="Account is suspended",
+                        error_code="ACCOUNT_SUSPENDED",
+                    )
                 user_data = {
                     "id": user.id,
                     "email": user.email,
@@ -751,11 +797,22 @@ async def confirm_reset_password(
             )
 
         anon_db.auth.update_user({"password": request.new_password})
+        # A password change must invalidate EVERY session the user holds, not
+        # just the recovery one (A1-15). The anon client has no stored
+        # session, so the legacy sign_out() is a no-op; the service-role
+        # admin API revokes the user's session globally using the recovery
+        # access token. Best-effort: the reset itself already succeeded.
         try:
-            anon_db.auth.sign_out()
+            client = SupabaseDB.get_service_client()
+            if request.access_token:
+                client.auth.admin.sign_out(jwt=request.access_token, scope="global")
+            else:
+                # OTP variant has no user JWT; fall back to the legacy call.
+                anon_db.auth.sign_out()
         except Exception:
-            # sign_out is best-effort; don't fail the reset if it errors.
-            pass
+            logger.warning(
+                "Could not revoke sessions after password reset (best-effort)",
+            )
 
         logger.info("Password reset confirmed successfully")
         return {"message": "Password has been reset successfully"}

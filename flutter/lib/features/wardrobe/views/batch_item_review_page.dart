@@ -513,8 +513,18 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
       Navigator.pop(context); // Close loading dialog
 
       if (savedItems.isNotEmpty) {
-        // Show success and go back to wardrobe
-        ErrorHandler.showSuccess('${savedItems.length} items added to your closet', title: 'Success');
+        // A10b-06: partial success must not read as full success — per-item
+        // failures are collected by the controller and reported by name.
+        final failed = controller.saveFailures;
+        if (failed.isEmpty) {
+          ErrorHandler.showSuccess('${savedItems.length} items added to your closet', title: 'Success');
+        } else {
+          ErrorHandler.showWarning(
+            '${savedItems.length} of ${savedItems.length + failed.length} items were saved. '
+            'Could not save: ${failed.join(', ')}',
+            title: 'Some items failed',
+          );
+        }
 
         controller.reset();
         Get.until((route) => route.isFirst);

@@ -246,6 +246,62 @@ async def test_get_leaderboard_empty_board_returns_zero_rank(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_get_leaderboard_small_board_exact_percentile(monkeypatch):
+    """A4-19: boards of <=100 users report the exact rounded percentile, so
+    rank 1 of 6 is 17%, not a blanket floor (16.67 -> 17) and not a
+    max(1, ...) distortion."""
+    rows = {
+        "user_streaks": [
+            _streak_row(user_id=f"u{i}", current_streak=6 - i) for i in range(5)
+        ]
+        + [_streak_row(user_id=USER_ID, current_streak=9)],
+        "users": [{"id": USER_ID, "full_name": "Ada"}],
+    }
+    db = FakeDB(rows=rows)
+    async def fake_materialize(avatar_url, *, presigned=False):
+        return None
+    monkeypatch.setattr(gamification, "materialize_avatar_url", fake_materialize)
+    result = await get_leaderboard(user_id=USER_ID, db=db)
+    rank = result["data"]["user_rank"]
+    assert rank["rank"] == 1
+    assert rank["total_users"] == 6
+    assert rank["top_percentile"] == 17  # round(1/6*100)
+
+
+@pytest.mark.asyncio
+async def test_get_leaderboard_large_board_ceil_with_floor(monkeypatch):
+    """A4-19: boards of >100 users ceil the percentile with a 1% floor: rank
+    101 of 251 reads as ceil(40.2)=41 (never floor 40) and rank 1 never
+    rounds down to 0%.
+
+    (Streaks are seeded as equal-width strings: the in-memory fake compares
+    gt filters lexicographically, so equal widths are required.)"""
+    rows = {
+        "user_streaks": [
+            _streak_row(user_id=f"u{i}", current_streak=f"{i + 1:03d}") for i in range(250)
+        ]
+        + [_streak_row(user_id=USER_ID, current_streak="150")],
+        "users": [{"id": USER_ID, "full_name": "Ada"}],
+    }
+    db = FakeDB(rows=rows)
+    async def fake_materialize(avatar_url, *, presigned=False):
+        return None
+    monkeypatch.setattr(gamification, "materialize_avatar_url", fake_materialize)
+    result = await get_leaderboard(user_id=USER_ID, db=db)
+    rank = result["data"]["user_rank"]
+    assert rank["total_users"] == 251
+    assert rank["rank"] == 101  # 100 users hold a higher streak
+    assert rank["top_percentile"] == 41  # ceil(101/251*100), not floor
+
+    # Rank 1 on the same board: the 1% floor keeps it out of 0%.
+    rows["user_streaks"][-1] = _streak_row(user_id=USER_ID, current_streak="250")
+    db = FakeDB(rows=rows)
+    result = await get_leaderboard(user_id=USER_ID, db=db)
+    assert result["data"]["user_rank"]["rank"] == 1
+    assert result["data"]["user_rank"]["top_percentile"] == 1
+
+
+@pytest.mark.asyncio
 async def test_get_leaderboard_display_name_fallbacks(monkeypatch):
     """Rows without a profile or without any id must still render a name."""
     db = FakeDB(

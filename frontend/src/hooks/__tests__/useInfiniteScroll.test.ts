@@ -106,4 +106,34 @@ describe('useInfiniteScroll', () => {
     intersect(observers[0], true)
     expect(onLoadMore).not.toHaveBeenCalled()
   })
+
+  it('re-fires when a fetch settles while the sentinel is still intersecting (F1-08)', () => {
+    // Regression: a failed or short append used to leave the one-shot latch
+    // set with the sentinel still in the zone, stalling auto-paging until
+    // the user scrolled away and back. The latch must clear when isLoading
+    // flips true → false and the fire re-check runs.
+    const onLoadMore = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ isLoading, hasMore }) =>
+        useInfiniteScroll({ onLoadMore, hasMore, isLoading }),
+      { initialProps: { isLoading: false, hasMore: true } }
+    )
+    result.current(document.createElement('div'))
+
+    intersect(observers[0], true)
+    expect(onLoadMore).toHaveBeenCalledTimes(1)
+
+    // Fetch in flight: no re-fire yet.
+    rerender({ isLoading: true, hasMore: true })
+    expect(onLoadMore).toHaveBeenCalledTimes(1)
+
+    // Fetch settles with the sentinel STILL intersecting: the latch clears
+    // and fire() re-checks (hasMore/isLoading) → auto-append continues.
+    rerender({ isLoading: false, hasMore: true })
+    expect(onLoadMore).toHaveBeenCalledTimes(2)
+
+    // It must stop once the server reports no more pages.
+    rerender({ isLoading: false, hasMore: false })
+    expect(onLoadMore).toHaveBeenCalledTimes(2)
+  })
 })

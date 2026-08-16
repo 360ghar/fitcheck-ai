@@ -212,7 +212,10 @@ export function IapTransactionsPage() {
   // Store-billed rows have no provider transaction id — there is nothing to
   // fetch from the detail endpoint and nothing to mark refunded by id.
   const hasProviderTransactionId = Boolean(selected?.transaction_id)
-  const canMark = can('iap.read') && hasProviderTransactionId && detailStatus !== 'refunded'
+  // A8-01: the mark-refunded endpoint requires `iap.write` (ops holds it,
+  // backend/app/core/permissions.py); gating on `iap.read` rendered the
+  // button for support, whose every click 403'd.
+  const canMark = can('iap.write') && hasProviderTransactionId && detailStatus !== 'refunded'
 
   return (
     <div className="space-y-6">

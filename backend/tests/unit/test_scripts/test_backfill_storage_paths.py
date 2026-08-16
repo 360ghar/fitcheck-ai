@@ -23,9 +23,10 @@ SCRIPT_PATH = BACKEND_ROOT / "scripts" / "backfill_storage_paths.py"
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
 NAME = "0123456789abcdef0123456789abcdef"
-ITEM_KEY = f"{USER_ID}/items/{NAME}.webp"
-OUTFIT_KEY = f"{USER_ID}/outfits/{NAME}.png"
-SOURCE_KEY = f"{USER_ID}/sources/{NAME}.jpg"
+# Post-migration: canonical keys are the users/{user}/... layout.
+ITEM_KEY = f"users/{USER_ID}/items/{NAME}.webp"
+OUTFIT_KEY = f"users/{USER_ID}/outfits/{NAME}.png"
+SOURCE_KEY = f"users/{USER_ID}/sources/{NAME}.jpg"
 
 
 @pytest.fixture(scope="module")

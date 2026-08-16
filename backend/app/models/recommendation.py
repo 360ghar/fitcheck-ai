@@ -8,6 +8,8 @@ from uuid import UUID
 from datetime import datetime
 from enum import Enum
 
+from app.utils.datetime_util import utcnow
+
 
 # ============================================================================
 # RECOMMENDATION TYPES
@@ -209,7 +211,7 @@ class StyleAnalysisResponse(BaseModel):
     analysis: StyleAnalysis
     recommendations: List[str] = Field(default_factory=list)
     suggestions: List[str] = Field(default_factory=list)
-    analyzed_at: datetime = Field(default_factory=datetime.now)
+    analyzed_at: datetime = Field(default_factory=utcnow)
 
 
 # ============================================================================

@@ -108,6 +108,14 @@ export function ShareOutfitDialog({
     if (!outfit) throw new Error('No outfit selected')
     if (shareLinkUrl) return shareLinkUrl
 
+    // F2b-01: the backend only accepts `public` visibility (outfits.py
+    // raises ValidationError("Only 'public' visibility is supported")),
+    // so minting a private link is a guaranteed 400 on every share action.
+    // Belt-and-braces on top of the switch guard below.
+    if (!shareOptions.isPublic) {
+      throw new Error('Private outfit sharing is not available yet — please share as public.')
+    }
+
     const link = await shareOutfit(outfit.id, {
       visibility: shareOptions.isPublic ? 'public' : 'private',
       allow_feedback: shareOptions.allowFeedback,
@@ -405,9 +413,21 @@ export function ShareOutfitDialog({
                   </div>
                   <Switch
                     checked={shareOptions.isPublic}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={(checked) => {
+                      if (!checked) {
+                        // F2b-01: private sharing is not implemented
+                        // backend-side; keep the toggle on rather than let
+                        // the user mint a link that 400s everywhere.
+                        toast({
+                          title: 'Private sharing unavailable',
+                          description:
+                            'Only public sharing is supported right now. Anyone with the link can view your outfit.',
+                          variant: 'destructive',
+                        })
+                        return
+                      }
                       setShareOptions((prev) => ({ ...prev, isPublic: checked }))
-                    }
+                    }}
                   />
                 </div>
 

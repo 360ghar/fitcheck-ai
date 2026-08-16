@@ -169,6 +169,56 @@ class S3StorageBackend:
         client = await self._get_client()
         await client.delete_object(Bucket=self.bucket, Key=key)
 
+    async def exists(self, key: str) -> bool:
+        """Return whether an object exists at ``key`` (HEAD request).
+
+        Used by idempotent move/promote paths to distinguish "the source is
+        gone AND the destination is already there" (a concurrent promotion
+        already finished — treat as success) from "the source never existed"
+        (a real error). Absence is surfaced as a False return, not an
+        exception.
+        """
+        client = await self._get_client()
+        try:
+            await client.head_object(Bucket=self.bucket, Key=key)
+            return True
+        except Exception as error:
+            code = str(
+                ((getattr(error, "response", None) or {}).get("Error") or {}).get("Code") or ""
+            ).lower()
+            # botocore surfaces missing keys as ClientError with code 404 /
+            # "NotFound"; R2 and S3 also report HEAD on an absent object as
+            # "NoSuchKey" (see storage_service._is_no_such_key_error for the
+            # same class). Anything else is a real storage failure and must
+            # not be read as "absent".
+            if code in ("404", "notfound", "nosuchkey"):
+                return False
+            raise
+
+    async def head(self, key: str) -> Optional[dict]:
+        """Return ``{"size": ..., "etag": ...}`` for ``key``, or None if absent.
+
+        Metadata from a single HEAD request, used for provenance checks (e.g.
+        verifying a target object is a prior copy of a source before resuming
+        a migration). Absence is surfaced as None (same 404/NotFound/NoSuchKey
+        tolerance as ``exists``); anything else is a real storage failure and
+        is raised.
+        """
+        client = await self._get_client()
+        try:
+            response = await client.head_object(Bucket=self.bucket, Key=key)
+        except Exception as error:
+            code = str(
+                ((getattr(error, "response", None) or {}).get("Error") or {}).get("Code") or ""
+            ).lower()
+            if code in ("404", "notfound", "nosuchkey"):
+                return None
+            raise
+        return {
+            "size": int(response.get("ContentLength") or 0),
+            "etag": str(response.get("ETag") or "").strip('"'),
+        }
+
     async def delete_many(self, keys: List[str]) -> int:
         """Delete many objects (batched at S3's 1000-object limit).
 

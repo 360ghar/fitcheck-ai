@@ -34,9 +34,9 @@ from tests.factories.row_factories import user_row
 from tests.utils.fake_db import FakeDB
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
-OWNED = f"{USER_ID}/items/0123456789abcdef0123456789abcdef.jpg"
-FOREIGN = "22222222-2222-2222-2222-222222222222/items/0123456789abcdef0123456789abcdef.jpg"
-OWNED_AVATAR = f"{USER_ID}/avatars/0123456789abcdef0123456789abcdef.jpg"
+OWNED = f"users/{USER_ID}/items/0123456789abcdef0123456789abcdef.jpg"
+FOREIGN = "users/22222222-2222-2222-2222-222222222222/items/0123456789abcdef0123456789abcdef.jpg"
+OWNED_AVATAR = f"users/{USER_ID}/avatars/0123456789abcdef0123456789abcdef.jpg"
 
 _PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -461,6 +461,7 @@ async def test_generate_outfit_with_avatar_and_body_profile(monkeypatch):
             "body_profiles": [
                 {
                     "id": "bp-1",
+                    "user_id": USER_ID,
                     "height_cm": 170.0,
                     "weight_kg": 65.0,
                     "body_shape": "hourglass",
@@ -1125,19 +1126,23 @@ async def test_search_similar_items_requires_text_or_embedding():
 
 @pytest.mark.asyncio
 async def test_search_similar_items_with_embedding(monkeypatch):
+    # find_similar rows are shaped {"item_id", "score", "metadata"} (see
+    # vector_service); the route must map item_id into the response.
     vector_service = Mock()
     vector_service.find_similar = AsyncMock(
-        return_value=[{"id": "i1", "score": 0.9, "metadata": {"name": "tee"}}]
+        return_value=[{"item_id": "i1", "score": 0.9, "metadata": {"name": "tee"}}]
     )
     monkeypatch.setattr(ai_module, "get_vector_service", lambda: vector_service)
 
     result = await ai_module.search_similar_items(
-        ai_module.SimilaritySearchRequest(embedding=[0.1, 0.2]), user_id=USER_ID, db=FakeDB()
+        ai_module.SimilaritySearchRequest(embedding=[0.1] * 768), user_id=USER_ID, db=FakeDB()
     )
 
     assert result["message"] == "Found 1 similar items"
     assert result["data"]["items"][0]["item_id"] == "i1"
-    assert result["data"]["query_embedding_dimensions"] == 2
+    # A3b-07: the route rejects embeddings whose dimension differs from
+    # settings.PINECONE_DIMENSION (768) with a 422 instead of a 503.
+    assert result["data"]["query_embedding_dimensions"] == 768
     vector_service.find_similar.assert_awaited_once()
 
 
@@ -1167,7 +1172,7 @@ async def test_search_similar_items_wraps_generic_errors(monkeypatch):
 
     with pytest.raises(AIServiceError) as exc_info:
         await ai_module.search_similar_items(
-            ai_module.SimilaritySearchRequest(embedding=[0.1]), user_id=USER_ID, db=FakeDB()
+            ai_module.SimilaritySearchRequest(embedding=[0.1] * 768), user_id=USER_ID, db=FakeDB()
         )
     assert "Failed to search similar items" in str(exc_info.value)
 
@@ -1180,7 +1185,7 @@ async def test_search_similar_items_propagates_fitcheck_exception(monkeypatch):
 
     with pytest.raises(AIServiceError):
         await ai_module.search_similar_items(
-            ai_module.SimilaritySearchRequest(embedding=[0.1]), user_id=USER_ID, db=FakeDB()
+            ai_module.SimilaritySearchRequest(embedding=[0.1] * 768), user_id=USER_ID, db=FakeDB()
         )
 
 

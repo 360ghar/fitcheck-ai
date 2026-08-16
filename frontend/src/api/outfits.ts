@@ -184,6 +184,10 @@ export async function uploadOutfitImage(
     lighting?: string;
     body_profile_id?: string;
     generation_id?: string;
+    /** Client-generated idempotency key (F1-07): retries of the same logical
+     * upload carry the same key and the backend replays the original row
+     * instead of inserting a duplicate image. */
+    client_request_id?: string;
   } = {}
 ): Promise<OutfitImage> {
   try {
@@ -193,6 +197,7 @@ export async function uploadOutfitImage(
     if (options.lighting) formData.append('lighting', options.lighting);
     if (options.body_profile_id) formData.append('body_profile_id', options.body_profile_id);
     if (options.generation_id) formData.append('generation_id', options.generation_id);
+    if (options.client_request_id) formData.append('client_request_id', options.client_request_id);
     formData.append('is_primary', String(options.isPrimary ?? false));
 
     const response = await apiClient.post<ApiEnvelope<OutfitImage>>(

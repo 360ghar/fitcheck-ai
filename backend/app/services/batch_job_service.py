@@ -28,6 +28,7 @@ from app.utils.sse_queue import (
 )
 from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+    execute_with_reconnect,
     job_persistence_migration_hint,
     maybe_single_data,
 )
@@ -109,6 +110,7 @@ def _build_persisted_payload(
         "generations_failed": len(job.generation_failed),
         "auto_generate": job.auto_generate,
         "generation_batch_size": job.generation_batch_size,
+        "reserved_generations": getattr(job, "reserved_generations", 0) or 0,
         "error_message": error_message if error_message is not None else job.error_message,
         "items": items,
         "images": images,
@@ -144,7 +146,7 @@ class BatchImageData:
     image_id: str
     image_base64: str
     filename: Optional[str] = None
-    # Persisted source photo (Supabase Storage URL + path). Set once before
+    # Persisted source photo (object-storage URL + path). Set once before
     # extraction runs so every item detected in this photo can carry the same
     # reference for product-image generation. The in-memory base64 is dropped
     # after extraction (release_image_payloads); the URL survives.
@@ -258,6 +260,12 @@ class BatchJob:
     # `_persisted_status` is the status the row currently holds (the CAS anchor).
     persistence_dirty: bool = field(default=False, repr=False, compare=False)
     _persisted_status: Any = field(default=None, repr=False, compare=False)
+    # Daily GENERATION quota reserved at admission (total_images * 3 when
+    # auto_generate). The pipeline releases the unused remainder at the
+    # terminal transition (A2-02); see release_unused_generation_quota.
+    # In-memory only: the durable extraction_jobs row has no column for it
+    # (no migration budget), and recovered jobs are never resumed.
+    reserved_generations: int = 0
 
     def is_cancelled(self) -> bool:
         """Check if job is cancelled."""
@@ -351,6 +359,12 @@ class BatchJobService:
                 persistence_db=db,
                 recovered_from_persistence=True,
                 _persisted_status=status,
+                # Restore the admission reservation (migration 053) so a
+                # restart cannot strand it: the recovered shell can then
+                # release the unused remainder when it is cancelled or
+                # evicted, instead of leaking the user's daily generation
+                # quota forever.
+                reserved_generations=int(row.get("reserved_generations") or 0),
             )
             job.extraction_completed = {
                 image_id for image_id, image in images.items()
@@ -380,8 +394,15 @@ class BatchJobService:
         auto_generate: bool = True,
         generation_batch_size: int = 30,
         db: Any = None,
+        reserved_generations: int = 0,
     ) -> BatchJob:
         """Create a new batch job.
+
+        ``reserved_generations`` is the daily GENERATION quota reserved at
+        admission (total_images x 3). It is persisted with the durable row
+        (migration 053) so a process restart can restore and reconcile it;
+        without persistence the recovered shell carried 0 and the unused
+        reservation was never released (A3-xx).
 
         Raises:
             RateLimitError: If process-wide concurrent batch job cap is hit.
@@ -434,6 +455,7 @@ class BatchJobService:
             generation_batch_size=generation_batch_size,
             images=image_dict,
             persistence_db=db,
+            reserved_generations=reserved_generations,
         )
 
         payload_mb = estimate_base64_mb(payload_sizes)
@@ -633,6 +655,78 @@ class BatchJobService:
         return None
 
     @classmethod
+    async def release_unused_generation_quota(cls, job: "BatchJob", db: Any = None) -> None:
+        """Return daily GENERATION quota reserved at admission but never consumed.
+
+        Admission reserves ``total_images * 3`` generation slots up front (the
+        per-photo item estimate, see batch_processing._check_batch_rate_limits)
+        and the old code only released them on admission-failure paths, so a
+        batch that generated fewer images than reserved (fewer items detected,
+        extraction failures, cancellation) burned the difference from the
+        user's daily quota forever (A2-02).
+
+        The claim + release is ONE atomic database operation
+        (``release_job_generation_quota``, migration 055) keyed by job id.
+        The unused count is derived on the database from the durable job
+        row (reserved minus items that actually generated) so a worker
+        with a stale in-memory ``generation_completed`` set cannot
+        over/under-refund. Best-effort: a failing release RPC must never
+        fail the pipeline or cancel path.
+        """
+        reserved = getattr(job, "reserved_generations", 0) or 0
+        if reserved <= 0:
+            return
+        actually_generated = len(job.generation_completed)
+        unused = max(0, reserved - actually_generated)
+        db_client = db or getattr(job, "persistence_db", None)
+        if db_client is None:
+            logger.warning(
+                "Cannot release unused generation quota: no db client",
+                extra={"job_id": job.job_id, "user_id": job.user_id, "unused": unused},
+            )
+            return
+        try:
+            await execute_with_reconnect(
+                lambda d: d.rpc(
+                    "release_job_generation_quota",
+                    {
+                        "p_job_id": job.job_id,
+                        "p_user_id": job.user_id,
+                        "p_count": unused,
+                    },
+                ).execute(),
+                db_client,
+                extra={
+                    "operation": "release_job_generation_quota",
+                    "job_id": job.job_id,
+                    "user_id": job.user_id,
+                    "unused": unused,
+                },
+            )
+        except Exception as exc:
+            # The reservation is intentionally KEPT: the in-memory value still
+            # reflects it, so the next eviction/cancel cycle retries the
+            # release. No blind durable restore here — that was the source of
+            # a possible double release after a lost RPC response (migration
+            # 055 makes the retry idempotent instead).
+            logger.warning(
+                "Failed to release unused generation quota; keeping the "
+                "reservation so a later poll retries",
+                extra={
+                    "job_id": job.job_id,
+                    "user_id": job.user_id,
+                    "unused": unused,
+                    "reserved": reserved,
+                    "error": str(exc),
+                },
+            )
+            return
+        # The RPC either won the claim (reservation zeroed + quota released)
+        # or returned FALSE (another caller already released it). Either way
+        # the durable reservation is gone.
+        job.reserved_generations = 0
+
+    @classmethod
     async def cancel_job(cls, job_id: str, user_id: str, db: Any = None) -> bool:
         """Cancel a running job."""
         if db is not None and job_id not in cls._jobs:
@@ -658,6 +752,10 @@ class BatchJobService:
             job.cancelled = True
             job.cancel_event.set()
             job.status = BatchJobStatus.CANCELLED
+
+        # A cancelled job never generates its remaining items: hand back the
+        # generation quota reserved at admission but not yet consumed (A2-02).
+        await cls.release_unused_generation_quota(job, db=db)
 
         # Broadcast cancellation
         await cls.broadcast_event(job_id, "job_cancelled", {
@@ -1062,7 +1160,19 @@ class BatchJobService:
 
     @classmethod
     async def _cleanup_expired_jobs(cls) -> None:
-        """Remove jobs past active/finished TTLs and free base64 from finished ones."""
+        """Remove terminal jobs past their finished TTL and free payloads.
+
+        Non-terminal jobs are NEVER evicted: a running pipeline's later
+        update_status/set_error calls would no-op on the missing in-memory job
+        and the durable row would stay non-terminal forever, hanging status
+        polls and SSE streams (A2-03). The pipeline owns the terminal
+        transition; stale non-terminal jobs are kept (with a warning) until
+        they reach a terminal state. The one carve-out is a job hydrated from
+        a durable row (``recovered_from_persistence``): no pipeline owns it
+        (recovered jobs are poll-only, never resumed), so evicting the
+        in-memory shell after the active TTL cannot strand a live pipeline —
+        the durable row stays the polling source of truth.
+        """
         async with cls._lock:
             # Coalesced writes may still be pending; flush them before evicting
             # so the durable row is never silently dropped with the job.
@@ -1077,12 +1187,18 @@ class BatchJobService:
         await _store.flush_all(dirty_jobs)
 
         now = utcnow()
-        expired_ids = []
         finished_statuses = {
             BatchJobStatus.COMPLETED,
             BatchJobStatus.CANCELLED,
             BatchJobStatus.FAILED,
         }
+        pending_eviction: List[str] = []
+        # Recovered non-terminal shells carry a restored admission reservation
+        # (migration 053); release the unused remainder before evicting them,
+        # otherwise the daily generation quota stays burned forever (A3-xx).
+        # The release RPC runs outside the lock (snapshot under it, like the
+        # dirty-jobs flush above).
+        quota_release_jobs: List[BatchJob] = []
 
         async with cls._lock:
             for job_id, job in list(cls._jobs.items()):
@@ -1098,17 +1214,73 @@ class BatchJobService:
                     if age > _FINISHED_JOB_TTL:
                         for item in job.detected_items:
                             item.generated_image_base64 = None
-                        expired_ids.append(job_id)
+                        # A recovered terminal job (crashed after the terminal
+                        # persist but before its in-memory quota release) must
+                        # still reconcile its reservation — otherwise it leaks
+                        # the user's daily generation allowance forever.
+                        if job.recovered_from_persistence and (
+                            getattr(job, "reserved_generations", 0) or 0
+                        ) > 0:
+                            quota_release_jobs.append(job)
+                        pending_eviction.append(job_id)
                 elif age > _ACTIVE_JOB_TTL:
-                    expired_ids.append(job_id)
+                    if job.recovered_from_persistence:
+                        # Poll-only shell hydrated from a durable row: no
+                        # pipeline owns it, so eviction is safe (the row
+                        # remains the polling source of truth).
+                        if (getattr(job, "reserved_generations", 0) or 0) > 0:
+                            quota_release_jobs.append(job)
+                        pending_eviction.append(job_id)
+                    else:
+                        logger.warning(
+                            "Batch job exceeded active TTL but is not terminal; "
+                            "keeping it (the pipeline owns the terminal transition)",
+                            extra={
+                                "job_id": job_id,
+                                "status": job.status.value,
+                                "age_minutes": round(age.total_seconds() / 60, 1),
+                            },
+                        )
 
-            for job_id in expired_ids:
-                del cls._jobs[job_id]
+        # A terminal job must not be evicted while its durable row is still
+        # non-terminal: a status poll after eviction would hydrate the stale
+        # row and report a non-terminal job forever (A2-21). When the bulk
+        # flush left a terminal job dirty (the CAS repeatedly lost or the DB
+        # was down), force one last synchronous flush attempt; only evict when
+        # the flush succeeded (dirty cleared, durable row terminal).
+        evictable: List[str] = []
+        for job_id in pending_eviction:
+            job = cls._jobs.get(job_id)
+            if job is None:
+                continue
+            if job.persistence_db is not None and job.persistence_dirty:
+                try:
+                    await _store.flush(job)
+                except Exception as exc:
+                    logger.warning(
+                        "Final flush failed for terminal batch job; keeping it in memory",
+                        extra={"job_id": job_id, "error": str(exc)},
+                    )
+                if job.persistence_dirty:
+                    # Durable row is still non-terminal: keep the job so a
+                    # later flush tick can finish the terminal transition.
+                    continue
+            evictable.append(job_id)
 
-        if expired_ids:
-            logger.info(f"Cleaned up {len(expired_ids)} expired batch jobs")
+        if evictable:
+            async with cls._lock:
+                for job_id in evictable:
+                    cls._jobs.pop(job_id, None)
+
+        # Release the restored reservation of evicted recovered shells
+        # (best-effort; the release helper never raises).
+        for job in quota_release_jobs:
+            await cls.release_unused_generation_quota(job)
+
+        if evictable:
+            logger.info(f"Cleaned up {len(evictable)} expired batch jobs")
             log_memory(
                 "batch_jobs_cleaned",
                 force=True,
-                extra={"cleaned": len(expired_ids), "remaining": len(cls._jobs)},
+                extra={"cleaned": len(evictable), "remaining": len(cls._jobs)},
             )

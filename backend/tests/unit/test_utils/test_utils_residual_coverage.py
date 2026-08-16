@@ -29,6 +29,53 @@ async def test_with_retry_negative_max_retries_hits_defensive_tail():
         await with_retry(_fail, max_retries=-1)
 
 
+@pytest.mark.asyncio
+async def test_with_retry_on_retry_callback_exception_does_not_abort():
+    """A failing on_retry callback must not abort the retry loop or mask the
+    original error (B3-11): the second attempt still runs and succeeds."""
+    calls = {"n": 0, "on_retry": 0}
+
+    async def _flaky():
+        calls["n"] += 1
+        if calls["n"] < 2:
+            raise ConnectionError("transient")
+        return "ok"
+
+    def _on_retry(attempt, error, delay):
+        calls["on_retry"] += 1
+        raise RuntimeError("callback boom")
+
+    result = await with_retry(
+        _flaky,
+        max_retries=2,
+        initial_delay=0.0,
+        on_retry=_on_retry,
+    )
+
+    assert result == "ok"
+    assert calls["n"] == 2
+    assert calls["on_retry"] == 1
+
+
+@pytest.mark.asyncio
+async def test_with_retry_on_retry_callback_exception_still_exhausts_retries():
+    """The original error (not the callback's) is raised when retries run
+    out even if the callback keeps failing."""
+    async def _always_fail():
+        raise ConnectionError("original failure")
+
+    def _on_retry(attempt, error, delay):
+        raise RuntimeError("callback boom")
+
+    with pytest.raises(ConnectionError, match="original failure"):
+        await with_retry(
+            _always_fail,
+            max_retries=1,
+            initial_delay=0.0,
+            on_retry=_on_retry,
+        )
+
+
 # ---------------------------------------------------------------------------
 # app/utils/process_metrics.py
 # ---------------------------------------------------------------------------

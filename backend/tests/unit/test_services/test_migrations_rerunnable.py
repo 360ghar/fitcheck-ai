@@ -15,6 +15,9 @@ IF NOT EXISTS`, so the repo contract (`docs/references/local-setup.md`) is:
 - every `ADD CONSTRAINT` is preceded by `DROP CONSTRAINT IF EXISTS <name>`,
   or sits in a `DO` block guarded by `IF NOT EXISTS (... conname = '<name>' ...)`;
 - every top-level seed `INSERT INTO` carries `ON CONFLICT`;
+- every top-level `UPDATE <table> SET ...` / `DELETE FROM <table>` sits inside
+  a `DO $$` block (guarded, so DML that references columns a later migration
+  drops cannot 42703 a rerun — e.g. 014/015's `date_of_birth` backfill);
 - `CREATE TABLE` / `CREATE INDEX` use `IF NOT EXISTS`;
 - `CREATE FUNCTION` uses `CREATE OR REPLACE`.
 
@@ -116,6 +119,18 @@ def _check_file(path: Path) -> list:
         stmt = top[m.start(): stmt_end if stmt_end != -1 else m.start() + 2000]
         if "ON CONFLICT" not in stmt:
             flag(f'top-level INSERT INTO {m.group(1)} has no ON CONFLICT guard', m.start())
+
+    # Top-level UPDATE <table> SET ... / DELETE FROM <table> must live inside a
+    # DO $$ block so a rerun cannot hit DML that references a column a later
+    # migration drops (42703 — the 014/015 date_of_birth backfill bug class).
+    # "UPDATE ... SET" pins the statement shape: "FOR UPDATE" (row lock) and
+    # "ON CONFLICT DO UPDATE SET" (upsert) cannot match.
+    for m in re.finditer(r"UPDATE\s+[\w.\"]+\s+SET\b", top, re.I | re.S):
+        if not _is_inside(m.start(), spans):
+            flag(f'top-level UPDATE {m.group(0)!r} is not inside a DO $$ block', m.start())
+    for m in re.finditer(r"\bDELETE\s+FROM\b", top, re.I):
+        if not _is_inside(m.start(), spans):
+            flag("top-level DELETE FROM is not inside a DO $$ block", m.start())
 
     # CREATE TABLE / CREATE INDEX / CREATE FUNCTION guards.
     for m in re.finditer(r"CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)", top, re.I):

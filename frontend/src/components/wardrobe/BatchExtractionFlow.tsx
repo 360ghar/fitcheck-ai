@@ -228,6 +228,11 @@ export function BatchExtractionFlow({
   const { toast } = useToast();
   const backgroundedRef = useRef(false);
   const notifiedReadyRef = useRef(false);
+  // F1-07: per-item idempotency keys for createItem. Keys are minted once per
+  // tempId and reused across retries of the SAME save attempt AND across
+  // repeated save attempts, so a committed-but-lost response can never
+  // produce a duplicate item.
+  const saveRequestIdsRef = useRef<Map<string, string>>(new Map());
   // Track step transitions so we only auto-reopen when first entering review,
   // not when the user deliberately closes an already-open review dialog.
   const prevStepRef = useRef(state.step);
@@ -559,6 +564,21 @@ export function BatchExtractionFlow({
       return true;
     });
 
+    // F1-07: mint (or reuse) one idempotency key per tempId BEFORE the retried
+    // lambdas — a key generated inside the lambda would change per retry and
+    // defeat the backend's dedupe.
+    const clientRequestIdByTempId = new Map<string, string>();
+    for (const item of itemsToSave) {
+      const existing = saveRequestIdsRef.current.get(item.tempId);
+      if (existing) {
+        clientRequestIdByTempId.set(item.tempId, existing);
+      } else {
+        const fresh = `save-${item.tempId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        saveRequestIdsRef.current.set(item.tempId, fresh);
+        clientRequestIdByTempId.set(item.tempId, fresh);
+      }
+    }
+
     if (itemsToSave.length === 0) {
       reset();
       onUploadComplete?.([]);
@@ -648,7 +668,13 @@ export function BatchExtractionFlow({
           ],
         };
 
-        const savedItem = await createItem(itemData, skipToast);
+        const savedItem = await createItem(
+          {
+            ...itemData,
+            client_request_id: clientRequestIdByTempId.get(item.tempId),
+          },
+          skipToast
+        );
         return savedItem;
       },
       {

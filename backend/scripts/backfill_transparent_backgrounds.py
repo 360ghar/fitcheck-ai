@@ -142,7 +142,6 @@ Optional:
     BUST_CACHE=0                        # 1 = append ?v=<epoch> to the URLs
     UPDATE_DIMENSIONS=1                 # write real width/height (see below)
     DRY_RUN_SAMPLE=20                   # images to matte during a dry run
-    SUPABASE_STORAGE_BUCKET=fitcheck-images
 
 WIDTH/HEIGHT: NULL on every row ever written, and both `ItemCard` and
 `OutfitCard` already forward them to `<img>`, so today every card renders with
@@ -192,10 +191,11 @@ from app.utils.background_removal import (  # noqa: E402
 )
 
 # Storage is now the Cloudflare R2 bucket (private). This script talks to the
-# same `S3StorageBackend` the app uses, rather than the Supabase Storage API
-# directly. The DB client (supabase-py) is still used for the row listing /
-# metadata patch — the DB stays on Supabase; only file storage moved.
+# same `S3StorageBackend` the app uses. The DB client (supabase-py) is still
+# used for the row listing / metadata patch — the DB stays on Supabase; only
+# file storage moved.
 from app.services.object_storage import get_storage_backend  # noqa: E402
+from app.core.storage_keys import key_from_path  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # audit actions
@@ -263,7 +263,7 @@ TABLE_SPECS: dict[str, TableSpec] = {
 
 SELECT_COLUMNS = "id,image_url,thumbnail_url,storage_path,width,height"
 
-_PUBLIC_URL_MARKER = "/object/public/"
+_PUBLIC_URL_PREFIX = "/storage/v1/object/public/"
 
 # Parent ids per `.in_()` clause. Keeps the querystring well under PostgREST's
 # URL length ceiling for a user with a large wardrobe.
@@ -301,36 +301,51 @@ def _utc_now_iso() -> str:
 # --------------------------------------------------------------------------- #
 # storage key resolution
 # --------------------------------------------------------------------------- #
-def storage_key_from_public_url(url: str | None, bucket: str) -> Optional[str]:
-    """Recover an object key from a Supabase public URL, or None.
+def storage_key_from_public_url(url: str | None) -> Optional[str]:
+    """Recover an object key from a legacy Supabase public URL, or None.
 
-    storage3 builds public URLs deterministically as
-    `{base}/object/public/{bucket}/{key}` (`storage3/_sync/file_api.py`,
-    `get_public_url`), so the split is exact rather than a guess. Any query
-    string is stripped, which also makes this tolerant of a URL that a previous
-    BUST_CACHE=1 run stamped with `?v=<epoch>`.
+    storage3 built public URLs deterministically as
+    `{base}/storage/v1/object/public/{bucket}/{key}`
+    (`storage3/_sync/file_api.py`, `get_public_url`), so the split is exact
+    rather than a guess: the bucket segment is dropped regardless of its name
+    (the pre-R2 bucket was `fitcheck-images`). Any query string is stripped,
+    which also makes this tolerant of a URL that a previous BUST_CACHE=1 run
+    stamped with `?v=<epoch>`.
     """
     if not url:
         return None
-    marker = f"{_PUBLIC_URL_MARKER}{bucket}/"
-    _, _, tail = url.partition(marker)
+    _, _, tail = url.partition(_PUBLIC_URL_PREFIX)
     if not tail:
         return None
-    key = tail.split("?", 1)[0].split("#", 1)[0].strip()
+    parts = [part for part in tail.split("/") if part]
+    if len(parts) < 2:
+        return None
+    key = "/".join(parts[1:]).split("?", 1)[0].split("#", 1)[0].strip()
     return key or None
 
 
-def resolve_storage_key(row: dict[str, Any], bucket: str) -> Optional[str]:
+def resolve_storage_key(row: dict[str, Any]) -> Optional[str]:
     """Object key for an image row: `storage_path`, else derived from the URL.
 
     `storage_path` is nullable - it was retrofitted onto both tables with
     `ADD COLUMN IF NOT EXISTS` - so rows written before that are NULL and have
     to be recovered from `image_url`.
+
+    The resolved key (from either branch) is reduced through
+    ``key_from_path`` so a legacy bare key (``{user}/items/{hex}.png``) or a
+    legacy Supabase URL resolves to its migrated ``users/`` home. Without this
+    the R2 download 404s on a post-``users/``-layout row whose DB value was
+    never rewritten. ``key_from_path`` applies ``migrate_key_to_users_layout``
+    and is a no-op for already-current keys.
     """
     path = (row.get("storage_path") or "").strip()
     if path:
-        return path.lstrip("/") or None
-    return storage_key_from_public_url(row.get("image_url"), bucket)
+        resolved = path.lstrip("/") or None
+    else:
+        resolved = storage_key_from_public_url(row.get("image_url"))
+    if not resolved:
+        return None
+    return key_from_path(resolved) or resolved
 
 
 def with_version(url: str | None, version: int) -> Optional[str]:
@@ -731,7 +746,6 @@ def page_rows(
 # per-image work
 # --------------------------------------------------------------------------- #
 class Config(NamedTuple):
-    bucket: str
     dry_run: bool
     cache_control: int
     bust_cache: bool
@@ -747,7 +761,7 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
     `error` and stays retryable on the next run.
     """
     row_id = str(row.get("id") or "")
-    key = resolve_storage_key(row, cfg.bucket)
+    key = resolve_storage_key(row)
     if not key:
         # Neither storage_path nor a parseable image_url. Nothing to overwrite.
         return make_record(
@@ -864,7 +878,6 @@ def main() -> int:
     audit_path = Path(_env("AUDIT_FILE", "backend/logs/transparent_backfill.jsonl"))
 
     cfg = Config(
-        bucket=_env("SUPABASE_STORAGE_BUCKET", "fitcheck-images"),
         dry_run=dry_run,
         cache_control=_env_int("CACHE_CONTROL", 60),
         bust_cache=_env_bool("BUST_CACHE", False),
@@ -876,7 +889,6 @@ def main() -> int:
     mode = "DRY-RUN" if dry_run else "LIVE"
     print(f"[{mode}] backfill transparent backgrounds")
     print(f"  tables            = {', '.join(table_names)}")
-    print(f"  bucket            = {cfg.bucket}")
     print(f"  page_size         = {page_size}   limit = {limit or 'unbounded'}")
     print(f"  concurrency       = {concurrency}   throttle_ms = {cfg.throttle_ms}")
     print(f"  only_user_id      = {only_user_id or '(all users)'}")

@@ -26,6 +26,7 @@ from app.core.exceptions import (
     CalendarEventNotFoundError,
     DatabaseError,
     NotFoundError,
+    OutfitNotFoundError,
     ValidationError,
 )
 from tests.utils.fake_db import FakeDB
@@ -368,8 +369,11 @@ async def test_get_events_applies_day_boundary_filters():
 
     assert [e["id"] for e in result["data"]["events"]] == ["e-2"]
     filters = [(op, col, value) for table, op, col, value in db.filters if table == "calendar_events"]
+    # A4-02: date-only bounds keep UTC-midnight semantics; a full ISO
+    # instant (Flutter sends local midnight converted to UTC) keeps its
+    # exact time instead of being truncated to the UTC date.
     assert ("gte", "start_time", "2026-01-01T00:00:00") in filters
-    assert ("lte", "start_time", "2026-01-05T23:59:59") in filters
+    assert ("lte", "start_time", "2026-01-05T23:59:59.000") in filters
 
 
 @pytest.mark.asyncio
@@ -487,6 +491,156 @@ async def test_create_event_wraps_errors():
         )
 
     assert exc.value.details["operation"] == "create_calendar_event"
+
+
+@pytest.mark.asyncio
+async def test_create_event_rejects_unparseable_time():
+    """Garbage times used to be written verbatim into TIMESTAMP NOT NULL
+    columns and 500 with 22007; they must 422 instead."""
+    with pytest.raises(ValidationError, match="Invalid start_time"):
+        await calendar_module.create_calendar_event(
+            CreateEventRequest(title="X", start_time="soon", end_time="later"),
+            user_id=USER_ID,
+            db=FakeDB(rows={"calendar_events": []}),
+        )
+    with pytest.raises(ValidationError, match="Invalid end_time"):
+        await calendar_module.create_calendar_event(
+            CreateEventRequest(title="X", start_time="2026-01-10T09:00:00", end_time="later"),
+            user_id=USER_ID,
+            db=FakeDB(rows={"calendar_events": []}),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_event_rejects_inverted_window():
+    with pytest.raises(ValidationError, match="end_time must be on or after start_time"):
+        await calendar_module.create_calendar_event(
+            CreateEventRequest(
+                title="X",
+                start_time="2026-01-10T10:00:00",
+                end_time="2026-01-10T09:00:00",
+            ),
+            user_id=USER_ID,
+            db=FakeDB(rows={"calendar_events": []}),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_event_accepts_z_suffix_and_aware_times():
+    db = FakeDB(rows={"calendar_events": []})
+    result = await calendar_module.create_calendar_event(
+        CreateEventRequest(
+            title="Sync",
+            start_time="2026-01-10T09:00:00.000Z",
+            end_time="2026-01-10T15:00:00+05:30",  # 09:30 UTC — after start
+        ),
+        user_id=USER_ID,
+        db=db,
+    )
+    assert result["message"] == "Created"
+
+
+@pytest.mark.asyncio
+async def test_create_event_all_day_allows_same_day_date_only_times():
+    db = FakeDB(rows={"calendar_events": []})
+    result = await calendar_module.create_calendar_event(
+        CreateEventRequest(
+            title="All day",
+            start_time="2026-01-10",
+            end_time="2026-01-10",
+            is_all_day=True,
+        ),
+        user_id=USER_ID,
+        db=db,
+    )
+    assert result["message"] == "Created"
+
+
+@pytest.mark.asyncio
+async def test_create_event_all_day_rejects_end_date_before_start_date():
+    with pytest.raises(ValidationError, match="all-day events"):
+        await calendar_module.create_calendar_event(
+            CreateEventRequest(
+                title="All day",
+                start_time="2026-01-11",
+                end_time="2026-01-10",
+                is_all_day=True,
+            ),
+            user_id=USER_ID,
+            db=FakeDB(rows={"calendar_events": []}),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_event_all_day_tolerates_same_date_picker_times():
+    # Flutter sends picker-derived times (9:00-10:00) for all-day events;
+    # the date comparison must not reject a same-day all-day event.
+    db = FakeDB(rows={"calendar_events": []})
+    result = await calendar_module.create_calendar_event(
+        CreateEventRequest(
+            title="All day",
+            start_time="2026-01-10T09:00:00",
+            end_time="2026-01-10T10:00:00",
+            is_all_day=True,
+        ),
+        user_id=USER_ID,
+        db=db,
+    )
+    assert result["message"] == "Created"
+
+
+@pytest.mark.asyncio
+async def test_update_event_rejects_inverted_window():
+    db = FakeDB(rows={"calendar_events": [_event("e-1")]})
+    with pytest.raises(ValidationError, match="end_time must be on or after start_time"):
+        await calendar_module.update_calendar_event(
+            "e-1",
+            UpdateEventRequest(
+                start_time="2026-01-03T13:00:00",
+                end_time="2026-01-03T11:00:00",
+            ),
+            user_id=USER_ID,
+            db=db,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_event_rejects_unparseable_time():
+    db = FakeDB(rows={"calendar_events": [_event("e-1")]})
+    with pytest.raises(ValidationError, match="Invalid start_time"):
+        await calendar_module.update_calendar_event(
+            "e-1",
+            UpdateEventRequest(start_time="not-a-time"),
+            user_id=USER_ID,
+            db=db,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_event_validates_partial_times_against_existing_row():
+    # Only end_time provided: the window check must compare it against the
+    # row's existing start_time (13:00 in the fixture's stored window would
+    # invert "2026-01-03T10:00:00" -> "2026-01-03T09:00:00").
+    db = FakeDB(rows={"calendar_events": [_event("e-1")]})
+    with pytest.raises(ValidationError, match="end_time must be on or after start_time"):
+        await calendar_module.update_calendar_event(
+            "e-1",
+            UpdateEventRequest(end_time="2026-01-03T09:00:00"),
+            user_id=USER_ID,
+            db=db,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_event_accepts_valid_partial_time_change():
+    db = FakeDB(rows={"calendar_events": [_event("e-1")]})
+    result = await calendar_module.update_calendar_event(
+        "e-1",
+        UpdateEventRequest(end_time="2026-01-03T11:30:00"),
+        user_id=USER_ID,
+        db=db,
+    )
+    assert result["message"] == "Updated"
 
 
 # ---------------------------------------------------------------------------
@@ -649,7 +803,13 @@ async def test_delete_event_wraps_errors():
 
 @pytest.mark.asyncio
 async def test_assign_outfit_to_event():
-    db = FakeDB(rows={"calendar_events": [_event("e-1")]})
+    # A4-05: the outfit must exist AND belong to the user.
+    db = FakeDB(
+        rows={
+            "calendar_events": [_event("e-1")],
+            "outfits": [{"id": "outfit-9", "user_id": USER_ID, "name": "Casual"}],
+        }
+    )
 
     result = await calendar_module.assign_outfit_to_event(
         "e-1",
@@ -662,6 +822,27 @@ async def test_assign_outfit_to_event():
     assert result["data"]["outfit_id"] == "outfit-9"
     payload = db.ops_on("calendar_events")[0][1]
     assert payload["outfit_id"] == "outfit-9"
+
+
+@pytest.mark.asyncio
+async def test_assign_outfit_rejects_foreign_or_bogus_outfit():
+    # A4-05: a bogus outfit_id used to surface as a Postgres FK violation
+    # → 500; a foreign user's outfit must be rejected the same way.
+    for rows in [
+        {"calendar_events": [_event("e-1")], "outfits": []},
+        {
+            "calendar_events": [_event("e-1")],
+            "outfits": [{"id": "outfit-9", "user_id": "other-user", "name": "Casual"}],
+        },
+    ]:
+        db = FakeDB(rows=rows)
+        with pytest.raises(OutfitNotFoundError):
+            await calendar_module.assign_outfit_to_event(
+                "e-1",
+                AssignOutfitRequest(outfit_id="outfit-9"),
+                user_id=USER_ID,
+                db=db,
+            )
 
 
 @pytest.mark.asyncio
@@ -679,7 +860,14 @@ async def test_assign_outfit_raises_when_event_missing():
 
 @pytest.mark.asyncio
 async def test_assign_outfit_raises_when_the_write_returns_no_row():
-    db = _NoRowDB(results=[SimpleNamespace(data={"id": "e-1"}), SimpleNamespace(data=None)])
+    # Event existence check, outfit ownership check, then the write.
+    db = _NoRowDB(
+        results=[
+            SimpleNamespace(data={"id": "e-1"}),
+            SimpleNamespace(data={"id": "outfit-9", "user_id": USER_ID}),
+            SimpleNamespace(data=None),
+        ]
+    )
 
     with pytest.raises(DatabaseError) as exc:
         await calendar_module.assign_outfit_to_event(

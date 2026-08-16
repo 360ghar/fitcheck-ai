@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **203** operations across **178** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **204** operations across **179** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -47,6 +47,7 @@ Public endpoints (no auth required):
 
 - `GET /`
 - `GET /api/v1/ai/social-import/auth/oauth/callback`
+- `POST /api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page`
 - `POST /api/v1/auth/confirm-reset-password`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
@@ -580,7 +581,7 @@ short-lived presigned download URL.
 
 Metadata only: rows carry their storage keys (``storage_path``); image
 bytes are never included. The archive is written to a single
-deterministic key per user (``{user_id}/export/data.json``, overwritten on
+deterministic key per user (``users/{user_id}/export/data.json``, overwritten on
 each call - the same key account deletion cleans up), and served as a
 short-lived presigned GET URL (the repo's ~15-minute pattern). Every call
 returns a fresh URL, so repeat requests never hand out a stale link.
@@ -745,6 +746,8 @@ Browse items with filtering and pagination.
 | `page` | query | integer | no |  |
 | `page_size` | query | integer | no |  |
 | `search` | query | string (nullable) | no |  |
+| `sort_by` | query | string (nullable) | no | created_at \| name \| worn_count |
+| `sort_order` | query | string (nullable) | no | asc \| desc |
 
 **Responses:**
 
@@ -763,6 +766,7 @@ Create a new wardrobe item.
 |---|---|---|---|
 | `brand` | string (nullable) | no |  |
 | `category` | string | yes |  |
+| `client_request_id` | string (nullable) | no |  |
 | `colors` | array<string> | no |  |
 | `condition` | string | no |  |
 | `images` | array<`ItemImageBase`> | no |  |
@@ -896,7 +900,7 @@ Compute wardrobe item statistics for dashboard/analytics.
 
 ### POST /api/v1/items/upload
 
-Upload one or more images to Supabase Storage for later item creation.
+Upload one or more images to object storage for later item creation.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -1399,7 +1403,10 @@ Get Generation Status
 
 Public outfit view for share links (no auth).
 
-Only returns data when `is_public=true` on the outfit record.
+Only returns data when the outfit has an active shared_outfits row AND
+`is_public=true` on the outfit record. The share row is the source of
+truth: an outfit without one is not shared, even if is_public somehow
+got set (legacy/crash residue).
 
 **Auth:** none (public endpoint)
 
@@ -1612,6 +1619,7 @@ Upload an outfit image and create an outfit_images record.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `body_profile_id` | string (nullable) | no |  |
+| `client_request_id` | string (nullable) | no |  |
 | `file` | file (binary) | yes |  |
 | `generation_id` | string (nullable) | no |  |
 | `is_primary` | boolean | no |  |
@@ -1687,7 +1695,8 @@ Remove Item From Outfit
 
 Enable public sharing for an outfit and return a share URL.
 
-MVP: visibility/expires_at are accepted but only `public` visibility is enforced.
+MVP: only `public` visibility is supported; anything else is rejected
+rather than persisted (the public route could never serve it).
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -1971,6 +1980,10 @@ Return a weather-driven recommendation object for the frontend.
 ### POST /api/v1/recommendations/{recommendation_id}/rate
 
 Store user feedback to improve future recommendations.
+
+The recommendation_id is client-supplied and used as the primary key; a
+second rating for the same id must update the existing row (upsert), not
+fail with a duplicate-key 500.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -2448,6 +2461,48 @@ Create Oauth Connect Url
 |-----------|----|------|----------|-------------|
 | `job_id` | path | string | yes |  |
 | `mobile_redirect_uri` | query | string (nullable) | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page
+
+Complete a multi-account Instagram OAuth by selecting the page.
+
+The account picker (served by the callback when several business pages
+are connected) POSTs the chosen ``provider_page_id`` with a signed
+``selection_token``. The token pins the job + user (short-TTL HMAC, same
+construction as the OAuth state) because the picker's browser context
+cannot present the app's Authorization header. Identity is resolved from
+the token persisted by the callback (``store_selection_pending_session``)
+using the selected page, then the real session is stored and the import
+resumes — no re-run of the OAuth flow (A4-28).
+
+Fails closed: an invalid/expired token, no pending session, a page id
+outside the candidate list, or a resolution error all return a validation
+error asking the user to reconnect.
+
+Single-use ordering (backend #16): an already-consumed token is rejected
+with a cheap non-destructive check BEFORE the outbound Graph API call, and
+the token is only burned immediately before ``accept_auth``. If auth
+persistence fails, the burn is released so the link stays usable.
+
+**Auth:** none (public endpoint)
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `job_id` | path | string | yes |  |
+
+**Request body** (`application/x-www-form-urlencoded`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `provider_page_id` | string | yes |  |
+| `selection_token` | string | yes |  |
 
 **Responses:**
 
@@ -3572,7 +3627,8 @@ Requires authentication.
 
 List all blog posts including unpublished ones.
 
-**Admin only.** Returns all blog posts with pagination.
+**Content readers and admins only** (``content.read``, A8-02).
+Returns all blog posts with pagination.
 Useful for content management.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
@@ -3632,8 +3688,9 @@ Supports filtering by category and searching by title/excerpt.
 
 Create a new blog post.
 
-**Admin only.** Creates a new blog post with the provided data.
-Slug must be unique.
+**Content editors and admins only** (``content.write``, A8-02).
+Creates a new blog post with the provided data. Slug must be unique.
+Audited as ``blog.created``.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -3684,8 +3741,10 @@ Only returns published posts for public access.
 
 Update an existing blog post.
 
-**Admin only.** Updates the blog post identified by slug.
+**Content editors and admins only** (``content.write``, A8-02).
+Updates the blog post identified by slug.
 If slug is being changed, the new slug must be unique.
+Audited as ``blog.updated``.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -3722,8 +3781,9 @@ If slug is being changed, the new slug must be unique.
 
 Delete a blog post.
 
-**Admin only.** Permanently deletes the blog post identified by slug.
-This action cannot be undone.
+**Content editors and admins only** (``content.write``, A8-02).
+Permanently deletes the blog post identified by slug.
+This action cannot be undone. Audited as ``blog.deleted``.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -3997,6 +4057,10 @@ Mark a store transaction refunded (status-only update + audit).
 
 Store-side refunds arrive via webhooks; this endpoint only records the
 refunded state for the admin UI.
+
+A4-14/M2: gated by ``iap.write`` (super_admin/admin/ops) instead of the
+blanket ``require_admin`` — a content_editor has no IAP surface and must
+not be able to flip store transactions to refunded.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -4451,6 +4515,10 @@ Set (or clear with null) a per-user daily AI quota override.
 
 The override lives on ``users.custom_daily_quota`` (migration 037);
 null restores the plan default. Audit: ``quota.override``.
+
+A4-14/M2: gated by ``quotas.write`` (super_admin/admin) instead of the
+blanket ``require_admin`` — a content_editor has no quotas surface and
+must not be able to change another user's daily AI quota.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -4992,6 +5060,13 @@ Model for updating body profile (all fields optional).
 | `skin_tone` | string (nullable) | no |  |
 | `weight_kg` | number (nullable) | no |  |
 
+### `Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `provider_page_id` | string | yes |  |
+| `selection_token` | string | yes |  |
+
 ### `Body_start_batch_extraction_multipart_api_v1_ai_batch_extract_multipart_post`
 
 | Field | Type | Required | Description |
@@ -5038,6 +5113,7 @@ Model for updating body profile (all fields optional).
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `body_profile_id` | string (nullable) | no |  |
+| `client_request_id` | string (nullable) | no |  |
 | `file` | file (binary) | yes |  |
 | `generation_id` | string (nullable) | no |  |
 | `is_primary` | boolean | no |  |
@@ -5243,6 +5319,7 @@ Model for creating a new item.
 |---|---|---|---|
 | `brand` | string (nullable) | no |  |
 | `category` | string | yes |  |
+| `client_request_id` | string (nullable) | no |  |
 | `colors` | array<string> | no |  |
 | `condition` | string | no |  |
 | `images` | array<`ItemImageBase`> | no |  |

@@ -23,6 +23,13 @@ class ReferralService extends GetxService {
     await _persistence.setString(_pendingReferralKey, code);
   }
 
+  /// Forget any pending referral code (logout / account switch): a code
+  /// entered by the previous user must never be redeemed under whichever
+  /// account signs in next on this device (A9-02).
+  Future<void> clearPendingReferral() async {
+    await _persistence.remove(_pendingReferralKey);
+  }
+
   /// Retrieve the pending referral code without removing it. The code is
   /// only cleared once redemption succeeds (see [handleOAuthCallback]), so a
   /// transient redemption failure does not permanently lose it.

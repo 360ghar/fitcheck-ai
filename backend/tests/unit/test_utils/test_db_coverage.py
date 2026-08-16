@@ -10,12 +10,27 @@ import httpx
 import pytest
 
 from app.utils.db import (
+    escape_ilike_literal,
     execute_with_reconnect,
     jsonb_contains,
     run_sync_with_reconnect,
     unwrap_rpc_bool,
     unwrap_rpc_result,
 )
+
+
+def test_escape_ilike_literal_escapes_wildcards_and_backslashes():
+    # The three Postgres LIKE metacharacters are backslash-escaped.
+    assert escape_ilike_literal("50% off_") == "50\\% off\\_"
+    assert escape_ilike_literal("a\\b") == "a\\\\b"
+    # Everything else passes through untouched (after safe_search_term).
+    assert escape_ilike_literal("plain search") == "plain search"
+    assert escape_ilike_literal("") == ""
+    # The escaped string contains no bare wildcards: it can be safely wrapped
+    # in %...% to build a literal contains-pattern.
+    escaped = escape_ilike_literal("100%")
+    assert "%" not in escaped.replace("\\%", "")
+
 
 
 def test_jsonb_contains_wraps_string_value_in_list():

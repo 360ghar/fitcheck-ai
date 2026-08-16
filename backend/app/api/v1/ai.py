@@ -15,7 +15,7 @@ from supabase import Client
 from app.api.v1.images import _is_owned_by_user, materialize_avatar_url
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
-from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError
+from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError, ValidationError
 from app.services.rate_limit import rate_limited_operation
 from app.models.subscription import OperationType
 from app.api.v1.deps import get_active_user_id
@@ -45,7 +45,7 @@ from app.services.item_reference_service import (
     resolve_outfit_source_reference,
 )
 from app.services.storage_service import StorageService
-from app.services.vector_service import get_vector_service
+from app.services.vector_service import VectorStoreError, get_vector_service
 from app.utils.image_processing import downscale_base64_image
 
 logger = get_context_logger(__name__)
@@ -263,6 +263,7 @@ async def generate_outfit(
             # Fetch user avatar and body profile if include_user_face is enabled
             user_avatar_base64 = None
             body_profile = None
+            user_result = None
 
             if request.include_user_face:
                 # Fetch user avatar_url and body_profile_id
@@ -294,21 +295,35 @@ async def generate_outfit(
                             error=str(e),
                         )
 
-                # Fetch body profile if available and requested
-                if request.use_body_profile:
-                    body_profile_id = (
-                        user_result.data.get("body_profile_id") if user_result and user_result.data else None
+            # A3b-08: body-profile conditioning stands on its own flag — the
+            # old nesting under include_user_face silently dropped
+            # use_body_profile=True for callers sending include_user_face=False.
+            if request.use_body_profile:
+                if user_result is None:
+                    user_result = await asyncio.to_thread(
+                        db.table("users")
+                        .select("avatar_url, body_profile_id")
+                        .eq("id", user_id)
+                        .maybe_single()
+                        .execute
                     )
-                    if body_profile_id:
-                        bp_result = await asyncio.to_thread(
-                            db.table("body_profiles")
-                            .select("height_cm, weight_kg, body_shape, skin_tone")
-                            .eq("id", body_profile_id)
-                            .maybe_single()
-                            .execute
-                        )
-                        if bp_result and bp_result.data:
-                            body_profile = bp_result.data
+                body_profile_id = (
+                    user_result.data.get("body_profile_id") if user_result and user_result.data else None
+                )
+                if body_profile_id:
+                    # A3-02: scope by the caller's user_id — the service-role
+                    # client bypasses RLS, so an id-only lookup could ship
+                    # another user's body measurements into the prompt.
+                    bp_result = await asyncio.to_thread(
+                        db.table("body_profiles")
+                        .select("height_cm, weight_kg, body_shape, skin_tone")
+                        .eq("id", body_profile_id)
+                        .eq("user_id", user_id)
+                        .maybe_single()
+                        .execute
+                    )
+                    if bp_result and bp_result.data:
+                        body_profile = bp_result.data
 
             # Get generation agent
             agent = await get_image_generation_agent(user_id=user_id, db=db)
@@ -728,7 +743,7 @@ class SimilaritySearchRequest(BaseModel):
     embedding: Optional[List[float]] = None
     category: Optional[str] = None
     colors: Optional[List[str]] = None
-    top_k: int = 10
+    top_k: int = Field(10, ge=1, le=100)
     min_score: float = 0.5
 
 
@@ -869,7 +884,20 @@ async def search_similar_items(
             )
 
         # Generate embedding from text if not provided
-        if request.embedding:
+        if request.embedding is not None:
+            # A3b-07: a client-supplied vector of the wrong dimension used to
+            # fail inside Pinecone and surface as a 503; reject it up front
+            # with a 422 instead.
+            expected = settings.PINECONE_DIMENSION
+            if len(request.embedding) != expected:
+                raise ValidationError(
+                    "embedding has the wrong dimension",
+                    details={
+                        "field": "embedding",
+                        "expected": expected,
+                        "received": len(request.embedding),
+                    },
+                )
             query_embedding = request.embedding
         else:
             # Rate limit only applies when generating embedding from text
@@ -878,19 +906,27 @@ async def search_similar_items(
 
         # Get vector service and search
         vector_service = get_vector_service()
-        results = await vector_service.find_similar(
-            embedding=query_embedding,
-            user_id=user_id,
-            category=request.category,
-            colors=request.colors,
-            top_k=request.top_k,
-            min_score=request.min_score,
-        )
+        try:
+            results = await vector_service.find_similar(
+                embedding=query_embedding,
+                user_id=user_id,
+                category=request.category,
+                colors=request.colors,
+                top_k=request.top_k,
+                min_score=request.min_score,
+            )
+        except VectorStoreError as e:
+            # Store outage must surface as a clear 503, not an empty
+            # "0 similar items" 200 (see vector_service.find_similar).
+            raise AIServiceError(
+                str(e), retryable=True
+            ) from e
 
-        # Convert results to response format
+        # Convert results to response format. find_similar returns rows shaped
+        # {"item_id": match.id, ...} (vector_service), so the key is item_id.
         items = [
             SimilarItem(
-                item_id=r.get("id", ""),
+                item_id=r.get("item_id", ""),
                 score=r.get("score", 0.0),
                 metadata=r.get("metadata", {}),
             )

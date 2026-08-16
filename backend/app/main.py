@@ -110,8 +110,9 @@ REQUIRED_COLUMNS = (
 )
 
 REQUIRED_COLUMN_ALTERNATIVES = {
-    # Backward compatibility for environments that still use legacy DOB column.
-    ("users", "birth_date"): (("users", "date_of_birth"),),
+    # No alternatives remain: migration 015 dropped the legacy
+    # date_of_birth column, so users.birth_date has no acceptable stand-in
+    # and must not be probed against a column that no longer exists.
 }
 
 

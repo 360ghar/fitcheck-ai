@@ -11,9 +11,20 @@ LIMITATIONS:
   safely parse X-Forwarded-For, since this container is only reachable via
   Railway's edge proxy. If ever deployed somewhere directly internet-facing,
   that flag/trust assumption would need revisiting.
+
+TRUST ASSUMPTION (get_client_ip):
+The container is only reachable through a trusted edge proxy (Railway's edge
+proxy / ngrok), which APPENDS the real client IP to X-Forwarded-For. uvicorn's
+ProxyHeadersMiddleware (--proxy-headers --forwarded-allow-ips='*') resolves
+``request.client.host`` from the FIRST X-Forwarded-For entry, which any direct
+peer could forge (A5-01) — so this module parses the LAST entry itself, the
+hop only the trusted proxy can append. If this service is ever exposed
+directly to the internet WITHOUT a trusted edge proxy, rate limiting keys on
+the connecting peer only and the flags must be revisited.
 """
 
 import asyncio
+import ipaddress
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -58,22 +69,95 @@ AUTH_RATE_LIMIT_WINDOW = timedelta(hours=1)
 
 RATE_LIMIT_WINDOW = timedelta(hours=24)
 
+# Bounds on the in-memory ``_ip_usage`` map (A1-10): the dict grows one key
+# per distinct client IP forever without a sweep. Once the map passes
+# ``_IP_SWEEP_THRESHOLD`` keys, every rate-limited operation prunes keys with
+# no fresh entries; ``_MAX_TRACKED_IPS`` hard-caps the map by evicting the
+# least-recently-active keys. Both are generous: a demo/edge deployment never
+# sees thousands of distinct IPs in one process lifetime.
+_IP_SWEEP_THRESHOLD = 512
+_MAX_TRACKED_IPS = 10_000
+
+
+def _cutoff_for_operation(operation: str, now: datetime) -> datetime:
+    """Rate-limit window boundary for one operation key.
+
+    Auth operations use the strict 1-hour window; demo operations (and
+    anything else) use the 24-hour demo window. Per-operation cutoffs matter
+    for pruning: an auth check prunes with its 1h boundary, but an IP whose
+    only entries are still-valid 24h demo reservations must NOT be evicted by
+    that narrower cutoff — otherwise a caller could reset their daily demo
+    quota just by making an auth request.
+    """
+    if operation.startswith("auth_"):
+        return now - AUTH_RATE_LIMIT_WINDOW
+    return now - RATE_LIMIT_WINDOW
+
+
+def _prune_ip_usage_locked(cutoff: datetime) -> None:
+    """Drop expired/empty tracked IP keys and enforce the key cap.
+
+    Callers hold ``_lock``. Each operation key is pruned against its OWN
+    window boundary (1h for auth_*, 24h otherwise) — never the caller's
+    narrower cutoff — so an auth check can't evict an IP whose only entries
+    are still-valid daily demo reservations (which would silently reset the
+    caller's demo quota). Keys with no timestamp newer than their own
+    boundary are dead weight and are removed. When the map still exceeds
+    ``_MAX_TRACKED_IPS`` after pruning, the least-recently-active keys are
+    evicted so memory stays bounded regardless of traffic shape.
+    """
+    if len(_ip_usage) >= _IP_SWEEP_THRESHOLD:
+        now = utcnow()
+        stale_keys = [
+            ip
+            for ip, operations in _ip_usage.items()
+            if not any(
+                ts > _cutoff_for_operation(operation, now)
+                for operation, entries in operations.items()
+                for ts in entries
+            )
+        ]
+        for ip in stale_keys:
+            del _ip_usage[ip]
+    if len(_ip_usage) > _MAX_TRACKED_IPS:
+        def _last_active(item):
+            newest = None
+            for entries in item[1].values():
+                if entries:
+                    candidate = max(entries)
+                    if newest is None or candidate > newest:
+                        newest = candidate
+            return newest
+
+        for ip, _ in sorted(
+            _ip_usage.items(), key=_last_active, reverse=True
+        )[_MAX_TRACKED_IPS:]:
+            del _ip_usage[ip]
+
 
 def get_client_ip(request: Request) -> str:
     """
     Extract the client IP from the request.
 
-    uvicorn is run with --proxy-headers --forwarded-allow-ips='*' (see
-    Dockerfile) because this container is only ever reachable through
-    Railway's edge proxy, never directly from the internet. That makes
-    uvicorn's own ProxyHeadersMiddleware responsible for resolving
-    request.client.host from X-Forwarded-For - trusting the proxy's own
-    appended hop, not a client-supplied header value. The app itself no
-    longer hand-parses X-Forwarded-For/X-Real-IP: doing so here trusted
-    whatever header any connecting client sent, letting a single caller
-    fake a different IP on every request to bypass the per-IP daily limit
-    entirely.
+    A5-01: uvicorn runs with --proxy-headers --forwarded-allow-ips='*' (see
+    Dockerfile) because this container is only reachable through Railway's
+    edge proxy. uvicorn's ProxyHeadersMiddleware resolves request.client.host
+    from the FIRST X-Forwarded-For entry, which a peer that can reach uvicorn
+    directly can forge (rotating the header defeats every per-IP limit).
+    The edge proxy APPENDS the real client IP, so the LAST entry is the hop
+    only the trusted proxy can place — resolve the client from it here, and
+    only fall back to the resolved peer when the header is absent or
+    malformed.
     """
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if isinstance(forwarded_for, str) and forwarded_for:
+        candidate = forwarded_for.split(",")[-1].strip()
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            candidate = ""
+        if candidate:
+            return candidate
     return request.client.host if request.client else "unknown"
 
 
@@ -94,10 +178,19 @@ async def check_ip_rate_limit(
     limit = DEMO_RATE_LIMITS.get(operation_type, 3)
     cutoff = utcnow() - RATE_LIMIT_WINDOW
 
+    # A5-06: loopback is exempt — local dev (run-dev.sh serves everything
+    # from 127.0.0.1 without --proxy-headers) would otherwise burn the
+    # shared per-IP buckets after a handful of requests. Production peers
+    # are Railway's edge proxy, never loopback, so the exemption cannot be
+    # reached there.
+    if _is_loopback(ip_address):
+        return {"allowed": True, "current_count": 0, "limit": limit, "remaining": limit}
+
     async with _lock:
         # Clean old entries
         current_usage = _ip_usage[ip_address][operation_type]
         current_usage[:] = [ts for ts in current_usage if ts > cutoff]
+        _prune_ip_usage_locked(cutoff)
 
         current_count = len(current_usage)
         allowed = current_count < limit
@@ -112,8 +205,34 @@ async def check_ip_rate_limit(
 
 async def increment_ip_usage(ip_address: str, operation_type: str) -> None:
     """Record a usage for rate limiting."""
+    if _is_loopback(ip_address):
+        return
     async with _lock:
         _ip_usage[ip_address][operation_type].append(utcnow())
+
+
+async def decrement_ip_usage(ip_address: str, operation_type: str) -> None:
+    """Undo the most recent usage for a rate-limited operation.
+
+    Used by ip_rate_limited_operation to refund the slot reserved up front
+    when the operation body fails (A5-11) — a provider 503 or timeout must
+    not burn one of the 3-per-day demo slots. Best-effort: if no usage was
+    recorded (e.g. a previous failure already refunded it), this is a no-op.
+    """
+    if _is_loopback(ip_address):
+        return
+    async with _lock:
+        usage_list = _ip_usage[ip_address][operation_type]
+        if usage_list:
+            usage_list.pop()
+
+
+def _is_loopback(ip_address: str) -> bool:
+    """True for 127.0.0.0/8 and ::1 (local dev peers)."""
+    try:
+        return ipaddress.ip_address(ip_address).is_loopback
+    except ValueError:
+        return False
 
 
 @asynccontextmanager
@@ -165,7 +284,15 @@ async def ip_rate_limited_operation(request: Request, operation_type: str):
     # exceed the daily limit. Matches auth_rate_limited_operation's pattern.
     await increment_ip_usage(ip_address, operation_type)
 
-    yield rate_check
+    try:
+        yield rate_check
+    except Exception:
+        # A5-11: a failed operation must not consume the daily slot. The
+        # reservation was made up front (so concurrent requests share one
+        # counter), so hand it back when the body raises — a provider
+        # 503/timeout used to burn one of the 3-per-day demo slots.
+        await decrement_ip_usage(ip_address, operation_type)
+        raise
 
 
 async def get_ip_usage_stats(ip_address: str) -> dict:
@@ -189,6 +316,7 @@ async def get_ip_usage_stats(ip_address: str) -> dict:
                 "limit": limit,
                 "remaining": max(0, limit - current_count),
             }
+        _prune_ip_usage_locked(cutoff)
 
     return stats
 
@@ -210,11 +338,16 @@ async def check_auth_rate_limit(
     limit = AUTH_RATE_LIMITS.get(operation_type, 10)
     cutoff = utcnow() - AUTH_RATE_LIMIT_WINDOW
 
+    # A5-06: loopback exempt (local dev; see check_ip_rate_limit).
+    if _is_loopback(ip_address):
+        return {"allowed": True, "current_count": 0, "limit": limit, "remaining": limit}
+
     async with _lock:
         # Use auth-specific key to avoid collision with demo limits
         auth_key = f"auth_{operation_type}"
         current_usage = _ip_usage[ip_address][auth_key]
         current_usage[:] = [ts for ts in current_usage if ts > cutoff]
+        _prune_ip_usage_locked(cutoff)
 
         current_count = len(current_usage)
         allowed = current_count < limit
@@ -229,6 +362,8 @@ async def check_auth_rate_limit(
 
 async def increment_auth_usage(ip_address: str, operation_type: str) -> None:
     """Record an auth attempt for rate limiting."""
+    if _is_loopback(ip_address):
+        return
     async with _lock:
         auth_key = f"auth_{operation_type}"
         _ip_usage[ip_address][auth_key].append(utcnow())

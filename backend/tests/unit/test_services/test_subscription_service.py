@@ -11,9 +11,10 @@ from datetime import datetime, timezone, timedelta
 import httpx
 import pytest
 
-from app.core.exceptions import DatabaseError
+from app.core.exceptions import AIServiceError, DatabaseError
 from app.models.subscription import PlanType
 from app.services.subscription_service import SubscriptionService
+from tests.utils.fake_db import FakeDB
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -303,32 +304,6 @@ async def test_cancel_subscription_sets_cancel_at_period_end():
 
 
 @pytest.mark.asyncio
-async def test_apply_referral_credit_upgrades_free_plan_to_trial():
-    db = Mock()
-    _mock_maybe_single(db, _subscription_row(plan_type="free", referral_credit_months=0))
-
-    await SubscriptionService.apply_referral_credit(USER_ID, months=2, db=db)
-
-    update_call = db.table.return_value.update.call_args
-    assert update_call.args[0]["status"] == "trial"
-    assert update_call.args[0]["referral_credit_months"] == 2
-
-
-@pytest.mark.asyncio
-async def test_apply_referral_credit_adds_to_existing_pro_credit_balance():
-    db = Mock()
-    _mock_maybe_single(
-        db, _subscription_row(plan_type="pro_monthly", referral_credit_months=3)
-    )
-
-    await SubscriptionService.apply_referral_credit(USER_ID, months=1, db=db)
-
-    update_call = db.table.return_value.update.call_args
-    assert update_call.args[0]["referral_credit_months"] == 4
-    assert "status" not in update_call.args[0]
-
-
-@pytest.mark.asyncio
 async def test_check_limit_retries_once_on_dead_http2_connection():
     """Regression test: retry classification must use isinstance, not
     string-matching str(e), which silently breaks if an exception's repr
@@ -364,17 +339,19 @@ async def test_check_limit_does_not_retry_on_unrelated_error():
 
 
 @pytest.mark.asyncio
-async def test_increment_usage_retries_once_on_dead_http2_connection():
-    """increment_usage (observed 2026-08-01: ConnectionTerminated on this exact
-    path) rebuilds the Supabase singleton and retries the whole reservation
-    once through the fresh client instead of failing the request."""
+async def test_increment_usage_fails_closed_on_dead_http2_connection():
+    """A1-07: reserve_usage is a non-idempotent conditional increment, so a
+    dead pooled connection (observed 2026-08-01: ConnectionTerminated on this
+    exact path) must NOT auto-retry the RPC — the first attempt may have
+    committed server-side, and a retry would reserve the same admission twice
+    or deny against the now-inflated counter. Fail closed instead: the
+    connection error becomes the friendly retryable 503 and no client rebuild
+    happens."""
     call_count = {"n": 0}
 
     def fake_rpc():
         call_count["n"] += 1
-        if call_count["n"] == 1:
-            raise httpx.RemoteProtocolError("<ConnectionTerminated error_code:1>")
-        return Mock(data=[{"reserve_usage": True}])
+        raise httpx.RemoteProtocolError("<ConnectionTerminated error_code:1>")
 
     fake_db = Mock()
     fake_db.rpc.return_value.execute = fake_rpc
@@ -384,10 +361,12 @@ async def test_increment_usage_retries_once_on_dead_http2_connection():
              return_value=Mock(plan_type=PlanType.FREE),
          ),          patch.object(SubscriptionService, "get_plan_limits", return_value={"monthly_extractions": 10}),          patch("app.db.connection.SupabaseDB") as mock_supabase_db:
         mock_supabase_db.rebuild_service_client.return_value = fake_db
-        await SubscriptionService.increment_usage(USER_ID, "extraction", db=fake_db)
+        with pytest.raises(AIServiceError) as exc_info:
+            await SubscriptionService.increment_usage(USER_ID, "extraction", db=fake_db)
 
-    assert call_count["n"] == 2
-    mock_supabase_db.rebuild_service_client.assert_called_once()
+    assert call_count["n"] == 1
+    assert exc_info.value.retryable is True
+    mock_supabase_db.rebuild_service_client.assert_not_called()
 
 
 # =============================================================================
@@ -918,16 +897,18 @@ async def test_new_store_purchase_releases_identifier_from_previous_owner():
     rows carrying one identifier — and the webhook's identifier lookup then has
     to guess which. The claiming row strips it from every other row so the
     lookup stays single-valued (renewals advance, refunds revoke)."""
-    db = Mock()
-    existing = _subscription_row(plan_type="free")
-    updated = _subscription_row(
-        plan_type="plus_monthly", status="active", billing_provider="apple"
+    db = FakeDB(
+        insert_defaults={"id": "22222222-2222-2222-2222-222222222222"},
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    user_id="old-owner",
+                    plan_type="free",
+                    apple_original_transaction_id="orig-shared",
+                )
+            ]
+        },
     )
-    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
-    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
-    _mock_write_result(db, updated)
-    release_chain = db.table.return_value.update.return_value.eq.return_value.neq.return_value
-    release_chain.execute.return_value = Mock(data=[{"user_id": "old-owner"}])
 
     await SubscriptionService.sync_iap_subscription(
         USER_ID,
@@ -939,41 +920,41 @@ async def test_new_store_purchase_releases_identifier_from_previous_owner():
         apple_original_transaction_id="orig-shared",
     )
 
-    # Cleared on the OTHER rows...
-    cleared = db.table.return_value.update.call_args.args[0]
-    assert cleared["apple_original_transaction_id"] is None
-    assert db.table.return_value.update.return_value.eq.call_args.args == (
-        "apple_original_transaction_id",
-        "orig-shared",
-    )
-    assert db.table.return_value.update.return_value.eq.return_value.neq.call_args.args == (
-        "user_id",
-        USER_ID,
-    )
-    # ...and still written on this one.
-    assert (
-        db.table.return_value.upsert.call_args.args[0]["apple_original_transaction_id"]
-        == "orig-shared"
-    )
+    previous = next(r for r in db.rows["subscriptions"] if r["user_id"] == "old-owner")
+    assert previous["apple_original_transaction_id"] is None
+    claimed = next(r for r in db.rows["subscriptions"] if r["user_id"] == USER_ID)
+    assert claimed["apple_original_transaction_id"] == "orig-shared"
 
 
 @pytest.mark.asyncio
 async def test_release_failure_does_not_block_the_entitlement_write():
     """The user is waiting on the entitlement; a failed cleanup is logged only."""
-    db = Mock()
-    existing = _subscription_row(plan_type="free")
-    updated = _subscription_row(
-        plan_type="pro_monthly",
-        status="active",
-        billing_provider="google",
-        # A paid plan with no period end reads as expired, so give it a live one.
-        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+
+    class _ReleaseBoomDB(FakeDB):
+        def table(self, name):
+            builder = super().table(name)
+            inner = builder.update
+
+            def update(payload):
+                if payload.get("plan_type") == "free" and "billing_product_id" in payload:
+                    raise Exception("permission denied")
+                return inner(payload)
+
+            builder.update = update
+            return builder
+
+    db = _ReleaseBoomDB(
+        insert_defaults={"id": "22222222-2222-2222-2222-222222222222"},
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    user_id="old-owner",
+                    plan_type="free",
+                    google_purchase_token="token-shared",
+                )
+            ]
+        },
     )
-    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
-    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
-    _mock_write_result(db, updated)
-    release_chain = db.table.return_value.update.return_value.eq.return_value.neq.return_value
-    release_chain.execute.side_effect = Exception("permission denied")
 
     result = await SubscriptionService.sync_iap_subscription(
         USER_ID,
@@ -981,12 +962,16 @@ async def test_release_failure_does_not_block_the_entitlement_write():
         provider="google",
         plan_type=PlanType.PRO_MONTHLY,
         status="active",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
         product_id="com.fitcheck.pro.monthly",
         google_purchase_token="token-shared",
     )
 
     assert result.plan_type == PlanType.PRO_MONTHLY
-    db.table.return_value.upsert.assert_called_once()
+    claimed = next(r for r in db.rows["subscriptions"] if r["user_id"] == USER_ID)
+    assert claimed["google_purchase_token"] == "token-shared"
+    previous = next(r for r in db.rows["subscriptions"] if r["user_id"] == "old-owner")
+    assert previous["google_purchase_token"] == "token-shared"
 
 
 @pytest.mark.asyncio

@@ -135,6 +135,7 @@ class SocialScraperService:
     _INSTAGRAM_APP_ID = "936619743392459"
     _MAX_IMPORTED_IMAGE_BYTES = 10 * 1024 * 1024
     _MAX_IMAGE_REDIRECTS = 3
+    _MAX_PROFILE_REDIRECTS = 5
 
     @classmethod
     async def _resolve_remote_image_endpoint(cls, image_url: str) -> Tuple[str, str]:
@@ -1116,6 +1117,43 @@ class SocialScraperService:
         )
 
     @classmethod
+    async def _fetch_profile_with_pinned_transport(
+        cls,
+        url: str,
+        headers: Dict[str, str],
+    ) -> httpx.Response:
+        """GET a profile URL with the same SSRF posture as fetch_photo_as_base64.
+
+        A4-27: the anonymous profile fetch previously followed redirects on a
+        plain transport, so a redirect (or DNS rebinding) could land the
+        request on a private host. Every hop is validated + resolved to a
+        globally routable address BEFORE connecting, and the validated address
+        is pinned in the transport (see _PinnedAddressHTTPTransport), so the
+        final URL is validated at each hop, including the last.
+        """
+        current_url = url
+        for _ in range(cls._MAX_PROFILE_REDIRECTS + 1):
+            hostname, address = await cls._resolve_remote_image_endpoint(current_url)
+            transport = _PinnedAddressHTTPTransport(hostname, address)
+            async with httpx.AsyncClient(
+                timeout=20.0,
+                follow_redirects=False,
+                transport=transport,
+                headers=headers,
+            ) as client:
+                response = await client.get(current_url, headers=headers)
+                if response.status_code in {301, 302, 303, 307, 308}:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise SocialImportError(
+                            "Social profile redirect chain is invalid or too long"
+                        )
+                    current_url = urljoin(current_url, location)
+                    continue
+                return response
+        raise SocialImportError("Social profile redirect chain is invalid or too long")
+
+    @classmethod
     async def discover_profile_photos(
         cls,
         *,
@@ -1144,6 +1182,25 @@ class SocialScraperService:
                     max_allowed = max(1, settings.SOCIAL_IMPORT_MAX_PHOTOS_PER_JOB)
                     meta_result.photos = meta_result.photos[:max_allowed]
                     return meta_result
+
+                # A4-04: a Meta API failure (5xx, transport error, non-JSON
+                # body) must NOT fall through to the anonymous HTML scrape
+                # below — for an OAuth-only profile that silently "completes"
+                # with 0 photos and masks the auth/retry need. Surface it as
+                # a retryable discovery failure instead: the pipeline maps
+                # error_type=fetch_failure to DISCOVERY_RETRY_ATTEMPTS, then
+                # fails the job instead of completing it empty.
+                return DiscoverPhotosResult(
+                    requires_auth=False,
+                    photos=[],
+                    next_cursor=None,
+                    exhausted=True,
+                    metadata={
+                        "source": "meta_api",
+                        "error_type": "fetch_failure",
+                        "message": "Instagram API temporarily unavailable; retry discovery",
+                    },
+                )
 
             # Check if this is scraper (username/password) auth for Instagram
             if platform == SocialPlatform.INSTAGRAM and payload.get("username") and payload.get("password"):
@@ -1221,9 +1278,27 @@ class SocialScraperService:
         headers = cls._build_headers(auth_session)
 
         try:
-            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
-                response = await client.get(normalized_url, headers=headers)
-                html = response.text or ""
+            # A4-27: pinned-address transport with per-hop validation (same
+            # posture as fetch_photo_as_base64), never a plain
+            # follow_redirects client.
+            response = await cls._fetch_profile_with_pinned_transport(
+                normalized_url,
+                headers,
+            )
+            html = response.text or ""
+        except SocialImportError as e:
+            cls._logger.warning(
+                "Social profile discovery rejected the target",
+                extra={"error": str(e), "platform": platform.value, "url": normalized_url},
+                exc_info=True,
+            )
+            return DiscoverPhotosResult(
+                requires_auth=False,
+                photos=[],
+                next_cursor=None,
+                exhausted=False,
+                metadata={"error_type": "fetch_failure", "message": str(e)},
+            )
         except httpx.RequestError as e:
             cls._logger.warning(
                 "Social profile discovery request failed",

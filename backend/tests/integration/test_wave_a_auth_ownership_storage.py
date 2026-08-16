@@ -87,8 +87,8 @@ class _DB:
             "item_images",
             FOREIGN_ITEM_ID,
             OWNED_ITEM_ID,
-            "user-b/item.jpg",
-            "user-a/item.jpg",
+            "user-b/items/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+            "user-a/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
         ),
         (
             outfits_module,
@@ -96,8 +96,8 @@ class _DB:
             "outfit_images",
             FOREIGN_OUTFIT_ID,
             OWNED_OUTFIT_ID,
-            "user-b/outfit.jpg",
-            "user-a/outfit.jpg",
+            "user-b/outfits/dddddddddddddddddddddddddddddddd.jpg",
+            "user-a/outfits/cccccccccccccccccccccccccccccccc.jpg",
         ),
     ],
 )
@@ -157,7 +157,11 @@ async def test_batch_delete_only_cleans_images_owned_by_requesting_user(
     else:
         await route_module.batch_delete_outfits(request=request, user_id=USER_ID, db=db)
 
-    assert deleted_paths == [owned_path]
+    # The owned row's path is a legacy key; resolve_owned_storage_paths
+    # migrates it to its users/ home and includes the derived thumb sibling.
+    migrated = "users/" + owned_path
+    base, _ext = migrated.rsplit(".", 1)
+    assert sorted(deleted_paths) == sorted([migrated, f"{base}_thumb.webp"])
 
 
 # --------------------------------------------------------------------------- #
@@ -177,12 +181,15 @@ async def test_single_item_delete_cleans_source_and_item_images(monkeypatch):
                 {
                     "id": OWNED_ITEM_ID,
                     "user_id": USER_ID,
-                    "source_image_storage_path": "user-a/sources/shot.jpg",
+                    # Canonical source key (users/{user}/sources/{32hex}.{ext}):
+                    # A2-01 re-verifies ownership via _is_owned_by_user before
+                    # deleting, so a non-canonical key is skipped.
+                    "source_image_storage_path": "users/user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
                 },
             ],
             "item_images": [
-                {"id": "img-1", "item_id": OWNED_ITEM_ID, "storage_path": "user-a/items/one.jpg"},
-                {"id": "img-2", "item_id": OWNED_ITEM_ID, "storage_path": "user-a/items/two.png"},
+                {"id": "img-1", "item_id": OWNED_ITEM_ID, "storage_path": "users/user-a/items/11111111111111111111111111111111.jpg"},
+                {"id": "img-2", "item_id": OWNED_ITEM_ID, "storage_path": "users/user-a/items/22222222222222222222222222222222.png"},
             ],
         }
     )
@@ -205,12 +212,12 @@ async def test_single_item_delete_cleans_source_and_item_images(monkeypatch):
 
     # Source photo + both item images, each with its derived _thumb sibling.
     assert sorted(deleted_paths) == [
-        "user-a/items/one.jpg",
-        "user-a/items/one_thumb.webp",
-        "user-a/items/two.png",
-        "user-a/items/two_thumb.webp",
-        "user-a/sources/shot.jpg",
-        "user-a/sources/shot_thumb.webp",
+        "users/user-a/items/11111111111111111111111111111111.jpg",
+        "users/user-a/items/11111111111111111111111111111111_thumb.webp",
+        "users/user-a/items/22222222222222222222222222222222.png",
+        "users/user-a/items/22222222222222222222222222222222_thumb.webp",
+        "users/user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+        "users/user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ]
     # The parent row is deleted.
     assert ("items", "delete", [("eq", "id", OWNED_ITEM_ID), ("eq", "user_id", USER_ID)]) in db.queries
@@ -222,7 +229,7 @@ async def test_single_outfit_delete_cleans_outfit_images(monkeypatch):
         {
             "outfits": [{"id": OWNED_OUTFIT_ID, "user_id": USER_ID}],
             "outfit_images": [
-                {"id": "oi-1", "outfit_id": OWNED_OUTFIT_ID, "storage_path": "user-a/outfits/one.jpg"},
+                {"id": "oi-1", "outfit_id": OWNED_OUTFIT_ID, "storage_path": "users/user-a/outfits/33333333333333333333333333333333.jpg"},
             ],
         }
     )
@@ -240,9 +247,11 @@ async def test_single_outfit_delete_cleans_outfit_images(monkeypatch):
 
     await outfits_module.delete_outfit(outfit_id=OWNED_OUTFIT_ID, user_id=USER_ID, db=db)
 
+    # Legacy fixture keys are mapped to their users/ home by the delete-path
+    # normalizer (migrate_key_to_users_layout).
     assert sorted(deleted_paths) == [
-        "user-a/outfits/one.jpg",
-        "user-a/outfits/one_thumb.webp",
+        "users/user-a/outfits/33333333333333333333333333333333.jpg",
+        "users/user-a/outfits/33333333333333333333333333333333_thumb.webp",
     ]
     assert ("outfits", "delete", [("eq", "id", OWNED_OUTFIT_ID), ("eq", "user_id", USER_ID)]) in db.queries
 
@@ -282,7 +291,7 @@ async def test_upload_avatar_deletes_replaced_avatar_object(monkeypatch):
         file=Mock(content_type="image/jpeg"), user_id=USER_ID, db=db
     )
 
-    assert deleted == ["user-a/avatars/old1234567890abcdef1234567890abcd.jpg"]
+    assert deleted == ["users/user-a/avatars/old1234567890abcdef1234567890abcd.jpg"]
 
 
 @pytest.mark.asyncio
@@ -458,7 +467,7 @@ async def test_delete_current_user_heals_dead_pooled_connection(monkeypatch):
 @pytest.mark.asyncio
 async def test_profile_lookup_failure_does_not_trigger_auto_provisioning():
     db = Mock()
-    db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = RuntimeError(
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = RuntimeError(
         "temporary database timeout"
     )
 
@@ -485,21 +494,22 @@ from app.api.v1.ai import _owned_storage_path, _provider_ready_avatar_url  # noq
 
 
 def test_owned_storage_path_accepts_canonical_keys_only():
-    assert _owned_storage_path("user-a/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
-    assert _owned_storage_path("user-a/tmp/social-import/0123456789abcdef0123456789abcdef.png", "user-a")
-    assert _owned_storage_path("user-a/sources/0123456789abcdef0123456789abcdef.webp", "user-a")
-    # Top-level preview folders (new layout): owner is the SECOND segment.
-    assert _owned_storage_path("tmp/user-a/photoshoot/0123456789abcdef0123456789abcdef.png", "user-a")
-    assert _owned_storage_path("generated/user-a/try-on/0123456789abcdef0123456789abcdef.png", "user-a")
-    assert not _owned_storage_path("tmp/user-b/photoshoot/0123456789abcdef0123456789abcdef.png", "user-a")
+    # Current users/ layout: owner is segment 1.
+    assert _owned_storage_path("users/user-a/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
+    assert _owned_storage_path("users/user-a/tmp/social-import/0123456789abcdef0123456789abcdef.png", "user-a")
+    assert _owned_storage_path("users/user-a/sources/0123456789abcdef0123456789abcdef.webp", "user-a")
+    assert _owned_storage_path("users/user-a/tmp/photoshoot/0123456789abcdef0123456789abcdef.png", "user-a")
+    assert not _owned_storage_path("users/user-b/photoshoot/0123456789abcdef0123456789abcdef.png", "user-a")
     # Foreign user
-    assert not _owned_storage_path("user-b/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
-    # Legacy (pre-migration) layouts are not canonical keys
+    assert not _owned_storage_path("users/user-b/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
+    # Legacy (pre-migration) layouts are not canonical keys anymore
+    assert not _owned_storage_path("user-a/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
+    assert not _owned_storage_path("tmp/user-a/photoshoot/0123456789abcdef0123456789abcdef.png", "user-a")
     assert not _owned_storage_path("user-a/20250314/item_3f2a9c1d.jpg", "user-a")
     assert not _owned_storage_path("user-a/sources/source_0123456789abcdef0123456789abcdef.jpg", "user-a")
     # Traversal / encoded separators
-    assert not _owned_storage_path("user-a/items/../user-b/0123456789abcdef0123456789abcdef.jpg", "user-a")
-    assert not _owned_storage_path("user-a/items/0123456789abcdef0123456789abcdef.jpg ", "user-a")
+    assert not _owned_storage_path("users/user-a/items/../user-b/0123456789abcdef0123456789abcdef.jpg", "user-a")
+    assert not _owned_storage_path("users/user-a/items/0123456789abcdef0123456789abcdef.jpg ", "user-a")
 
 
 @pytest.mark.asyncio
@@ -507,7 +517,7 @@ async def test_provider_ready_avatar_url_refreshes_stored_presigned_url(monkeypa
     """A stored (expiring) presigned URL must be reduced to its bucket key and
     re-materialized so providers never receive a stale URL."""
     user_id = "01234567-89ab-cdef-0123-456789abcdef"
-    key = f"{user_id}/avatars/0123456789abcdef0123456789abcdef.jpg"
+    key = f"users/{user_id}/avatars/0123456789abcdef0123456789abcdef.jpg"
     fresh = f"https://storage.example/{key}?fresh=1"
 
     async def _fake_presign(k):

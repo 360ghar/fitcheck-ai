@@ -59,11 +59,11 @@ EXPOSE 8000
 # Railway's healthcheck is configured in railway.json
 # --proxy-headers --forwarded-allow-ips='*': the container is only ever
 # reachable through Railway's edge proxy (never directly from the internet),
-# so it's the sole possible peer connecting to uvicorn. This makes uvicorn's
-# ProxyHeadersMiddleware resolve request.client.host to the real client IP
-# from X-Forwarded-For itself (taking the trusted-hop value, not a
-# client-supplied one), instead of the app hand-parsing (and trusting) the
-# header from any connecting peer.
+# so the proxy is the sole possible TCP peer. NOTE (A5-01): uvicorn resolves
+# request.client.host from the FIRST X-Forwarded-For entry, which any direct
+# peer could forge; the app's get_client_ip therefore parses the LAST entry
+# itself (the hop only the edge proxy can append) instead of trusting the
+# resolved host.
 # --limit-concurrency: shed load before the single process OOMs under
 # image/AI bursts (in-memory batch/photoshoot jobs hold large base64).
 # --timeout-keep-alive: free idle connections faster on Railway's edge.

@@ -387,11 +387,51 @@ class OutfitRepository {
   /// Get public shared outfit
   Future<SharedOutfitModel> getSharedOutfit(String shareId) async {
     try {
+      // A10b-10: the endpoint is `/outfits/public/{id}` — the old
+      // `/outfits/shared/{id}` path does not exist, so the shared page
+      // always 404'd into "Outfit not found".
       final response = await _apiClient.get(
-        '${ApiConstants.outfits}/shared/$shareId',
+        '${ApiConstants.outfits}/public/$shareId',
       );
       final data = _extractDataMap(response.data);
-      return SharedOutfitModel.fromJson(data);
+      // The API serves `images` (outfit image rows: url + storage_path +
+      // is_primary …) and `items` (item rows with nested item_images), while
+      // the model expects plain URL string lists. Transform here so the
+      // page can keep working with URL lists and still re-mint via the
+      // primary image's durable storage key.
+      final outfitRows = (data['images'] as List? ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      final outfitImages = <String>[
+        for (final row in outfitRows)
+          if (((row['url'] ?? row['image_url']) as String?)?.isNotEmpty ?? false)
+            (row['url'] ?? row['image_url']) as String,
+      ];
+      final primaryStoragePath =
+          (outfitRows.isEmpty ? null : outfitRows.first['storage_path']) as String?;
+      final itemImages = <String>[
+        for (final item in (data['items'] as List? ?? const <dynamic>[]))
+          if (item is Map)
+            for (final img in (item['item_images'] as List? ?? const <dynamic>[]))
+              if (img is Map && ((img['url'] ?? img['image_url'] ?? '') as String).isNotEmpty)
+                (img['url'] ?? img['image_url'] ?? '') as String,
+      ];
+      final sharedJson = <String, dynamic>{
+        ...data,
+        'outfit_images': outfitImages.isEmpty ? null : outfitImages,
+        'item_images': itemImages,
+        'outfit_storage_path': primaryStoragePath,
+      };
+      // A10b-10 review: the API stores the web app's season spelling
+      // ('all-season', matching VALID_SEASONS) and nulls for outfits without
+      // style/season — normalize the season and let the model treat both as
+      // optional so any shared outfit renders instead of "Outfit not found".
+      final season = sharedJson['season'];
+      if (season is String) {
+        sharedJson['season'] = _normalizeSeasonValue(season);
+      }
+      return SharedOutfitModel.fromJson(sharedJson);
     } on DioException catch (e) {
       throw handleDioException(e);
     }

@@ -16,7 +16,17 @@ import pytest
 from app.services.ai_provider_health_service import (
     AIProviderHealthService,
     HealthStatus,
+    _cache_key,
 )
+
+HOST = "https://apihub.agnes-ai.com/v1"
+API_KEY = "k"
+
+
+def _key(url: str = HOST, api_key: str = API_KEY) -> str:
+    """The breaker is keyed per (host, api key) — tests must seed/lookup the
+    same keyed entry the service computes (A3-10)."""
+    return _cache_key(url, api_key)
 
 
 def _make_fake_client(status_code: int = 200, exc: Exception = None):
@@ -49,10 +59,10 @@ def _patch_client(exc: Exception = None, status_code: int = 200):
 async def test_returns_cached_status_within_ttl():
     svc = AIProviderHealthService()
     cached = HealthStatus(available=True, last_check=time.time(), consecutive_failures=0)
-    svc._health_cache["https://apihub.agnes-ai.com/v1"] = cached
+    svc._health_cache[_key()] = cached
 
     with patch("app.services.ai_provider_health_service.httpx.AsyncClient") as client_cls:
-        result = await svc.check_provider_health("https://apihub.agnes-ai.com/v1", "k")
+        result = await svc.check_provider_health(HOST, API_KEY)
 
     assert result is cached
     client_cls.assert_not_called()
@@ -64,10 +74,10 @@ async def test_circuit_breaker_open_returns_cached_failure():
     cached = HealthStatus(
         available=False, last_check=time.time() - 90, consecutive_failures=3, error="Status 503",
     )
-    svc._health_cache["https://apihub.agnes-ai.com/v1"] = cached
+    svc._health_cache[_key()] = cached
 
     with patch("app.services.ai_provider_health_service.httpx.AsyncClient") as client_cls:
-        result = await svc.check_provider_health("https://apihub.agnes-ai.com/v1", "k")
+        result = await svc.check_provider_health(HOST, API_KEY)
 
     assert result is cached
     client_cls.assert_not_called()
@@ -76,12 +86,12 @@ async def test_circuit_breaker_open_returns_cached_failure():
 @pytest.mark.asyncio
 async def test_circuit_breaker_resets_after_timeout_and_rechecks():
     svc = AIProviderHealthService()
-    svc._health_cache["https://apihub.agnes-ai.com/v1"] = HealthStatus(
+    svc._health_cache[_key()] = HealthStatus(
         available=False, last_check=time.time() - 300, consecutive_failures=5, error="Status 503",
     )
 
     with _patch_client(status_code=200):
-        result = await svc.check_provider_health("https://apihub.agnes-ai.com/v1", "k")
+        result = await svc.check_provider_health(HOST, API_KEY)
 
     assert result.available is True
     assert result.consecutive_failures == 0
@@ -93,17 +103,17 @@ async def test_circuit_breaker_resets_after_timeout_and_rechecks():
 async def test_404_is_considered_healthy():
     svc = AIProviderHealthService()
     with _patch_client(status_code=404):
-        result = await svc.check_provider_health("https://apihub.agnes-ai.com/v1", "k")
+        result = await svc.check_provider_health(HOST, API_KEY)
     assert result.available is True
 
 
 # =============================================================================
-# Non-OpenAI hosts skip the Bearer header
+# Non-OpenAI hosts authenticate with x-goog-api-key
 # =============================================================================
 
 
 @pytest.mark.asyncio
-async def test_non_openai_host_check_skips_auth_header():
+async def test_non_openai_host_sends_google_api_key_header():
     svc = AIProviderHealthService()
     captured = {}
     fake_client = AsyncMock()
@@ -124,7 +134,9 @@ async def test_non_openai_host_check_skips_auth_header():
         )
 
     assert result.available is True
-    assert captured["headers"] == {}
+    # A3b-01: Google's API authenticates via x-goog-api-key — a probe with no
+    # auth header always 400s and would latch the breaker for a healthy host.
+    assert captured["headers"] == {"x-goog-api-key": "k"}
 
 
 # =============================================================================
@@ -136,12 +148,12 @@ async def test_non_openai_host_check_skips_auth_header():
 async def test_connect_error_marks_unavailable_and_counts_failures():
     svc = AIProviderHealthService()
     with _patch_client(exc=httpx.ConnectError("refused")):
-        result = await svc.check_provider_health("https://apihub.agnes-ai.com/v1", "k")
+        result = await svc.check_provider_health(HOST, API_KEY)
 
     assert result.available is False
     assert result.consecutive_failures == 1
     assert result.error == "Connection error: ConnectError"
-    assert svc._health_cache["https://apihub.agnes-ai.com/v1"] is result
+    assert svc._health_cache[_key()] is result
 
 
 @pytest.mark.asyncio
@@ -149,12 +161,12 @@ async def test_connect_timeout_increments_prior_failures():
     svc = AIProviderHealthService()
     # Seeded entry must be past the TTL (and under the circuit-breaker
     # threshold) so the check actually re-probes instead of returning cache.
-    svc._health_cache["https://apihub.agnes-ai.com/v1"] = HealthStatus(
+    svc._health_cache[_key()] = HealthStatus(
         available=False, last_check=time.time() - 200, consecutive_failures=2, error="Status 503",
     )
 
     with _patch_client(exc=httpx.ConnectTimeout("timed out")):
-        result = await svc.check_provider_health("https://apihub.agnes-ai.com/v1", "k")
+        result = await svc.check_provider_health(HOST, API_KEY)
 
     assert result.available is False
     assert result.consecutive_failures == 3
@@ -165,7 +177,7 @@ async def test_connect_timeout_increments_prior_failures():
 async def test_generic_exception_marks_unavailable():
     svc = AIProviderHealthService()
     with _patch_client(exc=ValueError("weird failure")):
-        result = await svc.check_provider_health("https://apihub.agnes-ai.com/v1", "k")
+        result = await svc.check_provider_health(HOST, API_KEY)
 
     assert result.available is False
     assert result.error == "weird failure"
@@ -175,12 +187,12 @@ async def test_generic_exception_marks_unavailable():
 @pytest.mark.asyncio
 async def test_generic_exception_increments_prior_failures():
     svc = AIProviderHealthService()
-    svc._health_cache["https://apihub.agnes-ai.com/v1"] = HealthStatus(
+    svc._health_cache[_key()] = HealthStatus(
         available=False, last_check=time.time() - 200, consecutive_failures=1, error="Status 503",
     )
 
     with _patch_client(exc=RuntimeError("boom")):
-        result = await svc.check_provider_health("https://apihub.agnes-ai.com/v1", "k")
+        result = await svc.check_provider_health(HOST, API_KEY)
 
     assert result.available is False
     assert result.consecutive_failures == 2
@@ -202,3 +214,23 @@ def test_clear_cache_specific_and_all():
 
     svc.clear_cache()
     assert svc._health_cache == {}
+
+
+def test_clear_cache_evicts_keyed_entries_for_the_host():
+    """A3b-02: entries live under {host}|{key-hash} too; clearing a host must
+    evict every variant, or the ConnectError recovery is a no-op."""
+    svc = AIProviderHealthService()
+    svc._health_cache[_key(HOST, "key-a")] = HealthStatus(
+        available=False, last_check=time.time(), consecutive_failures=3
+    )
+    svc._health_cache[_key(HOST, "key-b")] = HealthStatus(
+        available=False, last_check=time.time(), consecutive_failures=3
+    )
+    other = _key("https://other.example/v1", "key-a")
+    svc._health_cache[other] = HealthStatus(
+        available=True, last_check=time.time(), consecutive_failures=0
+    )
+
+    svc.clear_cache(HOST)
+
+    assert svc._health_cache == {other: svc._health_cache[other]}

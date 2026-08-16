@@ -28,6 +28,22 @@ def safe_search_term(term: str) -> str:
     return re.sub(r"[(),*.:]", "", term)
 
 
+def escape_ilike_literal(value: str) -> str:
+    """Escape ILIKE pattern metacharacters so user input matches LITERALLY.
+
+    ``safe_search_term`` deliberately keeps ``%`` and ``_`` (they are the
+    point of a contains-search), but a search term that itself contains
+    ``%``/``_`` must not widen into a wildcard: searching for ``50% off``
+    should match the literal string, not every name containing ``50``.
+    Postgres' default LIKE escape character is the backslash, so the three
+    metacharacters are escaped as ``\\``, ``\\%``, ``\\_``. Apply AFTER
+    ``safe_search_term`` and BEFORE wrapping the term in ``%...%``, at every
+    site where a user-controlled value is interpolated into an
+    ``ilike``/``like`` pattern (items search paths).
+    """
+    return re.sub(r"([\\%_])", r"\\\1", value)
+
+
 def jsonb_contains(builder: Any, column: str, values: Any) -> Any:
     """JSONB array containment (``@>``) for list values.
 

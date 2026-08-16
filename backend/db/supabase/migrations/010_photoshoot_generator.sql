@@ -87,11 +87,17 @@ SET search_path = public;
 -- Initialize photoshoot tracking for existing usage records
 -- =============================================================================
 
--- Set default values for existing records
-UPDATE public.subscription_usage
-SET daily_photoshoot_images = 0,
-    last_photoshoot_reset = CURRENT_DATE
-WHERE daily_photoshoot_images IS NULL
-   OR last_photoshoot_reset IS NULL;
+-- Set default values for existing records. The WHERE clause is a natural
+-- no-op on rerun; wrapped in a DO block to keep top-level DML out of the
+-- migration (re-runnability contract: no bare top-level UPDATE).
+DO $$
+BEGIN
+  UPDATE public.subscription_usage
+  SET daily_photoshoot_images = 0,
+      last_photoshoot_reset = CURRENT_DATE
+  WHERE daily_photoshoot_images IS NULL
+     OR last_photoshoot_reset IS NULL;
+END;
+$$;
 
 COMMIT;

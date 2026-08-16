@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-09
+Generated: 2026-08-11
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -61,6 +61,19 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `040_admin_dashboard_top_users.sql`
 - `041_admin_trends.sql`
 - `042_outfit_wear_history.sql`
+- `043_scope_service_policies_and_harden_users.sql`
+- `044_atomic_counters_and_item_images.sql`
+- `045_shared_outfit_atomicity.sql`
+- `046_seed_ai_settings_and_harden_storage_buckets.sql`
+- `047_items_client_request_id.sql`
+- `048_drop_legacy_supabase_buckets.sql`
+- `049_fix_redeem_promo_atomic_null_stripe.sql`
+- `050_fix_referral_credit_no_banking.sql`
+- `051_add_referral_redemptions_credit_months.sql`
+- `052_iap_identifier_ownership.sql`
+- `053_extraction_jobs_reserved_generations.sql`
+- `054_drop_overbroad_blog_manage_policy.sql`
+- `055_release_job_generation_quota.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -124,6 +137,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `035_add_photoshoot_jobs_image_failures.sql` | `photoshoot_jobs` | `image_failures` |
 | `037_admin_roles.sql` | `users` | `is_admin` |
 | `037_admin_roles.sql` | `users` | `role` |
+| `053_extraction_jobs_reserved_generations.sql` | `extraction_jobs` | `reserved_generations` |
 
 These columns are added after their table's CREATE TABLE and are required (NOT NULL DEFAULT), so inserts rely on the default until a value is supplied.
 
@@ -169,6 +183,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `005_waitlist.sql` → `waitlist`
 - `006_add_embedding_columns.sql` → `user_ai_settings`
 - `006_add_embedding_columns.sql` → `user_ai_settings`
+- `007_subscriptions_and_referrals.sql` → `referral_redemptions`
 - `007_subscriptions_and_referrals.sql` → `users`
 - `007_subscriptions_and_referrals.sql` → `subscriptions`
 - `007_subscriptions_and_referrals.sql` → `subscription_usage`
@@ -227,6 +242,11 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `037_admin_roles.sql` → `support_tickets`
 - `038_audit_events.sql` → `audit_events`
 - `042_outfit_wear_history.sql` → `outfit_wear_history`
+- `045_shared_outfit_atomicity.sql` → `shared_outfits`
+- `047_items_client_request_id.sql` → `items`
+- `047_items_client_request_id.sql` → `outfit_images`
+- `051_add_referral_redemptions_credit_months.sql` → `referral_redemptions`
+- `053_extraction_jobs_reserved_generations.sql` → `extraction_jobs`
 
 ## Related
 

@@ -17,6 +17,7 @@ and performs zero database work (which also kills the write-on-GET at
 """
 
 import asyncio
+import math
 from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, List, Optional
 
@@ -157,7 +158,12 @@ async def get_streak(
                 "streak_skips_remaining": 1,
                 "updated_at": now,
             }
-            insert_result = await asyncio.to_thread(db.table("user_streaks").insert(insert).execute)
+            # A4-19: upsert (user_id is the PK) instead of a plain insert, so
+            # a concurrent first GET cannot race into a duplicate-key error -
+            # the row is created exactly once.
+            insert_result = await asyncio.to_thread(
+                db.table("user_streaks").upsert(insert, on_conflict="user_id").execute
+            )
             if insert_result is None or not insert_result.data:
                 raise DatabaseError("Failed to insert streak record")
             row = insert_result.data[0]
@@ -321,7 +327,17 @@ async def get_leaderboard(
             level = _compute_level(points)
             top_percentile = 100
             if total_users > 0:
-                top_percentile = max(1, int((rank / total_users) * 100))
+                # A4-19: percentile semantics. `top_percentile` = the caller's
+                # position-based percentile (rank / total * 100). Large boards
+                # use ceil with a 1% floor so the top rank never rounds down
+                # to 0%; small boards (total <= 100) report the EXACT nearest
+                # whole percent - the old blanket `max(1, int(...))` floor
+                # made every rank on a tiny leaderboard read as "top 1%".
+                exact_percentile = (rank / total_users) * 100
+                if total_users <= 100:
+                    top_percentile = int(round(exact_percentile))
+                else:
+                    top_percentile = max(1, int(math.ceil(exact_percentile)))
             user_rank = {
                 "rank": rank,
                 "total_points": points,

@@ -244,6 +244,43 @@ async def test_start_batch_job_releases_inferred_reservations_on_failure(monkeyp
     assert sorted(released) == sorted([(OperationType.EXTRACTION, 1), (OperationType.GENERATION, 3)])
 
 
+@pytest.mark.asyncio
+async def test_start_batch_job_tracks_reserved_generations(monkeypatch):
+    """The admission reservation is recorded on the job so the pipeline can
+    hand back the unused generation slots at its terminal transition (A2-02)."""
+    job = _make_job()
+    monkeypatch.setattr(BatchJobService, "create_job", AsyncMock(return_value=job))
+    _patch_pipeline(monkeypatch)
+
+    await bp._start_batch_job(
+        user_id=USER_ID,
+        db=Mock(),
+        images_data=[{"image_id": "img-1", "image_base64": "x"}],
+        auto_generate=True,
+        generation_batch_size=1,
+        reservations={"extraction": 1, "generation": 3},
+    )
+    assert job.reserved_generations == 3
+
+
+@pytest.mark.asyncio
+async def test_start_batch_job_tracks_zero_generations_without_auto_generate(monkeypatch):
+    """auto_generate=False reserves no generation quota; nothing to release."""
+    job = _make_job()
+    monkeypatch.setattr(BatchJobService, "create_job", AsyncMock(return_value=job))
+    _patch_pipeline(monkeypatch)
+
+    await bp._start_batch_job(
+        user_id=USER_ID,
+        db=Mock(),
+        images_data=[{"image_id": "img-1", "image_base64": "x"}],
+        auto_generate=False,
+        generation_batch_size=1,
+        reservations={"extraction": 1},
+    )
+    assert job.reserved_generations == 0
+
+
 # ---------------------------------------------------------------------------
 # _check_batch_rate_limits admission matrix
 # ---------------------------------------------------------------------------
@@ -876,6 +913,52 @@ async def test_single_extraction_cache_miss_starts_pipeline(monkeypatch):
     images = BatchJobService.create_job.await_args.kwargs["images"]
     assert images[0]["image_id"].startswith("single_")
     assert images[0]["filename"] == "uploaded_image.jpg"
+
+
+@pytest.mark.asyncio
+async def test_single_extraction_tracks_reserved_generations(monkeypatch):
+    """The single-extract cache-miss path records its generation reservation
+    (3 slots for the one photo) so the pipeline can release the unused
+    remainder at its terminal transition (A2-02)."""
+    from app.api.v1.batch_processing import SingleExtractionRequest
+
+    job = _make_job()
+    monkeypatch.setattr(ExtractionCacheService, "get_cached_result", AsyncMock(return_value=None))
+    monkeypatch.setattr(AISettingsService, "reserve_usage", AsyncMock(return_value=True))
+    monkeypatch.setattr(BatchJobService, "create_job", AsyncMock(return_value=job))
+    _patch_pipeline(monkeypatch)
+
+    await bp.start_single_extraction(
+        SingleExtractionRequest(image=_png_b64(), skip_cache=True), user_id=USER_ID, db=Mock()
+    )
+
+    assert job.reserved_generations == 3
+
+
+@pytest.mark.asyncio
+async def test_single_extraction_cache_hit_tracks_no_reservation(monkeypatch):
+    """The cache-hit path consumes no quota and records no reservation, so no
+    release can happen at its terminal transition."""
+    from app.api.v1.batch_processing import SingleExtractionRequest
+
+    job = _make_job()
+    monkeypatch.setattr(
+        ExtractionCacheService,
+        "get_cached_result",
+        AsyncMock(return_value={"items": [{"temp_id": "t1", "category": "tops"}]}),
+    )
+    monkeypatch.setattr(BatchJobService, "create_job", AsyncMock(return_value=job))
+    monkeypatch.setattr(BatchJobService, "restore_cached_items", AsyncMock())
+    monkeypatch.setattr(BatchJobService, "update_status", AsyncMock())
+    reserve = AsyncMock()
+    monkeypatch.setattr(AISettingsService, "reserve_usage", reserve)
+
+    await bp.start_single_extraction(
+        SingleExtractionRequest(image=_png_b64()), user_id=USER_ID, db=Mock()
+    )
+
+    assert job.reserved_generations == 0
+    reserve.assert_not_awaited()
 
 
 @pytest.mark.asyncio

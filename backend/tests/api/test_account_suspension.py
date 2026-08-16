@@ -21,7 +21,7 @@ async def test_get_current_user_rejects_suspended_profile():
     db = Mock()
     result = Mock()
     result.data = {"id": "user-1", "email": "u@example.com", "is_active": False}
-    db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = result
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = result
 
     token_data = TokenData(sub="user-1")
     token_data.email = "u@example.com"
@@ -39,7 +39,7 @@ async def test_get_current_user_allows_active_profile_without_is_active_key():
     db = Mock()
     result = Mock()
     result.data = {"id": "user-1", "email": "u@example.com"}
-    db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = result
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = result
 
     token_data = TokenData(sub="user-1")
     token_data.email = "u@example.com"

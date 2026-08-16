@@ -288,6 +288,19 @@ class SocialImportJobNotFoundError(NotFoundError):
         super().__init__("Social import job not found", "social_import_job", job_id)
 
 
+class SocialImportPhotoNotFoundError(NotFoundError):
+    """Raised when a photo id is not found inside a social import job.
+
+    Distinct from SocialImportJobNotFoundError so a bad photo id does not
+    surface a misleading "job not found" body (A4-07).
+    """
+
+    error_code = "SOCIAL_IMPORT_PHOTO_NOT_FOUND"
+
+    def __init__(self, photo_id: Optional[str] = None):
+        super().__init__("Social import photo not found", "social_import_photo", photo_id)
+
+
 # ============================================================================
 # SERVICE ERRORS
 # ============================================================================
@@ -453,6 +466,21 @@ class SocialImportEncryptionConfigError(SocialImportError):
         super().__init__(message=message)
 
 
+class SocialImportPhotoStateError(SocialImportError):
+    """Raised when a photo action (approve/reject) is invalid for its state.
+
+    E.g. rejecting an already-approved photo would flip its saved items to
+    DISCARDED and desync the wardrobe; reject is only valid for photos
+    awaiting review.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    error_code = "SOCIAL_IMPORT_PHOTO_STATE"
+
+    def __init__(self, message: str = "Photo is not in a reviewable state"):
+        super().__init__(message=message)
+
+
 class SocialImportOAuthConfigError(SocialImportError):
     """Raised when Meta OAuth is not configured."""
 
@@ -479,8 +507,12 @@ class SocialImportOAuthExchangeError(SocialImportError):
     status_code = status.HTTP_502_BAD_GATEWAY
     error_code = "SOCIAL_IMPORT_OAUTH_EXCHANGE_ERROR"
 
-    def __init__(self, message: str = "Failed to exchange OAuth code with Meta"):
-        super().__init__(message=message)
+    def __init__(
+        self,
+        message: str = "Failed to exchange OAuth code with Meta",
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        super().__init__(message=message, details=details)
 
 
 # ============================================================================

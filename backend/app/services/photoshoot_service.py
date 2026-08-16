@@ -19,6 +19,7 @@ from typing import Any, List, Optional, Tuple
 
 from supabase import Client
 
+from app.agents.image_generation_agent import ImageGenerationAgent
 from app.agents.prompt_fidelity import (
     FACE_VISIBLE_POSE_RULE,
     IDENTITY_SAFE_DIVERSITY_RULE,
@@ -909,10 +910,19 @@ RULES:
                     )
                     return None
 
+                # A3-06: an empty-string or HTML-error-page payload is not a
+                # success — validate before it is counted, broadcast and
+                # billed. Raises AIServiceError (retryable for empty/garbage
+                # bytes, permanent for undecodable), which the per-prompt
+                # handler turns into a failure entry.
+                image_base64 = ImageGenerationAgent._validated_image(
+                    response.images[0], f"photoshoot prompt {prompt.index}"
+                )
+
                 return GeneratedImage(
                     id=f"img_{uuid.uuid4().hex[:8]}",
                     index=prompt.index,
-                    image_base64=response.images[0],
+                    image_base64=image_base64,
                     image_url=None,
                 )
 
@@ -997,6 +1007,12 @@ RULES:
         start_time = time.time()
         session_id = f"ps_{uuid.uuid4().hex[:12]}"
         reservation_made = False
+        # A3-11: UTC day the reservation was made. The release RPC decrements
+        # whatever day's counter is current (migration 024 keys on
+        # CURRENT_DATE), so a post-midnight release would over-credit the NEW
+        # day. Every release below is skipped once the day rolls over
+        # (mirrors recommendations.py's reserved_on guard).
+        reserved_on: Optional[date] = None
         # Tracks how much of the reservation has already been handed back
         # (mid-pipeline partial release), so the error arms below refund only
         # the remainder instead of releasing the full reservation a second
@@ -1016,6 +1032,7 @@ RULES:
                     retry_after=int((usage.resets_at - utcnow()).total_seconds()) if usage.resets_at else 86400,
                 )
             reservation_made = True
+            reserved_on = utc_today()
 
             # Generate prompts
             prompts = await PhotoshootService.generate_prompts(
@@ -1037,14 +1054,28 @@ RULES:
             # failed images must not consume daily quota so the user can
             # retry them.
             unused = num_images - len(images)
-            if unused > 0:
+            if unused > 0 and reserved_on == utc_today():
                 await PhotoshootService.release_daily_usage(user_id, unused, db)
                 released += unused
 
-            # The reservation RPC already reflects today's usage; reuse the
-            # usage object returned by reserve_daily_usage instead of paying a
-            # redundant read after generation.
-            updated_usage = usage
+            # Read the POST-RELEASE usage so the completion payload never
+            # carries the reservation-time numbers. A partial/failed run
+            # releases quota just above; broadcasting the stale pre-release
+            # usage made clients report "limit deducted" after a failed run
+            # (same 2026-08-04 photoshoot 0-images RCA as the streaming
+            # pipeline — parity with run_pipeline's re-read).
+            try:
+                updated_usage = await PhotoshootService.get_usage(user_id, db)
+            except Exception:
+                # A failed usage re-read must not kill the completion: fall
+                # back to the reservation-time snapshot (pre-RCA behavior) and
+                # let the client refetch usage itself.
+                logger.warning(
+                    "Failed to re-read photoshoot usage after release; "
+                    "falling back to reservation-time snapshot",
+                    exc_info=True,
+                )
+                updated_usage = usage
 
             generation_time = time.time() - start_time
 
@@ -1077,7 +1108,7 @@ RULES:
             # runs to completion on the loop.
             if reservation_made:
                 remaining = num_images - released
-                if remaining > 0:
+                if remaining > 0 and reserved_on == utc_today():
                     await _release_reservation_on_cancel(
                         user_id, remaining, db, session_id=session_id
                     )
@@ -1097,7 +1128,7 @@ RULES:
             # that already happened.
             if reservation_made:
                 remaining = num_images - released
-                if remaining > 0:
+                if remaining > 0 and reserved_on == utc_today():
                     await PhotoshootService.release_daily_usage(user_id, remaining, db)
             raise
         except Exception as e:
@@ -1116,7 +1147,7 @@ RULES:
             # refunded twice.
             if reservation_made:
                 remaining = num_images - released
-                if remaining > 0:
+                if remaining > 0 and reserved_on == utc_today():
                     await PhotoshootService.release_daily_usage(user_id, remaining, db)
             raise ServiceError("Photoshoot generation failed", service_name="photoshoot")
 
@@ -1169,6 +1200,9 @@ class PhotoshootStreamingService:
         )
 
         reservation_made = False
+        # A3-11: UTC day the reservation was made — releases below are
+        # skipped after the day rolls over (see sync path note).
+        reserved_on: Optional[date] = None
         # Tracks how much of the reservation has already been handed back
         # (mid-pipeline partial release), so the cancellation/error arms below
         # refund only the remainder instead of releasing the full reservation
@@ -1190,6 +1224,7 @@ class PhotoshootStreamingService:
                         retry_after=86400,
                     )
                 reservation_made = True
+                reserved_on = utc_today()
 
             # Broadcast generation started
             await PhotoshootJobService.broadcast_event(job.job_id, "generation_started", {
@@ -1217,7 +1252,7 @@ class PhotoshootStreamingService:
             # failed and cancelled images must not consume daily quota so the
             # user can retry them.
             unused = job.num_images - job.generated_count
-            if not self.is_demo and unused > 0:
+            if not self.is_demo and unused > 0 and reserved_on == utc_today():
                 await PhotoshootService.release_daily_usage(self.user_id, unused, self.db)
                 released += unused
 
@@ -1307,7 +1342,7 @@ class PhotoshootStreamingService:
             # tearing down, and the reservation is the part the user feels.
             if reservation_made:
                 remaining = job.num_images - released
-                if remaining > 0:
+                if remaining > 0 and reserved_on == utc_today():
                     await _release_reservation_on_cancel(
                         self.user_id, remaining, self.db, job_id=job.job_id
                     )
@@ -1332,7 +1367,7 @@ class PhotoshootStreamingService:
             # over-credit the user).
             if reservation_made:
                 remaining = job.num_images - released
-                if remaining > 0:
+                if remaining > 0 and reserved_on == utc_today():
                     await PhotoshootService.release_daily_usage(self.user_id, remaining, self.db)
             await PhotoshootJobService.set_error(job.job_id, str(e))
             await PhotoshootJobService.broadcast_event(job.job_id, "job_failed", {
@@ -1483,7 +1518,14 @@ class PhotoshootStreamingService:
                 raise ServiceError(f"No image generated for prompt {prompt.index}")
 
             image_id = f"img_{uuid.uuid4().hex[:8]}"
-            image_base64 = response.images[0]
+            # A3-06: same empty/garbage-payload validation as the sync path —
+            # a provider HTML error page must not be broadcast as a success,
+            # counted in generated_count or billed against daily quota. The
+            # AIServiceError raised here lands in the except arm below, which
+            # marks the image failed and broadcasts image_failed.
+            image_base64 = ImageGenerationAgent._validated_image(
+                response.images[0], f"photoshoot prompt {prompt.index}"
+            )
 
             # Persist a durable URL when the job has a persistence DB so a
             # recovered job can still return generated images (base64 payloads

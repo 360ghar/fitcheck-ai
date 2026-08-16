@@ -150,7 +150,12 @@ async def parallel_map(
     async def process_item(item: ItemT, index: int) -> T:
         result = await fn(item)
         if on_item_complete:
-            on_item_complete(index, result)
+            # Mirror parallel_with_retry: a failing callback must not raise
+            # through gather and discard the sibling results.
+            try:
+                on_item_complete(index, result)
+            except Exception as callback_error:  # noqa: BLE001 - callback is user code
+                logger.error(f"on_item_complete callback failed: {callback_error}")
         return result
 
     tasks = [process_item(item, i) for i, item in enumerate(items)]

@@ -75,12 +75,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
           widget.imageFile ??
           (additionalImages.isNotEmpty ? additionalImages.first : null);
 
-      if (imageToUse == null) {
-        ErrorHandler.showValidation('Please add a photo of the item', title: 'Image Required');
-        isSaving.value = false;
-        return;
-      }
-
+      // A10-02: "Add item details without a photo" is the advertised flow and
+      // the backend supports photo-less items (createItem posts no image) —
+      // the old hard block ("Image Required") contradicted the card copy.
       final request = CreateItemRequest(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim().isEmpty
@@ -113,10 +110,12 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
             : UseCases.normalizeList(selectedUseCases),
       );
 
-      final created = await ItemRepository().createItemWithImage(
-        image: imageToUse,
-        request: request,
-      );
+      final created = imageToUse == null
+          ? await ItemRepository().createItem(request)
+          : await ItemRepository().createItemWithImage(
+              image: imageToUse,
+              request: request,
+            );
 
       // Upload additional images if any (excluding the one already used)
       if (additionalImages.length > 1) {

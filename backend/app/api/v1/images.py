@@ -20,7 +20,6 @@ whether an object exists.
 """
 
 import asyncio
-import re
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -29,81 +28,17 @@ from app.core.config import settings
 from app.core.exceptions import NotFoundError
 from app.core.logging_config import get_context_logger
 from app.api.v1.deps import get_active_user_id
-from app.core.storage_keys import USER_ID_SEGMENT_RE
+from app.core.storage_keys import is_owned_storage_key, key_from_path, parse_key
 from app.services.storage_service import StorageService
 
 logger = get_context_logger(__name__)
 
 router = APIRouter()
 
-
-_KEY_RE = re.compile(
-    r"^(?P<user>[^/\\]+)/(?:items|outfits|avatars|sources|feedback)/"
-    r"(?P<name>[0-9a-f]{32})\.(?:jpg|jpeg|png|webp|gif|avif)$"
-)
-# Four-segment preview keys under the shared top-level folders,
-# ``{tmp|generated}/{user}/{sub}/{name}.{ext}``, where the ``sub`` segment is:
-#   tmp/{source}          - upload_temp_generated_image (social-import, batch,
-#                           photoshoot review flows)
-#   generated/{image_type}- image_generation_agent.save_generated_image, i.e. a
-#                           try-on or outfit render the user asked to keep
-# The top-level folder means every temp preview in the bucket shares ONE common
-# prefix, so scripts/cleanup_temp_assets.py can list or clear the whole folder
-# in a single pass.
-# `generated` was originally missing here, which made those objects
-# unrefreshable: their presigned URL is returned once (ai.py) and dies after
-# OBJECT_STORAGE_PRESIGN_TTL, no DB row references them so no read path
-# re-materializes them, and /images/presigned 404'd on the key. The image simply
-# vanished an hour after it was generated.
-_NESTED_KEY_RE = re.compile(
-    r"^(?:tmp|generated)/(?P<user>[^/\\]+?)/(?P<sub>[^/\\]+?)/"
-    r"(?P<name>[0-9a-f]{32})\.(?:jpg|jpeg|png|webp|gif|avif)$"
-)
-# Pre-migration preview keys, ``{user}/{tmp|generated}/{sub}/{name}.{ext}``.
-# Accepted ONLY until scripts/migrate_temp_keys_layout.py has rewritten every
-# old key (delete this regex and the Worker's copy once the migration is
-# verified complete). Keeping it during the migration window means a stored
-# storage_path minted before the deploy keeps serving instead of 404ing.
-_LEGACY_NESTED_KEY_RE = re.compile(
-    r"^(?P<user>[^/\\]+?)/(?:tmp|generated)/(?P<sub>[^/\\]+?)/"
-    r"(?P<name>[0-9a-f]{32})\.(?:jpg|jpeg|png|webp|gif|avif)$"
-)
-# Thumbnail siblings, ``{stem}_thumb.webp``. Always .webp whatever the parent's
-# format — see ``StorageService.THUMB_EXTENSION``. Servable so this endpoint and
-# the Worker (infra/images-worker, which allows the same set) agree on what a
-# valid key is.
-_THUMB_KEY_RE = re.compile(
-    r"^(?P<user>[^/\\]+)/(?:items|outfits|avatars|sources|feedback)/"
-    r"(?P<name>[0-9a-f]{32})_thumb\.webp$"
-)
-
-
-def _is_owned_by_user(storage_path: str, user_id: str) -> bool:
-    """Validate a canonical StorageService key and its user ownership.
-
-    Do not use a prefix-only check: encoded separators are decoded by the
-    framework before this function, and ``../`` or a user-id prefix trick must
-    never reach the presigner. Valid keys are the canonical two-segment form,
-    its ``_thumb.webp`` sibling, or the four-segment preview form under the
-    top-level ``tmp/`` and ``generated/`` folders (plus the pre-migration
-    ``{user}/{tmp|generated}/{type}`` form, see _LEGACY_NESTED_KEY_RE).
-
-    ``infra/images-worker/worker.js`` enforces this same allowlist at the edge;
-    the two must stay in step.
-    """
-    if not isinstance(storage_path, str) or not isinstance(user_id, str):
-        return False
-    if storage_path != storage_path.strip() or any(c in storage_path for c in "\\\r\n"):
-        return False
-    if ".." in storage_path:
-        return False
-    match = (
-        _KEY_RE.fullmatch(storage_path)
-        or _THUMB_KEY_RE.fullmatch(storage_path)
-        or _NESTED_KEY_RE.fullmatch(storage_path)
-        or _LEGACY_NESTED_KEY_RE.fullmatch(storage_path)
-    )
-    return bool(match and match.group("user") == user_id)
+# The key grammar + ownership check live in app.core.storage_keys (routes AND
+# services guard against the same rule — see the module docstring there). The
+# alias keeps every historical call site (and its tests) reading the same name.
+_is_owned_by_user = is_owned_storage_key
 
 
 async def serve_url(storage_path: str) -> str:
@@ -153,8 +88,16 @@ async def materialize_avatar_url(
     """
     if not avatar_url or not isinstance(avatar_url, str):
         return None
-    key = StorageService.key_from_path(avatar_url)
-    if not key or not USER_ID_SEGMENT_RE.fullmatch(key.split("/", 1)[0]):
+    key = key_from_path(avatar_url)
+    if not key:
+        return None
+    # Only our own avatar objects are re-minted. The current users/ layout
+    # nests keys under `users/{user_id}/avatars/...` (first segment "users",
+    # not a UUID), so the ownership guard is the structural parser, not the
+    # old UUID-first-segment heuristic — that heuristic would silently stop
+    # re-minting every avatar after the layout migration.
+    ref = parse_key(key)
+    if ref is None or ref.layout not in ("canonical", "thumb") or ref.category != "avatars":
         return None
     if presigned:
         return await StorageService.get_public_url(key)
@@ -219,7 +162,7 @@ async def materialize_image_urls(
             # embedded in the stored URL (a presigned ``/<bucket>/<key>``
             # URL). Derive it and re-mint so the tile renders again — but
             # only when the derived key is owned by the requesting user.
-            derived = StorageService.key_from_path(img.get("image_url"))
+            derived = key_from_path(img.get("image_url"))
             if derived and _is_owned_by_user(derived, owner_user_id):
                 storage_path = derived
         if not storage_path:
@@ -286,7 +229,7 @@ async def _remint_parent_source_url(
     never re-mint — source photos are not rendered there and re-minting
     without an ownership context is unsafe.
     """
-    path = parent.get("source_image_storage_path") or StorageService.key_from_path(
+    path = parent.get("source_image_storage_path") or key_from_path(
         parent.get("source_image_url")
     )
     if not path or not _is_owned_by_user(path, owner_user_id):

@@ -85,7 +85,10 @@ function rowName(row: AdminQuotaUsageItem): string {
 export function QuotasPage() {
   const { t } = useTranslation('quotas')
   const { can } = usePermission()
-  const canOverride = can('quotas.read')
+  // A8-02: the backend write endpoint requires `quotas.write` (admin-only,
+  // backend/app/core/permissions.py ADMIN_ONLY_WRITE_PERMISSIONS); gating on
+  // `quotas.read` rendered the button for support, whose every save 403'd.
+  const canOverride = can('quotas.write')
   const [selectedRow, setSelectedRow] = useState<AdminQuotaUsageItem | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const overrideMutation = useSetQuotaOverride()

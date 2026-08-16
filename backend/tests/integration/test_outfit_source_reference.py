@@ -527,11 +527,17 @@ async def test_endpoint_default_never_resolves_source_photo(monkeypatch):
     source resolver is never called and the agent gets source_photo_base64
     None."""
     from app.api.v1 import ai as ai_module
+    from tests.utils.fake_db import FakeDB
 
     captured = _patch_route_deps(monkeypatch, source_result=None)
 
     response = await ai_module.generate_outfit(
-        request=_make_request(use_source_photo=False), user_id="user-1", db=object()
+        request=_make_request(use_source_photo=False),
+        user_id="user-1",
+        # A3b-08: use_body_profile defaults True, so the route reads the
+        # users row even with include_user_face=False — the fake must answer
+        # that read (no row: body-profile conditioning is skipped).
+        db=FakeDB(rows={"users": []}),
     )
 
     assert captured["source_refs_calls"] == 0
@@ -546,11 +552,14 @@ async def test_endpoint_flag_on_resolves_and_forwards_source_photo(monkeypatch):
     """Upload flow (use_source_photo=True): the source resolver runs and its
     base64 reaches the agent."""
     from app.api.v1 import ai as ai_module
+    from tests.utils.fake_db import FakeDB
 
     captured = _patch_route_deps(monkeypatch, source_result="c291cmNlLXBob3Rv")
 
     response = await ai_module.generate_outfit(
-        request=_make_request(use_source_photo=True), user_id="user-1", db=object()
+        request=_make_request(use_source_photo=True),
+        user_id="user-1",
+        db=FakeDB(rows={"users": []}),
     )
 
     assert captured["source_refs_calls"] == 1
@@ -564,11 +573,14 @@ async def test_endpoint_flag_on_with_unresolvable_photo_still_generates(monkeypa
     """A failed source-photo resolution (None) must not fail the request -
     the agent is still called, with no source reference."""
     from app.api.v1 import ai as ai_module
+    from tests.utils.fake_db import FakeDB
 
     captured = _patch_route_deps(monkeypatch, source_result=None)
 
     response = await ai_module.generate_outfit(
-        request=_make_request(use_source_photo=True), user_id="user-1", db=object()
+        request=_make_request(use_source_photo=True),
+        user_id="user-1",
+        db=FakeDB(rows={"users": []}),
     )
 
     assert captured["source_refs_calls"] == 1

@@ -63,6 +63,7 @@ CREATE POLICY "Users can create tickets"
 DROP POLICY IF EXISTS "Service role can manage tickets" ON public.support_tickets;
 CREATE POLICY "Service role can manage tickets"
     ON public.support_tickets FOR ALL
+    TO service_role
     USING (TRUE)
     WITH CHECK (TRUE);
 

@@ -9,6 +9,7 @@ import { useDropzone } from 'react-dropzone';
 import { Download, Upload, RefreshCw, Loader2, Sparkles, X, Camera } from 'lucide-react';
 import { useAuthStore, useCurrentUser, useUserAvatar } from '@/stores/authStore';
 import { useJobUiStore } from '@/stores/jobUiStore';
+import { invalidateUsageCache } from '@/stores/subscriptionStore';
 import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
 import { getPresignedUrl } from '@/api/images';
 import { uploadAvatar } from '@/api/users';
@@ -281,6 +282,10 @@ export default function TryOnPage() {
       };
 
       const tryOnResult = await generateTryOn(clothingFileRef.current, options);
+      // The generation request reserves/consumes daily AI quota even when it
+      // fails, so invalidate regardless of outcome; the next usage read must
+      // hit the server, not the 60s-fresh cache (F1-10).
+      invalidateUsageCache();
       if (tryOnRunSeq !== runId) return;
       if (!resolveResultSrc(tryOnResult)) {
         // Provider returned no image payload at all: an empty result must be

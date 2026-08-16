@@ -138,6 +138,22 @@ interface ClosetState {
   totalItems: number;
   hasMore: boolean;
 
+  /**
+   * Session/request generation guard (F1-11): bumped on every `reset()`. Async
+   * reads capture the generation BEFORE their await and drop the response when
+   * it no longer matches — so a request begun before logout cannot repopulate
+   * the reset store with the previous account's wardrobe after another account
+   * signs in.
+   */
+  resetEpoch: number;
+  /**
+   * Monotonic token bumped at the start of every page-1 `fetchItems`. Captured
+   * before the await and re-checked after, so an out-of-order list response
+   * (a slow earlier query resolving AFTER a newer one) is dropped instead of
+   * overwriting the grid with stale results. Distinct from `resetEpoch`, which
+   * only guards logout/reset, not same-session query races.
+   */
+  listFetchEpoch: number;
   // Actions
   fetchItems: (refresh?: boolean) => Promise<void>;
   /** Append the next page (Load-more). No-op while a fetch is in flight or the list is exhausted. */
@@ -152,6 +168,8 @@ interface ClosetState {
   setSortBy: (sortBy: ClosetState['sortBy']) => void;
   setSortOrder: (order: 'asc' | 'desc') => void;
   setGridView: (isGrid: boolean) => void;
+  /** Reset all wardrobe state to the signed-out initial values (logout / user switch). */
+  reset: () => void;
   toggleItemFavorite: (itemId: string) => Promise<{ id: string; is_favorite: boolean }>;
   /** Rejects on failure so an inline edit form can stay open for a retry. */
   updateItem: (itemId: string, data: Partial<ItemFormData>) => Promise<Item>;
@@ -238,17 +256,11 @@ function applyFiltersAndSort(
     filtered = filtered.filter((item) => item.is_favorite);
   }
 
-  // Apply search filter
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
-    filtered = filtered.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchLower) ||
-        item.brand?.toLowerCase().includes(searchLower) ||
-        item.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
-        item.notes?.toLowerCase().includes(searchLower)
-    );
-  }
+  // Search is a server-side filter (buildItemApiFilters). Do not re-apply
+  // it here: the client used to match name/brand/tags/notes, which is a
+  // SUPERSET of the API (name+brand only), so the extra pass was a no-op
+  // on a server-filtered page. Keep search off this function so the two
+  // predicates cannot drift.
 
   // Apply sorting
   filtered.sort((a, b) => {
@@ -305,13 +317,47 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   pageSize: 24,
   totalItems: 0,
   hasMore: true,
+  resetEpoch: 0,
+  listFetchEpoch: 0,
+
+  // Reset every piece of in-memory wardrobe state (F1-04): logout / forced
+  // logout / user switch must never leave the previous account's items,
+  // filters, or pagination visible to the next sign-in. The wire cache is
+  // dropped separately (resetWardrobeRequestCache).
+  reset: () => {
+    set({
+      items: [],
+      filteredItems: [],
+      selectedItem: null,
+      selectedItems: new Set(),
+      filters: initialFilters,
+      isLoading: false,
+      hasLoaded: false,
+      isLoadingMore: false,
+      isDetailLoading: false,
+      isGridView: true,
+      viewMode: 'all',
+      sortBy: 'date_added',
+      sortOrder: 'desc',
+      error: null,
+      page: 1,
+      pageSize: 24,
+      totalItems: 0,
+      hasMore: true,
+      // Invalidate every in-flight read started before this reset (F1-11).
+      resetEpoch: get().resetEpoch + 1,
+    });
+  },
 
   // Fetch items
   fetchItems: async (refresh = false) => {
     const state = get();
-    const { filters, page, pageSize, items } = state;
+    const { filters, pageSize } = state;
 
-    const newPage = refresh ? 1 : page;
+    // Entry points always fetch page 1 — the store's `page` only advances via
+    // `fetchMore`, so a later plain `fetchItems()` must replace, not append.
+    // `refresh` stays the cache-busting flag (see `cacheRequest` below).
+    const newPage = 1;
     const apiFilters = buildItemApiFilters(filters, newPage, pageSize);
     const cacheKey = closetListKey(filters, newPage, pageSize);
 
@@ -320,6 +366,15 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     // fresh result instead of re-requesting on every mount. `refresh` (or
     // invalidate after a mutation) forces one new request.
     set({ isLoading: true, error: null });
+    // F1-11: capture the session generation BEFORE the await; a logout/reset
+    // that lands while this request is in flight bumps it, and the response
+    // must not repopulate the reset store with the prior account's items.
+    const generation = get().resetEpoch;
+    // Bump the list-fetch token so a slow earlier query (e.g. a debounced
+    // search whose response arrives AFTER a newer query's) cannot overwrite
+    // the grid with stale results — its captured token no longer matches.
+    const listGeneration = get().listFetchEpoch + 1;
+    set({ listFetchEpoch: listGeneration });
 
     try {
       const response = await cacheRequest(
@@ -327,9 +382,13 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         () => itemsApi.getItems(apiFilters),
         { force: refresh, label: 'wardrobe.fetchItems' }
       );
+      if (get().resetEpoch !== generation) return;
+      if (get().listFetchEpoch !== listGeneration) return;
 
       set({
-        items: refresh || newPage === 1 ? response.items : [...items, ...response.items],
+        // Unconditional replacement: a non-paging caller must never append
+        // page N onto a list that already contains it (duplicate tiles).
+        items: response.items,
         totalItems: response.total,
         hasMore: response.has_next,
         page: newPage,
@@ -348,6 +407,12 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         ),
       });
     } catch (error) {
+      // F1-11: a pre-logout rejection must not clear a new session's
+      // isLoading or write its error into the reset store.
+      if (get().resetEpoch !== generation) return;
+      // A stale failed request from a superseded query must not clear the
+      // newer query's isLoading or leave its error banner visible.
+      if (get().listFetchEpoch !== listGeneration) return;
       const apiError = getApiError(error);
       set({ error: apiError, isLoading: false });
     }
@@ -360,16 +425,44 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
 
     set({ isLoadingMore: true, error: null });
+    // F1-11: capture the session generation before the await (see fetchItems).
+    const generation = get().resetEpoch;
+    // Capture the list-fetch generation too: a page-2 request started before a
+    // filter change/refetch must not append its old-query rows after the new
+    // page-1 result (see fetchItems). Unlike fetchItems, fetchMore does NOT
+    // bump the token — only page-1 queries start a new query epoch.
+    const listGeneration = get().listFetchEpoch;
     try {
       const nextPage = state.page + 1;
-      // Search is a client-side narrowing over the loaded universe, so paging
-      // must NOT send it to the server — otherwise page 2 offsets against a
-      // search-filtered set and the list can strand mid-search.
+      // F1-02: search is sent on EVERY page (fetchItems sends it on page 1),
+      // so offsets, totals and hasMore stay consistent. Stripping it here
+      // made page 2+ an unfiltered continuation of a search-filtered page 1,
+      // stranding matching items past the unfiltered offset.
       const apiFilters = buildItemApiFilters(state.filters, nextPage, state.pageSize);
-      delete apiFilters.search;
       const response = await itemsApi.getItems(apiFilters);
-      const newItems = [...state.items, ...response.items];
+      // F1-11: drop the response if a logout/reset happened while in flight.
+      if (get().resetEpoch !== generation) return;
+      // Drop a stale page-2 response from a superseded query. Clear the
+      // load-more spinner explicitly: the newer page-1 fetchItems never
+      // touches isLoadingMore, so leaving it set would strand the spinner.
+      if (get().listFetchEpoch !== listGeneration) {
+        set({ isLoadingMore: false });
+        return;
+      }
+      // F1-01: re-read AFTER the await — a concurrent fetchItems(true) that
+      // resolved meanwhile must not be clobbered by the pre-await snapshot
+      // (last-writer-wins race).
       const currentState = get();
+      // F1-09: dedupe by id so offset pagination cannot double tiles when a
+      // concurrent mutation (favorite toggle, worn bump) reordered the list
+      // between page fetches.
+      const seen = new Set(currentState.items.map((i) => i.id));
+      const fresh = response.items.filter((item) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+      const newItems = [...currentState.items, ...fresh];
       set({
         items: newItems,
         totalItems: response.total,
@@ -384,6 +477,11 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         ),
       });
     } catch (error) {
+      if (get().resetEpoch !== generation) return;
+      if (get().listFetchEpoch !== listGeneration) {
+        set({ isLoadingMore: false });
+        return;
+      }
       const apiError = getApiError(error);
       set({ error: apiError, isLoadingMore: false });
     }
@@ -393,6 +491,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   fetchItemById: async (id: string) => {
     // isDetailLoading, not isLoading: see the field comment.
     set({ isDetailLoading: true, error: null });
+    // F1-11: capture the session generation before the await (see fetchItems).
+    const generation = get().resetEpoch;
     try {
       // Coalesce concurrent detail fetches for the same item (deep link
       // effect + detail pane) onto one request.
@@ -401,6 +501,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         () => itemsApi.getItem(id),
         { label: 'wardrobe.fetchItemById' }
       );
+      if (get().resetEpoch !== generation) return;
       const state = get();
       const index = state.items.findIndex((i) => i.id === id);
       const newItems = [...state.items];
@@ -417,6 +518,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
     } catch {
+      // F1-11: a pre-logout rejection must not mutate the reset store.
+      if (get().resetEpoch !== generation) return;
       // Deliberately NOT stored in the global `error`: a bad deep link (404)
       // would otherwise hoist a full-page "Try again" banner over the whole
       // closet. The detail pane shows its own "This item isn't available" line.
@@ -506,6 +609,10 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       const newItems = state.items.map((item) =>
         item.id === itemId ? { ...item, is_favorite: updated.is_favorite } : item
       );
+      const leftFavoriteFilter =
+        state.filters.isFavorite &&
+        !updated.is_favorite &&
+        state.filteredItems.some((item) => item.id === itemId)
       set({
         items: newItems,
         selectedItem:
@@ -513,6 +620,9 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
             ? { ...state.selectedItem, is_favorite: updated.is_favorite }
             : state.selectedItem,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
+        totalItems: leftFavoriteFilter
+          ? Math.max(0, state.totalItems - 1)
+          : state.totalItems,
       });
       return updated;
     } catch (error) {
@@ -577,7 +687,13 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
           state.selectedItem?.id === itemId ? patch(state.selectedItem) : state.selectedItem,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
-      if (!updated) throw new Error('Item is no longer in the closet');
+      // F1-12: the server call succeeded; the item may simply not be in the
+      // loaded pages (e.g. worn from a deep link). Throwing here made
+      // callers surface a failure toast for a successful action — return a
+      // best-effort item instead.
+      if (!updated) {
+        return { ...result, id: itemId, usage_last_worn: wornAt } as Item;
+      }
       return updated;
     } catch (error) {
       const apiError = getApiError(error);
@@ -602,6 +718,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
         selectedItem: state.selectedItem?.id === itemId ? null : state.selectedItem,
         selectedItems: newSelected,
+        totalItems: Math.max(0, state.totalItems - 1),
       });
     } catch (error) {
       const apiError = getApiError(error);
@@ -631,6 +748,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
           state.selectedItem && selectedItems.has(state.selectedItem.id)
             ? null
             : state.selectedItem,
+        totalItems: Math.max(0, state.totalItems - selectedItems.size),
       });
     } catch (error) {
       const apiError = getApiError(error);

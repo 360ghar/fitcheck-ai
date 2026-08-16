@@ -1,11 +1,14 @@
 """Tests for AI request model validation (image source migration)."""
 
 import pytest
+from pydantic import ValidationError
 
 from app.models.ai import (
     ExtractItemsRequest,
     ExtractSingleItemRequest,
+    GenerateOutfitRequest,
     GenerateProductImageRequest,
+    OutfitItemInput,
     TryOnRequest,
 )
 
@@ -69,3 +72,61 @@ def test_product_image_accepts_null_reference_with_storage_path():
          "reference_storage_path": _VALID_STORAGE_PATH}
     )
     assert request.reference_image is None
+
+
+# ---------------------------------------------------------------------------
+# Prompt/description caps (B3-17) — unbounded strings amplified provider
+# prompts; 2000 chars for prompts, 500 for descriptions/labels.
+# ---------------------------------------------------------------------------
+
+
+def _outfit_request_with(**overrides):
+    payload = {"items": [{"name": "Shirt"}]}
+    payload.update(overrides)
+    return payload
+
+
+def test_outfit_item_input_name_capped_at_500():
+    with pytest.raises(ValidationError, match="at most 500 characters"):
+        OutfitItemInput(name="n" * 501)
+
+
+def test_generate_outfit_request_custom_prompt_capped_at_2000():
+    with pytest.raises(ValidationError, match="at most 2000 characters"):
+        GenerateOutfitRequest.model_validate(
+            _outfit_request_with(custom_prompt="p" * 2001)
+        )
+
+
+def test_generate_outfit_request_style_and_background_capped_at_500():
+    with pytest.raises(ValidationError, match="at most 500 characters"):
+        GenerateOutfitRequest.model_validate(_outfit_request_with(style="s" * 501))
+    with pytest.raises(ValidationError, match="at most 500 characters"):
+        GenerateOutfitRequest.model_validate(_outfit_request_with(background="b" * 501))
+    # Defaults still construct.
+    assert GenerateOutfitRequest.model_validate(_outfit_request_with()).style == "casual"
+
+
+def test_generate_product_image_request_item_description_capped_at_500():
+    with pytest.raises(ValidationError, match="at most 500 characters"):
+        GenerateProductImageRequest(
+            item_description="d" * 501,
+            category="tops",
+        )
+
+
+def test_try_on_request_description_and_style_capped():
+    with pytest.raises(ValidationError, match="at most 500 characters"):
+        TryOnRequest.model_validate(
+            {
+                "clothing_storage_path": _VALID_STORAGE_PATH,
+                "clothing_description": "c" * 501,
+            }
+        )
+    with pytest.raises(ValidationError, match="at most 500 characters"):
+        TryOnRequest.model_validate(
+            {
+                "clothing_storage_path": _VALID_STORAGE_PATH,
+                "style": "s" * 501,
+            }
+        )

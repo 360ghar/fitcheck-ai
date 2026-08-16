@@ -7,7 +7,9 @@ bound (the historical OOM driver on single-worker deploys). These tests assert
 that:
   * a failure marks the job terminal (so the TTL sweep can reclaim it),
   * finished jobs are evicted after the finished TTL,
-  * stale active jobs are evicted after the active TTL,
+  * stale ACTIVE batch jobs are kept past the active TTL (the pipeline owns
+    the terminal transition; eviction would strand the durable row
+    non-terminal forever - A2-03),
   * finished jobs free their base64 payloads/history promptly on sweep.
 """
 
@@ -76,7 +78,10 @@ async def test_batch_failed_job_evicted_after_finished_ttl():
 
 
 @pytest.mark.asyncio
-async def test_batch_stale_active_job_evicted_after_active_ttl():
+async def test_batch_stale_active_job_kept_after_active_ttl():
+    """A non-terminal job past the active TTL is NEVER evicted: the pipeline
+    still owns its terminal transition, and evicting it mid-run would strand
+    the durable row non-terminal forever (A2-03)."""
     job = await BatchJobService.create_job(
         user_id="u1",
         images=[{"image_id": "img1", "image_base64": "abc"}],
@@ -86,7 +91,7 @@ async def test_batch_stale_active_job_evicted_after_active_ttl():
 
     await BatchJobService._cleanup_expired_jobs()
 
-    assert job.job_id not in BatchJobService._jobs
+    assert job.job_id in BatchJobService._jobs
 
 
 @pytest.mark.asyncio

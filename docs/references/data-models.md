@@ -10,7 +10,7 @@ This document summarizes FitCheck AI’s data model across:
 
 ## Source Of Truth
 
-- **Database DDL:** `backend/db/supabase/migrations/` (all files, 001..042 — see "Database Migrations" below)
+- **Database DDL:** `backend/db/supabase/migrations/` (all files, 001..047 — see "Database Migrations" below)
 - **Backend Pydantic models:** `backend/app/models/user.py`, `backend/app/models/item.py`, `backend/app/models/outfit.py`, `backend/app/models/recommendation.py`
 - **Frontend types:** `frontend/src/types/index.ts`
 
@@ -47,11 +47,19 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
   - `material`, `pattern`, `style`
   - `materials`, `seasonal_tags`, `occasion_tags` (JSONB arrays)
   - Usage analytics: `usage_times_worn`, `usage_last_worn`, `cost_per_wear`, `is_favorite`
-- **`public.item_images`**: persisted columns are `storage_path` (the bucket
-  key) plus `is_primary`/ordering flags. `image_url` and `thumbnail_url` are
-  **response-only** fields: the API materializes them as short-lived presigned
-  URLs at read time. They are never stored in the database — new code must not
-  write URL strings into `item_images` (S3-compatible/R2 object storage)
+  - Idempotency: `client_request_id` (migration 047; per-user unique when
+    set) — the create endpoint replays the original row for a repeated key
+    so transport retries cannot insert duplicate items. Soft-deleted rows
+    (`is_deleted = TRUE`) do NOT occupy the key, so a fresh create after a
+    delete with the same key takes the insert path.
+- **`public.item_images`**: the durable reference is `storage_path` (the
+  bucket key, S3-compatible/R2 object storage) plus `is_primary`/ordering
+  flags. `image_url` and `thumbnail_url` may carry a live presigned-URL
+  snapshot at write time (items.py/outfits.py write them on every create) but
+  are always re-minted at read time — they expire (`OBJECT_STORAGE_PRESIGN_TTL`)
+  and must never be treated as durable. New code should treat the URL columns
+  as a convenience snapshot, not the source of truth; read paths always
+  re-materialize from `storage_path`.
 - **`public.item_colors`**: Optional detailed color analysis (manual or derived)
 
 ### Outfit Management
@@ -63,6 +71,12 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
 - **`public.outfit_images`**: Supports manual + AI images:
   - `generation_type` (`ai`/`manual`), `generation_metadata`, `is_primary`
   - `storage_path` for object-storage objects (S3-compatible/R2)
+  - Idempotency: `client_request_id` (migration 047; unique per outfit when
+    set) — the upload endpoint replays the original row for a repeated key
+    so transport retries cannot insert duplicate images. Image insert and
+    primary reassignment are one server-side transaction
+    (`add_outfit_image_and_set_primary`, migration 045), so a crash can never
+    leave two primary images.
 - **`public.outfit_collections`** and **`public.outfit_collection_items`**: Group outfits into collections
 - **`public.outfit_wear_history`**: Per-outfit wear log (`worn_at`, `created_at`) written by `POST /outfits/{id}/wear` and read by `GET /outfits/{id}/wear-history` (migration 042)
 
@@ -135,13 +149,35 @@ Astrology recommendations are represented by `AstrologyRecommendation` and relat
 ## Database Migrations
 
 Migrations live in `backend/db/supabase/migrations/` and must **all** be
-applied in numeric order — 43 files numbered `001`..`042` (note that `002`
+applied in numeric order — 54 numbered files `001`..`054` (note that `002`
 has two files: `002_astrology_profile.sql` and
 `002_user_profile_trigger.sql`):
 
 - `001_full_schema.sql` — core tables (users, wardrobe, outfits, planning,
   gamification)
-- every later migration (`002`..`042`) builds on top; none may be skipped
+- every later migration (`002`..`054`) builds on top; none may be skipped
+
+Recent migrations:
+
+- `044` — atomic counters and item-image primaries; `remove_outfit_item`
+  enforces the >=1-member rule under the row lock
+- `045` — shared-outfit atomicity; `add_outfit_image_and_set_primary`
+  (image insert + primary reassignment in one transaction)
+- `047` — `client_request_id` idempotency keys (items, outfit_images; the
+  items index excludes soft-deleted rows)
+- `048` — drop legacy Supabase Storage buckets (R2-only object storage)
+- `049` — `redeem_promo_atomic` clears stale Stripe subscription/customer
+  links on promo redemption (forward fix for shipped 031/032)
+- `050` — `apply_referral_credit_atomic` no longer banks months on trial
+  grants (forward fix for shipped 033)
+- `051` — `referral_redemptions.credit_months` column (forward fix for
+  shipped 007)
+- `052` — partial unique indexes on IAP store identifiers (atomic
+  ownership claim for concurrent registrations)
+- `053` — `extraction_jobs.reserved_generations` (durable batch quota
+  reservation)
+- `054` — drops the over-broad `FOR ALL TO authenticated` blog_posts
+  manage policy (content.write is app-enforced only)
 
 Apply the whole sequence in the Supabase SQL Editor (or a migration runner)
 before running the app; a partial schema is treated as broken. The backend
@@ -163,7 +199,7 @@ not expanded here — see the DDL for details:
 | `referral_codes`, `referral_redemptions` | 007 |
 | `promo_codes`, `promo_redemptions` | 031 (+ 032 fix) |
 | `support_tickets` | 009 (+ 034, 037) |
-| `extraction_jobs` | 016 (+ 023, 029) |
+| `extraction_jobs` | 016 (+ 023, 029, 053) |
 | `photoshoot_jobs` | 023 (+ 035) |
 | `stripe_webhook_events` | 022 (+ 027) |
 | `apple_iap_events`, `google_rtdn_events` | 030 |

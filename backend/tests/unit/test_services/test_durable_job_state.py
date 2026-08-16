@@ -131,7 +131,6 @@ def test_storage_reference_paths_are_reduced_to_known_bucket_keys(monkeypatch):
     therefore reduced to a path that is looked up in the bucket, never fetched
     from the attacker's host.
     """
-    monkeypatch.setattr(storage_module.settings, "SUPABASE_STORAGE_BUCKET", "items")
     monkeypatch.setattr(storage_module.settings, "OBJECT_STORAGE_BUCKET", "bucket")
 
     # Supabase public object URL -> key (bucket segment dropped).
@@ -139,24 +138,25 @@ def test_storage_reference_paths_are_reduced_to_known_bucket_keys(monkeypatch):
         "https://project.supabase.co/storage/v1/object/public/items/user-a/item.webp"
     ) == "user-a/item.webp"
 
-    # A bare key passes through unchanged.
-    assert StorageService.key_from_path("user-a/items/item.webp") == "user-a/items/item.webp"
+    # A bare legacy key maps to its users/ home; a users/ key passes through.
+    assert StorageService.key_from_path("user-a/items/item.webp") == "users/user-a/items/item.webp"
+    assert StorageService.key_from_path("users/user-a/items/item.webp") == "users/user-a/items/item.webp"
 
-    # Top-level preview URLs (configured bucket) reduce to the key, second
-    # segment = owning user. Real user ids are UUID-shaped.
+    # Top-level preview URLs (configured bucket) reduce to the key and map to
+    # their users/ home. Real user ids are UUID-shaped.
     uid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     assert StorageService.key_from_path(
         f"https://endpoint.example/bucket/tmp/{uid}/social-import/abc123.webp"
-    ) == f"tmp/{uid}/social-import/abc123.webp"
+    ) == f"users/{uid}/tmp/social-import/abc123.webp"
     assert StorageService.key_from_path(
         f"https://endpoint.example/bucket/generated/{uid}/try-on/abc123.png"
-    ) == f"generated/{uid}/try-on/abc123.png"
+    ) == f"users/{uid}/generated/try-on/abc123.png"
 
     # A preview URL from a bucket that is no longer configured: the non-UUID
     # leading segment (bucket name) is dropped when parts[2] is UUID-shaped.
     assert StorageService.key_from_path(
         f"https://old-bucket.example/old-bucket/tmp/{uid}/photoshoot/abc123.jpg"
-    ) == f"tmp/{uid}/photoshoot/abc123.jpg"
+    ) == f"users/{uid}/tmp/photoshoot/abc123.jpg"
 
     # Any host is fine — the function only extracts a key, never fetches the URL.
     assert StorageService.key_from_path(

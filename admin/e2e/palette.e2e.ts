@@ -13,7 +13,8 @@ test.describe('command palette', () => {
     await authedPage(page)
     await page.goto('/dashboard')
 
-    await page.keyboard.press('Meta+K')
+    // Control+K: Linux CI has no Meta. The palette listens for ctrl OR meta.
+    await page.keyboard.press('Control+K')
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('combobox')).toBeFocused()
@@ -32,7 +33,7 @@ test.describe('command palette', () => {
     await authedPage(page)
     await page.goto('/dashboard')
 
-    await page.keyboard.press('Meta+K')
+    await page.keyboard.press('Control+K')
     const dialog = page.getByRole('dialog')
     await dialog.getByRole('combobox').fill('zz')
     await expect(dialog.getByText('No results found for “zz”.')).toBeVisible()

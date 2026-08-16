@@ -18,9 +18,11 @@ import pytest
 
 import httpx
 
+from pydantic import ValidationError
+
 from app.api.v1.outfits import get_outfit, list_outfits
 from app.models.common import DataResponse
-from app.models.outfit import OutfitCreate, OutfitListResponse, OutfitResponse
+from app.models.outfit import OutfitCreate, OutfitImage, OutfitListResponse, OutfitResponse
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
 OUTFIT_ID = "22222222-2222-2222-2222-222222222222"
@@ -75,7 +77,8 @@ def _make_db_for_get_outfit(outfit_row, item_rows=None):
         if name == "outfits":
             m.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = outfit_row
         elif name == "items":
-            m.select.return_value.in_.return_value.execute.return_value.data = item_rows or []
+            # A3b-03: the batch fetch is user-scoped now (in_ then eq).
+            m.select.return_value.in_.return_value.eq.return_value.execute.return_value.data = item_rows or []
         return m
 
     db.table.side_effect = table_side_effect
@@ -215,3 +218,33 @@ def test_outfit_response_allows_empty_item_ids():
         updated_at="2026-01-01T00:00:00",
     )
     assert response.item_ids == []
+
+
+# ---------------------------------------------------------------------------
+# OutfitImage.pose: VARCHAR(20) column, legacy '' rows (B3-01/B3-04)
+# ---------------------------------------------------------------------------
+
+
+def test_outfit_image_pose_accepts_empty_legacy_value():
+    """Legacy rows may carry '' in the VARCHAR(20) pose column; the response
+    model must serialize them (dropped min_length) or the whole outfit list
+    would 500."""
+    row = _outfit_image_row()
+    row["pose"] = ""
+    image = OutfitImage.model_validate(row)
+    assert image.pose == ""
+
+
+def test_outfit_image_pose_accepts_20_char_value():
+    row = _outfit_image_row()
+    row["pose"] = "p" * 20
+    assert OutfitImage.model_validate(row).pose == "p" * 20
+
+
+def test_outfit_image_pose_rejects_overlong_value():
+    """21+ chars cannot fit VARCHAR(20); reject at the model boundary so the
+    DB never 500s with 22001."""
+    row = _outfit_image_row()
+    row["pose"] = "p" * 21
+    with pytest.raises(ValidationError, match="at most 20 characters"):
+        OutfitImage.model_validate(row)

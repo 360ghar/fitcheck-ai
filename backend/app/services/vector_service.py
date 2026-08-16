@@ -8,9 +8,24 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from pinecone import Pinecone, ServerlessSpec
 from app.core.config import settings
+from app.core.exceptions import ServiceError
 from app.core.logging_config import get_context_logger
 
 logger = get_context_logger(__name__)
+
+
+class VectorStoreError(ServiceError):
+    """Raised when the vector store (Pinecone) is unreachable or fails.
+
+    Maps to HTTP 503 via the ServiceError base, so callers can distinguish
+    "store is down" from "no similar items found" (previously every failure
+    was swallowed into an empty result list and returned as a 200).
+    """
+
+    error_code = "VECTOR_STORE_ERROR"
+
+    def __init__(self, message: str = "Vector store unavailable"):
+        super().__init__(message, "vector_store")
 
 
 class VectorService:
@@ -197,6 +212,12 @@ class VectorService:
 
         Returns:
             List of similar items with scores
+
+        Raises:
+            VectorStoreError: If the store query fails. Previously every
+                exception was swallowed into an empty result list, which made
+                a store outage look identical to "no matches" (200 with 0
+                results) and silently truncated recommendation quality.
         """
         try:
             # Build filter
@@ -211,35 +232,54 @@ class VectorService:
             if colors:
                 filter_dict["colors"] = {"$in": colors}
 
-            # Query Pinecone (sync SDK → run in thread to avoid blocking the event loop)
-            results = await asyncio.to_thread(
-                self.index.query,
-                vector=embedding,
-                filter=filter_dict if filter_dict else None,
-                top_k=top_k * 2,  # Get more to filter and score
-                include_metadata=True
-            )
+            # A3-09: the 2x fetch window is filtered by exclusions/min_score
+            # before truncation, so a wardrobe with many exclusions silently
+            # under-filled. Widen the window in steps when the filtered
+            # result is still short AND the raw query was itself truncated
+            # (raw matches == window) — once the store returns fewer matches
+            # than requested there is nothing more to find. A larger window
+            # is a superset of a smaller one in the store's ordering, so the
+            # last iteration's filtered list is authoritative.
+            window = top_k * 2
+            items: List[Dict[str, Any]] = []
+            while True:
+                results = await asyncio.to_thread(
+                    self.index.query,
+                    vector=embedding,
+                    filter=filter_dict if filter_dict else None,
+                    top_k=window,
+                    include_metadata=True,
+                )
 
-            # Process results
-            items = []
-            for match in results.matches:
-                if exclude_item_ids and match.id in exclude_item_ids:
-                    continue
+                items = []
+                for match in results.matches:
+                    if exclude_item_ids and match.id in exclude_item_ids:
+                        continue
 
-                if match.score < min_score:
-                    continue
+                    if match.score < min_score:
+                        continue
 
-                items.append({
-                    "item_id": match.id,
-                    "score": match.score,
-                    "metadata": match.metadata or {}
-                })
+                    items.append({
+                        "item_id": match.id,
+                        "score": match.score,
+                        "metadata": match.metadata or {}
+                    })
+
+                if (
+                    len(items) >= top_k
+                    or len(results.matches) < window
+                    or window >= 10000
+                ):
+                    break
+                window *= 2
 
             return items[:top_k]
 
+        except VectorStoreError:
+            raise
         except Exception as e:
             logger.error(f"Error finding similar items: {str(e)}")
-            return []
+            raise VectorStoreError(f"Failed to query vector store: {str(e)}") from e
 
     async def find_matching_items(
         self,

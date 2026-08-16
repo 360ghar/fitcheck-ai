@@ -102,7 +102,10 @@ class SnapshotCard extends StatelessWidget {
                     final shellController = Get.find<MainShellController>();
                     final wardrobeController = Get.find<WardrobeController>();
                     shellController.changeTab(2); // wardrobe tab
-                    wardrobeController.sortType.value = 'favorite';
+                    // A10b-03: the real favorites FILTER — sortType='favorite'
+                    // mapped to a nonexistent sort key and showed the whole
+                    // wardrobe.
+                    wardrobeController.favoritesOnly.value = true;
                   },
                 ),
                 _StatPill(

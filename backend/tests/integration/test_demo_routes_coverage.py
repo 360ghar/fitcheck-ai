@@ -141,7 +141,9 @@ async def test_extract_items_generic_error_wrapped(monkeypatch):
             db=Mock(),
         )
 
-    assert exc_info.value.message == "Failed to extract items: boom"
+    assert exc_info.value.message == (
+        "Demo item extraction failed. Please try again in a few moments."
+    )
 
 
 @pytest.mark.asyncio
@@ -251,7 +253,9 @@ async def test_try_on_generic_error_wrapped(monkeypatch):
             db=Mock(),
         )
 
-    assert exc_info.value.message == "Failed to generate try-on: boom"
+    assert exc_info.value.message == (
+        "Demo try-on generation failed. Please try again in a few moments."
+    )
 
 
 # =============================================================================

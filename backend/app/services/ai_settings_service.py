@@ -449,6 +449,44 @@ class AISettingsService:
         return get_provider_class(provider)(config)
 
     @staticmethod
+    async def _effective_daily_limit(
+        user_id: str,
+        operation_type: str,
+        db,
+    ) -> int:
+        """Daily limit for an operation, honoring the admin per-user override.
+
+        ``users.custom_daily_quota`` (migration 037) is the per-user daily AI
+        usage limit override; NULL means the plan default (A1-08: the admin
+        quota endpoint used to write the override but nothing enforced it).
+        The read is best-effort: any failure falls back to the plan default
+        so admission is never blocked (or loosened) by an override lookup.
+        """
+        defaults = {
+            "extraction": settings.AI_DAILY_EXTRACTION_LIMIT,
+            "generation": settings.AI_DAILY_GENERATION_LIMIT,
+            "embedding": settings.AI_DAILY_EMBEDDING_LIMIT,
+        }
+        default_limit = defaults[operation_type]
+        try:
+            result = await asyncio.to_thread(
+                db.table("users")
+                .select("custom_daily_quota")
+                .eq("id", user_id)
+                .maybe_single()
+                .execute
+            )
+            override = (maybe_single_data(result) or {}).get("custom_daily_quota")
+        except Exception:  # pragma: no cover - defensive
+            return default_limit
+        if override is None:
+            return default_limit
+        try:
+            return max(0, int(override))
+        except (TypeError, ValueError):
+            return default_limit
+
+    @staticmethod
     async def check_rate_limit(
         user_id: str,
         operation_type: str,
@@ -471,13 +509,11 @@ class AISettingsService:
 
         if operation_type == "extraction":
             current = user_settings.get("daily_extraction_count", 0)
-            limit = settings.AI_DAILY_EXTRACTION_LIMIT
         elif operation_type == "embedding":
             current = user_settings.get("daily_embedding_count", 0)
-            limit = settings.AI_DAILY_EMBEDDING_LIMIT
         else:  # generation
             current = user_settings.get("daily_generation_count", 0)
-            limit = settings.AI_DAILY_GENERATION_LIMIT
+        limit = await AISettingsService._effective_daily_limit(user_id, operation_type, db)
 
         requested = max(0, int(count))
         return {
@@ -553,17 +589,13 @@ class AISettingsService:
         operation = getattr(operation_type, "value", operation_type)
         if count <= 0:
             raise ValueError("count must be positive")
-        limits = {
-            "extraction": settings.AI_DAILY_EXTRACTION_LIMIT,
-            "generation": settings.AI_DAILY_GENERATION_LIMIT,
-            "embedding": settings.AI_DAILY_EMBEDDING_LIMIT,
-        }
-        if operation not in limits:
+        if operation not in ("extraction", "generation", "embedding"):
             raise ValueError(f"Unknown AI operation type: {operation_type}")
 
         # Ensure the row exists before the RPC; the function intentionally
         # fails closed when the hosted migration or row is unavailable.
         await AISettingsService.ensure_ai_settings_row(user_id, db)
+        limit = await AISettingsService._effective_daily_limit(user_id, operation, db)
         try:
             # Deliberately NOT wrapped in execute_with_reconnect: reserve_ai_usage
             # is a non-idempotent conditional counter increment. If the first
@@ -583,7 +615,7 @@ class AISettingsService:
                         "p_user_id": user_id,
                         "p_operation": operation,
                         "p_count": count,
-                        "p_limit": limits[operation],
+                        "p_limit": limit,
                     },
                 ).execute
             )

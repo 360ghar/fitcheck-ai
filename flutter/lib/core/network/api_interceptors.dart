@@ -4,6 +4,7 @@ import 'package:get/get.dart' as getx;
 import '../../app/routes/app_routes.dart';
 import '../constants/api_constants.dart';
 import '../services/supabase_service.dart';
+import '../widgets/app_network_image.dart' show urlAcceptsAuthToken;
 
 /// Interceptor to add Supabase auth token to API requests
 class AuthInterceptor extends Interceptor {
@@ -14,8 +15,12 @@ class AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) {
-    // Skip auth for public endpoints
-    if (_isPublicEndpoint(options.path)) {
+    // Skip auth for public endpoints and for URLs that must NOT carry the
+    // bearer token (A9-01): presigned S3/R2 URLs reject any second auth
+    // mechanism ("Only one auth mechanism allowed") and third-party hosts
+    // must never receive the session token. Relative API paths are always
+    // ours and stay eligible.
+    if (_isPublicEndpoint(options.path) || !_acceptsAuthToken(options.path)) {
       return handler.next(options);
     }
 
@@ -30,6 +35,18 @@ class AuthInterceptor extends Interceptor {
 
   bool _isPublicEndpoint(String path) {
     return ApiConstants.publicEndpoints.any((endpoint) => path.contains(endpoint));
+  }
+
+  /// Whether [path] may carry the session bearer token. Relative API paths
+  /// are always ours; absolute URLs (presigned objects, OAuth avatars, any
+  /// third-party host) follow the same eligibility rule the image loader
+  /// uses — see urlAcceptsAuthToken.
+  bool _acceptsAuthToken(String path) {
+    final uri = Uri.tryParse(path);
+    if (uri == null || !uri.hasScheme) {
+      return true;
+    }
+    return urlAcceptsAuthToken(path);
   }
 }
 

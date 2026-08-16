@@ -91,7 +91,7 @@ This starts:
 
 1. Open your Supabase SQL Editor.
 2. Apply **all** migrations in numeric order from
-   `backend/db/supabase/migrations/` (43 files, numbered `001`..`042` — note
+   `backend/db/supabase/migrations/` (55 files, numbered `001`..`054` — note
    `002` has two files: `002_astrology_profile.sql` and
    `002_user_profile_trigger.sql`). Do not skip any: the backend treats a
    partial schema as broken (`GET /ready` fails closed on missing
@@ -100,22 +100,36 @@ This starts:
    must not abort. Postgres has no `CREATE TRIGGER/POLICY IF NOT EXISTS` or
    `ADD CONSTRAINT IF NOT EXISTS`, so each file guards those statements with
    drop-then-create / drop-then-add (`DROP TRIGGER|POLICY|CONSTRAINT IF
-   EXISTS …` before the `CREATE`/`ADD`) and seed `INSERT`s use
-   `ON CONFLICT … DO NOTHING`. If an apply run aborts partway (e.g. a
-   `42710 duplicate object` error from a pre-fix file), fix or finish the
-   file, then re-run every not-yet-applied file in order — re-running an
-   already-applied file is safe. (Regression-checked 2026-08-08: all 43
-   files applied twice in sequence on a scratch Postgres 17.)
+   EXISTS …` before the `CREATE`/`ADD`), seed `INSERT`s use
+   `ON CONFLICT … DO NOTHING`, and every top-level `UPDATE`/`DELETE` sits
+   inside a `DO $$` block (often with a column-existence guard, so DML that
+   references a column a later migration drops — e.g. the `date_of_birth`
+   backfill — cannot 42703 a rerun). The contract is enforced by
+   `backend/tests/unit/test_services/test_migrations_rerunnable.py`. If an
+   apply run aborts partway (e.g. a `42710 duplicate object` error from a
+   pre-fix file), fix or finish the file, then re-run every not-yet-applied
+   file in order — re-running an already-applied file is safe.
+   (Regression-checked 2026-08-08: all 43 files applied twice in sequence on
+   a scratch Postgres 17; contract extended to 55 files 2026-08-10.)
 3. File storage does **not** live in Supabase. Uploads go to a private
    S3-compatible object-storage bucket (Cloudflare R2) configured by the
    `OBJECT_STORAGE_*` vars in `backend/.env.example`
    (`OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION` (keep `auto`),
    `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`,
    `OBJECT_STORAGE_BUCKET`). There is no `SUPABASE_STORAGE_BUCKET` setup step:
-   create the R2 bucket, an S3 API token, and a CORS policy on the bucket
-   allowing your web origins (the frontend `fetch()`es image URLs for
+   the legacy Supabase Storage buckets are not created by migration 001 anymore
+   and migration 048 drops them on existing environments (rerunnable, storage
+   schema guarded). Create the R2 bucket, an S3 API token, and a CORS policy on
+   the bucket allowing your web origins (the frontend `fetch()`es image URLs for
    download/share and reads one through a canvas). Only the `OBJECT_STORAGE_*`
    names are read; provider-specific names (`R2_*`, `AWS_*`) are not aliased.
+
+   Key layout: user content lives under `users/{user_id}/...` (private, owner
+   = segment 1), previews under `users/{user_id}/tmp|generated/...` (staging
+   only, never DB-referenced), and public no-auth assets under
+   `public/{group}/...` (`banners|landing|blog|static`). The single grammar
+   owner is `backend/app/core/storage_keys.py` (minters, `parse_key`,
+   `key_from_path`); `infra/images-worker/worker.js` mirrors the allowlist.
 
    Image serving is configured by (`backend/app/core/config.py`):
    - `OBJECT_STORAGE_PRESIGN_TTL` — presigned GET URL lifetime before it

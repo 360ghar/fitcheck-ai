@@ -606,7 +606,9 @@ async def test_login_returns_profile_and_touches_last_login(anon_db):
 
 
 @pytest.mark.asyncio
-async def test_login_email_not_confirmed(anon_db):
+async def test_login_email_not_confirmed_is_uniform_invalid_credentials(anon_db):
+    """A1-13: 'email not confirmed' must not reveal the email is registered —
+    every sign-in failure is the same uniform invalid-credentials error."""
     anon_db.auth.sign_in_with_password.side_effect = AuthApiError("Email not confirmed", 400, "email_not_confirmed")
 
     with pytest.raises(AuthenticationError) as exc_info:
@@ -616,7 +618,7 @@ async def test_login_email_not_confirmed(anon_db):
             anon_db=anon_db,
             db=FakeDB(),
         )
-    assert exc_info.value.error_code == "AUTH_EMAIL_NOT_CONFIRMED"
+    assert exc_info.value.error_code == "AUTH_INVALID_CREDENTIALS"
 
 
 @pytest.mark.asyncio
@@ -637,6 +639,8 @@ async def test_login_invalid_credentials(anon_db):
 
 @pytest.mark.asyncio
 async def test_login_other_auth_error(anon_db):
+    """A1-13: even non-credential sign-in failures surface as the uniform
+    invalid-credentials error (no error-shape enumeration)."""
     anon_db.auth.sign_in_with_password.side_effect = AuthApiError(
         "Over request rate limit", 429, "over_request_rate_limit"
     )
@@ -648,7 +652,7 @@ async def test_login_other_auth_error(anon_db):
             anon_db=anon_db,
             db=FakeDB(),
         )
-    assert exc_info.value.error_code == "AUTH_LOGIN_FAILED"
+    assert exc_info.value.error_code == "AUTH_INVALID_CREDENTIALS"
 
 
 @pytest.mark.asyncio
@@ -685,6 +689,26 @@ async def test_login_missing_user(anon_db):
             db=FakeDB(),
         )
     assert exc_info.value.error_code == "AUTH_INVALID_CREDENTIALS"
+
+
+@pytest.mark.asyncio
+async def test_login_suspended_account_rejected_and_session_revoked(anon_db):
+    """A1-14: Supabase Auth still authenticates a suspended account, but the
+    login must not hand out tokens — the fresh session is revoked and the
+    uniform ACCOUNT_SUSPENDED error is raised."""
+    anon_db.auth.sign_in_with_password.return_value = _auth_response()
+    db = FakeDB(rows={"users": [user_row(id=USER_ID, email=EMAIL, is_active=False)]})
+
+    with patch.object(auth_module, "_revoke_supabase_session", new=AsyncMock()) as revoke:
+        with pytest.raises(AuthenticationError) as exc_info:
+            await auth_module.login(
+                auth_module.LoginRequest(email="ada@example.com", password="whatever"),
+                http_request=_request(),
+                anon_db=anon_db,
+                db=db,
+            )
+    assert exc_info.value.error_code == "ACCOUNT_SUSPENDED"
+    revoke.assert_awaited_once_with("access-token-1")
 
 
 @pytest.mark.asyncio
@@ -960,7 +984,11 @@ async def test_reset_password_failure_still_hides_enumeration(anon_db):
 
 
 @pytest.mark.asyncio
-async def test_confirm_reset_password_with_session_tokens(anon_db):
+async def test_confirm_reset_password_with_session_tokens(anon_db, monkeypatch):
+    """A1-15: after the reset, ALL sessions are revoked globally via the
+    service-role admin API using the recovery access token."""
+    admin_client = Mock()
+    monkeypatch.setattr(auth_module.SupabaseDB, "get_service_client", staticmethod(lambda: admin_client))
     result = await auth_module.confirm_reset_password(
         auth_module.ConfirmResetRequest(access_token="at", refresh_token="rt", new_password="Str0ng!Pass"),
         anon_db=anon_db,
@@ -969,7 +997,7 @@ async def test_confirm_reset_password_with_session_tokens(anon_db):
     assert result["message"] == "Password has been reset successfully"
     anon_db.auth.set_session.assert_called_once_with("at", "rt")
     anon_db.auth.update_user.assert_called_once_with({"password": "Str0ng!Pass"})
-    anon_db.auth.sign_out.assert_called_once()
+    admin_client.auth.admin.sign_out.assert_called_once_with(jwt="at", scope="global")
 
 
 @pytest.mark.asyncio
@@ -994,8 +1022,12 @@ async def test_confirm_reset_password_missing_recovery_session():
 
 
 @pytest.mark.asyncio
-async def test_confirm_reset_password_sign_out_failure_is_best_effort(anon_db):
-    anon_db.auth.sign_out.side_effect = RuntimeError("no session")
+async def test_confirm_reset_password_sign_out_failure_is_best_effort(anon_db, monkeypatch):
+    """A1-15: session revocation is best-effort — the reset itself succeeds
+    even when the admin sign-out call fails."""
+    admin_client = Mock()
+    admin_client.auth.admin.sign_out.side_effect = RuntimeError("admin down")
+    monkeypatch.setattr(auth_module.SupabaseDB, "get_service_client", staticmethod(lambda: admin_client))
 
     result = await auth_module.confirm_reset_password(
         auth_module.ConfirmResetRequest(access_token="at", refresh_token="rt", new_password="Str0ng!Pass"),

@@ -3,10 +3,16 @@ Tests for token refresh deduplication.
 
 The service deduplicates only in-flight refreshes for the same refresh token and
 intentionally does not keep a long-lived cache of refreshed tokens.
+
+Concurrency sequencing uses threading.Event handshakes (the mocked
+``refresh_session`` runs in a worker thread via ``asyncio.to_thread``), never
+fixed ``time.sleep`` delays — the leader parks on an event until every follower
+has joined the in-flight dedupe, so the interleavings under test are
+deterministic.
 """
 
 import asyncio
-import time
+import threading
 from unittest.mock import Mock
 
 import pytest
@@ -56,28 +62,55 @@ def mock_auth_response():
 async def test_concurrent_same_token_calls_supabase_once(
     mock_supabase_client,
     mock_auth_response,
+    monkeypatch,
 ):
     """Concurrent refreshes for one token should share a single upstream call.
 
-    The side_effect uses a short time.sleep to simulate upstream latency.
-    This intentionally blocks the event loop so the leader task is the only
-    one inside refresh_session when followers are scheduled; they then join
-    the in-flight dedupe instead of issuing a second call.
+    Handshake, not a sleep: the leader parks inside ``refresh_session``
+    (threading.Event) until every follower has joined the in-flight dedupe
+    (observed via a counting wrapper on ``_await_inflight``), then releases.
+    Only then can we assert one upstream call without a timing race.
     """
 
+    entered_refresh = threading.Event()
+    release_leader = threading.Event()
+    joined = {"n": 0}
+    all_joined = asyncio.Event()
+
     def delayed_refresh(_token):
-        time.sleep(0.01)
+        entered_refresh.set()
+        if not release_leader.wait(5):
+            raise AssertionError("leader never released")
         return mock_auth_response
 
+    original_await_inflight = svc._await_inflight
+
+    async def tracking_await_inflight(token_hash, inflight):
+        joined["n"] += 1
+        if joined["n"] == 4:
+            all_joined.set()
+        return await original_await_inflight(token_hash, inflight)
+
+    monkeypatch.setattr(svc, "_await_inflight", tracking_await_inflight)
     mock_supabase_client.auth.refresh_session.side_effect = delayed_refresh
 
     refresh_token = "shared_refresh_token"
-    tasks = [
+    leader_task = asyncio.create_task(
         refresh_token_with_deduplication(mock_supabase_client, refresh_token)
-        for _ in range(5)
+    )
+    # Wait (bounded) until the leader is inside refresh_session, then start
+    # the followers so they join the in-flight dedupe behind it.
+    assert await asyncio.to_thread(entered_refresh.wait, 5)
+    follower_tasks = [
+        asyncio.create_task(
+            refresh_token_with_deduplication(mock_supabase_client, refresh_token)
+        )
+        for _ in range(4)
     ]
+    await asyncio.wait_for(all_joined.wait(), timeout=5)
+    release_leader.set()
 
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(leader_task, *follower_tasks)
 
     assert mock_supabase_client.auth.refresh_session.call_count == 1
     assert all(result == results[0] for result in results)
@@ -113,12 +146,7 @@ async def test_different_tokens_dont_dedupe(
     mock_auth_response,
 ):
     """Different refresh tokens should each call Supabase once."""
-
-    def delayed_refresh(_token):
-        time.sleep(0.01)
-        return mock_auth_response
-
-    mock_supabase_client.auth.refresh_session.side_effect = delayed_refresh
+    mock_supabase_client.auth.refresh_session.return_value = mock_auth_response
 
     tasks = [
         refresh_token_with_deduplication(mock_supabase_client, "token_one"),
@@ -133,22 +161,46 @@ async def test_different_tokens_dont_dedupe(
 
 
 @pytest.mark.asyncio
-async def test_supabase_error_is_shared_for_waiters(mock_supabase_client):
+async def test_supabase_error_is_shared_for_waiters(mock_supabase_client, monkeypatch):
     """If leader refresh fails, waiters should receive the same auth error."""
 
+    entered_refresh = threading.Event()
+    release_leader = threading.Event()
+    joined = {"n": 0}
+    all_joined = asyncio.Event()
+
     def delayed_error(_token):
-        time.sleep(0.01)
+        entered_refresh.set()
+        if not release_leader.wait(5):
+            raise AssertionError("leader never released")
         raise Exception("Supabase error")
 
+    original_await_inflight = svc._await_inflight
+
+    async def tracking_await_inflight(token_hash, inflight):
+        joined["n"] += 1
+        if joined["n"] == 1:
+            all_joined.set()
+        return await original_await_inflight(token_hash, inflight)
+
+    monkeypatch.setattr(svc, "_await_inflight", tracking_await_inflight)
     mock_supabase_client.auth.refresh_session.side_effect = delayed_error
 
     refresh_token = "test_error_token"
-    tasks = [
-        refresh_token_with_deduplication(mock_supabase_client, refresh_token),
-        refresh_token_with_deduplication(mock_supabase_client, refresh_token),
-    ]
+    leader_task = asyncio.create_task(
+        refresh_token_with_deduplication(mock_supabase_client, refresh_token)
+    )
+    # Bounded handshake: hold the leader inside refresh_session until the
+    # follower has joined the in-flight dedupe, so the error is shared rather
+    # than raced past.
+    assert await asyncio.to_thread(entered_refresh.wait, 5)
+    follower_task = asyncio.create_task(
+        refresh_token_with_deduplication(mock_supabase_client, refresh_token)
+    )
+    await asyncio.wait_for(all_joined.wait(), timeout=5)
+    release_leader.set()
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    results = await asyncio.gather(leader_task, follower_task, return_exceptions=True)
 
     assert mock_supabase_client.auth.refresh_session.call_count == 1
     assert all(isinstance(result, AuthenticationError) for result in results)
@@ -172,8 +224,13 @@ async def test_waiter_timeout(mock_supabase_client, mock_auth_response, monkeypa
     """Follower request should timeout if leader refresh stalls."""
     monkeypatch.setattr(svc, "LOCK_TIMEOUT_SECONDS", 0.1)
 
+    entered_refresh = threading.Event()
+    release_leader = threading.Event()
+
     def slow_refresh(_token):
-        time.sleep(0.2)
+        entered_refresh.set()
+        if not release_leader.wait(5):
+            raise AssertionError("leader never released")
         return mock_auth_response
 
     mock_supabase_client.auth.refresh_session.side_effect = slow_refresh
@@ -183,17 +240,17 @@ async def test_waiter_timeout(mock_supabase_client, mock_auth_response, monkeypa
         refresh_token_with_deduplication(mock_supabase_client, refresh_token)
     )
 
-    # Yield once so the leader registers itself before the follower arrives.
-    # asyncio.sleep(0) is enough since the leader's time.sleep blocks the
-    # loop, guaranteeing the follower queues behind it rather than racing.
-    await asyncio.sleep(0)
+    # Bounded handshake: once the leader is parked inside refresh_session the
+    # follower's wait_for hits LOCK_TIMEOUT_SECONDS deterministically.
+    assert await asyncio.to_thread(entered_refresh.wait, 5)
 
     with pytest.raises(AuthenticationError) as exc_info:
         await refresh_token_with_deduplication(mock_supabase_client, refresh_token)
 
     assert exc_info.value.error_code == "AUTH_REFRESH_TIMEOUT"
 
-    # Leader still completes successfully.
+    # Leader still completes successfully once released.
+    release_leader.set()
     leader_result = await leader_task
     assert leader_result["access_token"] == "new_access_token_123"
 
@@ -203,8 +260,13 @@ async def test_clear_token_cache_cancels_inflight(mock_supabase_client, monkeypa
     """clear_token_cache should cancel any in-flight refresh for that token."""
     monkeypatch.setattr(svc, "LOCK_TIMEOUT_SECONDS", 1)
 
+    entered_refresh = threading.Event()
+    release_leader = threading.Event()
+
     def slow_refresh(_token):
-        time.sleep(0.1)
+        entered_refresh.set()
+        if not release_leader.wait(5):
+            raise AssertionError("leader never released")
         return Mock(session=None)
 
     mock_supabase_client.auth.refresh_session.side_effect = slow_refresh
@@ -214,8 +276,11 @@ async def test_clear_token_cache_cancels_inflight(mock_supabase_client, monkeypa
         refresh_token_with_deduplication(mock_supabase_client, refresh_token)
     )
 
-    await asyncio.sleep(0)
+    # Bounded handshake: clear the in-flight state while the leader is parked
+    # inside refresh_session (no fixed sleeps).
+    assert await asyncio.to_thread(entered_refresh.wait, 5)
     await clear_token_cache(refresh_token)
+    release_leader.set()
 
     with pytest.raises(AuthenticationError) as exc_info:
         await leader_task
@@ -227,8 +292,13 @@ async def test_clear_token_cache_cancels_inflight(mock_supabase_client, monkeypa
 async def test_cache_stats_reports_inflight(mock_supabase_client, mock_auth_response):
     """Stats should expose in-flight counts and no long-lived cache entries."""
 
+    entered_refresh = threading.Event()
+    release_leader = threading.Event()
+
     def slow_refresh(_token):
-        time.sleep(0.05)
+        entered_refresh.set()
+        if not release_leader.wait(5):
+            raise AssertionError("leader never released")
         return mock_auth_response
 
     mock_supabase_client.auth.refresh_session.side_effect = slow_refresh
@@ -236,12 +306,13 @@ async def test_cache_stats_reports_inflight(mock_supabase_client, mock_auth_resp
     task = asyncio.create_task(
         refresh_token_with_deduplication(mock_supabase_client, "stats_token")
     )
-    await asyncio.sleep(0)
+    assert await asyncio.to_thread(entered_refresh.wait, 5)
 
     stats = get_cache_stats()
     assert stats["cache_size"] == 0
     assert stats["inflight_count"] >= 1
 
+    release_leader.set()
     await task
 
 

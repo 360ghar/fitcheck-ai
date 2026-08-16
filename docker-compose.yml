@@ -18,8 +18,15 @@ services:
     container_name: fitcheck-backend
     ports:
       - "8000:8000"
+    # The root .env is gitignored, so a fresh clone has no .env. `required:
+    # false` keeps `docker compose up` working anyway (backend starts with
+    # whatever it is given and fails loudly at request time on missing
+    # secrets). To run with real secrets, copy the template first:
+    #   cp backend/.env.example .env
+    #   # then fill in the values (hosted Supabase credentials, JWT secret, ...)
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - PORT=8000
       - FRONTEND_URL=http://localhost:3000
@@ -52,21 +59,34 @@ services:
     container_name: fitcheck-frontend
     ports:
       - "3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:8000
+    # VITE_* values are compile-time constants: setting them here at runtime
+    # does nothing for a static `vite build`. The production image
+    # (frontend/Dockerfile) reads them as build args instead — pass them
+    # with `docker compose build --build-arg VITE_SUPABASE_URL=... ...` or:
+    #   build:
+    #     context: ./frontend
+    #     args:
+    #       VITE_SUPABASE_URL: https://your-project.supabase.co
+    #       VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_...
+    #       VITE_API_BASE_URL: ""
+    #       VITE_PUBLIC_POSTHOG_KEY: ""
+    # The dev server below proxies /api to the backend on :8000, so no API
+    # URL env is needed for the dev workflow.
     volumes:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
       - backend
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - fitcheck-network
 
 networks:
   fitcheck-network:
     driver: bridge
-
-volumes:
-  # Persist backend data if needed in the future
-  backend-data:

@@ -45,7 +45,17 @@ CREATE POLICY "Users can read own wear history"
 DROP POLICY IF EXISTS "Users can insert own wear history" ON public.outfit_wear_history;
 CREATE POLICY "Users can insert own wear history"
     ON public.outfit_wear_history FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
+    -- A5-07: the row must be the caller's OWN AND reference one of the
+    -- caller's outfits — otherwise any client could write (and backdate)
+    -- wear rows against other users' outfits through the anon/authenticated
+    -- surface. (The backend writes via the RLS-exempt service client.)
+    WITH CHECK (
+        auth.uid() = user_id
+        AND EXISTS (
+            SELECT 1 FROM public.outfits o
+            WHERE o.id = outfit_id AND o.user_id = auth.uid()
+        )
+    );
 
 DROP POLICY IF EXISTS "Users can update own wear history" ON public.outfit_wear_history;
 CREATE POLICY "Users can update own wear history"

@@ -52,12 +52,39 @@ echo -e "${YELLOW}API Docs: http://localhost:8000/api/v1/docs${NC}"
 echo ""
 
 cd "$BACKEND_DIR"
+if [ ! -d "$BACKEND_DIR/.venv" ]; then
+    echo -e "${RED}Error: backend virtualenv not found at $BACKEND_DIR/.venv${NC}"
+    echo -e "${YELLOW}Create it with:${NC}"
+    echo -e "  cd $BACKEND_DIR"
+    echo -e "  python3 -m venv .venv"
+    echo -e "  source .venv/bin/activate"
+    echo -e "  pip install -r requirements.txt"
+    exit 1
+fi
 source "$BACKEND_DIR/.venv/bin/activate"
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
-# Wait a moment for backend to start
-sleep 2
+# Wait for the backend to become healthy (bounded retry loop instead of a
+# fixed sleep: slower cold starts are tolerated, a dead process fails fast).
+echo -e "${YELLOW}Waiting for backend health (http://localhost:8000/health)...${NC}"
+BACKEND_READY=""
+for _ in $(seq 1 30); do
+    if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+        BACKEND_READY="yes"
+        break
+    fi
+    if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+        echo -e "${RED}Backend process exited before becoming healthy${NC}"
+        exit 1
+    fi
+    sleep 1
+done
+if [ -n "$BACKEND_READY" ]; then
+    echo -e "${GREEN}Backend is healthy.${NC}"
+else
+    echo -e "${YELLOW}Backend not healthy after 30s — continuing anyway; check logs with: tail -f $BACKEND_DIR/logs/*.log${NC}"
+fi
 
 # Start Frontend Server
 echo -e "${BLUE}Starting Frontend Server (Vite)...${NC}"

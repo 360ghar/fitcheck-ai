@@ -240,3 +240,57 @@ def test_classify_category_legacy_preview_and_canonical_unchanged(script):
     assert script.classify_category("u1/outfits/abc.png") == "outfits"
     assert script.classify_category("u1/20260101/item_abc123.png") == "items"
     assert script.classify_category("u1/other/x.png") == "legacy-other"
+
+
+# --------------------------------------------------------------------------- #
+# export / public keys must NOT be misclassified as legacy-other (P2: under
+# --delete they would be removed on the 2h grace, deleting user export archives
+# and public assets).
+# --------------------------------------------------------------------------- #
+def test_classify_category_users_export_is_export(script):
+    # The data-export archive lives at users/{user}/export/data.json.
+    assert script.classify_category("users/u1/export/data.json") == "export"
+
+
+def test_classify_category_public_root_is_public(script):
+    # public/{group}/... keys (banners/landing/blog/static) classify as
+    # "public", not "legacy-other".
+    assert script.classify_category("public/banners/home/abc.webp") == "public"
+    assert script.classify_category("public/landing/hero/abc.webp") == "public"
+    assert script.classify_category("public/blog/post1/abc.webp") == "public"
+    assert script.classify_category("public/static/icons/abc.webp") == "public"
+
+
+def test_export_and_public_are_never_deletable(script):
+    """``export`` archives and ``public`` assets carry an infinite min-age: no
+    matter how old, they are always protected (never auto-deleted). This is the
+    property that stops the cleanup script from deleting a user's data export
+    or a banner."""
+    keys = [
+        "users/u1/export/data.json",
+        "public/banners/home/abc.webp",
+    ]
+    # Absurdly old (years) — still protected.
+    mtimes = {k: NOW - timedelta(hours=24 * 365 * 10) for k in keys}
+    deletable, protected = script.split_by_age(keys, mtimes, min_age_hours=2, now=NOW)
+    assert deletable == []
+    assert sorted(protected) == sorted(keys)
+
+
+def test_export_and_public_min_age_is_infinite(script):
+    """Contract: the infinite-window sentinel is what enforces never-delete."""
+    assert script.CATEGORY_MIN_AGE_HOURS["export"] == float("inf")
+    assert script.CATEGORY_MIN_AGE_HOURS["public"] == float("inf")
+
+
+def test_generated_retention_still_applies(script):
+    """Sanity: the pre-existing generated/ long window is untouched by the
+    export/public additions."""
+    key = "u1/generated/try-on/abc.png"
+    window = script.CATEGORY_MIN_AGE_HOURS["generated"]
+    mtimes = {key: NOW - timedelta(hours=5)}
+    deletable, protected = script.split_by_age([key], mtimes, min_age_hours=2, now=NOW)
+    assert deletable == [] and protected == [key]
+    mtimes_old = {key: NOW - timedelta(hours=window + 1)}
+    deletable2, _ = script.split_by_age([key], mtimes_old, min_age_hours=2, now=NOW)
+    assert deletable2 == [key]

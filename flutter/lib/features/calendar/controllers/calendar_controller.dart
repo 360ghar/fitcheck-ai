@@ -8,7 +8,12 @@ import '../../../core/utils/error_handler.dart';
 
 /// Calendar controller - manages calendar state and operations
 class CalendarController extends GetxController {
-  final CalendarRepository _repository = CalendarRepository();
+  final CalendarRepository _repository;
+
+  /// [repository] is injectable for unit tests; defaults to the live
+  /// repository in production (same pattern as WardrobeController).
+  CalendarController({CalendarRepository? repository})
+      : _repository = repository ?? CalendarRepository();
 
   // Workers for cleanup
   final List<Worker> _workers = [];
@@ -23,6 +28,14 @@ class CalendarController extends GetxController {
   final Rx<DateTime> selectedDate = DateTime.now().obs;
   final Rx<DateTime> focusedDate = DateTime.now().obs;
   final RxString calendarFormat = 'month'.obs;
+
+  /// Monotonic token so a slow response for month A cannot overwrite the
+  /// events of a month the user navigated to later (A10b-08).
+  int _fetchGeneration = 0;
+
+  /// Test-only: the generation reserved at the last [fetchEventsForMonth]
+  /// call. Used to pin that the bump happens before `settleBuildPhase`.
+  int get debugFetchGeneration => _fetchGeneration;
 
   // Loading states
   final RxBool isLoadingConnections = false.obs;
@@ -91,6 +104,12 @@ class CalendarController extends GetxController {
 
   /// Fetch events for a month range
   Future<void> fetchEventsForMonth(DateTime date) async {
+    // A10b-08: reserve the generation BEFORE the first await. Responses are
+    // unordered, and a stale month must never clobber the focused one — but
+    // reserving AFTER `settleBuildPhase` meant a navigation during a build
+    // frame could not invalidate an already-running request until the deferred
+    // call resumed, so the previous month's response could briefly land.
+    final generation = ++_fetchGeneration;
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoadingEvents.value = true;
@@ -99,17 +118,22 @@ class CalendarController extends GetxController {
       final startOfMonth = DateTime(date.year, date.month, 1);
       final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
 
-      events.value = await _repository.getEvents(
+      final fetched = await _repository.getEvents(
         startDate: startOfMonth,
         endDate: endOfMonth,
       );
+      if (generation != _fetchGeneration) return; // superseded — drop stale data
 
+      events.value = fetched;
       _groupEventsByDate();
     } catch (e) {
+      if (generation != _fetchGeneration) return;
       error.value = ErrorHandler.extractMessage(e);
       // Don't show snackbar on initial load
     } finally {
-      isLoadingEvents.value = false;
+      if (generation == _fetchGeneration) {
+        isLoadingEvents.value = false;
+      }
     }
   }
 

@@ -68,7 +68,15 @@ CREATE POLICY "Anyone can read published blog posts"
     USING (is_published = true);
 
 -- Policy: Only authenticated users with admin role can manage posts
--- Note: Admin checks are handled at the application level
+-- Note: Admin checks are handled at the application level (the backend runs
+-- with the service_role client, which bypasses RLS). Migration 054 drops the
+-- over-broad `FOR ALL TO authenticated` manage policy that 017 originally
+-- shipped: it let ANY signed-in user INSERT/UPDATE/DELETE every post directly
+-- through PostgREST. Fresh installs must not create it; existing deployments
+-- are fixed by 054.
+DROP POLICY IF EXISTS "Authenticated users can manage blog posts"
+    ON blog_posts;
+
 DROP POLICY IF EXISTS "Authenticated users can read all blog posts"
     ON blog_posts;
 
@@ -77,16 +85,6 @@ CREATE POLICY "Authenticated users can read all blog posts"
     FOR SELECT
     TO authenticated
     USING (true);
-
-DROP POLICY IF EXISTS "Authenticated users can manage blog posts"
-    ON blog_posts;
-
-CREATE POLICY "Authenticated users can manage blog posts"
-    ON blog_posts
-    FOR ALL
-    TO authenticated
-    USING (true)
-    WITH CHECK (true);
 
 -- =============================================================================
 -- UPDATED_AT TRIGGER

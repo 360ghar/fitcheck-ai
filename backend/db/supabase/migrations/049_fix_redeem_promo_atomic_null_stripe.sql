@@ -1,0 +1,189 @@
+-- FitCheck AI - Forward migration: redeem_promo_atomic clears stale Stripe links
+--
+-- Migration 031 added `stripe_subscription_id = NULL, stripe_customer_id = NULL`
+-- to redeem_promo_atomic's ON CONFLICT branch (A1-09: a promo grant replaces
+-- the previous billing arrangement, so a later web upgrade must start a fresh
+-- checkout instead of "modifying" the old canceled Stripe subscription).
+--
+-- 031 was already shipped before that edit, and 032 (which CREATE OR REPLACEs
+-- the same function for the 42804 return-type fix) shipped WITHOUT the two
+-- assignments - so existing deployments run the 032 version, which retains
+-- the canceled Stripe subscription/customer. This forward migration recreates
+-- the function with the assignments, following the 032/033 pattern: identical
+-- to shipped 032 except for the two `= NULL` lines.
+--
+-- Rerunnable (CREATE OR REPLACE + guarded REVOKE/GRANT): safe to re-run.
+--
+-- Target: Supabase Postgres
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.redeem_promo_atomic(
+    p_user_id UUID,
+    p_code TEXT
+)
+RETURNS TABLE (
+    success BOOLEAN,
+    already_redeemed BOOLEAN,
+    plan_type TEXT,
+    months INTEGER,
+    message TEXT
+) AS $$
+DECLARE
+    promo_row public.promo_codes%ROWTYPE;
+    redemption_row public.promo_redemptions%ROWTYPE;
+    sub_row public.subscriptions%ROWTYPE;
+    new_trial_end TIMESTAMPTZ;
+BEGIN
+    SELECT * INTO promo_row
+    FROM public.promo_codes
+    WHERE LOWER(TRIM(code)) = LOWER(TRIM(p_code))
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN QUERY SELECT FALSE, FALSE, NULL::TEXT, 0, 'Promo code not found'::TEXT;
+        RETURN;
+    END IF;
+
+    IF NOT promo_row.active THEN
+        RETURN QUERY SELECT FALSE, FALSE, NULL::TEXT, 0, 'This promo code is no longer active'::TEXT;
+        RETURN;
+    END IF;
+
+    IF promo_row.expires_at IS NOT NULL AND promo_row.expires_at <= NOW() THEN
+        RETURN QUERY SELECT FALSE, FALSE, NULL::TEXT, 0, 'This promo code has expired'::TEXT;
+        RETURN;
+    END IF;
+
+    IF promo_row.max_uses IS NOT NULL AND promo_row.used_count >= promo_row.max_uses THEN
+        RETURN QUERY SELECT FALSE, FALSE, NULL::TEXT, 0, 'This promo code has reached its usage limit'::TEXT;
+        RETURN;
+    END IF;
+
+    SELECT * INTO redemption_row
+    FROM public.promo_redemptions
+    WHERE user_id = p_user_id
+    FOR UPDATE;
+
+    IF FOUND THEN
+        RETURN QUERY SELECT
+            FALSE,
+            TRUE,
+            redemption_row.plan_type::TEXT,
+            redemption_row.months,
+            'You have already redeemed a promo code'::TEXT;
+        RETURN;
+    END IF;
+
+    -- Never overwrite a paying subscriber (same rule as grant_free_pro_month.py
+    -- and the referral grant). "Paying" is judged on the EFFECTIVE plan exactly
+    -- like SubscriptionService.effective_plan_type: an expired trial
+    -- (stored plan_type pro_monthly, trial_end in the past) is effectively
+    -- free, so its holder can still redeem a promo.
+    SELECT * INTO sub_row
+    FROM public.subscriptions
+    WHERE user_id = p_user_id
+    FOR UPDATE;
+
+    IF FOUND
+       AND sub_row.plan_type <> 'free'
+       AND (
+           (sub_row.status = 'trial' AND sub_row.trial_end IS NOT NULL AND sub_row.trial_end > NOW())
+           OR (sub_row.status = 'active' AND sub_row.current_period_end IS NOT NULL AND sub_row.current_period_end > NOW())
+       ) THEN
+        RETURN QUERY SELECT
+            FALSE,
+            FALSE,
+            NULL::TEXT,
+            0,
+            'You already have an active plan'::TEXT;
+        RETURN;
+    END IF;
+
+    -- Extend from any existing trial instead of restarting it, so stacking a
+    -- promo on top of a running referral trial does not shrink it.
+    new_trial_end := GREATEST(
+        COALESCE(sub_row.trial_end, NOW()),
+        NOW()
+    ) + make_interval(months => promo_row.months);
+
+    INSERT INTO public.subscriptions (
+        user_id,
+        plan_type,
+        status,
+        current_period_start,
+        current_period_end,
+        cancel_at_period_end,
+        trial_end,
+        referral_credit_months
+    ) VALUES (
+        p_user_id,
+        promo_row.plan_type,
+        'trial',
+        NOW(),
+        new_trial_end,
+        FALSE,
+        new_trial_end,
+        0
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+        plan_type = EXCLUDED.plan_type,
+        status = EXCLUDED.status,
+        current_period_start = EXCLUDED.current_period_start,
+        current_period_end = EXCLUDED.current_period_end,
+        cancel_at_period_end = FALSE,
+        trial_end = EXCLUDED.trial_end,
+        -- A1-09: a promo grant replaces the previous billing arrangement, so
+        -- a stale Stripe subscription/customer must not survive — a later
+        -- web upgrade would otherwise "modify" the old canceled Stripe
+        -- subscription instead of starting a fresh checkout. The same holds
+        -- for an expired Apple/Google subscription: leaving its store rail and
+        -- identifier on the row lets a delayed expiry/refund webhook target
+        -- the new promo trial and downgrade it. Clear the full prior billing
+        -- state (Stripe + store rails + identifiers) on promo redemption.
+        -- NOTE: billing_provider is NOT NULL (migration 030, DEFAULT 'stripe'),
+        -- so the neutral "no live store rail" value is 'stripe' — assigning
+        -- NULL here raised 23502 and rolled back every promo redemption for a
+        -- user who already had a subscription row.
+        stripe_subscription_id = NULL,
+        stripe_customer_id = NULL,
+        apple_original_transaction_id = NULL,
+        google_purchase_token = NULL,
+        google_order_id = NULL,
+        billing_provider = 'stripe',
+        updated_at = NOW();
+
+    INSERT INTO public.promo_redemptions (
+        user_id,
+        promo_code_id,
+        plan_type,
+        months
+    ) VALUES (
+        p_user_id,
+        promo_row.id,
+        promo_row.plan_type,
+        promo_row.months
+    );
+
+    UPDATE public.promo_codes
+    SET used_count = used_count + 1,
+        updated_at = NOW()
+    WHERE id = promo_row.id;
+
+    RETURN QUERY SELECT
+        TRUE,
+        FALSE,
+        promo_row.plan_type::TEXT,
+        promo_row.months,
+        'Promo code applied'::TEXT;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Harden RPC privileges (same policy as 031/032: the backend calls this with
+-- the service-role client, so browser roles must not be able to invoke it).
+REVOKE EXECUTE ON FUNCTION public.redeem_promo_atomic(UUID, TEXT)
+    FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.redeem_promo_atomic(UUID, TEXT) TO service_role;
+
+COMMIT;

@@ -19,7 +19,7 @@ images never load" class of failures.
 The URL is not garbage, though: it embeds the same key the object now lives
 under in R2 (``/storage/v1/object/public/<bucket>/<key>``, a path-style
 presigned URL ``/<bucket>/<key>``, or a bare key). This script extracts the
-key with the app's own ``StorageService.key_from_path`` (the SSRF-safe
+key with the app's own ``key_from_path`` (the SSRF-safe
 reducer the read paths use), validates it against the canonical layout
 (``{user-uuid}/{items|outfits|sources|...}/...``), and writes it back — after
 which read paths materialize fresh URLs and the client re-mint works.
@@ -65,16 +65,17 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts._common import _env, _utc_now_iso  # noqa: E402
-from app.core.storage_keys import USER_ID_SEGMENT_RE  # noqa: E402
-from app.db.connection import SupabaseDB  # noqa: E402
-from app.services.storage_service import StorageService  # noqa: E402
-
-# Canonical categories that can back a DB-referenced image row. Preview keys
-# (``tmp/``, ``generated/``) are never DB-referenced, so a derived key that
-# lands there means the URL is not one of ours and must NOT be written.
-_CANONICAL_CATEGORIES = frozenset(
-    {"items", "outfits", "avatars", "sources", "feedback"}
+from app.core.storage_keys import (  # noqa: E402
+    CANONICAL_CATEGORIES,
+    key_from_path,
+    parse_key,
 )
+from app.db.connection import SupabaseDB  # noqa: E402
+
+# Canonical categories that can back a DB-referenced image row come from the
+# shared grammar (app.core.storage_keys). Preview keys (``tmp/``,
+# ``generated/``) are never DB-referenced, so a derived key that lands there
+# means the URL is not one of ours and must NOT be written.
 
 # (table, storage column to fill, URL columns to derive from, label)
 _TABLES: Tuple[Tuple[str, str, Tuple[str, ...], str], ...] = (
@@ -89,21 +90,22 @@ def derive_storage_path(value: Optional[str]) -> Optional[str]:
 
     Conservative by design: ``key_from_path`` already refuses to reshape
     unrelated external URLs into keys, and this function additionally requires
-    the canonical ``{user-uuid}/{category}/...`` shape (first segment a UUID,
-    category one of ours). Anything else — an OAuth picture, a junk URL, a
-    preview key — returns None and the row is reported unrepairable.
+    the canonical ``{user}/{category}/...`` shape (current ``users/{user}/...``
+    or legacy ``{user}/...``, category one of ours). Anything else — an OAuth
+    picture, a junk URL, a preview key — returns None and the row is reported
+    unrepairable.
     """
     if not value:
         return None
-    key = StorageService.key_from_path(value)
+    key = key_from_path(value)
     if not key:
         return None
-    parts = key.split("/")
-    if len(parts) < 2:
+    ref = parse_key(key)
+    if ref is None or ref.layout != "canonical":
         return None
-    if USER_ID_SEGMENT_RE.fullmatch(parts[0]) and parts[1] in _CANONICAL_CATEGORIES:
-        return key
-    return None
+    if ref.category not in CANONICAL_CATEGORIES:
+        return None
+    return key
 
 
 # PostgREST caps a single SELECT at this many rows (hosted Supabase default),

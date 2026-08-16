@@ -76,6 +76,23 @@ def _clear_daily_quota_latch():
     clear_daily_quota_latch()
 
 
+@pytest.fixture(autouse=True)
+def _mock_health_check():
+    """Stub the module-level health-service singleton GeminiProvider.chat
+    imports at call time (the health gate added for parity with
+    AIProviderService.chat). The gate must not 503 a test whose focus is the
+    SDK boundary; record_result is a no-op so the breaker learns nothing
+    from these fake calls."""
+    from app.services.ai_provider_health_service import HealthStatus
+
+    healthy = HealthStatus(available=True, last_check=0, consecutive_failures=0)
+    with patch(
+        "app.services.ai_provider_health_service.AIProviderHealthService.check_provider_health",
+        AsyncMock(return_value=healthy),
+    ):
+        yield
+
+
 class TestChat:
     @pytest.mark.asyncio
     async def test_plain_text_chat(self):
@@ -138,6 +155,7 @@ class TestChat:
 
         class FakeResponse:
             headers = {"content-type": "image/png"}
+            status_code = 200
 
             def raise_for_status(self):
                 pass

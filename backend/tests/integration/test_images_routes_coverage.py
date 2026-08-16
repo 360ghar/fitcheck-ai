@@ -23,7 +23,8 @@ from app.services.storage_service import StorageService
 
 
 USER = "11111111-1111-1111-1111-111111111111"
-OWNED_KEY = f"{USER}/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+OWNED_KEY = f"users/{USER}/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+OWNED_AVATAR = f"users/{USER}/avatars/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
 
 
 def test_is_owned_by_user_rejects_non_string_inputs():
@@ -32,21 +33,21 @@ def test_is_owned_by_user_rejects_non_string_inputs():
 
 
 def test_is_owned_by_user_rejects_backslashes_and_dotdot():
-    assert _is_owned_by_user(f"{USER}\\items\\x.jpg", USER) is False
+    assert _is_owned_by_user(f"users/{USER}\\items\\x.jpg", USER) is False
     assert _is_owned_by_user(f"../{USER}/items/x.jpg", USER) is False
     assert _is_owned_by_user(f" {OWNED_KEY}", USER) is False
 
 
 def test_is_owned_by_user_accepts_all_key_shapes():
-    thumb = f"{USER}/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp"
-    nested = f"generated/{USER}/tryon/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"
-    legacy = f"{USER}/generated/tryon/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"
+    thumb = f"users/{USER}/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp"
+    nested = f"users/{USER}/generated/tryon/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"
+    preview = f"users/{USER}/tmp/tryon/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"
     assert _is_owned_by_user(OWNED_KEY, USER) is True
     assert _is_owned_by_user(thumb, USER) is True
     assert _is_owned_by_user(nested, USER) is True
-    assert _is_owned_by_user(legacy, USER) is True
+    assert _is_owned_by_user(preview, USER) is True
     # Same shape, different owner -> not owned.
-    other = "22222222-2222-2222-2222-222222222222/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+    other = "users/22222222-2222-2222-2222-222222222222/items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
     assert _is_owned_by_user(other, USER) is False
 
 
@@ -59,15 +60,17 @@ def test_materialize_avatar_url_none_and_foreign_urls(monkeypatch):
         assert await materialize_avatar_url("https://example.com/pic.jpg") is None
         # Bare key without a UUID first segment -> None.
         assert await materialize_avatar_url("items/abc.jpg") is None
-        # Our own object -> materialized.
+        # Our own avatar object -> materialized.
         monkeypatch.setattr(
             StorageService, "get_public_url", AsyncMock(side_effect=lambda key: f"https://cdn/{key}")
         )
-        url = await materialize_avatar_url(OWNED_KEY)
-        assert url == f"https://cdn/{OWNED_KEY}"
+        url = await materialize_avatar_url(OWNED_AVATAR)
+        assert url == f"https://cdn/{OWNED_AVATAR}"
         # presigned=True forces a signed URL.
-        signed = await materialize_avatar_url(OWNED_KEY, presigned=True)
-        assert signed == f"https://cdn/{OWNED_KEY}"
+        signed = await materialize_avatar_url(OWNED_AVATAR, presigned=True)
+        assert signed == f"https://cdn/{OWNED_AVATAR}"
+        # A non-avatar key (even owned) is never re-minted by the avatar path.
+        assert await materialize_avatar_url(OWNED_KEY) is None
 
     __import__("asyncio").run(_run())
 

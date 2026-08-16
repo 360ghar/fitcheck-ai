@@ -110,7 +110,12 @@ async def with_retry(
             )
 
             if on_retry:
-                on_retry(attempt + 1, e, delay)
+                # A failing callback must never abort the retry loop or mask
+                # the original error — log and keep backing off.
+                try:
+                    on_retry(attempt + 1, e, delay)
+                except Exception as callback_error:  # noqa: BLE001 - callback is user code
+                    logger.error(f"on_retry callback failed: {callback_error}")
 
             await asyncio.sleep(delay)
 

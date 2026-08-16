@@ -42,12 +42,24 @@ export function useInfiniteScroll({
   const isLoadingRef = useRef(isLoading)
   const disabledRef = useRef(disabled)
   const firedForThisIntersectRef = useRef(false)
+  const prevLoadingRef = useRef(isLoading)
 
   useEffect(() => {
     onLoadMoreRef.current = onLoadMore
     hasMoreRef.current = hasMore
     isLoadingRef.current = isLoading
     disabledRef.current = disabled
+    const wasLoading = prevLoadingRef.current
+    prevLoadingRef.current = isLoading
+    // F1-08: when a fetch settles (isLoading true → false) while the sentinel
+    // is still in the preload zone, clear the one-shot latch and re-fire.
+    // Previously a failed or short append left the latch set with the
+    // sentinel still intersecting, and auto-paging stalled until the user
+    // scrolled away and back. fire() re-checks hasMore/isLoading/disabled.
+    if (wasLoading && !isLoading && firedForThisIntersectRef.current) {
+      firedForThisIntersectRef.current = false
+      fire()
+    }
   })
 
   const observerRef = useRef<IntersectionObserver | null>(null)

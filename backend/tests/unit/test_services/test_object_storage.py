@@ -36,6 +36,7 @@ def _fake_client() -> Mock:
     client.copy_object = AsyncMock()
     client.delete_object = AsyncMock()
     client.delete_objects = AsyncMock()
+    client.head_object = AsyncMock()
     client.generate_presigned_url = AsyncMock()
     client.close = AsyncMock()
     client.get_paginator = Mock()
@@ -265,6 +266,126 @@ async def test_delete_single_object(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# exists (HEAD)
+# ---------------------------------------------------------------------------
+
+
+class _ClientError(Exception):
+    """Minimal botocore-style error carrying the response Error code."""
+
+    def __init__(self, code):
+        super().__init__(f"ClientError: {code}")
+        self.response = {"Error": {"Code": code}}
+
+
+@pytest.mark.asyncio
+async def test_exists_returns_true_when_head_succeeds(monkeypatch):
+    client = _fake_client()
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    assert await backend.exists("user-1/items/a.png") is True
+    client.head_object.assert_awaited_once_with(
+        Bucket=settings.OBJECT_STORAGE_BUCKET, Key="user-1/items/a.png"
+    )
+
+
+@pytest.mark.asyncio
+async def test_exists_returns_false_on_missing_key(monkeypatch):
+    client = _fake_client()
+    client.head_object.side_effect = _ClientError("404")
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    assert await backend.exists("user-1/items/gone.png") is False
+
+
+@pytest.mark.asyncio
+async def test_exists_returns_false_on_not_found_code(monkeypatch):
+    client = _fake_client()
+    client.head_object.side_effect = _ClientError("NotFound")
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    assert await backend.exists("user-1/items/gone.png") is False
+
+
+@pytest.mark.asyncio
+async def test_exists_returns_false_on_no_such_key_code(monkeypatch):
+    """R2/S3 report an absent HEAD target as NoSuchKey; the idempotent
+    move/promote paths read that as "absent", not a storage failure."""
+    client = _fake_client()
+    client.head_object.side_effect = _ClientError("NoSuchKey")
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    assert await backend.exists("user-1/items/gone.png") is False
+
+
+@pytest.mark.asyncio
+async def test_exists_reraises_non_missing_errors(monkeypatch):
+    client = _fake_client()
+    client.head_object.side_effect = _ClientError("SlowDown")
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    with pytest.raises(_ClientError, match="SlowDown"):
+        await backend.exists("user-1/items/a.png")
+
+
+# head (size + etag provenance)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_head_returns_size_and_etag(monkeypatch):
+    client = _fake_client()
+    client.head_object.return_value = {
+        "ContentLength": 4321,
+        "ETag": '"abc123"',
+    }
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    info = await backend.head("user-1/items/a.png")
+    assert info == {"size": 4321, "etag": "abc123"}
+    client.head_object.assert_awaited_once_with(
+        Bucket=settings.OBJECT_STORAGE_BUCKET, Key="user-1/items/a.png"
+    )
+
+
+@pytest.mark.asyncio
+async def test_head_normalizes_quoted_etag(monkeypatch):
+    client = _fake_client()
+    client.head_object.return_value = {"ContentLength": 10, "ETag": "unquoted"}
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    assert await backend.head("k") == {"size": 10, "etag": "unquoted"}
+
+
+@pytest.mark.asyncio
+async def test_head_returns_none_on_missing_key(monkeypatch):
+    for code in ("404", "NotFound", "NoSuchKey"):
+        client = _fake_client()
+        client.head_object.side_effect = _ClientError(code)
+        _install_fake_session(monkeypatch, client)
+        backend = S3StorageBackend()
+
+        assert await backend.head("user-1/items/gone.png") is None
+
+
+@pytest.mark.asyncio
+async def test_head_reraises_non_missing_errors(monkeypatch):
+    client = _fake_client()
+    client.head_object.side_effect = _ClientError("SlowDown")
+    _install_fake_session(monkeypatch, client)
+    backend = S3StorageBackend()
+
+    with pytest.raises(_ClientError, match="SlowDown"):
+        await backend.head("user-1/items/a.png")
+
+
 # Batch delete
 # ---------------------------------------------------------------------------
 
