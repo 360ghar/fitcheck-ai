@@ -176,9 +176,14 @@ def _promotion_target(path: str, db_paths: set) -> Optional[str]:
         if ref.name and _is_hex32(ref.name):
             name = ref.name
         else:
+            # Truncated to 32 hex chars so the promoted name stays within the
+            # canonical key grammar (_NAME requires exactly [0-9a-f]{32}): a
+            # full sha256 hexdigest (64 chars) fails parse_key, so
+            # is_owned_storage_key would reject the promoted key and the image
+            # would become unreachable after the legacy key was deleted.
             name = hashlib.sha256(
                 f"{ref.user}/{ref.name}.{ref.ext}".encode()
-            ).hexdigest()
+            ).hexdigest()[:32]
         return f"users/{ref.user}/items/{name}.{ref.ext}"
     return None
 

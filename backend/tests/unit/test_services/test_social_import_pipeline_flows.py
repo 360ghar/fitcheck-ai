@@ -1531,15 +1531,16 @@ async def test_process_single_photo_capacity_exhaustion_sets_flag(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_capacity_pause_refunds_full_reservation_for_requeued_photo(monkeypatch):
-    """backend #15 + follow-up: when a capacity pause requeues a photo, the
-    WHOLE photo is re-reserved and regenerated on retry — so the full
-    reservation must be returned now, or every already-billed item is charged
-    twice (once now, once on retry). The provider_billed_count distinction
-    (keep billed-but-not-uploaded slots) applies only to the delivered-photo
-    path, where the photo proceeds to review and never re-bills.
+    """backend #15 + follow-up: a capacity pause requeues only the items that
+    did NOT produce a persisted result, so those retried items hand their
+    reserved slots back NOW (the retry re-bills them exactly once). An item
+    whose generation succeeded but whose upload failed is NOT a delivered
+    result — it is retried too, and its slot is refunded so the retry's
+    re-bill is the only charge (no double charge for a single result).
 
     Two items: item 1 bills then fails upload; item 2 trips capacity.
-    Refund must be 2 (the full photo reservation), not 1."""
+    Refund must be 2 (both are retried), and both are stored as the requeue
+    remainder."""
     patch_event(monkeypatch)
     updated = []
 
@@ -1547,9 +1548,16 @@ async def test_capacity_pause_refunds_full_reservation_for_requeued_photo(monkey
         updated.append(dict(updates))
         return {"id": photo_id, **updates}
 
+    upserted = []
+
+    async def fake_upsert_photo_items(db, *, job_id, photo_id, user_id, items):
+        upserted.append(items)
+        return items
+
     patch_store(
         monkeypatch,
         update_photo=fake_update_photo,
+        upsert_photo_items=fake_upsert_photo_items,
         get_photo=_async_value(make_photo()),
         get_slots=_async_value({"awaiting": None}),
         get_photo_with_items=_identity_photo,
@@ -1591,15 +1599,102 @@ async def test_capacity_pause_refunds_full_reservation_for_requeued_photo(monkey
     monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
     await service._process_single_photo("job-1", make_photo())
 
-    # The requeued photo will re-reserve and re-bill every item on retry, so
-    # the full reservation (2) is returned now. Refunding only 1 would leave
-    # item 1's slot held AND re-bill it on the retry — a double charge for a
-    # single delivered result.
+    # The failed-upload item produced no deliverable result, so it is part of
+    # the requeue remainder alongside the unattempted item — both slots are
+    # returned now and re-billed exactly once on the retry.
     gen_releases = [c for op, c in released if op == OperationType.GENERATION]
     assert gen_releases == [2], (
-        "capacity-requeued photo must return its full generation reservation; "
-        f"got release count(s) {gen_releases}"
+        "capacity-requeued photo must return the reservation for every retried "
+        f"item; got release count(s) {gen_releases}"
     )
+    # The requeued remainder is exactly the two retried items (nothing was
+    # successfully delivered).
+    pending_updates = [u for u in updated if "pending_extraction" in u.get("metadata", {})]
+    assert pending_updates
+    stored = pending_updates[0]["metadata"]["pending_extraction"]
+    assert {i["temp_id"] for i in stored["items"]} == {"t1", "t2"}
+    # The failed item's row is persisted (best-effort persistence of the
+    # processed items, including the FAILED marker).
+    assert upserted and upserted[0][0]["temp_id"] == "t1"
+
+
+@pytest.mark.asyncio
+async def test_capacity_pause_persists_generated_items_and_retries_only_remainder(monkeypatch):
+    """backend #15 + follow-up: an item that FULLY generated (provider billed
+    AND temp image uploaded) is persisted as GENERATED on a capacity pause and
+    excluded from the requeue — the retry re-generates only the unattempted
+    remainder, so each item is billed exactly once and the refund covers only
+    the slots that will actually be re-used."""
+    patch_event(monkeypatch)
+    updated = []
+
+    async def fake_update_photo(db, *, job_id, user_id, photo_id, updates):
+        updated.append(dict(updates))
+        return {"id": photo_id, **updates}
+
+    upserted = []
+
+    async def fake_upsert_photo_items(db, *, job_id, photo_id, user_id, items):
+        upserted.append(items)
+        return items
+
+    patch_store(
+        monkeypatch,
+        update_photo=fake_update_photo,
+        upsert_photo_items=fake_upsert_photo_items,
+        get_photo=_async_value(make_photo()),
+        get_slots=_async_value({"awaiting": None}),
+        get_photo_with_items=_identity_photo,
+    )
+    fake_extraction, fake_generation = patch_process_collaborators(
+        monkeypatch, items=[{"temp_id": "t1", "category": "tops"}, {"temp_id": "t2", "category": "tops"}]
+    )
+
+    call = {"n": 0}
+
+    async def _gen_then_quota(**kwargs):
+        call["n"] += 1
+        if call["n"] == 1:
+            return SimpleNamespace(image_base64="aGVsbG8=")
+        raise QuotaError("quota")
+
+    class QuotaError(Exception):
+        error_kind = "upstream_quota"
+        retry_after_seconds = 30
+
+    fake_generation.generate_product_image = _gen_then_quota
+
+    released: list[tuple] = []
+
+    async def fake_release(user_id, operation_type, db, count=1):
+        released.append((operation_type, count))
+
+    monkeypatch.setattr(AISettingsService, "release_usage", staticmethod(fake_release))
+
+    service = make_service()
+    monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
+    await service._process_single_photo("job-1", make_photo())
+
+    # Item 1 was fully delivered: persisted as GENERATED, NOT refunded, NOT in
+    # the requeue. Only item 2's unattempted slot is returned.
+    gen_releases = [c for op, c in released if op == OperationType.GENERATION]
+    assert gen_releases == [1], (
+        "a fully generated item must not be refunded or re-billed; got "
+        f"release count(s) {gen_releases}"
+    )
+    assert upserted and upserted[0][0]["status"] == SocialImportItemStatus.GENERATED.value
+    assert upserted[0][0]["temp_id"] == "t1"
+    assert upserted[0][0]["generated_image_url"] == "https://gen"
+
+    pending_updates = [u for u in updated if "pending_extraction" in u.get("metadata", {})]
+    assert pending_updates
+    stored = pending_updates[0]["metadata"]["pending_extraction"]
+    assert [i["temp_id"] for i in stored["items"]] == ["t2"], (
+        "the requeue must contain only the unattempted remainder"
+    )
+    # The photo is requeued, not delivered as failed.
+    status_updates = [u for u in updated if u.get("status")]
+    assert status_updates[-1]["status"] == SocialImportPhotoStatus.QUEUED.value
 
 
 @pytest.mark.asyncio

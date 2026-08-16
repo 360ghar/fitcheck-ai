@@ -1333,7 +1333,12 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           `outfit-${outfitId}-${Date.now()}.png`
         );
 
-        const clientRequestId = `auto-${outfitId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        // The backend caps client_request_id at 64 chars (outfits.py:
+        // `client_request_id: str = Form(None, max_length=64)`), and
+        // `outfitId` is a 36-char UUID, so the suffix uses base36 timestamps
+        // and a short random — the previous decimal `Date.now()` (13 chars)
+        // pushed the key to exactly 64 with zero headroom.
+        const clientRequestId = `auto-${outfitId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
         const uploaded = await outfitsApi.uploadOutfitImage(outfitId, imageFile, {
           isPrimary: true,
           pose: 'front',

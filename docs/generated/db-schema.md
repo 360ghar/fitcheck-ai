@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-10
+Generated: 2026-08-11
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -73,6 +73,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `052_iap_identifier_ownership.sql`
 - `053_extraction_jobs_reserved_generations.sql`
 - `054_drop_overbroad_blog_manage_policy.sql`
+- `055_release_job_generation_quota.sql`
 
 ## Tables (CREATE TABLE)
 

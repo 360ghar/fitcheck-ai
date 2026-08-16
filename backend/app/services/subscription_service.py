@@ -949,6 +949,18 @@ class SubscriptionService:
                 # (A1-01). Best-effort downgrade to free alongside the
                 # identifier strip; the caller's entitlement write below is
                 # what the user is waiting on, so a failure here only logs.
+                #
+                # The release is CONDITIONAL: a row that is actively entitled
+                # on a paid plan (the pre-existing claimant of this store
+                # purchase) is never released by a concurrent registration.
+                # Otherwise account B's claim would clear account A's
+                # identifier mid-flight and then A's OWN upsert would land on
+                # an already-cleared row — silently transferring one paid
+                # purchase between accounts instead of letting the migration-
+                # 052 unique index reject the second claimant with 23505.
+                # Rows in a non-entitled state (free/trial/expired) are still
+                # released so a stale snapshot of the identifier on a
+                # downgraded row does not shadow the new owner's claim.
                 released = await asyncio.to_thread(
                     db.table("subscriptions")
                     .update({
@@ -962,6 +974,7 @@ class SubscriptionService:
                     })
                     .eq(identity_column, claimed_identifier)
                     .neq("user_id", user_id)
+                    .or_("plan_type.in.(free,trial),plan_type.is.null")
                     .execute
                 )
                 stale_rows = getattr(released, "data", None) or []

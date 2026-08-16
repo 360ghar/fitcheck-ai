@@ -808,6 +808,11 @@ async def select_oauth_page(
     Fails closed: an invalid/expired token, no pending session, a page id
     outside the candidate list, or a resolution error all return a validation
     error asking the user to reconnect.
+
+    Single-use ordering (backend #16): an already-consumed token is rejected
+    with a cheap non-destructive check BEFORE the outbound Graph API call, and
+    the token is only burned immediately before ``accept_auth``. If auth
+    persistence fails, the burn is released so the link stays usable.
     """
     try:
         # consume_selection_token (not parse) so the picker link is single-use:
@@ -855,6 +860,27 @@ async def select_oauth_page(
             "Please reconnect."
         )
 
+    # Replay guard, cheap and early: a replayed (already-consumed but still
+    # pending) token is rejected HERE, BEFORE the outbound Meta Graph API call
+    # in resolve_platform_identity below — otherwise a replay would spend a
+    # remote request on a submission that is doomed to be rejected at the burn
+    # step. The actual single-use burn still happens only at the end (backend
+    # #16), so a transient failure after this point does not permanently
+    # consume a still-valid token.
+    try:
+        if SocialOAuthService.is_selection_token_consumed(selection_token):
+            raise ValidationError(
+                "This account selection link has already been used. Please "
+                "connect your Instagram account again."
+            )
+    except ValidationError:
+        raise
+    except Exception as exc:
+        raise ValidationError(
+            "This account selection link has expired. Please connect your "
+            "Instagram account again."
+        ) from exc
+
     try:
         identity_payload = await SocialOAuthService.resolve_platform_identity(
             platform=SocialPlatform.INSTAGRAM,
@@ -893,7 +919,17 @@ async def select_oauth_page(
             "connect your Instagram account again."
         ) from exc
     service = _service(user_id, db)
-    await service.accept_auth(job_id, "oauth", payload)
+    try:
+        await service.accept_auth(job_id, "oauth", payload)
+    except Exception:
+        # The nonce was burned above but auth persistence failed: release the
+        # claim so a transient backend error (a Meta hiccup on resume, a DB
+        # blip) does not force the user to reconnect — the same picker link
+        # stays usable. A submission that actually won the concurrent race is
+        # unaffected: its nonce is already committed and release only removes
+        # a nonce that failed to persist. (backend #16)
+        SocialOAuthService.release_selection_token(selection_token)
+        raise
     return {
         "data": SocialImportAuthResponse(
             success=True,

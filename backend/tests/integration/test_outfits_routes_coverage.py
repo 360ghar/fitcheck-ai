@@ -27,7 +27,9 @@ model, so a tiny local subclass adds them without touching ``tests/utils``:
   note in ``test_add_collection_outfit_upserts_a_new_member``.
 """
 
+import asyncio
 import inspect
+import threading
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, patch
@@ -267,65 +269,75 @@ class _PrimaryRpcDB(_OutfitsFakeDB):
     primary reassignment the upload route calls; ``set_primary_outfit_image``
     is the migration-gap fallback. Both flip the primary flag like the real
     RPCs so route-level tests can assert on persisted rows.
+
+    The route invokes these RPCs via ``asyncio.to_thread``, so a same-key race
+    test runs two threads against the same in-memory rows: the row mutation is
+    guarded by a lock (the real RPC serializes on the DB row lock).
     """
+
+    _lock = threading.Lock()
 
     def rpc(self, name, params=None):
         params = params or {}
         if name == "add_outfit_image_and_set_primary":
             self.rpc_calls.append((name, params))
-            image_id = params.get("p_image_id") or IMAGE_ID
-            outfit_id = params.get("p_outfit_uuid")
-            client_request_id = params.get("p_client_request_id")
-            # ON CONFLICT DO NOTHING semantics: a repeated client_request_id
-            # resolves the existing row instead of inserting a duplicate.
-            existing = None
-            for row in self._rows_for("outfit_images"):
-                if (
-                    client_request_id
-                    and row.get("client_request_id") == client_request_id
-                    and row.get("outfit_id") == outfit_id
-                ):
-                    existing = row
-                    break
-            if existing is None:
-                row = _outfit_image_row(**{
-                    k: v
-                    for k, v in {
-                        "id": image_id,
-                        "outfit_id": outfit_id,
-                        "image_url": params.get("p_image_url") or "https://cdn/uploaded.jpg",
-                        "thumbnail_url": params.get("p_thumbnail_url"),
-                        "storage_path": params.get("p_storage_path"),
-                        "pose": params.get("p_pose") or "front",
-                        "lighting": params.get("p_lighting"),
-                        "body_profile_id": params.get("p_body_profile_id"),
-                        "generation_type": params.get("p_generation_type") or "ai",
-                        "is_primary": bool(params.get("p_is_primary")),
-                        "width": params.get("p_width"),
-                        "height": params.get("p_height"),
-                        "generation_metadata": params.get("p_generation_metadata"),
-                        "client_request_id": client_request_id,
-                        "created_at": params.get("p_created_at"),
-                    }.items()
-                    if v is not None
-                })
-                self._rows_for("outfit_images").append(row)
-                resolved_id = row["id"]
-            else:
-                resolved_id = existing["id"]
-            if bool(params.get("p_is_primary")):
-                for row in self._rows_for("outfit_images"):
-                    row["is_primary"] = row.get("id") == resolved_id
-            # add_outfit_image_and_set_primary RETURNS UUID (scalar), so
-            # PostgREST delivers the bare value in `data` — mirror that here
-            # so the route's scalar reader is exercised (a list-shaped fake
-            # masked the one-character truncation bug).
-            return _FakeRpcResultBuilder(FakeResult(data=resolved_id))
+            with self._lock:
+                return self._resolve_outfit_image_rpc(params)
         if name == "set_primary_outfit_image":
             image_uuid = params.get("image_uuid")
             for row in self._rows_for("outfit_images"):
                 row["is_primary"] = bool(image_uuid and row.get("id") == image_uuid)
         return super().rpc(name, params)
+
+    def _resolve_outfit_image_rpc(self, params):
+        image_id = params.get("p_image_id") or IMAGE_ID
+        outfit_id = params.get("p_outfit_uuid")
+        client_request_id = params.get("p_client_request_id")
+        # ON CONFLICT DO NOTHING semantics: a repeated client_request_id
+        # resolves the existing row instead of inserting a duplicate.
+        existing = None
+        for row in self._rows_for("outfit_images"):
+            if (
+                client_request_id
+                and row.get("client_request_id") == client_request_id
+                and row.get("outfit_id") == outfit_id
+            ):
+                existing = row
+                break
+        if existing is None:
+            row = _outfit_image_row(**{
+                k: v
+                for k, v in {
+                    "id": image_id,
+                    "outfit_id": outfit_id,
+                    "image_url": params.get("p_image_url") or "https://cdn/uploaded.jpg",
+                    "thumbnail_url": params.get("p_thumbnail_url"),
+                    "storage_path": params.get("p_storage_path"),
+                    "pose": params.get("p_pose") or "front",
+                    "lighting": params.get("p_lighting"),
+                    "body_profile_id": params.get("p_body_profile_id"),
+                    "generation_type": params.get("p_generation_type") or "ai",
+                    "is_primary": bool(params.get("p_is_primary")),
+                    "width": params.get("p_width"),
+                    "height": params.get("p_height"),
+                    "generation_metadata": params.get("p_generation_metadata"),
+                    "client_request_id": client_request_id,
+                    "created_at": params.get("p_created_at"),
+                }.items()
+                if v is not None
+            })
+            self._rows_for("outfit_images").append(row)
+            resolved_id = row["id"]
+        else:
+            resolved_id = existing["id"]
+        if bool(params.get("p_is_primary")):
+            for row in self._rows_for("outfit_images"):
+                row["is_primary"] = row.get("id") == resolved_id
+        # add_outfit_image_and_set_primary RETURNS UUID (scalar), so
+        # PostgREST delivers the bare value in `data` — mirror that here
+        # so the route's scalar reader is exercised (a list-shaped fake
+        # masked the one-character truncation bug).
+        return _FakeRpcResultBuilder(FakeResult(data=resolved_id))
 
 
 class _FakeRpcResultBuilder:
@@ -2632,41 +2644,73 @@ async def test_upload_outfit_image_race_collapses_onto_client_request_id_winner(
     server-side transaction (add_outfit_image_and_set_primary, migration 045),
     and the RPC's ON CONFLICT + client_request_id resolution collapses a
     concurrent same-key upload onto the winner's row instead of the route
-    catching a 23505. Two sequential uploads with the same key must persist a
-    single row and resolve the same id."""
-    db = _PrimaryRpcDB({"outfits": [_outfit_row()]})
+    catching a 23505.
 
-    with patch.object(StorageService, "upload_outfit_image", new=AsyncMock(return_value=_UPLOAD_RESPONSE)):
-        first = await outfits_module.upload_outfit_image(
-            outfit_id=UUID(OUTFIT_ID),
-            file=_FakeUpload(),
-            pose="front",
-            lighting=None,
-            body_profile_id=None,
-            generation_id=None,
-            is_primary=False,
-            client_request_id="img-req-1",
-            user_id=USER_ID,
-            db=db,
+    This drives a TRUE same-key race: both uploads are gated so they pass the
+    route's early replay lookup (``_find_outfit_image_by_client_request_id``)
+    before either proceeds — a sequential replay is caught by that lookup and
+    never reaches the RPC, so it would not exercise the ON CONFLICT collapse
+    this test pins. Both calls must reach ``add_outfit_image_and_set_primary``
+    and the RPC must resolve them to a single persisted row.
+    """
+    db = _PrimaryRpcDB({"outfits": [_outfit_row()]})
+    # Barrier: hold both callers at the replay lookup until BOTH have passed
+    # it (each seeing no existing row), then release them together so the two
+    # RPC calls actually race on the same key.
+    replay_entries = 0
+    replay_gate = asyncio.Event()
+    real_replay = outfits_module._find_outfit_image_by_client_request_id
+
+    async def gated_replay(db_client, outfit_id, client_request_id):
+        nonlocal replay_entries
+        replay_entries += 1
+        if replay_entries == 2:
+            replay_gate.set()
+        await replay_gate.wait()
+        return await real_replay(db_client, outfit_id, client_request_id)
+
+    with patch.object(
+        outfits_module,
+        "_find_outfit_image_by_client_request_id",
+        new=gated_replay,
+    ), patch.object(StorageService, "upload_outfit_image", new=AsyncMock(return_value=_UPLOAD_RESPONSE)):
+        first_task = asyncio.create_task(
+            outfits_module.upload_outfit_image(
+                outfit_id=UUID(OUTFIT_ID),
+                file=_FakeUpload(),
+                pose="front",
+                lighting=None,
+                body_profile_id=None,
+                generation_id=None,
+                is_primary=False,
+                client_request_id="img-req-1",
+                user_id=USER_ID,
+                db=db,
+            )
         )
-        # The loser's RPC resolves the winner's row via the same key (ON
-        # CONFLICT DO NOTHING + client_request_id lookup) — no duplicate row,
-        # same id, no 23505 surfaced.
-        second = await outfits_module.upload_outfit_image(
-            outfit_id=UUID(OUTFIT_ID),
-            file=_FakeUpload(),
-            pose="front",
-            lighting=None,
-            body_profile_id=None,
-            generation_id=None,
-            is_primary=False,
-            client_request_id="img-req-1",
-            user_id=USER_ID,
-            db=db,
+        second_task = asyncio.create_task(
+            outfits_module.upload_outfit_image(
+                outfit_id=UUID(OUTFIT_ID),
+                file=_FakeUpload(),
+                pose="front",
+                lighting=None,
+                body_profile_id=None,
+                generation_id=None,
+                is_primary=False,
+                client_request_id="img-req-1",
+                user_id=USER_ID,
+                db=db,
+            )
         )
+        first = await first_task
+        second = await second_task
 
     assert first["message"] == "Created"
     assert second["message"] == "Created"
+    # Both calls raced through to the RPC (neither was short-circuited by the
+    # early replay lookup) — the ON CONFLICT collapse is what was exercised.
+    rpc_names = [name for name, _params in db.rpc_calls]
+    assert rpc_names.count("add_outfit_image_and_set_primary") == 2
     # Exactly one row persisted — the winner's.
     assert len(db.rows["outfit_images"]) == 1
     assert db.rows["outfit_images"][0]["client_request_id"] == "img-req-1"

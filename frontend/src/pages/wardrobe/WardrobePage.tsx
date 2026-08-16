@@ -540,10 +540,11 @@ export default function WardrobePage() {
     Boolean(selectedItemDetail) &&
     !filteredItems.some((i) => i.id === selectedId)
 
-  // Header count: the server total when the list is not being narrowed
-  // client-side by search (search filters only the loaded pages); otherwise the
-  // number of visible matches. Without this a 100-item closet read "24 items".
-  const displayCount = filters.search ? filteredItems.length : totalItems
+  // Header count: the server total for the active filters (search is a
+  // server-side dimension too — see buildItemApiFilters — so totalItems is the
+  // real match count; falling back to the loaded page count understated 25+
+  // matches as "24 items").
+  const displayCount = totalItems
 
   const renderCard = (item: Item, variant: 'default' | 'list') => {
     const isMultiSelected = selectedItems.has(item.id)
@@ -593,17 +594,6 @@ export default function WardrobePage() {
           actionLabel="Clear filters"
           onAction={handleResetFilters}
         />
-        {/* Search is client-side over the loaded pages only: when matches may
-            live on unloaded pages, keep the infinite-scroll sentinel visible so
-            the empty state is not a dead end (a false "no match" for a closet
-            larger than one page). */}
-        {filters.search && hasMore && (
-          <InfiniteScrollSentinel
-            onLoadMore={() => void fetchMore()}
-            hasMore={hasMore}
-            isLoading={isLoadingMore}
-          />
-        )}
       </>
     ) : (
       <EmptyState

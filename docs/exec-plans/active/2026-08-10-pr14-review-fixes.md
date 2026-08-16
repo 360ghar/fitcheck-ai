@@ -80,7 +80,7 @@ Validation result: **38 VALID, 2 PARTIALLY VALID, 0 invalid.** Both partially-va
 
 ## Context / links
 
-- PR: https://github.com/360ghar/fitcheck-ai/pull/14
+- PR: [360ghar/fitcheck-ai#14](https://github.com/360ghar/fitcheck-ai/pull/14)
 - Review findings: cubic `cubic-dev-ai` review + inline comments on PR #14.
 
 ## Progress log

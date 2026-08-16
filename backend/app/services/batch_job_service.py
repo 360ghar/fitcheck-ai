@@ -16,8 +16,6 @@ from uuid import uuid4
 
 from app.core.exceptions import AIServiceError, DatabaseError, RateLimitError
 from app.core.logging_config import get_context_logger
-from app.models.subscription import OperationType
-from app.services.ai_settings_service import AISettingsService
 from app.services.job_persistence import JobPersistenceStore
 from app.utils.process_metrics import estimate_base64_mb, log_memory
 from app.utils.sse_queue import (
@@ -30,6 +28,7 @@ from app.utils.sse_queue import (
 )
 from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+    execute_with_reconnect,
     job_persistence_migration_hint,
     maybe_single_data,
 )
@@ -664,14 +663,16 @@ class BatchJobService:
         and the old code only released them on admission-failure paths, so a
         batch that generated fewer images than reserved (fewer items detected,
         extraction failures, cancellation) burned the difference from the
-        user's daily quota forever (A2-02). Release is GREATEST(0, ...)-bounded
-        server-side, so a duplicate release across workers is harmless.
+        user's daily quota forever (A2-02).
 
-        ``actually_generated`` is ``len(generation_completed)``: the set of
-        items whose product image was actually generated (one image per item),
-        including items whose upload failed (the VLM call consumed quota) and
-        excluding failed generations. Best-effort: a failing release RPC must
-        never fail the pipeline or cancel path.
+        The claim + release is ONE atomic database operation
+        (``release_job_generation_quota``, migration 055) keyed by job id: the
+        quota decrement only happens when this caller wins the
+        ``reserved_generations > 0`` claim, so an ambiguous retry or a
+        concurrent cleanup/cancel can never release the same slots twice (the
+        old CAS-update-then-release dance could double-release after a lost
+        RPC response). Best-effort: a failing release RPC must never fail the
+        pipeline or cancel path.
         """
         reserved = getattr(job, "reserved_generations", 0) or 0
         if reserved <= 0:
@@ -685,56 +686,33 @@ class BatchJobService:
                 extra={"job_id": job.job_id, "user_id": job.user_id, "unused": unused},
             )
             return
-        # Idempotency: a recovered poll-only shell is re-hydrated from the
-        # durable row on every poll, so without a marker the cleanup loop would
-        # re-release the same reservation each tick. Atomically zero the
-        # durable reserved_generations (conditional on its current value) and
-        # only release quota if the claim won — a concurrent caller / later
-        # poll sees reserved_generations = 0 and exits above. Also covers a
-        # terminal recovered job that crashed before its in-memory release ran.
         try:
-            claim_result = await asyncio.to_thread(
-                db_client.table("extraction_jobs")
-                .update({"reserved_generations": 0})
-                .eq("id", job.job_id)
-                .eq("reserved_generations", reserved)
-                .execute
-            )
-            claim_rows = getattr(claim_result, "data", None) or []
-            if not claim_rows:
-                # Another caller already claimed/released this reservation.
-                job.reserved_generations = 0
-                return
-        except Exception as exc:
-            logger.warning(
-                "Failed to claim reserved generation quota for release; "
-                "skipping to avoid a possible double release",
+            await execute_with_reconnect(
+                lambda d: d.rpc(
+                    "release_job_generation_quota",
+                    {
+                        "p_job_id": job.job_id,
+                        "p_user_id": job.user_id,
+                        "p_count": unused,
+                    },
+                ).execute(),
+                db_client,
                 extra={
+                    "operation": "release_job_generation_quota",
                     "job_id": job.job_id,
                     "user_id": job.user_id,
-                    "reserved": reserved,
-                    "error": str(exc),
+                    "unused": unused,
                 },
             )
-            return
-        job.reserved_generations = 0
-        if unused <= 0:
-            return
-        try:
-            await AISettingsService.release_usage(
-                user_id=job.user_id,
-                operation_type=OperationType.GENERATION,
-                db=db_client,
-                count=unused,
-            )
         except Exception as exc:
-            # The CAS already zeroed the durable reservation, so a later poll
-            # would see reserved_generations = 0 and never retry — abandoning
-            # the user's daily quota permanently. Restore the durable value so
-            # the next eviction/cancel cycle retries the release.
+            # The reservation is intentionally KEPT: the in-memory value still
+            # reflects it, so the next eviction/cancel cycle retries the
+            # release. No blind durable restore here — that was the source of
+            # a possible double release after a lost RPC response (migration
+            # 055 makes the retry idempotent instead).
             logger.warning(
-                "Failed to release unused generation quota; restoring the "
-                "durable reservation so a later poll can retry",
+                "Failed to release unused generation quota; keeping the "
+                "reservation so a later poll retries",
                 extra={
                     "job_id": job.job_id,
                     "user_id": job.user_id,
@@ -743,17 +721,11 @@ class BatchJobService:
                     "error": str(exc),
                 },
             )
-            try:
-                await asyncio.to_thread(
-                    db_client.table("extraction_jobs")
-                    .update({"reserved_generations": reserved})
-                    .eq("id", job.job_id)
-                    .execute
-                )
-            except Exception:
-                # Nothing else we can do — the in-memory value still reflects
-                # the reservation so a subsequent claim attempt can retry.
-                pass
+            return
+        # The RPC either won the claim (reservation zeroed + quota released)
+        # or returned FALSE (another caller already released it). Either way
+        # the durable reservation is gone.
+        job.reserved_generations = 0
 
     @classmethod
     async def cancel_job(cls, job_id: str, user_id: str, db: Any = None) -> bool:

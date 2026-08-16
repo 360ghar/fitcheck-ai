@@ -730,3 +730,49 @@ class TestSelectionToken:
 
         with pytest.raises(SocialImportOAuthStateError, match="payload"):
             SocialOAuthService.consume_selection_token(token)
+
+    def test_is_consumed_is_false_before_consume(self, _clear_consumed_nonces):
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        assert SocialOAuthService.is_selection_token_consumed(token) is False
+        SocialOAuthService.consume_selection_token(token)
+        assert SocialOAuthService.is_selection_token_consumed(token) is True
+
+    def test_is_consumed_does_not_burn_the_token(self, _clear_consumed_nonces):
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        assert SocialOAuthService.is_selection_token_consumed(token) is False
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result == {"user_id": "user-1", "job_id": "job-1"}
+
+    def test_is_consumed_rejects_invalid_and_expired(self, _clear_consumed_nonces):
+        with pytest.raises(SocialImportOAuthStateError, match="Malformed"):
+            SocialOAuthService.is_selection_token_consumed("not-a-token")
+
+        encoded = SocialOAuthService._b64_url_encode(
+            json.dumps(
+                {"uid": "user-1", "jid": "job-1", "exp": FIXED_NOW_TS - 1, "nonce": "old"},
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        signature = hmac.new(
+            SocialOAuthService._selection_secret(),
+            encoded.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        expired = f"{encoded}.{signature}"
+        with pytest.raises(SocialImportOAuthStateError, match="expired"):
+            SocialOAuthService.is_selection_token_consumed(expired)
+
+    def test_release_makes_token_reusable(self, _clear_consumed_nonces):
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        SocialOAuthService.consume_selection_token(token)
+        assert SocialOAuthService.is_selection_token_consumed(token) is True
+        SocialOAuthService.release_selection_token(token)
+        assert SocialOAuthService.is_selection_token_consumed(token) is False
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result == {"user_id": "user-1", "job_id": "job-1"}
+
+    def test_release_of_invalid_token_is_a_noop(self, _clear_consumed_nonces):
+        SocialOAuthService.release_selection_token("not-a-token")
+        token = SocialOAuthService.create_selection_token(user_id="user-1", job_id="job-1")
+        result = SocialOAuthService.consume_selection_token(token)
+        assert result == {"user_id": "user-1", "job_id": "job-1"}

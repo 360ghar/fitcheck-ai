@@ -184,3 +184,90 @@ Verified during the review sweep; 8 were already fixed in the working tree (F1-0
 Verification: backend `pytest` full suite green (3833 passed, 4 skipped), ruff clean; frontend vitest (incl. new `useBatchSSE.test.ts`, `useInfiniteScroll` settle-re-fire test, `subscriptionStore.usageCache.test.ts`, create/upload idempotency tests in both route coverage files) + lint + `tsc --noEmit` green.
 
 Review follow-up (this session): the first full-suite run hung on a **real deadlock in the A5-08 KeyedLock fallback** (`app/core/concurrency.py`): the contended-registry fallback returned an arbitrary cached lock, and nested acquisition of a lock the current task already holds deadlocks forever (`asyncio.Lock` is not reentrant). Fixed with per-task held-lock tracking (`__call__` yields immediately when the task already holds that lock object; the fallback skips task-held locks and only grows past `max_keys` when every cached lock is held by the caller). 3 regression tests added; `tests/unit/test_core/test_concurrency_keyed_lock.py` green. The full suite also surfaced 39 stale tests encoding pre-fix behavior; updated to the implemented contracts: migration 047 gained `IF NOT EXISTS` on its partial unique indexes (rerunnability contract), ip-rate-limit client-IP tests now use case-insensitive starlette `Headers` (last-hop semantics) and the demo-operation fakes expose `headers`, photoshoot fixtures use a real 1×1 PNG (A3-06 payload validation), `set_error` test asserts the in-memory error + dirty-flag retry contract (A3-08), `test_photoshoot_service.py` got an autouse job-registry reset (order-independent under `MAX_CONCURRENT_PHOTOSHOOT_JOBS=2`), approve/reject tests assert the photo-scoped `SocialImportPhotoNotFoundError` and the awaiting-review state guard (A4-07), the demo pseudo-user test asserts last-XFF-hop keying (A5-01), and the Meta-API-None scraper test asserts the retryable `fetch_failure` instead of anonymous fall-through (A4-04).
+
+## PR #14 review follow-up (2026-08-11): remaining cubic review findings
+
+The 121-review-comment pass on PR #14 head `1c91008` was re-validated against
+the working tree. 17 comments were already fixed by `277989a`/`0f56ad9`/`1c91008`
+(referral `email_verified` sync on login, IG multi-account picker, selection-nonce
+consumption, storage extension allowlists, legacy-key deletion ownership, worker
+legacy-avatar allowlist, forward migrations 049/050/051, scalar RPC status read,
+concurrent last-item-removal lock, `cleanup_temp_assets` users/ layout, 64-char
+key compliance, logout reset epochs, debounced-search race guard, Flutter
+`fetchedItem` sync, calendar UTC round-trip) — no change needed. The remaining
+actionable findings fixed in this pass:
+
+- **Social import OAuth picker** (`social_oauth_service.py`, `social_import.py`):
+  added non-destructive `is_selection_token_consumed` (reject a replayed token
+  BEFORE the outbound Meta call) and `release_selection_token` (un-burn the nonce
+  when `accept_auth` persistence fails, so a transient error does not force a
+  reconnect).
+- **Social import capacity pause** (`social_import_pipeline_service.py`): items
+  that fully generated are now persisted (GENERATED + temp image) and excluded
+  from the requeue; only the unattempted/failed remainder is refunded and
+  re-queued — each item is billed exactly once and quota matches provider usage.
+  Removed the dead `provider_billed_count`/`generation_success_count` counters.
+- **IAP identifier release** (`subscription_service.py`): the concurrent-claim
+  release UPDATE is now conditional (`plan_type in free/trial or null`) so an
+  actively-entitled paid claimant is never stripped mid-flight; the migration-052
+  unique index rejects the second claimant (23505 → 400) instead of silently
+  transferring the purchase between accounts.
+- **Batch generation quota release** (`batch_job_service.py` + new migration
+  `055_release_job_generation_quota.sql`): claim + release is now ONE atomic
+  idempotent RPC keyed by job id (`reserved_generations > 0` claim + decrement in
+  a single transaction). Removes the blind durable restore that could double-
+  release after a lost RPC response, and keeps the in-memory reservation on
+  transient failure so the next cycle retries (the old comment claiming the
+  in-memory value still reflected the reservation was wrong).
+- **Migration 050 backfill** (`050_fix_referral_credit_no_banking.sql`): the
+  destructive zero-bank predicate now requires NO paid-billing footprint
+  (`stripe_customer_id`/Apple/Google identifiers all null), so a legitimate
+  paid-origin bank on a lapsed-paid-then-trial row is never destroyed.
+  (`billing_provider` was not usable as evidence — it defaults to `'stripe'` for
+  every row per migration 030.)
+- **`scripts/check_migrations.py`**: docstring no longer claims a nonexistent
+  `;` comment syntax; `_strip_sql_comments` now strips `/* ... */` block comments
+  so a `TO` role inside a block comment cannot be misread as a grant. New unit
+  tests in `test_check_migrations.py`.
+- **`migrate_storage_layout_users.py`**: `_promotion_target` digest truncated to
+  32 hex chars so promoted names stay within the canonical `_NAME` grammar
+  (a 64-hex name fails `parse_key` and would make the promoted image unreachable).
+- **Frontend**: `WardrobePage` header count uses `totalItems` for search too
+  (server-side search was undercounting 25+ matches as "24 items");
+  `outfitStore` auto-generation idempotency key uses a base36 timestamp so it
+  no longer sits at the 64-char backend cap.
+- **Flutter**: the A10b-08 `calendar_controller_test` is now a `testWidgets` test
+  that starts both fetches inside real build frames and completes the stale
+  response mid-frame — verified it FAILS against a bump-after-await controller
+  (the old plain `test()` could never exercise the deferral path).
+- **Test corrections**: the outfits race test now drives a true same-key race
+  (barrier before the replay lookup, `_PrimaryRpcDB` made thread-safe) so the
+  RPC ON CONFLICT collapse is actually exercised; stale "legacy fixture"
+  comments in the items delete tests updated; the migrate-layout determinism
+  docstring states only the reuse branch is covered; batch-job release tests
+  assert the new RPC path and reservation-retention-on-failure.
+
+Verification: backend `pytest` full suite green (3989 passed, 4 skipped), ruff
+clean; `scripts/check_migrations.py` OK (56 files); frontend lint + vitest
+(277 passed) + production build green; flutter full suite green (235 passed);
+`check_architecture.py` + `check_docs_structure.py` pass (db-schema.md
+regenerated for migration 055).
+
+## PR #14 close-out (2026-08-16)
+
+Re-validated all 33 still-open cubic threads on PR #14. 22 were already fixed
+in `277989a`/`0f56ad9`/`1c91008`; the remaining 11 plus review leftovers in
+this commit:
+
+- OAuth picker: `raise` after `release_selection_token` keeps the traceback;
+  unit tests for `is_selection_token_consumed` / `release_selection_token`.
+- Wardrobe: stop re-applying server-side search in `applyFiltersAndSort` (the
+  client predicate emptied pages the header still counted via `totalItems`);
+  drop the stale "search is client-side" empty-state sentinel.
+- CI: regenerate `docs/references/api-spec.md`; wrap the bare PR URL in
+  `2026-08-10-pr14-review-fixes.md` (MD034); admin palette e2e uses
+  `Control+K` so Linux CI can open the dialog.
+- U14 (two-primary outfit images) left as-is: insert + reassignment are one
+  transaction, so a second RPC cannot see an uncommitted primary-true insert.
+- Migration 055 must be applied on hosted Supabase before this Python path
+  deploys (same as 049–054).

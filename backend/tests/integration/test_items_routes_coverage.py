@@ -971,8 +971,7 @@ async def test_delete_item_removes_row_and_storage_paths(monkeypatch):
     assert result is None
     assert ("items", None) in db.deletes
     vector.delete_item.assert_awaited_once_with(ITEM_ID)
-    # Legacy fixture keys are mapped to their users/ home by the delete-path
-    # normalizer (migrate_key_to_users_layout).
+    # Canonical fixture keys pass through the delete-path normalizer unchanged.
     assert sorted(deleted_paths) == sorted([
         f"users/{USER_ID}/items/11111111111111111111111111111111.jpg",
         f"users/{USER_ID}/items/11111111111111111111111111111111_thumb.webp",
@@ -1496,8 +1495,7 @@ async def test_batch_delete_cleans_storage_and_embeddings(monkeypatch):
 
     assert result["data"]["deleted_count"] == 2
     vector.batch_delete.assert_awaited_once_with([ITEM_ID, OTHER_ITEM_ID])
-    # Legacy fixture keys are mapped to their users/ home by the delete-path
-    # normalizer (migrate_key_to_users_layout).
+    # Canonical fixture keys pass through the delete-path normalizer unchanged.
     assert sorted(deleted_paths) == sorted([
         f"users/{USER_ID}/items/11111111111111111111111111111111.jpg",
         f"users/{USER_ID}/items/11111111111111111111111111111111_thumb.webp",

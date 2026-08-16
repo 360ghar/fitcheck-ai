@@ -256,17 +256,9 @@ function applyFiltersAndSort(
     filtered = filtered.filter((item) => item.is_favorite);
   }
 
-  // Apply search filter
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
-    filtered = filtered.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchLower) ||
-        item.brand?.toLowerCase().includes(searchLower) ||
-        item.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
-        item.notes?.toLowerCase().includes(searchLower)
-    );
-  }
+  // Search is a server-side filter (buildItemApiFilters). Do not re-apply
+  // it here: the client predicate (name/brand/tags/notes) is narrower than
+  // the API and would empty a page the header still counted via totalItems.
 
   // Apply sorting
   filtered.sort((a, b) => {

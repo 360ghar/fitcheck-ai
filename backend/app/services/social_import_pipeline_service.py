@@ -998,22 +998,16 @@ class SocialImportPipelineService:
                 user_id=self.user_id, db=self.db
             )
             processed_items: List[Dict[str, Any]] = []
-            generation_success_count = 0
-            # provider_billed_count tracks items that actually consumed the
-            # AI generation provider's quota (generate_product_image returned
-            # successfully). generation_success_count only counts items that
-            # additionally decoded + uploaded. A provider-billed item whose
-            # decode/upload then fails has already consumed quota and must NOT
-            # be refunded on a later capacity pause - that would give back a
-            # slot the provider already used. (backend #15)
-            provider_billed_count = 0
-
+            # An item that generated successfully (provider billed) is
+            # persisted with its temp image when a later capacity pause
+            # interrupts the photo, so it is never re-generated on the retry
+            # (backend #15).
+            capacity_hit = False
             # Cache the source-photo download by URL: every item on a photo
             # shares the same source_image_url, so fetch it once instead of
             # re-GETting the multi-MB JPEG per item. (Items carrying their own
             # distinct URL are still fetched once each.)
             source_photo_cache: Dict[str, Optional[str]] = {}
-            capacity_hit = False
             for item in raw_items:
                 if self._capacity_exhausted:
                     capacity_hit = True
@@ -1075,12 +1069,9 @@ class SocialImportPipelineService:
                         include_shadows=False,
                         reference_image=reference_image_base64,
                     )
-                    # The provider call succeeded: quota for this item is
-                    # consumed regardless of whether decode/upload then
-                    # fails. Count it as billed NOW so a later capacity
-                    # pause never refunds this slot (backend #15).
-                    provider_billed_count += 1
-
+                    # The provider call succeeded: the item is persisted as
+                    # GENERATED below, so a later capacity pause excludes it
+                    # from the retry instead of re-billing it (backend #15).
                     image_bytes = base64.b64decode(generated.image_base64)
                     uploaded = await StorageService.upload_temp_generated_image(
                         db=self.db,
@@ -1088,7 +1079,6 @@ class SocialImportPipelineService:
                         file_data=image_bytes,
                         source="social-import",
                     )
-                    generation_success_count += 1
                     processed_items.append(
                         self._build_item_dict(
                             item,
@@ -1105,8 +1095,10 @@ class SocialImportPipelineService:
                     # A provider quota failure on one item must stop the queue
                     # grinding every remaining photo through the same doomed
                     # generation call: set the capacity flag, break out of the
-                    # item loop, and requeue the whole photo (its extraction
-                    # result is stored so the retry does not re-extract).
+                    # item loop, and requeue the remainder (already-generated
+                    # items are persisted and excluded, so only unattempted/
+                    # failed items re-generate on the retry — see the
+                    # capacity_hit block below).
                     if (
                         getattr(generation_error, "error_kind", None) == "upstream_quota"
                         and not self._capacity_exhausted
@@ -1143,24 +1135,33 @@ class SocialImportPipelineService:
                 # was already extracted.
                 #
                 # A4-03: the generation reservation at the top of this photo
-                # covered ALL items, but capacity stopped the loop early —
-                # items never attempted must hand their reserved slots back
-                # NOW, before the retry re-reserves the full photo. Without
-                # this, a first-item outage on a multi-item photo burns the
-                # user's daily generation allowance without delivering any
-                # reviewable result (and every retry cycle double-reserves).
-                #
-                # The whole photo is requeued below and the retry RE-RESERVES
-                # the full reservation and re-bills every item — so the full
-                # reservation is returned here (the retry bills each item
-                # exactly once, not twice). Refunding only
-                # len(raw_items) - provider_billed_count would keep the
-                # already-billed slots held AND re-bill them on the retry,
-                # double-charging one item for a single delivered result. The
-                # provider_billed_count distinction (backend #15) belongs to
-                # the delivered-photo path where a billed-but-not-uploaded
-                # item is NOT refunded because the photo proceeds to review.
-                unused_generation = len(raw_items)
+                # covered ALL items, but capacity stopped the loop early. Items
+                # that ALREADY generated (provider billed + temp image uploaded)
+                # are persisted NOW and excluded from the requeue, so the retry
+                # re-generates ONLY the unattempted/failed remainder. Each item
+                # is generated exactly once, the user's daily generation quota
+                # matches actual provider usage, and a first-item outage on a
+                # multi-item photo no longer exhausts the allowance without
+                # delivering a reviewable result (backend #15).
+                generated_temp_ids = {
+                    item.get("temp_id")
+                    for item in processed_items
+                    if item.get("status") == SocialImportItemStatus.GENERATED.value
+                }
+                if processed_items:
+                    await SocialImportJobStore.upsert_photo_items(
+                        self.db,
+                        job_id=job_id,
+                        photo_id=photo_id,
+                        user_id=self.user_id,
+                        items=processed_items,
+                    )
+                remainder = [
+                    item
+                    for item in raw_items
+                    if item.get("temp_id") not in generated_temp_ids
+                ]
+                unused_generation = len(remainder)
                 if unused_generation > 0:
                     try:
                         await AISettingsService.release_usage(
@@ -1182,7 +1183,7 @@ class SocialImportPipelineService:
                 await self._store_pending_extraction(
                     job_id=job_id,
                     photo_id=photo_id,
-                    items=raw_items,
+                    items=remainder,
                     source_image_url=source_image_url,
                     source_image_storage_path=source_image_storage_path,
                 )

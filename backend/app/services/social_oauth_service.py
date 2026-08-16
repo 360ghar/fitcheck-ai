@@ -311,6 +311,42 @@ class SocialOAuthService:
         return {"user_id": parsed["user_id"], "job_id": parsed["job_id"]}
 
     @classmethod
+    def is_selection_token_consumed(cls, token: str) -> bool:
+        """Non-destructive replay check (backend #16).
+
+        Validates the token like ``consume_selection_token`` but does NOT
+        record it, so the picker endpoint can reject a replayed
+        (already-consumed-but-still-pending) token cheaply and early — before
+        it spends an outbound Meta Graph API call on ``resolve_platform_identity``
+        only to be rejected at the burn step. Raises
+        ``SocialImportOAuthStateError`` on an invalid/expired token, same as
+        the consuming variant.
+        """
+        parsed = cls.parse_selection_token(token)
+        with _CONSUMED_SELECTION_NONCES_LOCK:
+            return parsed["nonce"] in _CONSUMED_SELECTION_NONCES
+
+    @classmethod
+    def release_selection_token(cls, token: str) -> None:
+        """Best-effort un-consume of a selection token (backend #16).
+
+        Called when the picker endpoint consumed the token but the subsequent
+        auth persistence (``accept_auth``) FAILED, so a transient backend error
+        does not permanently burn a still-valid picker link — the user can
+        retry instead of being forced to reconnect. The consumed set is
+        lock-guarded and the nonce re-validates via its HMAC, so this cannot
+        resurrect a token that was already used by a concurrent submission
+        that actually succeeded.
+        """
+        try:
+            parsed = cls.parse_selection_token(token)
+        except SocialImportOAuthStateError:
+            # Invalid/expired anyway — nothing to release.
+            return
+        with _CONSUMED_SELECTION_NONCES_LOCK:
+            _CONSUMED_SELECTION_NONCES.pop(parsed["nonce"], None)
+
+    @classmethod
     def build_authorize_url(
         cls,
         *,

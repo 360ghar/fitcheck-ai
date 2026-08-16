@@ -71,14 +71,17 @@ def _is_exactly_service_role(roles: Optional[list[str]]) -> bool:
 
 
 def _strip_sql_comments(body: str) -> str:
-    """Remove ``--`` line comments (and trailing `;` comments) from a policy body.
+    """Remove SQL comments from a policy body before the role-list parser runs.
 
-    The role-list parser runs ``\\bTO\\s+`` over the raw body, so a trailing
+    The role-list parser runs ``\\bTO\\s+`` over the body, so a trailing
     ``-- scoped to public`` style comment (common after ``USING (true)``) would
     otherwise be misread as a real ``TO public`` grant and fail the check on a
-    policy that is actually safe.
+    policy that is actually safe. Both comment forms are stripped: ``--`` line
+    comments and ``/* ... */`` block comments — a ``TO`` role name inside a
+    block comment is still a comment, not a grant.
     """
-    return re.sub(r"--[^\n]*", "", body)
+    body = re.sub(r"--[^\n]*", "", body)
+    return re.sub(r"/\*.*?\*/", "", body, flags=re.DOTALL)
 
 
 def check_migrations() -> int:

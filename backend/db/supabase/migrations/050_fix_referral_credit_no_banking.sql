@@ -124,12 +124,21 @@ GRANT EXECUTE ON FUNCTION public.apply_referral_credit_atomic(UUID, INTEGER) TO 
 -- 2 and 3 in the buggy body). The corrected function above only banks for
 -- paying subscribers (branch 1), so those erroneously banked months would
 -- otherwise be spent by _consume_banked_referral_credit after the trial
--- lapses — handing the same referral out twice. Zero the bank ONLY for rows
--- whose current state is free or trial — those are the shapes branches 2/3
--- produced (and branch 1 never banks a free/trial row). A LAPSED paying
--- subscriber (non-free plan, status='active', period ended) may have banked
--- months LEGITIMATELY while paying, so those banks are preserved. This
--- under-corrects a few trial-origin banks on later-converted rows rather than
+-- lapses — handing the same referral out twice.
+--
+-- The predicate is deliberately NARROW so it can never destroy a legitimate
+-- paid-origin bank. Branch 1 banks only when the row is a paying subscriber
+-- (plan_type <> 'free' AND status = 'active' AND current_period_end > NOW()),
+-- so a bank can be legitimate even when the row is CURRENTLY free/trial —
+-- e.g. a user paid (banked), then their paid sub lapsed and a promo/referral
+-- trial started before the bank was redeemed. We therefore only zero rows
+-- that carry NO paid-billing footprint at all (no Stripe customer, no
+-- Apple/Google store identifier): those shapes could only have been produced
+-- by the buggy branches 2/3. billing_provider is NOT used as evidence — it
+-- defaults to 'stripe' for every row, paid or not. Any row that ever touched
+-- a paid rail (stripe_customer_id or a store identifier) keeps its bank
+-- regardless of its current plan state. This under-corrects a few
+-- trial-origin banks on rows that later converted to a paid plan rather than
 -- destroying a legitimate paid-origin bank — the correct bias for a
 -- destructive backfill. Idempotent and guarded: no-ops on fresh DBs/re-runs.
 DO $$
@@ -141,7 +150,10 @@ BEGIN
     SET referral_credit_months = 0,
         updated_at = NOW()
     WHERE COALESCE(referral_credit_months, 0) <> 0
-      AND (plan_type = 'free' OR plan_type IS NULL OR status = 'trial');
+      AND (plan_type = 'free' OR plan_type IS NULL OR status = 'trial')
+      AND (stripe_customer_id IS NULL OR stripe_customer_id = '')
+      AND (apple_original_transaction_id IS NULL OR apple_original_transaction_id = '')
+      AND (google_purchase_token IS NULL OR google_purchase_token = '');
 END $$;
 
 COMMIT;

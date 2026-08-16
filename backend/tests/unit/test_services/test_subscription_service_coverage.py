@@ -612,19 +612,17 @@ async def test_sync_iap_subscription_older_purchase_date_skipped_cross_provider(
 
 @pytest.mark.asyncio
 async def test_sync_iap_subscription_release_downgrades_previous_owner():
-    """A1-01: claiming an identifier held by ANOTHER user's row releases it —
-    and downgrades that row to free so one verified transaction cannot keep
-    two accounts on the paid plan."""
+    """A1-01: claiming an identifier held by ANOTHER user's NON-entitled row
+    (free/trial/null plan) releases it — and downgrades that row to free so
+    one verified transaction cannot keep two accounts on the paid plan."""
     db = _fresh_db(
         rows={
             "subscriptions": [
                 _subscription_row(
-                    plan_type="pro_monthly",
+                    plan_type="trial",
+                    status="trial",
                     billing_provider="apple",
                     apple_original_transaction_id="orig-shared",
-                    current_period_start=(
-                        datetime.now(timezone.utc) - timedelta(days=10)
-                    ).isoformat(),
                     current_period_end=(
                         datetime.now(timezone.utc) + timedelta(days=20)
                     ).isoformat(),
@@ -656,6 +654,60 @@ async def test_sync_iap_subscription_release_downgrades_previous_owner():
     assert previous_owner["apple_original_transaction_id"] is None
     assert previous_owner["plan_type"] == "free"
     assert previous_owner["current_period_end"] is None
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_does_not_release_active_paid_previous_owner():
+    """A1-01 + review fix: a concurrent registration must NOT strip a store
+    identifier from another account's ACTIVELY ENTITLED paid row — that would
+    transfer one paid purchase between accounts instead of letting the
+    migration-052 unique index reject the second claimant with 23505. The
+    release is conditional on the previous owner being non-entitled; an active
+    paid row keeps its identifier and plan, and the caller's own upsert is
+    where the unique index enforces ownership."""
+    db = _fresh_db(
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    plan_type="pro_monthly",
+                    billing_provider="apple",
+                    apple_original_transaction_id="orig-shared",
+                    current_period_start=(
+                        datetime.now(timezone.utc) - timedelta(days=10)
+                    ).isoformat(),
+                    current_period_end=(
+                        datetime.now(timezone.utc) + timedelta(days=20)
+                    ).isoformat(),
+                )
+            ]
+        }
+    )
+    # The stored row belongs to user-2; USER_ID is the new owner.
+    db.rows["subscriptions"][0]["user_id"] = "user-2"
+
+    start = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+
+    await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,
+        status="active",
+        current_period_start=start,
+        current_period_end=end,
+        product_id="com.fitcheck.pro.monthly",
+        apple_original_transaction_id="orig-shared",
+    )
+
+    # The actively entitled previous owner is untouched: identifier kept, plan
+    # kept. Ownership of the shared identifier now collides on the unique
+    # index (migration 052), which the API layer maps to the "already used on
+    # another account" validation error.
+    previous_owner = db.rows["subscriptions"][0]
+    assert previous_owner["user_id"] == "user-2"
+    assert previous_owner["apple_original_transaction_id"] == "orig-shared"
+    assert previous_owner["plan_type"] == "pro_monthly"
 
 
 @pytest.mark.asyncio

@@ -63,8 +63,11 @@ def test_promotion_target_promotes_legacy_generated_key(script):
 def test_promotion_target_is_deterministic_across_runs(script):
     # The promotion target must be recomputed identically on a rerun, or an
     # interrupted run (copy done, DB rewrite not) strands the first copy as an
-    # orphan when the second run computes a fresh UUID. Both a canonical-shaped
-    # source name (reused as-is) and a legacy-shaped name (hashed) are stable.
+    # orphan when the second run computes a fresh UUID. The fixture uses a
+    # 32-hex source name, so it exercises the canonical-shaped REUSE branch
+    # (name carried over as-is). The hashed-name branch of _promotion_target
+    # is unreachable through parse_key today — every preview regex requires a
+    # 32-hex name — so only the reuse branch is pinned here.
     legacy = f"{USER_ID}/generated/product/{NAME}.png"
     db_paths = {legacy}
     first = script._promotion_target(legacy, db_paths)

@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **203** operations across **178** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **204** operations across **179** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -47,6 +47,7 @@ Public endpoints (no auth required):
 
 - `GET /`
 - `GET /api/v1/ai/social-import/auth/oauth/callback`
+- `POST /api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page`
 - `POST /api/v1/auth/confirm-reset-password`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
@@ -580,7 +581,7 @@ short-lived presigned download URL.
 
 Metadata only: rows carry their storage keys (``storage_path``); image
 bytes are never included. The archive is written to a single
-deterministic key per user (``{user_id}/export/data.json``, overwritten on
+deterministic key per user (``users/{user_id}/export/data.json``, overwritten on
 each call - the same key account deletion cleans up), and served as a
 short-lived presigned GET URL (the repo's ~15-minute pattern). Every call
 returns a fresh URL, so repeat requests never hand out a stale link.
@@ -899,7 +900,7 @@ Compute wardrobe item statistics for dashboard/analytics.
 
 ### POST /api/v1/items/upload
 
-Upload one or more images to Supabase Storage for later item creation.
+Upload one or more images to object storage for later item creation.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
@@ -2468,17 +2469,27 @@ Create Oauth Connect Url
 
 ### POST /api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page
 
-Complete a multi-account Instagram OAuth by selecting the page (A4-28).
+Complete a multi-account Instagram OAuth by selecting the page.
 
-The account picker (served by the OAuth callback when several business pages
-are connected) POSTs the chosen `provider_page_id` with a signed
-`selection_token` (the picker's browser cannot present the app's Authorization
-header). The token pins the job + user (short-TTL HMAC, same construction as
-the OAuth state). Identity is resolved from the token persisted by the
-callback using the selected page, then the real session is stored and the
-import resumes — no re-run of the OAuth flow.
+The account picker (served by the callback when several business pages
+are connected) POSTs the chosen ``provider_page_id`` with a signed
+``selection_token``. The token pins the job + user (short-TTL HMAC, same
+construction as the OAuth state) because the picker's browser context
+cannot present the app's Authorization header. Identity is resolved from
+the token persisted by the callback (``store_selection_pending_session``)
+using the selected page, then the real session is stored and the import
+resumes — no re-run of the OAuth flow (A4-28).
 
-**Auth:** none (the signed `selection_token` authorizes the request)
+Fails closed: an invalid/expired token, no pending session, a page id
+outside the candidate list, or a resolution error all return a validation
+error asking the user to reconnect.
+
+Single-use ordering (backend #16): an already-consumed token is rejected
+with a cheap non-destructive check BEFORE the outbound Graph API call, and
+the token is only burned immediately before ``accept_auth``. If auth
+persistence fails, the burn is released so the link stays usable.
+
+**Auth:** none (public endpoint)
 
 **Parameters:**
 
@@ -2490,8 +2501,8 @@ import resumes — no re-run of the OAuth flow.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `selection_token` | string | yes | Short-lived HMAC token minted by the OAuth callback when multiple Instagram business accounts were detected |
-| `provider_page_id` | string | yes | The selected Meta page id (must be among the candidates returned by the callback) |
+| `provider_page_id` | string | yes |  |
+| `selection_token` | string | yes |  |
 
 **Responses:**
 
@@ -5048,6 +5059,13 @@ Model for updating body profile (all fields optional).
 | `name` | string (nullable) | no |  |
 | `skin_tone` | string (nullable) | no |  |
 | `weight_kg` | number (nullable) | no |  |
+
+### `Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `provider_page_id` | string | yes |  |
+| `selection_token` | string | yes |  |
 
 ### `Body_start_batch_extraction_multipart_api_v1_ai_batch_extract_multipart_post`
 

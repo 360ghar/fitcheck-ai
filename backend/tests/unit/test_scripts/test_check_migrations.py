@@ -78,7 +78,9 @@ class TestPolicyToRoles:
 
 class TestCommentStripping:
     """A trailing ``-- comment`` mentioning a role must not be parsed as a real
-    TO grant (the regex runs over the raw body otherwise)."""
+    TO grant (the regex runs over the raw body otherwise). Block comments
+    (``/* ... */``) must be stripped too, so a role name inside a block comment
+    is not misread as a grant."""
 
     def test_trailing_comment_with_role_word_is_ignored(self, checker):
         body = " FOR ALL USING (TRUE) -- scoped to public"
@@ -88,6 +90,27 @@ class TestCommentStripping:
 
     def test_comment_after_real_to_clause_preserves_roles(self, checker):
         body = " TO service_role USING (TRUE) -- note"
+        stripped = checker._strip_sql_comments(body)
+        assert checker._policy_to_roles(stripped) == ["service_role"]
+
+    def test_block_comment_with_role_word_is_ignored(self, checker):
+        # A /* ... */ comment inside a policy body must not leak its content
+        # into the role-list parse: the parser would otherwise read the
+        # ``TO public`` inside the comment as a real grant and falsely flag a
+        # safe FOR ALL policy.
+        body = " FOR ALL /* TO public */ USING (TRUE)"
+        stripped = checker._strip_sql_comments(body)
+        assert "public" not in stripped
+        assert checker._policy_to_roles(stripped) is None
+
+    def test_block_comment_multi_line_is_stripped(self, checker):
+        body = " FOR ALL\n  /* scoped\n     TO public */ USING (TRUE)"
+        stripped = checker._strip_sql_comments(body)
+        assert "public" not in stripped
+        assert checker._policy_to_roles(stripped) is None
+
+    def test_real_to_clause_survives_block_comment_stripping(self, checker):
+        body = " /* preamble */ TO service_role USING (TRUE) /* tail */"
         stripped = checker._strip_sql_comments(body)
         assert checker._policy_to_roles(stripped) == ["service_role"]
 
