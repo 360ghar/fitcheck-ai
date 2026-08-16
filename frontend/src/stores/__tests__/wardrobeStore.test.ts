@@ -199,7 +199,9 @@ describe('wardrobe store', () => {
     mocks.deleteItem.mockResolvedValue(undefined)
 
     await useClosetStore.getState().fetchItems()
+    expect(useClosetStore.getState().totalItems).toBe(1)
     await useClosetStore.getState().deleteItem('item-1')
+    expect(useClosetStore.getState().totalItems).toBe(0)
     await useClosetStore.getState().fetchItems()
 
     // Initial load + post-delete re-read (cache was invalidated).

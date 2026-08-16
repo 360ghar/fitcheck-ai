@@ -2,7 +2,7 @@
 Subscription service for managing user subscriptions and usage tracking.
 """
 from datetime import datetime, date, timedelta
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from dateutil.relativedelta import relativedelta
 
 import asyncio
@@ -950,34 +950,63 @@ class SubscriptionService:
                 # identifier strip; the caller's entitlement write below is
                 # what the user is waiting on, so a failure here only logs.
                 #
-                # The release is CONDITIONAL: a row that is actively entitled
-                # on a paid plan (the pre-existing claimant of this store
-                # purchase) is never released by a concurrent registration.
-                # Otherwise account B's claim would clear account A's
-                # identifier mid-flight and then A's OWN upsert would land on
-                # an already-cleared row — silently transferring one paid
-                # purchase between accounts instead of letting the migration-
-                # 052 unique index reject the second claimant with 23505.
-                # Rows in a non-entitled state (free/trial/expired) are still
-                # released so a stale snapshot of the identifier on a
-                # downgraded row does not shadow the new owner's claim.
-                released = await asyncio.to_thread(
+                # Entitlement matches effective_plan_type: a refunded or
+                # period-lapsed paid plan_type is NOT entitled and must still
+                # be released, or it blocks a valid resubscription. An
+                # actively entitled paid row is left alone so the migration-
+                # 052 unique index can 23505 the second claimant.
+                others = await asyncio.to_thread(
                     db.table("subscriptions")
-                    .update({
-                        identity_column: None,
-                        "plan_type": "free",
-                        "status": "active",
-                        "current_period_end": None,
-                        "cancel_at_period_end": False,
-                        "billing_product_id": None,
-                        "updated_at": check_at.isoformat(),
-                    })
+                    .select(
+                        "user_id,plan_type,status,current_period_end,trial_end"
+                    )
                     .eq(identity_column, claimed_identifier)
                     .neq("user_id", user_id)
-                    .or_("plan_type.in.(free,trial),plan_type.is.null")
                     .execute
                 )
-                stale_rows = getattr(released, "data", None) or []
+                stale_user_ids: List[str] = []
+                for row in getattr(others, "data", None) or []:
+                    other_id = row.get("user_id")
+                    if not other_id:
+                        continue
+                    try:
+                        other_plan = PlanType(row.get("plan_type") or PlanType.FREE.value)
+                    except ValueError:
+                        stale_user_ids.append(other_id)
+                        continue
+                    try:
+                        other_status = SubscriptionStatus(
+                            row.get("status") or SubscriptionStatus.ACTIVE.value
+                        )
+                    except ValueError:
+                        other_status = SubscriptionStatus.ACTIVE
+                    if cls.effective_plan_type(
+                        other_plan,
+                        other_status,
+                        cls._parse_datetime(row.get("current_period_end")),
+                        cls._parse_datetime(row.get("trial_end")),
+                        check_at,
+                    ) == PlanType.FREE:
+                        stale_user_ids.append(other_id)
+                stale_rows: list = []
+                if stale_user_ids:
+                    released = await asyncio.to_thread(
+                        db.table("subscriptions")
+                        .update({
+                            identity_column: None,
+                            "plan_type": "free",
+                            "status": "active",
+                            "current_period_end": None,
+                            "cancel_at_period_end": False,
+                            "billing_product_id": None,
+                            "updated_at": check_at.isoformat(),
+                        })
+                        .eq(identity_column, claimed_identifier)
+                        .neq("user_id", user_id)
+                        .in_("user_id", stale_user_ids)
+                        .execute
+                    )
+                    stale_rows = getattr(released, "data", None) or []
                 if stale_rows:
                     logger.warning(
                         "Released store identifier from a previous owner and "

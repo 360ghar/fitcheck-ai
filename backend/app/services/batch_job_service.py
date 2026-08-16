@@ -666,13 +666,12 @@ class BatchJobService:
         user's daily quota forever (A2-02).
 
         The claim + release is ONE atomic database operation
-        (``release_job_generation_quota``, migration 055) keyed by job id: the
-        quota decrement only happens when this caller wins the
-        ``reserved_generations > 0`` claim, so an ambiguous retry or a
-        concurrent cleanup/cancel can never release the same slots twice (the
-        old CAS-update-then-release dance could double-release after a lost
-        RPC response). Best-effort: a failing release RPC must never fail the
-        pipeline or cancel path.
+        (``release_job_generation_quota``, migration 055) keyed by job id.
+        The unused count is derived on the database from the durable job
+        row (reserved minus items that actually generated) so a worker
+        with a stale in-memory ``generation_completed`` set cannot
+        over/under-refund. Best-effort: a failing release RPC must never
+        fail the pipeline or cancel path.
         """
         reserved = getattr(job, "reserved_generations", 0) or 0
         if reserved <= 0:

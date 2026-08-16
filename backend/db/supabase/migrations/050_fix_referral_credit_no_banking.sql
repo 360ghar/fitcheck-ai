@@ -132,11 +132,13 @@ GRANT EXECUTE ON FUNCTION public.apply_referral_credit_atomic(UUID, INTEGER) TO 
 -- so a bank can be legitimate even when the row is CURRENTLY free/trial —
 -- e.g. a user paid (banked), then their paid sub lapsed and a promo/referral
 -- trial started before the bank was redeemed. We therefore only zero rows
--- that carry NO paid-billing footprint at all (no Stripe customer, no
+-- that carry NO paid-billing footprint at all (no Stripe subscription, no
 -- Apple/Google store identifier): those shapes could only have been produced
--- by the buggy branches 2/3. billing_provider is NOT used as evidence — it
--- defaults to 'stripe' for every row, paid or not. Any row that ever touched
--- a paid rail (stripe_customer_id or a store identifier) keeps its bank
+-- by the buggy branches 2/3. stripe_customer_id is NOT paid evidence —
+-- create_checkout_session writes it before any payment, so an abandoned
+-- checkout would otherwise preserve a trial-origin bank. billing_provider
+-- is also unused: it defaults to 'stripe' for every row. Any row that ever
+-- held a Stripe subscription id or a store identifier keeps its bank
 -- regardless of its current plan state. This under-corrects a few
 -- trial-origin banks on rows that later converted to a paid plan rather than
 -- destroying a legitimate paid-origin bank — the correct bias for a
@@ -151,7 +153,7 @@ BEGIN
         updated_at = NOW()
     WHERE COALESCE(referral_credit_months, 0) <> 0
       AND (plan_type = 'free' OR plan_type IS NULL OR status = 'trial')
-      AND (stripe_customer_id IS NULL OR stripe_customer_id = '')
+      AND (stripe_subscription_id IS NULL OR stripe_subscription_id = '')
       AND (apple_original_transaction_id IS NULL OR apple_original_transaction_id = '')
       AND (google_purchase_token IS NULL OR google_purchase_token = '');
 END $$;

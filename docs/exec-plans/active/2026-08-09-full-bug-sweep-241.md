@@ -271,3 +271,20 @@ this commit:
   transaction, so a second RPC cannot see an uncommitted primary-true insert.
 - Migration 055 must be applied on hosted Supabase before this Python path
   deploys (same as 049–054).
+
+## PR #14 cubic re-review (2026-08-17)
+
+Closed the 14 new threads on `884ba51`:
+
+- IAP release now uses `effective_plan_type` (refunded / lapsed paid rows
+  release; live paid rows still do not).
+- Social import writes the fallback `temp_id` onto the raw item before the
+  capacity-pause remainder filter; picker token is released only when no
+  OAuth session was committed, including `CancelledError`.
+- `release_job_generation_quota` derives unused from durable job items and
+  skips the daily decrement when the reservation is from a previous day.
+- 050 paid evidence is `stripe_subscription_id` (abandoned checkout still
+  has a customer id).
+- Wardrobe `totalItems` decrements on delete / unfavorite-under-favorites.
+- Calendar A10b-08 test pins the synchronous bump; oauth / outfits test
+  comments and the wardrobe search comment match the code.

@@ -743,7 +743,8 @@ class TestSelectionToken:
         result = SocialOAuthService.consume_selection_token(token)
         assert result == {"user_id": "user-1", "job_id": "job-1"}
 
-    def test_is_consumed_rejects_invalid_and_expired(self, _clear_consumed_nonces):
+    def test_is_consumed_rejects_invalid_and_expired(self, _clear_consumed_nonces, monkeypatch):
+        monkeypatch.setattr(oauth_mod, "utcnow", lambda: FIXED_NOW)
         with pytest.raises(SocialImportOAuthStateError, match="Malformed"):
             SocialOAuthService.is_selection_token_consumed("not-a-token")
 

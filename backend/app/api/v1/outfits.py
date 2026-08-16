@@ -1742,28 +1742,32 @@ async def upload_outfit_image(
         # The two-step insert-then-clear survives only as the fallback for the
         # migration gap (RPC missing -> PGRST202).
         try:
+            rpc_params = {
+                "p_outfit_uuid": outfit_id_str,
+                "p_user_uuid": user_id,
+                "p_image_id": img_row["id"],
+                "p_image_url": img_row["image_url"],
+                "p_thumbnail_url": img_row.get("thumbnail_url"),
+                "p_storage_path": img_row.get("storage_path"),
+                "p_pose": img_row["pose"],
+                "p_lighting": img_row.get("lighting"),
+                "p_body_profile_id": img_row.get("body_profile_id"),
+                "p_generation_type": img_row.get("generation_type") or "ai",
+                "p_is_primary": bool(is_primary),
+                "p_width": img_row.get("width"),
+                "p_height": img_row.get("height"),
+                "p_generation_metadata": img_row.get("generation_metadata"),
+                "p_client_request_id": img_row.get("client_request_id"),
+                "p_created_at": now,
+            }
+            # Build the RPC inside the worker thread so a same-key race
+            # actually contends on the fake/real mutation, not on the
+            # event-loop thread that would otherwise evaluate db.rpc().
             rpc_result = await asyncio.to_thread(
-                db.rpc(
+                lambda: db.rpc(
                     "add_outfit_image_and_set_primary",
-                    {
-                        "p_outfit_uuid": outfit_id_str,
-                        "p_user_uuid": user_id,
-                        "p_image_id": img_row["id"],
-                        "p_image_url": img_row["image_url"],
-                        "p_thumbnail_url": img_row.get("thumbnail_url"),
-                        "p_storage_path": img_row.get("storage_path"),
-                        "p_pose": img_row["pose"],
-                        "p_lighting": img_row.get("lighting"),
-                        "p_body_profile_id": img_row.get("body_profile_id"),
-                        "p_generation_type": img_row.get("generation_type") or "ai",
-                        "p_is_primary": bool(is_primary),
-                        "p_width": img_row.get("width"),
-                        "p_height": img_row.get("height"),
-                        "p_generation_metadata": img_row.get("generation_metadata"),
-                        "p_client_request_id": img_row.get("client_request_id"),
-                        "p_created_at": now,
-                    },
-                ).execute
+                    rpc_params,
+                ).execute()
             )
         except Exception as e:
             if not is_pgrst202_missing_rpc(e):

@@ -1698,6 +1698,71 @@ async def test_capacity_pause_persists_generated_items_and_retries_only_remainde
 
 
 @pytest.mark.asyncio
+async def test_capacity_pause_assigns_fallback_temp_id_before_remainder(monkeypatch):
+    """An extracted item with no temp_id must not be requeued after it
+    generates: the fallback id is written back onto the raw item so the
+    remainder filter can exclude it."""
+    patch_event(monkeypatch)
+    updated = []
+
+    async def fake_update_photo(db, *, job_id, user_id, photo_id, updates):
+        updated.append(dict(updates))
+        return {"id": photo_id, **updates}
+
+    upserted = []
+
+    async def fake_upsert_photo_items(db, *, job_id, photo_id, user_id, items):
+        upserted.append(items)
+        return items
+
+    patch_store(
+        monkeypatch,
+        update_photo=fake_update_photo,
+        upsert_photo_items=fake_upsert_photo_items,
+        get_photo=_async_value(make_photo()),
+        get_slots=_async_value({"awaiting": None}),
+        get_photo_with_items=_identity_photo,
+    )
+    fake_extraction, fake_generation = patch_process_collaborators(
+        monkeypatch, items=[{"category": "tops"}, {"category": "bottoms"}]
+    )
+
+    call = {"n": 0}
+
+    async def _gen_then_quota(**kwargs):
+        call["n"] += 1
+        if call["n"] == 1:
+            return SimpleNamespace(image_base64="aGVsbG8=")
+        raise QuotaError("quota")
+
+    class QuotaError(Exception):
+        error_kind = "upstream_quota"
+        retry_after_seconds = 30
+
+    fake_generation.generate_product_image = _gen_then_quota
+
+    released: list[tuple] = []
+
+    async def fake_release(user_id, operation_type, db, count=1):
+        released.append((operation_type, count))
+
+    monkeypatch.setattr(AISettingsService, "release_usage", staticmethod(fake_release))
+
+    service = make_service()
+    monkeypatch.setattr(service, "_sync_job_counters", _noop_async)
+    await service._process_single_photo("job-1", make_photo())
+
+    assert upserted and upserted[0][0]["status"] == SocialImportItemStatus.GENERATED.value
+    generated_id = upserted[0][0]["temp_id"]
+    assert generated_id
+    pending_updates = [u for u in updated if "pending_extraction" in u.get("metadata", {})]
+    assert pending_updates
+    remainder_ids = [i["temp_id"] for i in pending_updates[0]["metadata"]["pending_extraction"]["items"]]
+    assert generated_id not in remainder_ids
+    assert released == [(OperationType.GENERATION, 1)]
+
+
+@pytest.mark.asyncio
 async def test_process_single_photo_outer_failure_marks_photo_failed(monkeypatch):
     events = patch_event(monkeypatch)
     updated = []

@@ -33,6 +33,10 @@ class CalendarController extends GetxController {
   /// events of a month the user navigated to later (A10b-08).
   int _fetchGeneration = 0;
 
+  /// Test-only: the generation reserved at the last [fetchEventsForMonth]
+  /// call. Used to pin that the bump happens before `settleBuildPhase`.
+  int get debugFetchGeneration => _fetchGeneration;
+
   // Loading states
   final RxBool isLoadingConnections = false.obs;
   final RxBool isLoadingEvents = false.obs;

@@ -919,16 +919,28 @@ async def select_oauth_page(
             "connect your Instagram account again."
         ) from exc
     service = _service(user_id, db)
+
+    async def _release_picker_if_uncommitted() -> None:
+        # Only un-burn the nonce when accept_auth did not persist a session.
+        # If store_oauth_session committed and a later step failed, releasing
+        # would re-enable a token whose pending session is already gone.
+        try:
+            session = await SocialAuthService.get_active_session(
+                db, job_id=job_id, user_id=user_id
+            )
+        except Exception:
+            session = None
+        if session:
+            return
+        SocialOAuthService.release_selection_token(selection_token)
+
     try:
         await service.accept_auth(job_id, "oauth", payload)
+    except asyncio.CancelledError:
+        await _release_picker_if_uncommitted()
+        raise
     except Exception:
-        # The nonce was burned above but auth persistence failed: release the
-        # claim so a transient backend error (a Meta hiccup on resume, a DB
-        # blip) does not force the user to reconnect — the same picker link
-        # stays usable. A submission that actually won the concurrent race is
-        # unaffected: its nonce is already committed and release only removes
-        # a nonce that failed to persist. (backend #16)
-        SocialOAuthService.release_selection_token(selection_token)
+        await _release_picker_if_uncommitted()
         raise
     return {
         "data": SocialImportAuthResponse(

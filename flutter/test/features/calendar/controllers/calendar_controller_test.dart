@@ -70,80 +70,44 @@ void main() {
 
   testWidgets('generation is reserved before settleBuildPhase defers the call',
       (tester) async {
-    // Regression pin for A10b-08: the invalidation token must be bumped
-    // BEFORE the first await (settleBuildPhase). A plain `test()` can never
-    // exercise the deferral path — `settleBuildPhase` returns
-    // `Future.value(true)` immediately when no frame is running, so a
-    // bump-after-await implementation passes identically. Here both fetches
-    // run against REAL build frames:
-    //
-    //   frame 1: the first navigation starts mid-frame, is deferred by
-    //            settleBuildPhase, and its request fires after the flush.
-    //   frame 2: a second navigation lands mid-frame. With bump-before the
-    //            token is bumped SYNCHRONOUSLY at the call, so the stale
-    //            first response — completed right after the navigation in the
-    //            same frame, before the second fetch's deferred body could
-    //            ever resume — is dropped at apply time. A bump-after-await
-    //            implementation would still hold the old token and apply it.
+    // A10b-08 pin: the token must bump SYNCHRONOUSLY at the call, before
+    // settleBuildPhase defers. Completing a stale future mid-build cannot
+    // distinguish bump-before from bump-after — the apply is a microtask
+    // and only runs after post-frame callbacks, so both implementations
+    // would already have generation 2. Read debugFetchGeneration in the
+    // same build as the call: bump-after would still be 0 here.
     final repo = FakeCalendarRepository();
     final controller = CalendarController(repository: repo);
 
-    final stale = Completer<List<CalendarEventModel>>();
-    final fresh = Completer<List<CalendarEventModel>>();
-    repo.queueEvents(stale.future);
-    repo.queueEvents(fresh.future);
+    final pending = Completer<List<CalendarEventModel>>();
+    repo.queueEvents(pending.future);
 
-    bool startedFirst = false;
-    bool startedSecond = false;
-    Future<void>? firstFetch;
-    Future<void>? secondFetch;
+    var started = false;
+    var genAfterCall = -1;
+    Future<void>? fetch;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) {
-            if (!startedFirst) {
-              startedFirst = true;
-              firstFetch = controller.fetchEventsForMonth(DateTime(2026, 1));
+            if (!started) {
+              started = true;
+              fetch = controller.fetchEventsForMonth(DateTime(2026, 1));
+              genAfterCall = controller.debugFetchGeneration;
             }
             return const SizedBox.shrink();
           },
         ),
       ),
     );
-    // The frame flushed: the first fetch resumed past settleBuildPhase and
-    // its repository request is in flight.
+
+    expect(genAfterCall, 1,
+        reason: 'token must bump before settleBuildPhase defers the body');
     expect(repo.getEventsCalls, 1);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            if (!startedSecond) {
-              startedSecond = true;
-              // Navigation lands mid-frame; the token bumps synchronously.
-              secondFetch = controller.fetchEventsForMonth(DateTime(2026, 1));
-              // The stale response completes in the SAME frame, before the
-              // second fetch's deferred body resumes.
-              stale.complete([_event('stale', DateTime(2026, 1, 1))]);
-            }
-            return const SizedBox.shrink();
-          },
-        ),
-      ),
-    );
-    // The superseding fetch's deferred body resumed and fired its request.
-    expect(repo.getEventsCalls, 2);
-
-    await firstFetch!;
-    expect(controller.events, isEmpty,
-        reason: 'the stale in-flight response must be dropped after the '
-            'mid-frame navigation');
-
-    fresh.complete([_event('fresh', DateTime(2026, 1, 2))]);
-    await secondFetch!;
+    pending.complete([_event('fresh', DateTime(2026, 1, 2))]);
+    await fetch!;
     expect(controller.events.map((e) => e.id), ['fresh']);
-    expect(controller.isLoadingEvents, isFalse);
 
     controller.dispose();
   });

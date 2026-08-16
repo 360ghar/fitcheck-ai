@@ -9,9 +9,13 @@
 -- the user's plan limit.
 --
 -- This RPC makes the claim + release a SINGLE atomic database operation keyed
--- by job id: the caller only gets the quota decrement when it also wins the
--- claim (reserved_generations > 0 still holds), so an ambiguous retry or a
--- concurrent cleanup/cancel can never double-release. Returns FALSE when the
+-- by job id. The unused count is derived from the durable job row
+-- (reserved_generations minus items that actually generated) so a worker
+-- with a stale in-memory generation_completed set cannot over/under-refund.
+-- The daily counter is only decremented when it still belongs to the
+-- reservation's day (last_reset_date is before today, or the job was created
+-- today); a leftover yesterday-job must not shrink today's counter after
+-- the daily reset. Lifetime totals always decrement. Returns FALSE when the
 -- reservation was already released (nothing to do) - the caller treats that
 -- as success.
 --
@@ -28,35 +32,64 @@ CREATE OR REPLACE FUNCTION public.release_job_generation_quota(
 )
 RETURNS BOOLEAN AS $$
 DECLARE
-    v_released BOOLEAN;
+    v_reserved INTEGER;
+    v_generated INTEGER;
+    v_unused INTEGER;
+    v_created DATE;
+    v_last_reset DATE;
+    v_items JSONB;
 BEGIN
     IF p_count < 0 THEN
         RAISE EXCEPTION 'Invalid generation quota release';
     END IF;
 
-    -- Atomic claim: zero the durable reservation only while it still holds
-    -- (WHERE reserved_generations > 0). A concurrent caller or a retry after
-    -- a lost response sees no row and returns FALSE - the release happens
-    -- exactly once per reservation, so daily_generation_count can never be
-    -- decremented twice for the same reserved slots.
-    UPDATE public.extraction_jobs
-    SET reserved_generations = 0,
-        updated_at = NOW()
+    SELECT reserved_generations,
+           (created_at AT TIME ZONE 'UTC')::date,
+           COALESCE(items, '[]'::jsonb)
+    INTO v_reserved, v_created, v_items
+    FROM public.extraction_jobs
     WHERE id = p_job_id
       AND user_id = p_user_id
-      AND reserved_generations > 0;
+      AND reserved_generations > 0
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RETURN FALSE;
     END IF;
 
-    IF p_count > 0 THEN
-        UPDATE public.user_ai_settings
-        SET daily_generation_count = GREATEST(0, COALESCE(daily_generation_count, 0) - p_count),
-            total_generations = GREATEST(0, COALESCE(total_generations, 0) - p_count),
-            updated_at = NOW()
-        WHERE user_id = p_user_id;
+    UPDATE public.extraction_jobs
+    SET reserved_generations = 0,
+        updated_at = NOW()
+    WHERE id = p_job_id
+      AND user_id = p_user_id;
+
+    SELECT COUNT(*)::integer
+    INTO v_generated
+    FROM jsonb_array_elements(v_items) AS elem
+    WHERE NULLIF(elem->>'generated_image_url', '') IS NOT NULL
+       OR elem->>'status' = 'generated';
+
+    v_unused := GREATEST(0, v_reserved - v_generated);
+    IF v_unused <= 0 THEN
+        RETURN TRUE;
     END IF;
+
+    SELECT last_reset_date
+    INTO v_last_reset
+    FROM public.user_ai_settings
+    WHERE user_id = p_user_id;
+
+    UPDATE public.user_ai_settings
+    SET daily_generation_count = CASE
+            WHEN v_last_reset IS NULL
+              OR v_last_reset < CURRENT_DATE
+              OR v_created = CURRENT_DATE
+            THEN GREATEST(0, COALESCE(daily_generation_count, 0) - v_unused)
+            ELSE daily_generation_count
+        END,
+        total_generations = GREATEST(0, COALESCE(total_generations, 0) - v_unused),
+        updated_at = NOW()
+    WHERE user_id = p_user_id;
 
     RETURN TRUE;
 END;

@@ -1013,6 +1013,11 @@ class SocialImportPipelineService:
                     capacity_hit = True
                     break
                 temp_id = item.get("temp_id") or f"item-{uuid.uuid4().hex[:8]}"
+                # Write the fallback back so the capacity-pause remainder
+                # filter can exclude this item by the same id it was persisted
+                # under (a missing extraction temp_id would otherwise requeue
+                # an already-generated item and bill it twice).
+                item["temp_id"] = temp_id
                 item_description = (
                     item.get("detailed_description")
                     or f"{(item.get('colors') or [''])[0]} {item.get('sub_category') or item.get('category') or 'clothing'}".strip()

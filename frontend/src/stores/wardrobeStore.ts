@@ -257,8 +257,10 @@ function applyFiltersAndSort(
   }
 
   // Search is a server-side filter (buildItemApiFilters). Do not re-apply
-  // it here: the client predicate (name/brand/tags/notes) is narrower than
-  // the API and would empty a page the header still counted via totalItems.
+  // it here: the client used to match name/brand/tags/notes, which is a
+  // SUPERSET of the API (name+brand only), so the extra pass was a no-op
+  // on a server-filtered page. Keep search off this function so the two
+  // predicates cannot drift.
 
   // Apply sorting
   filtered.sort((a, b) => {
@@ -607,6 +609,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       const newItems = state.items.map((item) =>
         item.id === itemId ? { ...item, is_favorite: updated.is_favorite } : item
       );
+      const leftFavoriteFilter =
+        state.filters.isFavorite && !updated.is_favorite
       set({
         items: newItems,
         selectedItem:
@@ -614,6 +618,9 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
             ? { ...state.selectedItem, is_favorite: updated.is_favorite }
             : state.selectedItem,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
+        totalItems: leftFavoriteFilter
+          ? Math.max(0, state.totalItems - 1)
+          : state.totalItems,
       });
       return updated;
     } catch (error) {
@@ -709,6 +716,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
         selectedItem: state.selectedItem?.id === itemId ? null : state.selectedItem,
         selectedItems: newSelected,
+        totalItems: Math.max(0, state.totalItems - 1),
       });
     } catch (error) {
       const apiError = getApiError(error);
@@ -738,6 +746,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
           state.selectedItem && selectedItems.has(state.selectedItem.id)
             ? null
             : state.selectedItem,
+        totalItems: Math.max(0, state.totalItems - selectedItems.size),
       });
     } catch (error) {
       const apiError = getApiError(error);

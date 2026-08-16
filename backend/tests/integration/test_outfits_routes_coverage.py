@@ -270,9 +270,10 @@ class _PrimaryRpcDB(_OutfitsFakeDB):
     is the migration-gap fallback. Both flip the primary flag like the real
     RPCs so route-level tests can assert on persisted rows.
 
-    The route invokes these RPCs via ``asyncio.to_thread``, so a same-key race
-    test runs two threads against the same in-memory rows: the row mutation is
-    guarded by a lock (the real RPC serializes on the DB row lock).
+    The route invokes ``db.rpc(...).execute()`` *inside* ``asyncio.to_thread``,
+    so a same-key race runs two worker threads against the same in-memory
+    rows. The lock serializes the mutation the way the real RPC serializes
+    on the DB row lock.
     """
 
     _lock = threading.Lock()
