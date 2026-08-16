@@ -14,6 +14,7 @@ import pytest
 from app.core.exceptions import AIServiceError, DatabaseError
 from app.models.subscription import PlanType
 from app.services.subscription_service import SubscriptionService
+from tests.utils.fake_db import FakeDB
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -896,16 +897,18 @@ async def test_new_store_purchase_releases_identifier_from_previous_owner():
     rows carrying one identifier — and the webhook's identifier lookup then has
     to guess which. The claiming row strips it from every other row so the
     lookup stays single-valued (renewals advance, refunds revoke)."""
-    db = Mock()
-    existing = _subscription_row(plan_type="free")
-    updated = _subscription_row(
-        plan_type="plus_monthly", status="active", billing_provider="apple"
+    db = FakeDB(
+        insert_defaults={"id": "22222222-2222-2222-2222-222222222222"},
+        rows={
+            "subscriptions": [
+                _subscription_row(
+                    user_id="old-owner",
+                    plan_type="free",
+                    apple_original_transaction_id="orig-shared",
+                )
+            ]
+        },
     )
-    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
-    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
-    _mock_write_result(db, updated)
-    release_chain = db.table.return_value.update.return_value.eq.return_value.neq.return_value
-    release_chain.execute.return_value = Mock(data=[{"user_id": "old-owner"}])
 
     await SubscriptionService.sync_iap_subscription(
         USER_ID,
@@ -917,22 +920,10 @@ async def test_new_store_purchase_releases_identifier_from_previous_owner():
         apple_original_transaction_id="orig-shared",
     )
 
-    # Cleared on the OTHER rows...
-    cleared = db.table.return_value.update.call_args.args[0]
-    assert cleared["apple_original_transaction_id"] is None
-    assert db.table.return_value.update.return_value.eq.call_args.args == (
-        "apple_original_transaction_id",
-        "orig-shared",
-    )
-    assert db.table.return_value.update.return_value.eq.return_value.neq.call_args.args == (
-        "user_id",
-        USER_ID,
-    )
-    # ...and still written on this one.
-    assert (
-        db.table.return_value.upsert.call_args.args[0]["apple_original_transaction_id"]
-        == "orig-shared"
-    )
+    previous = next(r for r in db.rows["subscriptions"] if r["user_id"] == "old-owner")
+    assert previous["apple_original_transaction_id"] is None
+    claimed = next(r for r in db.rows["subscriptions"] if r["user_id"] == USER_ID)
+    assert claimed["apple_original_transaction_id"] == "orig-shared"
 
 
 @pytest.mark.asyncio
@@ -950,8 +941,20 @@ async def test_release_failure_does_not_block_the_entitlement_write():
     chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
     chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
     _mock_write_result(db, updated)
-    release_chain = db.table.return_value.update.return_value.eq.return_value.neq.return_value
-    release_chain.execute.side_effect = Exception("permission denied")
+    sel = db.table.return_value.select.return_value
+    sel.eq.return_value = sel
+    sel.neq.return_value = sel
+    sel.execute.return_value = Mock(data=[{
+        "user_id": "old-owner",
+        "plan_type": "free",
+        "status": "active",
+        "current_period_end": None,
+        "trial_end": None,
+    }])
+    upd = db.table.return_value.update.return_value
+    upd.eq.return_value = upd
+    upd.is_.return_value = upd
+    upd.execute.side_effect = Exception("permission denied")
 
     result = await SubscriptionService.sync_iap_subscription(
         USER_ID,
