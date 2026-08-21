@@ -117,6 +117,12 @@ class FakeIapService extends IapService {
     _streamController.add([details]);
   }
 
+  /// Simulates a plugin-level stream error (StoreKit2 Transaction.updates
+  /// can emit them).
+  void emitError(Object error) {
+    _streamController.addError(error);
+  }
+
   void dispose() => _streamController.close();
 }
 
@@ -1100,6 +1106,115 @@ void main() {
       expect(iapService.startPurchaseCalls, 0);
       expect(controller.error.value, contains('not available in the store yet'));
       expect(Get.isSnackbarOpen, isTrue);
+      await settle(tester);
+      controller.onClose();
+    });
+  });
+
+  group('purchase stream resilience + redelivery dedupe', () {
+    testWidgets('a throwing handler does not kill the listener', (tester) async {
+      // Regression: a synchronous throw inside one update handler cancelled
+      // the purchaseStream subscription. The store then redelivered the
+      // unfinished transaction to a dead listener forever — a charged user
+      // was never verified nor completed until a full app restart.
+      await pumpApp(tester);
+      repository.registerError = Exception('verification failed');
+      final controller = buildController();
+
+      // First delivery: verification fails (handler reports the error).
+      iapService.emit(_purchase(serverVerificationData: 'token-1'));
+      await tester.pump();
+      await tester.pump();
+      expect(repository.registerCalls, 1);
+
+      // Second delivery: registration succeeds. This proves the listener
+      // survived the failing first pass.
+      repository.registerError = null;
+      iapService.emit(_purchase(
+        serverVerificationData: 'token-1',
+        purchaseID: 'GPA.retry',
+      ));
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.registerCalls, 2);
+      expect(iapService.completeCalls, 1);
+      expect(controller.subscription.value?.planType, PlanType.plusMonthly);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('a stream error does not kill the subscription', (
+      tester,
+    ) async {
+      // StoreKit2 Transaction.updates can emit stream errors; an unhandled
+      // one used to tear down (or crash) instead of staying subscribed.
+      await pumpApp(tester);
+      final controller = buildController();
+
+      iapService.emitError(StateError('storekit stream blew up'));
+      await tester.pump();
+      await tester.pump();
+
+      // The listener must still be attached: the next real update registers.
+      iapService.emit(_purchase());
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.registerCalls, 1);
+      expect(iapService.completeCalls, 1);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('the same transaction delivered twice verifies once', (
+      tester,
+    ) async {
+      // The store legitimately redelivers updates (unfinished transactions
+      // after a failed verify, restore overlapping an active entitlement,
+      // iOS upgrade flows). Each duplicate used to fire another verify +
+      // complete + success toast — which reads as double-charging.
+      await pumpApp(tester);
+      final controller = buildController();
+
+      final details = _purchase();
+      iapService.emit(details);
+      await tester.pump();
+      await tester.pump();
+      iapService.emit(details);
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.registerCalls, 1);
+      expect(iapService.completeCalls, 1);
+      expect(controller.subscription.value?.planType, PlanType.plusMonthly);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('a failed verification releases the ID for redelivery retry', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      repository.registerError = Exception('backend down');
+      final controller = buildController();
+
+      iapService.emit(_purchase());
+      await tester.pump();
+      await tester.pump();
+      expect(repository.registerCalls, 1);
+      expect(iapService.completeCalls, 0);
+
+      // Redelivery of the SAME transaction must be verified again once the
+      // backend recovers — not silently swallowed by the dedupe set.
+      repository.registerError = null;
+      iapService.emit(_purchase(purchaseID: 'GPA.redeliver'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.registerCalls, 2);
+      expect(iapService.completeCalls, 1);
+      expect(controller.subscription.value?.planType, PlanType.plusMonthly);
       await settle(tester);
       controller.onClose();
     });

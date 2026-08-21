@@ -148,7 +148,9 @@ class OutfitListController extends GetxController {
       _fetchGeneration++;
       currentPage.value = 1;
       hasMore.value = true;
-      outfits.clear();
+      // The old list stays visible until the refreshed page arrives: a
+      // failed refresh must not leave a fake "no outfits yet" state. The
+      // grid swaps atomically on success below.
     } else {
       if (isLoadingMore.value) return;
       _fetchGeneration++;
@@ -189,11 +191,17 @@ class OutfitListController extends GetxController {
 
       if (requestGeneration != _fetchGeneration || isClosed) return;
 
+      // Refresh swaps atomically: the previous list stays visible during the
+      // fetch and is replaced only once the new page has actually loaded, so
+      // a failed refresh never blanks the grid. Initial load / load-more
+      // append instead of clearing.
       if (refresh) {
-        outfits.clear();
+        outfits
+          ..clear()
+          ..addAll(response.outfits);
+      } else {
+        outfits.addAll(response.outfits);
       }
-
-      outfits.addAll(response.outfits);
       totalOutfits.value = response.total;
       hasMore.value = response.hasMore;
       currentPage.value++;

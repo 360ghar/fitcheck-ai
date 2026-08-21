@@ -98,6 +98,15 @@ class SubscriptionController extends GetxController {
 
   StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
+  /// Transaction IDs already handed to the backend for verification (or
+  /// currently in flight). The store legitimately redelivers updates —
+  /// unfinished transactions after a failed verify, restore overlapping an
+  /// active entitlement, iOS upgrade/crossgrade emitting several updates for
+  /// one product — and each duplicate would otherwise fire another verify +
+  /// complete + success toast. Bounded: entries are removed when verification
+  /// fails so the redelivery can retry.
+  final Set<String> _handledTransactionIds = <String>{};
+
   // Computed properties
   bool get isPro {
     final plan = subscription.value?.planType;
@@ -189,12 +198,34 @@ class SubscriptionController extends GetxController {
   void attachPurchaseListener() {
     if (_purchaseSubscription != null) return;
     // Store-purchase results (purchased / pending / restored / error) arrive
-    // on this stream after buyNonConsumable / restorePurchases.
+    // on this stream after buyNonConsumable / restorePurchases. The handler
+    // is wrapped in try/catch and the subscription carries an onError: a
+    // throw (or a plugin-emitted stream error) must never cancel this
+    // listener, or an unfinished transaction would never be verified nor
+    // completed until a full app restart while the store keeps redelivering
+    // it to a dead stream.
     _purchaseSubscription = iapService.purchaseStream.listen(
       (updates) {
         for (final details in updates) {
-          _handlePurchaseUpdate(details);
+          try {
+            final result = _handlePurchaseUpdate(details);
+            unawaited(result.catchError((Object e, StackTrace s) {
+              // _handlePurchaseUpdate's own paths are caught internally; a
+              // rejection here means something escaped — keep the listener
+              // alive and let telemetry see it.
+              ErrorHandler.reportError(e, 'Purchase update handler failed');
+            }));
+          } catch (e, stackTrace) {
+            // Synchronous throw from the switch itself: log, keep going with
+            // the remaining updates in this batch, and keep the subscription.
+            ErrorHandler.reportError(e, 'Purchase update handler threw', stackTrace: stackTrace);
+          }
         }
+      },
+      onError: (Object e) {
+        // Stream-level errors (StoreKit2 Transaction.updates can emit them):
+        // report and stay subscribed; the plugin redelivers unfinished work.
+        ErrorHandler.reportError(e, 'Store purchase stream error');
       },
     );
   }
@@ -543,6 +574,11 @@ class SubscriptionController extends GetxController {
       ErrorHandler.showError(error.value, title: 'Purchase error');
       return;
     }
+    // Dedupe store redeliveries: the same transaction must not be verified,
+    // completed, or celebrated twice (duplicate success toasts read as
+    // double-charging to users). On verification failure the ID is released
+    // so the store's automatic redelivery can retry.
+    if (!_handledTransactionIds.add(transactionId)) return;
     try {
       final sub = await _repository.registerIapTransaction(
         store: iapService.storeName,
@@ -562,6 +598,7 @@ class SubscriptionController extends GetxController {
         title: restored ? 'Restored' : 'Subscription active',
       );
     } catch (e, stackTrace) {
+      _handledTransactionIds.remove(transactionId);
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       // Do NOT complete the purchase: the store keeps it pending and
