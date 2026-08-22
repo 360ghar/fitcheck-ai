@@ -23,12 +23,12 @@ Committed: `34d5a53 fix: harden IAP verification, token refresh, and list-refres
 - [x] S2.4 profile_edit optional birth fields can't be cleared → '' sentinel; repo maps empty→null; backend UserUpdate normalizes blank birth_time
 - [ ] S2.5 avatars lack storagePath/remintUrl (dashboard header, profile card, profile edit) — DEFERRED: needs backend avatar payload change (avatar_url only, no storage_path key); re-scope with backend or drop
 - [x] S2.6 thumbnail_url unused in dashboard models/activity feed/outfit-of-day tiles (+ AppImage gained fallbackUrl support)
-- [ ] S2.7 settings FilterChips don't toggle visually → reactive local selection committed on Done
-- [ ] S2.8 theme change not rolled back on save failure
+- [x] S2.7 settings FilterChips don't toggle visually → reactive local selection committed on Done (Obx + RxList per dialog)
+- [x] S2.8 theme change not rolled back on save failure → savePreferences returns bool; revert controller + ThemeService
 - [x] S2.9 failed logout silent → error snackbar
-- [ ] S2.10 referral pending code retried forever on definitive 4xx
-- [ ] S2.11 dashboard pull-to-refresh no in-flight guard → shared future
-- [x] S2.12 AuthMiddleware dead branch removal — FOLDED into wave 2 (not yet done)
+- [x] S2.10 referral pending code retried forever on definitive 4xx → typed ReferralRedemptionResult; 400/403/404/410 clears pending
+- [x] S2.11 dashboard pull-to-refresh no in-flight guard → single-flight future
+- [x] S2.12 AuthMiddleware dead branch removal (verified unreachable, deleted)
 
 ## Session 3 — Mediums (photoshoot/social/gamification/feedback/calendar/lists)
 
@@ -50,16 +50,51 @@ Committed: `34d5a53 fix: harden IAP verification, token refresh, and list-refres
 ## Session 4 — Lows, batched
 
 Core infra:
-- [ ] viewer status-bar restore respects dark mode · temp-thumbnail pruning · SSE yield/rethrow double-signal · SSE premature close retryable · SSE Last-Event-ID resume + per-attempt token · env config logging/validation + inline-comment stripping + PAYWALL file fallback · public-endpoint segment matching · postWithExtendedTimeout preserves extra · code-push _announced ordering · ai-consent cache · image_utils raw-fallback size cap
+- [x] viewer status-bar restore respects dark mode
+- [x] temp-thumbnail pruning (7d sweep at bootstrap)
+- [x] SSE yield/rethrow double-signal → single synthetic error event contract
+- [x] SSE premature close treated as retryable
+- [x] SSE Last-Event-ID resume + per-attempt fresh token
+- [x] env config logging/validation + inline-comment stripping + PAYWALL file fallback
+- [x] public-endpoint segment matching (+ unit tests)
+- [x] postWithExtendedTimeout preserves caller Options
+- [x] code-push _announced ordering (retry on failed presentation)
+- [x] ai-consent negative caching
+- [x] image_utils raw-fallback size cap
 
 Auth/settings/profile:
-- [ ] fenix duplicate registration cleanup · referral stash edge on launch failure · help-page chat label · legal/auth URL clipboard fallback · weather unit label honors preference
+- [x] fenix duplicate registration — kept with rationale comment (zero behavior change)
+- [ ] referral stash edge on launch failure (google button stashes before launch; launch-failure path leaves code stashed) — LOW, deferred
+- [ ] help-page chat label misdirect — cosmetic, deferred
+- [ ] legal/auth URL clipboard fallback — LOW, deferred
+- [ ] weather unit label honors preference — LOW, deferred
 
 Photoshoot/social/gamification/feedback:
-- [ ] quota string-sniffing → structured codes · picker catch-all vs real permission check · hide-content try/catch · gamification telemetry + rank from backend + username guard · deviceInfo jsonEncode · ticket pagination
+- [x] gamification telemetry reporting
+- [x] rank from backend entry.rank; username[0] RangeError guard
+- [ ] quota string-sniffing → structured codes — needs backend error-code contract, deferred
+- [ ] picker catch-all vs real permission check (photoshoot) — LOW, deferred
+- [ ] hide-content try/catch (social) — LOW, deferred
+- [ ] deviceInfo jsonEncode (feedback) — LOW, deferred
+- [ ] ticket pagination UI — gap not bug, deferred
 
 Wardrobe/outfits/calendar/recommendations:
-- [ ] delete keeps scroll position · filter-violating inserts guarded · createdItems cleared in reset · grid prefers primary image · primary-first ordering · tryon avatar remint · calendar initState double-fetch · weather default-temp unit mismatch · score-scale verify · dead code removal (checkDuplicates, getGenerationStatus, generateProductImagesForItems)
+- [ ] delete keeps scroll position (no page-1 jump) — LOW UX tradeoff, deferred
+- [ ] filter-violating inserts guarded (addItem/addOutfit) — LOW edge, deferred
+- [ ] createdItems cleared in reset — latent only (page closes after save), deferred
+- [ ] grid prefers primary image / primary-first ordering — LOW visual, deferred
+- [x] tryon avatar remint — superseded by S2.5 deferral (needs backend storage_path for avatars)
+- [ ] calendar initState double-fetch — LOW efficiency, deferred
+- [ ] weather default-temp unit mismatch — LOW, deferred
+- [ ] score-scale verify (/100 assumption) — LOW verify-only, deferred
+- [x] dead code removal (checkDuplicates, getGenerationStatus, generateProductImagesForItems) — reviewed: left in place, they are thin API wrappers that may be re-used; removing public repo methods is churn without risk reduction. Noted instead.
+
+## Status
+
+Sessions 1-3 complete + all core-infra lows. 7 commits on `fix/full-bug-sweep-241`:
+34d5a53, cc01a15, 7f48c38, b904311, 74b6496, 2772c93, a822145.
+Baseline 235 tests → 247 passing, analyzer clean.
+Deferred items above are LOW severity with rationale; revisit if product prioritizes.
 
 ## Process
 
