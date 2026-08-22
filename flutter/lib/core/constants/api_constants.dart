@@ -52,6 +52,32 @@ class ApiConstants {
     '/waitlist',
   ];
 
+  /// Segment-aware public-endpoint match. Unlike substring contains(), a path
+  /// like `/users/auth/login-history` can never match `/auth/login`: the
+  /// endpoint's segments must appear as CONSECUTIVE non-empty path segments
+  /// (query string stripped first).
+  static bool isPublicEndpoint(String path) {
+    var clean = path;
+    final q = clean.indexOf('?');
+    if (q >= 0) clean = clean.substring(0, q);
+    final segments = clean.split('/').where((s) => s.isNotEmpty).toList();
+    return publicEndpoints.any((endpoint) {
+      final target = endpoint.split('/').where((s) => s.isNotEmpty).toList();
+      if (target.length > segments.length) return false;
+      for (var i = 0; i <= segments.length - target.length; i++) {
+        var matched = true;
+        for (var j = 0; j < target.length; j++) {
+          if (segments[i + j] != target[j]) {
+            matched = false;
+            break;
+          }
+        }
+        if (matched) return true;
+      }
+      return false;
+    });
+  }
+
   // Endpoints
   static const String auth = '$apiVersion/auth';
   static const String items = '$apiVersion/items';

@@ -34,7 +34,7 @@ class AuthInterceptor extends Interceptor {
   }
 
   bool _isPublicEndpoint(String path) {
-    return ApiConstants.publicEndpoints.any((endpoint) => path.contains(endpoint));
+    return ApiConstants.isPublicEndpoint(path);
   }
 
   /// Whether [path] may carry the session bearer token. Relative API paths
@@ -129,6 +129,6 @@ class TokenRefreshInterceptor extends Interceptor {
   }
 
   bool _isPublicEndpoint(String path) {
-    return ApiConstants.publicEndpoints.any((endpoint) => path.contains(endpoint));
+    return ApiConstants.isPublicEndpoint(path);
   }
 }
