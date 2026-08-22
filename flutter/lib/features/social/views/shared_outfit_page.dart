@@ -7,6 +7,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
 import '../../outfits/models/outfit_model.dart';
 import '../../outfits/repositories/outfit_repository.dart';
+import '../../../core/exceptions/app_exceptions.dart';
 import '../../../core/utils/error_handler.dart';
 
 /// Local store of share IDs the user chose to hide (Guideline 1.2 — ability
@@ -63,9 +64,23 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
     try {
       final outfit = await OutfitRepository().getSharedOutfit(widget.shareId);
       return _SharedLoadResult.ok(outfit);
-    } catch (_) {
+    } on NotFoundException {
+      // Genuine 404: outfit removed or link invalid. The repository maps
+      // Dio 404s to NotFoundException via handleDioException.
       return const _SharedLoadResult.missing();
+    } catch (_) {
+      // Timeout / no connection / 5xx: transient failure, not a missing
+      // outfit. Surface an error card with Retry instead of a permanent
+      // "Outfit not found".
+      return const _SharedLoadResult.error();
     }
+  }
+
+  Future<void> _retry() {
+    setState(() {
+      _loadFuture = _load();
+    });
+    return _loadFuture;
   }
 
   Future<void> _hideContent() async {
@@ -131,6 +146,23 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                       title: 'Outfit not found',
                       body:
                           'This outfit may have been removed or the link is invalid',
+                    );
+                  }
+
+                  if (result.status == _SharedStatus.error) {
+                    return _messageState(
+                      context,
+                      tokens,
+                      icon: Icons.cloud_off_outlined,
+                      title: 'Something went wrong',
+                      body:
+                          'We couldn\'t reach the server. Check your '
+                          'connection and try again.',
+                      action: ElevatedButton.icon(
+                        onPressed: _retry,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                      ),
                     );
                   }
 
@@ -325,6 +357,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
     required IconData icon,
     required String title,
     required String body,
+    Widget? action,
   }) {
     return Center(
       child: Padding(
@@ -346,6 +379,10 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                   ?.copyWith(color: tokens.textMuted),
               textAlign: TextAlign.center,
             ),
+            if (action != null) ...[
+              const SizedBox(height: AppConstants.spacing24),
+              action,
+            ],
           ],
         ),
       ),
@@ -353,7 +390,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
   }
 }
 
-enum _SharedStatus { ok, missing, hidden }
+enum _SharedStatus { ok, missing, hidden, error }
 
 class _SharedLoadResult {
   final _SharedStatus status;
@@ -367,4 +404,6 @@ class _SharedLoadResult {
   const _SharedLoadResult.missing() : this._(_SharedStatus.missing, null);
 
   const _SharedLoadResult.hidden() : this._(_SharedStatus.hidden, null);
+
+  const _SharedLoadResult.error() : this._(_SharedStatus.error, null);
 }

@@ -88,6 +88,14 @@ class SubscriptionController extends GetxController {
   final RxList<String> missingStoreProductIds = <String>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isCheckingOut = false.obs;
+  /// True while a store restore is in flight. Distinct from [isCheckingOut]
+  /// so the Restore button spins/disables on its own signal: unlike checkout,
+  /// a restore has no synchronous completion — results arrive later on the
+  /// purchase stream, so the flag is cleared there (or by a safety timer).
+  final RxBool isRestoring = false.obs;
+  /// Safety net for restores where the store never emits an update (sandbox
+  /// hangs): releases [isRestoring] so the button cannot stay disabled forever.
+  Timer? _restoreTimeoutTimer;
   /// The plan variant currently launching a store checkout ('' when none).
   /// Drives the per-card loading state so only the tapped plan card spins
   /// instead of every card in the tier.
@@ -95,6 +103,9 @@ class SubscriptionController extends GetxController {
   final RxBool isLoadingReferral = false.obs;
   final RxString error = ''.obs;
   final RxString referralError = ''.obs;
+
+  /// In-flight [refreshStoreProducts] query, when one is running.
+  Future<void>? _storeQueryFuture;
 
   StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
@@ -233,6 +244,7 @@ class SubscriptionController extends GetxController {
   @override
   void onClose() {
     _purchaseSubscription?.cancel();
+    _restoreTimeoutTimer?.cancel();
     super.onClose();
   }
 
@@ -289,6 +301,27 @@ class SubscriptionController extends GetxController {
   /// status [StoreStatus.unknown] so the checkout path can retry on its own.
   Future<void> refreshStoreProducts() async {
     if (!iapService.isStoreBillingAvailable) return;
+    // Single-flight: fetchPlans fires this fire-and-forget during onInit and
+    // the banner's Retry re-fires it; overlapping queries race on the
+    // storeProductDetails clear/add batch and a stale slow response landing
+    // last would flip a fresh ready rail back to unavailable. Join the
+    // in-flight query instead of racing it.
+    final inFlight = _storeQueryFuture;
+    if (inFlight != null) return inFlight;
+    final query = _queryStoreProducts();
+    _storeQueryFuture = query;
+    try {
+      await query;
+    } finally {
+      if (identical(_storeQueryFuture, query)) _storeQueryFuture = null;
+    }
+  }
+
+  /// Query the store once for product details (localized prices).
+  ///
+  /// Internal body of [refreshStoreProducts]; callers go through the
+  /// single-flight wrapper above.
+  Future<void> _queryStoreProducts() async {
     try {
       const planTypes = [
         'plus_monthly', 'plus_yearly', 'pro_monthly', 'pro_yearly',
@@ -311,10 +344,12 @@ class SubscriptionController extends GetxController {
       if (ids.isEmpty) {
         // The backend published no store product IDs: the rail is not wired
         // up (fail-closed by design — see config_health.py's contract).
+        if (isClosed) return;
         storeStatus.value = StoreStatus.notConfigured;
         return;
       }
       final query = await iapService.fetchProducts(ids);
+      if (isClosed) return;
       storeProductDetails
         ..clear()
         ..addEntries(
@@ -355,6 +390,7 @@ class SubscriptionController extends GetxController {
       // "not available yet" banner. An already-unavailable rail stays
       // unavailable across a transient retry — the underlying state
       // (products not served) has not changed.
+      if (isClosed) return;
       final wasDefinitivelyUnavailable =
           storeStatus.value == StoreStatus.unavailable;
       storeStatus.value =
@@ -535,6 +571,13 @@ class SubscriptionController extends GetxController {
     switch (details.status) {
       case PurchaseStatus.purchased:
       case PurchaseStatus.restored:
+        // A restored transaction ends the restore flow: release the spinner
+        // before the (potentially slow) backend verification await so the
+        // button never stays disabled while verification runs.
+        if (details.status == PurchaseStatus.restored) {
+          _restoreTimeoutTimer?.cancel();
+          isRestoring.value = false;
+        }
         await _registerStorePurchase(
           details,
           restored: details.status == PurchaseStatus.restored,
@@ -615,11 +658,24 @@ class SubscriptionController extends GetxController {
   /// reinstall). Restored transactions arrive on the purchase stream.
   Future<void> restorePurchases() async {
     if (!iapService.isStoreBillingAvailable) return;
+    // Re-entry guard: a restore is already in flight; ignore duplicate taps.
+    if (isRestoring.value) return;
     isCheckingOut.value = true;
     error.value = '';
     try {
+      isRestoring.value = true;
+      // Unlike checkout there is no synchronous completion: the restored
+      // transaction arrives later on the purchase stream. If the store never
+      // emits one (sandbox hang), this timer releases [isRestoring] so the
+      // Restore button cannot stay disabled forever.
+      _restoreTimeoutTimer = Timer(
+        const Duration(seconds: 15),
+        () => isRestoring.value = false,
+      );
       await iapService.restorePurchases();
     } catch (e, stackTrace) {
+      _restoreTimeoutTimer?.cancel();
+      isRestoring.value = false;
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       ErrorHandler.showError('Could not restore purchases.', title: 'Restore failed');

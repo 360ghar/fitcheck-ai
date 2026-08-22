@@ -14,6 +14,11 @@ import '../../../core/utils/error_handler.dart';
 /// Controller for outfit builder
 /// Manages outfit creation, item selection, and AI generation
 class OutfitBuilderController extends GetxController {
+  /// Safety cap when paginating the full wardrobe for the item picker
+  /// (10 pages x 100 items). Prevents an unbounded fetch loop on bad
+  /// `has_more` data; pickers degrade gracefully past the cap.
+  static const int _maxPickerPages = 10;
+
   final OutfitRepository _outfitRepository;
   final ItemRepository _itemRepository;
 
@@ -89,8 +94,17 @@ class OutfitBuilderController extends GetxController {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoading.value = true;
-      final response = await _itemRepository.getItems(limit: 100);
-      availableItems.value = response.items;
+      // Load the full wardrobe for the picker (not just the first 100):
+      // paginate until exhausted, capped at [_maxPickerPages].
+      final allItems = <ItemModel>[];
+      var page = 1;
+      ItemsListResponse response;
+      do {
+        response = await _itemRepository.getItems(page: page, limit: 100);
+        allItems.addAll(response.items);
+        page++;
+      } while (response.hasMore && page <= _maxPickerPages);
+      availableItems.value = allItems;
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
     } finally {

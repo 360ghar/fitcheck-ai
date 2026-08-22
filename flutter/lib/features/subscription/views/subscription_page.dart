@@ -458,12 +458,25 @@ class SubscriptionPage extends GetView<SubscriptionController> {
   Widget _buildRestorePurchasesRow() {
     return Align(
       alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        onPressed: controller.isCheckingOut.value
-            ? null
-            : controller.restorePurchases,
-        icon: const Icon(Icons.refresh, size: 18),
-        label: const Text('Restore Purchases'),
+      child: Obx(
+        () {
+          final restoring = controller.isRestoring.value;
+          return TextButton.icon(
+            // Gated on isRestoring, not isCheckingOut: a restore completes
+            // asynchronously on the purchase stream (see
+            // SubscriptionController.isRestoring), so the button must spin
+            // until that lands — checkout state would release too early.
+            onPressed: restoring ? null : controller.restorePurchases,
+            icon: restoring
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh, size: 18),
+            label: const Text('Restore Purchases'),
+          );
+        },
       ),
     );
   }

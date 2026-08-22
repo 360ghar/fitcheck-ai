@@ -393,6 +393,68 @@ void main() {
       controller.onClose();
     });
 
+    testWidgets('refreshStoreProducts single-flights concurrent queries', (
+      tester,
+    ) async {
+      // onInit fires the query fire-and-forget via fetchPlans and the banner
+      // Retry can re-fire it; overlapping queries used to race on the
+      // storeProductDetails clear/add batch and a stale slow response landing
+      // last could flip a fresh ready rail back to unavailable.
+      await pumpApp(tester);
+      iapService.productsToReturn = [_product('plus_monthly')];
+      iapService.fetchGate = Completer<void>();
+      final controller = buildController();
+      controller.storeProducts.value = _storeProducts();
+
+      final first = controller.refreshStoreProducts();
+      final second = controller.refreshStoreProducts();
+
+      // Both calls joined the ONE in-flight store query.
+      expect(iapService.fetchProductsCalls, 1);
+
+      iapService.fetchGate!.complete();
+      await first;
+      await second;
+      expect(iapService.fetchProductsCalls, 1);
+      expect(controller.storeStatus.value, StoreStatus.ready);
+
+      // The in-flight slot is released once the query settles: the next
+      // call must run a fresh query instead of joining a dead future.
+      await controller.refreshStoreProducts();
+      expect(iapService.fetchProductsCalls, 2);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('isRestoring stays up until the restored update lands', (
+      tester,
+    ) async {
+      // A restore has no synchronous completion: the transaction arrives
+      // later on the purchase stream, so the Restore button's spinner state
+      // must hold across awaits and release when the update lands — not
+      // when restorePurchases() returns.
+      await pumpApp(tester);
+      final controller = buildController();
+
+      final restoring = controller.restorePurchases();
+      expect(controller.isRestoring.value, isTrue);
+
+      await tester.pump();
+      // Still restoring while waiting for the store.
+      expect(controller.isRestoring.value, isTrue);
+
+      // Restored transaction arrives: the flag must drop BEFORE backend
+      // verification finishes so the button never spins through it.
+      iapService.emit(_purchase(status: PurchaseStatus.restored));
+      await tester.pump();
+      expect(controller.isRestoring.value, isFalse);
+      expect(repository.registerCalls, 1);
+
+      await restoring;
+      await settle(tester);
+      controller.onClose();
+    });
+
     testWidgets('unavailable plan product is surfaced without launching a purchase', (
       tester,
     ) async {

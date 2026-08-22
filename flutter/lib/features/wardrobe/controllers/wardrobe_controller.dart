@@ -188,7 +188,12 @@ class WardrobeController extends GetxController {
       // staring at a fake "empty closet" state. The grid swaps atomically on
       // success below.
     } else {
-      if (isLoadingMore.value) return;
+      // Block load-more while ANY fetch is in flight. During a refresh
+      // (isLoading=true) a scroll notification would otherwise start a
+      // concurrent page-N fetch that gets stale-guarded later — wasted
+      // bandwidth. Safe for initial load: it runs from onInit before any
+      // scroll exists, and InfiniteScrollWrapper only ever calls load-more.
+      if (isLoadingMore.value || isLoading.value) return;
       _fetchGeneration++;
     }
     final requestGeneration = _fetchGeneration;

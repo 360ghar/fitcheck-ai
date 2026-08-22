@@ -19,14 +19,22 @@ class FindMatchesController extends GetxController {
   final RxString searchQuery = ''.obs;
   final RxString categoryFilter = 'all'.obs;
 
+  /// Monotonic generation guard for [findMatches]. Rapid selection toggles
+  /// fire overlapping POSTs; responses can land out of order, and without
+  /// this guard an older response overwrites a newer one's results.
+  /// Mirrors `_fetchGeneration` in the wardrobe/outfit list controllers.
+  int _findGeneration = 0;
+
   /// Find matching items for selected items
   Future<void> findMatches(List<ItemModel> selectedItems) async {
     if (selectedItems.isEmpty) {
+      _findGeneration++; // discard any in-flight fetch's results
       matchingItems.clear();
       completeLooks.clear();
       return;
     }
 
+    final requestGeneration = ++_findGeneration;
     isLoading.value = true;
     error.value = '';
 
@@ -34,6 +42,9 @@ class FindMatchesController extends GetxController {
       final result = await _repository.findMatchingItems(
         selectedItems.map((i) => i.id).toList(),
       );
+
+      // A newer selection superseded this request; drop the stale payload.
+      if (requestGeneration != _findGeneration) return;
 
       final matches = (result['matches'] as List? ?? [])
           .whereType<Map<String, dynamic>>()
@@ -59,10 +70,15 @@ class FindMatchesController extends GetxController {
         }
       }
     } catch (e) {
+      if (requestGeneration != _findGeneration) return;
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value);
     } finally {
-      isLoading.value = false;
+      // Only the latest request owns the loading flag; an older request
+      // finishing late must not clear it while the newer one is in flight.
+      if (requestGeneration == _findGeneration) {
+        isLoading.value = false;
+      }
     }
   }
 
