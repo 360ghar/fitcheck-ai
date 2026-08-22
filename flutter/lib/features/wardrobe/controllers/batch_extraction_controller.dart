@@ -35,7 +35,7 @@ enum BatchInputMode { upload, social }
 class BatchExtractionController extends GetxController {
   final BatchExtractionRepository _batchRepo;
   final ItemRepository _itemRepo;
-  final SocialImportRepository _socialRepo = SocialImportRepository();
+  final SocialImportRepository _socialRepo;
   final ImagePicker _imagePicker = ImagePicker();
   final AppLinks _appLinks = AppLinks();
   PersistenceService get _persistence => Get.isRegistered<PersistenceService>()
@@ -52,11 +52,16 @@ class BatchExtractionController extends GetxController {
   /// [itemRepository] is injectable so unit tests can drive the item-save
   /// image-upload strategy without hitting the real API. Defaults to a live
   /// repository.
+  ///
+  /// [socialRepository] is injectable so unit tests can drive the social-import
+  /// SSE fallback without hitting the real API. Defaults to a live repository.
   BatchExtractionController({
     BatchExtractionRepository? batchRepository,
     ItemRepository? itemRepository,
+    SocialImportRepository? socialRepository,
   }) : _batchRepo = batchRepository ?? BatchExtractionRepository(),
-       _itemRepo = itemRepository ?? ItemRepository();
+       _itemRepo = itemRepository ?? ItemRepository(),
+       _socialRepo = socialRepository ?? SocialImportRepository();
 
   // Constants
   static const int maxImages = 50;
@@ -640,6 +645,11 @@ class BatchExtractionController extends GetxController {
     _persistSocialImportState();
   }
 
+  /// Test hook: drive the (otherwise private) social-import SSE subscription.
+  @visibleForTesting
+  void subscribeToSocialEventsForTesting(String id) =>
+      _subscribeToSocialEvents(id);
+
   void _subscribeToSocialEvents(String jobId, {int? lastEventId}) {
     _socialSseSubscription?.cancel();
     _socialSseSubscription = _socialRepo
@@ -680,6 +690,15 @@ class BatchExtractionController extends GetxController {
             }
 
             if (event.type == 'heartbeat' || event.type == 'connected') {
+              return;
+            }
+            // SSE retry exhaustion arrives as this synthetic event followed
+            // by a stream close — onError never fires under the SSE service's
+            // single-error contract, so the bounded polling fallback must be
+            // started here (restores what onError used to do pre-contract).
+            if (event.type == 'error') {
+              socialIsConnected.value = false;
+              _pollSocialStatus(jobId);
               return;
             }
             unawaited(refreshSocialStatus());
