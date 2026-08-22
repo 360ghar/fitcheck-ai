@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../exceptions/app_exceptions.dart';
+
 /// Image utilities for compression, encoding, and thumbnail generation
 class ImageUtils {
   ImageUtils._();
@@ -20,6 +22,9 @@ class ImageUtils {
 
   /// Max file size in bytes (10MB)
   static const int maxFileSize = 10 * 1024 * 1024;
+
+  /// Filename prefix used by [generateThumbnail] for generated thumbnails.
+  static const String _thumbnailPrefix = 'thumb_';
 
   /// Compress an image file
   ///
@@ -65,10 +70,19 @@ class ImageUtils {
     );
 
     if (compressed == null) {
-      // Fallback to raw file if compression fails
+      // Fallback to raw file if compression fails. Never send an over-limit
+      // payload: enforce the same cap as validateImage and surface the shared
+      // upload exception instead of silently base64-encoding oversized bytes.
       try {
         final bytes = await file.readAsBytes();
+        if (bytes.length > maxFileSize) {
+          throw FileUploadException.fileTooLarge(
+            maxFileSize ~/ (1024 * 1024),
+          );
+        }
         return base64Encode(bytes);
+      } on FileUploadException {
+        rethrow;
       } catch (e) {
         if (kDebugMode) {
           print('Failed to read image file: $e');
@@ -91,7 +105,7 @@ class ImageUtils {
     try {
       final tempDir = await getTemporaryDirectory();
       final thumbnailPath =
-          '${tempDir.path}/thumb_${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.last}';
+          '${tempDir.path}/$_thumbnailPrefix${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.last}';
 
       final result = await FlutterImageCompress.compressAndGetFile(
         file.absolute.path,
@@ -108,6 +122,40 @@ class ImageUtils {
         print('Thumbnail generation error: $e');
       }
       return null;
+    }
+  }
+
+  /// Deletes stale generated thumbnails from the temp directory.
+  ///
+  /// [generateThumbnail] writes files prefixed with [_thumbnailPrefix] into the
+  /// OS temp dir and nothing cleans them up, so they accumulate across
+  /// sessions. Best-effort: any failure is swallowed (debug-printed only in
+  /// debug builds) so pruning can never break startup or a caller.
+  static Future<void> pruneThumbnails({
+    Duration maxAge = const Duration(days: 7),
+  }) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final entities = tempDir.listSync(followLinks: false);
+      final cutoff = DateTime.now().subtract(maxAge).millisecondsSinceEpoch;
+      for (final entity in entities) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        if (!name.startsWith(_thumbnailPrefix)) continue;
+        try {
+          final modified = await entity.lastModified();
+          if (modified.millisecondsSinceEpoch >= cutoff) continue;
+          await entity.delete();
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('Failed to prune thumbnail $name: $e');
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Thumbnail pruning failed: $e');
+      }
     }
   }
 

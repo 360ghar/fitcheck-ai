@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Loads environment values from an asset `.env` file with
@@ -85,6 +86,12 @@ class EnvConfig {
     if (_paywallEnabledEnv.isNotEmpty) {
       return _paywallEnabledEnv.toLowerCase() == 'true';
     }
+    // Fall back to the .env file value (same parsing as dart-define), so
+    // PAYWALL_ENABLED=false in a bundled .env is honored too.
+    final fileValue = _fileValues['PAYWALL_ENABLED'];
+    if (fileValue != null && fileValue.isNotEmpty) {
+      return fileValue.toLowerCase() == 'true';
+    }
     return true;
   }
 
@@ -98,7 +105,14 @@ class EnvConfig {
     try {
       final content = await rootBundle.loadString(path);
       _parseEnv(content);
-    } catch (_) {}
+    } catch (e) {
+      // Missing or unreadable .env assets are an expected fallback path
+      // (dart-defines carry all real values in CI/release builds), so keep the
+      // silent-fallback behavior but leave a debug breadcrumb.
+      if (kDebugMode) {
+        debugPrint('EnvConfig: failed to load .env asset "$path": $e');
+      }
+    }
   }
 
   static void _parseEnv(String content) {
@@ -113,12 +127,23 @@ class EnvConfig {
       if (idx <= 0) continue;
       final key = line.substring(0, idx).trim();
       var value = line.substring(idx + 1).trim();
-      if (value.length >= 2) {
-        final first = value[0];
-        final last = value[value.length - 1];
-        if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
-          value = value.substring(1, value.length - 1);
+
+      // Detect fully-quoted values first: quotes may legitimately contain '#'
+      // and must not be truncated by the inline-comment strip below.
+      final fullyQuoted = value.length >= 2 &&
+          ((value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith('\'') && value.endsWith('\'')));
+
+      if (!fullyQuoted) {
+        // Strip unquoted inline comments (`KEY=value # note`) before storing.
+        final commentIdx = value.indexOf(' #');
+        if (commentIdx >= 0) {
+          value = value.substring(0, commentIdx).trimRight();
         }
+      }
+
+      if (fullyQuoted) {
+        value = value.substring(1, value.length - 1);
       }
       _fileValues[key] = value;
     }
