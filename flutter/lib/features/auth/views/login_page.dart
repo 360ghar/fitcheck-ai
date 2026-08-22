@@ -44,6 +44,10 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleLogin() async {
+    // Keyboard submit (onFieldSubmitted) bypasses the button's disabled
+    // state, so the guard must live here too or Enter-spam double-submits
+    // credentials.
+    if (Get.find<AuthController>().isLoading.value) return;
     if (!_formKey.currentState!.validate()) {
       return;
     }

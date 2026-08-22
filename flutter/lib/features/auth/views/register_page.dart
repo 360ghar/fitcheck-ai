@@ -42,6 +42,8 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _handleRegister() async {
+    // Keyboard submit bypasses the button's disabled state; guard here too.
+    if (Get.find<AuthController>().isLoading.value) return;
     if (!_formKey.currentState!.validate()) {
       return;
     }

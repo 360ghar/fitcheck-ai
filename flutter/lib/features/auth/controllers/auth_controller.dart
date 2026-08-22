@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +6,7 @@ import '../../../core/services/analytics_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../shell/controllers/main_shell_controller.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/referral_service.dart';
@@ -24,6 +24,13 @@ class AuthController extends GetxController {
 
   // Workers for cleanup (prevent memory leaks)
   final List<Worker> _workers = [];
+
+  /// True while a credential flow (login / register / Apple) is driving the
+  /// post-auth pipeline itself. The auth-state worker below also fires when
+  /// those flows flip `isAuthenticated`, and without this flag every login
+  /// ran the pipeline twice: two `/users/me` loads, two stacked
+  /// `offAllNamed` transitions, and racing `user.value` writes.
+  bool _credentialFlowDriving = false;
 
   // Reactive state
   final Rx<UserModel?> user = Rx<UserModel?>(null);
@@ -71,6 +78,11 @@ class AuthController extends GetxController {
           user.value = null;
           return;
         }
+        // A credential flow (login / register / Apple) is already running the
+        // load + referral + navigation pipeline; let it own the sequence.
+        // This worker remains the driver for OAuth deep-link restores and
+        // session-restore events, which have no explicit flow.
+        if (_credentialFlowDriving) return;
         await _loadUserData();
         // Check for pending referral code from OAuth flow
         await _referralService.handleOAuthCallback();
@@ -152,6 +164,7 @@ class AuthController extends GetxController {
       isLoading.value = true;
       error.value = '';
       showEmailNotVerifiedError.value = false;
+      _credentialFlowDriving = true;
 
       final response = await _authService.login(email, password);
 
@@ -184,6 +197,7 @@ class AuthController extends GetxController {
       rethrow;
     } finally {
       isLoading.value = false;
+      _credentialFlowDriving = false;
     }
   }
 
@@ -197,6 +211,7 @@ class AuthController extends GetxController {
     try {
       isLoading.value = true;
       error.value = '';
+      _credentialFlowDriving = true;
 
       final response = await _authService.register(
         email,
@@ -262,6 +277,7 @@ class AuthController extends GetxController {
       rethrow;
     } finally {
       isLoading.value = false;
+      _credentialFlowDriving = false;
     }
   }
 
@@ -294,6 +310,7 @@ class AuthController extends GetxController {
     try {
       isAppleSigningIn.value = true;
       error.value = '';
+      _credentialFlowDriving = true;
 
       final response = await _authService.signInWithApple();
 
@@ -329,6 +346,7 @@ class AuthController extends GetxController {
       rethrow;
     } finally {
       isAppleSigningIn.value = false;
+      _credentialFlowDriving = false;
     }
   }
 
@@ -344,12 +362,24 @@ class AuthController extends GetxController {
       user.value = null;
       error.value = '';
 
+      // The shell controller is permanent, so its tab state would otherwise
+      // carry over to the next session (previous user's tab + all tabs
+      // mounted at once for the new account).
+      if (Get.isRegistered<MainShellController>()) {
+        Get.find<MainShellController>().resetForNewSession();
+      }
+
       Get.offAllNamed(Routes.splash);
 
       ErrorHandler.showInfo('You have been logged out successfully', title: 'Logged Out');
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
-      debugPrint('Logout error: $e');
+      // A failed logout used to only debugPrint: the spinner stopped and the
+      // user appeared still-logged-in with no explanation.
+      ErrorHandler.showError(
+        error.value,
+        title: 'Logout Failed',
+      );
     } finally {
       isLoggingOut.value = false;
     }

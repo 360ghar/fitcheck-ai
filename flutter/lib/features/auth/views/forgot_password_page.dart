@@ -24,6 +24,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   Future<void> _handleResetRequest() async {
+    // Keyboard submit bypasses the button's disabled state; guard here too.
+    if (Get.find<AuthController>().isLoading.value) return;
     if (!_formKey.currentState!.validate()) {
       return;
     }
