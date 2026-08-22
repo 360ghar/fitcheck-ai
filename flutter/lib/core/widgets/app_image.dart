@@ -21,6 +21,7 @@ class AppImage extends StatefulWidget {
   const AppImage({
     super.key,
     this.imageUrl,
+    this.fallbackUrl,
     this.fit = BoxFit.contain,
     this.width,
     this.height,
@@ -42,6 +43,15 @@ class AppImage extends StatefulWidget {
 
   /// The URL of the image to display.
   final String? imageUrl;
+
+  /// Full-size URL to retry once if [imageUrl] fails.
+  ///
+  /// Same contract as `AppNetworkImage.fallbackUrl`: read paths derive
+  /// `thumbnail_url` with no existence check, so a missing thumb must fall
+  /// back to the full size instead of rendering a broken tile. An empty
+  /// string or a URL identical to [imageUrl] is dropped (see
+  /// `resolveFallbackUrl`).
+  final String? fallbackUrl;
 
   /// How the image should be inscribed into the box.
   /// Defaults to [BoxFit.contain] to preserve aspect ratio.
@@ -113,6 +123,9 @@ class _AppImageState extends State<AppImage> {
   /// minted URL once.
   String? _activeUrl;
 
+  /// Whether the [AppImage.fallbackUrl] retry has already been attempted.
+  bool _usingFallback = false;
+
   /// Whether the re-mint fallback has already been attempted. A single retry
   /// per URL is enough: if the fresh URL fails too, the object is genuinely
   /// unreadable and an error tile is the honest result.
@@ -121,17 +134,43 @@ class _AppImageState extends State<AppImage> {
   @override
   void initState() {
     super.initState();
-    _activeUrl = widget.imageUrl;
+    _resolveActiveUrl();
   }
 
   @override
   void didUpdateWidget(AppImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.imageUrl != widget.imageUrl ||
+        oldWidget.fallbackUrl != widget.fallbackUrl ||
         oldWidget.storagePath != widget.storagePath) {
+      // A stale failure must never suppress a freshly-configured URL.
       _reminted = false;
+      _resolveActiveUrl();
+    }
+  }
+
+  /// Picks the URL to render: the fallback once the primary has failed and a
+  /// distinct fallback exists (identical/empty fallbacks are dropped — see
+  /// [resolveFallbackUrl]).
+  void _resolveActiveUrl() {
+    final fallback = resolveFallbackUrl(widget.imageUrl ?? '', widget.fallbackUrl);
+    if (_usingFallback && fallback != null) {
+      _activeUrl = fallback;
+    } else {
+      _usingFallback = false;
       _activeUrl = widget.imageUrl;
     }
+  }
+
+  /// Retries the load once with [AppImage.fallbackUrl]. Mirrors
+  /// AppNetworkImage's fallback swap: one retry per configuration, scheduled
+  /// from the error builder because it runs during build.
+  void _retryWithFallback() {
+    if (!mounted || _usingFallback) return;
+    setState(() {
+      _usingFallback = true;
+      _resolveActiveUrl();
+    });
   }
 
   Future<void> _remintAndRetry() async {
@@ -182,6 +221,16 @@ class _AppImageState extends State<AppImage> {
         placeholder: (context, url) =>
             widget.placeholder ?? _buildPlaceholder(context, tokens),
         errorWidget: (context, url, error) {
+          // A distinct fallback URL gets one retry before the re-mint: a
+          // missing `thumbnail_url` object is recovered by the full size.
+          final fallback =
+              resolveFallbackUrl(_activeUrl ?? '', widget.fallbackUrl);
+          if (!_usingFallback && fallback != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _retryWithFallback();
+            });
+            return widget.placeholder ?? _buildPlaceholder(context, tokens);
+          }
           if (canRemint && !_reminted) {
             // errorWidget runs during build; schedule the re-mint + retry
             // instead of calling setState inline.
