@@ -67,8 +67,14 @@ class SettingsController extends GetxController {
   }
 
   /// Update theme mode
+  ///
+  /// Applies optimistically (snappy UI), then persists. If the backend save
+  /// fails, both the controller state AND the ThemeService persistence are
+  /// reverted to the previous mode — otherwise the app keeps showing and
+  /// storing a theme the server rejected.
   Future<void> updateThemeMode(AppThemeMode mode) async {
     final current = preferences.value ?? UserPreferencesModel();
+    final previousMode = current.themeMode ?? AppThemeMode.system;
 
     final updated = current.copyWith(themeMode: mode);
     preferences.value = updated;
@@ -76,8 +82,12 @@ class SettingsController extends GetxController {
     // Update ThemeService (handles local storage and applies theme)
     await _themeService.setThemeMode(mode);
 
-    // Save to backend
-    await savePreferences(updated);
+    // Save to backend; on failure roll back the optimistic apply above.
+    final saved = await savePreferences(updated);
+    if (!saved && !isClosed) {
+      await _themeService.setThemeMode(previousMode);
+      preferences.value = current.copyWith(themeMode: previousMode);
+    }
   }
 
   /// Update temperature unit
@@ -166,7 +176,11 @@ class SettingsController extends GetxController {
   }
 
   /// Save preferences
-  Future<void> savePreferences(UserPreferencesModel newPreferences) async {
+  ///
+  /// Returns whether the save succeeded so callers that optimistically applied
+  /// state (e.g. [updateThemeMode]) can roll back on failure. Existing
+  /// fire-and-forget callers ignore the result, so this is backward compatible.
+  Future<bool> savePreferences(UserPreferencesModel newPreferences) async {
     try {
       isSaving.value = true;
       error.value = '';
@@ -175,9 +189,11 @@ class SettingsController extends GetxController {
       preferences.value = saved;
 
       ErrorHandler.showSuccess('Your preferences have been updated', title: 'Saved');
+      return true;
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
+      return false;
     } finally {
       isSaving.value = false;
     }

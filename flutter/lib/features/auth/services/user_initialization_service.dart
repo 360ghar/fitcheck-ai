@@ -1,8 +1,27 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../repositories/auth_repository.dart';
 import '../../../core/services/referral_redemption_service.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/exceptions/app_exceptions.dart';
+
+/// Outcome of a referral redemption attempt.
+///
+/// The legacy [UserInitializationService.redeemReferralCode] bool API cannot
+/// distinguish "backend said no" (invalid/expired/revoked code — retrying can
+/// never succeed) from "network hiccup" (retrying later will). Callers that
+/// need that distinction use [redeemReferralCodeWithResult].
+enum ReferralRedemptionStatus { success, definitiveRejection, transientFailure }
+
+class ReferralRedemptionResult {
+  final ReferralRedemptionStatus status;
+  final Object? error;
+
+  const ReferralRedemptionResult(this.status, {this.error});
+
+  bool get isSuccess => status == ReferralRedemptionStatus.success;
+}
 
 /// Shared initialization logic for user setup that was previously duplicated
 /// across [AuthController] and the subscription feature.
@@ -21,16 +40,57 @@ class UserInitializationService extends GetxService {
   /// decide whether to keep the pending code for a later retry. Never throws:
   /// a failure must not block the caller's flow (e.g. registration).
   Future<bool> redeemReferralCode(String code) async {
+    final result = await redeemReferralCodeWithResult(code);
+    return result.isSuccess;
+  }
+
+  /// Redeem a referral code with a typed outcome: [ReferralRedemptionStatus.definitiveRejection]
+  /// means the backend definitively rejected the code (HTTP 400/403/404/410 —
+  /// invalid, revoked, or expired), so retrying is pointless. Never throws.
+  Future<ReferralRedemptionResult> redeemReferralCodeWithResult(
+    String code,
+  ) async {
     try {
       await _subscriptionRepo.redeemReferralCode(code);
       ErrorHandler.showInfo(
         'You and your friend both get 1 month of Pro free!',
         title: 'Referral Applied!',
       );
-      return true;
+      return const ReferralRedemptionResult(ReferralRedemptionStatus.success);
+    } on DioException catch (e) {
+      debugPrint('Failed to redeem referral code: $e');
+      final statusCode = e.response?.statusCode;
+      if (statusCode != null &&
+          const {400, 403, 404, 410}.contains(statusCode)) {
+        return ReferralRedemptionResult(
+          ReferralRedemptionStatus.definitiveRejection,
+          error: e,
+        );
+      }
+      return ReferralRedemptionResult(
+        ReferralRedemptionStatus.transientFailure,
+        error: e,
+      );
+    } on AppException catch (e) {
+      debugPrint('Failed to redeem referral code: $e');
+      final statusCode = e.statusCode;
+      if (statusCode != null &&
+          const {400, 403, 404, 410}.contains(statusCode)) {
+        return ReferralRedemptionResult(
+          ReferralRedemptionStatus.definitiveRejection,
+          error: e,
+        );
+      }
+      return ReferralRedemptionResult(
+        ReferralRedemptionStatus.transientFailure,
+        error: e,
+      );
     } catch (e) {
       debugPrint('Failed to redeem referral code: $e');
-      return false;
+      return ReferralRedemptionResult(
+        ReferralRedemptionStatus.transientFailure,
+        error: e,
+      );
     }
   }
 

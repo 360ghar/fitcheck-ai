@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../../../core/services/persistence_service.dart';
 import 'user_initialization_service.dart';
@@ -48,11 +49,23 @@ class ReferralService extends GetxService {
     await _userInitService.syncOAuthProfile();
 
     // Check for pending referral code from before OAuth redirect; clear it
-    // only after redemption succeeds so a failure can retry later.
+    // after redemption succeeds, or when the backend DEFINITIVELY rejects it
+    // (invalid/expired/revoked — HTTP 400/403/404/410). A definitive rejection
+    // can never succeed on retry, so keeping the code pending meant every
+    // future login re-failed forever. Transient failures (network, timeouts,
+    // 5xx) keep the code pending so a later attempt can still redeem it.
     final pendingCode = await getPendingReferralCode();
     if (pendingCode != null && pendingCode.isNotEmpty) {
-      final redeemed = await redeemReferralCode(pendingCode);
-      if (redeemed) {
+      final result = await _userInitService.redeemReferralCodeWithResult(
+        pendingCode,
+      );
+      if (result.isSuccess || result.status == ReferralRedemptionStatus.definitiveRejection) {
+        if (!result.isSuccess) {
+          debugPrint(
+            'Pending referral code $pendingCode definitively rejected by '
+            'backend; clearing it. Error: ${result.error}',
+          );
+        }
         await _persistence.remove(_pendingReferralKey);
       }
     }
