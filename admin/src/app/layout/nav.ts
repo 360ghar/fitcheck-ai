@@ -4,6 +4,7 @@ import {
   Database,
   FileText,
   FolderTree,
+  Gift,
   LayoutDashboard,
   LineChart,
   MessageSquare,
@@ -14,6 +15,8 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
+
+import { featureFlags } from '@/config/env'
 
 /**
  * Sidebar navigation manifest (spec §5): grouped, permission-filtered. Items
@@ -53,6 +56,9 @@ export const navGroups: NavGroup[] = [
       { path: '/subscriptions', titleKey: 'nav.subscriptions', icon: CreditCard, permission: 'subscriptions.read' },
       { path: '/iap', titleKey: 'nav.iap', icon: Receipt, permission: 'iap.read' },
       { path: '/promo', titleKey: 'nav.promo', icon: Tag, permission: 'promo.read' },
+      ...(featureFlags.giftVouchers
+        ? [{ path: '/gifts', titleKey: 'nav.gifts', icon: Gift, permission: 'gifts.read' }]
+        : []),
     ],
   },
   {

@@ -13,7 +13,7 @@ export default function SupportPage() {
         canonicalUrl={`${SEO_CONFIG.siteUrl}/support`}
       />
       <div className="pt-20">
-        <section className="py-24 bg-stone-50 dark:bg-stone-950">
+        <section className="py-16 bg-stone-50 dark:bg-stone-950 md:py-24">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center mb-12">
@@ -44,7 +44,7 @@ export default function SupportPage() {
                   <p className="text-stone-600 dark:text-stone-400 mb-3">
                     Product questions, account help, and technical issues.
                   </p>
-                  <p className="font-medium text-primary">
+                  <p className="font-medium text-primary break-words">
                     support@fitcheckaiapp.com
                   </p>
                 </a>
@@ -77,7 +77,7 @@ export default function SupportPage() {
                     Account deletion is available in-app under Settings → Delete
                     Account. Contact us for other privacy requests.
                   </p>
-                  <p className="font-medium text-primary">
+                  <p className="font-medium text-primary break-words">
                     privacy@fitcheckaiapp.com
                   </p>
                 </a>

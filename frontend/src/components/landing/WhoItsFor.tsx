@@ -1,63 +1,110 @@
 import { Link } from 'react-router-dom'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, LockKeyhole, ShieldCheck, Trash2 } from 'lucide-react'
+
 import { AnimatedSection } from './AnimatedSection'
+import { SectionKicker } from './SectionKicker'
+
+const privacyFacts = [
+  {
+    icon: ShieldCheck,
+    title: 'Private image storage',
+    body: 'Wardrobe images use private storage with account ownership checks for reads and writes.',
+  },
+  {
+    icon: LockKeyhole,
+    title: 'Protected transfer and storage',
+    body: 'Photos and wardrobe data are encrypted in transit and at rest.',
+  },
+  {
+    icon: Trash2,
+    title: 'Account data deletion',
+    body: 'Account deletion removes profile, wardrobe, and stored image data tied to the account.',
+  },
+]
 
 const personas = [
   {
     title: 'Busy professionals',
-    body: 'Spend less time deciding what to wear. Weather-aware outfits from your real wardrobe, planned around the week.',
+    body: 'Plan weather-aware workday outfits from the wardrobe you already own.',
     href: '/for/busy-professionals',
   },
   {
     title: 'Content creators',
-    body: 'Plan looks, visualize outfits, and generate photoshoot-style images for content calendars from clothes you own.',
+    body: 'Plan looks and produce studio-style images for a content schedule.',
     href: '/for/content-creators',
   },
   {
     title: 'Festive and wedding guests',
-    body: 'Digitize ethnic and formal wear, then mix occasion looks without buying a new outfit every invitation.',
+    body: 'Catalog occasion wear and prepare combinations before the next invitation.',
     href: '/for/festive-and-wedding-outfits',
   },
 ]
 
 export default function WhoItsFor() {
   return (
-    <section id="who-its-for" className="py-20 md:py-28 bg-white dark:bg-stone-950">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <AnimatedSection>
-          <div className="max-w-2xl mb-12 md:mb-14">
-            <h2 className="landing-display text-3xl sm:text-4xl md:text-[2.75rem] font-semibold text-stone-900 dark:text-stone-50 leading-tight">
-              Built for how you dress
-            </h2>
-            <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400">
-              Same wardrobe tools, different mornings. Pick the path that matches your routine.
-            </p>
-          </div>
+    <section id="who-its-for" className="bg-background py-20 md:py-28">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-14 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8">
+        <AnimatedSection className="reveal min-w-0 lg:col-span-5">
+          <SectionKicker>Privacy + use cases</SectionKicker>
+          <h2 className="landing-display max-w-xl text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
+            Personal photos need clear boundaries
+          </h2>
+          <p className="mt-4 max-w-xl text-base leading-relaxed text-body">
+            Review how wardrobe data is stored, protected, and removed before you upload a personal photo.
+          </p>
+
+          <dl className="mt-8 border-t border-border">
+            {privacyFacts.map((fact) => (
+              <div key={fact.title} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-4 border-b border-border py-5">
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-card text-primary">
+                  <fact.icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <div>
+                  <dt className="text-sm font-semibold text-foreground">{fact.title}</dt>
+                  <dd className="mt-1 text-sm leading-relaxed text-muted-foreground">{fact.body}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
+
+          <Link
+            to="/privacy"
+            className="mt-6 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-primary hover:text-primary-pressed"
+          >
+            Read the Privacy Policy
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
         </AnimatedSection>
 
-        <div className="grid md:grid-cols-3 gap-0 border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden bg-white dark:bg-stone-950">
-          {personas.map((persona, index) => (
-            <AnimatedSection key={persona.title} delay={index * 60} className="h-full">
-              <Link
-                to={persona.href}
-                className={
-                  index < personas.length - 1
-                    ? 'group flex h-full flex-col p-7 md:p-9 border-b md:border-b-0 md:border-r border-stone-200 dark:border-stone-800 transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/50'
-                    : 'group flex h-full flex-col p-7 md:p-9 transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/50'
-                }
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-xl font-semibold text-stone-900 dark:text-stone-50 tracking-tight">
-                    {persona.title}
-                  </h3>
-                  <ArrowUpRight className="h-4 w-4 shrink-0 text-stone-400 transition group-hover:text-primary" />
-                </div>
-                <p className="mt-3 text-sm md:text-[15px] text-stone-600 dark:text-stone-400 leading-relaxed">
-                  {persona.body}
-                </p>
-              </Link>
-            </AnimatedSection>
-          ))}
+        <div className="min-w-0 lg:col-span-7">
+          <AnimatedSection className="reveal">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Workflows by audience
+            </p>
+          </AnimatedSection>
+          <div className="mt-4 border-t border-border">
+            {personas.map((persona, index) => (
+              <AnimatedSection key={persona.title} delay={index * 60}>
+                <Link
+                  to={persona.href}
+                  className="group grid min-w-0 grid-cols-[minmax(0,1fr)_1.5rem] gap-5 border-b border-border py-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:py-9"
+                >
+                  <span>
+                    <span className="block text-xl font-semibold text-foreground group-hover:text-primary sm:text-2xl">
+                      {persona.title}
+                    </span>
+                    <span className="mt-2 block max-w-xl text-sm leading-relaxed text-body sm:text-base">
+                      {persona.body}
+                    </span>
+                  </span>
+                  <ArrowUpRight
+                    className="h-5 w-5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
+                    aria-hidden="true"
+                  />
+                </Link>
+              </AnimatedSection>
+            ))}
+          </div>
         </div>
       </div>
     </section>

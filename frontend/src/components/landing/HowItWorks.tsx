@@ -1,113 +1,93 @@
 import { Link } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
+
 import { AnimatedSection } from './AnimatedSection'
+import { SectionKicker } from './SectionKicker'
 
 const steps = [
   {
     id: 'step-photograph',
+    number: '01',
     verb: 'Photograph',
-    title: 'Snap what you own',
+    title: 'Capture what you own',
     description:
-      'Shoot singles or full hangs. FitCheck reads the image and files each piece for you.',
+      'Take photos of single pieces, a full rail, or a flat lay. The source image stays connected to the items it contains.',
     href: '/features/ai-wardrobe-extraction',
-    linkLabel: 'How extraction works',
+    linkLabel: 'See extraction',
   },
   {
     id: 'step-catalog',
+    number: '02',
     verb: 'Catalog',
-    title: 'Your closet, searchable',
+    title: 'Review the wardrobe record',
     description:
-      'Colors, categories, and styles land automatically so you stop hunting for that one shirt.',
+      'FitCheck proposes color, category, and style details. Review them before saving a searchable wardrobe.',
     href: '/features/wardrobe-analytics',
-    linkLabel: 'Wardrobe analytics',
+    linkLabel: 'See wardrobe analytics',
   },
   {
     id: 'step-wear',
+    number: '03',
     verb: 'Wear',
-    title: 'Outfits that fit the day',
+    title: 'Decide with context',
     description:
-      'Get recommendations, try looks on, and plan the week without decision fatigue.',
+      'Use the saved wardrobe for weather-aware recommendations, try-on, calendar planning, and photoshoot images.',
     href: '/features/outfit-recommendations',
-    linkLabel: 'Daily outfit ideas',
+    linkLabel: 'See outfit planning',
   },
 ]
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-20 md:py-28 bg-stone-50 dark:bg-stone-900/40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <AnimatedSection>
-          <div className="max-w-2xl mb-12 md:mb-16">
-            <h2 className="landing-display text-3xl sm:text-4xl md:text-[2.75rem] font-semibold text-stone-900 dark:text-stone-50 leading-tight">
-              Three moves. Morning solved.
-            </h2>
-            <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400">
-              No multi-day setup. Upload a few photos and start getting useful outfits the same day.
+    <section id="how-it-works" className="bg-surface-soft py-20 md:py-28">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <AnimatedSection className="reveal">
+          <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
+            <div className="lg:col-span-7">
+              <SectionKicker>Photograph → Catalog → Wear</SectionKicker>
+              <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
+                One sequence from camera roll to morning plan
+              </h2>
+            </div>
+            <p className="max-w-xl text-base leading-relaxed text-body lg:col-span-5 lg:justify-self-end">
+              Start with a few clothing photos. Keep control at the review step. Use the result across the product.
             </p>
           </div>
         </AnimatedSection>
 
-        <div className="grid md:grid-cols-3 gap-0 md:gap-0 border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden">
+        <ol className="mt-12 grid border-y border-border md:grid-cols-3">
           {steps.map((step, index) => (
-            <AnimatedSection key={step.verb} delay={index * 80} className="h-full">
-              <div
-                id={step.id}
-                className={
-                  index < steps.length - 1
-                    ? 'h-full border-b md:border-b-0 md:border-r border-stone-200 dark:border-stone-800 p-7 md:p-9'
-                    : 'h-full p-7 md:p-9'
-                }
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                  {step.verb}
-                </p>
-                <h3 className="mt-4 text-xl font-semibold text-stone-900 dark:text-stone-50 tracking-tight">
-                  {step.title}
-                </h3>
-                <p className="mt-3 text-sm md:text-[15px] text-stone-600 dark:text-stone-400 leading-relaxed">
-                  {step.description}
-                </p>
-                <Link
-                  to={step.href}
-                  className="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:text-primary-pressed transition-colors"
-                >
-                  {step.linkLabel}
-                </Link>
-              </div>
-            </AnimatedSection>
+            <li
+              key={step.id}
+              id={step.id}
+              className="relative min-w-0 border-b border-border py-8 last:border-b-0 md:border-b-0 md:border-r md:px-8 md:last:border-r-0 md:first:pl-0 md:last:pr-0"
+            >
+              <AnimatedSection delay={index * 80} className="h-full">
+                <div className="flex h-full flex-col">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full border border-primary text-xs font-semibold text-primary">
+                      {step.number}
+                    </span>
+                    <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      {step.verb}
+                    </span>
+                  </div>
+                  <h3 className="mt-6 text-xl font-semibold leading-snug text-foreground">{step.title}</h3>
+                  <p className="mt-3 flex-1 text-sm leading-relaxed text-body sm:text-[15px]">
+                    {step.description}
+                  </p>
+                  <Link
+                    to={step.href}
+                    className="mt-5 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-primary hover:text-primary-pressed"
+                  >
+                    {step.linkLabel}
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                </div>
+              </AnimatedSection>
+            </li>
           ))}
-        </div>
-
-        <AnimatedSection delay={160}>
-          <div className="mt-10 md:mt-12 relative rounded-2xl overflow-hidden border border-stone-200 dark:border-stone-800 aspect-[16/10] sm:aspect-[21/9] max-h-[360px]">
-            {/* Landscape variants: the container is 16/10 → 21/9 and the old
-                portrait source (864x1152) was upscaled to ~1280px wide on
-                desktop. outfit-wide-1280 is a 16/10 crop of the same source at
-                the same object-position (20% from top), so the visual is
-                unchanged but sharp. */}
-            <img
-              src="/landing/outfit-wide-1280.webp"
-              srcSet="/landing/outfit-wide-640.webp 640w, /landing/outfit-wide-1280.webp 1280w"
-              sizes="(min-width: 640px) 80vw, 100vw"
-              alt="A complete everyday outfit ready to wear"
-              className="w-full h-full object-cover object-[center_20%]"
-              loading="lazy"
-              width={1280}
-              height={800}
-            />
-            <div className="absolute inset-0 bg-stone-950/20" />
-            <div className="absolute bottom-4 left-4 md:bottom-6 md:left-6 flex flex-wrap items-center gap-3">
-              <div className="rounded-lg bg-white/95 dark:bg-stone-950/90 px-4 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-50 border border-stone-200/60 dark:border-stone-800">
-                From catalog to wear in one flow
-              </div>
-              <a
-                href="#demo"
-                className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-pressed transition-colors"
-              >
-                Try extraction free
-              </a>
-            </div>
-          </div>
-        </AnimatedSection>
+        </ol>
       </div>
     </section>
   )

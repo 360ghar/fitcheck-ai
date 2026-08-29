@@ -18,6 +18,7 @@ Every test receives a brand-new instance via the ``fake_db`` fixture in
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -26,6 +27,7 @@ except ImportError:  # pragma: no cover - postgrest is a backend dependency
     PostgrestAPIError = RuntimeError  # type: ignore[assignment,misc]
 
 from app.core.predicates import evaluate_predicate, resolve_dotted, split_or
+from app.utils.datetime_util import utcnow
 
 
 # Unique keys per table, mirroring the migrations' constraints (the fake can
@@ -55,6 +57,19 @@ UNIQUE_KEYS: Dict[str, Tuple[str, ...]] = {
 
 def _key_values(row: Dict[str, Any], keys: Tuple[str, ...]) -> Tuple[Any, ...]:
     return tuple(row.get(key) for key in keys)
+
+
+def _timestamp_expired(value: Any) -> bool:
+    """Match the OAuth RPC's expiry branch for ISO timestamps."""
+    if not value:
+        return False
+    try:
+        parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed < (utcnow() - timedelta(seconds=1))
 
 
 class FakeResult:
@@ -123,12 +138,13 @@ class FakeRpcBuilder:
     top-users RPCs from migration 040) can be tested without a live DB.
     """
 
-    def __init__(self, db: "FakeDB", name: str):
+    def __init__(self, db: "FakeDB", name: str, params: Dict[str, Any]):
         self._db = db
         self._name = name
+        self._params = params
 
     def execute(self) -> FakeResult:
-        return FakeResult(data=list(self._db.rpc_results.get(self._name, [])))
+        return self._db._execute_rpc(self._name, self._params)
 
 
 class FakeNotBuilder:
@@ -518,8 +534,102 @@ class FakeDB:
         return FakeBuilder(self, name)
 
     def rpc(self, name: str, params: Optional[Dict[str, Any]] = None) -> FakeRpcBuilder:
-        self.rpc_calls.append((name, params or {}))
-        return FakeRpcBuilder(self, name)
+        rpc_params = params or {}
+        self.rpc_calls.append((name, rpc_params))
+        return FakeRpcBuilder(self, name, rpc_params)
+
+    def _execute_rpc(self, name: str, params: Dict[str, Any]) -> FakeResult:
+        """Execute an RPC with either a canned result or its stateful fake.
+
+        The OAuth RPCs mutate their backing rows, so canned data cannot model
+        a full authorization-code and refresh-token flow. Keep that behavior
+        here with the table fake rather than special-casing production code.
+        """
+        if name in self.rpc_results:
+            return FakeResult(data=list(self.rpc_results[name]))
+        if name == "consume_mcp_oauth_authorization_code":
+            return self._consume_mcp_oauth_authorization_code(params)
+        if name == "rotate_mcp_oauth_refresh_token":
+            return self._rotate_mcp_oauth_refresh_token(params)
+        return FakeResult(data=[])
+
+    def _consume_mcp_oauth_authorization_code(self, params: Dict[str, Any]) -> FakeResult:
+        record = next(
+            (
+                row
+                for row in self._rows_for("mcp_oauth_auth_codes")
+                if row.get("code_hash") == params.get("p_code_hash")
+            ),
+            None,
+        )
+        if not record or record.get("used_at"):
+            return FakeResult(data=[{"outcome": "invalid"}])
+        if _timestamp_expired(record.get("expires_at")):
+            return FakeResult(data=[{"outcome": "expired"}])
+        if (
+            record.get("client_id") != params.get("p_client_id")
+            or record.get("redirect_uri") != params.get("p_redirect_uri")
+        ):
+            return FakeResult(data=[{"outcome": "client_mismatch"}])
+        if record.get("code_challenge") != params.get("p_code_challenge"):
+            return FakeResult(data=[{"outcome": "pkce_failed"}])
+        if not record.get("user_id"):
+            return FakeResult(data=[{"outcome": "unbound"}])
+
+        record["used_at"] = utcnow().isoformat()
+        return FakeResult(
+            data=[
+                {
+                    "outcome": "consumed",
+                    "user_id": record["user_id"],
+                    "scope": record.get("scope") or "mcp",
+                }
+            ]
+        )
+
+    def _rotate_mcp_oauth_refresh_token(self, params: Dict[str, Any]) -> FakeResult:
+        tokens = self._rows_for("mcp_oauth_refresh_tokens")
+        record = next(
+            (row for row in tokens if row.get("token_hash") == params.get("p_token_hash")),
+            None,
+        )
+        if not record:
+            return FakeResult(data=[{"outcome": "invalid"}])
+        if record.get("revoked_at"):
+            now = utcnow().isoformat()
+            for token in tokens:
+                if token.get("family") == record.get("family"):
+                    token["revoked_at"] = token.get("revoked_at") or now
+            return FakeResult(data=[{"outcome": "reused", "family": record.get("family")}])
+        if _timestamp_expired(record.get("expires_at")):
+            return FakeResult(data=[{"outcome": "expired", "family": record.get("family")}])
+
+        record["revoked_at"] = utcnow().isoformat()
+        record["replaced_by"] = params.get("p_replacement_id")
+        tokens.append(
+            {
+                "id": params.get("p_replacement_id"),
+                "token_hash": params.get("p_replacement_token_hash"),
+                "user_id": record["user_id"],
+                "client_id": record["client_id"],
+                "scope": record.get("scope") or "mcp",
+                "family": record["family"],
+                "expires_at": params.get("p_replacement_expires_at"),
+                "revoked_at": None,
+                "replaced_by": None,
+            }
+        )
+        return FakeResult(
+            data=[
+                {
+                    "outcome": "rotated",
+                    "user_id": record["user_id"],
+                    "client_id": record["client_id"],
+                    "scope": record.get("scope") or "mcp",
+                    "family": record["family"],
+                }
+            ]
+        )
 
     def ops_on(self, table: str) -> List[Tuple[str, Optional[Dict[str, Any]]]]:
         """(op, payload) for every mutation recorded against ``table``."""

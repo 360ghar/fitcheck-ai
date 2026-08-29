@@ -204,6 +204,144 @@ export interface paths {
         patch: operations["update_admin_feedback_api_v1_admin_feedback__ticket_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/gifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Gifts */
+        get: operations["list_gifts_api_v1_admin_gifts_get"];
+        put?: never;
+        /** Create Gift */
+        post: operations["create_gift_api_v1_admin_gifts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/gifts/allowances/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adjust Gift Allowance */
+        post: operations["adjust_gift_allowance_api_v1_admin_gifts_allowances__user_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/gifts/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Gifts */
+        get: operations["export_gifts_api_v1_admin_gifts_export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/gifts/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gift Summary */
+        get: operations["gift_summary_api_v1_admin_gifts_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/gifts/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Gift */
+        get: operations["get_gift_api_v1_admin_gifts__voucher_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Gift */
+        patch: operations["update_gift_api_v1_admin_gifts__voucher_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/gifts/{voucher_id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assign Gift */
+        post: operations["assign_gift_api_v1_admin_gifts__voucher_id__assign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/gifts/{voucher_id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Gift */
+        post: operations["rotate_gift_api_v1_admin_gifts__voucher_id__rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/gifts/{voucher_id}/void-or-revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void Or Revoke Gift */
+        post: operations["void_or_revoke_gift_api_v1_admin_gifts__voucher_id__void_or_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/iap/transactions": {
         parameters: {
             query?: never;
@@ -259,6 +397,10 @@ export interface paths {
          *
          *     Store-side refunds arrive via webhooks; this endpoint only records the
          *     refunded state for the admin UI.
+         *
+         *     A4-14/M2: gated by ``iap.write`` (super_admin/admin/ops) instead of the
+         *     blanket ``require_admin`` — a content_editor has no IAP surface and must
+         *     not be able to flip store transactions to refunded.
          */
         post: operations["admin_iap_mark_refunded_api_v1_admin_iap_transactions__txn_id__mark_refunded_post"];
         delete?: never;
@@ -607,6 +749,10 @@ export interface paths {
          *
          *     The override lives on ``users.custom_daily_quota`` (migration 037);
          *     null restores the plan default. Audit: ``quota.override``.
+         *
+         *     A4-14/M2: gated by ``quotas.write`` (super_admin/admin) instead of the
+         *     blanket ``require_admin`` — a content_editor has no quotas surface and
+         *     must not be able to change another user's daily AI quota.
          */
         patch: operations["admin_quota_override_api_v1_admin_users__user_id__quota_override_patch"];
         trace?: never;
@@ -1156,6 +1302,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Oauth Page
+         * @description Complete a multi-account Instagram OAuth by selecting the page.
+         *
+         *     The account picker (served by the callback when several business pages
+         *     are connected) POSTs the chosen ``provider_page_id`` with a signed
+         *     ``selection_token``. The token pins the job + user (short-TTL HMAC, same
+         *     construction as the OAuth state) because the picker's browser context
+         *     cannot present the app's Authorization header. Identity is resolved from
+         *     the token persisted by the callback (``store_selection_pending_session``)
+         *     using the selected page, then the real session is stored and the import
+         *     resumes — no re-run of the OAuth flow (A4-28).
+         *
+         *     Fails closed: an invalid/expired token, no pending session, a page id
+         *     outside the candidate list, or a resolution error all return a validation
+         *     error asking the user to reconnect.
+         *
+         *     Single-use ordering (backend #16): an already-consumed token is rejected
+         *     with a cheap non-destructive check BEFORE the outbound Graph API call, and
+         *     the token is only burned immediately before ``accept_auth``. If auth
+         *     persistence fails, the burn is released so the link stays usable.
+         */
+        post: operations["select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/social-import/jobs/{job_id}/auth/scraper-login": {
         parameters: {
             query?: never;
@@ -1475,7 +1659,8 @@ export interface paths {
          * List All Posts
          * @description List all blog posts including unpublished ones.
          *
-         *     **Admin only.** Returns all blog posts with pagination.
+         *     **Content readers and admins only** (``content.read``, A8-02).
+         *     Returns all blog posts with pagination.
          *     Useful for content management.
          */
         get: operations["list_all_posts_api_v1_blog_admin_posts_get"];
@@ -1529,8 +1714,9 @@ export interface paths {
          * Create Post
          * @description Create a new blog post.
          *
-         *     **Admin only.** Creates a new blog post with the provided data.
-         *     Slug must be unique.
+         *     **Content editors and admins only** (``content.write``, A8-02).
+         *     Creates a new blog post with the provided data. Slug must be unique.
+         *     Audited as ``blog.created``.
          */
         post: operations["create_post_api_v1_blog_posts_post"];
         delete?: never;
@@ -1558,8 +1744,10 @@ export interface paths {
          * Update Post
          * @description Update an existing blog post.
          *
-         *     **Admin only.** Updates the blog post identified by slug.
+         *     **Content editors and admins only** (``content.write``, A8-02).
+         *     Updates the blog post identified by slug.
          *     If slug is being changed, the new slug must be unique.
+         *     Audited as ``blog.updated``.
          */
         put: operations["update_post_api_v1_blog_posts__slug__put"];
         post?: never;
@@ -1567,8 +1755,9 @@ export interface paths {
          * Delete Post
          * @description Delete a blog post.
          *
-         *     **Admin only.** Permanently deletes the blog post identified by slug.
-         *     This action cannot be undone.
+         *     **Content editors and admins only** (``content.write``, A8-02).
+         *     Permanently deletes the blog post identified by slug.
+         *     This action cannot be undone. Audited as ``blog.deleted``.
          */
         delete: operations["delete_post_api_v1_blog_posts__slug__delete"];
         options?: never;
@@ -1876,6 +2065,237 @@ export interface paths {
         get: operations["get_streak_api_v1_gamification_streak_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/allowances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Allowances */
+        get: operations["get_allowances_api_v1_gifts_allowances_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Catalog
+         * @description Return fixed USD gift terms and paid-checkout availability.
+         */
+        get: operations["catalog_api_v1_gifts_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Paid Gift Checkout */
+        post: operations["create_paid_gift_checkout_api_v1_gifts_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/checkout/fulfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fulfill Paid Gift Checkout */
+        post: operations["fulfill_paid_gift_checkout_api_v1_gifts_checkout_fulfill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim Gift */
+        post: operations["claim_gift_api_v1_gifts_claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/complimentary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Complimentary Gift */
+        post: operations["create_complimentary_gift_api_v1_gifts_complimentary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/public/{public_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Gift
+         * @description Return presentation and lifecycle state without private account data.
+         */
+        get: operations["get_public_gift_api_v1_gifts_public__public_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/public/{public_id}/artwork/og.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Gift Artwork
+         * @description Return the versioned 1200 x 630 social preview.
+         */
+        get: operations["get_public_gift_artwork_api_v1_gifts_public__public_id__artwork_og_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/received": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Received Gifts */
+        get: operations["list_received_gifts_api_v1_gifts_received_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sent Gifts */
+        get: operations["list_sent_gifts_api_v1_gifts_sent_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/{voucher_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Owned Gift */
+        get: operations["get_owned_gift_api_v1_gifts__voucher_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Owned Gift */
+        patch: operations["update_owned_gift_api_v1_gifts__voucher_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/gifts/{voucher_id}/artwork/portrait.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Owned Gift Artwork */
+        get: operations["download_owned_gift_artwork_api_v1_gifts__voucher_id__artwork_portrait_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/{voucher_id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Owned Gift Link */
+        post: operations["rotate_owned_gift_link_api_v1_gifts__voucher_id__rotate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2443,7 +2863,10 @@ export interface paths {
          * Get Public Outfit
          * @description Public outfit view for share links (no auth).
          *
-         *     Only returns data when `is_public=true` on the outfit record.
+         *     Only returns data when the outfit has an active shared_outfits row AND
+         *     `is_public=true` on the outfit record. The share row is the source of
+         *     truth: an outfit without one is not shared, even if is_public somehow
+         *     got set (legacy/crash residue).
          */
         get: operations["get_public_outfit_api_v1_outfits_public__outfit_id__get"];
         put?: never;
@@ -2678,7 +3101,8 @@ export interface paths {
          * Share Outfit
          * @description Enable public sharing for an outfit and return a share URL.
          *
-         *     MVP: visibility/expires_at are accepted but only `public` visibility is enforced.
+         *     MVP: only `public` visibility is supported; anything else is rejected
+         *     rather than persisted (the public route could never serve it).
          */
         post: operations["share_outfit_api_v1_outfits__outfit_id__share_post"];
         delete?: never;
@@ -3189,6 +3613,10 @@ export interface paths {
         /**
          * Rate Recommendation
          * @description Store user feedback to improve future recommendations.
+         *
+         *     The recommendation_id is client-supplied and used as the primary key; a
+         *     second rating for the same id must update the existing row (upsert), not
+         *     fail with a duplicate-key 500.
          */
         post: operations["rate_recommendation_api_v1_recommendations__recommendation_id__rate_post"];
         delete?: never;
@@ -3609,6 +4037,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Bootstrap
+         * @description One-roundtrip app-launch aggregate.
+         *
+         *     The mobile/web launch sequence used to fire 5+ parallel reads
+         *     (/users/me, /items, /outfits, /subscription/usage, /referral/code);
+         *     each paid its own auth-profile lookup and DB roundtrip, which showed up
+         *     in the Aug 2026 logs as 400-1500 ms cold-start clusters. This endpoint
+         *     returns the same payloads under one request. The individual routes stay
+         *     for compatibility and partial refreshes.
+         */
+        get: operations["get_bootstrap_api_v1_users_bootstrap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/dashboard": {
         parameters: {
             query?: never;
@@ -3645,7 +4100,7 @@ export interface paths {
          *
          *     Metadata only: rows carry their storage keys (``storage_path``); image
          *     bytes are never included. The archive is written to a single
-         *     deterministic key per user (``{user_id}/export/data.json``, overwritten on
+         *     deterministic key per user (``users/{user_id}/export/data.json``, overwritten on
          *     each call - the same key account deletion cleans up), and served as a
          *     short-lived presigned GET URL (the repo's ~15-minute pattern). Every call
          *     returns a fresh URL, so repeat requests never hand out a stale link.
@@ -3979,6 +4434,51 @@ export interface components {
             internal_notes?: string | null;
             /** Status */
             status?: ("open" | "in_progress" | "resolved" | "closed") | null;
+        };
+        /** AdminGiftAction */
+        AdminGiftAction: {
+            /** Reason */
+            reason: string;
+        };
+        /** AdminGiftAllowanceAdjust */
+        AdminGiftAllowanceAdjust: {
+            /** Add Count */
+            add_count: number;
+            /**
+             * Duration Months
+             * @enum {integer}
+             */
+            duration_months: 1 | 3 | 12;
+            /** Reason */
+            reason: string;
+        };
+        /** AdminGiftAssign */
+        AdminGiftAssign: {
+            /** Reason */
+            reason: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** AdminGiftCreate */
+        AdminGiftCreate: {
+            /**
+             * Duration Months
+             * @enum {integer}
+             */
+            duration_months: 1 | 3 | 12;
+            /** Expires At */
+            expires_at?: string | null;
+            /** From Name */
+            from_name: string;
+            /** Message */
+            message?: string | null;
+            /** Note */
+            note: string;
+            /** To Name */
+            to_name: string;
         };
         /**
          * AdminIapTransactionListItem
@@ -4834,6 +5334,13 @@ export interface components {
             /** Weight Kg */
             weight_kg?: number | null;
         };
+        /** Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post */
+        Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post: {
+            /** Provider Page Id */
+            provider_page_id: string;
+            /** Selection Token */
+            selection_token: string;
+        };
         /** Body_start_batch_extraction_multipart_api_v1_ai_batch_extract_multipart_post */
         Body_start_batch_extraction_multipart_api_v1_ai_batch_extract_multipart_post: {
             /**
@@ -4902,6 +5409,8 @@ export interface components {
         Body_upload_outfit_image_api_v1_outfits__outfit_id__images_post: {
             /** Body Profile Id */
             body_profile_id?: string | null;
+            /** Client Request Id */
+            client_request_id?: string | null;
             /** File */
             file: string;
             /** Generation Id */
@@ -4944,6 +5453,22 @@ export interface components {
             start_item_id?: string | null;
             /** Weather Condition */
             weather_condition?: string | null;
+        };
+        /** ComplimentaryGiftCreate */
+        ComplimentaryGiftCreate: {
+            /** Client Request Id */
+            client_request_id: string;
+            /**
+             * Duration Months
+             * @enum {integer}
+             */
+            duration_months: 1 | 3 | 12;
+            /** From Name */
+            from_name: string;
+            /** Message */
+            message?: string | null;
+            /** To Name */
+            to_name: string;
         };
         /**
          * ConfirmResetRequest
@@ -5279,6 +5804,30 @@ export interface components {
              */
             variations: number;
         };
+        /** GiftCheckoutFulfill */
+        GiftCheckoutFulfill: {
+            /** Session Id */
+            session_id: string;
+        };
+        /** GiftClaimRequest */
+        GiftClaimRequest: {
+            /**
+             * Public Id
+             * Format: uuid
+             */
+            public_id: string;
+            /** Secret */
+            secret: string;
+        };
+        /** GiftUpdate */
+        GiftUpdate: {
+            /** From Name */
+            from_name?: string | null;
+            /** Message */
+            message?: string | null;
+            /** To Name */
+            to_name?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -5293,6 +5842,8 @@ export interface components {
             brand?: string | null;
             /** Category */
             category: string;
+            /** Client Request Id */
+            client_request_id?: string | null;
             /** Colors */
             colors?: string[];
             /**
@@ -5588,8 +6139,10 @@ export interface components {
          *     stored image — degrades to the text-only inventory.
          *
          *     Clients never send image URLs or base64 here: a client-supplied URL the
-         *     backend fetches is an SSRF primitive (StorageService.download_to_base64
-         *     follows redirects with no host allow-list), and inline base64 would
+         *     backend fetches would be an SSRF primitive, so references are resolved
+         *     server-side to a bucket key and read from object storage only
+         *     (StorageService.download_to_base64 reduces any input to a key via
+         *     key_from_path and never follows arbitrary URLs), and inline base64 would
          *     triple mobile request size.
          */
         OutfitItemInput: {
@@ -5810,6 +6363,32 @@ export interface components {
             page_size: number;
             /** Total */
             total: number;
+        };
+        /** PaidGiftCheckoutCreate */
+        PaidGiftCheckoutCreate: {
+            /**
+             * Cancel Url
+             * @default /gifts?checkout=cancelled
+             */
+            cancel_url: string;
+            /** Client Request Id */
+            client_request_id: string;
+            /**
+             * Duration Months
+             * @enum {integer}
+             */
+            duration_months: 1 | 3 | 12;
+            /** From Name */
+            from_name: string;
+            /** Message */
+            message?: string | null;
+            /**
+             * Success Url
+             * @default /gifts?checkout=success&session_id={CHECKOUT_SESSION_ID}
+             */
+            success_url: string;
+            /** To Name */
+            to_name: string;
         };
         /**
          * PhotoshootUseCase
@@ -6579,6 +7158,353 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AdminFeedbackUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_gifts_api_v1_admin_gifts_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                source?: string | null;
+                duration_months?: number | null;
+                status?: string | null;
+                created_from?: string | null;
+                created_to?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_gift_api_v1_admin_gifts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminGiftCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adjust_gift_allowance_api_v1_admin_gifts_allowances__user_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminGiftAllowanceAdjust"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_gifts_api_v1_admin_gifts_export_csv_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                source?: string | null;
+                duration_months?: number | null;
+                status?: string | null;
+                created_from?: string | null;
+                created_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gift_summary_api_v1_admin_gifts_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    get_gift_api_v1_admin_gifts__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_gift_api_v1_admin_gifts__voucher_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GiftUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_gift_api_v1_admin_gifts__voucher_id__assign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminGiftAssign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_gift_api_v1_admin_gifts__voucher_id__rotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminGiftAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_or_revoke_gift_api_v1_admin_gifts__voucher_id__void_or_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminGiftAction"];
             };
         };
         responses: {
@@ -8071,6 +8997,43 @@ export interface operations {
             };
         };
     };
+    select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     submit_scraper_login_api_v1_ai_social_import_jobs__job_id__auth_scraper_login_post: {
         parameters: {
             query?: never;
@@ -9355,6 +10318,452 @@ export interface operations {
             };
         };
     };
+    get_allowances_api_v1_gifts_allowances_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    catalog_api_v1_gifts_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    create_paid_gift_checkout_api_v1_gifts_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaidGiftCheckoutCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fulfill_paid_gift_checkout_api_v1_gifts_checkout_fulfill_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GiftCheckoutFulfill"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_gift_api_v1_gifts_claim_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GiftClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_complimentary_gift_api_v1_gifts_complimentary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComplimentaryGiftCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_gift_api_v1_gifts_public__public_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_gift_artwork_api_v1_gifts_public__public_id__artwork_og_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_received_gifts_api_v1_gifts_received_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sent_gifts_api_v1_gifts_sent_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_owned_gift_api_v1_gifts__voucher_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_owned_gift_api_v1_gifts__voucher_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GiftUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_owned_gift_artwork_api_v1_gifts__voucher_id__artwork_portrait_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_owned_gift_link_api_v1_gifts__voucher_id__rotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_check_api_v1_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -9421,6 +10830,10 @@ export interface operations {
                 brand?: string | null;
                 search?: string | null;
                 is_favorite?: boolean | null;
+                /** @description created_at | name | worn_count */
+                sort_by?: string | null;
+                /** @description asc | desc */
+                sort_order?: string | null;
             };
             header?: never;
             path?: never;
@@ -12282,6 +13695,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_bootstrap_api_v1_users_bootstrap_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

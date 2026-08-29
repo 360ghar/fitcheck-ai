@@ -23,6 +23,8 @@ import type { RefreshEnvelope } from '@/shared/api/types'
 export interface RequestOptions extends Omit<RequestInit, 'body' | 'headers'> {
   body?: unknown
   headers?: HeadersInit
+  /** Parse a successful response as JSON by default, or return its raw text. */
+  responseType?: 'json' | 'text'
   /** Skip the Authorization header (e.g. public endpoints) */
   skipAuth?: boolean
   /** Skip dispatching `session:unauthorized` on 401 */
@@ -213,7 +215,15 @@ function parseErrorResponse(
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, skipAuth = false, skipUnauthorizedEvent = false, retried = false, headers, ...init } = options
+  const {
+    body,
+    skipAuth = false,
+    skipUnauthorizedEvent = false,
+    retried = false,
+    responseType = 'json',
+    headers,
+    ...init
+  } = options
   const url = buildUrl(path)
   const mergedHeaders = new Headers(headers)
   if (body !== undefined && !(body instanceof FormData)) {
@@ -279,6 +289,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     })
   }
 
+  if (responseType === 'text') return text as T
+
   if (parsed === null) {
     // 204-style empty responses
     return undefined as T
@@ -296,6 +308,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 /** GET shorthand. */
 export function apiGet<T>(path: string, options: RequestOptions = {}): Promise<T> {
   return apiRequest<T>(path, { ...options, method: 'GET' })
+}
+
+/** GET shorthand for successful plain-text responses such as CSV exports. */
+export function apiGetText(path: string, options: RequestOptions = {}): Promise<string> {
+  return apiRequest<string>(path, { ...options, method: 'GET', responseType: 'text' })
 }
 
 /** POST shorthand. */

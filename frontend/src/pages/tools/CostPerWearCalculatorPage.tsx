@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { trialRegisterHref } from '@/lib/trial-offer'
 import { ArrowRight, Calculator } from 'lucide-react'
 import SEO from '@/components/seo/SEO'
 import { BreadcrumbJsonLd, buildFaqSchema } from '@/components/seo/JsonLd'
@@ -90,7 +91,7 @@ export default function CostPerWearCalculatorPage() {
             </AnimatedSection>
 
             <div className="mt-10 rounded-2xl border border-stone-200 bg-white p-6 dark:border-stone-800 dark:bg-stone-900 md:p-8">
-              <div className="grid gap-6 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
                 <label className="block">
                   <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
                     Item price (USD)
@@ -124,7 +125,7 @@ export default function CostPerWearCalculatorPage() {
               </div>
 
 
-              <div className="mt-8 rounded-xl bg-stone-100 p-6 dark:bg-stone-950">
+              <div className="mt-8 rounded-xl bg-stone-100 p-4 dark:bg-stone-950 sm:p-6">
                 <p className="text-sm text-stone-500 dark:text-stone-400">Cost per wear</p>
                 <p className="landing-display mt-1 text-4xl font-semibold text-stone-900 dark:text-stone-50">
                   {cpw > 0 ? formatCurrency(cpw) : '—'}
@@ -141,7 +142,7 @@ export default function CostPerWearCalculatorPage() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="h-12 px-6">
-                <Link to="/auth/register">
+                <Link to={trialRegisterHref()}>
                   Track wears automatically
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>

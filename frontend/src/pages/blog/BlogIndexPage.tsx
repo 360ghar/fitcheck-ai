@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { trialRegisterHref } from '@/lib/trial-offer'
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import { BlogImage } from '@/components/blog/BlogImage'
@@ -128,7 +129,11 @@ export default function BlogIndexPage() {
                 <div
                   className={cn(
                     'flex flex-wrap justify-center gap-2',
-                    (isLoadingCategories || (categories?.length ?? 0) > 0) && 'min-h-[124px] md:min-h-[44px]'
+                    // Stepped reservation: pills wrap to ~3 rows on phones
+                    // (~136px), 1–2 rows on tablets, 1 row on desktop. Keeps
+                    // the CLS guard honest if the pill count changes.
+                    (isLoadingCategories || (categories?.length ?? 0) > 0) &&
+                      'min-h-[8.5rem] xs:min-h-[7rem] sm:min-h-[5.5rem] md:min-h-11'
                   )}
                 >
                   {isLoadingCategories ? (
@@ -183,7 +188,7 @@ export default function BlogIndexPage() {
         <section className="py-16 md:py-24 bg-white dark:bg-gray-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {categoryIsResolving || isLoadingPosts ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12" role="status" aria-live="polite" aria-busy="true">
+              <div className="grid gap-6 md:grid-cols-2 md:gap-8 lg:grid-cols-3 mb-12" role="status" aria-live="polite" aria-busy="true">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
@@ -233,7 +238,7 @@ export default function BlogIndexPage() {
               </div>
             ) : (
               <>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+                <div className="grid gap-6 md:grid-cols-2 md:gap-8 lg:grid-cols-3 mb-12">
                   {posts.map((post, index) => (
                     <AnimatedSection key={post.slug} delay={index * 100}>
                       <Link to={`/blog/${post.slug}`} className="group block h-full">
@@ -316,11 +321,11 @@ export default function BlogIndexPage() {
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
                 Ready to transform your wardrobe?
               </h2>
-              <p className="text-xl text-stone-300 mb-8">
+              <p className="text-lg text-stone-300 mb-8 md:text-xl">
                 Join thousands using AI to organize, plan, and optimize their style
               </p>
               <Link
-                to="/auth/register"
+                to={trialRegisterHref()}
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-on-image px-8 py-4 text-lg font-semibold text-on-image-foreground hover:opacity-90 transition-opacity"
               >
                 Get Started Free

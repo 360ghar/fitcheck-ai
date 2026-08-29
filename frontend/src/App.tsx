@@ -27,6 +27,8 @@ import PublicLayout from './layouts/PublicLayout'
 // covers that cold start. Everything else below is lazy too.
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'))
+// MCP / ChatGPT connector OAuth bridge (backend OAuth gateway bounces here).
+const OAuthBridgePage = lazy(() => import('./pages/oauth/OAuthBridgePage'))
 
 // Public marketing routes come from one shared manifest so the build-time
 // prerender (src/entry-prerender.tsx) renders exactly what the client router
@@ -60,6 +62,10 @@ const GamificationPage = FEATURES.gamification
   ? lazy(() => import('./pages/gamification/GamificationPage'))
   : () => null
 const SharedOutfitPage = lazy(() => import('./pages/shared/SharedOutfitPage'))
+const GiftClaimPage = lazy(() => import('./pages/gifts/GiftClaimPage'))
+const GiftsPage = FEATURES.gifts
+  ? lazy(() => import('./pages/gifts/GiftsPage'))
+  : () => null
 const TryOnPage = lazy(() => import('./pages/try-on/TryOnPage'))
 const PhotoshootPage = lazy(() => import('./pages/photoshoot/PhotoshootPage'))
 
@@ -203,6 +209,9 @@ function App() {
 
           {/* Public share routes */}
           <Route path="/shared/outfits/:id" element={<SharedOutfitPage />} />
+          <Route path="/gift/:publicId" element={<GiftClaimPage />} />
+          {/* MCP/ChatGPT OAuth bridge: public, self-contained */}
+          <Route path="/oauth/bridge" element={<OAuthBridgePage />} />
 
           {/* Main app routes - protected */}
           <Route
@@ -223,6 +232,12 @@ function App() {
             <Route path="/recommendations" element={<FeatureErrorBoundary featureName="Recommendations"><RecommendationsPage /></FeatureErrorBoundary>} />
             <Route path="/photoshoot" element={<FeatureErrorBoundary featureName="Photoshoot"><PhotoshootPage /></FeatureErrorBoundary>} />
             <Route path="/try-on" element={<FeatureErrorBoundary featureName="Virtual Try-On"><TryOnPage /></FeatureErrorBoundary>} />
+            {FEATURES.gifts && (
+              <Route
+                path="/gifts"
+                element={<FeatureErrorBoundary featureName="Gift vouchers"><GiftsPage /></FeatureErrorBoundary>}
+              />
+            )}
             {/* Gamification is flag-gated (FEATURES.gamification, default off:
                 nothing on the backend writes streaks or achievements, so the
                 page can only ever show zeros). With the flag off the route is

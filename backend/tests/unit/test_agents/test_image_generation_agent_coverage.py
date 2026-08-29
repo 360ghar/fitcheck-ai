@@ -276,10 +276,15 @@ async def test_outfit_pose_flat_lay_word_triggers_flat_lay():
 
 @pytest.mark.asyncio
 async def test_outfit_custom_prompt_is_appended():
+    """Custom instructions render EARLY and subordinate: Agnes weights the
+    last text most, so the locks must own the end of the prompt."""
     agent = _make_agent()
     await agent.generate_outfit(items=[_item("tee", "tops")], custom_prompt="Make it moody")
     prompt = agent.ai_service.generate_image.call_args.args[0]
-    assert "Additional instructions: Make it moody" in prompt
+    assert "Additional instructions (lower priority than every lock below):" in prompt
+    assert "Make it moody" in prompt
+    # The lock block must come AFTER the user's instructions.
+    assert prompt.index("Additional instructions") < prompt.index("OUTFIT LOCK")
 
 
 @pytest.mark.asyncio

@@ -25,6 +25,7 @@
 interface ImportMetaEnv {
   readonly VITE_ENABLE_SOCIAL_IMPORT?: string
   readonly VITE_ENABLE_GAMIFICATION?: string
+  readonly VITE_ENABLE_GIFT_VOUCHERS?: string
 }
 
 interface ImportMeta {

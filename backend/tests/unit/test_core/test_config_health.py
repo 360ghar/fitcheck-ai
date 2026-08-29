@@ -69,6 +69,11 @@ def _settings(**overrides):
         STRIPE_PLUS_YEARLY_PRICE_ID="price_plus_yearly",
         STRIPE_PRO_MONTHLY_PRICE_ID="price_pro_monthly",
         STRIPE_PRO_YEARLY_PRICE_ID="price_pro_yearly",
+        ENABLE_GIFT_VOUCHER_CREATION=False,
+        GIFT_TOKEN_SECRET=None,
+        STRIPE_GIFT_PRO_1M_PRICE_ID=None,
+        STRIPE_GIFT_PRO_3M_PRICE_ID=None,
+        STRIPE_GIFT_PRO_12M_PRICE_ID=None,
         # Object storage (check #11) + image serving (check #12): healthy by
         # default so the base config stays issue-free.
         OBJECT_STORAGE_ENDPOINT="https://acct.r2.cloudflarestorage.com",
@@ -464,6 +469,36 @@ def test_missing_stripe_price_ids_reported():
     assert len(stripe_issues) == 1
     assert "STRIPE_PRO_YEARLY_PRICE_ID" in stripe_issues[0].message
     assert "STRIPE_PLUS_MONTHLY_PRICE_ID" in stripe_issues[0].message
+
+
+def test_enabled_gift_creation_requires_dedicated_prices_and_secret():
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(ENABLE_GIFT_VOUCHER_CREATION=True),
+    ):
+        issues = validate_production_config()
+    gift_issues = [i for i in issues if i.key == "ENABLE_GIFT_VOUCHER_CREATION"]
+    assert len(gift_issues) == 1
+    assert gift_issues[0].severity == "error"
+    assert "GIFT_TOKEN_SECRET" in gift_issues[0].message
+    assert "STRIPE_GIFT_PRO_12M_PRICE_ID" in gift_issues[0].message
+
+
+def test_enabled_gift_creation_config_is_healthy_when_complete():
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(
+            ENABLE_GIFT_VOUCHER_CREATION=True,
+            GIFT_TOKEN_SECRET="gift-secret",
+            STRIPE_GIFT_PRO_1M_PRICE_ID="price_gift_1m",
+            STRIPE_GIFT_PRO_3M_PRICE_ID="price_gift_3m",
+            STRIPE_GIFT_PRO_12M_PRICE_ID="price_gift_12m",
+        ),
+    ):
+        issues = validate_production_config()
+    assert not [i for i in issues if i.key == "ENABLE_GIFT_VOUCHER_CREATION"]
 
 
 # --------------------------------------------------------------------------- #

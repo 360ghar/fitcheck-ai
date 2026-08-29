@@ -455,3 +455,97 @@ a.text-primary {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/*
+ * Landing motion system (CSS-native, zero JS).
+ *
+ * Scroll-linked reveals run on native scroll-driven animations
+ * (`animation-timeline: view()/scroll()`): no IntersectionObserver, no
+ * library, and content stays prerender-visible because every rule below is
+ * gated behind `@supports` and sits on a fully-visible default state.
+ * Reveals are transform-only, so primary content stays fully painted while
+ * animating. Browsers without support (and reduced-motion users, via the
+ * global kill-switch above) simply get the static page.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal-up linear both;
+      animation-timeline: view();
+      /* Settles just before the element finishes entering, whatever its height. */
+      animation-range: entry 0% entry 90%;
+    }
+
+    /*
+     * Staggered grids: each child tracks its own view() position, so rows
+     * deeper in the page naturally start later; --reveal-step (mapped from
+     * AnimatedSection's delay prop) adds an intra-row cascade.
+     */
+    .reveal-steps > * {
+      animation: reveal-up linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry calc(60% + min(var(--reveal-step, 0), 4) * 10%);
+    }
+
+    /*
+     * Navbar scroll-progress hairline. Base state is invisible so browsers
+     * without scroll timelines never render a stray line.
+     */
+    .scroll-progress {
+      animation: progress-x linear both;
+      animation-timeline: scroll(root);
+    }
+  }
+
+  /* Hero load choreography: transform-only, time-based, and done in <1s. */
+  .hero-in {
+    animation: hero-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--hero-delay, 0ms);
+  }
+
+  /*
+   * The product canvas stays painted during its entrance so the flat-lay LCP
+   * request and paint are never delayed by opacity.
+   */
+  .hero-in-frame {
+    animation: hero-rise-frame 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--hero-delay, 0ms);
+  }
+
+}
+
+@keyframes reveal-up {
+  from {
+    transform: translateY(16px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes hero-rise {
+  from {
+    transform: translateY(14px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes hero-rise-frame {
+  from {
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes progress-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}

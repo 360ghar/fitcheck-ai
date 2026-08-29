@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { trialRegisterHref } from '@/lib/trial-offer'
 import type { LucideIcon } from 'lucide-react'
 import { ArrowRight, Check, Sparkles } from 'lucide-react'
 import SEO from '@/components/seo/SEO'
@@ -130,7 +131,7 @@ export function FeaturePageTemplate({
               )}
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="h-12 px-6">
-                  <Link to="/auth/register">
+                  <Link to={trialRegisterHref()}>
                     Start free
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
@@ -157,7 +158,7 @@ export function FeaturePageTemplate({
           </div>
         </section>
 
-        <section className="bg-white py-12 dark:bg-stone-950 md:py-16">
+        <section className="bg-white px-4 py-12 dark:bg-stone-950 sm:px-6 md:py-16 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-px overflow-hidden rounded-2xl border border-stone-200 bg-stone-200 dark:border-stone-800 dark:bg-stone-800 md:grid-cols-3">
             {[
               ['Your inputs stay in context', 'Use your photos, wardrobe, and choices to guide the flow.'],
@@ -239,7 +240,7 @@ export function FeaturePageTemplate({
               <h2 className="landing-display text-3xl font-semibold">Make the next choice easier</h2>
               <p className="mt-4 leading-relaxed text-stone-300">Create an account to use this capability with your wardrobe. You can keep working while supported tasks run and return to clear results or recovery actions.</p>
               <Button asChild size="lg" className="mt-7 h-12 bg-white px-6 text-stone-900 hover:bg-stone-100">
-                <Link to="/auth/register">Create your free account <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                <Link to={trialRegisterHref()}>Create your free account <ArrowRight className="ml-2 h-4 w-4" /></Link>
               </Button>
             </div>
           </div>

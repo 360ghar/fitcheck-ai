@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HelmetProvider } from 'react-helmet-async'
 import { initAnalytics } from './lib/analytics'
 import { captureException, initErrorReporting } from './lib/error-reporting'
+import { captureGiftClaimCredentialFromLocation } from './lib/gift-claim-credential'
 import { hydratePrerenderedState } from './lib/prerenderState'
 import { preloadRoute } from './routes/publicRoutes'
 import App from './App'
@@ -22,6 +23,7 @@ import './index.css'
 // importing them here put ~370 kB (PostHog) plus the Sentry SDK into the entry
 // chunk, on the critical path of every marketing pageview. See
 // lib/error-reporting.ts and lib/analytics.ts.
+captureGiftClaimCredentialFromLocation()
 initErrorReporting()
 initAnalytics()
 

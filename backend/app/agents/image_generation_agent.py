@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 from app.agents.prompt_fidelity import (
     GARMENT_REFERENCE_LOCK,
+    NO_PERSON_NEGATIVES,
     OUTFIT_LOCK,
     PERSON_REFERENCE_FIDELITY,
     PRODUCT_CUSTOM_BACKGROUND_LOCK,
@@ -303,6 +304,31 @@ class ImageGenerationAgent:
         """
         return re.sub(r"\n{3,}", "\n\n", prompt).strip()
 
+    # Agnes renders the LAST text it sees with the most weight (image calls
+    # collapse to one flat prompt or one user message), so user instructions
+    # must sit BEFORE the locks, not after them - and they are capped so one
+    # long paste cannot crowd out the inventory.
+    CUSTOM_PROMPT_MAX_CHARS = 400
+
+    @classmethod
+    def _custom_prompt_block(cls, custom_prompt: Optional[str]) -> str:
+        """Format caller-supplied extra instructions as a subordinate block.
+
+        Empty string when absent. Truncated hard at CUSTOM_PROMPT_MAX_CHARS;
+        the cut is mid-sentence by design - the locks below still close the
+        prompt, so a truncated wish degrades gracefully instead of hijacking
+        the render.
+        """
+        text = (custom_prompt or "").strip()
+        if not text:
+            return ""
+        if len(text) > cls.CUSTOM_PROMPT_MAX_CHARS:
+            text = text[: cls.CUSTOM_PROMPT_MAX_CHARS].rstrip()
+        return (
+            "Additional instructions (lower priority than every lock below):\n"
+            f"{text}"
+        )
+
     @classmethod
     def _collect_garment_references(
         cls,
@@ -437,11 +463,18 @@ class ImageGenerationAgent:
             pattern = str(item.get("pattern") or "").strip()
             brand = str(item.get("brand") or "").strip()
 
+            # Only present fields are listed: four "unspecified" lines per
+            # item are filler a flash-tier model reads as noise, and the
+            # item numbering the reference map depends on is unchanged.
             lines.append(f"- Item {idx}: {name} (category: {category})")
-            lines.append(f"  - colors: {', '.join(colors) if colors else 'unspecified'}")
-            lines.append(f"  - material: {material if material else 'unspecified'}")
-            lines.append(f"  - pattern: {pattern if pattern else 'unspecified'}")
-            lines.append(f"  - brand/details: {brand if brand else 'unspecified'}")
+            if colors:
+                lines.append(f"  - colors: {', '.join(colors)}")
+            if material:
+                lines.append(f"  - material: {material}")
+            if pattern:
+                lines.append(f"  - pattern: {pattern}")
+            if brand:
+                lines.append(f"  - brand/details: {brand}")
             if image_numbers:
                 number = image_numbers.get(idx)
                 lines.append(
@@ -582,6 +615,11 @@ class ImageGenerationAgent:
             source_photo=uses_source_photo,
         )
         garment_block = f"\n{GARMENT_REFERENCE_LOCK}\n" if garment_images else ""
+        # Caller-supplied extra instructions render EARLY and subordinate (see
+        # _custom_prompt_block): Agnes weights the last text most, so the
+        # locks must own the end of every prompt.
+        custom_block = self._custom_prompt_block(custom_prompt)
+        custom_section = f"{custom_block}\n\n" if custom_block else ""
         # The "as worn" lock rides above the per-item garment lock: the source
         # photo shows how the pieces combine, which isolated product shots
         # cannot. Empty string when absent, so the templates below are
@@ -612,7 +650,7 @@ class ImageGenerationAgent:
         if wants_flat_lay:
             prompt = f"""Professional flat lay fashion photo of a cohesive {style} outfit: {items_list}.
 
-{reference_map}
+{custom_section}{reference_map}
 {source_photo_block}{garment_block}
 {outfit_inventory}
 
@@ -627,9 +665,7 @@ Style:
 
 Composition: ONE single flat lay photograph of these garments arranged together on the background{no_collage}.
 
-{SHORT_NEGATIVES}
-
-{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
+{NO_PERSON_NEGATIVES}"""
 
             # MATTE SITE 1 of 2. Flat lay is the same optical regime as a product
             # shot - no subject, no hair - so the same algorithm and guards apply.
@@ -661,7 +697,7 @@ Composition: ONE single flat lay photograph of these garments arranged together 
             )
             base_prompt = f"""{person_header}TASK: Photoreal fashion photo of that same single person wearing the outfit below.
 
-{PERSON_REFERENCE_FIDELITY}
+{custom_section}{PERSON_REFERENCE_FIDELITY}
 {source_photo_block}{garment_block}
 {outfit_inventory}
 {body_desc}
@@ -674,7 +710,7 @@ SCENE (change only these):
 - Lighting: {lighting} (even face light; no beauty-filter look)
 - Clothing fits naturally with realistic draping
 
-{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
+Output one photoreal photo of THIS same person. Do not invent a new face."""
 
             return await self._generate_with_references(
                 self._tidy_prompt(base_prompt),
@@ -688,7 +724,7 @@ SCENE (change only these):
             # Generic model generation (no avatar)
             prompt = f"""Professional fashion photo of a {model_gender} model wearing a cohesive {style} outfit: {items_list}.
 
-{reference_map}
+{custom_section}{reference_map}
 {source_photo_block}{garment_block}
 {outfit_inventory}
 
@@ -704,9 +740,7 @@ Style:
 
 Composition: ONE single photograph of the model wearing this outfit{no_collage}.
 
-{SHORT_NEGATIVES}
-
-{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
+{SHORT_NEGATIVES}"""
 
             return await self._generate_with_references(
                 self._tidy_prompt(prompt),
@@ -829,7 +863,7 @@ Specs:
 - Soft studio light, sharp focus
 - Only this single item; no model, extra garments, or second item
 
-{SHORT_NEGATIVES}""".strip()
+{NO_PERSON_NEGATIVES}""".strip()
 
         generated = await self._generate_image(prompt, reference_image=reference_image)
         return await self._matte(generated, context="product image") if matte_requested else generated
@@ -1116,7 +1150,7 @@ SCENE (change only these):
 - Lighting: {lighting} (even face light; no beauty-filter look)
 - Natural fit, draping, and shadows
 
-Output one cohesive image of THIS same person wearing that exact garment."""
+Output one cohesive image of THIS same person wearing that exact garment. Do not invent a new face."""
 
         try:
             # Use chat_with_vision for multi-image input with image generation

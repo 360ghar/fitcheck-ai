@@ -27,11 +27,20 @@ IDENTITY_LOCK = """IDENTITY LOCK (highest priority):
 - No beautification, skin smoothing, face morph, or generic "model face".
 - If text conflicts with the reference image for face/body/hair/skin, follow the image."""
 
-# Ultra-short negatives (weak models handle 5–8 better than long essays)
+# Ultra-short negatives (weak models handle 5–8 better than long essays).
+# Kept free of filter-bait tokens ("wrong ethnicity" read as an ethnicity
+# request and 400'd Agnes; IDENTITY_LOCK already pins appearance positively).
 SHORT_NEGATIVES = (
     "AVOID: different person, face morph, beauty filter, plastic skin, "
-    "wrong age, wrong ethnicity, extra limbs, distorted hands, watermark, "
-    "text, second person, group shot"
+    "extra limbs, distorted hands, watermark, text, second person"
+)
+
+# Garment-only counterpart for no-person paths (flat lay, product shot).
+# Naming anatomy/person concepts on a garment-only render can SUMMON them in
+# weak instruct models, so these never reuse SHORT_NEGATIVES.
+NO_PERSON_NEGATIVES = (
+    "AVOID: people, mannequin faces, extra garments, second item, "
+    "watermark, text, cast shadow, gradient background"
 )
 
 # Outfit fidelity when inventory is provided
@@ -79,9 +88,7 @@ PRODUCT_REFERENCE_LOCK = """PRODUCT LOCK (highest priority):
   gradient, no vignette.
 
 AVOID: extra items, second garment, partial second item, wrong color,
-       different design, restyled cut, mannequin face, person, watermark,
-       text, beautification, fabric smoothing, drop shadow, cast shadow,
-       reflection, gradient background, vignette, gray backdrop, floor plane."""
+       different design, restyled cut, watermark, text."""
 
 # Product prompts that intentionally request a non-white background cannot
 # reuse PRODUCT_REFERENCE_LOCK: its pure-white clause would contradict the
@@ -101,8 +108,7 @@ PRODUCT_CUSTOM_BACKGROUND_LOCK = """PRODUCT LOCK (highest priority):
   replace it with white, transparency, or a different scene.
 
 AVOID: extra items, second garment, partial second item, wrong color,
-       different design, restyled cut, mannequin face, person, watermark,
-       text, beautification, fabric smoothing."""
+       different design, restyled cut, watermark, text."""
 
 # The backdrop clause above is not cosmetic: app/utils/background_removal.py
 # cuts the alpha out of these images with a near-white threshold plus a

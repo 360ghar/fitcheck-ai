@@ -107,7 +107,7 @@ export default function SharedOutfitPage() {
             Loading shared outfit…
           </div>
         ) : error ? (
-          <div className="bg-card rounded-lg p-8 text-center">
+          <div className="bg-card rounded-lg p-6 text-center sm:p-8">
             <Layers className="mx-auto h-12 w-12 text-muted-foreground/60" />
             <h1 className="mt-4 text-lg font-semibold text-foreground">Outfit not available</h1>
             <p className="mt-2 text-sm text-muted-foreground">{error}</p>
@@ -128,7 +128,7 @@ export default function SharedOutfitPage() {
               )}
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-4 sm:p-6">
               <div>
                 <h1 className="text-2xl font-bold text-foreground">{outfit.name}</h1>
                 {outfit.description && (

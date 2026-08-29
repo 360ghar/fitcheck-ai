@@ -63,6 +63,7 @@ from app.core.exceptions import (
 )
 from app.core.permissions import ADMIN_ROLES, USER_ROLE, get_user_role
 from app.core.predicates import build_predicate
+from app.core import user_profile_cache
 from app.utils.db import execute_with_reconnect, maybe_single_data, safe_search_term
 from app.utils.datetime_util import utc_today, utcnow
 
@@ -465,6 +466,10 @@ async def update_user(
         db,
         extra={"operation": "admin.update_user.apply", "user_id": user_id},
     )
+    # Suspension/role changes must reach the auth hot path immediately: the
+    # cached profile carries is_active, so a stale copy would keep serving a
+    # suspended account for the rest of its TTL.
+    user_profile_cache.invalidate(user_id)
     updated = _first_row(result) or {**target, **updates}
 
     # Change list for the route's audit rows (before/after per field).
@@ -1148,6 +1153,7 @@ async def set_quota_override(db: Any, user_id: str, daily_limit: Optional[int]) 
         db,
         extra={"operation": "admin.quota_override.apply", "user_id": user_id},
     )
+    user_profile_cache.invalidate(user_id)
     return {"user_id": user_id, "custom_daily_quota": daily_limit}
 
 
@@ -1173,40 +1179,23 @@ async def dashboard_overview(db: Any) -> Dict[str, Any]:
         )
         return getattr(res, "count", 0) or 0
 
-    signups_7d = await _count(lambda d: d.table("users").select("id", count="exact").gte("created_at", d7))
-    signups_30d = await _count(lambda d: d.table("users").select("id", count="exact").gte("created_at", d30))
-    active_7d = await _count(
-        lambda d: d.table("users").select("id", count="exact").eq("is_active", True).gte("last_login_at", d7)
-    )
-    active_30d = await _count(
-        lambda d: d.table("users").select("id", count="exact").eq("is_active", True).gte("last_login_at", d30)
-    )
-    paid = await _count(
-        lambda d: d.table("subscriptions")
-        .select("id", count="exact")
-        .neq("plan_type", "free")
-        .in_("status", ["active", "trial"])
-    )
-
-    # AI jobs last 7d: extraction_jobs (016/023) + photoshoot_jobs (023/035).
-    # Success buckets differ per table ('completed' vs 'complete').
-    extraction_total = await _count(
-        lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7)
-    )
-    extraction_ok = await _count(
-        lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7).in_("status", ["completed"])
-    )
-    extraction_failed = await _count(
-        lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7).eq("status", "failed")
-    )
-    photoshoot_total = await _count(
-        lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7)
-    )
-    photoshoot_ok = await _count(
-        lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7).in_("status", ["complete"])
-    )
-    photoshoot_failed = await _count(
-        lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7).eq("status", "failed")
+    signups_7d, signups_30d, active_7d, active_30d, paid, extraction_total, extraction_ok, extraction_failed, photoshoot_total, photoshoot_ok, photoshoot_failed = await asyncio.gather(
+        _count(lambda d: d.table("users").select("id", count="exact").gte("created_at", d7)),
+        _count(lambda d: d.table("users").select("id", count="exact").gte("created_at", d30)),
+        _count(lambda d: d.table("users").select("id", count="exact").eq("is_active", True).gte("last_login_at", d7)),
+        _count(lambda d: d.table("users").select("id", count="exact").eq("is_active", True).gte("last_login_at", d30)),
+        _count(lambda d: d.table("subscriptions")
+               .select("id", count="exact")
+               .neq("plan_type", "free")
+               .in_("status", ["active", "trial"])),
+        # AI jobs last 7d: extraction_jobs (016/023) + photoshoot_jobs (023/035).
+        # Success buckets differ per table ('completed' vs 'complete').
+        _count(lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7)),
+        _count(lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7).in_("status", ["completed"])),
+        _count(lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7).eq("status", "failed")),
+        _count(lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7)),
+        _count(lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7).in_("status", ["complete"])),
+        _count(lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7).eq("status", "failed")),
     )
 
     return {
@@ -1256,9 +1245,13 @@ async def _top_users_from_rpc(db: Any, rpc_name: str) -> List[Dict[str, Any]]:
 
 async def dashboard_top_users(db: Any) -> Dict[str, Any]:
     """Top-10 lists by outfits, items and referrals (service-role RPCs)."""
-    top_outfits = await _top_users_from_rpc(db, "admin_top_users_outfits")
-    top_items = await _top_users_from_rpc(db, "admin_top_users_items")
-    top_referrers = await _top_users_from_rpc(db, "admin_top_users_referrals")
+    # The three RPCs are independent; run them concurrently so the panel
+    # waits on the slowest RPC, not their sum.
+    top_outfits, top_items, top_referrers = await asyncio.gather(
+        _top_users_from_rpc(db, "admin_top_users_outfits"),
+        _top_users_from_rpc(db, "admin_top_users_items"),
+        _top_users_from_rpc(db, "admin_top_users_referrals"),
+    )
     return {"top_outfits": top_outfits, "top_items": top_items, "top_referrers": top_referrers}
 
 
@@ -1272,13 +1265,11 @@ async def dashboard_referrals(db: Any) -> Dict[str, Any]:
         )
         return getattr(res, "count", 0) or 0
 
-    codes_issued = await _count(lambda d: d.table("referral_codes").select("id", count="exact"))
-    redemptions = await _count(lambda d: d.table("referral_redemptions").select("id", count="exact"))
-    referrer_credits = await _count(
-        lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referrer_credit_applied", True)
-    )
-    referred_credits = await _count(
-        lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referred_credit_applied", True)
+    codes_issued, redemptions, referrer_credits, referred_credits = await asyncio.gather(
+        _count(lambda d: d.table("referral_codes").select("id", count="exact")),
+        _count(lambda d: d.table("referral_redemptions").select("id", count="exact")),
+        _count(lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referrer_credit_applied", True)),
+        _count(lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referred_credit_applied", True)),
     )
     credits_granted = referrer_credits + referred_credits
     return {
@@ -1360,40 +1351,42 @@ async def dashboard_revenue(db: Any) -> Dict[str, Any]:
             mrr_iap += amount
         paid += 1
 
-    trials = await _count(
-        lambda d: d.table("subscriptions").select("id", count="exact").neq("plan_type", "free").eq("status", "trial")
-    )
-    # A4-16: churn counts must reflect SUBSCRIBERS, not webhook volume. The
-    # dedupe ledgers are keyed by provider event id (no subscription column),
-    # so entity-level dedupe is not possible; at minimum only count events
-    # the webhook processor actually handled (status='processed', the ledger's
-    # success value) - unprocessed/retrying events double-count otherwise.
-    churn_stripe = await _count(
-        lambda d: d.table("stripe_webhook_events")
-        .select("event_id", count="exact")
-        .in_("event_type", STRIPE_CHURN_EVENT_TYPES)
-        .eq("status", "processed")
-        .gte("received_at", d30)
-    )
-    churn_apple = await _count(
-        lambda d: d.table("apple_iap_events")
-        .select("notification_id", count="exact")
-        .in_("event_type", APPLE_CHURN_EVENT_TYPES)
-        .eq("status", "processed")
-        .gte("received_at", d30)
-    )
-    churn_google = await _count(
-        lambda d: d.table("google_rtdn_events")
-        .select("message_id", count="exact")
-        .in_("event_type", GOOGLE_CHURN_EVENT_TYPES)
-        .eq("status", "processed")
-        .gte("received_at", d30)
-    )
-    refunds = await _count(
-        lambda d: d.table("audit_events")
-        .select("id", count="exact")
-        .in_("action", ["subscription.refunded", "iap.refund_marked"])
-        .gte("created_at", d30)
+    trials, churn_stripe, churn_apple, churn_google, refunds = await asyncio.gather(
+        _count(
+            lambda d: d.table("subscriptions").select("id", count="exact").neq("plan_type", "free").eq("status", "trial")
+        ),
+        # A4-16: churn counts must reflect SUBSCRIBERS, not webhook volume. The
+        # dedupe ledgers are keyed by provider event id (no subscription column),
+        # so entity-level dedupe is not possible; at minimum only count events
+        # the webhook processor actually handled (status='processed', the ledger's
+        # success value) - unprocessed/retrying events double-count otherwise.
+        _count(
+            lambda d: d.table("stripe_webhook_events")
+            .select("event_id", count="exact")
+            .in_("event_type", STRIPE_CHURN_EVENT_TYPES)
+            .eq("status", "processed")
+            .gte("received_at", d30)
+        ),
+        _count(
+            lambda d: d.table("apple_iap_events")
+            .select("notification_id", count="exact")
+            .in_("event_type", APPLE_CHURN_EVENT_TYPES)
+            .eq("status", "processed")
+            .gte("received_at", d30)
+        ),
+        _count(
+            lambda d: d.table("google_rtdn_events")
+            .select("message_id", count="exact")
+            .in_("event_type", GOOGLE_CHURN_EVENT_TYPES)
+            .eq("status", "processed")
+            .gte("received_at", d30)
+        ),
+        _count(
+            lambda d: d.table("audit_events")
+            .select("id", count="exact")
+            .in_("action", ["subscription.refunded", "iap.refund_marked"])
+            .gte("created_at", d30)
+        ),
     )
     churn_total = churn_stripe + churn_apple + churn_google
 
@@ -1440,8 +1433,8 @@ async def dashboard_trends(db: Any, days: int = 30) -> Dict[str, Any]:
             details={"field": "days"},
         )
     rpc_names = ("admin_trend_signups", "admin_trend_jobs", "admin_trend_paid", "admin_trend_active")
-    data: Dict[str, List[Dict[str, Any]]] = {}
-    for name in rpc_names:
+
+    async def _run_rpc(name: str) -> List[Dict[str, Any]]:
         # PostgREST matches RPC args by parameter name — the migration-041
         # functions declare `p_days` (codebase convention: p_-prefixed SQL
         # params, cf. promo/referral/quota RPC call sites).
@@ -1450,7 +1443,11 @@ async def dashboard_trends(db: Any, days: int = 30) -> Dict[str, Any]:
             db,
             extra={"operation": f"admin.dashboard_trends.{name}", "days": days},
         )
-        data[name] = result.data or []
+        return result.data or []
+
+    # The four series are independent reads; run them concurrently.
+    data_list = await asyncio.gather(*[_run_rpc(name) for name in rpc_names])
+    data: Dict[str, List[Dict[str, Any]]] = dict(zip(rpc_names, data_list))
 
     # Jobs: aggregate per-kind rows (day, kind, total, succeeded, failed)
     # into one zero-filled per-day series.

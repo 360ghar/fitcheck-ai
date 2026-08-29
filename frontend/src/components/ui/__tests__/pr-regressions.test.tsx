@@ -153,14 +153,33 @@ describe('PR regression guards', () => {
       </MemoryRouter>
     )
 
+    expect(
+      screen.getByRole('table', { name: 'FitCheck plan and usage limit comparison' })
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('mobile-pricing-rail')).toHaveClass('snap-x')
+    expect(screen.getByTestId('mobile-pricing-rail').parentElement).toHaveClass(
+      '[contain:paint]'
+    )
+    expect(screen.getByTestId('mobile-pricing-rail').parentElement).toHaveClass('lg:hidden')
+
+    // The trial-offer promo rides along on plan CTAs (trial-offer.ts); the
+    // regression guard is that plan_type + cadence survive in the link.
     expect(screen.getByRole('link', { name: 'Get Plus' })).toHaveAttribute(
       'href',
-      '/auth/register?plan_type=plus_monthly'
+      '/auth/register?plan_type=plus_monthly&promo=TRYPRO'
+    )
+    expect(screen.getByRole('link', { name: 'Choose Plus' })).toHaveAttribute(
+      'href',
+      '/auth/register?plan_type=plus_monthly&promo=TRYPRO'
     )
     await user.click(screen.getByRole('switch'))
     expect(screen.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute(
       'href',
-      '/auth/register?plan_type=pro_yearly'
+      '/auth/register?plan_type=pro_yearly&promo=TRYPRO'
+    )
+    expect(screen.getByRole('link', { name: 'Choose Pro' })).toHaveAttribute(
+      'href',
+      '/auth/register?plan_type=pro_yearly&promo=TRYPRO'
     )
   })
 

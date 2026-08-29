@@ -1,10 +1,10 @@
 import Hero from '@/components/landing/Hero'
+import TrustBar from '@/components/landing/TrustBar'
 import DemoSection from '@/components/landing/DemoSection'
 import Features from '@/components/landing/Features'
-import AlsoInApp from '@/components/landing/AlsoInApp'
 import HowItWorks from '@/components/landing/HowItWorks'
+import PhotoshootShowcase from '@/components/landing/PhotoshootShowcase'
 import WhoItsFor from '@/components/landing/WhoItsFor'
-import Testimonials from '@/components/landing/Testimonials'
 import GuidesStrip from '@/components/landing/GuidesStrip'
 import Pricing from '@/components/landing/Pricing'
 import FAQ, { LANDING_FAQS } from '@/components/landing/FAQ'
@@ -87,12 +87,12 @@ export default function LandingPage() {
         jsonLd={[faqSchema, howToSchema, featureListSchema]}
       />
       <Hero />
+      <TrustBar />
       <DemoSection />
       <Features />
-      <AlsoInApp />
       <HowItWorks />
+      <PhotoshootShowcase />
       <WhoItsFor />
-      <Testimonials />
       <GuidesStrip />
       <Pricing />
       <FAQ />

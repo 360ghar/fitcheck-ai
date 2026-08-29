@@ -71,6 +71,13 @@ class SubscriptionResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     is_pro: bool = False
+    # Gift entitlements overlay this response without changing the billing
+    # row. Existing clients continue to receive ``plan_type=pro_monthly``
+    # while a gift is active.
+    entitlement_source: str = "subscription"
+    active_gift_ends_at: Optional[datetime] = None
+    queued_gift_count: int = 0
+    queued_gift_months: int = 0
 
     class Config:
         from_attributes = True

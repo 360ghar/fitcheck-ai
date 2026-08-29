@@ -116,7 +116,7 @@ export function PhotoshootResultsStep() {
       )}
 
       {/* Image Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {generatedImages.map((image, index) => {
           // `image.index` is the true slot number (0-based) — the grid index
           // drifts from it when earlier slots failed, so labels must use the
@@ -175,9 +175,8 @@ export function PhotoshootResultsStep() {
               <p className="text-xs text-amber-800 dark:text-amber-100" role="status" aria-live="polite">Generation failed for this slot. Retry to fill it.</p>
             </div>
             <Button
-              size="sm"
               variant="outline"
-              className="border-amber-300"
+              className="min-h-11 border-amber-300"
               disabled={retryingFailedIndex !== null}
               onClick={() => void retryFailedSlot(failedIndex)}
             >

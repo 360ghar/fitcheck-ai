@@ -1,0 +1,63 @@
+import { render, screen } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import GiftClaimPage from '../GiftClaimPage'
+
+const { getPublicGift } = vi.hoisted(() => ({
+  getPublicGift: vi.fn(),
+}))
+
+vi.mock('@/api/gifts', () => ({
+  claimGift: vi.fn(),
+  getPublicGift,
+  giftErrorMessage: () => 'This gift could not be loaded.',
+}))
+
+vi.mock('@/components/gifts/GiftCardPreview', () => ({
+  GiftCardPreview: () => <div data-testid="gift-card-preview" />,
+}))
+
+vi.mock('@/components/seo', () => ({ SEO: () => null }))
+
+vi.mock('@/lib/gift-claim-credential', () => ({
+  captureGiftClaimCredentialFromLocation: () => null,
+  forgetGiftClaimCredential: vi.fn(),
+  readGiftClaimCredential: () => '',
+}))
+
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: <T,>(selector: (state: { user: { email_verified: boolean } }) => T) =>
+    selector({ user: { email_verified: true } }),
+  useIsAuthenticated: () => true,
+}))
+
+describe('GiftClaimPage credential safety', () => {
+  beforeEach(() => {
+    getPublicGift.mockResolvedValue({
+      public_id: 'gift-123',
+      from_name: 'Sam',
+      to_name: 'Alex',
+      duration_months: 1,
+      retail_value_cents: 1200,
+      status: 'issued',
+      created_at: '2026-08-29T00:00:00Z',
+      artwork_version: 1,
+      og_image_url: '/gift.png',
+    })
+  })
+
+  it('excludes the printed gift credential field from session recording', async () => {
+    render(
+      <MemoryRouter initialEntries={['/gift/gift-123']}>
+        <Routes>
+          <Route path="/gift/:publicId" element={<GiftClaimPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(
+      await screen.findByRole('textbox', { name: 'Enter the code printed on the gift' }),
+    ).toHaveClass('ph-no-capture')
+  })
+})

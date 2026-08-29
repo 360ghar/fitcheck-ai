@@ -21,6 +21,8 @@ const envSchema = z.object({
    */
   VITE_SUPABASE_URL: z.string().optional(),
   VITE_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
+  /** Gift voucher reporting and controls. Disabled until migration 056 is live. */
+  VITE_ENABLE_GIFT_VOUCHERS: z.enum(['true', 'false']).default('false'),
 })
 
 const parsed = envSchema.safeParse({
@@ -29,15 +31,19 @@ const parsed = envSchema.safeParse({
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL || undefined,
   VITE_SUPABASE_PUBLISHABLE_KEY:
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || undefined,
+  VITE_ENABLE_GIFT_VOUCHERS: import.meta.env.VITE_ENABLE_GIFT_VOUCHERS ?? 'false',
 })
 
 if (!parsed.success) {
-   
   console.error('[env] invalid environment configuration:', parsed.error.flatten())
   throw new Error('Invalid environment configuration — see console for details.')
 }
 
 export const env = parsed.data
+
+export const featureFlags = {
+  giftVouchers: env.VITE_ENABLE_GIFT_VOUCHERS === 'true',
+} as const
 
 /**
  * True when both Supabase credentials are present (Google OAuth enabled).

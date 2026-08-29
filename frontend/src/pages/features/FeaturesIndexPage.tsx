@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { trialRegisterHref } from '@/lib/trial-offer'
 import SEO from '@/components/seo/SEO'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { PAGE_SEO, SEO_CONFIG } from '@/components/seo/seo-config'
@@ -94,7 +95,7 @@ export default function FeaturesIndexPage() {
                   className="bg-primary hover:bg-primary-pressed text-white h-12 px-6"
                   asChild
                 >
-                  <Link to="/auth/register">
+                  <Link to={trialRegisterHref()}>
                     Start free
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
@@ -137,7 +138,7 @@ export default function FeaturesIndexPage() {
               ))}
             </div>
 
-            <div className="mt-14 rounded-2xl border border-stone-200 dark:border-stone-800 p-8 text-center">
+            <div className="mt-14 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 text-center md:p-8">
               <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-50">
                 Guides & comparisons
               </h2>

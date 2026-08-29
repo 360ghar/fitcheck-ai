@@ -557,6 +557,7 @@ export default function RecommendationsPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="w-full sm:w-auto"
                       onClick={() => void runWeather()}
                       disabled={isLoadingWeather}
                     >
@@ -667,11 +668,11 @@ export default function RecommendationsPage() {
                       value={matchSearch}
                       onChange={(e) => setMatchSearch(e.target.value)}
                       placeholder="Search closet…"
-                      className="pl-9"
+                      className="h-11 pl-9"
                       aria-label="Search items to match"
                     />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[40vh] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[40vh] md:max-h-[18rem] overflow-y-auto pr-1">
                     {filteredMatchItems.map((item) => {
                       const selected = matchItemId === item.id
                       return (
@@ -714,7 +715,7 @@ export default function RecommendationsPage() {
                   )}
 
                   {matchData && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <div className="text-sm font-semibold text-foreground">Matching items</div>
                         {matchData.matches.length === 0 ? (

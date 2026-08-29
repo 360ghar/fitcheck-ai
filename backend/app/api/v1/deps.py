@@ -12,6 +12,7 @@ from supabase import Client
 from app.db.connection import get_db, SupabaseDB
 from app.core.security import verify_token, TokenData
 from app.core.exceptions import AuthenticationError, PermissionDeniedError
+from app.core import user_profile_cache
 from app.utils.datetime_util import utcnow_iso
 from app.utils.db import execute_with_reconnect, maybe_single_data
 
@@ -60,11 +61,26 @@ async def get_current_user(
         # bare None result, so the no-row case is a VALUE, not an exception —
         # the PGRST116 code attribute is not guaranteed by postgrest-py and
         # must not be the provisioning signal.
-        result = await execute_with_reconnect(
-            lambda d: d.table("users").select("*").eq("id", token_data.sub).maybe_single().execute(),
-            db,
-            extra={"operation": "get_current_user.lookup", "user_id": token_data.sub},
-        )
+        #
+        # The lookup itself is wrapped in a short-TTL single-flight cache
+        # (app.core.user_profile_cache): launch bursts fire 5+ parallel
+        # requests that each paid this roundtrip; now they share one load,
+        # and warm-cache requests skip it entirely. Writers invalidate via
+        # user_profile_cache.invalidate (users.py, admin_service.py); the
+        # 30 s TTL bounds staleness for anything else. Suspension still
+        # applies: the cached dict carries is_active and the check below
+        # runs on every request regardless of cache state.
+        async def _load_profile():
+            # Unwrap .data here so the cache stores plain profile dicts
+            # (or None), not postgrest response objects.
+            result = await execute_with_reconnect(
+                lambda d: d.table("users").select("*").eq("id", token_data.sub).maybe_single().execute(),
+                db,
+                extra={"operation": "get_current_user.lookup", "user_id": token_data.sub},
+            )
+            return maybe_single_data(result)
+
+        user = await user_profile_cache.get_or_load(token_data.sub, _load_profile)
     except Exception as error:
         # With maybe_single, a raised error is NEVER a missing profile (the
         # id lookup is on the PK, so PGRST116/multi-row is impossible) —
@@ -77,9 +93,8 @@ async def get_current_user(
                 message="User profile lookup failed",
                 error_code="AUTH_PROFILE_LOOKUP_ERROR",
             ) from error
-        result = None
+        user = None
 
-    user = maybe_single_data(result)
     if user is not None:
         # Suspended accounts are rejected before anything else: the admin
         # panel (and every client) must not keep serving a user whose
@@ -177,6 +192,9 @@ async def get_current_user(
 
         profile = await asyncio.to_thread(_create_profile)
         logger.info(f"Auto-created profile for OAuth user {token_data.sub}")
+        # The freshly created row is by definition current; cache it so the
+        # request burst that triggered provisioning does not re-read it.
+        user_profile_cache.set_(token_data.sub, profile)
         return profile
 
     except AuthenticationError:

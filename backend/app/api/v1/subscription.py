@@ -20,6 +20,7 @@ from app.models.subscription import (
     PortalSessionResponse,
 )
 from app.services.subscription_service import SubscriptionService
+from app.services.gift_service import GiftService
 from app.utils import maybe_single_data
 from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
 
@@ -664,7 +665,44 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
     logger.info(f"Received Stripe event: {event['type']}")
 
     try:
-        if event["type"] == "checkout.session.completed":
+        event_type = event["type"]
+        event_object = event["data"]["object"]
+        gift_event_handled = False
+
+        if event_type in {
+            "checkout.session.completed",
+            "checkout.session.async_payment_succeeded",
+            "checkout.session.async_payment_failed",
+            "checkout.session.expired",
+        }:
+            metadata = event_object.get("metadata", {})
+            if metadata.get("purchase_kind") == "gift_voucher":
+                gift_event_handled = True
+                if event_type in {
+                    "checkout.session.completed",
+                    "checkout.session.async_payment_succeeded",
+                } and event_object.get("payment_status") == "paid":
+                    await GiftService.fulfill_checkout(event_object, db)
+                elif event_type in {
+                    "checkout.session.async_payment_failed",
+                    "checkout.session.expired",
+                }:
+                    await GiftService.mark_checkout_failed(
+                        event_object,
+                        db,
+                        reason=event_type,
+                    )
+        elif event_type in {
+            "charge.refunded",
+            "charge.dispute.created",
+            "charge.dispute.closed",
+        }:
+            gift_event_handled = True
+            await GiftService.process_payment_event(event_type, event_object, db)
+
+        if gift_event_handled:
+            logger.info("Processed Stripe gift event", event_type=event_type)
+        elif event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
             user_id = session.get("metadata", {}).get("user_id")
             plan_type = session.get("metadata", {}).get("plan_type", "pro_monthly")

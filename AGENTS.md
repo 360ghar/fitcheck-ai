@@ -50,6 +50,7 @@ Package-local notes: `backend/CLAUDE.md`, `frontend/CLAUDE.md`, `admin/CLAUDE.md
 | Exec plans (active/completed/debt) | `docs/exec-plans/` |
 | Quality grades | `docs/QUALITY_SCORE.md` |
 | UI / visual direction | `docs/DESIGN.md` |
+| MCP server & ChatGPT app | `docs/references/mcp.md` |
 | Setup & stack references | `docs/references/` |
 | Store listing / ASO | `docs/store/` |
 

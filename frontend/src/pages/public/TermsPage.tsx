@@ -11,7 +11,7 @@ export default function TermsPage() {
         canonicalUrl={`${SEO_CONFIG.siteUrl}/terms`}
       />
     <div className="pt-20">
-      <section className="py-24 bg-stone-50 dark:bg-stone-950">
+      <section className="py-16 bg-stone-50 dark:bg-stone-950 md:py-24">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
             <div className="text-center mb-12">
@@ -29,7 +29,7 @@ export default function TermsPage() {
       <section className="py-16 bg-white dark:bg-stone-950">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
-            <div className="prose prose-gray dark:prose-invert max-w-none">
+            <div className="prose prose-gray dark:prose-invert max-w-none [overflow-wrap:anywhere]">
               <h2>1. Acceptance of Terms</h2>
               <p>
                 By accessing or using FitCheck AI ("Service"), you agree to be bound by these Terms

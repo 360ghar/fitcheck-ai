@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { validateReferralCode } from '@/api/subscription'
 import { PENDING_PROMO_KEY, stashPromoCode } from '@/lib/promo'
+import { trackEvent } from '@/lib/analytics'
 import SEO from '@/components/seo/SEO'
 import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
@@ -82,6 +83,12 @@ export default function RegisterPage() {
   useEffect(() => {
     clearError()
   }, [clearError])
+
+  // Funnel instrumentation: which registrations arrive with the trial offer
+  // attached vs plain organic signups.
+  useEffect(() => {
+    trackEvent('register_view', { has_promo: Boolean(promoCode) })
+  }, [promoCode])
 
   // Validate referral code
   const validateReferral = async (code: string) => {
@@ -168,6 +175,7 @@ export default function RegisterPage() {
       // redirected here); carry it into the destination so the plan page is
       // still reached when the URL no longer has the param. Mirrors LoginPage.
       const promoFromStorage = localStorage.getItem(PENDING_PROMO_KEY)
+      trackEvent('signup_success', { has_promo: Boolean(promoCode || promoFromStorage) })
       navigate(getPostAuthDestination(returnTo, selectedPlan, promoCode || promoFromStorage))
     } catch {
       // Registration error is handled by the store and displayed in UI
@@ -216,6 +224,16 @@ export default function RegisterPage() {
         <h1 className="text-xl md:text-2xl font-extrabold text-foreground">
           Create your account
         </h1>
+        {promoCode ? (
+          <p className="mt-2 text-sm font-medium text-primary">
+            Your first month of Pro is free — no credit card. Code{' '}
+            <span className="font-mono">{promoCode}</span> is applied after signup.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">
+            First month of Pro free. No credit card required.
+          </p>
+        )}
       </div>
 
       <div className="mt-6 md:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
@@ -264,7 +282,7 @@ export default function RegisterPage() {
           </Button>
 
           {/* Divider */}
-          <div className="relative my-6">
+          <div className="relative my-4 sm:my-6">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-border" />
             </div>

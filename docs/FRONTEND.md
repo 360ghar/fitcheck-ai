@@ -72,6 +72,9 @@ Domain modules: `src/api/*.ts` (auth, items, outfits, ai, batch, etc.).
 - Auth: `/auth/login`, `/auth/register`, forgot/reset password
 - Protected: dashboard, wardrobe, outfits (incl. the `/outfits/new` create page), calendar, recommendations, try-on, photoshoot, profile
 - Protected + flag-gated: `/gamification` (only registered when `FEATURES.gamification` is true — see Feature flags below; with the flag off a bookmarked `/gamification` falls through to the catch-all redirect to `/dashboard`)
+- Gift vouchers: protected `/gifts` studio is flag-gated; public
+  `/gift/:publicId` always stays mounted so issued gifts survive a creation
+  rollback
 - Share: `/shared/outfits/:id`
 - SEO intent pages (one path-driven component, all in `publicRoutes.ts` +
   `scripts/seo-content.mjs`): `/features/*`, `/best/*`, `/compare/*`,
@@ -269,6 +272,7 @@ feature can be dropped from the bundle as well as the UI. Declare new vars in
 |-----|---------|-------|---------------------|
 | `VITE_ENABLE_SOCIAL_IMPORT` | `true` | Instagram import panes in `BatchExtractionFlow` | `ENABLE_SOCIAL_IMPORT` (router unmounted when off) |
 | `VITE_ENABLE_GAMIFICATION` | `false` | `/gamification` route, sidebar nav entry, and the lazy import of `GamificationPage` | `ENABLE_GAMIFICATION` (router stays **mounted**, handlers return zeroed 200s) |
+| `VITE_ENABLE_GIFT_VOUCHERS` | `false` | `/gifts` studio, sidebar entry, and its lazy import; the public claim page remains mounted | `ENABLE_GIFT_VOUCHER_CREATION` (new issuance only) |
 
 There is no `/config` endpoint, so each pair must be kept in step by hand.
 Gamification defaults off because nothing on the backend writes `user_streaks`
@@ -277,6 +281,20 @@ or `user_achievements`, so the page can only ever render zeros.
 Gating the `<Route>` alone is not enough to remove the code: the
 `lazy(() => import(...))` binding must be gated too, or Rollup still emits the
 page chunk. `App.tsx` does both.
+
+### Gift voucher sharing
+
+`src/pages/gifts/GiftsPage.tsx` provides the protected studio: allowance and
+paid/free choice, personalization, live premium preview, Checkout return,
+sent/received history, edit, rotation, copy, native Web Share, and portrait
+download. `src/pages/gifts/GiftClaimPage.tsx` serves the public claim flow.
+
+The claim credential is stored in `location.hash`, never the path or query.
+`captureCredential` removes the fragment with `history.replaceState` before
+route analytics effects run, then keeps it in localStorage for at most seven
+days so login, registration, OAuth, and email verification can return to the
+gift. Public states do not reveal the claimant. The Netlify edge metadata path
+uses the versioned 1200x630 artwork and adds `noindex, nofollow`.
 
 ## References
 

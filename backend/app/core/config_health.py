@@ -302,6 +302,32 @@ def validate_production_config() -> List[ConfigIssue]:
             ),
         ))
 
+    # Gift issuance stays disabled until all one-time prices and the dedicated
+    # claim-credential key are present. Existing links and entitlements do not
+    # depend on this creation flag.
+    if settings.ENABLE_GIFT_VOUCHER_CREATION:
+        missing_gift_config = [
+            name
+            for name, value in (
+                ("GIFT_TOKEN_SECRET", settings.GIFT_TOKEN_SECRET),
+                ("STRIPE_GIFT_PRO_1M_PRICE_ID", settings.STRIPE_GIFT_PRO_1M_PRICE_ID),
+                ("STRIPE_GIFT_PRO_3M_PRICE_ID", settings.STRIPE_GIFT_PRO_3M_PRICE_ID),
+                ("STRIPE_GIFT_PRO_12M_PRICE_ID", settings.STRIPE_GIFT_PRO_12M_PRICE_ID),
+            )
+            if not (value or "").strip()
+        ]
+        if missing_gift_config:
+            issues.append(ConfigIssue(
+                severity="error",
+                key="ENABLE_GIFT_VOUCHER_CREATION",
+                message=(
+                    "Gift voucher creation is enabled but its production "
+                    f"configuration is incomplete ({' and '.join(missing_gift_config)} "
+                    "missing). Disable issuance or set the dedicated token "
+                    "secret and all three one-time Stripe Price IDs."
+                ),
+            ))
+
     # Object storage must be fully configured, or EVERY image read and write
     # fails at request time. Checked as one issue: the four are useless apart.
     # Read the field list off Settings rather than restating it: a fifth required

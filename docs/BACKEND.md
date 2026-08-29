@@ -82,7 +82,11 @@ reconnect-protected delete), `feedback_service.py`, `promo_service.py`,
 - Generated overview: `docs/generated/db-schema.md`.
 - Model notes: `docs/references/data-models.md`.
 
-Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`, `user_ai_settings`, `items`, `item_images`, `outfits`, `outfit_images`, `calendar_events`, `shared_outfits`, subscription/referral tables, photoshoot + social import tables.
+Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`,
+`user_ai_settings`, `items`, `item_images`, `outfits`, `outfit_images`,
+`calendar_events`, `shared_outfits`, subscription/referral tables,
+`gift_vouchers`, `gift_voucher_allowances`, `gift_entitlement_grants`, and
+photoshoot + social import tables.
 
 `user_streaks` / `user_achievements` exist in the schema but are written only
 by the flag-ON `get_streak` path (B3-07: a first GET upserts a zeroed
@@ -159,7 +163,8 @@ trust boundary** — the UI's permission gating is cosmetic.
 - **Permission vocabulary**: `dashboards.read`, `users.read`/`users.write`,
   `subscriptions.read`/`subscriptions.refund`, `iap.read`, `quotas.read`,
   `ops.read`, `storage.cleanup`, `audit.read`, `content.read`/`content.write`,
-  `promo.read`, `feedback.read`/`feedback.write`, `search`. Full matrix in
+  `promo.read`, `feedback.read`/`feedback.write`, `gifts.read`/`gifts.write`,
+  `search`. Full matrix in
   `docs/exec-plans/active/2026-08-07-admin-panel.md` and `admin/README.md`.
 - **Key endpoint groups** (all under `/api/v1/admin`): `GET /me` (session
   bootstrap: profile + role + permissions), `users` (list/detail/PATCH
@@ -169,7 +174,9 @@ trust boundary** — the UI's permission gating is cosmetic.
   webhooks stay authoritative), `quotas` (+ `PATCH /users/{id}/quota-override`),
   `dashboards` (overview/top-users/referrals/revenue/trends), `promo-codes`
   (CRUD, gated by `content.write`), `feedback` (status + internal notes),
-  `ops` (health, storage inventory + `DELETE …/temp` cleanup), `audit` (trail
+  `gifts` (summary, filtered list/detail, CSV, manual issue, edit, rotate,
+  assign, allowance adjustment, and eligible void/revoke actions), `ops`
+  (health, storage inventory + `DELETE …/temp` cleanup), `audit` (trail
   explorer +
   per-entity history), `search`, `settings` (read-only deployment info).
   Blog admin writes stay in `blog.py` (`/api/v1/blog/admin/posts`, …) guarded
@@ -435,9 +442,49 @@ expiry → free downgrade need no special-casing. One redemption per user; paid
 subscribers are never overwritten. Codes are created by operators with
 `backend/scripts/create_promo_code.py`.
 
+### Pro gift vouchers
+
+Migration `056_gift_vouchers.sql` adds voucher, allowance, and entitlement
+tables plus service-role-only atomic RPCs for complimentary issuance, first
+claim, and entitlement resolution. Gift time is an overlay and never changes
+the `subscriptions` billing row. `SubscriptionService.get_subscription`, usage
+checks, and Stripe/IAP synchronization resolve the overlay so billing updates
+cannot erase a gift. Free and Plus accounts activate a gift immediately;
+existing Pro access queues it. A new non-gift Pro entitlement pauses an active
+gift and banks its exact unused seconds.
+
+`/api/v1/gifts` exposes a safe public catalog/detail/social-artwork surface and
+authenticated allowance, sent/received, issuance, Checkout fulfillment,
+claim, edit, rotation, and portrait-artwork operations. Public responses omit
+voucher source, payment data, account identifiers, email addresses, and claim
+credentials. A random public ID selects the presentation. A separate
+HMAC-derived secret lives only in the URL fragment; the printed base32 code is
+high entropy and is accepted with or without separators. Creation and claim
+attempts are rate limited.
+
+Paid gifts use Stripe Checkout `mode=payment`. Fulfillment verifies the
+authenticated owner, reserved session, one line item, quantity, configured
+Price ID, amount, and USD currency. The shared Stripe webhook ledger makes
+Checkout completion, asynchronous success/failure, expiry, refunds, and final
+dispute outcomes repeat safe. Paid value cannot be voided through the admin
+API. Pillow and `qrcode` render deterministic 1080x1350 portrait and 1200x630
+social PNGs; versioned objects use the private object-storage cache when it is
+available.
+
+Launch config is fail-closed. `ENABLE_GIFT_VOUCHER_CREATION=false` blocks new
+complimentary, admin, and paid issuance without disabling existing public
+links, claims, or entitlements. When it is true, config health requires
+`GIFT_TOKEN_SECRET` and all three `STRIPE_GIFT_PRO_*_PRICE_ID` values. The
+three gift tables are included in readiness checks. See
+`docs/product-specs/features/gift-vouchers.md`.
+
 ## Route registration
 
-Modules wired from `main.py` include: auth, users, items, outfits, shared_outfits, recommendations, calendar, weather, gamification (flagged), ai, ai_settings, batch_processing, photoshoot, feedback, waitlist, demo, subscription, referral, promo, social_import (flagged), blog, and the admin API (`app.api.v1.admin` under `/api/v1/admin`, see "Admin API & RBAC").
+Modules wired from `main.py` include: auth, users, items, outfits,
+shared_outfits, recommendations, calendar, weather, gamification (flagged), ai,
+ai_settings, batch_processing, photoshoot, feedback, waitlist, demo,
+subscription, referral, promo, gifts, social_import (flagged), blog, and the
+admin API (`app.api.v1.admin` under `/api/v1/admin`, see "Admin API & RBAC").
 
 ### Flagged routes — two different shapes
 
@@ -445,6 +492,7 @@ Modules wired from `main.py` include: auth, users, items, outfits, shared_outfit
 |------|---------|----------------|
 | `ENABLE_SOCIAL_IMPORT` | `true` | **Router not mounted.** The paths 404 and vanish from OpenAPI. |
 | `ENABLE_GAMIFICATION` | `false` | **Router stays mounted.** Handlers return `200` with a neutral zeroed payload. |
+| `ENABLE_GIFT_VOUCHER_CREATION` | `false` | **Routers stay mounted.** Existing links, claims, history, artwork, and entitlements work; new issuance returns 403. |
 
 The gamification asymmetry is deliberate and must not be "made consistent".
 Unmounting the router would 404 `/api/v1/gamification/streak` while the shipped
@@ -495,7 +543,10 @@ Storage: `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACC
 
 AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg, see `.env.example`), `AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE` (garment reference size, default 768), `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` (default 12), `AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY` (default 8), and `AI_MAX_OUTFIT_ITEMS` (default 100)
 
-Optional: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, social import flags, `ENABLE_GAMIFICATION` (default `false`), `AI_ENCRYPTION_KEY`  
+Optional: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, social import flags,
+`ENABLE_GAMIFICATION` (default `false`),
+`ENABLE_GIFT_VOUCHER_CREATION` (default `false`), `GIFT_TOKEN_SECRET`,
+`AI_ENCRYPTION_KEY`
 
 Full templates: `backend/.env.example`. Backend also loads repo root `.env`.
 
