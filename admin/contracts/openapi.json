@@ -346,6 +346,51 @@
         "title": "AdminFeedbackUpdate",
         "type": "object"
       },
+      "AdminFunnelResponse": {
+        "additionalProperties": true,
+        "description": "GET /admin/dashboards/funnel \u2014 signups -> items -> outfits -> paid.",
+        "properties": {
+          "days": {
+            "default": 30,
+            "title": "Days",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AdminFunnelStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "title": "AdminFunnelResponse",
+        "type": "object"
+      },
+      "AdminFunnelStep": {
+        "additionalProperties": true,
+        "description": "One funnel step: label, count, pct_of_prev (100.0 for first).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pct_of_prev": {
+            "default": 0.0,
+            "title": "Pct Of Prev",
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "count"
+        ],
+        "title": "AdminFunnelStep",
+        "type": "object"
+      },
       "AdminIapTransactionListItem": {
         "additionalProperties": true,
         "description": "One row of GET /admin/iap/transactions (store-billed subscriptions).",
@@ -560,6 +605,16 @@
             },
             "title": "Signups",
             "type": "object"
+          },
+          "tickets_open_48h": {
+            "default": 0,
+            "title": "Tickets Open 48H",
+            "type": "integer"
+          },
+          "trials_ending_7d": {
+            "default": 0,
+            "title": "Trials Ending 7D",
+            "type": "integer"
           }
         },
         "title": "AdminOverviewResponse",
@@ -907,6 +962,56 @@
           "status"
         ],
         "title": "AdminRefundResponse",
+        "type": "object"
+      },
+      "AdminRetentionCohort": {
+        "additionalProperties": true,
+        "description": "One weekly cohort row for retention.",
+        "properties": {
+          "retained_7d": {
+            "default": 0,
+            "title": "Retained 7D",
+            "type": "integer"
+          },
+          "retention_pct": {
+            "default": 0.0,
+            "title": "Retention Pct",
+            "type": "number"
+          },
+          "signups": {
+            "default": 0,
+            "title": "Signups",
+            "type": "integer"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_start"
+        ],
+        "title": "AdminRetentionCohort",
+        "type": "object"
+      },
+      "AdminRetentionResponse": {
+        "additionalProperties": true,
+        "description": "GET /admin/dashboards/retention \u2014 last N Mondays \u00d7 retained 7d.",
+        "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/AdminRetentionCohort"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
+          "weeks": {
+            "default": 4,
+            "title": "Weeks",
+            "type": "integer"
+          }
+        },
+        "title": "AdminRetentionResponse",
         "type": "object"
       },
       "AdminRevenueResponse": {
@@ -1453,12 +1558,57 @@
       },
       "AdminUserDetail": {
         "additionalProperties": true,
-        "description": "GET /admin/users/{user_id} \u2014 full profile detail.",
+        "description": "GET /admin/users/{user_id} \u2014 full profile detail (360 view).\n\nCore keys (user, subscription, usage, counts, recent_jobs) are always\npresent; 360 keys are optional and best-effort (missing table -> []).\n``extra=\"allow\"`` keeps the contract stable when the service adds a new\nsection without a model bump (the admin console reads via schema.d.ts).",
         "properties": {
+          "achievements": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Achievements",
+            "type": "array"
+          },
+          "achievements_meta": {
+            "additionalProperties": true,
+            "title": "Achievements Meta",
+            "type": "object"
+          },
+          "collections": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Collections",
+            "type": "array"
+          },
           "counts": {
             "additionalProperties": true,
             "title": "Counts",
             "type": "object"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "outfits": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Outfits",
+            "type": "array"
+          },
+          "photoshoot_jobs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Photoshoot Jobs",
+            "type": "array"
           },
           "recent_jobs": {
             "items": {
@@ -1467,6 +1617,24 @@
             },
             "title": "Recent Jobs",
             "type": "array"
+          },
+          "social_import_jobs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Social Import Jobs",
+            "type": "array"
+          },
+          "streak": {
+            "additionalProperties": true,
+            "title": "Streak",
+            "type": "object"
+          },
+          "streaks": {
+            "additionalProperties": true,
+            "title": "Streaks",
+            "type": "object"
           },
           "subscription": {
             "anyOf": [
@@ -1479,6 +1647,14 @@
               }
             ],
             "title": "Subscription"
+          },
+          "trips": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Trips",
+            "type": "array"
           },
           "usage": {
             "additionalProperties": true,
@@ -2368,6 +2544,24 @@
         "title": "BodyProfileUpdate",
         "type": "object"
       },
+      "Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post": {
+        "properties": {
+          "provider_page_id": {
+            "title": "Provider Page Id",
+            "type": "string"
+          },
+          "selection_token": {
+            "title": "Selection Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "selection_token",
+          "provider_page_id"
+        ],
+        "title": "Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post",
+        "type": "object"
+      },
       "Body_start_batch_extraction_multipart_api_v1_ai_batch_extract_multipart_post": {
         "properties": {
           "auto_generate": {
@@ -2552,6 +2746,18 @@
             ],
             "title": "Body Profile Id"
           },
+          "client_request_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Request Id"
+          },
           "file": {
             "contentMediaType": "application/octet-stream",
             "title": "File",
@@ -2576,6 +2782,7 @@
           "lighting": {
             "anyOf": [
               {
+                "maxLength": 50,
                 "type": "string"
               },
               {
@@ -2586,6 +2793,7 @@
           },
           "pose": {
             "default": "front",
+            "maxLength": 20,
             "title": "Pose",
             "type": "string"
           }
@@ -3049,6 +3257,23 @@
         "title": "EmbeddingRequest",
         "type": "object"
       },
+      "ExtendTrialRequest": {
+        "description": "POST /admin/users/{id}/subscription/extend-trial body.",
+        "properties": {
+          "days": {
+            "description": "Days to extend trial (1..90)",
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "ExtendTrialRequest",
+        "type": "object"
+      },
       "ExtractItemsRequest": {
         "description": "Request to extract items from an image (inline or stored).",
         "properties": {
@@ -3127,12 +3352,14 @@
         "properties": {
           "background": {
             "default": "transparent",
+            "maxLength": 500,
             "title": "Background",
             "type": "string"
           },
           "custom_prompt": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {
@@ -3161,6 +3388,7 @@
           },
           "lighting": {
             "default": "professional studio lighting",
+            "maxLength": 500,
             "title": "Lighting",
             "type": "string"
           },
@@ -3171,6 +3399,7 @@
           },
           "pose": {
             "default": "standing front",
+            "maxLength": 500,
             "title": "Pose",
             "type": "string"
           },
@@ -3181,6 +3410,7 @@
           },
           "style": {
             "default": "casual",
+            "maxLength": 500,
             "title": "Style",
             "type": "string"
           },
@@ -3196,6 +3426,7 @@
           },
           "view_angle": {
             "default": "full body",
+            "maxLength": 500,
             "title": "View Angle",
             "type": "string"
           }
@@ -3211,10 +3442,12 @@
         "properties": {
           "background": {
             "default": "transparent",
+            "maxLength": 500,
             "title": "Background",
             "type": "string"
           },
           "category": {
+            "maxLength": 500,
             "title": "Category",
             "type": "string"
           },
@@ -3231,12 +3464,14 @@
             "type": "boolean"
           },
           "item_description": {
+            "maxLength": 500,
             "title": "Item Description",
             "type": "string"
           },
           "material": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -3278,6 +3513,7 @@
           "sub_category": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -3288,6 +3524,7 @@
           },
           "view_angle": {
             "default": "front",
+            "maxLength": 500,
             "title": "View Angle",
             "type": "string"
           }
@@ -3376,6 +3613,18 @@
             "title": "Category",
             "type": "string"
           },
+          "client_request_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Request Id"
+          },
           "colors": {
             "items": {
               "type": "string"
@@ -3458,6 +3707,7 @@
           "price": {
             "anyOf": [
               {
+                "maximum": 99999999.99,
                 "minimum": 0.0,
                 "type": "number"
               },
@@ -3775,6 +4025,7 @@
           "price": {
             "anyOf": [
               {
+                "maximum": 99999999.99,
                 "minimum": 0.0,
                 "type": "number"
               },
@@ -4141,7 +4392,6 @@
           },
           "name": {
             "maxLength": 255,
-            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -4290,8 +4540,7 @@
             "type": "string"
           },
           "pose": {
-            "maxLength": 50,
-            "minLength": 1,
+            "maxLength": 20,
             "title": "Pose",
             "type": "string"
           },
@@ -4340,7 +4589,7 @@
         "type": "object"
       },
       "OutfitItemInput": {
-        "description": "Input item for outfit generation.\n\n`item_id` is the caller's own wardrobe item. When present, the backend\nresolves that item's stored image server-side (scoped to the caller) and\nsends it to the image model as a labelled garment reference, so the\ngenerated outfit reproduces the real garment instead of inventing a\nlookalike from the text attributes below. Absent \u2014 or an item with no\nstored image \u2014 degrades to the text-only inventory.\n\nClients never send image URLs or base64 here: a client-supplied URL the\nbackend fetches is an SSRF primitive (StorageService.download_to_base64\nfollows redirects with no host allow-list), and inline base64 would\ntriple mobile request size.",
+        "description": "Input item for outfit generation.\n\n`item_id` is the caller's own wardrobe item. When present, the backend\nresolves that item's stored image server-side (scoped to the caller) and\nsends it to the image model as a labelled garment reference, so the\ngenerated outfit reproduces the real garment instead of inventing a\nlookalike from the text attributes below. Absent \u2014 or an item with no\nstored image \u2014 degrades to the text-only inventory.\n\nClients never send image URLs or base64 here: a client-supplied URL the\nbackend fetches would be an SSRF primitive, so references are resolved\nserver-side to a bucket key and read from object storage only\n(StorageService.download_to_base64 reduces any input to a key via\nkey_from_path and never follows arbitrary URLs), and inline base64 would\ntriple mobile request size.",
         "properties": {
           "brand": {
             "anyOf": [
@@ -4395,6 +4644,7 @@
             "title": "Material"
           },
           "name": {
+            "maxLength": 500,
             "title": "Name",
             "type": "string"
           },
@@ -4541,7 +4791,6 @@
           },
           "name": {
             "maxLength": 255,
-            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -5359,6 +5608,8 @@
           },
           "top_k": {
             "default": 10,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Top K",
             "type": "integer"
           }
@@ -5793,12 +6044,14 @@
           },
           "background": {
             "default": "studio white",
+            "maxLength": 500,
             "title": "Background",
             "type": "string"
           },
           "clothing_description": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -5835,11 +6088,13 @@
           },
           "lighting": {
             "default": "professional studio lighting",
+            "maxLength": 500,
             "title": "Lighting",
             "type": "string"
           },
           "pose": {
             "default": "standing front",
+            "maxLength": 500,
             "title": "Pose",
             "type": "string"
           },
@@ -5850,6 +6105,7 @@
           },
           "style": {
             "default": "casual",
+            "maxLength": 500,
             "title": "Style",
             "type": "string"
           }
@@ -6066,6 +6322,7 @@
           "color_temperature": {
             "anyOf": [
               {
+                "maxLength": 20,
                 "type": "string"
               },
               {
@@ -6158,6 +6415,7 @@
           "style_personality": {
             "anyOf": [
               {
+                "maxLength": 50,
                 "type": "string"
               },
               {
@@ -6187,6 +6445,7 @@
           "default_location": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -6209,6 +6468,7 @@
           "language": {
             "anyOf": [
               {
+                "maxLength": 10,
                 "type": "string"
               },
               {
@@ -6242,6 +6502,7 @@
           "timezone": {
             "anyOf": [
               {
+                "maxLength": 50,
                 "type": "string"
               },
               {
@@ -6724,6 +6985,59 @@
         ]
       }
     },
+    "/api/v1/admin/dashboards/funnel": {
+      "get": {
+        "description": "Funnel: signups -> items (24h) -> outfits (7d) -> paid (window).",
+        "operationId": "funnel_api_v1_admin_dashboards_funnel_get",
+        "parameters": [
+          {
+            "description": "Window in days (1-90, default 30)",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Window in days (1-90, default 30)",
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminFunnelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Funnel",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/dashboards/overview": {
       "get": {
         "description": "Signups / active users / paid subscriptions / AI jobs aggregates.",
@@ -6773,6 +7087,59 @@
           }
         ],
         "summary": "Referrals",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/dashboards/retention": {
+      "get": {
+        "description": "Cohort retention: last N Mondays UTC \u00d7 retained 7d later.",
+        "operationId": "retention_api_v1_admin_dashboards_retention_get",
+        "parameters": [
+          {
+            "description": "Number of weekly cohorts (1-12, default 4)",
+            "in": "query",
+            "name": "weeks",
+            "required": false,
+            "schema": {
+              "default": 4,
+              "description": "Number of weekly cohorts (1-12, default 4)",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Weeks",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRetentionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retention",
         "tags": [
           "Admin"
         ]
@@ -7236,7 +7603,7 @@
     },
     "/api/v1/admin/iap/transactions/{txn_id}/mark-refunded": {
       "post": {
-        "description": "Mark a store transaction refunded (status-only update + audit).\n\nStore-side refunds arrive via webhooks; this endpoint only records the\nrefunded state for the admin UI.",
+        "description": "Mark a store transaction refunded (status-only update + audit).\n\nStore-side refunds arrive via webhooks; this endpoint only records the\nrefunded state for the admin UI.\n\nA4-14/M2: gated by ``iap.write`` (super_admin/admin/ops) instead of the\nblanket ``require_admin`` \u2014 a content_editor has no IAP surface and must\nnot be able to flip store transactions to refunded.",
         "operationId": "admin_iap_mark_refunded_api_v1_admin_iap_transactions__txn_id__mark_refunded_post",
         "parameters": [
           {
@@ -7831,7 +8198,7 @@
     },
     "/api/v1/admin/subscriptions": {
       "get": {
-        "description": "Paginated subscriptions with user email and display amount.",
+        "description": "Paginated subscriptions with user email and display amount.\n\n``billing_provider`` filters by billing rail; ``stripe`` includes legacy\nrows whose ``billing_provider`` is NULL (see admin_service).",
         "operationId": "list_admin_subscriptions_api_v1_admin_subscriptions_get",
         "parameters": [
           {
@@ -7868,6 +8235,27 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "billing_provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "stripe",
+                    "apple",
+                    "google"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Billing Provider"
             }
           },
           {
@@ -8373,9 +8761,59 @@
         ]
       }
     },
+    "/api/v1/admin/users/{user_id}/ai/clear-daily": {
+      "post": {
+        "description": "Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).\n\nSets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to\ntoday, plus ``subscription_usage.daily_photoshoot_images`` to 0 for\ntoday's period. Writes audit ``user.ai_daily_cleared`` and invalidates\nthe cached profile.",
+        "operationId": "admin_clear_daily_api_v1_admin_users__user_id__ai_clear_daily_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Clear Daily Api V1 Admin Users  User Id  Ai Clear Daily Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Clear Daily",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/users/{user_id}/quota-override": {
       "patch": {
-        "description": "Set (or clear with null) a per-user daily AI quota override.\n\nThe override lives on ``users.custom_daily_quota`` (migration 037);\nnull restores the plan default. Audit: ``quota.override``.",
+        "description": "Set (or clear with null) a per-user daily AI quota override.\n\nThe override lives on ``users.custom_daily_quota`` (migration 037);\nnull restores the plan default. Audit: ``quota.override``.\n\nA4-14/M2: gated by ``quotas.write`` (super_admin/admin) instead of the\nblanket ``require_admin`` \u2014 a content_editor has no quotas surface and\nmust not be able to change another user's daily AI quota.",
         "operationId": "admin_quota_override_api_v1_admin_users__user_id__quota_override_patch",
         "parameters": [
           {
@@ -8428,6 +8866,66 @@
           }
         ],
         "summary": "Admin Quota Override",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/subscription/extend-trial": {
+      "post": {
+        "description": "Extend a user's trial by ``days`` (1..90).\n\nIf ``subscriptions.trial_end`` is set it is moved forward; otherwise\n``now + days`` becomes the new trial end. Writes audit\n``user.trial_extended`` with ``{days, before, after}`` and\ninvalidates the cached profile (service helper).",
+        "operationId": "admin_extend_trial_api_v1_admin_users__user_id__subscription_extend_trial_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtendTrialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Extend Trial Api V1 Admin Users  User Id  Subscription Extend Trial Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Extend Trial",
         "tags": [
           "Admin"
         ]
@@ -9680,6 +10178,61 @@
         ]
       }
     },
+    "/api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page": {
+      "post": {
+        "description": "Complete a multi-account Instagram OAuth by selecting the page.\n\nThe account picker (served by the callback when several business pages\nare connected) POSTs the chosen ``provider_page_id`` with a signed\n``selection_token``. The token pins the job + user (short-TTL HMAC, same\nconstruction as the OAuth state) because the picker's browser context\ncannot present the app's Authorization header. Identity is resolved from\nthe token persisted by the callback (``store_selection_pending_session``)\nusing the selected page, then the real session is stored and the import\nresumes \u2014 no re-run of the OAuth flow (A4-28).\n\nFails closed: an invalid/expired token, no pending session, a page id\noutside the candidate list, or a resolution error all return a validation\nerror asking the user to reconnect.\n\nSingle-use ordering (backend #16): an already-consumed token is rejected\nwith a cheap non-destructive check BEFORE the outbound Graph API call, and\nthe token is only burned immediately before ``accept_auth``. If auth\npersistence fails, the burn is released so the link stays usable.",
+        "operationId": "select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Select Oauth Page Api V1 Ai Social Import Jobs  Job Id  Auth Oauth Select Page Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Oauth Page",
+        "tags": [
+          "Social Import"
+        ]
+      }
+    },
     "/api/v1/ai/social-import/jobs/{job_id}/auth/scraper-login": {
       "post": {
         "operationId": "submit_scraper_login_api_v1_ai_social_import_jobs__job_id__auth_scraper_login_post",
@@ -10465,7 +11018,7 @@
     },
     "/api/v1/blog/admin/posts": {
       "get": {
-        "description": "List all blog posts including unpublished ones.\n\n**Admin only.** Returns all blog posts with pagination.\nUseful for content management.",
+        "description": "List all blog posts including unpublished ones.\n\n**Content readers and admins only** (``content.read``, A8-02).\nReturns all blog posts with pagination.\nUseful for content management.",
         "operationId": "list_all_posts_api_v1_blog_admin_posts_get",
         "parameters": [
           {
@@ -10707,7 +11260,7 @@
         ]
       },
       "post": {
-        "description": "Create a new blog post.\n\n**Admin only.** Creates a new blog post with the provided data.\nSlug must be unique.",
+        "description": "Create a new blog post.\n\n**Content editors and admins only** (``content.write``, A8-02).\nCreates a new blog post with the provided data. Slug must be unique.\nAudited as ``blog.created``.",
         "operationId": "create_post_api_v1_blog_posts_post",
         "requestBody": {
           "content": {
@@ -10756,7 +11309,7 @@
     },
     "/api/v1/blog/posts/{slug}": {
       "delete": {
-        "description": "Delete a blog post.\n\n**Admin only.** Permanently deletes the blog post identified by slug.\nThis action cannot be undone.",
+        "description": "Delete a blog post.\n\n**Content editors and admins only** (``content.write``, A8-02).\nPermanently deletes the blog post identified by slug.\nThis action cannot be undone. Audited as ``blog.deleted``.",
         "operationId": "delete_post_api_v1_blog_posts__slug__delete",
         "parameters": [
           {
@@ -10847,7 +11400,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing blog post.\n\n**Admin only.** Updates the blog post identified by slug.\nIf slug is being changed, the new slug must be unique.",
+        "description": "Update an existing blog post.\n\n**Content editors and admins only** (``content.write``, A8-02).\nUpdates the blog post identified by slug.\nIf slug is being changed, the new slug must be unique.\nAudited as ``blog.updated``.",
         "operationId": "update_post_api_v1_blog_posts__slug__put",
         "parameters": [
           {
@@ -11570,6 +12123,8 @@
             "required": false,
             "schema": {
               "default": 20,
+              "maximum": 100,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -11580,6 +12135,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "Offset",
               "type": "integer"
             }
@@ -11914,6 +12470,43 @@
                 }
               ],
               "title": "Is Favorite"
+            }
+          },
+          {
+            "description": "created_at | name | worn_count",
+            "in": "query",
+            "name": "sort_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "created_at | name | worn_count",
+              "title": "Sort By"
+            }
+          },
+          {
+            "description": "asc | desc",
+            "in": "query",
+            "name": "sort_order",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "desc",
+              "description": "asc | desc",
+              "title": "Sort Order"
             }
           }
         ],
@@ -13633,7 +14226,7 @@
     },
     "/api/v1/outfits/public/{outfit_id}": {
       "get": {
-        "description": "Public outfit view for share links (no auth).\n\nOnly returns data when `is_public=true` on the outfit record.",
+        "description": "Public outfit view for share links (no auth).\n\nOnly returns data when the outfit has an active shared_outfits row AND\n`is_public=true` on the outfit record. The share row is the source of\ntruth: an outfit without one is not shared, even if is_public somehow\ngot set (legacy/crash residue).",
         "operationId": "get_public_outfit_api_v1_outfits_public__outfit_id__get",
         "parameters": [
           {
@@ -14377,7 +14970,7 @@
     },
     "/api/v1/outfits/{outfit_id}/share": {
       "post": {
-        "description": "Enable public sharing for an outfit and return a share URL.\n\nMVP: visibility/expires_at are accepted but only `public` visibility is enforced.",
+        "description": "Enable public sharing for an outfit and return a share URL.\n\nMVP: only `public` visibility is supported; anything else is rejected\nrather than persisted (the public route could never serve it).",
         "operationId": "share_outfit_api_v1_outfits__outfit_id__share_post",
         "parameters": [
           {
@@ -15701,7 +16294,7 @@
     },
     "/api/v1/recommendations/{recommendation_id}/rate": {
       "post": {
-        "description": "Store user feedback to improve future recommendations.",
+        "description": "Store user feedback to improve future recommendations.\n\nThe recommendation_id is client-supplied and used as the primary key; a\nsecond rating for the same id must update the existing row (upsert), not\nfail with a duplicate-key 500.",
         "operationId": "rate_recommendation_api_v1_recommendations__recommendation_id__rate_post",
         "parameters": [
           {
@@ -16584,7 +17177,7 @@
     },
     "/api/v1/users/export": {
       "post": {
-        "description": "Generate a JSON archive of the current user's data and return a\nshort-lived presigned download URL.\n\nMetadata only: rows carry their storage keys (``storage_path``); image\nbytes are never included. The archive is written to a single\ndeterministic key per user (``{user_id}/export/data.json``, overwritten on\neach call - the same key account deletion cleans up), and served as a\nshort-lived presigned GET URL (the repo's ~15-minute pattern). Every call\nreturns a fresh URL, so repeat requests never hand out a stale link.",
+        "description": "Generate a JSON archive of the current user's data and return a\nshort-lived presigned download URL.\n\nMetadata only: rows carry their storage keys (``storage_path``); image\nbytes are never included. The archive is written to a single\ndeterministic key per user (``users/{user_id}/export/data.json``, overwritten on\neach call - the same key account deletion cleans up), and served as a\nshort-lived presigned GET URL (the repo's ~15-minute pattern). Every call\nreturns a fresh URL, so repeat requests never hand out a stale link.",
         "operationId": "export_user_data_api_v1_users_export_post",
         "responses": {
           "200": {

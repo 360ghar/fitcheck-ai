@@ -21,7 +21,6 @@ import { DataTable } from '@/shared/ui/DataTable'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { ErrorState } from '@/shared/ui/ErrorState'
 import { MetricCard } from '@/shared/ui/MetricCard'
-import { PageHeader } from '@/shared/ui/PageHeader'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { TableToolbar } from '@/shared/ui/TableToolbar'
 import { useServerTable } from '@/shared/ui/useServerTable'
@@ -162,19 +161,15 @@ export function PostsPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t('title')}
-        description={t('description')}
-        actions={
-          <Button asChild>
-            <Link to="/content/posts/new">
-              <FileText aria-hidden="true" />
-              {t('newPost')}
-            </Link>
-          </Button>
-        }
-      />
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button asChild size="sm">
+          <Link to="/content/posts/new">
+            <FileText aria-hidden="true" />
+            {t('newPost')}
+          </Link>
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MetricCard label={t('stats.total')} value={table.total} />

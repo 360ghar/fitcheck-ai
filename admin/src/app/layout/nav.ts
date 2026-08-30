@@ -5,7 +5,6 @@ import {
   FileText,
   FolderTree,
   LayoutDashboard,
-  LineChart,
   MessageSquare,
   Receipt,
   ScrollText,
@@ -19,6 +18,13 @@ import {
  * Sidebar navigation manifest (spec §5): grouped, permission-filtered. Items
  * without the matching permission are hidden — UI shaping only, the backend
  * enforces access.
+ *
+ * Single-page console: /dashboard owns all 7 sections (overview/revenue/trends
+ * /funnel/retention/referrals/ops) with sticky anchor pills and ?section=
+ * deep-links. The legacy /dashboard/trends route remains as a redirect-only
+ * entry for backwards compatibility (→ /dashboard?section=trends preserving
+ * ?days) but the sidebar exposes a single Dashboard entry now that trends
+ * lives inside the page.
  */
 export interface NavItem {
   path: string
@@ -27,6 +33,8 @@ export interface NavItem {
   icon: LucideIcon
   /** Backend permission (see shared/lib/permissions.ts). Omit = any signed-in admin. */
   permission?: string
+  /** Optional badge kind (rendered only when expanded, cheap count fetch). */
+  badge?: 'subs' | 'quotas' | 'feedback' | 'audit'
 }
 
 export interface NavGroup {
@@ -38,10 +46,7 @@ export interface NavGroup {
 export const navGroups: NavGroup[] = [
   {
     labelKey: 'nav.overview',
-    items: [
-      { path: '/dashboard', titleKey: 'nav.dashboard', icon: LayoutDashboard, permission: 'dashboards.read' },
-      { path: '/dashboard/trends', titleKey: 'nav.trends', icon: LineChart, permission: 'dashboards.read' },
-    ],
+    items: [{ path: '/dashboard', titleKey: 'nav.dashboard', icon: LayoutDashboard, permission: 'dashboards.read' }],
   },
   {
     labelKey: 'nav.customers',

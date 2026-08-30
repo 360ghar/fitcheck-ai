@@ -61,8 +61,9 @@ describe('DashboardPage', () => {
     await user.click(screen.getByRole('tab', { name: 'Most referrals' }))
     expect(await screen.findByText('Grace Example')).toBeInTheDocument()
 
-    // Referral totals (compact 2×2)
-    expect(screen.getByText('Referral program')).toBeInTheDocument()
+    // Referral totals — single-page pulse (6 cells: codes/redemptions/credits + promo/gifts)
+    // Anchor nav + card header both render "Referrals & promos" / "Revenue"
+    expect(screen.getAllByText('Referrals & promos').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Codes issued')).toBeInTheDocument()
     expect(screen.getByText('84')).toBeInTheDocument()
     expect(screen.getByText('Credits pending')).toBeInTheDocument()
@@ -74,8 +75,8 @@ describe('DashboardPage', () => {
     expect(screen.getByText('user.suspended')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View audit log' })).toBeInTheDocument()
 
-    // Revenue strip (MRR estimate, paid/trials, churn)
-    expect(screen.getByText('Revenue')).toBeInTheDocument()
+    // Revenue strip (MRR estimate, paid/trials, churn) — anchor nav + card header duplicate
+    expect(screen.getAllByText('Revenue').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('$1,240.50')).toBeInTheDocument()
     expect(screen.getByText('$930.25')).toBeInTheDocument()
     expect(screen.getByText('$310.25')).toBeInTheDocument()
@@ -86,7 +87,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('2 refunds (30d)')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View daily trends' })).toHaveAttribute(
       'href',
-      '/dashboard/trends',
+      '/dashboard?section=trends',
     )
 
     // Refresh control shows a relative updated timestamp

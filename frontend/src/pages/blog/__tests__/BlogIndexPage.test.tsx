@@ -55,3 +55,40 @@ describe('BlogIndexPage filters', () => {
     expect(screen.getByText('AI & Style Articles')).toBeInTheDocument()
   })
 })
+
+describe('BlogIndexPage responsive layout', () => {
+  it('reserves spaced height for loading pills without overlapping the search form', () => {
+    useBlogCategories.mockReturnValue({ data: undefined, isLoading: true })
+    useInfiniteBlogPosts.mockReturnValue(mockEmptyInfinite())
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/blog']}>
+        <Routes>
+          <Route path="/blog" element={<BlogIndexPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    const spacer = container.querySelector('[data-testid="categories-loading"]')
+    expect(spacer).toHaveClass('mt-6', 'h-[256px]', 'md:h-[44px]')
+    expect(screen.queryByTestId('category-pills')).not.toBeInTheDocument()
+    expect(screen.getByRole('search')).toHaveClass('mt-6', 'w-full', 'max-w-xl')
+  })
+
+  it('renders the category pill row below the search form with spacing', async () => {
+    useBlogCategories.mockReturnValue({ data: ['AI & Style'], isLoading: false })
+    useInfiniteBlogPosts.mockReturnValue(mockEmptyInfinite())
+
+    render(
+      <MemoryRouter initialEntries={['/blog']}>
+        <Routes>
+          <Route path="/blog" element={<BlogIndexPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('category-pills')).toHaveClass('mt-6')
+    })
+  })
+})

@@ -41,7 +41,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/shared/ui/form'
-import { PageHeader } from '@/shared/ui/PageHeader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { TableToolbar } from '@/shared/ui/TableToolbar'
@@ -215,8 +214,7 @@ export function FeedbackPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('description')} />
+    <div className="space-y-3">
 
       <TableToolbar
         searchValue={table.tableState.q}

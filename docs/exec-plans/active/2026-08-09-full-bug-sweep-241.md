@@ -288,3 +288,37 @@ Closed the 14 new threads on `884ba51`:
 - Wardrobe `totalItems` decrements on delete / unfavorite-under-favorites.
 - Calendar A10b-08 test pins the synchronous bump; oauth / outfits test
   comments and the wardrobe search comment match the code.
+
+## IAP consolidation finished properly (2026-08-29)
+
+RCA: an uncommitted working-tree pass had replaced the working
+`IapTransactionsPage` with a redirect to `/subscriptions?provider=apple`, but
+the provider filter there was client-side over the current page only (usually
+zero apple/google rows on page 1 → "No subscriptions match"), the backend had
+no `billing_provider` param (forwarded value silently ignored), and the IAP
+detail/mark-refunded affordances were gone. Fixed by finishing the
+consolidation for real:
+
+- Backend `GET /admin/subscriptions` gained `billing_provider`
+  (`stripe|apple|google`); `stripe` includes legacy NULL-provider rows
+  (`billing_provider.eq.stripe OR is.null`). Contract re-exported and admin
+  `schema.d.ts` regenerated (`check:schema` green); `docs/references/api-spec.md`
+  regenerated to match (also picks up the funnel/dashboard routes from this
+  branch's earlier uncommitted backend work — 204→208 operations).
+- `SubscriptionsPage` provider filter is server-side (totals/pagination
+  correct; `/iap` redirect shim retained for deep links). A8-05 fixed: Stripe
+  refund renders only for Stripe-billed rows; store rows get a
+  "View transaction" dialog (per-user subscription detail endpoint) showing
+  receipt metadata (apple original transaction id / google order id /
+  google purchase token / billing product) with mark-refunded gated on
+  `iap.write` (A8-01 semantics preserved) hitting the existing
+  `POST /admin/iap/transactions/{id}/mark-refunded`.
+- MSW: subscriptions handler honors `billing_provider` (stripe includes
+  NULL), apple/google fixtures carry provider ids, user-detail handler added,
+  refund on store rows mirrors the backend 422.
+
+Verification: backend ruff clean, full `pytest` 4006 passed / 4 skipped (2
+pre-existing environment-dependent failures in `test_model_validators_coverage`
+and `test_promo_scripts`, unrelated to this change); admin lint + typecheck +
+vitest (229 passed, incl. 5 new/updated subscriptions tests) + `check:schema`
+green; `check_architecture.py` passed.

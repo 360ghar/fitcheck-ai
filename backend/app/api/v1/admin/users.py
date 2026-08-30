@@ -5,9 +5,12 @@ Admin users: list/search, detail, role/suspend edits, activity.
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, Field
 from supabase import Client
 
-from app.api.v1.deps import get_db, require_permission
+from app.api.v1.deps import get_current_user, get_db, require_permission
+from app.core.exceptions import PermissionDeniedError
+from app.core.permissions import has_permission
 from app.models.admin import (
     AdminUserActivity,
     AdminUserDetail,
@@ -15,8 +18,38 @@ from app.models.admin import (
     AdminUserPatch,
     PageResponse,
 )
-from app.services.admin_service import get_user_detail, list_users, update_user, user_activity
+from app.services.admin_service import (
+    clear_daily_ai_counters,
+    extend_user_trial,
+    get_user_detail,
+    list_users,
+    update_user,
+    user_activity,
+)
 from app.services.audit_service import record_audit
+
+
+class ExtendTrialRequest(BaseModel):
+    """POST /admin/users/{id}/subscription/extend-trial body."""
+
+    days: int = Field(..., ge=1, le=90, description="Days to extend trial (1..90)")
+
+
+def _require_either(*permissions: str):
+    """Dependency: require any of the listed permissions (OR).
+
+    Used for the extend-trial endpoint where the spec allows either
+    ``subscriptions.write`` or ``users.write`` (the latter is the existing
+    users.write holder set: support/ops/admin). Falls back to 403 if none
+    match, mirroring ``require_permission``.
+    """
+
+    async def _dep(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+        if not any(has_permission(user, perm) for perm in permissions):
+            raise PermissionDeniedError(f"Permission required: {' or '.join(permissions)}")
+        return user
+
+    return _dep
 
 router = APIRouter()
 
@@ -112,3 +145,60 @@ async def admin_user_activity(
     """Recent audit events + recent jobs for one user (limit 25 each)."""
     result = await user_activity(db, user_id)
     return AdminUserActivity(**result)
+
+
+@router.post("/users/{user_id}/subscription/extend-trial", response_model=Dict[str, Any])
+async def admin_extend_trial(
+    user_id: str,
+    body: ExtendTrialRequest,
+    http_request: Request,
+    actor: Dict[str, Any] = Depends(_require_either("subscriptions.write", "users.write")),
+    db: Client = Depends(get_db),
+) -> Dict[str, Any]:
+    """Extend a user's trial by ``days`` (1..90).
+
+    If ``subscriptions.trial_end`` is set it is moved forward; otherwise
+    ``now + days`` becomes the new trial end. Writes audit
+    ``user.trial_extended`` with ``{days, before, after}`` and
+    invalidates the cached profile (service helper).
+    """
+    result = await extend_user_trial(db, user_id, days=body.days)
+    await record_audit(
+        db,
+        actor_id=actor.get("id"),
+        action="user.trial_extended",
+        entity_type="user",
+        entity_id=user_id,
+        payload={"days": body.days, "before": result.get("before"), "after": result.get("after")},
+        ip=http_request.client.host if http_request.client else None,
+        user_agent=http_request.headers.get("user-agent"),
+    )
+    return result
+
+
+@router.post("/users/{user_id}/ai/clear-daily", response_model=Dict[str, Any])
+async def admin_clear_daily(
+    user_id: str,
+    http_request: Request,
+    actor: Dict[str, Any] = Depends(require_permission("users.write")),
+    db: Client = Depends(get_db),
+) -> Dict[str, Any]:
+    """Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).
+
+    Sets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to
+    today, plus ``subscription_usage.daily_photoshoot_images`` to 0 for
+    today's period. Writes audit ``user.ai_daily_cleared`` and invalidates
+    the cached profile.
+    """
+    result = await clear_daily_ai_counters(db, user_id)
+    await record_audit(
+        db,
+        actor_id=actor.get("id"),
+        action="user.ai_daily_cleared",
+        entity_type="user",
+        entity_id=user_id,
+        payload={"today": result.get("today")},
+        ip=http_request.client.host if http_request.client else None,
+        user_agent=http_request.headers.get("user-agent"),
+    )
+    return result

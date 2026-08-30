@@ -7,7 +7,6 @@ import { deriveCategoryStats, type CategoryStat } from '@/features/content/lib/c
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { ErrorState } from '@/shared/ui/ErrorState'
-import { PageHeader } from '@/shared/ui/PageHeader'
 import { SkeletonTable } from '@/shared/ui/SkeletonTable'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 import {
@@ -30,10 +29,7 @@ export function CategoriesPage() {
   const stats = deriveCategoryStats(query.data ?? [])
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t('categories.title')} description={t('categories.description')} />
-
-      <p className="max-w-2xl text-sm text-muted-foreground">{t('categories.intro')}</p>
+    <div className="space-y-3">
 
       {query.isPending ? (
         <SkeletonTable rows={6} columns={3} />

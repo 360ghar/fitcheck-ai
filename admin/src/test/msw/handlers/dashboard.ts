@@ -23,6 +23,8 @@ export const adminOverviewFixture: AdminOverviewResponse = {
   active_users: { '7d': 58, '30d': 204 },
   paid_subscriptions: 47,
   ai_jobs_7d: { total: 321, succeeded: 301, failed: 20 },
+  trials_ending_7d: 5,
+  tickets_open_48h: 3,
 }
 
 export const adminRevenueFixture: AdminRevenueResponse = {

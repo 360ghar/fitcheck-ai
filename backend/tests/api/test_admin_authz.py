@@ -70,6 +70,10 @@ def _fill_path(path: str) -> str:
 def _body_for(method: str, path: str):
     if method == "POST" and path == "/api/v1/admin/promo-codes":
         return {"code": "TEST100", "plan_type": "pro_monthly", "months": 1}
+    if method == "POST" and path.endswith("/subscription/extend-trial"):
+        return {"days": 7}
+    if method == "POST" and path.endswith("/ai/clear-daily"):
+        return {}
     if method in ("POST", "PATCH", "DELETE"):
         return None if method == "DELETE" else {}
     return None

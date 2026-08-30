@@ -4,7 +4,6 @@ import { useSettingsQuery } from '@/features/settings/api/settings'
 import { formatNumber } from '@/shared/lib/formatters'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { ErrorState } from '@/shared/ui/ErrorState'
-import { PageHeader } from '@/shared/ui/PageHeader'
 import { SkeletonTable } from '@/shared/ui/SkeletonTable'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 
@@ -33,7 +32,6 @@ export function SettingsPage() {
   if (query.isPending) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
         <SkeletonTable rows={5} columns={3} />
       </div>
     )
@@ -42,7 +40,6 @@ export function SettingsPage() {
   if (query.isError || !query.data) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
         <ErrorState
           title={t('loadError.title')}
           message={t('loadError.message')}
@@ -63,7 +60,6 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('description')} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Application */}

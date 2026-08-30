@@ -84,12 +84,21 @@ def _audit_context(http_request: Optional[Request]) -> Dict[str, Any]:
 # PUBLIC ENDPOINTS
 # =============================================================================
 
-# Public blog content is static between deploys; let browsers (and any CDN in
-# front of the API) serve it without a round trip for a few minutes. The
-# client refetches on mount anyway (baked prerender data is stamped stale), so
-# max-age only helps cold loads — the 2026-08-07 PSI measured this endpoint at
-# 3.4 s on the mobile critical path.
-BLOG_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=600"
+# Public blog content is static between deploys; let the browser serve it
+# without a round trip for a few minutes. The client refetches on mount anyway
+# (baked prerender data is stamped stale), so max-age only helps cold loads —
+# the 2026-08-07 PSI measured this endpoint at 3.4 s on the mobile critical
+# path.
+#
+# `private` is REQUIRED, not a taste choice: these responses cross origins, so
+# CORSMiddleware stamps each one with an Access-Control-Allow-Origin for the
+# caller. A shared cache that ignores `Vary: Origin` (Railway's hikari edge,
+# observed 2026-08-29) bakes that header into its URL-keyed entry — an entry
+# populated by a no-Origin crawler/monitor is then served to browsers with NO
+# allow-origin header ("No 'Access-Control-Allow-Origin'" + net::ERR_FAILED
+# 200), and one populated by apex poisons www and vice versa. `private` keeps
+# the per-browser cold-load win while forcing shared caches to skip.
+BLOG_CACHE_CONTROL = "private, max-age=300, stale-while-revalidate=600"
 
 
 @router.get("/posts", response_model=Dict[str, Any])

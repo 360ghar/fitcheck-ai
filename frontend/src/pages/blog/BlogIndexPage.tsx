@@ -4,7 +4,6 @@ import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import { BlogImage } from '@/components/blog/BlogImage'
 import SEO from '@/components/seo/SEO'
-import { cn } from '@/lib/utils'
 import { Calendar, Clock, ArrowRight } from 'lucide-react'
 import { useBlogCategories } from '@/hooks/useBlog'
 import { useInfiniteBlogPosts } from '@/hooks/useInfiniteBlogPosts'
@@ -87,16 +86,16 @@ export default function BlogIndexPage() {
                 <Badge className="mb-4 bg-secondary text-secondary-foreground border-0">
                   {category ? categoryFilter || category : 'Blog'}
                 </Badge>
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6">
                   {category ? `${categoryFilter || category} Articles` : 'Fashion, AI & Style Tips'}
                 </h1>
-                <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8">
+                <p className="text-base sm:text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8">
                   {category
                     ? `Explore our latest articles on ${categoryFilter || category}`
                     : 'Discover how AI is transforming wardrobe management and get expert style advice'}
                 </p>
 
-                <form onSubmit={handleSearchSubmit} className="mx-auto flex max-w-xl flex-col gap-2 sm:flex-row" role="search">
+                <form onSubmit={handleSearchSubmit} className="mx-auto mt-6 flex w-full max-w-xl flex-col gap-2 sm:flex-row" role="search">
                   <label htmlFor="blog-search" className="sr-only">Search blog posts</label>
                   <input
                     id="blog-search"
@@ -106,48 +105,45 @@ export default function BlogIndexPage() {
                     value={searchValue}
                     onChange={(event) => setSearchValue(event.target.value)}
                     placeholder="Search articles…"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 sm:flex-1 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                   />
-                  <div className="flex gap-2">
-                    <button type="submit" className="flex-1 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary-pressed sm:flex-none">
+                  <div className="flex w-full gap-2 sm:w-auto">
+                    <button type="submit" className="min-h-11 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary-pressed sm:flex-none">
                       Search
                     </button>
                     {searchQuery && (
-                      <button type="button" onClick={handleClearSearch} className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex-none dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
+                      <button type="button" onClick={handleClearSearch} className="min-h-11 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex-none dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
                         Clear
                       </button>
                     )}
                   </div>
                 </form>
 
-                {/* Category Pills — the container is always rendered, but its
-                    reserved min-height (which holds the posts grid steady while
-                    categories fetch, avoiding CLS) applies only while loading or
-                    when categories exist, so an error or empty list leaves no
-                    blank band. */}
-                <div
-                  className={cn(
-                    'flex flex-wrap justify-center gap-2',
-                    (isLoadingCategories || (categories?.length ?? 0) > 0) && 'min-h-[124px] md:min-h-[44px]'
-                  )}
-                >
-                  {isLoadingCategories ? (
-                    // Skeleton pills fill the reserved space (same 36px pill
-                    // height + wrap) instead of an empty band.
-                    Array.from({ length: 6 }).map((_, i) => (
+                {/* Category Pills — while categories load, an aria-hidden
+                    spacer reserves enough height for wrapped pill rows (no CLS
+                    when the real pills arrive); the real row renders only when
+                    categories exist, so an error or empty list leaves no blank
+                    band and nothing can overlap the search form above it. */}
+                {isLoadingCategories ? (
+                  <div
+                    data-testid="categories-loading"
+                    aria-hidden="true"
+                    className="mt-6 flex h-[256px] flex-wrap content-start justify-center gap-2 px-2 md:h-[44px]"
+                  >
+                    {Array.from({ length: 6 }).map((_, i) => (
                       <span
                         key={i}
-                        aria-hidden="true"
                         className="h-9 w-20 rounded-full bg-stone-200 dark:bg-stone-800 animate-pulse"
                       />
-                    ))
-                  ) : (
+                    ))}
+                  </div>
+                ) : (
                     categories &&
                     categories.length > 0 && (
-                      <>
+                      <div data-testid="category-pills" className="mt-6 flex flex-wrap justify-center gap-2 px-2">
                         <Link
                           to="/blog"
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${!category
+                          className={`max-w-full truncate px-4 py-2 rounded-full text-sm font-medium transition-colors border ${!category
                             ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
                             : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
                             }`}
@@ -161,7 +157,7 @@ export default function BlogIndexPage() {
                             <Link
                               key={cat}
                               to={`/blog/category/${catSlug}`}
-                              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${isActive
+                              className={`max-w-full truncate px-4 py-2 rounded-full text-sm font-medium transition-colors border ${isActive
                                 ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
                                 : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
                                 }`}
@@ -170,10 +166,9 @@ export default function BlogIndexPage() {
                             </Link>
                           )
                         })}
-                      </>
+                      </div>
                     )
                   )}
-                </div>
               </div>
             </AnimatedSection>
           </div>

@@ -73,13 +73,30 @@ class AdminUserListItem(BaseModel):
 
 
 class AdminUserDetail(BaseModel):
-    """GET /admin/users/{user_id} — full profile detail."""
+    """GET /admin/users/{user_id} — full profile detail (360 view).
+
+    Core keys (user, subscription, usage, counts, recent_jobs) are always
+    present; 360 keys are optional and best-effort (missing table -> []).
+    ``extra="allow"`` keeps the contract stable when the service adds a new
+    section without a model bump (the admin console reads via schema.d.ts).
+    """
 
     user: Dict[str, Any]
     subscription: Optional[Dict[str, Any]] = None
     usage: Dict[str, Any] = Field(default_factory=dict)
     counts: Dict[str, Any] = Field(default_factory=dict)
     recent_jobs: List[Dict[str, Any]] = Field(default_factory=list)
+    # 360 detail (all best-effort; empty list when the table/column is absent)
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    outfits: List[Dict[str, Any]] = Field(default_factory=list)
+    photoshoot_jobs: List[Dict[str, Any]] = Field(default_factory=list)
+    collections: List[Dict[str, Any]] = Field(default_factory=list)
+    trips: List[Dict[str, Any]] = Field(default_factory=list)
+    achievements: List[Dict[str, Any]] = Field(default_factory=list)
+    streak: Dict[str, Any] = Field(default_factory=dict)
+    streaks: Dict[str, Any] = Field(default_factory=dict)
+    achievements_meta: Dict[str, Any] = Field(default_factory=dict)
+    social_import_jobs: List[Dict[str, Any]] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 
@@ -320,6 +337,9 @@ class AdminOverviewResponse(BaseModel):
     active_users: Dict[str, int] = Field(default_factory=dict)
     paid_subscriptions: int = 0
     ai_jobs_7d: Dict[str, Any] = Field(default_factory=dict)
+    # Phase 1a extensions: trial pressure and overdue tickets, zero-filled.
+    trials_ending_7d: int = 0
+    tickets_open_48h: int = 0
 
     model_config = ConfigDict(extra="allow")
 
@@ -378,6 +398,45 @@ class AdminTrendsResponse(BaseModel):
     jobs: List[Dict[str, Any]] = Field(default_factory=list)
     paid: List[Dict[str, Any]] = Field(default_factory=list)
     active: List[Dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdminFunnelStep(BaseModel):
+    """One funnel step: label, count, pct_of_prev (100.0 for first)."""
+
+    label: str
+    count: int
+    pct_of_prev: float = 0.0
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdminFunnelResponse(BaseModel):
+    """GET /admin/dashboards/funnel — signups -> items -> outfits -> paid."""
+
+    days: int = 30
+    steps: List[AdminFunnelStep] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdminRetentionCohort(BaseModel):
+    """One weekly cohort row for retention."""
+
+    week_start: str
+    signups: int = 0
+    retained_7d: int = 0
+    retention_pct: float = 0.0
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdminRetentionResponse(BaseModel):
+    """GET /admin/dashboards/retention — last N Mondays × retained 7d."""
+
+    weeks: int = 4
+    cohorts: List[AdminRetentionCohort] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 

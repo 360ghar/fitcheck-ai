@@ -167,6 +167,10 @@ export const appRouteObjects: RouteObject[] = [
         handle: { titleKey: routeManifest.dashboard.titleKey },
       },
       {
+        // Phase 1a single-page: legacy /dashboard/trends collapses to a
+        // section/anchor inside /dashboard. Keep the route object for
+        // backwards-compatible deep links, but the element redirects to
+        // /dashboard?section=trends preserving ?days (see TrendsPage).
         path: 'dashboard/trends',
         element: guardedPage(TrendsPage, 'dashboards.read'),
         handle: { titleKey: routeManifest.trends.titleKey },

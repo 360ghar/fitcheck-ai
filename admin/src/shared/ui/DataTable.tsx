@@ -258,11 +258,11 @@ export function DataTable<TData, TValue = unknown>({
   const rowVirtualizer = useVirtualizer({
     count: virtualize ? rows.length : 0,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => (density === 'compact' ? 36 : 48),
+    estimateSize: () => (density === 'compact' ? 32 : 40),
     overscan: 12,
   })
   const virtualRows = virtualize ? rowVirtualizer.getVirtualItems() : null
-  const rowHeightClass = density === 'compact' ? 'h-9' : 'h-12'
+  const rowHeightClass = density === 'compact' ? 'h-8' : 'h-9'
 
   const showSkeleton = isLoading && data.length === 0
   const skeletonRowCount = Math.min(skeletonRows, pageSize)
@@ -387,7 +387,7 @@ export function DataTable<TData, TValue = unknown>({
                             : 'none'
                       }
                       className={cn(
-                        'h-11 whitespace-nowrap px-3 text-left align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground',
+                        'h-8 whitespace-nowrap px-2.5 text-left align-middle text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
                         isFrozen && frozenCellClass,
                       )}
                       style={{ width: header.getSize() }}
@@ -497,7 +497,7 @@ export function DataTable<TData, TValue = unknown>({
       </div>
 
       {/* Footer */}
-      <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 py-2 text-xs">
         <p className="text-sm text-muted-foreground">
           {t('showing', {
             from: total === 0 ? 0 : (page - 1) * pageSize + 1,

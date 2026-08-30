@@ -87,6 +87,69 @@ def test_subscriptions_list_filters_plan_and_status(client):
     assert response.json()["items"][0]["plan_type"] == "free"
 
 
+def test_subscriptions_list_filters_billing_provider(client):
+    db = FakeDB(
+        rows={
+            "subscriptions": [
+                SUB_ROW,
+                {
+                    **SUB_ROW,
+                    "id": "sub-apple",
+                    "user_id": "user-2",
+                    "stripe_customer_id": None,
+                    "stripe_subscription_id": None,
+                    "billing_provider": "apple",
+                    "apple_original_transaction_id": "1000000123",
+                },
+            ]
+        }
+    )
+    response = _call(client, "GET", "/api/v1/admin/subscriptions?billing_provider=apple", db=db)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["billing_provider"] == "apple"
+
+
+def test_subscriptions_list_stripe_filter_includes_legacy_null_provider(client):
+    """Rows predating migration 030 have billing_provider NULL but are
+    Stripe-billed; the stripe filter must include them."""
+    db = FakeDB(
+        rows={
+            "subscriptions": [
+                SUB_ROW,
+                {
+                    **SUB_ROW,
+                    "id": "sub-legacy",
+                    "user_id": "user-2",
+                    "billing_provider": None,
+                },
+                {
+                    **SUB_ROW,
+                    "id": "sub-google",
+                    "user_id": "user-3",
+                    "stripe_customer_id": None,
+                    "stripe_subscription_id": None,
+                    "billing_provider": "google",
+                    "google_order_id": "GPA.1234",
+                },
+            ]
+        }
+    )
+    response = _call(client, "GET", "/api/v1/admin/subscriptions?billing_provider=stripe", db=db)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert {item["id"] for item in body["items"]} == {"sub-1", "sub-legacy"}
+
+
+def test_subscriptions_list_rejects_unknown_billing_provider(client):
+    response = _call(
+        client, "GET", "/api/v1/admin/subscriptions?billing_provider=paypal", db=FakeDB()
+    )
+    assert response.status_code == 422
+
+
 def test_subscription_detail_includes_provider_identifiers(client):
     db = FakeDB(rows={"subscriptions": [SUB_ROW], "users": []})
     response = _call(client, "GET", "/api/v1/admin/subscriptions/user/user-1", db=db)

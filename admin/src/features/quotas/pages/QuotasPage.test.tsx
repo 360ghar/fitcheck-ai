@@ -25,16 +25,16 @@ describe('QuotasPage', () => {
     server.use(...handlers)
     renderWithProviders(<QuotasPage />)
 
-    expect(await screen.findByText('Alice Example')).toBeInTheDocument()
-    expect(screen.getByText('bob@example.com')).toBeInTheDocument()
+    expect((await screen.findAllByText('Alice Example')).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('bob@example.com').length).toBeGreaterThanOrEqual(1)
     // plan labels via the users namespace
-    expect(screen.getByText('Pro monthly')).toBeInTheDocument()
+    expect(screen.getAllByText('Pro monthly').length).toBeGreaterThanOrEqual(1)
     // plan default vs custom override (column header + badge share the word)
     expect(screen.getAllByText('Plan default').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Override').length).toBeGreaterThanOrEqual(1)
     // alice: used = 14 + 6 + 22 = 42, custom limit 150 → remaining 108
-    expect(screen.getByText('42')).toBeInTheDocument()
-    expect(screen.getByText('108')).toBeInTheDocument()
+    expect(screen.getAllByText('42').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('108').length).toBeGreaterThanOrEqual(1)
   })
 
   it('override dialog: submit sends daily_limit and updates the row', async () => {
@@ -42,7 +42,7 @@ describe('QuotasPage', () => {
     server.use(...handlers)
     renderWithProviders(<QuotasPage />)
 
-    await screen.findByText('Alice Example')
+    await screen.findAllByText('Alice Example')
     const user = userEvent.setup()
     const setButtons = screen.getAllByRole('button', { name: 'Set override' })
     await user.click(setButtons[0] as HTMLElement)
@@ -68,7 +68,7 @@ describe('QuotasPage', () => {
     server.use(...handlers)
     renderWithProviders(<QuotasPage />)
 
-    await screen.findByText('Alice Example')
+    await screen.findAllByText('Alice Example')
     const user = userEvent.setup()
     const setButtons = screen.getAllByRole('button', { name: 'Set override' })
     await user.click(setButtons[0] as HTMLElement)
@@ -87,7 +87,7 @@ describe('QuotasPage', () => {
     server.use(...handlers)
     renderWithProviders(<QuotasPage />)
 
-    await screen.findByText('Alice Example')
+    await screen.findAllByText('Alice Example')
     const user = userEvent.setup()
     const setButtons = screen.getAllByRole('button', { name: 'Set override' })
     await user.click(setButtons[0] as HTMLElement)
@@ -118,7 +118,7 @@ describe('QuotasPage', () => {
     )
     renderWithProviders(<QuotasPage />)
 
-    await screen.findByText('Alice Example')
+    await screen.findAllByText('Alice Example')
     const user = userEvent.setup()
     const setButtons = screen.getAllByRole('button', { name: 'Set override' })
     await user.click(setButtons[0] as HTMLElement)
@@ -137,7 +137,7 @@ describe('QuotasPage', () => {
     server.use(...handlers)
     renderWithProviders(<QuotasPage />)
 
-    await screen.findByText('Alice Example')
+    await screen.findAllByText('Alice Example')
     const user = userEvent.setup()
     await user.type(screen.getByRole('searchbox'), 'bob')
 
@@ -145,7 +145,7 @@ describe('QuotasPage', () => {
       const lastRequest = state.requests.at(-1)
       expect(lastRequest?.searchParams.get('q')).toBe('bob')
     })
-    expect(await screen.findByText('bob@example.com')).toBeInTheDocument()
+    expect((await screen.findAllByText('bob@example.com')).length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByText('Alice Example')).not.toBeInTheDocument()
   })
 
@@ -171,7 +171,7 @@ describe('QuotasPage', () => {
     server.use(...handlers)
     renderWithProviders(<QuotasPage />)
 
-    await screen.findByText('Alice Example')
+    await screen.findAllByText('Alice Example')
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Export CSV' }))
     await waitFor(() => {

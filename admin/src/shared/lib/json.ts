@@ -36,3 +36,14 @@ export function pickBoolean(record: JsonRecord | null | undefined, key: string):
 export function displayName(record: JsonRecord | null | undefined): string {
   return pickString(record, 'full_name') ?? pickString(record, 'email') ?? '—'
 }
+
+/** Extract array value from a dict, or [] when missing/not an array. */
+export function pickArray(
+  record: JsonRecord | null | undefined,
+  key: string,
+): JsonRecord[] {
+  if (!record) return []
+  const value = record[key]
+  if (Array.isArray(value)) return value.filter((v): v is JsonRecord => typeof v === 'object' && v !== null)
+  return []
+}

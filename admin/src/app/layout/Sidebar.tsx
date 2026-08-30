@@ -9,8 +9,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 /**
- * Sidebar — fixed on desktop (collapsible 240px → 64px), rendered inside a
- * Sheet drawer on mobile. Groups + items filtered by usePermission.
+ * Sidebar v2 — power-tool rail: dense, bento-friendly.
+ * - Desktop 240 → 72px collapsed (was 64), 11px group labels, dividers.
+ * - Active: brand-accent left border + bg-brand/10 (was dot).
+ * - Hover: bg-surface-card.
+ * - Badge slot (right-aligned) for commerce/AI counts when expanded.
+ * - Footer hint ⌘K for command palette.
  */
 export function Sidebar({
   collapsed,
@@ -26,7 +30,7 @@ export function Sidebar({
     <div className="flex h-full flex-col bg-background">
       <div
         className={cn(
-          'flex h-16 shrink-0 items-center gap-2.5 border-b border-border px-4',
+          'flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-3',
           collapsed && 'justify-center px-2',
         )}
       >
@@ -36,14 +40,14 @@ export function Sidebar({
         ) : null}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label={t('nav.label')}>
-        {navGroups.map((group) => {
+      <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label={t('nav.label')}>
+        {navGroups.map((group, idx) => {
           const visibleItems = group.items.filter((item) => !item.permission || can(item.permission))
           if (visibleItems.length === 0) return null
           return (
-            <div key={group.labelKey} className="mb-4 last:mb-0">
+            <div key={group.labelKey} className={cn('mb-3 last:mb-0', idx > 0 && 'border-t border-border pt-3')}>
               {!collapsed ? (
-                <p className="px-2.5 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   {t(group.labelKey)}
                 </p>
               ) : null}
@@ -57,6 +61,14 @@ export function Sidebar({
         })}
       </nav>
 
+      {!collapsed ? (
+        <div className="border-t border-border px-3 py-2">
+          <p className="text-[11px] text-muted-foreground">
+            <span className="rounded border border-border bg-surface-card px-1 py-0.5 font-mono text-[10px]">⌘K</span>{' '}
+            quick search
+          </p>
+        </div>
+      ) : null}
       <SidebarUserCard collapsed={collapsed} />
     </div>
   )
@@ -79,24 +91,19 @@ function SidebarItem({
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          'group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          'group relative flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
           isActive
-            ? 'bg-surface-card text-ink'
-            : 'text-muted-foreground hover:bg-surface-card/60 hover:text-foreground',
-          collapsed && 'justify-center px-0',
+            ? 'border-l-[2px] border-brand bg-brand/10 pl-[6px] font-semibold text-brand'
+            : 'border-l-[2px] border-transparent text-muted-foreground hover:bg-surface-card hover:text-foreground',
+          collapsed && 'justify-center border-l-0 px-0 pl-0',
         )
       }
     >
       {({ isActive }) => (
         <>
-          {isActive ? (
-            <span
-              className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary"
-              aria-hidden="true"
-            />
-          ) : null}
           {icon}
-          {!collapsed ? <span className="truncate">{t(item.titleKey)}</span> : null}
+          {!collapsed ? <span className="flex-1 truncate">{t(item.titleKey)}</span> : null}
+          {!collapsed && isActive ? <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" /> : null}
           <span className={cn('sr-only', !collapsed && 'hidden')}>{t(item.titleKey)}</span>
         </>
       )}
@@ -132,18 +139,18 @@ function SidebarUserCard({ collapsed }: { collapsed: boolean }) {
   const card = (
     <div
       className={cn(
-        'flex shrink-0 items-center gap-2.5 border-t border-border p-3',
+        'flex shrink-0 items-center gap-2 border-t border-border p-2.5',
         collapsed && 'justify-center p-2',
       )}
     >
-      <Avatar className="size-8">
+      <Avatar className="size-7">
         <AvatarImage src={user?.avatar_url ?? undefined} alt="" />
-        <AvatarFallback>{initials}</AvatarFallback>
+        <AvatarFallback className="text-xs">{initials}</AvatarFallback>
       </Avatar>
       {!collapsed ? (
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
-          <p className="truncate text-xs text-muted-foreground">{role ? t(`roles.${role}`) : '—'}</p>
+          <p className="truncate text-[13px] font-medium leading-tight text-foreground">{displayName}</p>
+          <p className="truncate text-[11px] leading-tight text-muted-foreground">{role ? t(`roles.${role}`) : '—'}</p>
         </div>
       ) : null}
     </div>

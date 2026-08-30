@@ -20,7 +20,6 @@ import { Button } from '@/shared/ui/button'
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { DataTable } from '@/shared/ui/DataTable'
 import { ErrorState } from '@/shared/ui/ErrorState'
-import { PageHeader } from '@/shared/ui/PageHeader'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { TableToolbar } from '@/shared/ui/TableToolbar'
 import { useServerTable } from '@/shared/ui/useServerTable'
@@ -201,8 +200,7 @@ export function UsersPage() {
 
   if (table.query.isError) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
+      <div className="space-y-3">
         <ErrorState
           message={normalizeError(table.query.error).message}
           onRetry={() => void table.query.refetch()}
@@ -212,8 +210,7 @@ export function UsersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('description')} />
+    <div className="space-y-3">
 
       <TableToolbar
         searchValue={table.tableState.q}

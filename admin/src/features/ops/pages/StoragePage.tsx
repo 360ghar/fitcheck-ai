@@ -18,7 +18,6 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { ErrorState } from '@/shared/ui/ErrorState'
 import { MetricCard } from '@/shared/ui/MetricCard'
-import { PageHeader } from '@/shared/ui/PageHeader'
 import { SkeletonTable } from '@/shared/ui/SkeletonTable'
 import {
   Table,
@@ -76,8 +75,7 @@ export function StoragePage() {
 
   if (storageQuery.isPending) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
+      <div className="space-y-3">
         <SkeletonTable rows={4} columns={4} />
       </div>
     )
@@ -85,8 +83,7 @@ export function StoragePage() {
 
   if (storageQuery.isError || !storageQuery.data) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
+      <div className="space-y-3">
         <ErrorState
           title={t('loadError.title')}
           message={t('loadError.message')}
@@ -102,23 +99,20 @@ export function StoragePage() {
   const items = inventory.items ?? []
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t('title')}
-        description={t('description')}
-        actions={
-          canCleanup ? (
-            <Button
-              variant="destructive"
-              onClick={() => setCleanupOpen(true)}
-              disabled={inventory.count === 0}
-            >
-              <Eraser aria-hidden="true" />
-              {t('cleanup.title')}
-            </Button>
-          ) : undefined
-        }
-      />
+    <div className="space-y-3">
+      {canCleanup ? (
+        <div className="flex justify-end">
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setCleanupOpen(true)}
+            disabled={inventory.count === 0}
+          >
+            <Eraser aria-hidden="true" />
+            {t('cleanup.title')}
+          </Button>
+        </div>
+      ) : null}
 
       {inventory.truncated ? (
         <p className="rounded-md border border-warning-deep/40 bg-warning-pale px-3 py-2 text-sm text-warning-deep">

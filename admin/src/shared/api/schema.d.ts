@@ -64,6 +64,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/dashboards/funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Funnel
+         * @description Funnel: signups -> items (24h) -> outfits (7d) -> paid (window).
+         */
+        get: operations["funnel_api_v1_admin_dashboards_funnel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/dashboards/overview": {
         parameters: {
             query?: never;
@@ -96,6 +116,26 @@ export interface paths {
          * @description Referral totals: codes issued, redemptions, credits granted/pending.
          */
         get: operations["referrals_api_v1_admin_dashboards_referrals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/dashboards/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retention
+         * @description Cohort retention: last N Mondays UTC × retained 7d later.
+         */
+        get: operations["retention_api_v1_admin_dashboards_retention_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -259,6 +299,10 @@ export interface paths {
          *
          *     Store-side refunds arrive via webhooks; this endpoint only records the
          *     refunded state for the admin UI.
+         *
+         *     A4-14/M2: gated by ``iap.write`` (super_admin/admin/ops) instead of the
+         *     blanket ``require_admin`` — a content_editor has no IAP surface and must
+         *     not be able to flip store transactions to refunded.
          */
         post: operations["admin_iap_mark_refunded_api_v1_admin_iap_transactions__txn_id__mark_refunded_post"];
         delete?: never;
@@ -469,6 +513,9 @@ export interface paths {
         /**
          * List Admin Subscriptions
          * @description Paginated subscriptions with user email and display amount.
+         *
+         *     ``billing_provider`` filters by billing rail; ``stripe`` includes legacy
+         *     rows whose ``billing_provider`` is NULL (see admin_service).
          */
         get: operations["list_admin_subscriptions_api_v1_admin_subscriptions_get"];
         put?: never;
@@ -588,6 +635,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/{user_id}/ai/clear-daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Clear Daily
+         * @description Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).
+         *
+         *     Sets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to
+         *     today, plus ``subscription_usage.daily_photoshoot_images`` to 0 for
+         *     today's period. Writes audit ``user.ai_daily_cleared`` and invalidates
+         *     the cached profile.
+         */
+        post: operations["admin_clear_daily_api_v1_admin_users__user_id__ai_clear_daily_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{user_id}/quota-override": {
         parameters: {
             query?: never;
@@ -607,8 +679,37 @@ export interface paths {
          *
          *     The override lives on ``users.custom_daily_quota`` (migration 037);
          *     null restores the plan default. Audit: ``quota.override``.
+         *
+         *     A4-14/M2: gated by ``quotas.write`` (super_admin/admin) instead of the
+         *     blanket ``require_admin`` — a content_editor has no quotas surface and
+         *     must not be able to change another user's daily AI quota.
          */
         patch: operations["admin_quota_override_api_v1_admin_users__user_id__quota_override_patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/subscription/extend-trial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Extend Trial
+         * @description Extend a user's trial by ``days`` (1..90).
+         *
+         *     If ``subscriptions.trial_end`` is set it is moved forward; otherwise
+         *     ``now + days`` becomes the new trial end. Writes audit
+         *     ``user.trial_extended`` with ``{days, before, after}`` and
+         *     invalidates the cached profile (service helper).
+         */
+        post: operations["admin_extend_trial_api_v1_admin_users__user_id__subscription_extend_trial_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/ai/batch-extract": {
@@ -1156,6 +1257,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Oauth Page
+         * @description Complete a multi-account Instagram OAuth by selecting the page.
+         *
+         *     The account picker (served by the callback when several business pages
+         *     are connected) POSTs the chosen ``provider_page_id`` with a signed
+         *     ``selection_token``. The token pins the job + user (short-TTL HMAC, same
+         *     construction as the OAuth state) because the picker's browser context
+         *     cannot present the app's Authorization header. Identity is resolved from
+         *     the token persisted by the callback (``store_selection_pending_session``)
+         *     using the selected page, then the real session is stored and the import
+         *     resumes — no re-run of the OAuth flow (A4-28).
+         *
+         *     Fails closed: an invalid/expired token, no pending session, a page id
+         *     outside the candidate list, or a resolution error all return a validation
+         *     error asking the user to reconnect.
+         *
+         *     Single-use ordering (backend #16): an already-consumed token is rejected
+         *     with a cheap non-destructive check BEFORE the outbound Graph API call, and
+         *     the token is only burned immediately before ``accept_auth``. If auth
+         *     persistence fails, the burn is released so the link stays usable.
+         */
+        post: operations["select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/social-import/jobs/{job_id}/auth/scraper-login": {
         parameters: {
             query?: never;
@@ -1475,7 +1614,8 @@ export interface paths {
          * List All Posts
          * @description List all blog posts including unpublished ones.
          *
-         *     **Admin only.** Returns all blog posts with pagination.
+         *     **Content readers and admins only** (``content.read``, A8-02).
+         *     Returns all blog posts with pagination.
          *     Useful for content management.
          */
         get: operations["list_all_posts_api_v1_blog_admin_posts_get"];
@@ -1529,8 +1669,9 @@ export interface paths {
          * Create Post
          * @description Create a new blog post.
          *
-         *     **Admin only.** Creates a new blog post with the provided data.
-         *     Slug must be unique.
+         *     **Content editors and admins only** (``content.write``, A8-02).
+         *     Creates a new blog post with the provided data. Slug must be unique.
+         *     Audited as ``blog.created``.
          */
         post: operations["create_post_api_v1_blog_posts_post"];
         delete?: never;
@@ -1558,8 +1699,10 @@ export interface paths {
          * Update Post
          * @description Update an existing blog post.
          *
-         *     **Admin only.** Updates the blog post identified by slug.
+         *     **Content editors and admins only** (``content.write``, A8-02).
+         *     Updates the blog post identified by slug.
          *     If slug is being changed, the new slug must be unique.
+         *     Audited as ``blog.updated``.
          */
         put: operations["update_post_api_v1_blog_posts__slug__put"];
         post?: never;
@@ -1567,8 +1710,9 @@ export interface paths {
          * Delete Post
          * @description Delete a blog post.
          *
-         *     **Admin only.** Permanently deletes the blog post identified by slug.
-         *     This action cannot be undone.
+         *     **Content editors and admins only** (``content.write``, A8-02).
+         *     Permanently deletes the blog post identified by slug.
+         *     This action cannot be undone. Audited as ``blog.deleted``.
          */
         delete: operations["delete_post_api_v1_blog_posts__slug__delete"];
         options?: never;
@@ -2443,7 +2587,10 @@ export interface paths {
          * Get Public Outfit
          * @description Public outfit view for share links (no auth).
          *
-         *     Only returns data when `is_public=true` on the outfit record.
+         *     Only returns data when the outfit has an active shared_outfits row AND
+         *     `is_public=true` on the outfit record. The share row is the source of
+         *     truth: an outfit without one is not shared, even if is_public somehow
+         *     got set (legacy/crash residue).
          */
         get: operations["get_public_outfit_api_v1_outfits_public__outfit_id__get"];
         put?: never;
@@ -2678,7 +2825,8 @@ export interface paths {
          * Share Outfit
          * @description Enable public sharing for an outfit and return a share URL.
          *
-         *     MVP: visibility/expires_at are accepted but only `public` visibility is enforced.
+         *     MVP: only `public` visibility is supported; anything else is rejected
+         *     rather than persisted (the public route could never serve it).
          */
         post: operations["share_outfit_api_v1_outfits__outfit_id__share_post"];
         delete?: never;
@@ -3189,6 +3337,10 @@ export interface paths {
         /**
          * Rate Recommendation
          * @description Store user feedback to improve future recommendations.
+         *
+         *     The recommendation_id is client-supplied and used as the primary key; a
+         *     second rating for the same id must update the existing row (upsert), not
+         *     fail with a duplicate-key 500.
          */
         post: operations["rate_recommendation_api_v1_recommendations__recommendation_id__rate_post"];
         delete?: never;
@@ -3645,7 +3797,7 @@ export interface paths {
          *
          *     Metadata only: rows carry their storage keys (``storage_path``); image
          *     bytes are never included. The archive is written to a single
-         *     deterministic key per user (``{user_id}/export/data.json``, overwritten on
+         *     deterministic key per user (``users/{user_id}/export/data.json``, overwritten on
          *     each call - the same key account deletion cleans up), and served as a
          *     short-lived presigned GET URL (the repo's ~15-minute pattern). Every call
          *     returns a fresh URL, so repeat requests never hand out a stale link.
@@ -3981,6 +4133,38 @@ export interface components {
             status?: ("open" | "in_progress" | "resolved" | "closed") | null;
         };
         /**
+         * AdminFunnelResponse
+         * @description GET /admin/dashboards/funnel — signups -> items -> outfits -> paid.
+         */
+        AdminFunnelResponse: {
+            /**
+             * Days
+             * @default 30
+             */
+            days: number;
+            /** Steps */
+            steps?: components["schemas"]["AdminFunnelStep"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdminFunnelStep
+         * @description One funnel step: label, count, pct_of_prev (100.0 for first).
+         */
+        AdminFunnelStep: {
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+            /**
+             * Pct Of Prev
+             * @default 0
+             */
+            pct_of_prev: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AdminIapTransactionListItem
          * @description One row of GET /admin/iap/transactions (store-billed subscriptions).
          */
@@ -4066,6 +4250,16 @@ export interface components {
             signups?: {
                 [key: string]: number;
             };
+            /**
+             * Tickets Open 48H
+             * @default 0
+             */
+            tickets_open_48h: number;
+            /**
+             * Trials Ending 7D
+             * @default 0
+             */
+            trials_ending_7d: number;
         } & {
             [key: string]: unknown;
         };
@@ -4196,6 +4390,46 @@ export interface components {
             refund_id: string;
             /** Status */
             status: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdminRetentionCohort
+         * @description One weekly cohort row for retention.
+         */
+        AdminRetentionCohort: {
+            /**
+             * Retained 7D
+             * @default 0
+             */
+            retained_7d: number;
+            /**
+             * Retention Pct
+             * @default 0
+             */
+            retention_pct: number;
+            /**
+             * Signups
+             * @default 0
+             */
+            signups: number;
+            /** Week Start */
+            week_start: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdminRetentionResponse
+         * @description GET /admin/dashboards/retention — last N Mondays × retained 7d.
+         */
+        AdminRetentionResponse: {
+            /** Cohorts */
+            cohorts?: components["schemas"]["AdminRetentionCohort"][];
+            /**
+             * Weeks
+             * @default 4
+             */
+            weeks: number;
         } & {
             [key: string]: unknown;
         };
@@ -4492,21 +4726,66 @@ export interface components {
         };
         /**
          * AdminUserDetail
-         * @description GET /admin/users/{user_id} — full profile detail.
+         * @description GET /admin/users/{user_id} — full profile detail (360 view).
+         *
+         *     Core keys (user, subscription, usage, counts, recent_jobs) are always
+         *     present; 360 keys are optional and best-effort (missing table -> []).
+         *     ``extra="allow"`` keeps the contract stable when the service adds a new
+         *     section without a model bump (the admin console reads via schema.d.ts).
          */
         AdminUserDetail: {
+            /** Achievements */
+            achievements?: {
+                [key: string]: unknown;
+            }[];
+            /** Achievements Meta */
+            achievements_meta?: {
+                [key: string]: unknown;
+            };
+            /** Collections */
+            collections?: {
+                [key: string]: unknown;
+            }[];
             /** Counts */
             counts?: {
                 [key: string]: unknown;
             };
+            /** Items */
+            items?: {
+                [key: string]: unknown;
+            }[];
+            /** Outfits */
+            outfits?: {
+                [key: string]: unknown;
+            }[];
+            /** Photoshoot Jobs */
+            photoshoot_jobs?: {
+                [key: string]: unknown;
+            }[];
             /** Recent Jobs */
             recent_jobs?: {
                 [key: string]: unknown;
             }[];
+            /** Social Import Jobs */
+            social_import_jobs?: {
+                [key: string]: unknown;
+            }[];
+            /** Streak */
+            streak?: {
+                [key: string]: unknown;
+            };
+            /** Streaks */
+            streaks?: {
+                [key: string]: unknown;
+            };
             /** Subscription */
             subscription?: {
                 [key: string]: unknown;
             } | null;
+            /** Trips */
+            trips?: {
+                [key: string]: unknown;
+            }[];
             /** Usage */
             usage?: {
                 [key: string]: unknown;
@@ -4834,6 +5113,13 @@ export interface components {
             /** Weight Kg */
             weight_kg?: number | null;
         };
+        /** Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post */
+        Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post: {
+            /** Provider Page Id */
+            provider_page_id: string;
+            /** Selection Token */
+            selection_token: string;
+        };
         /** Body_start_batch_extraction_multipart_api_v1_ai_batch_extract_multipart_post */
         Body_start_batch_extraction_multipart_api_v1_ai_batch_extract_multipart_post: {
             /**
@@ -4902,6 +5188,8 @@ export interface components {
         Body_upload_outfit_image_api_v1_outfits__outfit_id__images_post: {
             /** Body Profile Id */
             body_profile_id?: string | null;
+            /** Client Request Id */
+            client_request_id?: string | null;
             /** File */
             file: string;
             /** Generation Id */
@@ -5112,6 +5400,17 @@ export interface components {
             text: string;
         };
         /**
+         * ExtendTrialRequest
+         * @description POST /admin/users/{id}/subscription/extend-trial body.
+         */
+        ExtendTrialRequest: {
+            /**
+             * Days
+             * @description Days to extend trial (1..90)
+             */
+            days: number;
+        };
+        /**
          * ExtractItemsRequest
          * @description Request to extract items from an image (inline or stored).
          */
@@ -5293,6 +5592,8 @@ export interface components {
             brand?: string | null;
             /** Category */
             category: string;
+            /** Client Request Id */
+            client_request_id?: string | null;
             /** Colors */
             colors?: string[];
             /**
@@ -5588,8 +5889,10 @@ export interface components {
          *     stored image — degrades to the text-only inventory.
          *
          *     Clients never send image URLs or base64 here: a client-supplied URL the
-         *     backend fetches is an SSRF primitive (StorageService.download_to_base64
-         *     follows redirects with no host allow-list), and inline base64 would
+         *     backend fetches would be an SSRF primitive, so references are resolved
+         *     server-side to a bucket key and read from object storage only
+         *     (StorageService.download_to_base64 reduces any input to a key via
+         *     key_from_path and never follows arbitrary URLs), and inline base64 would
          *     triple mobile request size.
          */
         OutfitItemInput: {
@@ -6419,6 +6722,38 @@ export interface operations {
             };
         };
     };
+    funnel_api_v1_admin_dashboards_funnel_get: {
+        parameters: {
+            query?: {
+                /** @description Window in days (1-90, default 30) */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFunnelResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     overview_api_v1_admin_dashboards_overview_get: {
         parameters: {
             query?: never;
@@ -6455,6 +6790,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminReferralsResponse"];
+                };
+            };
+        };
+    };
+    retention_api_v1_admin_dashboards_retention_get: {
+        parameters: {
+            query?: {
+                /** @description Number of weekly cohorts (1-12, default 4) */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRetentionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6985,6 +7352,7 @@ export interface operations {
             query?: {
                 plan?: string | null;
                 status?: string | null;
+                billing_provider?: ("stripe" | "apple" | "google") | null;
                 page?: number;
                 page_size?: number;
                 sort_by?: "created_at" | "current_period_start" | "plan_type" | "status";
@@ -7215,6 +7583,39 @@ export interface operations {
             };
         };
     };
+    admin_clear_daily_api_v1_admin_users__user_id__ai_clear_daily_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     admin_quota_override_api_v1_admin_users__user_id__quota_override_patch: {
         parameters: {
             query?: never;
@@ -7227,6 +7628,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AdminQuotaOverride"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_extend_trial_api_v1_admin_users__user_id__subscription_extend_trial_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtendTrialRequest"];
             };
         };
         responses: {
@@ -8048,6 +8486,43 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -9421,6 +9896,10 @@ export interface operations {
                 brand?: string | null;
                 search?: string | null;
                 is_favorite?: boolean | null;
+                /** @description created_at | name | worn_count */
+                sort_by?: string | null;
+                /** @description asc | desc */
+                sort_order?: string | null;
             };
             header?: never;
             path?: never;

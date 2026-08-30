@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **204** operations across **179** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **208** operations across **183** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -3852,6 +3852,29 @@ Full audit history for one entity (e.g. a user or subscription).
 - **200** Returns array<`AdminAuditEventItem`>.
 - **Errors:** 422 Unprocessable Entity
 
+### GET /api/v1/admin/dashboards/funnel
+
+Funnel: signups -> items (24h) -> outfits (7d) -> paid (window).
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `days` | query | integer | no | Window in days (1-90, default 30) |
+
+**Responses:**
+
+**Response 200:** Returns `AdminFunnelResponse` — GET /admin/dashboards/funnel — signups -> items -> outfits -> paid.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `days` | integer | no |  |
+| `steps` | array<`AdminFunnelStep`> | no |  |
+
+- **Errors:** 422 Unprocessable Entity
+
 ### GET /api/v1/admin/dashboards/overview
 
 Signups / active users / paid subscriptions / AI jobs aggregates.
@@ -3868,6 +3891,8 @@ Signups / active users / paid subscriptions / AI jobs aggregates.
 | `ai_jobs_7d` | object | no |  |
 | `paid_subscriptions` | integer | no |  |
 | `signups` | object<integer> | no |  |
+| `tickets_open_48h` | integer | no |  |
+| `trials_ending_7d` | integer | no |  |
 
 
 ### GET /api/v1/admin/dashboards/referrals
@@ -3887,6 +3912,29 @@ Referral totals: codes issued, redemptions, credits granted/pending.
 | `credits_pending` | integer | no |  |
 | `redemptions` | integer | no |  |
 
+
+### GET /api/v1/admin/dashboards/retention
+
+Cohort retention: last N Mondays UTC × retained 7d later.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `weeks` | query | integer | no | Number of weekly cohorts (1-12, default 4) |
+
+**Responses:**
+
+**Response 200:** Returns `AdminRetentionResponse` — GET /admin/dashboards/retention — last N Mondays × retained 7d.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cohorts` | array<`AdminRetentionCohort`> | no |  |
+| `weeks` | integer | no |  |
+
+- **Errors:** 422 Unprocessable Entity
 
 ### GET /api/v1/admin/dashboards/revenue
 
@@ -4320,12 +4368,16 @@ Return safe deployment info: version, env, feature toggles, billing flags.
 
 Paginated subscriptions with user email and display amount.
 
+``billing_provider`` filters by billing rail; ``stripe`` includes legacy
+rows whose ``billing_provider`` is NULL (see admin_service).
+
 **Auth:** required — `Authorization: Bearer <jwt>`
 
 **Parameters:**
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
+| `billing_provider` | query | enum: stripe, apple, google (nullable) | no |  |
 | `page` | query | integer | no |  |
 | `page_size` | query | integer | no |  |
 | `plan` | query | string (nullable) | no |  |
@@ -4446,16 +4498,7 @@ Full user detail: profile + subscription + usage + counts + recent jobs.
 
 **Responses:**
 
-**Response 200:** Returns `AdminUserDetail` — GET /admin/users/{user_id} — full profile detail.
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `counts` | object | no |  |
-| `recent_jobs` | array<object> | no |  |
-| `subscription` | object (nullable) | no |  |
-| `usage` | object | no |  |
-| `user` | object | yes |  |
-
+- **200** Returns `AdminUserDetail` — see [Models](#models).
 - **Errors:** 422 Unprocessable Entity
 
 ### PATCH /api/v1/admin/users/{user_id}
@@ -4509,6 +4552,28 @@ Recent audit events + recent jobs for one user (limit 25 each).
 
 - **Errors:** 422 Unprocessable Entity
 
+### POST /api/v1/admin/users/{user_id}/ai/clear-daily
+
+Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).
+
+Sets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to
+today, plus ``subscription_usage.daily_photoshoot_images`` to 0 for
+today's period. Writes audit ``user.ai_daily_cleared`` and invalidates
+the cached profile.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
 ### PATCH /api/v1/admin/users/{user_id}/quota-override
 
 Set (or clear with null) a per-user daily AI quota override.
@@ -4533,6 +4598,34 @@ must not be able to change another user's daily AI quota.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `daily_limit` | integer (nullable) | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/admin/users/{user_id}/subscription/extend-trial
+
+Extend a user's trial by ``days`` (1..90).
+
+If ``subscriptions.trial_end`` is set it is moved forward; otherwise
+``now + days`` becomes the new trial end. Writes audit
+``user.trial_extended`` with ``{days, before, after}`` and
+invalidates the cached profile (service helper).
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string | yes |  |
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `days` | integer | yes | Days to extend trial (1..90) |
 
 **Responses:**
 
@@ -4611,6 +4704,25 @@ PATCH /admin/feedback/{ticket_id} body.
 | `internal_notes` | string (nullable) | no |  |
 | `status` | enum: open, in_progress, resolved, closed (nullable) | no |  |
 
+### `AdminFunnelResponse`
+
+GET /admin/dashboards/funnel — signups -> items -> outfits -> paid.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `days` | integer | no |  |
+| `steps` | array<`AdminFunnelStep`> | no |  |
+
+### `AdminFunnelStep`
+
+One funnel step: label, count, pct_of_prev (100.0 for first).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `count` | integer | yes |  |
+| `label` | string | yes |  |
+| `pct_of_prev` | number | no |  |
+
 ### `AdminIapTransactionListItem`
 
 One row of GET /admin/iap/transactions (store-billed subscriptions).
@@ -4661,6 +4773,8 @@ GET /admin/dashboards/overview.
 | `ai_jobs_7d` | object | no |  |
 | `paid_subscriptions` | integer | no |  |
 | `signups` | object<integer> | no |  |
+| `tickets_open_48h` | integer | no |  |
+| `trials_ending_7d` | integer | no |  |
 
 ### `AdminPromoCodeCreate`
 
@@ -4735,6 +4849,26 @@ POST /admin/subscriptions/user/{user_id}/refund.
 | `payment_intent` | string (nullable) | no |  |
 | `refund_id` | string | yes |  |
 | `status` | string | yes |  |
+
+### `AdminRetentionCohort`
+
+One weekly cohort row for retention.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `retained_7d` | integer | no |  |
+| `retention_pct` | number | no |  |
+| `signups` | integer | no |  |
+| `week_start` | string | yes |  |
+
+### `AdminRetentionResponse`
+
+GET /admin/dashboards/retention — last N Mondays × retained 7d.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cohorts` | array<`AdminRetentionCohort`> | no |  |
+| `weeks` | integer | no |  |
 
 ### `AdminRevenueResponse`
 
@@ -4876,13 +5010,23 @@ GET /admin/users/{user_id}/activity.
 
 ### `AdminUserDetail`
 
-GET /admin/users/{user_id} — full profile detail.
+GET /admin/users/{user_id} — full profile detail (360 view). Core keys (user, subscription, usage, counts, recent_jobs) are always present; 360 keys are optional and best-effort (missing table -> []). ``extra="allow"`` keeps the contract stable when the service adds a new section without a model bump (the admin console reads via schema.d.ts).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `achievements` | array<object> | no |  |
+| `achievements_meta` | object | no |  |
+| `collections` | array<object> | no |  |
 | `counts` | object | no |  |
+| `items` | array<object> | no |  |
+| `outfits` | array<object> | no |  |
+| `photoshoot_jobs` | array<object> | no |  |
 | `recent_jobs` | array<object> | no |  |
+| `social_import_jobs` | array<object> | no |  |
+| `streak` | object | no |  |
+| `streaks` | object | no |  |
 | `subscription` | object (nullable) | no |  |
+| `trips` | array<object> | no |  |
 | `usage` | object | no |  |
 | `user` | object | yes |  |
 
@@ -5236,6 +5380,14 @@ Request to generate a single embedding.
 |---|---|---|---|
 | `model` | string (nullable) | no |  |
 | `text` | string | yes | Text to generate embedding for |
+
+### `ExtendTrialRequest`
+
+POST /admin/users/{id}/subscription/extend-trial body.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `days` | integer | yes | Days to extend trial (1..90) |
 
 ### `ExtractItemsRequest`
 

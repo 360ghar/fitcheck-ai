@@ -5,7 +5,8 @@ cost 3.4 s on the mobile critical path, partly because `list_posts` ran TWO
 Supabase round trips per request (a count query, then the page query).
 PostgREST returns the exact count of the full filtered set alongside any page,
 so one execute suffices. The public endpoints also now send `Cache-Control`
-so browsers/CDNs can serve repeat requests without hitting the API.
+(`private` — browsers only, because a shared cache that ignores `Vary: Origin`
+bakes per-caller CORS headers into its entries) so repeat visits skip the API.
 """
 from unittest.mock import Mock
 
@@ -17,7 +18,7 @@ from app.core.exceptions import NotFoundError
 from app.models.blog import BlogPostListParams
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
-CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=600"
+CACHE_CONTROL = "private, max-age=300, stale-while-revalidate=600"
 
 
 def _post_row(slug: str) -> dict:
@@ -163,3 +164,21 @@ async def test_get_post_missing_is_not_cacheable():
         await blog_module.get_post(slug="missing-post", db=db, response=response)
 
     assert "Cache-Control" not in response.headers
+
+
+def test_blog_cache_control_is_not_shared_cacheable():
+    """Regression guard for the 2026-08-29 CORS outage.
+
+    Blog responses cross origins, so CORSMiddleware stamps a per-caller
+    Access-Control-Allow-Origin on each one. A shared cache that ignores
+    `Vary: Origin` (Railway's hikari edge, observed 2026-08-29) bakes one
+    caller's ACAO into its URL-keyed entry — an entry populated by a
+    no-Origin crawler is then served to browsers with no allow-origin header
+    ("No 'Access-Control-Allow-Origin'" + net::ERR_FAILED 200). The policy
+    must stay browser-only (`private`); `public` / `s-maxage` must never
+    return.
+    """
+    value = blog_module.BLOG_CACHE_CONTROL
+    assert "private" in value
+    assert "public" not in value
+    assert "s-maxage" not in value

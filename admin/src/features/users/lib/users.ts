@@ -1,3 +1,5 @@
+import { toDate } from '@/shared/lib/formatters'
+import { pickArray, type JsonRecord as SharedJsonRecord } from '@/shared/lib/json'
 import { ADMIN_ROLES, type AdminRole } from '@/shared/lib/permissions'
 
 /**
@@ -73,4 +75,57 @@ export function assignableRoles(): readonly (AdminRole | 'user')[] {
 /** Human-ish name for a user dict (detail/activity rows). */
 export function displayName(record: JsonRecord | null | undefined): string {
   return stringValue(record, 'full_name') ?? stringValue(record, 'email') ?? '—'
+}
+
+/** Local plan pricing for billing display (mirrors backend PLAN_*_PRICE). */
+export const PLAN_AMOUNTS: Record<string, number> = {
+  plus_monthly: 10,
+  plus_yearly: 100,
+  pro_monthly: 20,
+  pro_yearly: 200,
+}
+
+/** USD display amount for a plan_type, or null for free/unknown. */
+export function planAmount(plan: string | null | undefined): number | null {
+  if (!plan) return null
+  return PLAN_AMOUNTS[plan] ?? null
+}
+
+/** Extract array value from a dict, or [] when missing/not an array. */
+export function arrayValue(
+  record: JsonRecord | null | undefined,
+  key: string,
+): JsonRecord[] {
+  // Shared helper — keeps one array accessor for the whole admin app.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  return pickArray(record as unknown as SharedJsonRecord | null | undefined, key)
+}
+
+/** True when trial_end is within next N days (default 7). */
+export function isTrialEndingSoon(
+  subscription: JsonRecord | null | undefined,
+  days = 7,
+): boolean {
+  const date = toDate(subscription?.['trial_end'])
+  if (!date) return false
+  const diff = date.getTime() - Date.now()
+  return diff > 0 && diff <= days * 24 * 60 * 60 * 1000
+}
+
+/** Count failed jobs in last N days (default 7). */
+export function failedJobsLastDays(
+  jobs: JsonRecord[] | null | undefined,
+  days = 7,
+): number {
+  if (!jobs?.length) return 0
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  let count = 0
+  for (const job of jobs) {
+    if (stringValue(job, 'status') !== 'failed') continue
+    const date = toDate(job['created_at'] ?? job['completed_at'])
+    const time = date?.getTime() ?? null
+    // If no timestamp, count it conservatively as recent
+    if (time === null || time >= cutoff) count += 1
+  }
+  return count
 }

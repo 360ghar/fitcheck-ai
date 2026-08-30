@@ -48,7 +48,11 @@
     "status": "Status",
     "createdAt": "Created",
     "notFound": "Transaction not found",
-    "noProviderTransactionId": "This row has no provider transaction id (store-billed). Details and refund-marking are unavailable for store-billed transactions."
+    "noProviderTransactionId": "This row has no provider transaction id (store-billed). Details and refund-marking are unavailable for store-billed transactions.",
+    "providerTransactionId": "Provider transaction ID",
+    "appleOriginalTransactionId": "Apple original transaction ID",
+    "googleOrderId": "Google order ID",
+    "googlePurchaseToken": "Google purchase token"
   },
   "markRefunded": {
     "dialogTitle": "Mark transaction refunded",
