@@ -4,15 +4,16 @@ import { apiGet } from '@/shared/api/client'
 import { isApiError } from '@/shared/api/errors'
 import type { components } from '@/shared/api/schema'
 import type {
+  AdminFunnelResponse,
   AdminOverviewResponse,
   AdminReferralsResponse,
+  AdminRetentionResponse,
   AdminRevenueResponse,
   AdminTopUsersResponse,
   AdminTrendsResponse,
   PageResponse_AdminAuditEventItem_,
 } from '@/shared/api/schemaTypes'
 import { QUERY_RETRY, QUERY_STALE_TIMES } from '@/shared/lib/constants'
-import type { JsonRecord } from '@/shared/lib/json'
 
 /**
  * Dashboard API — read-only aggregates (spec §4 + revenue/trends wave + Phase 1a):
@@ -154,8 +155,10 @@ async function swallowNotFound<T>(promise: Promise<T>): Promise<T | null> {
   }
 }
 
-export function getFunnel(days: number): Promise<JsonRecord | null> {
-  return swallowNotFound(apiGet<JsonRecord>(`/api/v1/admin/dashboards/funnel?days=${days}`))
+export function getFunnel(days: number): Promise<AdminFunnelResponse | null> {
+  return swallowNotFound(
+    apiGet<AdminFunnelResponse>(`/api/v1/admin/dashboards/funnel?days=${days}`),
+  )
 }
 
 export function useFunnelQuery(days: number) {
@@ -168,8 +171,10 @@ export function useFunnelQuery(days: number) {
   })
 }
 
-export function getRetention(weeks: number): Promise<JsonRecord | null> {
-  return swallowNotFound(apiGet<JsonRecord>(`/api/v1/admin/dashboards/retention?weeks=${weeks}`))
+export function getRetention(weeks: number): Promise<AdminRetentionResponse | null> {
+  return swallowNotFound(
+    apiGet<AdminRetentionResponse>(`/api/v1/admin/dashboards/retention?weeks=${weeks}`),
+  )
 }
 
 export function useRetentionQuery(weeks: number) {

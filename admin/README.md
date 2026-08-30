@@ -9,8 +9,8 @@ Supabase-backed auth as the other clients. All authorization is
 > Status: implemented. App shell, login + RBAC, i18n, shared component
 > library, server-driven data tables, OpenAPI codegen contract, and all
 > feature modules (users, dashboard + revenue/trends, subscriptions + IAP,
-> quotas, content, promo, feedback, ops/storage, audit, search, settings)
-> are in place, with 28 Vitest files / 215 tests. Playwright e2e specs
+> gifts, quotas, content, promo, feedback, ops/storage, audit, search, settings)
+> are in place, with 33 Vitest files / 231 tests. Playwright e2e specs
 > (6 files / 8 critical journeys) are wired into CI via
 > `.github/workflows/admin-ci.yml` (runs on PRs touching `admin/**` and on
 > pushes to main); token-refresh end-to-end verification is still pending
@@ -41,6 +41,7 @@ All optional (see `.env.example`); env access is zod-validated in
 | `VITE_SENTRY_DSN` | empty disables Sentry | Error monitoring via `@sentry/react` |
 | `VITE_SUPABASE_URL` | empty hides the Google button | Supabase project URL for "Continue with Google" (same project as the main app) |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | empty hides the Google button | Supabase publishable (anon) key for Google OAuth |
+| `VITE_ENABLE_GIFT_VOUCHERS` | `false` | Shows the gift voucher navigation and admin route; backend RBAC remains authoritative |
 
 Google sign-in requires both Supabase vars AND the callback URL in the
 Supabase Auth allowlist: **Authentication → URL Configuration → Redirect
@@ -172,6 +173,8 @@ unless an explicit role is set).
 | `content.read` / `content.write` | x | x | | | x |
 | `promo.read` | x | x | | | x |
 | `feedback.read` / `feedback.write` | x | x | | x | |
+| `gifts.read` | x | x | x | x | |
+| `gifts.write` | x | x | | | |
 | `search` | x | x | x | x | x |
 
 Keep `src/shared/lib/permissions.ts` in step with the backend map by hand;
@@ -200,8 +203,8 @@ src/
     stores/          sessionStore (bootstrap/login/logout/idle), uiStore, commandStore
     ui/              primitives + composites + DataTable + ErrorBoundary
   app/               providers, routes manifest, guards, layout (Sidebar/Topbar/UserMenu), 403/404
-  features/          auth, dashboard, users, subscriptions, quotas, content, promo,
-                     feedback, ops, audit, search, settings
+  features/          auth, dashboard, users, subscriptions, gifts, quotas,
+                     content, promo, feedback, ops, audit, search, settings
   test/              MSW handlers, setup, render utils
 ```
 
@@ -209,7 +212,7 @@ src/
 
 | Layer | Tool | Status |
 |-------|------|--------|
-| Unit / integration | Vitest + RTL + MSW | 28 files / 215 tests passing; tests never hit the real network |
+| Unit / integration | Vitest + RTL + MSW | 33 files / 231 tests passing; tests never hit the real network |
 | A11y | vitest-axe | wired into unit tests (axe on shared components + pages) |
 | Contract | `npm run check:schema` | wired (CI drift check) |
 | E2E | Playwright (Chromium) | 6 files / 8 critical journeys (`npm run e2e`); wired into CI (`.github/workflows/admin-ci.yml`); token-refresh journey still pending (see advisories) |
@@ -233,8 +236,8 @@ backend response shapes typed against `schema.d.ts`.
   `index.html`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin`, `X-Robots-Tag: noindex`,
   immutable caching for `/assets/*` and `/fonts/*`.
-- **Backend migrations** 037 (roles/quota override) + 038 (audit_events) must
-  be applied to hosted Supabase; regenerate + commit `admin/contracts/openapi.json`
+- **Backend migrations** 037 (roles/quota override), 038 (audit_events), and
+  056 (gift vouchers) must be applied to hosted Supabase; regenerate + commit `admin/contracts/openapi.json`
   whenever the backend admin API changes.
 
 ## Known advisories / limitations

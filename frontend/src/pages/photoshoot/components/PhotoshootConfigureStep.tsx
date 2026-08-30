@@ -54,7 +54,7 @@ export function PhotoshootConfigureStep() {
       {isOutOfQuota && (
         <div className="space-y-3">
           <ReferralBanner variant="urgent" />
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
             <span>Daily limit reached. Comes back at midnight UTC.</span>
             <Button
               variant="link"
@@ -147,7 +147,7 @@ export function PhotoshootConfigureStep() {
 
       {/* Usage Info */}
       {usage && (
-        <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg text-sm">
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/30 rounded-lg text-sm">
           {!canUpgradeToPro ? (
             <>
               <Star className="w-4 h-4 text-amber-500" />

@@ -53,9 +53,6 @@ import { useColumnCount } from '@/hooks/useColumnCount'
 import type { Outfit } from '@/types'
 
 const LIST_PATH = '/outfits'
-// With the pane taking its share of a 1280px cap, the masonry gives up columns
-// rather than the page giving up width (DESIGN.md 05).
-const SPLIT_COLUMNS = 'lg:columns-2 xl:columns-3 2xl:columns-4'
 
 export default function OutfitsPage() {
   const { id } = useParams()
@@ -323,12 +320,7 @@ export default function OutfitsPage() {
     <LoadingGrid
       count={12}
       variant={showMasonry ? 'masonry' : 'list'}
-      className={showMasonry && isDetailOpen ? SPLIT_COLUMNS : undefined}
-      columns={
-        showMasonry
-          ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
-          : 'grid-cols-1'
-      }
+      columnCount={columnCount}
     />
   ) : error ? (
     <ErrorState
@@ -452,6 +444,7 @@ export default function OutfitsPage() {
             type="button"
             variant={favoritesOnly ? 'default' : 'outline'}
             size="icon"
+            className="touch-target"
             aria-label="Favorites only"
             aria-pressed={favoritesOnly}
             onClick={() => setFavoritesOnly((v) => !v)}
@@ -462,6 +455,7 @@ export default function OutfitsPage() {
             type="button"
             variant={isGridView ? 'default' : 'outline'}
             size="icon"
+            className="touch-target"
             aria-label="Grid view"
             onClick={() => setGridView(true)}
           >
@@ -471,6 +465,7 @@ export default function OutfitsPage() {
             type="button"
             variant={!isGridView ? 'default' : 'outline'}
             size="icon"
+            className="touch-target"
             aria-label="List view"
             onClick={() => setGridView(false)}
           >

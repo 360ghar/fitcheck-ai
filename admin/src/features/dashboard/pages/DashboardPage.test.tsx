@@ -23,9 +23,9 @@ describe('DashboardPage', () => {
 
     // Metric strip from overview aggregates
     expect(await screen.findByText('Signups (7 days)')).toBeInTheDocument()
-    expect(screen.getByText('42')).toBeInTheDocument()
+    expect(screen.getAllByText('42').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Signups (30 days)')).toBeInTheDocument()
-    expect(screen.getByText('180')).toBeInTheDocument()
+    expect(screen.getAllByText('180').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Active users (7 days)')).toBeInTheDocument()
     // "Paid subscriptions" labels both the overview metric and the revenue strip.
     expect(screen.getAllByText('Paid subscriptions').length).toBeGreaterThanOrEqual(1)
@@ -65,9 +65,9 @@ describe('DashboardPage', () => {
     // Anchor nav + card header both render "Referrals & promos" / "Revenue"
     expect(screen.getAllByText('Referrals & promos').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Codes issued')).toBeInTheDocument()
-    expect(screen.getByText('84')).toBeInTheDocument()
+    expect(screen.getAllByText('84').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Credits pending')).toBeInTheDocument()
-    expect(screen.getByText('10')).toBeInTheDocument()
+    expect(screen.getAllByText('10').length).toBeGreaterThanOrEqual(1)
 
     // Recent admin activity from the audit endpoint
     expect(screen.getByText('Recent admin activity')).toBeInTheDocument()

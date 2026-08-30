@@ -1,6 +1,6 @@
 # Admin console
 
-Last updated: 2026-08-08
+Last updated: 2026-08-29
 
 Internal admin console for FitCheck AI founder + ops/content/support staff,
 under `admin/`. A React 19 SPA deployed to `admin.fitcheckaiapp.com`, separate
@@ -37,7 +37,7 @@ file is the docs/-level entry point and intentionally does not duplicate
 | State | zustand 5 (session, UI prefs) |
 | Forms | react-hook-form 7 + zod 4 |
 | Routing | react-router-dom 7 (library mode) |
-| i18n | i18next (`src/shared/i18n/en/*.json`, 19 namespaces) |
+| i18n | i18next (`src/shared/i18n/en/*.json`, 20 namespaces) |
 | API types | openapi-typescript + openapi-fetch (codegen from `contracts/openapi.json`) |
 | Unit tests | Vitest 3 + Testing Library + MSW + vitest-axe |
 | E2E | Playwright (chromium) |
@@ -52,8 +52,8 @@ language + OpenAPI codegen, never shared code).
 src/
 ├── app/          providers, route manifest + guards, layout (Sidebar/Topbar/UserMenu), 403/404
 ├── config/       env.ts (zod-validated), feature flags (build-time)
-├── features/     auth, dashboard, users, subscriptions, quotas, content, promo,
-│                 feedback, ops, audit, search, settings
+├── features/     auth, dashboard, users, subscriptions, gifts, quotas, content,
+│                 promo, feedback, ops, audit, search, settings
 ├── shared/       api/ (typed client + generated schema), hooks/, i18n/, lib/,
 │                 stores/, ui/ (primitives + DataTable)
 └── test/         MSW handlers + fixtures, setup, render utils
@@ -117,6 +117,8 @@ Roles (`backend/app/core/permissions.py` is authoritative; the registry in
 | `content.read` / `content.write` | x | x | | | x |
 | `promo.read` | x | x | | | x |
 | `feedback.read` / `feedback.write` | x | x | | x | |
+| `gifts.read` | x | x | x | x | |
+| `gifts.write` | x | x | | | |
 | `search` | x | x | x | x | x |
 
 - Legacy fallback (`get_user_role`): an explicit admin `role` wins; otherwise
@@ -132,6 +134,9 @@ Roles (`backend/app/core/permissions.py` is authoritative; the registry in
   the action they document, RLS service-role only (migration 038).
 - Self-demotion / last-admin guards, refund idempotency, and quota-override
   logic are enforced server-side in `backend/app/services/admin_service.py`.
+- Gift mutations use explicit endpoints and are audited. Paid value cannot be
+  voided from the console; only an external Stripe refund, lost dispute, or
+  chargeback can make it ineligible.
 
 ## API contract / codegen
 
@@ -161,7 +166,7 @@ npm run e2e   # Playwright: 8 critical journeys across 6 spec files, chromium
 ```
 
 - `lint`: ESLint 9 flat config, `--max-warnings 0`; `typecheck`: `tsc --noEmit`
-  (app + node configs); `test`: Vitest (jsdom + MSW, 28 files / 215 tests,
+  (app + node configs); `test`: Vitest (jsdom + MSW, 33 files / 231 tests,
   never hits the network); `check:schema`: contract drift; `check:bundle`:
   bundle-size budget.
 - E2E (`admin/e2e/*.e2e.ts`): the 8 critical journeys from spec §10 — login
@@ -185,8 +190,9 @@ npm run e2e   # Playwright: 8 critical journeys across 6 spec files, chromium
   changes), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin`, `X-Robots-Tag: noindex`;
   immutable caching for `/assets/*` and `/fonts/*`.
-- Backend migrations 037 (roles/quota override) + 038 (audit_events) must be
-  applied to hosted Supabase before deploy.
+- Backend migrations 037 (roles/quota override), 038 (audit_events), and 056
+  (gift vouchers) must be applied to hosted Supabase before the related
+  features are enabled.
 
 ## Pointers
 

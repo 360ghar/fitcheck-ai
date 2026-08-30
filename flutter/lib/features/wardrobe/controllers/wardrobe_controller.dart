@@ -26,6 +26,11 @@ class WardrobeController extends GetxController {
   // Workers for cleanup
   final List<Worker> _workers = [];
   int _fetchGeneration = 0;
+  // The first active refresh owns the baseline. Later refreshes share it so a
+  // latest failure restores pagination for the retained list, not an earlier
+  // request's temporary page-one reset.
+  int? _refreshBaselinePage;
+  bool? _refreshBaselineHasMore;
   // Monotonic token for single-item detail fetches (fetchItemById). Bumped
   // before each fetch so an earlier detail fetch (A) resolving AFTER a newer
   // one (B) cannot overwrite B's fetchedItem and leave B on a permanent
@@ -64,6 +69,7 @@ class WardrobeController extends GetxController {
   // Single-item fetch state (deep links, items beyond the loaded page)
   final RxBool isFetchingItem = false.obs;
   final RxString itemFetchError = ''.obs;
+
   /// The item fetched by id when it is NOT on the loaded page and cannot be
   /// merged (a server-side filter is active — A10b-09). ItemDetailPage renders
   /// this directly so a deep link to an item beyond the current page leaves
@@ -167,11 +173,16 @@ class WardrobeController extends GetxController {
   /// Fetch items from server with filters
   Future<void> fetchItems({bool refresh = false}) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+    final previousPage = currentPage.value;
+    final previousHasMore = hasMore.value;
 
     if (!_networkService.isConnected.value) {
       // Invalidate any in-flight fetch so stale results for the previous
-      // filters cannot populate the new filter state after reconnect.
+      // filters cannot populate the new filter state after reconnect. Its
+      // refresh baseline belongs to that invalidated request as well; keeping
+      // it would let a later failed refresh restore obsolete pagination.
       _fetchGeneration++;
+      _clearRefreshBaseline();
       isLoading.value = false;
       isLoadingMore.value = false;
       isOffline.value = true;
@@ -180,12 +191,22 @@ class WardrobeController extends GetxController {
     }
 
     if (refresh) {
+      _refreshBaselinePage ??= currentPage.value;
+      _refreshBaselineHasMore ??= hasMore.value;
       _fetchGeneration++;
       currentPage.value = 1;
       hasMore.value = true;
-      items.clear();
+      // The old list stays visible until the refreshed page arrives: a
+      // failed refresh (flaky network, server 500) must not leave the user
+      // staring at a fake "empty closet" state. The grid swaps atomically on
+      // success below.
     } else {
-      if (isLoadingMore.value) return;
+      // Block load-more while ANY fetch is in flight. During a refresh
+      // (isLoading=true) a scroll notification would otherwise start a
+      // concurrent page-N fetch that gets stale-guarded later — wasted
+      // bandwidth. Safe for initial load: it runs from onInit before any
+      // scroll exists, and InfiniteScrollWrapper only ever calls load-more.
+      if (isLoadingMore.value || isLoading.value) return;
       _fetchGeneration++;
     }
     final requestGeneration = _fetchGeneration;
@@ -232,16 +253,28 @@ class WardrobeController extends GetxController {
 
       if (requestGeneration != _fetchGeneration || isClosed) return;
 
+      // Refresh swaps atomically: the previous list stays visible during the
+      // fetch and is replaced only once the new page has actually loaded, so
+      // a failed refresh never blanks the grid. Initial load / load-more
+      // append instead of clearing.
       if (refresh) {
-        items.clear();
+        items
+          ..clear()
+          ..addAll(response.items);
+        _clearRefreshBaseline();
+      } else {
+        items.addAll(response.items);
       }
-
-      items.addAll(response.items);
       totalItems.value = response.total;
       hasMore.value = response.hasMore;
       currentPage.value++;
     } catch (e) {
       if (requestGeneration != _fetchGeneration || isClosed) return;
+      if (refresh) {
+        currentPage.value = _refreshBaselinePage ?? previousPage;
+        hasMore.value = _refreshBaselineHasMore ?? previousHasMore;
+        _clearRefreshBaseline();
+      }
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');
     } finally {
@@ -250,6 +283,11 @@ class WardrobeController extends GetxController {
         isLoadingMore.value = false;
       }
     }
+  }
+
+  void _clearRefreshBaseline() {
+    _refreshBaselinePage = null;
+    _refreshBaselineHasMore = null;
   }
 
   /// Fetch a single item from the server.
@@ -517,7 +555,10 @@ class WardrobeController extends GetxController {
         selectedItem.value = null;
       }
 
-      ErrorHandler.showSuccess('Item removed from your closet', title: 'Deleted');
+      ErrorHandler.showSuccess(
+        'Item removed from your closet',
+        title: 'Deleted',
+      );
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;
@@ -539,7 +580,10 @@ class WardrobeController extends GetxController {
       clearSelection();
       applyFilters();
 
-      ErrorHandler.showSuccess('$count items removed from your closet', title: 'Deleted');
+      ErrorHandler.showSuccess(
+        '$count items removed from your closet',
+        title: 'Deleted',
+      );
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;

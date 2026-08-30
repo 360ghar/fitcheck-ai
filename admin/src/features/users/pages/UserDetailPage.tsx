@@ -19,7 +19,6 @@ import {
   failedJobsLastDays,
   isTrialEndingSoon,
   numberValue,
-  planAmount,
   planLabelKey,
   roleLabelKey,
   stringValue,
@@ -27,7 +26,7 @@ import {
   subscriptionStatus,
   type JsonRecord,
 } from '@/features/users/lib/users'
-import { isApiError, normalizeError } from '@/shared/api/errors'
+import { normalizeError } from '@/shared/api/errors'
 import type { AdminUserPatch } from '@/shared/api/schemaTypes'
 import { usePermission } from '@/shared/hooks/usePermission'
 import { formatDateTimeValue, formatMoney, formatNumber } from '@/shared/lib/formatters'
@@ -102,7 +101,8 @@ export function UserDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation('users')
   const { can } = usePermission()
-  const canWrite = can('users.write')
+  const canManageUser = can('users.write')
+  const canExtendTrial = canManageUser || can('subscriptions.write')
 
   const detailQuery = useUserDetailQuery(userId, { enabled: userId !== '' })
   const activityQuery = useUserActivityQuery(userId, { enabled: userId !== '' })
@@ -212,14 +212,14 @@ export function UserDetailPage() {
     if (isTrialEndingSoon(subscription)) {
       badges.push({
         key: 'trial',
-        label: t('detail.riskTrialEnding', { defaultValue: 'Trial ending' }),
+        label: t('detail.riskTrialEnding'),
         variant: 'warning',
       })
     }
     if (subStatus === 'past_due') {
       badges.push({
         key: 'pastdue',
-        label: t('detail.riskPastDue', { defaultValue: 'Past due' }),
+        label: t('detail.riskPastDue'),
         variant: 'danger',
       })
     }
@@ -233,7 +233,7 @@ export function UserDetailPage() {
       if (maxUsed / customQuota >= 0.9) {
         badges.push({
           key: 'quota',
-          label: t('detail.riskQuotaHigh', { defaultValue: 'Quota 90%+' }),
+          label: t('detail.riskQuotaHigh'),
           variant: 'warning',
         })
       }
@@ -242,14 +242,14 @@ export function UserDetailPage() {
     if (failedCount >= 3) {
       badges.push({
         key: 'failed',
-        label: t('detail.riskFailedJobs', { defaultValue: '3+ failed jobs' }),
+        label: t('detail.riskFailedJobs'),
         variant: 'danger',
       })
     }
     return badges
   }, [subscription, subStatus, userRecord, aiUsage, recentJobs, t])
 
-  const amount = subPlan ? planAmount(subPlan) : null
+  const amount = numberValue(subscription, 'amount')
   const stripeCustomerId = stringValue(subscription, 'stripe_customer_id')
   const stripeSubscriptionId = stringValue(subscription, 'stripe_subscription_id')
 
@@ -277,26 +277,17 @@ export function UserDetailPage() {
     }
   }
 
-  function isComingSoonError(error: unknown): boolean {
-    return isApiError(error) && (error.status === 404 || error.code === 'NOT_FOUND')
-  }
-
   async function handleExtendTrial() {
     const days = Number(extendDays)
-    if (!Number.isFinite(days) || days < 1 || days > 90) {
-      toast.error(t('detail.extendTrialDescription', { defaultValue: 'Enter 1 to 90 days.' }))
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      toast.error(t('detail.extendTrialInvalidDays'))
       return
     }
     try {
       await extendTrialMutation.mutateAsync({ userId, days })
-      toast.success(t('detail.extendTrialSuccess', { defaultValue: 'Trial extended by {{days}} days', days }))
+      toast.success(t('detail.extendTrialSuccess', { days }))
       setExtendOpen(false)
     } catch (error) {
-      if (isComingSoonError(error)) {
-        toast.info(t('detail.extendTrialComingSoon', { defaultValue: 'Extend trial is coming soon — backend not yet available' }))
-        setExtendOpen(false)
-        return
-      }
       toast.error(normalizeError(error).message)
     }
   }
@@ -304,14 +295,9 @@ export function UserDetailPage() {
   async function handleClearCounters() {
     try {
       await clearCountersMutation.mutateAsync({ userId })
-      toast.success(t('detail.clearCountersSuccess', { defaultValue: 'Daily counters cleared' }))
+      toast.success(t('detail.clearCountersSuccess'))
       setClearOpen(false)
     } catch (error) {
-      if (isComingSoonError(error)) {
-        toast.info(t('detail.clearCountersComingSoon', { defaultValue: 'Clear counters is coming soon — backend not yet available' }))
-        setClearOpen(false)
-        return
-      }
       toast.error(normalizeError(error).message)
       throw error
     }
@@ -364,18 +350,18 @@ export function UserDetailPage() {
       {/* Anchor nav — jump to any of the 8 sections, sticky for long 360 page */}
       {!detailQuery.isPending && !detailQuery.isError ? (
         <nav
-          aria-label={t('detail.sectionsNavLabel', { defaultValue: 'User sections' })}
+          aria-label={t('detail.sectionsNavLabel')}
           className="sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-border bg-background/80 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60"
         >
           {[
-            { id: 'section-identity', label: t('detail.navIdentity', { defaultValue: 'Profile' }) },
-            { id: 'section-subscription', label: t('detail.navSubscription', { defaultValue: 'Subscription' }) },
-            { id: 'section-usage', label: t('detail.navUsage', { defaultValue: 'Usage' }) },
-            { id: 'section-uploads', label: t('detail.navUploads', { defaultValue: 'Uploads' }) },
-            { id: 'section-generations', label: t('detail.navGenerations', { defaultValue: 'Generations' }) },
-            { id: 'section-collections', label: t('detail.navCollections', { defaultValue: 'Collections' }) },
-            { id: 'section-counts', label: t('detail.navCounts', { defaultValue: 'Counts' }) },
-            { id: 'section-timeline', label: t('detail.navTimeline', { defaultValue: 'Timeline' }) },
+            { id: 'section-identity', label: t('detail.navIdentity') },
+            { id: 'section-subscription', label: t('detail.navSubscription') },
+            { id: 'section-usage', label: t('detail.navUsage') },
+            { id: 'section-uploads', label: t('detail.navUploads') },
+            { id: 'section-generations', label: t('detail.navGenerations') },
+            { id: 'section-collections', label: t('detail.navCollections') },
+            { id: 'section-counts', label: t('detail.navCounts') },
+            { id: 'section-timeline', label: t('detail.navTimeline') },
           ].map((item) => (
             <button
               key={item.id}
@@ -429,11 +415,11 @@ export function UserDetailPage() {
                   <AvatarFallback>{initials(name)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <CardTitle className="truncate text-xl">{name}</CardTitle>
+                  <h1 className="truncate text-xl font-semibold tracking-tight text-ink">{name}</h1>
                   <CardDescription className="truncate">{email}</CardDescription>
                 </div>
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                  <Badge variant="default">{t(roleLabelKey(role), { defaultValue: role ?? '—' })}</Badge>
+                  <Badge variant="default">{t(roleLabelKey(role))}</Badge>
                   <StatusBadge
                     status={active ? 'active' : 'suspended'}
                     label={t(active ? 'status.active' : 'status.suspended')}
@@ -483,56 +469,62 @@ export function UserDetailPage() {
               <CardTitle>{t('detail.actions')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {canWrite ? (
+              {canExtendTrial ? (
                 <>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label htmlFor="user-role-select" className="text-sm font-medium">
-                        {t('detail.role')}
-                      </label>
-                      <Select
-                        value={role ?? 'user'}
-                        onValueChange={(value) => setPendingAction({ kind: 'role', value })}
-                      >
-                        <SelectTrigger id="user-role-select" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assignableRoles().map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {t(roleLabelKey(option), { defaultValue: option })}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-end justify-between gap-4 rounded-md border border-border px-3 py-2">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium">{t('detail.isAdmin')}</p>
-                        <p className="text-xs text-muted-foreground">{t('detail.isAdminHint')}</p>
+                  {canManageUser ? (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label htmlFor="user-role-select" className="text-sm font-medium">
+                          {t('detail.role')}
+                        </label>
+                        <Select
+                          value={role ?? 'user'}
+                          onValueChange={(value) => setPendingAction({ kind: 'role', value })}
+                        >
+                          <SelectTrigger id="user-role-select" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {assignableRoles().map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {t(roleLabelKey(option))}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <Switch
-                        checked={isAdmin}
-                        onCheckedChange={(value) => setPendingAction({ kind: 'admin', value })}
-                        aria-label={t('detail.isAdmin')}
-                      />
+                      <div className="flex items-end justify-between gap-4 rounded-md border border-border px-3 py-2">
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-medium">{t('detail.isAdmin')}</p>
+                          <p className="text-xs text-muted-foreground">{t('detail.isAdminHint')}</p>
+                        </div>
+                        <Switch
+                          checked={isAdmin}
+                          onCheckedChange={(value) => setPendingAction({ kind: 'admin', value })}
+                          aria-label={t('detail.isAdmin')}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
 
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <Button
-                      variant={active ? 'destructive' : 'secondary'}
-                      onClick={() => setPendingAction({ kind: 'status', value: !active })}
-                      disabled={patchMutation.isPending}
-                    >
-                      {t(active ? 'detail.suspend' : 'detail.activate')}
-                    </Button>
+                    {canManageUser ? (
+                      <Button
+                        variant={active ? 'destructive' : 'secondary'}
+                        onClick={() => setPendingAction({ kind: 'status', value: !active })}
+                        disabled={patchMutation.isPending}
+                      >
+                        {t(active ? 'detail.suspend' : 'detail.activate')}
+                      </Button>
+                    ) : null}
                     <Button variant="outline" onClick={() => setExtendOpen(true)} disabled={extendTrialMutation.isPending}>
-                      {t('detail.extendTrial', { defaultValue: 'Extend trial' })}
+                      {t('detail.extendTrial')}
                     </Button>
-                    <Button variant="outline" onClick={() => setClearOpen(true)} disabled={clearCountersMutation.isPending}>
-                      {t('detail.clearCounters', { defaultValue: 'Clear daily AI counters' })}
-                    </Button>
+                    {canManageUser ? (
+                      <Button variant="outline" onClick={() => setClearOpen(true)} disabled={clearCountersMutation.isPending}>
+                        {t('detail.clearCounters')}
+                      </Button>
+                    ) : null}
                   </div>
                 </>
               ) : (
@@ -545,7 +537,7 @@ export function UserDetailPage() {
           <div className="grid gap-4 lg:grid-cols-12">
             <div id="section-subscription" className="scroll-mt-16 lg:col-span-5">
           {/* Section 2: Subscription & billing */}
-          <Card id="section-subscription" className="scroll-mt-16">
+          <Card>
             <CardHeader>
               <CardTitle>{t('detail.subscription')}</CardTitle>
             </CardHeader>
@@ -579,11 +571,11 @@ export function UserDetailPage() {
                     value={numberValue(subscription, 'referral_credit_months') ?? '—'}
                   />
                   <Field
-                    label={t('detail.amount', { defaultValue: 'Amount' })}
+                    label={t('detail.amount')}
                     value={amount !== null ? formatMoney(amount, 'USD') : '—'}
                   />
                   <Field
-                    label={t('detail.stripeCustomer', { defaultValue: 'Stripe customer' })}
+                    label={t('detail.stripeCustomer')}
                     value={
                       stripeCustomerId ? (
                         <a
@@ -594,7 +586,7 @@ export function UserDetailPage() {
                         >
                           {stripeCustomerId}
                           <ExternalLink className="size-3" aria-hidden="true" />
-                          <span className="sr-only">{t('detail.viewInStripe', { defaultValue: 'View in Stripe' })}</span>
+                          <span className="sr-only">{t('detail.viewInStripe')}</span>
                         </a>
                       ) : (
                         '—'
@@ -602,7 +594,7 @@ export function UserDetailPage() {
                     }
                   />
                   <Field
-                    label={t('detail.stripeSubscription', { defaultValue: 'Stripe subscription' })}
+                    label={t('detail.stripeSubscription')}
                     value={
                       stripeSubscriptionId ? (
                         <a
@@ -621,7 +613,7 @@ export function UserDetailPage() {
                   />
                 </dl>
               ) : (
-                <p className="text-sm text-muted-foreground">{t('detail.noSubscription', { defaultValue: 'No active subscription' })}</p>
+                <p className="text-sm text-muted-foreground">{t('detail.noSubscription')}</p>
               )}
             </CardContent>
           </Card>
@@ -687,7 +679,7 @@ export function UserDetailPage() {
                   {countRows.map((row) => (
                     <Field
                       key={row.key}
-                      label={t(`detail.${row.key}`, { defaultValue: row.key })}
+                      label={t(`detail.${row.key}`)}
                       value={formatNumber(row.value)}
                     />
                   ))}
@@ -735,7 +727,7 @@ export function UserDetailPage() {
                 collections={collections}
                 trips={trips}
                 streaks={streaks}
-                achievements={achievements}
+                achievementsCount={numberValue(counts, 'achievements') ?? achievements.length}
               />
             </Suspense>
           </div>
@@ -751,14 +743,21 @@ export function UserDetailPage() {
 
           {/* Section 8: Activity timeline (lazy) */}
           <div id="section-timeline" className="scroll-mt-16">
-            <Suspense fallback={<SectionSkeleton />}>
-              <Timeline
-                auditEvents={auditEvents}
-                recentJobs={recentJobs}
-                socialImportJobs={socialImportJobs}
-                supportTickets={supportTickets}
+            {activityQuery.isError ? (
+              <ErrorState
+                message={normalizeError(activityQuery.error).message}
+                onRetry={() => void activityQuery.refetch()}
               />
-            </Suspense>
+            ) : (
+              <Suspense fallback={<SectionSkeleton />}>
+                <Timeline
+                  auditEvents={auditEvents}
+                  recentJobs={recentJobs}
+                  socialImportJobs={socialImportJobs}
+                  supportTickets={supportTickets}
+                />
+              </Suspense>
+            )}
           </div>
         </>
       )}
@@ -772,7 +771,7 @@ export function UserDetailPage() {
         title={
           pendingAction?.kind === 'role'
             ? t('detail.roleConfirmTitle', {
-                role: t(roleLabelKey(pendingAction.value), { defaultValue: pendingAction.value }),
+                role: t(roleLabelKey(pendingAction.value)),
               })
             : pendingAction?.kind === 'admin'
               ? t('detail.adminConfirmTitle')
@@ -805,14 +804,14 @@ export function UserDetailPage() {
       <Dialog open={extendOpen} onOpenChange={setExtendOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('detail.extendTrialTitle', { defaultValue: 'Extend trial' })}</DialogTitle>
+            <DialogTitle>{t('detail.extendTrialTitle')}</DialogTitle>
             <DialogDescription>
-              {t('detail.extendTrialDescription', { defaultValue: 'Add days to this user\'s trial period. Enter 1 to 90 days.' })}
+              {t('detail.extendTrialDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <label htmlFor="extend-days" className="text-sm font-medium">
-              {t('detail.extendTrialPlaceholder', { defaultValue: 'Days (1–90)' })}
+              {t('detail.extendTrialPlaceholder')}
             </label>
             <Input
               id="extend-days"
@@ -831,7 +830,7 @@ export function UserDetailPage() {
               loading={extendTrialMutation.isPending}
               onClick={() => void handleExtendTrial()}
             >
-              {t('detail.extendTrialConfirm', { defaultValue: 'Extend' })}
+              {t('detail.extendTrialConfirm')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -841,14 +840,11 @@ export function UserDetailPage() {
       <ConfirmDialog
         open={clearOpen}
         onOpenChange={setClearOpen}
-        title={t('detail.clearCountersTitle', { defaultValue: 'Clear daily counters?' })}
-        description={t('detail.clearCountersDescription', {
-          defaultValue: "Reset this user's daily extraction, generation, and embedding counters to zero. This is audit-logged.",
-        })}
-        confirmLabel={t('detail.clearCountersConfirm', { defaultValue: 'Clear counters' })}
+        title={t('detail.clearCountersTitle')}
+        description={t('detail.clearCountersDescription')}
+        confirmLabel={t('detail.clearCountersConfirm')}
         onConfirm={handleClearCounters}
       />
     </div>
   )
 }
-

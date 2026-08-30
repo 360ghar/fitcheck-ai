@@ -12,6 +12,7 @@ import dashboard from './en/dashboard.json'
 import dataTable from './en/dataTable.json'
 import errors from './en/errors.json'
 import feedback from './en/feedback.json'
+import gifts from './en/gifts.json'
 import iap from './en/iap.json'
 import layout from './en/layout.json'
 import ops from './en/ops.json'
@@ -47,6 +48,7 @@ void i18n.use(initReactI18next).init({
       iap,
       promo,
       feedback,
+      gifts,
       ops,
       settings,
       content,

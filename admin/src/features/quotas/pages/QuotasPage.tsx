@@ -56,20 +56,6 @@ const planLabelKeys: Record<(typeof PLANS)[number], string> = {
   pro_yearly: 'users:plans.pro_yearly',
 }
 
-/** Plan defaults: fallback when custom_daily_quota is null (config.py or hardcoded). */
-const PLAN_DEFAULTS: Record<string, number> = {
-  free: 10,
-  plus_monthly: 50,
-  plus_yearly: 50,
-  pro_monthly: 100,
-  pro_yearly: 100,
-}
-
-function planDefault(plan: string | null | undefined): number {
-  if (!plan) return 10
-  return PLAN_DEFAULTS[plan] ?? 10
-}
-
 /** Raw-string validation so empty vs <1 vs non-integer get distinct messages. */
 function overrideSchema(t: TFunction<'quotas', undefined>) {
   return z.object({
@@ -84,25 +70,47 @@ function overrideSchema(t: TFunction<'quotas', undefined>) {
 
 type OverrideFormValues = z.infer<ReturnType<typeof overrideSchema>>
 
-/** Today's "used" total = extraction + generation + embedding counters. */
-function usedCount(row: AdminQuotaUsageItem): number {
-  return (
-    (row.daily_extraction_count ?? 0) +
-    (row.daily_generation_count ?? 0) +
-    (row.daily_embedding_count ?? 0)
-  )
+type QuotaOperation = 'extraction' | 'generation' | 'embedding'
+
+type OperationUsage = {
+  operation: QuotaOperation
+  used: number
+  limit: number
 }
 
-function quotaLimit(row: AdminQuotaUsageItem): number {
-  const custom = row.custom_daily_quota
-  if (custom !== null && custom !== undefined) return custom
-  return planDefault(row.plan_type)
+function operationUsage(row: AdminQuotaUsageItem): OperationUsage[] {
+  return [
+    {
+      operation: 'extraction',
+      used: row.daily_extraction_count ?? 0,
+      limit: row.effective_extraction_limit,
+    },
+    {
+      operation: 'generation',
+      used: row.daily_generation_count ?? 0,
+      limit: row.effective_generation_limit,
+    },
+    {
+      operation: 'embedding',
+      used: row.daily_embedding_count ?? 0,
+      limit: row.effective_embedding_limit,
+    },
+  ]
+}
+
+/** Today's combined count, used only for the CSV export. */
+function usedCount(row: AdminQuotaUsageItem): number {
+  return operationUsage(row).reduce((total, item) => total + item.used, 0)
 }
 
 function quotaPct(row: AdminQuotaUsageItem): number {
-  const limit = quotaLimit(row)
-  if (limit <= 0) return 0
-  return usedCount(row) / limit
+  return Math.max(
+    ...operationUsage(row).map(({ used, limit }) => (limit > 0 ? used / limit : 0)),
+  )
+}
+
+function lowestRemaining(row: AdminQuotaUsageItem): number {
+  return Math.min(...operationUsage(row).map(({ used, limit }) => Math.max(0, limit - used)))
 }
 
 /** Display name for a quota row (full_name → email → id). */
@@ -152,9 +160,9 @@ export function QuotasPage() {
       { label: t('columns.used'), value: (row) => usedCount(row) },
       {
         label: t('columns.limit'),
-        value: (row) => (row.custom_daily_quota !== null && row.custom_daily_quota !== undefined
-          ? String(row.custom_daily_quota)
-          : ''),
+        value: (row) => operationUsage(row)
+          .map((item) => `${item.operation}:${item.limit}`)
+          .join(' '),
       },
     ],
   })
@@ -220,29 +228,44 @@ export function QuotasPage() {
         id: 'used',
         accessorFn: usedCount,
         header: t('columns.used'),
-        size: 90,
-        minSize: 70,
-        cell: ({ row }) => formatNumber(usedCount(row.original)),
+        size: 160,
+        minSize: 140,
+        cell: ({ row }) => (
+          <div className="flex gap-2 text-xs tabular-nums text-ink">
+            {operationUsage(row.original).map((item) => (
+              <span key={item.operation}>
+                {t(`operations.${item.operation}Short`)} {formatNumber(item.used)}
+              </span>
+            ))}
+          </div>
+        ),
         enableSorting: false,
       },
       {
         accessorKey: 'custom_daily_quota',
         header: t('columns.limit'),
-        size: 120,
-        minSize: 90,
+        size: 180,
+        minSize: 150,
         cell: ({ row }) => {
           const custom = row.original.custom_daily_quota
-          return custom !== null && custom !== undefined ? (
-            <span className="tabular-nums font-medium text-ink">{formatNumber(custom)}</span>
-          ) : (
-            <span className="text-muted-foreground">{t('limit.planDefault')}</span>
+          return (
+            <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs tabular-nums text-ink">
+              {operationUsage(row.original).map((item) => (
+                <span key={item.operation}>
+                  {t(`operations.${item.operation}Short`)} {formatNumber(item.limit)}
+                </span>
+              ))}
+              {custom !== null && custom !== undefined ? (
+                <Badge variant="info">{t('override.label')}</Badge>
+              ) : null}
+            </div>
           )
         },
         enableSorting: false,
       },
       {
         id: 'pct',
-        header: t('columns.pct', { defaultValue: 'Burn %' }),
+        header: t('columns.pct'),
         size: 110,
         minSize: 90,
         cell: ({ row }) => {
@@ -258,18 +281,14 @@ export function QuotasPage() {
       },
       {
         id: 'remaining',
-        accessorFn: (row) => {
-          const limit = quotaLimit(row)
-          return Math.max(0, limit - usedCount(row))
-        },
+        accessorFn: lowestRemaining,
         header: t('columns.remaining'),
         size: 120,
         minSize: 90,
         cell: ({ row }) => {
-          const limit = quotaLimit(row.original)
           return (
             <span className="tabular-nums text-ink">
-              {formatNumber(Math.max(0, limit - usedCount(row.original)))}
+              {formatNumber(lowestRemaining(row.original))}
             </span>
           )
         },
@@ -352,7 +371,7 @@ export function QuotasPage() {
     <div className="space-y-3">
 
       {!canRead ? (
-        <ErrorState message={t('common:permissionDenied', { defaultValue: 'You do not have permission to view quotas.' })} />
+        <ErrorState message={t('permissionDenied')} />
       ) : (
         <>
           {/* Burn histogram + top burners — client-side from table.data */}
@@ -360,7 +379,7 @@ export function QuotasPage() {
             <Card>
               <CardHeader dense>
                 <CardTitle className="text-sm font-semibold">
-                  {t('histogram.title', { defaultValue: 'Burn histogram' })}
+                  {t('histogram.title')}
                 </CardTitle>
               </CardHeader>
               <CardContent dense>
@@ -378,7 +397,7 @@ export function QuotasPage() {
             <Card>
               <CardContent dense>
                 <p className="py-4 text-center text-sm text-muted-foreground">
-                  {t('histogram.empty', { defaultValue: 'No quota data to show burn histogram.' })}
+                  {t('histogram.empty')}
                 </p>
               </CardContent>
             </Card>
@@ -388,9 +407,9 @@ export function QuotasPage() {
                 <CardHeader dense>
                   <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                     <Flame className="size-4 text-warning-deep" aria-hidden="true" />
-                    {t('histogram.title', { defaultValue: 'Burn histogram' })}
+                    {t('histogram.title')}
                     <span className="ml-auto text-xs font-normal text-muted-foreground">
-                      {t('histogram.subtitle', { defaultValue: 'used / limit per user today' })}
+                      {t('histogram.subtitle')}
                     </span>
                   </CardTitle>
                 </CardHeader>
@@ -408,7 +427,7 @@ export function QuotasPage() {
                       ))}
                     </div>
                     {/* Simple bar chart — CSS bars, no extra query */}
-                    <div className="flex items-end gap-2 pt-2" role="img" aria-label={t('histogram.aria', { defaultValue: 'Quota burn distribution' })}>
+                    <div className="flex items-end gap-2 pt-2" role="img" aria-label={t('histogram.aria')}>
                       {histogram.map((count, idx) => {
                         const height = Math.max(8, Math.round((count / maxBucket) * 64))
                         return (
@@ -425,7 +444,7 @@ export function QuotasPage() {
                       })}
                     </div>
                     <p className="pt-2 text-center text-xs text-muted-foreground">
-                      {t('histogram.caption', { defaultValue: 'Current page only — 20 users per page, search/filter to narrow.' })}
+                      {t('histogram.caption')}
                     </p>
                   </div>
                 </CardContent>
@@ -434,20 +453,23 @@ export function QuotasPage() {
               <Card>
                 <CardHeader dense>
                   <CardTitle className="text-sm font-semibold">
-                    {t('topBurners.title', { defaultValue: 'Top burners' })}
+                    {t('topBurners.title')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent dense>
                   {topBurners.length === 0 ? (
                     <p className="py-2 text-sm text-muted-foreground">
-                      {t('topBurners.empty', { defaultValue: 'No data' })}
+                      {t('topBurners.empty')}
                     </p>
                   ) : (
                     <ul className="space-y-2">
                       {topBurners.map((row) => {
                         const pct = quotaPct(row)
-                        const used = usedCount(row)
-                        const limit = quotaLimit(row)
+                        const mostUsed = operationUsage(row).reduce((current, item) =>
+                          item.limit > 0 && item.used / item.limit > current.used / Math.max(1, current.limit)
+                            ? item
+                            : current,
+                        )
                         return (
                           <li key={row.user_id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-surface-card">
                             <div className="min-w-0 flex-1">
@@ -458,7 +480,7 @@ export function QuotasPage() {
                                 {rowName(row)}
                               </Link>
                               <p className="truncate text-xs text-muted-foreground">
-                                {formatNumber(used)} / {formatNumber(limit)} • {row.plan_type ?? '—'}
+                                {t(`operations.${mostUsed.operation}Short`)} {formatNumber(mostUsed.used)} / {formatNumber(mostUsed.limit)} • {row.plan_type ?? '—'}
                               </p>
                             </div>
                             <Badge variant={pct >= 1 ? 'danger' : pct >= 0.75 ? 'warning' : 'secondary'}>

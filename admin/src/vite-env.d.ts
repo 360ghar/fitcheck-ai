@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   /** Feature-flag env vars — mirror entries in src/config/feature-flags.ts */
   readonly VITE_ENABLE_ADMIN_REFUNDS?: string
   readonly VITE_ENABLE_ADMIN_STORAGE_CLEANUP?: string
+  readonly VITE_ENABLE_GIFT_VOUCHERS?: string
 }
 
 interface ImportMeta {

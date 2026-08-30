@@ -97,7 +97,9 @@ export function PhotoshootUploadStep() {
         <div
           className={cn(
             'grid gap-3',
-            photos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+            photos.length === 1
+              ? 'grid-cols-1'
+              : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
           )}
         >
           {photos.map((photo, index) => (
@@ -129,7 +131,7 @@ export function PhotoshootUploadStep() {
           {...getRootProps()}
           className={cn(
             'border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors',
-            photos.length === 0 ? 'p-12' : 'p-6',
+            photos.length === 0 ? 'p-8 md:p-12' : 'p-6',
             isDragActive
               ? 'border-primary bg-primary/5'
               : 'border-muted-foreground/25 hover:border-muted-foreground/50'

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatedSection } from './AnimatedSection'
+import { SectionKicker } from './SectionKicker'
 import {
   Collapsible,
   CollapsibleContent,
@@ -30,6 +31,11 @@ export const LANDING_FAQS = [
   {
     question: 'Is FitCheck AI free?',
     answer: freeVsProSummary(),
+  },
+  {
+    question: 'How does the first month of Pro free work?',
+    answer:
+      'Every new account can claim its first month of Pro free — no credit card required. Sign up through the offer link (or enter the code at signup) and Pro is applied to your account. After the free month, the account returns to the Free plan unless you choose to upgrade, so nothing is charged automatically.',
   },
   {
     question: 'How is FitCheck different from Acloset or Whering?',
@@ -78,20 +84,22 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="border-b border-stone-200 dark:border-stone-800">
-        <CollapsibleTrigger className="flex items-center justify-between w-full py-5 text-left group">
-          <span className="font-medium text-stone-900 dark:text-stone-50 pr-4 text-[15px] md:text-base">
+      <div className="border-b border-border">
+        <CollapsibleTrigger className="group flex min-h-14 w-full items-center justify-between py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          <span className="pr-4 text-[15px] font-medium text-foreground md:text-base">
             {question}
           </span>
           <ChevronDown
             className={cn(
-              'w-5 h-5 text-stone-400 transition-transform shrink-0',
+              'h-5 w-5 shrink-0 text-muted-foreground transition-transform',
               isOpen && 'rotate-180 text-primary'
             )}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="pb-5 text-stone-600 dark:text-stone-400 leading-relaxed pr-8 space-y-2">
+        {/* Height animation rides on Radix's --radix-collapsible-content-height
+            var via the accordion-down/up keyframes in tailwind.config.ts. */}
+        <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+          <div className="space-y-2 pb-5 pr-8 leading-relaxed text-body">
             <p>{answer}</p>
             {question.includes('Acloset') && (
               <p className="text-sm">
@@ -160,38 +168,33 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 export default function FAQ() {
   return (
-    <section id="faq" className="py-20 md:py-28 bg-white dark:bg-stone-950">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <AnimatedSection>
-          <div className="mb-10 md:mb-12">
-            <h2 className="landing-display text-3xl sm:text-4xl font-semibold text-stone-900 dark:text-stone-50 leading-tight">
-              Questions
+    <section id="faq" className="scroll-mt-16 bg-background py-20 md:py-28">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8">
+        <AnimatedSection className="reveal min-w-0 lg:col-span-4">
+          <div className="lg:sticky lg:top-24">
+            <SectionKicker>FAQ</SectionKicker>
+            <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
+              Clear answers before you upload
             </h2>
-            <p className="mt-3 text-stone-600 dark:text-stone-400">
-              Straight answers about what FitCheck is, how it works, privacy, and plans.
+            <p className="mt-4 text-body">
+              Product, privacy, billing, and platform details in one place.
+            </p>
+            <p className="mt-6 text-sm text-muted-foreground">
+              Need more detail?{' '}
+              <Link to="/faq" className="text-primary hover:text-primary-pressed">
+                Open the full FAQ
+              </Link>
             </p>
           </div>
         </AnimatedSection>
 
-        <div>
+        <div className="min-w-0 border-t border-border lg:col-span-8">
           {faqs.map((faq, index) => (
             <AnimatedSection key={faq.question} delay={index * 40}>
               <FAQItem {...faq} />
             </AnimatedSection>
           ))}
         </div>
-
-        <AnimatedSection delay={120}>
-          <p className="mt-8 text-sm text-stone-500 dark:text-stone-400">
-            Need more detail?{' '}
-            <Link
-              to="/faq"
-              className="text-primary hover:text-primary-pressed"
-            >
-              Full FAQ
-            </Link>
-          </p>
-        </AnimatedSection>
       </div>
     </section>
   )

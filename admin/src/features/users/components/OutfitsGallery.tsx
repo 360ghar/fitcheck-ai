@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { JsonRecord } from '@/features/users/lib/users'
@@ -21,6 +21,9 @@ export function OutfitsGallery({
 }) {
   const { t } = useTranslation('users')
   const [tab, setTab] = useState(defaultTab || 'outfits')
+  useEffect(() => {
+    setTab(defaultTab || 'outfits')
+  }, [defaultTab])
   const handle = (value: string) => {
     setTab(value)
     onTabChange(value)
@@ -28,14 +31,14 @@ export function OutfitsGallery({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between py-2">
-        <CardTitle className="text-sm">{t('detail.generationsSection', { defaultValue: 'Generations' })}</CardTitle>
+        <CardTitle className="text-sm">{t('detail.generationsSection')}</CardTitle>
         <Tabs value={tab} onValueChange={handle}>
           <TabsList className="h-7">
             <TabsTrigger value="outfits" className="px-2.5 py-0.5 text-xs">
-              {t('detail.outfitsTab', { defaultValue: 'Outfits' })}
+              {t('detail.outfitsTab')}
             </TabsTrigger>
             <TabsTrigger value="photoshoot" className="px-2.5 py-0.5 text-xs">
-              {t('detail.photoshootTab', { defaultValue: 'Photoshoot' })}
+              {t('detail.photoshootTab')}
             </TabsTrigger>
           </TabsList>
         </Tabs>

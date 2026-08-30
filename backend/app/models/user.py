@@ -96,6 +96,19 @@ class UserUpdate(BaseModel):
         # field check to reject.
         return v
 
+    @field_validator('birth_time', mode='before')
+    @classmethod
+    def normalize_birth_time(cls, v: object) -> object:
+        """Accept '' as an explicit clear for birth_time.
+
+        Clients send an empty string to ERASE a previously saved value; a
+        plain null would be dropped by `exclude_unset` on some clients and
+        mean "leave unchanged". Blank must not 422 the whole update.
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
 
 class UserResponseBase(BaseModel):
     """Response-side user fields (no input validators).

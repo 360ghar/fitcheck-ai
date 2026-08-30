@@ -97,6 +97,7 @@ class AdminUserDetail(BaseModel):
     streaks: Dict[str, Any] = Field(default_factory=dict)
     achievements_meta: Dict[str, Any] = Field(default_factory=dict)
     social_import_jobs: List[Dict[str, Any]] = Field(default_factory=list)
+    support_tickets: List[Dict[str, Any]] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 
@@ -215,6 +216,9 @@ class AdminQuotaUsageItem(BaseModel):
     daily_photoshoot_images: Optional[int] = None
     last_reset_date: Optional[Any] = None
     custom_daily_quota: Optional[int] = None
+    effective_extraction_limit: int
+    effective_generation_limit: int
+    effective_embedding_limit: int
 
     model_config = ConfigDict(extra="allow")
 

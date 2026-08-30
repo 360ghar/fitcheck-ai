@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-11
+Generated: 2026-08-30
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -74,6 +74,11 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `053_extraction_jobs_reserved_generations.sql`
 - `054_drop_overbroad_blog_manage_policy.sql`
 - `055_release_job_generation_quota.sql`
+- `056_gift_vouchers.sql`
+- `057_mcp_oauth.sql`
+- `058_mcp_oauth_atomic_token_exchange.sql`
+- `059_atomic_admin_gift_revoke.sql`
+- `060_atomic_admin_user_actions.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -88,10 +93,16 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `challenge_participations` | `001_full_schema.sql` |
 | `challenges` | `001_full_schema.sql` |
 | `extraction_jobs` | `016_extraction_jobs.sql` |
+| `gift_entitlement_grants` | `056_gift_vouchers.sql` |
+| `gift_voucher_allowances` | `056_gift_vouchers.sql` |
+| `gift_vouchers` | `056_gift_vouchers.sql` |
 | `google_rtdn_events` | `030_mobile_iap.sql` |
 | `item_colors` | `001_full_schema.sql` |
 | `item_images` | `001_full_schema.sql` |
 | `items` | `001_full_schema.sql` |
+| `mcp_oauth_auth_codes` | `057_mcp_oauth.sql` |
+| `mcp_oauth_clients` | `057_mcp_oauth.sql` |
+| `mcp_oauth_refresh_tokens` | `057_mcp_oauth.sql` |
 | `outfit_collection_items` | `001_full_schema.sql` |
 | `outfit_collections` | `001_full_schema.sql` |
 | `outfit_generations` | `001_full_schema.sql` |
@@ -247,6 +258,12 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `047_items_client_request_id.sql` → `outfit_images`
 - `051_add_referral_redemptions_credit_months.sql` → `referral_redemptions`
 - `053_extraction_jobs_reserved_generations.sql` → `extraction_jobs`
+- `056_gift_vouchers.sql` → `gift_vouchers`
+- `056_gift_vouchers.sql` → `gift_voucher_allowances`
+- `056_gift_vouchers.sql` → `gift_entitlement_grants`
+- `057_mcp_oauth.sql` → `mcp_oauth_clients`
+- `057_mcp_oauth.sql` → `mcp_oauth_auth_codes`
+- `057_mcp_oauth.sql` → `mcp_oauth_refresh_tokens`
 
 ## Related
 

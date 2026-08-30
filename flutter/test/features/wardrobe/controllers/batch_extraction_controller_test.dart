@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:fitcheck_ai/core/services/persistence_service.dart';
 import 'package:fitcheck_ai/core/utils/error_handler.dart';
 import 'package:fitcheck_ai/domain/enums/category.dart';
 import 'package:fitcheck_ai/domain/enums/condition.dart';
 import 'package:fitcheck_ai/features/wardrobe/controllers/batch_extraction_controller.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/batch_extraction_models.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
+import 'package:fitcheck_ai/features/wardrobe/models/social_import_models.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/batch_extraction_repository.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/item_repository.dart';
+import 'package:fitcheck_ai/features/wardrobe/repositories/social_import_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart' hide Condition;
@@ -40,6 +43,82 @@ class FakeBatchExtractionRepository extends BatchExtractionRepository {
   Stream<SSEEvent> subscribeToEvents(String jobId) {
     final handler = onSubscribeToEvents;
     return handler?.call(jobId) ?? const Stream<SSEEvent>.empty();
+  }
+}
+
+/// A fake [SocialImportRepository] whose SSE stream and status endpoint are
+/// driven by callbacks, so tests can simulate the SSE service's single-error
+/// contract (synthetic 'error' event + stream close) without any network.
+class FakeSocialImportRepository extends SocialImportRepository {
+  final StreamController<SocialImportSSEEvent> events =
+      StreamController<SocialImportSSEEvent>.broadcast();
+
+  int getStatusCalls = 0;
+
+  @override
+  Future<SocialImportJobData> getStatus(String jobId) {
+    getStatusCalls++;
+    return Future.value(
+      SocialImportJobData(
+        id: jobId,
+        // Terminal after a few polls so the bounded loop exits instead of
+        // leaving pending timers at test teardown.
+        status: getStatusCalls >= 3
+            ? SocialImportJobStatus.completed
+            : SocialImportJobStatus.processing,
+        platform: SocialPlatform.instagram,
+        sourceUrl: 'https://instagram.com/x',
+        normalizedUrl: 'https://instagram.com/x',
+        totalPhotos: 10,
+        discoveredPhotos: 5,
+        processedPhotos: 2,
+        approvedPhotos: 2,
+        rejectedPhotos: 0,
+        failedPhotos: 0,
+        authRequired: false,
+        discoveryCompleted: false,
+        queuedCount: 3,
+      ),
+    );
+  }
+
+  @override
+  Stream<SocialImportSSEEvent> subscribeToEvents(
+    String jobId, {
+    int? lastEventId,
+  }) {
+    // Mimic SSE retry exhaustion: one synthetic error event, then close.
+    return events.stream;
+  }
+}
+
+/// In-memory [PersistenceService] so the social-import persistence paths
+/// never touch real SharedPreferences in unit tests.
+class _InMemoryPersistenceService extends PersistenceService {
+  final Map<String, Object> _store = {};
+
+  @override
+  Future<bool> setString(String key, String value) async {
+    _store[key] = value;
+    return true;
+  }
+
+  @override
+  Future<String?> getString(String key) async => _store[key] as String?;
+
+  @override
+  Future<bool> setInt(String key, int value) async {
+    _store[key] = value;
+    return true;
+  }
+
+  @override
+  Future<int?> getInt(String key) async => _store[key] as int?;
+
+  @override
+  Future<bool> remove(String key) async {
+    _store.remove(key);
+    return true;
   }
 }
 
@@ -343,6 +422,53 @@ void main() {
         isEmpty,
         reason: 'one blip must be retried, not reported to the user',
       );
+
+      controller.onClose();
+    });
+  });
+
+  group('BatchExtractionController social-import SSE fallback', () {
+    testWidgets('synthetic error event starts the polling fallback', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+      // In-memory persistence so the controller's social-state persistence
+      // never touches real SharedPreferences.
+      Get.put<PersistenceService>(_InMemoryPersistenceService());
+      addTearDown(Get.reset);
+
+      final repo = FakeSocialImportRepository();
+      final controller = BatchExtractionController(socialRepository: repo);
+      controller.socialJobId.value = 'social-1';
+
+      controller.subscribeToSocialEventsForTesting('social-1');
+      await tester.pump();
+      // The synthetic event arrives, then the SSE service closes the stream.
+      repo.events.add(
+        const SocialImportSSEEvent(
+          type: 'error',
+          data: {'message': 'Connection failed after 3 attempts'},
+        ),
+      );
+      await repo.events.close();
+      await tester.pump(const Duration(seconds: 2));
+
+      // Pre-fix the synthetic error event fell through to a single one-shot
+      // refreshSocialStatus and onDone did nothing, so a dead backend left
+      // the import UI frozen with no polling fallback.
+      expect(
+        repo.getStatusCalls,
+        greaterThan(1),
+        reason:
+            'synthetic SSE error must engage the bounded polling loop '
+            '(what onError did before the single-error contract)',
+      );
+      expect(controller.socialIsConnected.value, isFalse);
+
+      // Drain the bounded loop to its terminal status so no poll timer is
+      // left pending at teardown.
+      await runClock(tester);
+      expect(controller.socialJob.value?.status, SocialImportJobStatus.completed);
 
       controller.onClose();
     });

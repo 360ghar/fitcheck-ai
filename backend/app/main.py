@@ -16,9 +16,15 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images, admin, health
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images, gifts, admin, health, oauth
 from app.db.connection import SupabaseDB
 from app.utils.db import missing_quota_rpcs, missing_referral_rpcs, probe_valid_batch_size_bound
+from app.mcp.curated import build_curated_registry
+from app.mcp.executor import set_asgi_app
+from app.mcp.generate import build_tool_registry
+from app.mcp.http import ManagedMCPASGIApp
+from app.mcp.server import build_mcp_server
+from app.mcp.widgets import WidgetProvider
 from postgrest.exceptions import APIError as PostgrestAPIError
 
 REQUIRED_TABLES = (
@@ -57,6 +63,10 @@ REQUIRED_TABLES = (
     # Promo codes (shareable campaign grants)
     "promo_codes",
     "promo_redemptions",
+    # Gift value and its entitlement queue stay separate from billing rows.
+    "gift_vouchers",
+    "gift_voucher_allowances",
+    "gift_entitlement_grants",
     # Support tickets
     "support_tickets",
     # Store webhook event ledgers: without these tables the App Store / Play /
@@ -456,7 +466,8 @@ async def lifespan(app: FastAPI):
     )
 
     logger.info("Accepting traffic; background init scheduled")
-    yield
+    async with _MCP_APP.run():
+        yield
 
     # Shutdown (Railway "Stopping Container" / SIGTERM reaches here)
     logger.info(
@@ -594,6 +605,9 @@ app.include_router(demo.router, prefix="/api/v1/demo", tags=["Demo"])
 
 # Subscription routes (requires auth, except webhook)
 app.include_router(subscription.router, prefix="/api/v1/subscription", tags=["Subscription"])
+
+# Paid, complimentary, and public gift voucher flows.
+app.include_router(gifts.router, prefix="/api/v1/gifts", tags=["Gift Vouchers"])
 # Mobile in-app purchase routes (register + store webhooks); mounted under
 # /api/v1/subscription via its own prefix.
 app.include_router(iap.router, prefix="/api/v1", tags=["Subscription", "IAP"])
@@ -628,6 +642,10 @@ app.include_router(images.router, prefix="/api/v1/images", tags=["Images"])
 # Health endpoints: canonical /health + /api/v1/health compatibility alias.
 # The routes carry full paths, so no prefix is applied here.
 app.include_router(health.router, tags=["Health"])
+# OAuth 2.1 gateway for the MCP/ChatGPT surface (discovery, DCR, authorize,
+# token, revoke). No-op (503) unless MCP_OAUTH_ISSUER is configured. Must be
+# registered BEFORE the MCP root mount below.
+app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["OAuth"])
 
 
 # ============================================================================
@@ -685,6 +703,54 @@ async def readiness_check():
         response["missing_tables"] = missing
 
     return response
+
+
+# ============================================================================
+# MCP (Model Context Protocol) — agent surface
+# ============================================================================
+# Two MCP mounts from one codebase (ManagedMCPASGIApp dispatches by prefix):
+#   /mcp         — full API mirror (minus denylist: admin, auth, webhooks,
+#                  SSE, multipart, binary) for Claude/Cursor/Droid/power users.
+#   /mcp/chatgpt — curated ChatGPT app: ~8 friendly tools + ui:// widget
+#                  resources (the ChatGPT app IS this MCP server).
+# Tool calls loop back through the real routes in-process, so auth,
+# validation, rate limits and error formatting behave exactly like the public
+# API. Bearer token required. Docs: docs/references/mcp.md.
+#
+# This MUST stay the LAST route registration: the transport is mounted at the
+# router root because Starlette Mount("/mcp") 307-redirects the exact "/mcp"
+# URL MCP clients POST to. Requests outside the mount paths get the standard
+# 404 envelope, so unmatched API paths still 404 normally.
+set_asgi_app(app)
+_MCP_MIRROR_TOOLS = build_tool_registry(app)
+_MCP_APP = ManagedMCPASGIApp(
+    [
+        (
+            "/mcp",
+            build_mcp_server(
+                "fitcheck",
+                "FitCheck AI wardrobe, outfits, planning, photoshoot and "
+                "subscription API. Every tool acts on the authenticated "
+                "user's own data; results are the same JSON the public API "
+                "returns.",
+                _MCP_MIRROR_TOOLS,
+                version=settings.VERSION,
+            ),
+        ),
+        (
+            "/mcp/chatgpt",
+            build_mcp_server(
+                "fitcheck",
+                "FitCheck AI: your wardrobe, outfits, and wear plans. Ask "
+                "about what to wear, browse outfits, or check the plan.",
+                build_curated_registry(_MCP_MIRROR_TOOLS),
+                version=settings.VERSION,
+                widget_provider=WidgetProvider(),
+            ),
+        ),
+    ]
+)
+app.mount("", _MCP_APP, name="mcp")
 
 
 # ============================================================================

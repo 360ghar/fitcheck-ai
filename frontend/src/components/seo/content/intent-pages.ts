@@ -1,5 +1,6 @@
 import type { SeoPageContent } from '../SeoPageLayout'
 import { CITY_WEAR_PAGES, getCityWearPageByPath } from './city-wear-pages'
+import { TRIAL_PROMO_CODE } from '@/lib/trial-offer'
 
 export const INTENT_PAGES: Record<string, SeoPageContent> = {
   'best-virtual-closet-apps': {
@@ -294,7 +295,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     relatedLinks: [
       { label: 'FitCheck vs Acloset', href: '/compare/fitcheck-vs-acloset' },
       { label: 'Features overview', href: '/features' },
-      { label: 'Register free', href: '/auth/register' },
+      { label: 'Register free', href: `/auth/register?promo=${TRIAL_PROMO_CODE}` },
     ],
   },
 
@@ -483,7 +484,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     relatedLinks: [
       { label: 'AI wardrobe extraction', href: '/features/ai-wardrobe-extraction' },
       { label: 'Best virtual closet apps', href: '/best/virtual-closet-apps' },
-      { label: 'Start free', href: '/auth/register' },
+      { label: 'Start free', href: `/auth/register?promo=${TRIAL_PROMO_CODE}` },
     ],
   },
 

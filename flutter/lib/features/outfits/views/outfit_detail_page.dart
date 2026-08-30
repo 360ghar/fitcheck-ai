@@ -634,6 +634,36 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
           }
 
           if (history.isEmpty) {
+            if (_controller.isWearHistoryFailed(outfit.id)) {
+              // A previous fetch failed; do NOT reschedule on rebuild (that
+              // looped forever). Offer a manual retry instead.
+              return AppGlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppConstants.spacing16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_off_outlined,
+                          color: tokens.textMuted),
+                      const SizedBox(width: AppConstants.spacing12),
+                      Expanded(
+                        child: Text(
+                          'Couldn\'t load wear history.',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: tokens.textMuted,
+                                  ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            _controller.retryWearHistory(outfit.id),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
             // Load history if not cached
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _controller.fetchWearHistory(outfit.id);

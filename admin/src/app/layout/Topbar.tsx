@@ -56,9 +56,9 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           )}
         </Button>
         {pageTitle ? (
-          <h1 className="hidden max-w-[28vw] truncate text-sm font-semibold tracking-tight text-ink lg:block">
+          <span className="hidden max-w-[28vw] truncate text-sm font-semibold tracking-tight text-ink lg:block">
             {pageTitle}
-          </h1>
+          </span>
         ) : null}
       </div>
 

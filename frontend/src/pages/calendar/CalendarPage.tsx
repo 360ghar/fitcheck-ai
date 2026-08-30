@@ -526,7 +526,7 @@ export default function CalendarPage() {
 
       {/* Create event dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Event</DialogTitle>
             <DialogDescription>Add a planning event and assign an outfit later.</DialogDescription>
@@ -612,7 +612,7 @@ export default function CalendarPage() {
           if (!open) setSelectedEvent(null)
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedEvent?.title}</DialogTitle>
             <DialogDescription>
@@ -635,7 +635,7 @@ export default function CalendarPage() {
             <div className="text-sm text-muted-foreground">No outfit assigned yet.</div>
           )}
 
-          <DialogFooter className="flex-col md:flex-row gap-2">
+          <DialogFooter className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Button variant="outline" onClick={() => setSelectedEvent(null)} className="w-full md:w-auto">
               Close
             </Button>
@@ -743,11 +743,11 @@ export default function CalendarPage() {
             error={geoState.error}
             showAutoDetectButton={true}
           />
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowLocationDialog(false)}>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowLocationDialog(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button onClick={handleSaveLocation}>
+            <Button onClick={handleSaveLocation} className="w-full sm:w-auto">
               Save Location
             </Button>
           </DialogFooter>

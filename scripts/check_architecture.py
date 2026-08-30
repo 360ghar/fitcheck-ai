@@ -7,6 +7,9 @@ Backend rules:
   - core must not import app.services or app.api
   - db must not import app.services
   - utils (app/utils/) is infrastructure helpers: must not import api or services
+  - mcp (app/mcp/) talks to the API via in-process ASGI loopback only: may
+    import core (and itself), must not import api/services/models/db/agents;
+    only app.main may import app.mcp
 
 Frontend rules (regex-based TS/JS import scanner):
   - src/api must not import pages or components
@@ -30,7 +33,7 @@ BACKEND_APP = ROOT / "backend" / "app"
 FRONTEND_SRC = ROOT / "frontend" / "src"
 FRONTEND_NODE_MODULES = ROOT / "frontend" / "node_modules"
 
-KNOWN_LAYERS = frozenset({"api", "services", "models", "core", "db", "agents", "utils"})
+KNOWN_LAYERS = frozenset({"api", "services", "models", "core", "db", "agents", "utils", "mcp"})
 
 # Regex scanner for TypeScript/JavaScript imports. Handles:
 #   - static imports: import x from 'path'; import { y } from 'path'
@@ -75,6 +78,8 @@ def layer_of(mod: str) -> str | None:
         return "agents"
     if mod.startswith("app.utils"):
         return "utils"
+    if mod.startswith("app.mcp"):
+        return "mcp"
     if mod == "app" or mod.startswith("app.main"):
         return "main"
     return None
@@ -145,6 +150,7 @@ def check_backend_file(path: Path) -> None:
         "db": "db",
         "agents": "agents",
         "utils": "utils",
+        "mcp": "mcp",
     }.get(top)
     if path.name == "main.py":
         path_layer = "main"
@@ -192,6 +198,22 @@ def check_backend_file(path: Path) -> None:
                 f"REMEDIATE: app/utils/ is infrastructure helpers only and must not import "
                 f"api or services (avoids reverse deps and circular graphs). Move domain "
                 f"logic into services; keep utils pure. See ARCHITECTURE.md."
+            )
+        # mcp is an agent surface: talks HTTP-loopback only, never domain imports
+        if file_layer == "mcp" and target in {"api", "services", "models", "db", "agents", "utils", "main"}:
+            errors.append(
+                f"{path}: layer 'mcp' imports '{imp}' ({target}). "
+                f"REMEDIATE: app/mcp/ executes tool calls as in-process loopback "
+                f"requests against /api/v1 routes (app/mcp/executor.py), so it must "
+                f"not import api/services/models/db/agents directly; it may import "
+                f"app.core only. See ARCHITECTURE.md and docs/references/mcp.md."
+            )
+        # only main may wire the MCP layer into the app
+        if target == "mcp" and file_layer not in {"main", "mcp"}:
+            errors.append(
+                f"{path}: layer '{file_layer}' imports '{imp}' (mcp). "
+                f"REMEDIATE: only app/main.py may mount the MCP servers; domain "
+                f"layers must not depend on the agent surface. See ARCHITECTURE.md."
             )
 
 

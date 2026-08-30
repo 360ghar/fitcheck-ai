@@ -3,36 +3,56 @@
  */
 
 import { AnimatedSection } from './AnimatedSection'
+import { SectionKicker } from './SectionKicker'
 import { ExtractionDemo } from './ExtractionDemo'
 import { TryOnDemo } from './TryOnDemo'
 import { PhotoshootDemo } from './PhotoshootDemo'
 
 export default function DemoSection() {
   return (
-    <section id="demo" className="py-20 md:py-28 bg-white dark:bg-stone-950">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <AnimatedSection>
-          <div className="max-w-2xl mb-12 md:mb-16">
-            <h2 className="landing-display text-3xl sm:text-4xl md:text-[2.75rem] font-semibold text-stone-900 dark:text-stone-50 leading-tight">
-              Try it without signing up
+    <section id="demo" className="scroll-mt-16 bg-surface-soft py-20 md:py-28">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <AnimatedSection className="reveal">
+          <div className="mb-12 max-w-2xl md:mb-16">
+            <SectionKicker>Live demo</SectionKicker>
+            <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
+              Product proof you can run yourself
             </h2>
-            <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400 leading-relaxed">
-              Run extraction, try-on, and photoshoot demos on real photos. About 3 extraction, 2 try-on, and 1 photoshoot demo per day per IP. Create a free account to save results and keep building your wardrobe.
+            <p className="mt-4 text-base leading-relaxed text-body md:text-lg">
+              Try extraction, virtual try-on, and Photoshoot Studio without an account. Demo limits are about 3 extraction, 2 try-on, and 1 photoshoot run per IP each day.
             </p>
           </div>
         </AnimatedSection>
 
-        <div className="grid md:grid-cols-3 gap-5 md:gap-6">
-          <AnimatedSection delay={80}>
-            <ExtractionDemo />
-          </AnimatedSection>
-          <AnimatedSection delay={140}>
-            <TryOnDemo />
-          </AnimatedSection>
-          <AnimatedSection delay={200}>
-            <PhotoshootDemo />
-          </AnimatedSection>
+        <div className="min-w-0 max-w-full overflow-hidden [contain:paint]">
+          <div
+            data-testid="demo-rail"
+            className="reveal-steps flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4 lg:grid lg:grid-cols-3 lg:gap-6 lg:overflow-visible lg:pb-0"
+          >
+            <AnimatedSection
+              delay={80}
+              className="w-[90%] min-w-0 shrink-0 snap-start sm:w-[24rem] lg:w-auto lg:shrink"
+            >
+              <ExtractionDemo />
+            </AnimatedSection>
+            <AnimatedSection
+              delay={140}
+              className="w-[90%] min-w-0 shrink-0 snap-start sm:w-[24rem] lg:w-auto lg:shrink"
+            >
+              <TryOnDemo />
+            </AnimatedSection>
+            <AnimatedSection
+              delay={200}
+              className="w-[90%] min-w-0 shrink-0 snap-start sm:w-[24rem] lg:w-auto lg:shrink"
+            >
+              <PhotoshootDemo />
+            </AnimatedSection>
+          </div>
         </div>
+
+        <p className="mt-4 text-xs text-muted-foreground lg:hidden">
+          Swipe to test all three demos.
+        </p>
       </div>
     </section>
   )

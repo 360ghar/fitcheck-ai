@@ -13,6 +13,10 @@
   function = "og-tags"
 
 [[edge_functions]]
+  path = "/gift/*"
+  function = "og-tags"
+
+[[edge_functions]]
   path = "/blog/*"
   function = "seo-html"
 
@@ -153,6 +157,16 @@
     X-Robots-Tag = "noindex, nofollow"
 
 [[headers]]
+  for = "/gift/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/gifts/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
   for = "/settings/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
@@ -247,4 +261,3 @@
   for = "/video/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
-

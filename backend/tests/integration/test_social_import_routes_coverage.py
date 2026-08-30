@@ -275,6 +275,35 @@ async def test_events_replay_terminal_event_closes_stream(monkeypatch, fake_db):
 
 
 @pytest.mark.asyncio
+async def test_events_last_event_id_header_takes_precedence(monkeypatch, fake_db):
+    _enable_social_import(monkeypatch)
+    fake_db.rows["social_import_jobs"] = [_job_row()]
+    _patch_service(monkeypatch, SimpleNamespace(get_status=AsyncMock(return_value=_status_payload())))
+    replay = AsyncMock(
+        return_value=[{"id": 8, "type": "job_completed", "data": {"job_id": "job-1"}}],
+    )
+    monkeypatch.setattr(SocialImportEventService, "add_subscriber", AsyncMock())
+    monkeypatch.setattr(SocialImportEventService, "replay", replay)
+    monkeypatch.setattr(SocialImportEventService, "remove_subscriber", AsyncMock())
+
+    response = await social_import_events(
+        job_id="job-1",
+        last_event_id=2,
+        last_event_id_header="7",
+        user_id="user-1",
+        db=fake_db,
+    )
+    _ = [chunk async for chunk in response.body_iterator]
+
+    replay.assert_awaited_once_with(
+        fake_db,
+        job_id="job-1",
+        user_id="user-1",
+        after_id=7,
+    )
+
+
+@pytest.mark.asyncio
 async def test_events_live_queue_events_until_terminal(monkeypatch, fake_db):
     _enable_social_import(monkeypatch)
     fake_db.rows["social_import_jobs"] = [_job_row()]

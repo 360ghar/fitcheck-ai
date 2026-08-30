@@ -15,7 +15,7 @@ export function CountsStrip({ counts }: { counts: JsonRecord }) {
       <CardContent className="flex flex-wrap gap-1.5 py-2">
         {entries.map(([key, value]) => (
           <Badge key={key} variant="secondary" className="gap-1.5">
-            {t(`detail.${key}`, { defaultValue: key })}: {formatNumber(value as number)}
+            {t(`detail.${key}`)}: {formatNumber(value as number)}
           </Badge>
         ))}
         {entries.length === 0 ? <span className="text-sm text-muted-foreground">—</span> : null}

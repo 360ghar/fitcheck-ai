@@ -91,6 +91,19 @@ class Settings(BaseSettings):
 
         return value
 
+    # MCP / agent surface (docs/references/mcp.md). All optional: MCP works
+    # with bearer Supabase JWTs alone; the OAuth issuer is only needed for
+    # ChatGPT-style connector discovery, PUBLIC_API_BASE_URL only for
+    # self-referential metadata URLs.
+    MCP_OAUTH_ISSUER: Optional[str] = None
+    PUBLIC_API_BASE_URL: Optional[str] = None
+    # Comma-separated redirect-URI prefixes allowed to register via DCR.
+    # Empty disables dynamic registration entirely (bearer-JWT-only mode).
+    MCP_REDIRECT_URI_ALLOWLIST: str = ""
+    # Signing key for MCP-issued OAuth tokens (HS256). Falls back to the
+    # Supabase project secret when unset so local dev needs no new env.
+    MCP_JWT_SECRET: Optional[str] = None
+
     # Supabase API Keys (sb_publishable_... and sb_secret_...)
     SUPABASE_URL: str
     SUPABASE_PUBLISHABLE_KEY: str
@@ -273,6 +286,20 @@ class Settings(BaseSettings):
     STRIPE_PLUS_YEARLY_PRICE_ID: Optional[str] = None
     STRIPE_PRO_MONTHLY_PRICE_ID: Optional[str] = None
     STRIPE_PRO_YEARLY_PRICE_ID: Optional[str] = None
+
+    # One-time Pro gift purchases. These are separate Stripe Prices from the
+    # recurring subscription catalog and are verified server-side before a
+    # voucher is issued.
+    STRIPE_GIFT_PRO_1M_PRICE_ID: Optional[str] = None
+    STRIPE_GIFT_PRO_3M_PRICE_ID: Optional[str] = None
+    STRIPE_GIFT_PRO_12M_PRICE_ID: Optional[str] = None
+    # Dedicated HMAC key for claim links/codes. Falls back to the Supabase JWT
+    # secret for local/backwards-compatible environments; production should
+    # set a separate random value before enabling creation.
+    GIFT_TOKEN_SECRET: Optional[str] = None
+    # Safe rollout switch: blocks only NEW issuance. Existing public links,
+    # claims, artwork, and entitlement resolution continue to work.
+    ENABLE_GIFT_VOUCHER_CREATION: bool = False
 
     # ==========================================================================
     # Mobile In-App Purchase Configuration (Apple App Store + Google Play)

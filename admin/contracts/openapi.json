@@ -391,6 +391,137 @@
         "title": "AdminFunnelStep",
         "type": "object"
       },
+      "AdminGiftAction": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "AdminGiftAction",
+        "type": "object"
+      },
+      "AdminGiftAllowanceAdjust": {
+        "properties": {
+          "add_count": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Add Count",
+            "type": "integer"
+          },
+          "duration_months": {
+            "enum": [
+              1,
+              3,
+              12
+            ],
+            "title": "Duration Months",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "duration_months",
+          "add_count",
+          "reason"
+        ],
+        "title": "AdminGiftAllowanceAdjust",
+        "type": "object"
+      },
+      "AdminGiftAssign": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "reason"
+        ],
+        "title": "AdminGiftAssign",
+        "type": "object"
+      },
+      "AdminGiftCreate": {
+        "properties": {
+          "duration_months": {
+            "enum": [
+              1,
+              3,
+              12
+            ],
+            "title": "Duration Months",
+            "type": "integer"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "from_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "From Name",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "note": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Note",
+            "type": "string"
+          },
+          "to_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "To Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_name",
+          "to_name",
+          "duration_months",
+          "note"
+        ],
+        "title": "AdminGiftCreate",
+        "type": "object"
+      },
       "AdminIapTransactionListItem": {
         "additionalProperties": true,
         "description": "One row of GET /admin/iap/transactions (store-billed subscriptions).",
@@ -831,6 +962,18 @@
             ],
             "title": "Daily Photoshoot Images"
           },
+          "effective_embedding_limit": {
+            "title": "Effective Embedding Limit",
+            "type": "integer"
+          },
+          "effective_extraction_limit": {
+            "title": "Effective Extraction Limit",
+            "type": "integer"
+          },
+          "effective_generation_limit": {
+            "title": "Effective Generation Limit",
+            "type": "integer"
+          },
           "email": {
             "anyOf": [
               {
@@ -879,7 +1022,10 @@
           }
         },
         "required": [
-          "user_id"
+          "user_id",
+          "effective_extraction_limit",
+          "effective_generation_limit",
+          "effective_embedding_limit"
         ],
         "title": "AdminQuotaUsageItem",
         "type": "object"
@@ -1647,6 +1793,14 @@
               }
             ],
             "title": "Subscription"
+          },
+          "support_tickets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Support Tickets",
+            "type": "array"
           },
           "trips": {
             "items": {
@@ -2544,6 +2698,81 @@
         "title": "BodyProfileUpdate",
         "type": "object"
       },
+      "Body_issue_token_api_v1_oauth_token_post": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "code_verifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Verifier"
+          },
+          "grant_type": {
+            "title": "Grant Type",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redirect Uri"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          }
+        },
+        "required": [
+          "grant_type",
+          "client_id"
+        ],
+        "title": "Body_issue_token_api_v1_oauth_token_post",
+        "type": "object"
+      },
+      "Body_revoke_token_api_v1_oauth_revoke_post": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "Body_revoke_token_api_v1_oauth_revoke_post",
+        "type": "object"
+      },
       "Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post": {
         "properties": {
           "provider_page_id": {
@@ -2894,6 +3123,57 @@
           }
         },
         "title": "CompleteLookRequest",
+        "type": "object"
+      },
+      "ComplimentaryGiftCreate": {
+        "properties": {
+          "client_request_id": {
+            "maxLength": 100,
+            "minLength": 8,
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "duration_months": {
+            "enum": [
+              1,
+              3,
+              12
+            ],
+            "title": "Duration Months",
+            "type": "integer"
+          },
+          "from_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "From Name",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "to_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "To Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_name",
+          "to_name",
+          "duration_months",
+          "client_request_id"
+        ],
+        "title": "ComplimentaryGiftCreate",
         "type": "object"
       },
       "ConfirmResetRequest": {
@@ -3579,6 +3859,86 @@
           }
         },
         "title": "GenerationRequest",
+        "type": "object"
+      },
+      "GiftCheckoutFulfill": {
+        "properties": {
+          "session_id": {
+            "maxLength": 255,
+            "minLength": 8,
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "GiftCheckoutFulfill",
+        "type": "object"
+      },
+      "GiftClaimRequest": {
+        "properties": {
+          "public_id": {
+            "format": "uuid",
+            "title": "Public Id",
+            "type": "string"
+          },
+          "secret": {
+            "maxLength": 160,
+            "minLength": 16,
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "public_id",
+          "secret"
+        ],
+        "title": "GiftClaimRequest",
+        "type": "object"
+      },
+      "GiftUpdate": {
+        "properties": {
+          "from_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Name"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "to_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Name"
+          }
+        },
+        "title": "GiftUpdate",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -5229,6 +5589,69 @@
           "page_size"
         ],
         "title": "PageResponse[Dict[str, Any]]",
+        "type": "object"
+      },
+      "PaidGiftCheckoutCreate": {
+        "properties": {
+          "cancel_url": {
+            "default": "/gifts?checkout=cancelled",
+            "maxLength": 500,
+            "title": "Cancel Url",
+            "type": "string"
+          },
+          "client_request_id": {
+            "maxLength": 100,
+            "minLength": 8,
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "duration_months": {
+            "enum": [
+              1,
+              3,
+              12
+            ],
+            "title": "Duration Months",
+            "type": "integer"
+          },
+          "from_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "From Name",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "success_url": {
+            "default": "/gifts?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+            "maxLength": 500,
+            "title": "Success Url",
+            "type": "string"
+          },
+          "to_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "To Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_name",
+          "to_name",
+          "duration_months",
+          "client_request_id"
+        ],
+        "title": "PaidGiftCheckoutCreate",
         "type": "object"
       },
       "PhotoshootUseCase": {
@@ -7437,6 +7860,724 @@
         ]
       }
     },
+    "/api/v1/admin/gifts": {
+      "get": {
+        "operationId": "list_gifts_api_v1_admin_gifts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(paid|complimentary|admin)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "duration_months",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duration Months"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_Dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Gifts",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "post": {
+        "operationId": "create_gift_api_v1_admin_gifts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Gift Api V1 Admin Gifts Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/allowances/{user_id}": {
+      "post": {
+        "operationId": "adjust_gift_allowance_api_v1_admin_gifts_allowances__user_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftAllowanceAdjust"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Adjust Gift Allowance Api V1 Admin Gifts Allowances  User Id  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Adjust Gift Allowance",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/export.csv": {
+      "get": {
+        "operationId": "export_gifts_api_v1_admin_gifts_export_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(paid|complimentary|admin)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "duration_months",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duration Months"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Gifts",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/summary": {
+      "get": {
+        "operationId": "gift_summary_api_v1_admin_gifts_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Gift Summary Api V1 Admin Gifts Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Gift Summary",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/{voucher_id}": {
+      "get": {
+        "operationId": "get_gift_api_v1_admin_gifts__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Gift Api V1 Admin Gifts  Voucher Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Gift",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "patch": {
+        "operationId": "update_gift_api_v1_admin_gifts__voucher_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiftUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Gift Api V1 Admin Gifts  Voucher Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/{voucher_id}/assign": {
+      "post": {
+        "operationId": "assign_gift_api_v1_admin_gifts__voucher_id__assign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftAssign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Assign Gift Api V1 Admin Gifts  Voucher Id  Assign Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assign Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/{voucher_id}/rotate": {
+      "post": {
+        "operationId": "rotate_gift_api_v1_admin_gifts__voucher_id__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rotate Gift Api V1 Admin Gifts  Voucher Id  Rotate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/{voucher_id}/void-or-revoke": {
+      "post": {
+        "operationId": "void_or_revoke_gift_api_v1_admin_gifts__voucher_id__void_or_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Void Or Revoke Gift Api V1 Admin Gifts  Voucher Id  Void Or Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Void Or Revoke Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/iap/transactions": {
       "get": {
         "description": "Paginated store transactions (Apple App Store / Google Play).",
@@ -8763,7 +9904,7 @@
     },
     "/api/v1/admin/users/{user_id}/ai/clear-daily": {
       "post": {
-        "description": "Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).\n\nSets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to\ntoday, plus ``subscription_usage.daily_photoshoot_images`` to 0 for\ntoday's period. Writes audit ``user.ai_daily_cleared`` and invalidates\nthe cached profile.",
+        "description": "Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).\n\nSets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to\ntoday, plus ``subscription_usage.daily_photoshoot_images`` to 0 for the\nactive monthly usage period. Writes audit ``user.ai_daily_cleared`` and invalidates\nthe cached profile.",
         "operationId": "admin_clear_daily_api_v1_admin_users__user_id__ai_clear_daily_post",
         "parameters": [
           {
@@ -10368,6 +11509,22 @@
                 }
               ],
               "title": "Last Event Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
             }
           }
         ],
@@ -12260,6 +13417,658 @@
         ]
       }
     },
+    "/api/v1/gifts/allowances": {
+      "get": {
+        "operationId": "get_allowances_api_v1_gifts_allowances_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Allowances Api V1 Gifts Allowances Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Allowances",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/catalog": {
+      "get": {
+        "description": "Return fixed USD gift terms and paid-checkout availability.",
+        "operationId": "catalog_api_v1_gifts_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Catalog Api V1 Gifts Catalog Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Catalog",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/checkout": {
+      "post": {
+        "operationId": "create_paid_gift_checkout_api_v1_gifts_checkout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaidGiftCheckoutCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Paid Gift Checkout Api V1 Gifts Checkout Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Paid Gift Checkout",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/checkout/fulfill": {
+      "post": {
+        "operationId": "fulfill_paid_gift_checkout_api_v1_gifts_checkout_fulfill_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiftCheckoutFulfill"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fulfill Paid Gift Checkout Api V1 Gifts Checkout Fulfill Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Fulfill Paid Gift Checkout",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/claim": {
+      "post": {
+        "operationId": "claim_gift_api_v1_gifts_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiftClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Claim Gift Api V1 Gifts Claim Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Claim Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/complimentary": {
+      "post": {
+        "operationId": "create_complimentary_gift_api_v1_gifts_complimentary_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComplimentaryGiftCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Complimentary Gift Api V1 Gifts Complimentary Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Complimentary Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/public/{public_id}": {
+      "get": {
+        "description": "Return presentation and lifecycle state without private account data.",
+        "operationId": "get_public_gift_api_v1_gifts_public__public_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Public Gift Api V1 Gifts Public  Public Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/public/{public_id}/artwork/og.png": {
+      "get": {
+        "description": "Return the versioned 1200 x 630 social preview.",
+        "operationId": "get_public_gift_artwork_api_v1_gifts_public__public_id__artwork_og_png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Gift Artwork",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/received": {
+      "get": {
+        "operationId": "list_received_gifts_api_v1_gifts_received_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Received Gifts Api V1 Gifts Received Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Received Gifts",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/sent": {
+      "get": {
+        "operationId": "list_sent_gifts_api_v1_gifts_sent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Sent Gifts Api V1 Gifts Sent Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Sent Gifts",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/{voucher_id}": {
+      "get": {
+        "operationId": "get_owned_gift_api_v1_gifts__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Owned Gift Api V1 Gifts  Voucher Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Owned Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      },
+      "patch": {
+        "operationId": "update_owned_gift_api_v1_gifts__voucher_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiftUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Owned Gift Api V1 Gifts  Voucher Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Owned Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/{voucher_id}/artwork/portrait.png": {
+      "get": {
+        "operationId": "download_owned_gift_artwork_api_v1_gifts__voucher_id__artwork_portrait_png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Owned Gift Artwork",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/{voucher_id}/rotate": {
+      "post": {
+        "operationId": "rotate_owned_gift_link_api_v1_gifts__voucher_id__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rotate Owned Gift Link Api V1 Gifts  Voucher Id  Rotate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Owned Gift Link",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "description": "Compatibility alias for probes configured against /api/v1/health.\n\nThe canonical liveness endpoint is /health. Probes pointed at\n/api/v1/health produced 404 noise (observed 2026-08-07); serve the same\ncheap payload instead. Operators should still fix the probe path - this\nonly makes a misconfiguration harmless.",
@@ -13464,6 +15273,330 @@
         "summary": "Mark Worn",
         "tags": [
           "Items"
+        ]
+      }
+    },
+    "/api/v1/oauth/.well-known/oauth-authorization-server": {
+      "get": {
+        "description": "RFC 8414 authorization-server metadata (public clients, PKCE S256).",
+        "operationId": "authorization_server_metadata_api_v1_oauth__well_known_oauth_authorization_server_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Authorization Server Metadata Api V1 Oauth  Well Known Oauth Authorization Server Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Authorization Server Metadata",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/.well-known/oauth-protected-resource": {
+      "get": {
+        "description": "RFC 9728 protected-resource metadata for the /mcp resource.",
+        "operationId": "protected_resource_metadata_api_v1_oauth__well_known_oauth_protected_resource_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Protected Resource Metadata Api V1 Oauth  Well Known Oauth Protected Resource Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Protected Resource Metadata",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/authorize": {
+      "get": {
+        "description": "Validate the client's authorization request and bounce the user to the\nfrontend bridge (Supabase hosted login runs there).",
+        "operationId": "authorize_api_v1_oauth_authorize_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "response_type",
+            "required": true,
+            "schema": {
+              "title": "Response Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "redirect_uri",
+            "required": true,
+            "schema": {
+              "title": "Redirect Uri",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code_challenge",
+            "required": true,
+            "schema": {
+              "title": "Code Challenge",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code_challenge_method",
+            "required": false,
+            "schema": {
+              "default": "S256",
+              "title": "Code Challenge Method",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "mcp",
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/authorize/complete": {
+      "post": {
+        "description": "Frontend bridge callback: bind the Supabase session to the pending\nauthorization. Returns the redirect URL the browser must follow.",
+        "operationId": "authorize_complete_api_v1_oauth_authorize_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Authorize Complete Api V1 Oauth Authorize Complete Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize Complete",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/register": {
+      "post": {
+        "description": "RFC 7591 dynamic registration. Public clients only (PKCE, no secret);\nredirect URIs must match MCP_REDIRECT_URI_ALLOWLIST.",
+        "operationId": "register_client_api_v1_oauth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Register Client Api V1 Oauth Register Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Client",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/revoke": {
+      "post": {
+        "description": "RFC 7009 revocation (idempotent; always 200 for valid requests).",
+        "operationId": "revoke_token_api_v1_oauth_revoke_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_revoke_token_api_v1_oauth_revoke_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revoke Token Api V1 Oauth Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Token",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/token": {
+      "post": {
+        "description": "RFC 6749 token endpoint: authorization_code (PKCE) or refresh_token.",
+        "operationId": "issue_token_api_v1_oauth_token_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_issue_token_api_v1_oauth_token_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Issue Token Api V1 Oauth Token Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue Token",
+        "tags": [
+          "OAuth"
         ]
       }
     },
@@ -15400,6 +17533,22 @@
               "title": "Job Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
           }
         ],
         "responses": {
@@ -17141,6 +19290,35 @@
           }
         ],
         "summary": "Update Body Profile",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/bootstrap": {
+      "get": {
+        "description": "One-roundtrip app-launch aggregate.\n\nThe mobile/web launch sequence used to fire 5+ parallel reads\n(/users/me, /items, /outfits, /subscription/usage, /referral/code);\neach paid its own auth-profile lookup and DB roundtrip, which showed up\nin the Aug 2026 logs as 400-1500 ms cold-start clusters. This endpoint\nreturns the same payloads under one request. The individual routes stay\nfor compatibility and partial refreshes.",
+        "operationId": "get_bootstrap_api_v1_users_bootstrap_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Bootstrap Api V1 Users Bootstrap Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bootstrap",
         "tags": [
           "Users"
         ]

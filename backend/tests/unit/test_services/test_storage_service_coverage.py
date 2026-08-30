@@ -361,6 +361,33 @@ async def test_delete_multiple_images_raises_on_backend_failure():
             )
 
 
+@pytest.mark.asyncio
+async def test_list_owned_user_storage_paths_includes_unreferenced_previews(
+    monkeypatch,
+):
+    class _ListingBackend(FakeS3Backend):
+        async def list_keys(self, prefix: str = ""):
+            self.list_calls.append(prefix)
+            return [
+                "users/u1/generated/product/11111111111111111111111111111111.png",
+                "users/u1/items/22222222222222222222222222222222.png",
+                "users/u2/items/33333333333333333333333333333333.png",
+                "users/u1/unknown/not-an-image.txt",
+            ]
+
+    backend = _ListingBackend()
+    monkeypatch.setattr(storage_module.settings, "OBJECT_STORAGE_ENDPOINT", "https://r2.example")
+    monkeypatch.setattr(storage_module.settings, "OBJECT_STORAGE_BUCKET", "images")
+    with patch.object(storage_module, "get_storage_backend", return_value=backend):
+        paths = await StorageService.list_owned_user_storage_paths("u1")
+
+    assert backend.list_calls == ["users/u1/"]
+    assert paths == [
+        "users/u1/generated/product/11111111111111111111111111111111.png",
+        "users/u1/items/22222222222222222222222222222222.png",
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # resolve_owned_storage_paths scoped variant
 # --------------------------------------------------------------------------- #

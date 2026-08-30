@@ -17,6 +17,7 @@ import {
   useTrendsQuery,
 } from '@/features/dashboard/api/dashboard'
 import { normalizeError } from '@/shared/api/errors'
+import type { AdminFunnelResponse } from '@/shared/api/schemaTypes'
 import { formatMoney, formatNumber, relativeTimeValue } from '@/shared/lib/formatters'
 import { pickArray, pickNumber, pickString, type JsonRecord } from '@/shared/lib/json'
 import { Badge } from '@/shared/ui/badge'
@@ -196,13 +197,10 @@ export function DashboardPage() {
   }
 
   const funnelDerived = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    const funnelData = funnel.data as unknown as JsonRecord | null | undefined
-    const stepsRaw = funnelData?.['steps']
-    const backendSteps = Array.isArray(stepsRaw) ? (stepsRaw as JsonRecord[]) : []
+    const backendSteps = funnel.data?.steps ?? []
     const hasBackend = !funnel.isError && !!funnel.data && backendSteps.length > 0
     if (hasBackend) return { steps: backendSteps, isApprox: false }
-    const approxSteps: JsonRecord[] = [
+    const approxSteps: NonNullable<AdminFunnelResponse['steps']> = [
       { label: t('funnel.stepSignups', { defaultValue: 'Signups (30d)' }), count: signups30d, pct_of_prev: 100 },
       {
         label: t('funnel.stepActive', { defaultValue: 'Active (7d)' }),
@@ -583,9 +581,9 @@ export function DashboardPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-stretch gap-2">
                 {funnelDerived.steps.slice(0, 4).map((row, index) => {
-                  const label = pickString(row, 'label') ?? `Step ${index + 1}`
-                  const count = pickNumber(row, 'count') ?? 0
-                  const pct = pickNumber(row, 'pct_of_prev')
+                  const label = row.label ?? `Step ${index + 1}`
+                  const count = row.count ?? 0
+                  const pct = row.pct_of_prev ?? null
                   return (
                     <div key={`funnel-step-${index}`} className="flex min-w-0 flex-1 items-center gap-2">
                       <div className="flex-1 rounded-md border border-border bg-surface-card px-3 py-3 text-center">
@@ -643,9 +641,7 @@ export function DashboardPage() {
               })}
             />
           ) : (() => {
-              const retentionData = retention.data as unknown as JsonRecord | null
-              const cohortsRaw = retentionData ? (retentionData['cohorts']) : null
-              const cohorts = Array.isArray(cohortsRaw) ? (cohortsRaw as JsonRecord[]) : []
+              const cohorts = retention.data?.cohorts ?? []
               if (cohorts.length === 0) {
                 return (
                   <EmptyState
@@ -665,7 +661,7 @@ export function DashboardPage() {
                           {t('retention.weekHeader', { defaultValue: 'Week' })}
                         </th>
                         <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          {t('retention.activeUsers', { defaultValue: 'Active users' })}
+                          {t('retention.signups', { defaultValue: 'Signups' })}
                         </th>
                         <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           {t('retention.retentionRate', { defaultValue: 'Retention' })}
@@ -674,9 +670,9 @@ export function DashboardPage() {
                     </thead>
                     <tbody className="divide-y divide-border">
                       {cohorts.slice(0, 4).map((row, index) => {
-                        const weekStart = pickString(row, 'week_start') ?? t('retention.week', { n: index + 1, defaultValue: `Week ${index + 1}` })
-                        const signupsCount = pickNumber(row, 'signups') ?? null
-                        const retentionPct = pickNumber(row, 'retention_pct') ?? null
+                        const weekStart = row.week_start ?? t('retention.week', { n: index + 1 })
+                        const signupsCount = row.signups ?? null
+                        const retentionPct = row.retention_pct ?? null
                         return (
                           <tr key={`retention-${index}`}>
                             <td className="px-3 py-2 font-medium text-ink">{weekStart}</td>
@@ -710,7 +706,7 @@ export function DashboardPage() {
           onRetry={() => void queryClient.invalidateQueries({ queryKey: dashboardKeys.topUsers })}
         />
 
-        <Card className="min-w-0">
+        <Card id="section-ops" className="min-w-0">
           <CardHeader dense className="flex-row items-center justify-between">
             <CardTitle className="text-sm">{t('activity.title')}</CardTitle>
             <Link

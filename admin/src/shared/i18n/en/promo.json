@@ -81,6 +81,15 @@
     "title": "No promo codes",
     "message": "No promo codes match the current filters."
   },
+  "roi": {
+    "error": "Could not load promo metrics.",
+    "issued": "Issued",
+    "redeemed": "Redeemed",
+    "conversion": "Conversion to paid",
+    "conversionTooltip": "Conversion requires a link from promo redemptions to paid subscriptions. This data is not available here.",
+    "empty": "No promo codes",
+    "pageScope": "Metrics apply to the current page only. Redeemed events can exceed issued reusable codes."
+  },
   "loadError": {
     "title": "Could not load promo codes",
     "message": "The promo code list is unavailable right now."

@@ -9,6 +9,7 @@
 | [authentication-notes.md](./authentication-notes.md) | Auth behavior notes |
 | [user-management-notes.md](./user-management-notes.md) | Profile / user management |
 | [core-features-notes.md](./core-features-notes.md) | Core feature notes |
+| [features/gift-vouchers.md](./features/gift-vouchers.md) | Pro gift voucher offer, entitlement, privacy, and launch contract |
 | [features/](./features/) | Feature PRD sections |
 
 Product intent summary: `docs/PRODUCT_SENSE.md`.

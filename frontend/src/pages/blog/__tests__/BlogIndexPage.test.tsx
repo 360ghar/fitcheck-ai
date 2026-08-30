@@ -57,11 +57,11 @@ describe('BlogIndexPage filters', () => {
 })
 
 describe('BlogIndexPage responsive layout', () => {
-  it('reserves spaced height for loading pills without overlapping the search form', () => {
+  it('uses responsive skeleton pills while categories load', () => {
     useBlogCategories.mockReturnValue({ data: undefined, isLoading: true })
     useInfiniteBlogPosts.mockReturnValue(mockEmptyInfinite())
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={['/blog']}>
         <Routes>
           <Route path="/blog" element={<BlogIndexPage />} />
@@ -69,13 +69,21 @@ describe('BlogIndexPage responsive layout', () => {
       </MemoryRouter>
     )
 
-    const spacer = container.querySelector('[data-testid="categories-loading"]')
-    expect(spacer).toHaveClass('mt-6', 'h-[256px]', 'md:h-[44px]')
-    expect(screen.queryByTestId('category-pills')).not.toBeInTheDocument()
-    expect(screen.getByRole('search')).toHaveClass('mt-6', 'w-full', 'max-w-xl')
+    const search = screen.getByRole('search')
+    const categoryRow = search.nextElementSibling as HTMLElement
+    expect(categoryRow).toHaveClass(
+      'flex',
+      'flex-wrap',
+      'min-h-[8.5rem]',
+      'xs:min-h-[7rem]',
+      'sm:min-h-[5.5rem]',
+      'md:min-h-11'
+    )
+    expect(categoryRow).not.toHaveClass('h-[256px]', 'md:h-[44px]')
+    expect(categoryRow.querySelectorAll('[aria-hidden="true"]')).toHaveLength(6)
   })
 
-  it('renders the category pill row below the search form with spacing', async () => {
+  it('renders the category pill row directly below the search form', async () => {
     useBlogCategories.mockReturnValue({ data: ['AI & Style'], isLoading: false })
     useInfiniteBlogPosts.mockReturnValue(mockEmptyInfinite())
 
@@ -88,7 +96,40 @@ describe('BlogIndexPage responsive layout', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTestId('category-pills')).toHaveClass('mt-6')
+      const search = screen.getByRole('search')
+      const categoryRow = search.nextElementSibling as HTMLElement
+      expect(categoryRow).toHaveClass(
+        'flex',
+        'flex-wrap',
+        'min-h-[8.5rem]',
+        'xs:min-h-[7rem]',
+        'sm:min-h-[5.5rem]',
+        'md:min-h-11'
+      )
+      expect(categoryRow).toContainElement(screen.getByRole('link', { name: 'All' }))
+      expect(categoryRow).toContainElement(screen.getByRole('link', { name: 'AI & Style' }))
     })
+  })
+
+  it('does not reserve a blank category band when category loading fails', () => {
+    useBlogCategories.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('categories unavailable'),
+    })
+    useInfiniteBlogPosts.mockReturnValue(mockEmptyInfinite())
+
+    render(
+      <MemoryRouter initialEntries={['/blog/category/ai-style']}>
+        <Routes>
+          <Route path="/blog/category/:category" element={<BlogIndexPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    const search = screen.getByRole('search')
+    const categoryRow = search.nextElementSibling as HTMLElement
+    expect(categoryRow).not.toHaveClass('min-h-[8.5rem]', 'xs:min-h-[7rem]', 'sm:min-h-[5.5rem]', 'md:min-h-11')
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load blog categories.')
   })
 })

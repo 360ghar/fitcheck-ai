@@ -864,6 +864,11 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
   final RxString error = ''.obs;
   final RxString searchQuery = ''.obs;
 
+  /// Safety cap when paginating the full wardrobe for the picker
+  /// (10 pages x 100 items). Prevents an unbounded fetch loop on bad
+  /// `has_more` data; the picker degrades gracefully past the cap.
+  static const int _maxPickerPages = 10;
+
   @override
   void initState() {
     super.initState();
@@ -873,8 +878,17 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
   Future<void> _loadItems() async {
     try {
       isLoading.value = true;
-      final response = await _itemRepository.getItems(limit: 100);
-      items.value = response.items;
+      // Load the full wardrobe for the picker (not just the first 100):
+      // paginate until exhausted, capped at [_maxPickerPages].
+      final allItems = <ItemModel>[];
+      var page = 1;
+      ItemsListResponse response;
+      do {
+        response = await _itemRepository.getItems(page: page, limit: 100);
+        allItems.addAll(response.items);
+        page++;
+      } while (response.hasMore && page <= _maxPickerPages);
+      items.value = allItems;
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
     } finally {

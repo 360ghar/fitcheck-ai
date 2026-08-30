@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
+import { trialRegisterHref } from '@/lib/trial-offer'
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import { BlogImage } from '@/components/blog/BlogImage'
@@ -124,7 +125,7 @@ export default function BlogPostPage() {
               </h1>
 
               {/* Meta */}
-              <div className="flex flex-wrap items-center gap-6 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <span className="flex items-center">
                   <User className="w-4 h-4 mr-2" />
                   {post.author}
@@ -151,12 +152,12 @@ export default function BlogPostPage() {
         <section className="pb-12 md:pb-16">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
-              <div className="aspect-[21/9] bg-stone-200 dark:bg-stone-800 rounded-2xl flex items-center justify-center overflow-hidden relative">
+              <div className="aspect-[16/9] bg-stone-200 dark:bg-stone-800 rounded-2xl flex items-center justify-center overflow-hidden relative md:aspect-[21/9]">
                 <BlogImage
                   src={post.featured_image_url}
                   alt={post.title}
                   emoji={post.emoji}
-                  emojiClassName="text-8xl md:text-9xl"
+                  emojiClassName="text-6xl md:text-8xl lg:text-9xl"
                   sizes="(min-width: 1024px) 1024px, 100vw"
                   widths={[640, 960, 1280, 1600]}
                   quality={75}
@@ -287,7 +288,7 @@ export default function BlogPostPage() {
                   Related Articles
                 </h2>
 
-                <div className="grid md:grid-cols-3 gap-6">
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {relatedPosts.map((relatedPost) => (
                     <Link
                       key={relatedPost.slug}
@@ -338,7 +339,7 @@ export default function BlogPostPage() {
                 Join thousands organizing, planning, and optimizing their style
               </p>
               <Link
-                to="/auth/register"
+                to={trialRegisterHref()}
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-on-image px-8 py-4 text-lg font-semibold text-on-image-foreground hover:opacity-90 transition-opacity"
               >
                 Start Free Today
@@ -361,7 +362,7 @@ function formatInlineText(text: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Links: [text](url)
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) =>
-      `<a href="${sanitizeMarkdownUrl(url)}" class="text-primary dark:text-primary hover:underline">${label}</a>`
+      `<a href="${sanitizeMarkdownUrl(url)}" class="text-primary dark:text-primary hover:underline break-words">${label}</a>`
     )
 }
 

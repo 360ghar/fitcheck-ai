@@ -54,6 +54,7 @@ ROLE_PERMISSIONS: Dict[str, List[str]] = {
         "audit.read",
         "users.read",
         "users.write",
+        "gifts.read",
         "search",
     ],
     "support": [
@@ -67,6 +68,7 @@ ROLE_PERMISSIONS: Dict[str, List[str]] = {
         "feedback.write",
         "audit.read",
         "search",
+        "gifts.read",
     ],
     "content_editor": [
         "dashboards.read",
@@ -83,7 +85,7 @@ ROLE_PERMISSIONS: Dict[str, List[str]] = {
 # iap.write) but not quotas; support is "quotas"/"IAP" read-only; a
 # content_editor has no quotas/iap surface at all. Listed here so the
 # permission strings are discoverable/testable alongside the map.
-ADMIN_ONLY_WRITE_PERMISSIONS = frozenset({"quotas.write"})
+ADMIN_ONLY_WRITE_PERMISSIONS = frozenset({"quotas.write", "gifts.write"})
 
 
 def get_user_role(user: Dict[str, Any]) -> str:

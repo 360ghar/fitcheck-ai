@@ -43,6 +43,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly string[]> = {
     'ops.read',
     'storage.cleanup',
     'audit.read',
+    'gifts.read',
     'search',
   ],
   support: [
@@ -55,6 +56,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly string[]> = {
     'feedback.read',
     'feedback.write',
     'audit.read',
+    'gifts.read',
     'search',
   ],
   content_editor: [

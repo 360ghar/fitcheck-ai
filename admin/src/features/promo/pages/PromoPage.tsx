@@ -78,13 +78,14 @@ export function PromoPage() {
     filterKeys: ['active', 'plan_type'],
   })
 
-  // ROI strip — client-side from already-fetched data, no new query
+  // Promo metrics are intentionally current-page scoped; redemption events
+  // can exceed issued codes for reusable promos, so this is not a rate.
   const roi = useMemo(() => {
-    const issued = table.total
+    const issued = table.data.length
     const redeemed = table.data.reduce((sum, row) => sum + (row.redemptions_count ?? 0), 0)
     // Conversion to paid is not available from promo data alone; show placeholder
     return { issued, redeemed, conversion: null as string | null }
-  }, [table.total, table.data])
+  }, [table.data])
 
   const csvExport = useCsvExport<PromoCodeItem>({
     rows: table.data,
@@ -209,7 +210,7 @@ export function PromoPage() {
       minSize: 110,
       cell: ({ row }) => (
         <span className="rounded-full bg-surface-card px-2.5 py-0.5 text-xs font-medium">
-          {t(`plans.${row.original.plan_type}`, { defaultValue: row.original.plan_type })}
+          {t(`plans.${row.original.plan_type}`)}
         </span>
       ),
     },
@@ -313,7 +314,7 @@ export function PromoPage() {
           <Card>
             <CardContent className="py-3">
               <p className="text-sm text-muted-foreground">
-                {t('roi.error', { defaultValue: 'Could not load ROI summary.' })}
+                {t('roi.error')}
               </p>
             </CardContent>
           </Card>
@@ -321,39 +322,43 @@ export function PromoPage() {
           <Card>
             <CardContent className="flex flex-wrap items-center gap-4 py-3 text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">{t('roi.issued', { defaultValue: 'Issued' })}:</span>
+                <span className="text-muted-foreground">{t('roi.issued')}:</span>
                 <Badge variant="secondary">{formatNumber(roi.issued)}</Badge>
               </div>
               <span className="hidden text-border sm:inline">•</span>
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">{t('roi.redeemed', { defaultValue: 'Redeemed' })}:</span>
+                <span className="text-muted-foreground">{t('roi.redeemed')}:</span>
                 <Badge variant="info">{formatNumber(roi.redeemed)}</Badge>
-                <span className="text-xs text-muted-foreground">
-                  {roi.issued > 0 ? `(${Math.round((roi.redeemed / roi.issued) * 100)}%)` : ''}
-                </span>
               </div>
               <span className="hidden text-border sm:inline">•</span>
               <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground">{t('roi.conversion', { defaultValue: 'Conversion to paid' })}:</span>
+                <span className="text-muted-foreground">{t('roi.conversion')}:</span>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="inline-flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6"
+                        aria-label={t('roi.conversionTooltip')}
+                      >
                         <span className="tabular-nums">{roi.conversion ?? '—'}</span>
                         <Info className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                      </span>
+                      </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{t('roi.conversionTooltip', { defaultValue: 'Conversion requires linking redemptions to paid subscriptions — not available from promo data alone.' })}</p>
+                      <p>{t('roi.conversionTooltip')}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
               {table.data.length === 0 ? (
                 <span className="ml-auto text-xs text-muted-foreground">
-                  {t('roi.empty', { defaultValue: 'No promo codes' })}
+                  {t('roi.empty')}
                 </span>
               ) : null}
+              <span className="basis-full text-xs text-muted-foreground">{t('roi.pageScope')}</span>
             </CardContent>
           </Card>
         )
@@ -387,7 +392,7 @@ export function PromoPage() {
               { value: 'all', label: t('filters.planPlaceholder') },
               ...PROMO_PLAN_TYPES.map((plan) => ({
                 value: plan,
-                label: t(`plans.${plan}`, { defaultValue: plan }),
+                label: t(`plans.${plan}`),
               })),
             ],
             value: table.tableState.filters.plan_type,
@@ -471,7 +476,7 @@ export function PromoPage() {
                       <SelectContent>
                         {PROMO_PLAN_TYPES.map((plan) => (
                           <SelectItem key={plan} value={plan}>
-                            {t(`plans.${plan}`, { defaultValue: plan })}
+                            {t(`plans.${plan}`)}
                           </SelectItem>
                         ))}
                       </SelectContent>

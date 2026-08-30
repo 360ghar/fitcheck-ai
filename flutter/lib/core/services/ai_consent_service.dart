@@ -19,7 +19,10 @@ class AiConsentService extends GetxController {
 
   PersistenceService get _persistence => Get.find<PersistenceService>();
 
-  /// Cached in-memory value to avoid repeated disk reads after first check.
+  /// Cached in-memory value to avoid repeated disk reads. `false` is cached
+  /// too: consent can only change in-process via [setConsented] (which updates
+  /// the cache), so a cached false is authoritative and re-reading disk on
+  /// every call while the user hasn't consented yet buys nothing.
   bool _consented = false;
 
   @override
@@ -39,11 +42,19 @@ class AiConsentService extends GetxController {
   /// Returns true if the user has previously granted consent.
   Future<bool> hasConsented() async {
     if (_consented) return true;
+    // First call only: seed the cache from disk, then answer from memory until
+    // a mutation changes it.
     try {
-      _consented = (await _persistence.getBool(_consentKey)) ?? false;
+      final stored = await _persistence.getBool(_consentKey);
+      if (stored != null) {
+        _consented = stored;
+        return _consented;
+      }
     } catch (e) {
       debugPrint('Failed to read AI consent: $e');
     }
+    // Key absent (or read failed): treat as not-consented and remember it so
+    // subsequent calls skip the disk entirely.
     return _consented;
   }
 

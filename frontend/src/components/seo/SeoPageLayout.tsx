@@ -6,6 +6,7 @@ import { BreadcrumbJsonLd, buildFaqSchema } from '@/components/seo/JsonLd'
 import { SEO_CONFIG } from '@/components/seo/seo-config'
 import { ArrowRight, Check, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { trialRegisterHref } from '@/lib/trial-offer'
 
 export interface SeoFaq {
   question: string
@@ -66,7 +67,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
   }))
 
   const faqSchema = content.faqs.length ? buildFaqSchema(content.faqs) : undefined
-  const primary = content.ctaPrimary || { label: 'Start free', href: '/auth/register' }
+  const primary = content.ctaPrimary || { label: 'Start free', href: trialRegisterHref() }
   const secondary = content.ctaSecondary || {
     label: 'Get the app',
     href: PLAY_STORE,
@@ -103,7 +104,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
             </nav>
 
             <AnimatedSection>
-              <h1 className="landing-display text-3xl sm:text-4xl md:text-[2.75rem] font-semibold text-stone-900 dark:text-stone-50 leading-tight">
+              <h1 className="landing-display text-3xl sm:text-4xl md:text-5xl font-semibold text-stone-900 dark:text-stone-50 leading-tight">
                 {content.h1}
               </h1>
               <p className="mt-5 text-lg text-stone-600 dark:text-stone-400 leading-relaxed">
@@ -234,7 +235,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                         href={source.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+                        className="text-indigo-600 dark:text-indigo-400 hover:underline [overflow-wrap:anywhere]"
                       >
                         {source.label}
                       </a>
@@ -284,7 +285,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                 className="bg-white text-indigo-700 hover:bg-stone-100 h-12 px-6"
                 asChild
               >
-                <Link to="/auth/register">
+                <Link to={trialRegisterHref()}>
                   Start free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>

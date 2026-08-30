@@ -13,6 +13,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Camera, Loader2, Download, AlertCircle, CheckCircle2, ArrowRight, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { EditorialPanel } from './EditorialPanel';
 import { LoginPromptModal } from './LoginPromptModal';
@@ -292,12 +293,12 @@ export function PhotoshootDemo() {
     <EditorialPanel className="p-6 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-          <Camera className="w-5 h-5 text-white" />
+        <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+          <Camera className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h3 className="font-semibold text-stone-900 dark:text-stone-50">AI photoshoot</h3>
-          <p className="text-sm text-stone-500 dark:text-stone-400">2 free images</p>
+          <h3 className="text-lg font-semibold tracking-tight text-foreground">AI photoshoot</h3>
+          <p className="text-sm text-muted-foreground">2 free images</p>
         </div>
       </div>
 
@@ -306,18 +307,20 @@ export function PhotoshootDemo() {
         {state === 'idle' && !photo && (
           <div
             {...getRootProps()}
-            className={`h-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
-              isDragActive
-                ? 'border-primary bg-secondary'
-                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-            }`}
+            className={cn(
+              'h-full rounded-xl border border-dashed bg-surface-card p-8 text-center cursor-pointer flex flex-col items-center justify-center',
+              'transition-[border-color,background-color] duration-200 hover:border-ash',
+              isDragActive ? 'border-primary bg-secondary' : 'border-ash'
+            )}
           >
             <input {...getInputProps({ 'aria-label': 'Upload your photo' })} />
-            <Camera className="w-10 h-10 text-gray-400 mb-4" />
-            <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+              <Camera className={cn('h-5 w-5 text-primary transition-transform duration-200', isDragActive && 'scale-110')} />
+            </div>
+            <p className="text-body font-medium mb-1">
               {isDragActive ? 'Drop your photo here' : 'Upload your photo'}
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-muted-foreground">
               Clear face photo for best results
             </p>
           </div>
@@ -349,7 +352,7 @@ export function PhotoshootDemo() {
 
             {/* Generate Button - centered in remaining space */}
             <div className="flex-1 flex flex-col items-center justify-center">
-              <p className="text-gray-600 dark:text-gray-400 mb-4 text-center">
+              <p className="text-body mb-4 text-center">
                 Ready to generate 2 AI-styled photos
               </p>
               <Button
@@ -373,10 +376,10 @@ export function PhotoshootDemo() {
             />
           )}
           <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-body">
             {partialImages.length > 0 ? `${partialImages.length}/2 images ready…` : 'Creating your AI photos...'}
           </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Generation time can vary. You can keep exploring while this runs.
           </p>
 
@@ -476,9 +479,9 @@ export function PhotoshootDemo() {
 
       {/* Error State */}
       {state === 'error' && (
-        <div className="h-full flex flex-col items-center justify-center text-center">
-          <AlertCircle className="w-10 h-10 text-red-500 mb-4" />
-          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+        <div className="h-full flex flex-col items-center justify-center text-center rounded-xl bg-error-pale p-6">
+          <AlertCircle className="w-10 h-10 text-error mb-4" />
+          <p className="text-error mb-4">{error}</p>
           <Button variant="outline" onClick={handleReset}>
             Try Again
           </Button>

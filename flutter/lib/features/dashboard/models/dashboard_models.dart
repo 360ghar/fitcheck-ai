@@ -62,6 +62,14 @@ class DashboardActivity {
   final DateTime? timestamp;
   final String? imageUrl;
 
+  /// Small thumbnail variant of [imageUrl] (`thumbnail_url` from the API).
+  ///
+  /// Materialized at read time; the backend mirrors `image_url` onto it when
+  /// thumbnail serving is unavailable. Tiles prefer this and pass [imageUrl]
+  /// as the fallback URL — falling back only when this field is EMPTY,
+  /// never on a 404 (see `AppNetworkImage.fallbackUrl`).
+  final String? thumbnailUrl;
+
   /// Durable bucket key behind [imageUrl] — lets the tile re-mint a fresh
   /// short-lived URL when the one it holds expires (presigned URLs are
   /// 1h TTL).
@@ -72,6 +80,7 @@ class DashboardActivity {
     required this.description,
     required this.timestamp,
     this.imageUrl,
+    this.thumbnailUrl,
     this.storagePath,
   });
 
@@ -82,6 +91,7 @@ class DashboardActivity {
       description: (json['description'] ?? '').toString(),
       timestamp: timestampRaw != null ? DateTime.tryParse(timestampRaw) : null,
       imageUrl: json['image_url']?.toString(),
+      thumbnailUrl: json['thumbnail_url']?.toString(),
       storagePath: json['storage_path']?.toString(),
     );
   }
@@ -114,6 +124,14 @@ class DashboardOutfitOfTheDay {
   final String? name;
   final String? imageUrl;
 
+  /// Small thumbnail variant of [imageUrl] (`thumbnail_url` from the API).
+  ///
+  /// Materialized at read time; the backend mirrors `image_url` onto it when
+  /// thumbnail serving is unavailable. Tiles prefer this and pass [imageUrl]
+  /// as the fallback URL — falling back only when this field is EMPTY,
+  /// never on a 404 (see `AppNetworkImage.fallbackUrl`).
+  final String? thumbnailUrl;
+
   /// Durable bucket key behind [imageUrl] — lets the tile re-mint a fresh
   /// short-lived URL when the one it holds expires (presigned URLs are
   /// 1h TTL).
@@ -123,6 +141,7 @@ class DashboardOutfitOfTheDay {
     required this.id,
     required this.name,
     required this.imageUrl,
+    this.thumbnailUrl,
     this.storagePath,
   });
 
@@ -131,6 +150,7 @@ class DashboardOutfitOfTheDay {
       id: json['id']?.toString(),
       name: json['name']?.toString(),
       imageUrl: json['image_url']?.toString(),
+      thumbnailUrl: json['thumbnail_url']?.toString(),
       storagePath: json['storage_path']?.toString(),
     );
   }

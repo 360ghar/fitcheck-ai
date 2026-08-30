@@ -63,6 +63,8 @@ AUTH_RATE_LIMITS = {
     "waitlist signup": 5,  # 5 signups per hour per IP
     "feedback submission": 10,  # 10 tickets per hour per IP (each up to 5 uploads)
     "shared outfit feedback": 20,  # 20 ratings per hour per IP (shared NAT-friendly)
+    "gift creation": 20,
+    "gift claim": 30,
 }
 
 AUTH_RATE_LIMIT_WINDOW = timedelta(hours=1)

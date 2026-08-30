@@ -258,7 +258,7 @@ export function DataTable<TData, TValue = unknown>({
   const rowVirtualizer = useVirtualizer({
     count: virtualize ? rows.length : 0,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => (density === 'compact' ? 32 : 40),
+    estimateSize: () => (density === 'compact' ? 32 : 36),
     overscan: 12,
   })
   const virtualRows = virtualize ? rowVirtualizer.getVirtualItems() : null

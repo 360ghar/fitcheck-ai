@@ -2,8 +2,10 @@ import { http, HttpResponse } from 'msw'
 import type { HttpHandler } from 'msw'
 
 import type {
+  AdminFunnelResponse,
   AdminOverviewResponse,
   AdminReferralsResponse,
+  AdminRetentionResponse,
   AdminRevenueResponse,
   AdminTopUsersResponse,
   AdminTrendsResponse,
@@ -82,6 +84,25 @@ export const adminReferralsFixture: AdminReferralsResponse = {
   credits_pending: 10,
 }
 
+export const adminFunnelFixture: AdminFunnelResponse = {
+  days: 30,
+  steps: [
+    { label: 'Signups', count: 180, pct_of_prev: 100 },
+    { label: 'Added item (24h)', count: 120, pct_of_prev: 66.7 },
+    { label: 'Created outfit (7d)', count: 84, pct_of_prev: 70 },
+    { label: 'Paid subscription', count: 47, pct_of_prev: 56 },
+  ],
+}
+
+export const adminRetentionFixture: AdminRetentionResponse = {
+  weeks: 4,
+  cohorts: [
+    { week_start: '2026-07-20', signups: 42, retained_7d: 28, retention_pct: 66.7 },
+    { week_start: '2026-07-27', signups: 48, retained_7d: 30, retention_pct: 62.5 },
+    { week_start: '2026-08-03', signups: 51, retained_7d: 32, retention_pct: 62.7 },
+  ],
+}
+
 export function createDashboardHandlers(): HttpHandler[] {
   return [
     http.get('*/api/v1/admin/dashboards/overview', () =>
@@ -98,6 +119,12 @@ export function createDashboardHandlers(): HttpHandler[] {
     ),
     http.get('*/api/v1/admin/dashboards/trends', () =>
       HttpResponse.json(adminTrendsFixture),
+    ),
+    http.get('*/api/v1/admin/dashboards/funnel', () =>
+      HttpResponse.json(adminFunnelFixture),
+    ),
+    http.get('*/api/v1/admin/dashboards/retention', () =>
+      HttpResponse.json(adminRetentionFixture),
     ),
   ]
 }

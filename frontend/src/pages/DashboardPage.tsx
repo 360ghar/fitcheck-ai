@@ -312,7 +312,7 @@ export default function DashboardPage() {
             : "Here's what's happening with your closet today."}
         </p>
         {isEmpty && (
-          <Button className="mt-4" onClick={() => setIsUploadModalOpen(true)}>
+          <Button className="mt-4 w-full sm:w-auto" onClick={() => setIsUploadModalOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add your first photos
           </Button>
@@ -365,7 +365,7 @@ export default function DashboardPage() {
 
       {/* Stats — de-emphasize when empty */}
       {!isEmpty && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-3 mb-3 md:mb-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3 md:mb-4">
           {stats.map((stat) => (
             <StatCard
               key={stat.name}
@@ -466,7 +466,7 @@ export default function DashboardPage() {
       {/* Recent activity — only when there is something to show */}
       {totalItems > 0 && (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 md:py-3 md:px-6 border-b border-border">
+          <div className="px-4 py-3 md:px-6 border-b border-border">
             <div className="flex items-center justify-between">
               <h3 className="text-base md:text-lg font-semibold text-foreground">Recent items</h3>
               {totalItems > 0 && totalOutfits === 0 && (
@@ -511,7 +511,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground shrink-0">
+                    <span className="hidden sm:inline text-xs text-muted-foreground shrink-0">
                       {new Date(item.created_at).toLocaleDateString()}
                     </span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />

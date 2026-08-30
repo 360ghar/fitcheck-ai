@@ -58,7 +58,7 @@ const PROVIDER_OPTIONS = [
   { value: 'google', label: 'Google' },
 ] as const
 
-const FAILED_STATUSES = new Set(['past_due', 'incomplete', 'incomplete_expired', 'unpaid'])
+const BANNER_STATUS = 'past_due'
 
 function daysLeft(trialEnd: unknown): number | null {
   const date = toDate(trialEnd)
@@ -114,9 +114,9 @@ export function SubscriptionsPage() {
   // page (see caption).
   const searchQ = (table.tableState.q ?? '').trim().toLowerCase()
 
-  const { filteredData, failedCount } = useMemo(() => {
+  const { filteredData, pastDueCount } = useMemo(() => {
     const out: AdminSubscriptionListItem[] = []
-    let failed = 0
+    let pastDue = 0
     for (const row of table.data) {
       if (searchQ) {
         const email = subscriptionUserEmail(row.user) ?? ''
@@ -125,14 +125,14 @@ export function SubscriptionsPage() {
       }
       out.push(row)
       const s = (row.status ?? '').toLowerCase()
-      if (FAILED_STATUSES.has(s)) failed += 1
+      if (s === BANNER_STATUS) pastDue += 1
     }
-    return { filteredData: out, failedCount: failed }
+    return { filteredData: out, pastDueCount: pastDue }
   }, [table.data, searchQ])
 
-  // For banner total, also consider server total when we have failed rows server-side?
-  // We use page count; task says "visible on current page or total" — show if any failed visible.
-  const showFailedBanner = failedCount > 0 && can('subscriptions.read')
+  // The status filter accepts one server-side status. Keep the alert and CTA
+  // on the same representable status instead of claiming all failed states.
+  const showFailedBanner = pastDueCount > 0 && can('subscriptions.read')
 
   const csvExport = useCsvExport<AdminSubscriptionListItem>({
     rows: filteredData,
@@ -413,10 +413,7 @@ export function SubscriptionsPage() {
         >
           <AlertTriangle className="size-4 shrink-0 text-warning-deep" aria-hidden="true" />
           <span className="font-medium text-warning-deep">
-            {t('banner.failed', {
-              count: failedCount,
-              defaultValue: `${failedCount} failed subscription(s) — past due / incomplete / unpaid`,
-            })}
+            {t('banner.pastDue', { count: pastDueCount })}
           </span>
           <Button
             variant="outline"
@@ -424,7 +421,7 @@ export function SubscriptionsPage() {
             className="ml-auto"
             onClick={() => table.tableState.setFilter('status', 'past_due')}
           >
-            {t('banner.viewFailed', { defaultValue: 'View failed' })}
+            {t('banner.viewPastDue')}
           </Button>
         </div>
       ) : null}

@@ -18,6 +18,7 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { ErrorState } from '@/shared/ui/ErrorState'
 import { MetricCard } from '@/shared/ui/MetricCard'
+import { PageHeader } from '@/shared/ui/PageHeader'
 import { SkeletonTable } from '@/shared/ui/SkeletonTable'
 import {
   Table,
@@ -100,8 +101,11 @@ export function StoragePage() {
 
   return (
     <div className="space-y-3">
-      {canCleanup ? (
-        <div className="flex justify-end">
+      <PageHeader
+        dense
+        title={t('title')}
+        description={t('description')}
+        actions={canCleanup ? (
           <Button
             variant="destructive"
             size="sm"
@@ -111,8 +115,8 @@ export function StoragePage() {
             <Eraser aria-hidden="true" />
             {t('cleanup.title')}
           </Button>
-        </div>
-      ) : null}
+        ) : undefined}
+      />
 
       {inventory.truncated ? (
         <p className="rounded-md border border-warning-deep/40 bg-warning-pale px-3 py-2 text-sm text-warning-deep">

@@ -114,13 +114,24 @@ class ApiClient {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
-    // Create options with extended timeout for AI operations
+    // Create options with extended timeout for AI operations. Caller
+    // Options fields are copied only when set — dropping them silently
+    // changed request behaviour (e.g. an extra marker used by interceptors
+    // or a custom validateStatus would vanish on this path).
     final extendedOptions = Options(
       sendTimeout: ApiConstants.aiSendTimeout,
       receiveTimeout: ApiConstants.aiReceiveTimeout,
       headers: options?.headers,
       contentType: options?.contentType,
       responseType: options?.responseType,
+      extra: {...?options?.extra},
+      followRedirects: options?.followRedirects,
+      validateStatus: options?.validateStatus,
+      receiveDataWhenStatusError: options?.receiveDataWhenStatusError,
+      maxRedirects: options?.maxRedirects,
+      persistentConnection: options?.persistentConnection,
+      requestEncoder: options?.requestEncoder,
+      responseDecoder: options?.responseDecoder,
     );
 
     return dio.post<T>(

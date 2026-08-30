@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { trialRegisterHref } from '@/lib/trial-offer'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -102,7 +103,7 @@ export default function AboutPage() {
           </div>
         </section>
 
-        <section className="py-20 bg-stone-50 dark:bg-stone-950">
+        <section className="py-16 bg-stone-50 dark:bg-stone-950 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center mb-12">
@@ -134,13 +135,13 @@ export default function AboutPage() {
         </section>
 
         <section className="py-20 bg-stone-900 text-stone-50">
-          <div className="max-w-3xl mx-auto px-4 text-center">
+          <div className="max-w-3xl mx-auto px-4 text-center sm:px-6 lg:px-8">
             <h2 className="landing-display text-3xl font-semibold mb-4">Start free today</h2>
             <p className="text-stone-400 mb-8">
               Create an account on the web or get the Android app on Google Play.
             </p>
             <Button asChild size="lg" className="bg-primary hover:bg-primary-pressed text-white">
-              <Link to="/auth/register">
+              <Link to={trialRegisterHref()}>
                 Start free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>

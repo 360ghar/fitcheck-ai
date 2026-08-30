@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **208** operations across **183** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **240** operations across **212** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -59,7 +59,17 @@ Public endpoints (no auth required):
 - `GET /api/v1/calendar`
 - `POST /api/v1/demo/extract-items`
 - `POST /api/v1/demo/try-on`
+- `GET /api/v1/gifts/catalog`
+- `GET /api/v1/gifts/public/{public_id}`
+- `GET /api/v1/gifts/public/{public_id}/artwork/og.png`
 - `GET /api/v1/health`
+- `GET /api/v1/oauth/.well-known/oauth-authorization-server`
+- `GET /api/v1/oauth/.well-known/oauth-protected-resource`
+- `GET /api/v1/oauth/authorize`
+- `POST /api/v1/oauth/authorize/complete`
+- `POST /api/v1/oauth/register`
+- `POST /api/v1/oauth/revoke`
+- `POST /api/v1/oauth/token`
 - `GET /api/v1/outfits/public/{outfit_id}`
 - `POST /api/v1/photoshoot/demo`
 - `GET /api/v1/photoshoot/demo/{job_id}/status`
@@ -175,6 +185,121 @@ Root endpoint.
 **Responses:**
 
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/oauth/.well-known/oauth-authorization-server
+
+RFC 8414 authorization-server metadata (public clients, PKCE S256).
+
+**Auth:** none (public endpoint)
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/oauth/.well-known/oauth-protected-resource
+
+RFC 9728 protected-resource metadata for the /mcp resource.
+
+**Auth:** none (public endpoint)
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/oauth/authorize
+
+Validate the client's authorization request and bounce the user to the
+frontend bridge (Supabase hosted login runs there).
+
+**Auth:** none (public endpoint)
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `client_id` | query | string | yes |  |
+| `code_challenge` | query | string | yes |  |
+| `code_challenge_method` | query | string | no |  |
+| `redirect_uri` | query | string | yes |  |
+| `response_type` | query | string | yes |  |
+| `scope` | query | string | no |  |
+| `state` | query | string | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/oauth/authorize/complete
+
+Frontend bridge callback: bind the Supabase session to the pending
+authorization. Returns the redirect URL the browser must follow.
+
+**Auth:** none (public endpoint)
+
+**Request body** (`application/json`, required):
+
+_No structured fields declared._
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/oauth/register
+
+RFC 7591 dynamic registration. Public clients only (PKCE, no secret);
+redirect URIs must match MCP_REDIRECT_URI_ALLOWLIST.
+
+**Auth:** none (public endpoint)
+
+**Request body** (`application/json`, required):
+
+_No structured fields declared._
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/oauth/revoke
+
+RFC 7009 revocation (idempotent; always 200 for valid requests).
+
+**Auth:** none (public endpoint)
+
+**Request body** (`application/x-www-form-urlencoded`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `token` | string | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/oauth/token
+
+RFC 6749 token endpoint: authorization_code (PKCE) or refresh_token.
+
+**Auth:** none (public endpoint)
+
+**Request body** (`application/x-www-form-urlencoded`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `client_id` | string | yes |  |
+| `code` | string (nullable) | no |  |
+| `code_verifier` | string (nullable) | no |  |
+| `grant_type` | string | yes |  |
+| `redirect_uri` | string (nullable) | no |  |
+| `refresh_token` | string (nullable) | no |  |
+
+**Responses:**
+
+- **200** Returns object.
+- **Errors:** 422 Unprocessable Entity
 
 ### GET /robots.txt
 
@@ -563,6 +688,23 @@ Delete a body profile.
 
 - **204** No Content
 - **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/users/bootstrap
+
+One-roundtrip app-launch aggregate.
+
+The mobile/web launch sequence used to fire 5+ parallel reads
+(/users/me, /items, /outfits, /subscription/usage, /referral/code);
+each paid its own auth-profile lookup and DB roundtrip, which showed up
+in the Aug 2026 logs as 400-1500 ms cold-start clusters. This endpoint
+returns the same payloads under one request. The individual routes stay
+for compatibility and partial refreshes.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 
 ### GET /api/v1/users/dashboard
 
@@ -3572,6 +3714,253 @@ visitor what the code grants. Never mutates state.
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 - **Errors:** 422 Unprocessable Entity
 
+## Gift Vouchers
+
+### GET /api/v1/gifts/allowances
+
+Get Allowances
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/gifts/catalog
+
+Return fixed USD gift terms and paid-checkout availability.
+
+**Auth:** none (public endpoint)
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### POST /api/v1/gifts/checkout
+
+Create Paid Gift Checkout
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cancel_url` | string | no |  |
+| `client_request_id` | string | yes |  |
+| `duration_months` | integer | yes |  |
+| `from_name` | string | yes |  |
+| `message` | string (nullable) | no |  |
+| `success_url` | string | no |  |
+| `to_name` | string | yes |  |
+
+**Responses:**
+
+- **201** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/gifts/checkout/fulfill
+
+Fulfill Paid Gift Checkout
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `session_id` | string | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/gifts/claim
+
+Claim Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `public_id` | string (uuid) | yes |  |
+| `secret` | string | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/gifts/complimentary
+
+Create Complimentary Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `client_request_id` | string | yes |  |
+| `duration_months` | integer | yes |  |
+| `from_name` | string | yes |  |
+| `message` | string (nullable) | no |  |
+| `to_name` | string | yes |  |
+
+**Responses:**
+
+- **201** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/gifts/public/{public_id}
+
+Return presentation and lifecycle state without private account data.
+
+**Auth:** none (public endpoint)
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `public_id` | path | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/gifts/public/{public_id}/artwork/og.png
+
+Return the versioned 1200 x 630 social preview.
+
+**Auth:** none (public endpoint)
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `public_id` | path | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** OK
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/gifts/received
+
+List Received Gifts
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `page` | query | integer | no |  |
+| `page_size` | query | integer | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/gifts/sent
+
+List Sent Gifts
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `page` | query | integer | no |  |
+| `page_size` | query | integer | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/gifts/{voucher_id}
+
+Get Owned Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### PATCH /api/v1/gifts/{voucher_id}
+
+Update Owned Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `from_name` | string (nullable) | no |  |
+| `message` | string (nullable) | no |  |
+| `to_name` | string (nullable) | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/gifts/{voucher_id}/artwork/portrait.png
+
+Download Owned Gift Artwork
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** OK
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/gifts/{voucher_id}/rotate
+
+Rotate Owned Gift Link
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
 ## Feedback
 
 ### POST /api/v1/feedback
@@ -4047,6 +4436,229 @@ Update a ticket's status and/or internal notes. Audit: feedback.updated.
 |---|---|---|---|
 | `internal_notes` | string (nullable) | no |  |
 | `status` | enum: open, in_progress, resolved, closed (nullable) | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/admin/gifts
+
+List Gifts
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `created_from` | query | string (date) (nullable) | no |  |
+| `created_to` | query | string (date) (nullable) | no |  |
+| `duration_months` | query | integer (nullable) | no |  |
+| `page` | query | integer | no |  |
+| `page_size` | query | integer | no |  |
+| `q` | query | string (nullable) | no |  |
+| `source` | query | string (nullable) | no |  |
+| `status` | query | string (nullable) | no |  |
+
+**Responses:**
+
+**Response 200:** Returns `PageResponse_Dict_str__Any__`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `items` | array<object> | yes |  |
+| `page` | integer | yes |  |
+| `page_size` | integer | yes |  |
+| `total` | integer | yes |  |
+
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/admin/gifts
+
+Create Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `duration_months` | integer | yes |  |
+| `expires_at` | string (date-time) (nullable) | no |  |
+| `from_name` | string | yes |  |
+| `message` | string (nullable) | no |  |
+| `note` | string | yes |  |
+| `to_name` | string | yes |  |
+
+**Responses:**
+
+- **201** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/admin/gifts/allowances/{user_id}
+
+Adjust Gift Allowance
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string (uuid) | yes |  |
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `add_count` | integer | yes |  |
+| `duration_months` | integer | yes |  |
+| `reason` | string | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/admin/gifts/export.csv
+
+Export Gifts
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `created_from` | query | string (date) (nullable) | no |  |
+| `created_to` | query | string (date) (nullable) | no |  |
+| `duration_months` | query | integer (nullable) | no |  |
+| `q` | query | string (nullable) | no |  |
+| `source` | query | string (nullable) | no |  |
+| `status` | query | string (nullable) | no |  |
+
+**Responses:**
+
+- **200** OK
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/admin/gifts/summary
+
+Gift Summary
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/admin/gifts/{voucher_id}
+
+Get Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### PATCH /api/v1/admin/gifts/{voucher_id}
+
+Update Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `from_name` | string (nullable) | no |  |
+| `message` | string (nullable) | no |  |
+| `to_name` | string (nullable) | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/admin/gifts/{voucher_id}/assign
+
+Assign Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `reason` | string | yes |  |
+| `user_id` | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/admin/gifts/{voucher_id}/rotate
+
+Rotate Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `reason` | string | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/admin/gifts/{voucher_id}/void-or-revoke
+
+Void Or Revoke Gift
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `reason` | string | yes |  |
 
 **Responses:**
 
@@ -4557,8 +5169,8 @@ Recent audit events + recent jobs for one user (limit 25 each).
 Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).
 
 Sets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to
-today, plus ``subscription_usage.daily_photoshoot_images`` to 0 for
-today's period. Writes audit ``user.ai_daily_cleared`` and invalidates
+today, plus ``subscription_usage.daily_photoshoot_images`` to 0 for the
+active monthly usage period. Writes audit ``user.ai_daily_cleared`` and invalidates
 the cached profile.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
@@ -4723,6 +5335,38 @@ One funnel step: label, count, pct_of_prev (100.0 for first).
 | `label` | string | yes |  |
 | `pct_of_prev` | number | no |  |
 
+### `AdminGiftAction`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `reason` | string | yes |  |
+
+### `AdminGiftAllowanceAdjust`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `add_count` | integer | yes |  |
+| `duration_months` | integer | yes |  |
+| `reason` | string | yes |  |
+
+### `AdminGiftAssign`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `reason` | string | yes |  |
+| `user_id` | string (uuid) | yes |  |
+
+### `AdminGiftCreate`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `duration_months` | integer | yes |  |
+| `expires_at` | string (date-time) (nullable) | no |  |
+| `from_name` | string | yes |  |
+| `message` | string (nullable) | no |  |
+| `note` | string | yes |  |
+| `to_name` | string | yes |  |
+
 ### `AdminIapTransactionListItem`
 
 One row of GET /admin/iap/transactions (store-billed subscriptions).
@@ -4820,6 +5464,9 @@ One row of GET /admin/quotas (today's per-user AI usage).
 | `daily_extraction_count` | integer (nullable) | no |  |
 | `daily_generation_count` | integer (nullable) | no |  |
 | `daily_photoshoot_images` | integer (nullable) | no |  |
+| `effective_embedding_limit` | integer | yes |  |
+| `effective_extraction_limit` | integer | yes |  |
+| `effective_generation_limit` | integer | yes |  |
 | `email` | string (nullable) | no |  |
 | `full_name` | string (nullable) | no |  |
 | `last_reset_date` | object (nullable) | no |  |
@@ -5026,6 +5673,7 @@ GET /admin/users/{user_id} — full profile detail (360 view). Core keys (user, 
 | `streak` | object | no |  |
 | `streaks` | object | no |  |
 | `subscription` | object (nullable) | no |  |
+| `support_tickets` | array<object> | no |  |
 | `trips` | array<object> | no |  |
 | `usage` | object | no |  |
 | `user` | object | yes |  |
@@ -5204,6 +5852,23 @@ Model for updating body profile (all fields optional).
 | `skin_tone` | string (nullable) | no |  |
 | `weight_kg` | number (nullable) | no |  |
 
+### `Body_issue_token_api_v1_oauth_token_post`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `client_id` | string | yes |  |
+| `code` | string (nullable) | no |  |
+| `code_verifier` | string (nullable) | no |  |
+| `grant_type` | string | yes |  |
+| `redirect_uri` | string (nullable) | no |  |
+| `refresh_token` | string (nullable) | no |  |
+
+### `Body_revoke_token_api_v1_oauth_revoke_post`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `token` | string | yes |  |
+
 ### `Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post`
 
 | Field | Type | Required | Description |
@@ -5280,6 +5945,16 @@ Model for updating body profile (all fields optional).
 | `occasion` | string (nullable) | no |  |
 | `start_item_id` | string (nullable) | no |  |
 | `weather_condition` | string (nullable) | no |  |
+
+### `ComplimentaryGiftCreate`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `client_request_id` | string | yes |  |
+| `duration_months` | integer | yes |  |
+| `from_name` | string | yes |  |
+| `message` | string (nullable) | no |  |
+| `to_name` | string | yes |  |
 
 ### `ConfirmResetRequest`
 
@@ -5456,6 +6131,27 @@ Request model for AI outfit image generation.
 | `lighting` | string (nullable) | no |  |
 | `pose` | string | no |  |
 | `variations` | integer | no |  |
+
+### `GiftCheckoutFulfill`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `session_id` | string | yes |  |
+
+### `GiftClaimRequest`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `public_id` | string (uuid) | yes |  |
+| `secret` | string | yes |  |
+
+### `GiftUpdate`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `from_name` | string (nullable) | no |  |
+| `message` | string (nullable) | no |  |
+| `to_name` | string (nullable) | no |  |
 
 ### `HTTPValidationError`
 
@@ -5759,6 +6455,18 @@ Model for updating an outfit (all fields optional).
 | `page` | integer | yes |  |
 | `page_size` | integer | yes |  |
 | `total` | integer | yes |  |
+
+### `PaidGiftCheckoutCreate`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cancel_url` | string | no |  |
+| `client_request_id` | string | yes |  |
+| `duration_months` | integer | yes |  |
+| `from_name` | string | yes |  |
+| `message` | string (nullable) | no |  |
+| `success_url` | string | no |  |
+| `to_name` | string | yes |  |
 
 ### `PhotoshootUseCase`
 

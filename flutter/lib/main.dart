@@ -14,6 +14,7 @@ import 'core/services/persistence_service.dart';
 import 'core/services/theme_service.dart';
 import 'core/services/route_observer.dart';
 import 'core/utils/error_handler.dart';
+import 'core/utils/image_utils.dart';
 import 'app/themes/app_theme.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
@@ -26,6 +27,10 @@ void main() async {
 
   await SupabaseService.instance.init();
   await AnalyticsService.instance.init();
+
+  // Best-effort cleanup of stale generated thumbnails (fire-and-forget; the
+  // method swallows its own errors and must never delay startup).
+  unawaited(ImageUtils.pruneThumbnails());
 
   // PersistenceService must be registered before ThemeService (and any other
   // service that reads cached prefs in onInit), since ThemeService.onInit

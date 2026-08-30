@@ -364,6 +364,12 @@ async function main() {
     // data without waiting for hydration. Only JSON-LD scripts are emitted;
     // title/description/canonical are already set per-route by prerender-meta.
     let out = html.replace(ROOT_DIV, `<div id="root">${markup}</div>`)
+    // A successfully prerendered route already has complete non-JS content in
+    // #root. Keeping the generic shell fallback here duplicates the homepage
+    // copy and adds a second H1 for source-based crawlers. app-shell.html is
+    // snapshotted before this loop, and skipped routes never reach this line,
+    // so both still retain the fallback they need.
+    out = out.replace(/\s*<noscript>[\s\S]*?<\/noscript>/, '')
     const headInject = []
     if (headScripts && headScripts.trim()) {
       // De-dupe: skip injection if this page's JSON-LD is already present
@@ -375,8 +381,11 @@ async function main() {
     // Preload it there only — emitting this on every route would make /faq,
     // /features, etc. fetch a hero image they never display.
     if (routePath === '/') {
+      // Must mirror the hero image's own sizes attribute (Hero.tsx) exactly —
+      // a mismatch makes the browser fetch a different tier than the preload,
+      // wasting it and doubling the LCP request.
       headInject.push(
-        '<link rel="preload" as="image" href="/landing/wardrobe-640.webp" imagesrcset="/landing/wardrobe-640.webp 640w, /landing/wardrobe.webp 1152w" imagesizes="(min-width: 1024px) 58vw, 100vw" fetchpriority="high" />'
+        '<link rel="preload" as="image" href="/landing/flatlay-640.webp" imagesrcset="/landing/flatlay-640.webp 640w, /landing/flatlay.webp 1024w" imagesizes="(min-width: 1024px) 42vw, calc(100vw - 32px)" fetchpriority="high" />'
       )
     }
     // The blog index's JS chunk graph is only discovered after the entry

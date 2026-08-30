@@ -3,6 +3,7 @@ User API routes.
 
 Implements:
 - GET/PUT /api/v1/users/me
+- GET /api/v1/users/bootstrap (app-launch aggregate: me + usage + referral)
 - DELETE /api/v1/users/me (account deletion)
 - POST /api/v1/users/export (data export archive)
 - GET/PUT /api/v1/users/preferences
@@ -25,6 +26,7 @@ from pydantic import ValidationError as PydanticValidationError
 from supabase import Client
 
 from app.core.concurrency import PER_USER_LOCK
+from app.core import user_profile_cache
 from app.core.exceptions import (
     BodyProfileNotFoundError,
     DatabaseError,
@@ -402,6 +404,10 @@ async def update_current_user(
         if not row:
             raise DatabaseError("Failed to update user")
 
+        # The auth hot path caches this row; drop the stale copy so the next
+        # request reads the updated profile.
+        user_profile_cache.invalidate(user_id)
+
         _sync_birth_fields_to_auth(db, user_id, birth_patch)
 
         user = UserResponse.model_validate(_normalize_user_birth_fields(row))
@@ -414,6 +420,52 @@ async def update_current_user(
         raise
     except Exception as e:
         _handle_db_error("update user", user_id, e)
+
+
+@router.get("/bootstrap", response_model=Dict[str, Any])
+async def get_bootstrap(
+    user_id: str = Depends(get_active_user_id),
+    db: Client = Depends(get_db),
+):
+    """One-roundtrip app-launch aggregate.
+
+    The mobile/web launch sequence used to fire 5+ parallel reads
+    (/users/me, /items, /outfits, /subscription/usage, /referral/code);
+    each paid its own auth-profile lookup and DB roundtrip, which showed up
+    in the Aug 2026 logs as 400-1500 ms cold-start clusters. This endpoint
+    returns the same payloads under one request. The individual routes stay
+    for compatibility and partial refreshes.
+    """
+    from app.services.referral_service import ReferralService
+    from app.services.subscription_service import SubscriptionService
+
+    try:
+        # Stage 1: profile + usage concurrently (independent reads). Stage 2
+        # needs the profile's full_name (referral-code generation), so the
+        # referral read runs after me. Cache means me + usage share the
+        # already-warmed profile; with the old 5-endpoint fan-out each paid
+        # its own profile lookup.
+        me_response, usage_response = await asyncio.gather(
+            get_current_user(user_id=user_id, db=db),
+            SubscriptionService.get_usage(user_id, db),
+        )
+        referral_data = await ReferralService.get_or_create_referral_code(
+            user_id=user_id,
+            full_name=me_response["data"].get("full_name"),
+            db=db,
+        )
+        return {
+            "data": {
+                "me": me_response["data"],
+                "usage": usage_response.model_dump(mode="json"),
+                "referral_code": referral_data.model_dump(mode="json"),
+            },
+            "message": "OK",
+        }
+    except (UserNotFoundError, ValidationError, DatabaseError):
+        raise
+    except Exception as e:
+        _handle_db_error("bootstrap", user_id, e)
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
@@ -486,6 +538,13 @@ async def delete_current_user(
         # bucket listing; delete it with the rest of the owned storage. A
         # missing object is a no-op delete on the S3 side.
         storage_paths.append(mint_export_key(user_id))
+        # Database rows only reference durable objects. A user can also have
+        # short-lived generated or temporary images that are never attached
+        # to a row, so enumerate their owned namespace before deletion.
+        storage_paths.extend(
+            await StorageService.list_owned_user_storage_paths(user_id)
+        )
+        storage_paths = list(dict.fromkeys(storage_paths))
 
         async def _delete_storage() -> None:
             if storage_paths:  # pragma: no cover - export path always appended above
@@ -531,6 +590,8 @@ async def delete_current_user(
             db,
             extra={"operation": "delete_account.user_row", "user_id": user_id},
         )
+        # The row is gone; a cached copy must not serve later requests.
+        user_profile_cache.invalidate(user_id)
 
         admin = getattr(getattr(db, "auth", None), "admin", None)
         if not admin or not hasattr(admin, "delete_user"):
@@ -669,6 +730,8 @@ async def upload_avatar(
 
         try:
             await asyncio.to_thread(db.table("users").update({"avatar_url": avatar_url, "updated_at": _now()}).eq("id", user_id).execute)
+            # Keep the auth-path profile cache coherent with the new avatar.
+            user_profile_cache.invalidate(user_id)
         except Exception:
             # A2-07: the row update failed after the new avatar object was
             # uploaded — best-effort delete of the orphan before surfacing

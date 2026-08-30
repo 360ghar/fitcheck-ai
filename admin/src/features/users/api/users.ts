@@ -130,7 +130,7 @@ export function useClearDailyCounters() {
     mutationFn: ({ userId }: { userId: string }) => clearDailyCounters(userId),
     onSettled: (_data, _error, { userId }) => {
       void queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) })
-      void queryClient.invalidateQueries({ queryKey: userKeys.all })
+      void queryClient.invalidateQueries({ queryKey: userKeys.activity(userId) })
     },
     retry: QUERY_RETRY.mutations,
   })

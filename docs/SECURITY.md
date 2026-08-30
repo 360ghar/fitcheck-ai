@@ -1,7 +1,7 @@
 # Security
 
 Status: verified  
-Last updated: 2026-08-08
+Last updated: 2026-08-29
 
 ## Authentication and authorization
 
@@ -9,6 +9,29 @@ Last updated: 2026-08-08
 - Protected routes use `get_current_user` / deps in `app/api/v1/deps.py`.
 - Prefer user-scoped queries (`user_id` filters) even when using the service role client.
 - RLS should be enabled on user data tables in Supabase; treat service role as privileged and careful.
+
+## MCP / agent surface (`/mcp`, `/mcp/chatgpt`)
+
+Details: `docs/references/mcp.md`. Security posture:
+
+- **Presence gate at the transport, verification in the route.** The MCP
+  transport 401s any request without `Authorization: Bearer`; the token is
+  verified inside the loopbacked API call by the normal `get_current_user`
+  dependency (Supabase JWTs, then backend-minted MCP tokens
+  `aud=fitcheck-mcp` from `verify_mcp_token` in `app/core/security.py`).
+- **Denylist by construction**: admin, auth session management, webhooks,
+  SSE, multipart/binary, demo/waitlist never become tools
+  (`app/mcp/denylist.py`, enforced in tests).
+- **OAuth gateway (opt-in via `MCP_OAUTH_ISSUER`)**: DCR restricted to
+  `MCP_REDIRECT_URI_ALLOWLIST` origins and path boundaries (default blank = registration
+  disabled); PKCE S256 mandatory; access tokens expire after one hour;
+  60-second codes are consumed atomically; refresh tokens are SHA-256-hashed,
+  atomically rotated per use, and family-revoked on replay. All three tables
+  are service-role only (migrations 057 and 058). Codes/refresh tokens are
+  never stored in plaintext.
+- **User scoping is inherited**: tools run real routes, so every query keeps
+  its `user_id` filter — the agent surface cannot read another user's data
+  even with a valid token for that other user's session.
 
 ## Secrets
 

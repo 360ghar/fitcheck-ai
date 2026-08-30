@@ -24,6 +24,7 @@ import {
 } from '@/shared/ui/dialog'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { ErrorState } from '@/shared/ui/ErrorState'
+import { PageHeader } from '@/shared/ui/PageHeader'
 import { TableToolbar } from '@/shared/ui/TableToolbar'
 import { useServerTable } from '@/shared/ui/useServerTable'
 
@@ -222,6 +223,8 @@ export function AuditPage() {
 
   return (
     <div className="space-y-3">
+
+      <PageHeader dense title={t('title')} description={t('description')} />
 
       <TableToolbar
         searchValue={table.tableState.q}

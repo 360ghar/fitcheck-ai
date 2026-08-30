@@ -5,7 +5,7 @@ report in app/models/{item,user,ai,blog,outfit,photoshoot}.py.
 """
 
 import re
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -22,6 +22,7 @@ from app.models.outfit import OutfitCreate, OutfitUpdate
 from app.models.photoshoot import StartPhotoshootRequest
 from app.models.recommendation import StyleAnalysisResponse
 from app.models.user import UserBase, UserSettingsUpdate, UserUpdate
+from app.utils.datetime_util import utc_today
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ def test_user_birth_date_future_rejected():
     with pytest.raises(ValidationError, match="cannot be in the future"):
         UserBase(
             email="a@b.com",
-            birth_date=date.today() + timedelta(days=1),
+            birth_date=utc_today() + timedelta(days=1),
         )
 
 

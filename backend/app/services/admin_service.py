@@ -51,7 +51,7 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -63,6 +63,7 @@ from app.core.exceptions import (
 )
 from app.core.permissions import ADMIN_ROLES, USER_ROLE, get_user_role
 from app.core.predicates import build_predicate
+from app.core import user_profile_cache
 from app.utils.db import execute_with_reconnect, maybe_single_data, safe_search_term
 from app.utils.datetime_util import parse_utc_datetime, utc_today, utcnow
 
@@ -106,6 +107,36 @@ def _page_range(page: int, page_size: int) -> tuple[int, int]:
     """PostgREST .range() is inclusive on both ends."""
     offset = (page - 1) * page_size
     return offset, offset + page_size - 1
+
+
+def _current_usage_period_start() -> str:
+    """Current UTC usage-period start, matching ``SubscriptionService``."""
+    today = utc_today()
+    return today.replace(day=1).isoformat()
+
+
+async def _fetch_all_pages(
+    db: Any,
+    builder: Callable[[Any], Any],
+    *,
+    operation: str,
+    extra: Optional[Dict[str, Any]] = None,
+    page_size: int = 500,
+) -> List[Dict[str, Any]]:
+    """Fetch every PostgREST page for a bounded dashboard analysis query."""
+    rows: List[Dict[str, Any]] = []
+    offset = 0
+    while True:
+        result = await execute_with_reconnect(
+            lambda d, start=offset: builder(d).range(start, start + page_size - 1).execute(),
+            db,
+            extra={"operation": operation, **(extra or {}), "offset": offset},
+        )
+        page = [dict(row) for row in (result.data or [])]
+        rows.extend(page)
+        if len(page) < page_size:
+            return rows
+        offset += page_size
 
 
 def _extract_count(value: Any) -> int:
@@ -238,8 +269,8 @@ async def list_users(
 async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
     """Full user profile: row + subscription + usage snapshot + counts + jobs.
 
-    Extended for the 360 detail page: 6 additional sections (items, outfits,
-    photoshoot_jobs, collections, trips, achievements) plus social_import_jobs
+    Extended for the 360 detail page: items, outfits, photoshoot jobs,
+    collections, trips, achievements, support tickets, and social import jobs
     when the table is present. All are fetched concurrently via
     ``asyncio.gather`` so the detail page is one user-facing GET, not N.
     """
@@ -282,7 +313,7 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 "daily_photoshoot_images,last_photoshoot_reset"
             )
             .eq("user_id", user_id)
-            .eq("period_start", utc_today().isoformat())
+            .eq("period_start", _current_usage_period_start())
             .maybe_single()
             .execute(),
             db,
@@ -372,12 +403,13 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
         # so both schema variants work; also attempt an outfit_images embed for
         # cover art when the relation exists -- cheap to try, harmless to drop.
         for cols in (
+            "id,title,created_at,outfit_images(image_url,is_primary)",
+            "id,name,created_at,outfit_images(image_url,is_primary)",
             "id,title,created_at",
             "id,name,created_at",
-            "id,name,created_at,outfit_images(image_url,is_primary)",
         ):
-            # The embed variant is explicitly attempted last so the simple
-            # select remains the common path.
+            # Prefer a compatible image embed. If an older deployment lacks
+            # the relation or title column, keep trying the safe fallbacks.
             if "outfit_images" in cols:
                 try:
                     res = await execute_with_reconnect(
@@ -409,7 +441,7 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                         out.append(r)
                     return out
                 except Exception:
-                    return []
+                    continue
             try:
                 res = await execute_with_reconnect(
                     lambda d, c=cols: d.table("outfits")
@@ -431,8 +463,6 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                         r["name"] = r.get("title")
                 return rows
             except Exception:
-                if cols == "id,name,created_at":
-                    return []
                 continue
         return []
 
@@ -597,6 +627,25 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
         except Exception:
             return []
 
+    async def _fetch_support_tickets() -> List[Dict[str, Any]]:
+        """Fetch recent support tickets for the activity timeline."""
+        try:
+            res = await execute_with_reconnect(
+                lambda d: d.table("support_tickets")
+                .select("id,status,category,subject,created_at,updated_at")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(25)
+                .execute(),
+                db,
+                extra={"operation": "admin.get_user.detail.support_tickets", "user_id": user_id},
+            )
+            return [dict(row) for row in (res.data or [])]
+        except Exception:
+            # Support tickets are optional for deployments that have not
+            # applied the admin-support migration yet.
+            return []
+
     # Concurrent fetch. return_exceptions=False would fail the whole detail
     # on one bad section; with helpers swallowing per-section errors we can
     # gather normally. Keep it simple: individual helpers never raise.
@@ -608,6 +657,7 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
         trips,
         achievements,
         social_import_jobs,
+        support_tickets,
     ) = await asyncio.gather(
         _fetch_items(),
         _fetch_outfits(),
@@ -616,6 +666,7 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
         _fetch_trips(),
         _fetch_achievements(),
         _fetch_social_import_jobs(),
+        _fetch_support_tickets(),
     )
 
     # Extend counts where cheap: gifts, collections, trips — batched concurrently.
@@ -657,9 +708,14 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
     counts["achievements"] = achievements.get("achievements_count", 0) if isinstance(achievements, dict) else 0
     # Streak is not counted separately; its fields live in streak/streaks
 
+    subscription = (
+        {**sub_row, "amount": plan_display_amount(sub_row.get("plan_type"))}
+        if isinstance(sub_row, dict)
+        else sub_row
+    )
     return {
         "user": user_row,
-        "subscription": sub_row,
+        "subscription": subscription,
         "usage": {"ai": ai_row or {}, "subscription_usage": usage_row or {}},
         "counts": counts,
         "recent_jobs": jobs[:10],
@@ -674,6 +730,7 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
         # Keep the original dict for callers that expect the old shape
         "achievements_meta": achievements if isinstance(achievements, dict) else {},
         "social_import_jobs": social_import_jobs,
+        "support_tickets": support_tickets,
     }
 
 
@@ -696,9 +753,11 @@ def _invalidate_user_profile_cache(user_id: str) -> None:
 async def extend_user_trial(db: Any, user_id: str, days: int) -> Dict[str, Any]:
     """Extend a user's subscription trial by ``days``.
 
-    If ``subscriptions.trial_end`` is set, it is moved forward by ``days``;
-    otherwise ``now + days`` becomes the new trial end. The write is behind
-    the route's ``subscriptions.write`` / ``users.write`` permission check.
+    The migration-060 RPC locks the subscription row and extends from the
+    later of its existing expiry and the current time. This keeps concurrent
+    admin actions additive and revives an expired trial for the requested
+    period. The write is behind the route's ``subscriptions.write`` /
+    ``users.write`` permission check.
 
     Returns ``{subscription, before, after}`` where before/after are ISO
     strings (or None) for the audit payload.
@@ -708,126 +767,57 @@ async def extend_user_trial(db: Any, user_id: str, days: int) -> Dict[str, Any]:
             message="days must be between 1 and 90",
             details={"field": "days", "value": days},
         )
-    sub_row = maybe_single_data(
-        await execute_with_reconnect(
-            lambda d: d.table("subscriptions").select("*").eq("user_id", user_id).maybe_single().execute(),
-            db,
-            extra={"operation": "admin.extend_trial.load", "user_id": user_id},
-        )
+    result = await execute_with_reconnect(
+        lambda d: d.rpc(
+            "admin_extend_user_trial",
+            {"p_user_id": user_id, "p_days": days},
+        ).execute(),
+        db,
+        extra={"operation": "admin.extend_trial.atomic", "user_id": user_id, "days": days},
     )
-    if not sub_row:
+    row = _first_row(result)
+    if not row:
         raise NotFoundError(
             message=f"No subscription found for user {user_id}",
             resource_type="subscription",
             resource_id=user_id,
         )
-    before_raw = sub_row.get("trial_end")
-    from app.utils.datetime_util import parse_utc_datetime  # local import to avoid cycle
-
-    before_dt = parse_utc_datetime(before_raw) if before_raw else None
-    now = utcnow()
-    after_dt = (before_dt + timedelta(days=days)) if before_dt else (now + timedelta(days=days))
-    after_iso = after_dt.isoformat()
-    before_iso = before_dt.isoformat() if before_dt else (str(before_raw) if before_raw else None)
-
-    result = await execute_with_reconnect(
-        lambda d: d.table("subscriptions").update({"trial_end": after_iso}).eq("user_id", user_id).execute(),
-        db,
-        extra={"operation": "admin.extend_trial.apply", "user_id": user_id, "days": days},
-    )
-    updated = _first_row(result) or {**sub_row, "trial_end": after_iso}
+    subscription = row.get("subscription") if isinstance(row.get("subscription"), dict) else {}
     _invalidate_user_profile_cache(user_id)
-    return {"subscription": updated, "before": before_iso, "after": after_iso}
+    return {
+        "subscription": subscription,
+        "before": row.get("before_trial_end"),
+        "after": row.get("after_trial_end"),
+    }
 
 
 async def clear_daily_ai_counters(db: Any, user_id: str) -> Dict[str, Any]:
     """Reset daily AI counters for a user.
 
-    Resets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to
-    today, plus ``subscription_usage.daily_photoshoot_images`` to 0 (creating
-    the usage row if needed). Behind ``users.write`` (route check).
+    The migration-060 RPC resets settings and the active monthly usage row in
+    one transaction. It creates either row when needed and does not silently
+    report success if one part of the reset fails. Behind ``users.write``.
     """
-    user_row = maybe_single_data(
-        await execute_with_reconnect(
-            lambda d: d.table("users").select("id").eq("id", user_id).maybe_single().execute(),
-            db,
-            extra={"operation": "admin.clear_daily.load", "user_id": user_id},
-        )
-    )
-    if not user_row:
-        raise UserNotFoundError(user_id)
-
-    today_iso = utc_today().isoformat()
-    ai_payload = {
-        "daily_extraction_count": 0,
-        "daily_generation_count": 0,
-        "daily_embedding_count": 0,
-        "last_reset_date": today_iso,
-    }
-    ai_res = await execute_with_reconnect(
-        lambda d: d.table("user_ai_settings").update(ai_payload).eq("user_id", user_id).execute(),
+    result = await execute_with_reconnect(
+        lambda d: d.rpc("admin_clear_user_daily_ai_counters", {"p_user_id": user_id}).execute(),
         db,
-        extra={"operation": "admin.clear_daily.ai", "user_id": user_id},
+        extra={"operation": "admin.clear_daily.atomic", "user_id": user_id},
     )
-    if not _first_row(ai_res):
-        try:
-            await execute_with_reconnect(
-                lambda d: d.table("user_ai_settings")
-                .upsert({"user_id": user_id, **ai_payload}, on_conflict="user_id")
-                .execute(),
-                db,
-                extra={"operation": "admin.clear_daily.ai.upsert", "user_id": user_id},
-            )
-        except Exception:
-            pass
-    try:
-        await execute_with_reconnect(
-            lambda d: d.table("subscription_usage")
-            .update({"daily_photoshoot_images": 0})
-            .eq("user_id", user_id)
-            .eq("period_start", today_iso)
-            .execute(),
-            db,
-            extra={"operation": "admin.clear_daily.usage", "user_id": user_id},
-        )
-    except Exception:
-        pass
-    try:
-        maybe = maybe_single_data(
-            await execute_with_reconnect(
-                lambda d: d.table("subscription_usage")
-                .select("user_id")
-                .eq("user_id", user_id)
-                .eq("period_start", today_iso)
-                .maybe_single()
-                .execute(),
-                db,
-                extra={"operation": "admin.clear_daily.usage.check", "user_id": user_id},
-            )
-        )
-        if not maybe:
-            await execute_with_reconnect(
-                lambda d: d.table("subscription_usage")
-                .upsert(
-                    {
-                        "user_id": user_id,
-                        "period_start": today_iso,
-                        "daily_photoshoot_images": 0,
-                        "monthly_extractions": 0,
-                        "monthly_generations": 0,
-                        "monthly_embeddings": 0,
-                    },
-                    on_conflict="user_id,period_start",
-                )
-                .execute(),
-                db,
-                extra={"operation": "admin.clear_daily.usage.upsert", "user_id": user_id},
-            )
-    except Exception:
-        pass
-
+    row = _first_row(result)
+    if not row:
+        raise UserNotFoundError(user_id)
     _invalidate_user_profile_cache(user_id)
-    return {"user_id": user_id, "today": today_iso, "cleared": ai_payload}
+    return {
+        "user_id": user_id,
+        "today": row.get("today"),
+        "period_start": row.get("period_start"),
+        "cleared": {
+            "daily_extraction_count": 0,
+            "daily_generation_count": 0,
+            "daily_embedding_count": 0,
+            "last_reset_date": row.get("today"),
+        },
+    }
 
 
 async def update_user(
@@ -964,6 +954,10 @@ async def update_user(
         db,
         extra={"operation": "admin.update_user.apply", "user_id": user_id},
     )
+    # Suspension/role changes must reach the auth hot path immediately: the
+    # cached profile carries is_active, so a stale copy would keep serving a
+    # suspended account for the rest of its TTL.
+    user_profile_cache.invalidate(user_id)
     updated = _first_row(result) or {**target, **updates}
 
     # Change list for the route's audit rows (before/after per field).
@@ -1174,7 +1168,7 @@ async def get_user_subscription(db: Any, user_id: str) -> Dict[str, Any]:
                 "daily_photoshoot_images"
             )
             .eq("user_id", user_id)
-            .eq("period_start", utc_today().isoformat())
+            .eq("period_start", _current_usage_period_start())
             .maybe_single()
             .execute(),
             db,
@@ -1559,6 +1553,28 @@ _QUOTA_SORT_COLUMNS = {
 }
 
 
+def _effective_daily_quota_limits(custom_daily_quota: Any) -> Dict[str, int]:
+    """Effective per-operation limits used by ``AISettingsService`` today."""
+    try:
+        override = int(custom_daily_quota) if custom_daily_quota is not None else None
+    except (TypeError, ValueError):
+        override = None
+    if override is not None:
+        # The write endpoint requires >= 1, but a defensive floor keeps an
+        # unexpected legacy value from creating a negative UI limit.
+        limit = max(0, override)
+        return {
+            "effective_extraction_limit": limit,
+            "effective_generation_limit": limit,
+            "effective_embedding_limit": limit,
+        }
+    return {
+        "effective_extraction_limit": settings.AI_DAILY_EXTRACTION_LIMIT,
+        "effective_generation_limit": settings.AI_DAILY_GENERATION_LIMIT,
+        "effective_embedding_limit": settings.AI_DAILY_EMBEDDING_LIMIT,
+    }
+
+
 def _quota_usage_builder(
     d: Any, *, q: Optional[str], plan: Optional[str], sort_col: str, sort_dir: str
 ) -> Any:
@@ -1634,13 +1650,15 @@ async def list_quota_usage(
             sub = subscriptions[0] if subscriptions else {}
         else:
             sub = subscriptions or {}
+        custom_daily_quota = user.get("custom_daily_quota") if isinstance(user, dict) else None
         items.append(
             {
                 **row,
                 "email": user.get("email") if isinstance(user, dict) else None,
                 "full_name": user.get("full_name") if isinstance(user, dict) else None,
-                "custom_daily_quota": user.get("custom_daily_quota") if isinstance(user, dict) else None,
+                "custom_daily_quota": custom_daily_quota,
                 "plan_type": sub.get("plan_type") if isinstance(sub, dict) else None,
+                **_effective_daily_quota_limits(custom_daily_quota),
             }
         )
     return {"items": items, "total": total, "page": page, "page_size": page_size}
@@ -1662,6 +1680,7 @@ async def set_quota_override(db: Any, user_id: str, daily_limit: Optional[int]) 
         db,
         extra={"operation": "admin.quota_override.apply", "user_id": user_id},
     )
+    user_profile_cache.invalidate(user_id)
     return {"user_id": user_id, "custom_daily_quota": daily_limit}
 
 
@@ -1793,9 +1812,13 @@ async def _top_users_from_rpc(db: Any, rpc_name: str) -> List[Dict[str, Any]]:
 
 async def dashboard_top_users(db: Any) -> Dict[str, Any]:
     """Top-10 lists by outfits, items and referrals (service-role RPCs)."""
-    top_outfits = await _top_users_from_rpc(db, "admin_top_users_outfits")
-    top_items = await _top_users_from_rpc(db, "admin_top_users_items")
-    top_referrers = await _top_users_from_rpc(db, "admin_top_users_referrals")
+    # The three RPCs are independent; run them concurrently so the panel
+    # waits on the slowest RPC, not their sum.
+    top_outfits, top_items, top_referrers = await asyncio.gather(
+        _top_users_from_rpc(db, "admin_top_users_outfits"),
+        _top_users_from_rpc(db, "admin_top_users_items"),
+        _top_users_from_rpc(db, "admin_top_users_referrals"),
+    )
     return {"top_outfits": top_outfits, "top_items": top_items, "top_referrers": top_referrers}
 
 
@@ -1809,13 +1832,11 @@ async def dashboard_referrals(db: Any) -> Dict[str, Any]:
         )
         return getattr(res, "count", 0) or 0
 
-    codes_issued = await _count(lambda d: d.table("referral_codes").select("id", count="exact"))
-    redemptions = await _count(lambda d: d.table("referral_redemptions").select("id", count="exact"))
-    referrer_credits = await _count(
-        lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referrer_credit_applied", True)
-    )
-    referred_credits = await _count(
-        lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referred_credit_applied", True)
+    codes_issued, redemptions, referrer_credits, referred_credits = await asyncio.gather(
+        _count(lambda d: d.table("referral_codes").select("id", count="exact")),
+        _count(lambda d: d.table("referral_redemptions").select("id", count="exact")),
+        _count(lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referrer_credit_applied", True)),
+        _count(lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referred_credit_applied", True)),
     )
     credits_granted = referrer_credits + referred_credits
     return {
@@ -1897,40 +1918,42 @@ async def dashboard_revenue(db: Any) -> Dict[str, Any]:
             mrr_iap += amount
         paid += 1
 
-    trials = await _count(
-        lambda d: d.table("subscriptions").select("id", count="exact").neq("plan_type", "free").eq("status", "trial")
-    )
-    # A4-16: churn counts must reflect SUBSCRIBERS, not webhook volume. The
-    # dedupe ledgers are keyed by provider event id (no subscription column),
-    # so entity-level dedupe is not possible; at minimum only count events
-    # the webhook processor actually handled (status='processed', the ledger's
-    # success value) - unprocessed/retrying events double-count otherwise.
-    churn_stripe = await _count(
-        lambda d: d.table("stripe_webhook_events")
-        .select("event_id", count="exact")
-        .in_("event_type", STRIPE_CHURN_EVENT_TYPES)
-        .eq("status", "processed")
-        .gte("received_at", d30)
-    )
-    churn_apple = await _count(
-        lambda d: d.table("apple_iap_events")
-        .select("notification_id", count="exact")
-        .in_("event_type", APPLE_CHURN_EVENT_TYPES)
-        .eq("status", "processed")
-        .gte("received_at", d30)
-    )
-    churn_google = await _count(
-        lambda d: d.table("google_rtdn_events")
-        .select("message_id", count="exact")
-        .in_("event_type", GOOGLE_CHURN_EVENT_TYPES)
-        .eq("status", "processed")
-        .gte("received_at", d30)
-    )
-    refunds = await _count(
-        lambda d: d.table("audit_events")
-        .select("id", count="exact")
-        .in_("action", ["subscription.refunded", "iap.refund_marked"])
-        .gte("created_at", d30)
+    trials, churn_stripe, churn_apple, churn_google, refunds = await asyncio.gather(
+        _count(
+            lambda d: d.table("subscriptions").select("id", count="exact").neq("plan_type", "free").eq("status", "trial")
+        ),
+        # A4-16: churn counts must reflect SUBSCRIBERS, not webhook volume. The
+        # dedupe ledgers are keyed by provider event id (no subscription column),
+        # so entity-level dedupe is not possible; at minimum only count events
+        # the webhook processor actually handled (status='processed', the ledger's
+        # success value) - unprocessed/retrying events double-count otherwise.
+        _count(
+            lambda d: d.table("stripe_webhook_events")
+            .select("event_id", count="exact")
+            .in_("event_type", STRIPE_CHURN_EVENT_TYPES)
+            .eq("status", "processed")
+            .gte("received_at", d30)
+        ),
+        _count(
+            lambda d: d.table("apple_iap_events")
+            .select("notification_id", count="exact")
+            .in_("event_type", APPLE_CHURN_EVENT_TYPES)
+            .eq("status", "processed")
+            .gte("received_at", d30)
+        ),
+        _count(
+            lambda d: d.table("google_rtdn_events")
+            .select("message_id", count="exact")
+            .in_("event_type", GOOGLE_CHURN_EVENT_TYPES)
+            .eq("status", "processed")
+            .gte("received_at", d30)
+        ),
+        _count(
+            lambda d: d.table("audit_events")
+            .select("id", count="exact")
+            .in_("action", ["subscription.refunded", "iap.refund_marked"])
+            .gte("created_at", d30)
+        ),
     )
     churn_total = churn_stripe + churn_apple + churn_google
 
@@ -1977,8 +2000,8 @@ async def dashboard_trends(db: Any, days: int = 30) -> Dict[str, Any]:
             details={"field": "days"},
         )
     rpc_names = ("admin_trend_signups", "admin_trend_jobs", "admin_trend_paid", "admin_trend_active")
-    data: Dict[str, List[Dict[str, Any]]] = {}
-    for name in rpc_names:
+
+    async def _run_rpc(name: str) -> List[Dict[str, Any]]:
         # PostgREST matches RPC args by parameter name — the migration-041
         # functions declare `p_days` (codebase convention: p_-prefixed SQL
         # params, cf. promo/referral/quota RPC call sites).
@@ -1987,7 +2010,11 @@ async def dashboard_trends(db: Any, days: int = 30) -> Dict[str, Any]:
             db,
             extra={"operation": f"admin.dashboard_trends.{name}", "days": days},
         )
-        data[name] = result.data or []
+        return result.data or []
+
+    # The four series are independent reads; run them concurrently.
+    data_list = await asyncio.gather(*[_run_rpc(name) for name in rpc_names])
+    data: Dict[str, List[Dict[str, Any]]] = dict(zip(rpc_names, data_list))
 
     # Jobs: aggregate per-kind rows (day, kind, total, succeeded, failed)
     # into one zero-filled per-day series.
@@ -2099,14 +2126,20 @@ async def dashboard_funnel(db: Any, days: int = 30) -> Dict[str, Any]:
         ]
         return {"days": days, "steps": steps}
 
-    # Fetch window users with timestamps for strict window filtering.
-    users_res = await execute_with_reconnect(
-        lambda d: d.table("users").select("id,created_at").gte("created_at", window_start_iso).execute(),
+    # Fetch every window user with timestamps for strict window filtering.
+    # PostgREST caps one response (normally at 1,000 rows), so a single
+    # select here would silently under-count a busy signup cohort.
+    users_rows = await _fetch_all_pages(
         db,
-        extra={"operation": "admin.dashboard_funnel.window_users", "days": days},
+        lambda d: d.table("users")
+        .select("id,created_at")
+        .gte("created_at", window_start_iso)
+        .order("id"),
+        operation="admin.dashboard_funnel.window_users",
+        extra={"days": days},
     )
     users_by_id: Dict[str, Any] = {}
-    for row in users_res.data or []:
+    for row in users_rows:
         uid = str(row.get("id") or "")
         if not uid:
             continue
@@ -2129,12 +2162,16 @@ async def dashboard_funnel(db: Any, days: int = 30) -> Dict[str, Any]:
             chunk = window_ids[idx : idx + chunk_size]
 
             # Items: fetch user_id + created_at for strict 24h check.
-            items_res = await execute_with_reconnect(
-                lambda d, c=chunk: d.table("items").select("user_id,created_at").in_("user_id", c).execute(),
+            items_rows = await _fetch_all_pages(
                 db,
-                extra={"operation": "admin.dashboard_funnel.items", "days": days},
+                lambda d, c=chunk: d.table("items")
+                .select("user_id,created_at")
+                .in_("user_id", c)
+                .order("id"),
+                operation="admin.dashboard_funnel.items",
+                extra={"days": days},
             )
-            for row in items_res.data or []:
+            for row in items_rows:
                 uid = str(row.get("user_id") or "")
                 if uid not in users_by_id:
                     continue
@@ -2148,12 +2185,16 @@ async def dashboard_funnel(db: Any, days: int = 30) -> Dict[str, Any]:
                     with_items_set.add(uid)
 
             # Outfits: strict 7-day window.
-            outfits_res = await execute_with_reconnect(
-                lambda d, c=chunk: d.table("outfits").select("user_id,created_at").in_("user_id", c).execute(),
+            outfits_rows = await _fetch_all_pages(
                 db,
-                extra={"operation": "admin.dashboard_funnel.outfits", "days": days},
+                lambda d, c=chunk: d.table("outfits")
+                .select("user_id,created_at")
+                .in_("user_id", c)
+                .order("id"),
+                operation="admin.dashboard_funnel.outfits",
+                extra={"days": days},
             )
-            for row in outfits_res.data or []:
+            for row in outfits_rows:
                 uid = str(row.get("user_id") or "")
                 if uid not in users_by_id:
                     continue
@@ -2207,10 +2248,11 @@ async def dashboard_retention(db: Any, weeks: int = 4) -> Dict[str, Any]:
     counted. Documented as tech debt — a richer "any activity" check would
     need to union items/outfits timestamps per cohort.
 
-    Returns ``{weeks, cohorts: [{week_start, signups, retained_7d, retention_pct}]}``
-    where week_start is ``YYYY-MM-DD`` (Monday) and retention_pct is
-    ``round(retained/signups*100,1)`` (0.0 when signups is 0). Zero-filled
-    fallback ensures cohorts always emit even when empty.
+    Returns only mature cohorts — those whose full seven-day observation
+    window has ended — in ``{weeks, cohorts: [...]}``. This avoids showing a
+    false 0% result for the current partial week. ``week_start`` is a Monday
+    ``YYYY-MM-DD`` and retention_pct is ``round(retained/signups*100,1)``
+    (0.0 when a mature cohort has no signups).
     """
     if not 1 <= weeks <= 12:
         raise ValidationError(
@@ -2226,7 +2268,8 @@ async def dashboard_retention(db: Any, weeks: int = 4) -> Dict[str, Any]:
         )
         return getattr(res, "count", 0) or 0
 
-    today = utc_today()
+    now = utcnow()
+    today = now.date()
     days_since_monday = today.weekday()  # Monday is 0
     most_recent_monday = today - timedelta(days=days_since_monday)
     # Oldest first: most_recent - (weeks-1) weeks .. most_recent
@@ -2238,6 +2281,9 @@ async def dashboard_retention(db: Any, weeks: int = 4) -> Dict[str, Any]:
     for monday in cohort_mondays:
         start_dt = datetime(monday.year, monday.month, monday.day, tzinfo=timezone.utc)
         end_dt = start_dt + timedelta(days=7)
+        if end_dt > now:
+            # The cohort cannot yet have seven complete days of activity.
+            continue
         start_iso = start_dt.isoformat()
         end_iso = end_dt.isoformat()
         week_start = monday.isoformat()  # YYYY-MM-DD

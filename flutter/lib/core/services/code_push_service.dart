@@ -185,14 +185,18 @@ class CodePushService extends GetxService with WidgetsBindingObserver {
       // next resume retries rather than swallowing the prompt for the session.
       if (Get.context == null) return;
       if (_announced) return;
-      _announced = true;
       // Routed through ErrorHandler rather than Get.snackbar so this toast is
       // styled like every other one. test/core/utils/snackbar_policy_test.dart
       // enforces that NotificationService.present is the only caller.
+      //
+      // _announced flips only after showInfo returns, so a failed presentation
+      // (e.g. context torn down between the check above and the call) leaves
+      // the flag false and the next lifecycle event can retry.
       ErrorHandler.showInfo(
         'Restart FitCheck AI to apply the latest improvements.',
         title: 'Update ready',
       );
+      _announced = true;
     });
   }
 }

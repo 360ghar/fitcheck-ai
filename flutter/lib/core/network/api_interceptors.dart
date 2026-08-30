@@ -34,7 +34,7 @@ class AuthInterceptor extends Interceptor {
   }
 
   bool _isPublicEndpoint(String path) {
-    return ApiConstants.publicEndpoints.any((endpoint) => path.contains(endpoint));
+    return ApiConstants.isPublicEndpoint(path);
   }
 
   /// Whether [path] may carry the session bearer token. Relative API paths
@@ -72,42 +72,56 @@ class TokenRefreshInterceptor extends Interceptor {
     if (err.response?.statusCode == 401 &&
         !_isPublicEndpoint(err.requestOptions.path) &&
         !alreadyRetried) {
+      Future<void>? refresh;
       try {
+        // Single-flight: racing 401s share one refreshSession() call. The
+        // slot is cleared only while it still holds the future we awaited —
+        // an unconditional null here (or in a finally) would clobber a NEWER
+        // refresh started by another racing caller between our await
+        // resuming and our clear, breaking single-flight for it.
         _refreshFuture ??= _supabase.refreshSession();
-        await _refreshFuture;
-        _refreshFuture = null;
-
-        final newToken = _supabase.currentAccessToken;
-        if (newToken == null || newToken.isEmpty) {
-          return handler.next(err);
+        refresh = _refreshFuture;
+        await refresh;
+      } catch (e) {
+        if (identical(_refreshFuture, refresh)) _refreshFuture = null;
+        // Only a FAILED REFRESH is a session problem. Sign out and land on
+        // splash so a dead session cannot loop here.
+        if (kDebugMode) {
+          debugPrint('Token refresh failed: $e');
         }
+        try {
+          await _supabase.signOut();
+        } catch (_) {}
+        getx.Get.offAllNamed(Routes.splash);
+        return handler.next(err);
+      }
+      if (identical(_refreshFuture, refresh)) _refreshFuture = null;
 
-        final opts = err.requestOptions;
-        opts.extra[_retryMarkerKey] = true;
-        opts.headers['Authorization'] = 'Bearer $newToken';
+      final newToken = _supabase.currentAccessToken;
+      if (newToken == null || newToken.isEmpty) {
+        return handler.next(err);
+      }
 
+      // A multipart body is finalized by its first send; replaying the same
+      // RequestOptions throws instead of retrying. Surface the original 401
+      // to the upload's own error path (the refresh above still fixed the
+      // session for every other queued request).
+      if (err.requestOptions.data is FormData) {
+        return handler.next(err);
+      }
+
+      final opts = err.requestOptions;
+      opts.extra[_retryMarkerKey] = true;
+      opts.headers['Authorization'] = 'Bearer $newToken';
+
+      try {
         final response = await _dio.fetch(opts);
         return handler.resolve(response);
-      } catch (e) {
-        // Only a FAILED REFRESH is a session problem. A failure of the
-        // replayed request itself (transient 5xx, network blip, or the
-        // second 401 the retry marker intends to propagate to the caller)
-        // must NOT force a sign-out — the marker's terminal behaviour is
-        // "the original 401 propagates to the caller". Throwing out of
-        // `_dio.fetch` lands here, so distinguish the two: wrap only the
-        // refresh in the sign-out path.
-        final isRefreshFailure = _refreshFuture != null;
-        _refreshFuture = null;
-        if (isRefreshFailure) {
-          if (kDebugMode) {
-            debugPrint('Token refresh failed: $e');
-          }
-          await _supabase.signOut();
-          getx.Get.offAllNamed(Routes.splash);
-        }
+      } catch (_) {
+        // Failure of the replayed request itself (transient 5xx, network
+        // blip, or the second 401 the retry marker propagates): NOT a
+        // session problem, so no sign-out — the original 401 flows on.
         return handler.next(err);
-      } finally {
-        _refreshFuture = null;
       }
     }
 
@@ -115,6 +129,6 @@ class TokenRefreshInterceptor extends Interceptor {
   }
 
   bool _isPublicEndpoint(String path) {
-    return ApiConstants.publicEndpoints.any((endpoint) => path.contains(endpoint));
+    return ApiConstants.isPublicEndpoint(path);
   }
 }

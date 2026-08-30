@@ -10,13 +10,12 @@ export function IapTransactionsPage() {
   // Map legacy `platform` query param to the new `provider` param.
   // Default to apple so the redirect lands on a store view.
   const platform = searchParams.get('platform')
-  const status = searchParams.get('status')
   const provider =
     platform === 'google' ? 'google' : platform === 'apple' ? 'apple' : 'apple'
 
-  const params = new URLSearchParams()
+  const params = new URLSearchParams(searchParams)
+  params.delete('platform')
   params.set('provider', provider)
-  if (status) params.set('status', status)
 
   return <Navigate to={`/subscriptions?${params.toString()}`} replace />
 }

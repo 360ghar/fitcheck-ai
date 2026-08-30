@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { PENDING_PROMO_KEY } from '@/lib/promo';
 import { Loader2 } from 'lucide-react';
 import { consumeAuthReturnTo, getPostAuthDestination, withAuthContext } from './authRedirect';
+import { trackEvent } from '@/lib/analytics';
 
 export default function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -32,7 +33,13 @@ export default function AuthCallbackPage() {
       const pendingReturnTo = consumeAuthReturnTo()
 
       try {
-        await handleOAuthCallback();
+        const result = await handleOAuthCallback();
+        // Track a signup only for genuinely new users so returning OAuth users
+        // are not double-counted in the TRYPRO funnel. `trackEvent` buffers
+        // until PostHog is ready, so an early-firing event is not lost.
+        if (result?.is_new_user) {
+          trackEvent('signup_success', { has_promo: Boolean(pendingPromo) })
+        }
         // Only consume the plan intent once the OAuth round-trip actually
         // succeeded, so a failed callback can still carry the plan into the
         // login redirect below instead of dropping it.

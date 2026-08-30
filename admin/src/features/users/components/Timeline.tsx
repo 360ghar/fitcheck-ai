@@ -9,6 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 
 type TimelineTab = 'all' | 'audits' | 'jobs' | 'imports' | 'tickets'
+type TimelineKind = Exclude<TimelineTab, 'all'>
+type TimelineRow = JsonRecord & { _kind: TimelineKind }
+
+function withKind(rows: JsonRecord[], kind: TimelineKind): TimelineRow[] {
+  return rows.map((row) => ({ ...row, _kind: kind }))
+}
 
 export function Timeline({
   auditEvents,
@@ -23,65 +29,62 @@ export function Timeline({
 }) {
   const { t } = useTranslation('users')
   const [tab, setTab] = useState<TimelineTab>('all')
-  const merged: (JsonRecord & { _kind: string })[] = [
-    ...auditEvents.map((r) => ({ ...r, _kind: 'audits' })),
-    ...recentJobs.map((r) => ({ ...r, _kind: 'jobs' })),
-    ...socialImportJobs.map((r) => ({ ...r, _kind: 'imports' })),
-    ...supportTickets.map((r) => ({ ...r, _kind: 'tickets' })),
-  ]
-    .sort((a, b) =>
-      String((a as JsonRecord)['created_at'] as string | undefined ?? '').localeCompare(
-        String((b as JsonRecord)['created_at'] as string | undefined ?? ''),
-      ),
-    )
-    .slice(0, 60)
+  const merged: TimelineRow[] = [
+    ...withKind(auditEvents, 'audits'),
+    ...withKind(recentJobs, 'jobs'),
+    ...withKind(socialImportJobs, 'imports'),
+    ...withKind(supportTickets, 'tickets'),
+  ].sort((a, b) =>
+    String(stringValue(b, 'created_at') ?? '').localeCompare(String(stringValue(a, 'created_at') ?? '')),
+  )
 
   const filtered =
-    tab === 'all' ? merged : merged.filter((r) => (r as unknown as Record<string, unknown>)['_kind'] === tab)
+    (tab === 'all' ? merged : merged.filter((row) => row._kind === tab)).slice(0, 60)
 
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between py-2">
-        <CardTitle className="text-sm">{t('detail.timeline', { defaultValue: 'Activity timeline' })}</CardTitle>
+        <CardTitle className="text-sm">{t('detail.timeline')}</CardTitle>
         <Tabs value={tab} onValueChange={(v) => setTab(v as TimelineTab)}>
           <TabsList className="h-7">
             <TabsTrigger value="all" className="px-2.5 py-0.5 text-xs">
-              {t('detail.timelineFiltersAll', { defaultValue: 'All' })}
+              {t('detail.timelineFiltersAll')}
             </TabsTrigger>
             <TabsTrigger value="audits" className="px-2.5 py-0.5 text-xs">
-              {t('detail.timelineFiltersAudits', { defaultValue: 'Audits' })}
+              {t('detail.timelineFiltersAudits')}
             </TabsTrigger>
             <TabsTrigger value="jobs" className="px-2.5 py-0.5 text-xs">
-              {t('detail.timelineFiltersJobs', { defaultValue: 'Jobs' })}
+              {t('detail.timelineFiltersJobs')}
             </TabsTrigger>
             <TabsTrigger value="imports" className="px-2.5 py-0.5 text-xs">
-              {t('detail.timelineFiltersImports', { defaultValue: 'Imports' })}
+              {t('detail.timelineFiltersImports')}
             </TabsTrigger>
             <TabsTrigger value="tickets" className="px-2.5 py-0.5 text-xs">
-              {t('detail.timelineFiltersTickets', { defaultValue: 'Tickets' })}
+              {t('detail.timelineFiltersTickets')}
             </TabsTrigger>
           </TabsList>
         </Tabs>
       </CardHeader>
       <CardContent className="py-2">
         {filtered.length === 0 ? (
-          <p className="py-3 text-sm text-muted-foreground">{t('detail.timelineEmpty', { defaultValue: 'No activity yet' })}</p>
+          <p className="py-3 text-sm text-muted-foreground">{t('detail.timelineEmpty')}</p>
         ) : (
           <ol className="divide-y divide-border">
             {filtered.map((row, index) => (
-              <li key={stringValue(row as JsonRecord, 'id') ?? `tl-${index}`} className="flex items-center gap-3 py-1.5">
+              <li key={stringValue(row, 'id') ?? `tl-${index}`} className="flex items-center gap-3 py-1.5">
                 <Badge variant="secondary" className="shrink-0 text-[10px]">
-                  {String((row as Record<string, unknown>)['_kind'])}
+                  {row._kind}
                 </Badge>
                 <span className="min-w-0 flex-1 truncate text-sm text-ink">
-                  {stringValue(row as JsonRecord, 'job_type') ??
-                    stringValue(row as JsonRecord, 'action') ??
-                    stringValue(row as JsonRecord, 'status') ??
-                    stringValue(row as JsonRecord, 'subject') ??
+                  {stringValue(row, 'job_type') ??
+                    stringValue(row, 'use_case') ??
+                    stringValue(row, 'action') ??
+                    stringValue(row, 'status') ??
+                    stringValue(row, 'subject') ??
                     '—'}
                 </span>
                 <time className="whitespace-nowrap text-xs text-muted-foreground">
-                  {formatDateTimeValue((row as Record<string, unknown>)['created_at'] as string | null | undefined)}
+                  {formatDateTimeValue(stringValue(row, 'created_at'))}
                 </time>
               </li>
             ))}

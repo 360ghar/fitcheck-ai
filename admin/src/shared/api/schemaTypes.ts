@@ -12,11 +12,13 @@ import type { components } from './schema'
 
 export type AdminAuditEventItem = components['schemas']['AdminAuditEventItem']
 export type AdminFeedbackListItem = components['schemas']['AdminFeedbackListItem']
+export type AdminFunnelResponse = components['schemas']['AdminFunnelResponse']
 export type AdminOverviewResponse = components['schemas']['AdminOverviewResponse']
 export type AdminQuotaOverride = components['schemas']['AdminQuotaOverride']
 export type AdminQuotaUsageItem = components['schemas']['AdminQuotaUsageItem']
 export type AdminReferralsResponse = components['schemas']['AdminReferralsResponse']
 export type AdminRevenueResponse = components['schemas']['AdminRevenueResponse']
+export type AdminRetentionResponse = components['schemas']['AdminRetentionResponse']
 export type AdminSearchResponse = components['schemas']['AdminSearchResponse']
 export type AdminTopUsersResponse = components['schemas']['AdminTopUsersResponse']
 export type AdminTrendsResponse = components['schemas']['AdminTrendsResponse']

@@ -186,8 +186,8 @@ async def admin_clear_daily(
     """Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).
 
     Sets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to
-    today, plus ``subscription_usage.daily_photoshoot_images`` to 0 for
-    today's period. Writes audit ``user.ai_daily_cleared`` and invalidates
+    today, plus ``subscription_usage.daily_photoshoot_images`` to 0 for the
+    active monthly usage period. Writes audit ``user.ai_daily_cleared`` and invalidates
     the cached profile.
     """
     result = await clear_daily_ai_counters(db, user_id)

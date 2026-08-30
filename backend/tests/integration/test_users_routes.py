@@ -1071,6 +1071,11 @@ async def test_delete_current_user_anonymizes_tickets_and_purges_export_archive(
         "delete_multiple_images",
         staticmethod(fake_delete_multiple_images),
     )
+    monkeypatch.setattr(
+        StorageService,
+        "list_owned_user_storage_paths",
+        AsyncMock(return_value=[]),
+    )
 
     await users_module.delete_current_user(user_id=USER_ID, db=db)
 

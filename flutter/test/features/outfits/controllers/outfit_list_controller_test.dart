@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fitcheck_ai/core/exceptions/app_exceptions.dart';
 import 'package:fitcheck_ai/core/services/network_service.dart';
 import 'package:fitcheck_ai/features/outfits/controllers/outfit_list_controller.dart';
 import 'package:fitcheck_ai/features/outfits/models/outfit_model.dart';
@@ -114,6 +115,93 @@ void main() {
     await tester.pump();
 
     expect(controller.outfits.single.id, 'new');
+    controller.onClose();
+  });
+
+  testWidgets('a failed refresh preserves the previously loaded outfits', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+    final network = FakeOutfitNetworkService();
+    Get.put<NetworkService>(network);
+    var failRefresh = false;
+    final repository = FakeOutfitListRepository()
+      ..onGetOutfits = () async {
+        if (failRefresh) throw AuthException.unauthorized();
+        return const OutfitsListResponse(
+          outfits: [
+            OutfitModel(id: 'o1', userId: 'user-1', name: 'o1', itemIds: []),
+            OutfitModel(id: 'o2', userId: 'user-1', name: 'o2', itemIds: []),
+          ],
+          total: 2,
+          page: 1,
+          limit: 20,
+          hasMore: false,
+        );
+      };
+    final controller = OutfitListController(
+      networkService: network,
+      repository: repository,
+    );
+    controller.onInit();
+    await tester.pump();
+    expect(controller.outfits.length, 2);
+
+    // Pull-to-refresh fails. Regression: the list used to be cleared BEFORE
+    // the fetch resolved, so a transient failure left a fake "no outfits"
+    // state.
+    failRefresh = true;
+    await controller.fetchOutfits(refresh: true);
+    await tester.pump();
+
+    expect(
+      controller.outfits.map((o) => o.id),
+      ['o1', 'o2'],
+      reason: 'a failed refresh must not wipe the loaded outfits',
+    );
+    // Flush the error snackbar so no ticker outlives the test.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(milliseconds: 500));
+    controller.onClose();
+  });
+
+  testWidgets('load-more appends instead of replacing', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+    final network = FakeOutfitNetworkService();
+    Get.put<NetworkService>(network);
+    var call = 0;
+    final repository = FakeOutfitListRepository()
+      ..onGetOutfits = () async {
+        call++;
+        return OutfitsListResponse(
+          outfits: [
+            OutfitModel(
+              id: 'o$call',
+              userId: 'user-1',
+              name: 'o$call',
+              itemIds: const [],
+            ),
+          ],
+          total: 2,
+          page: call,
+          limit: 20,
+          hasMore: call < 2,
+        );
+      };
+    final controller = OutfitListController(
+      networkService: network,
+      repository: repository,
+    );
+    controller.onInit();
+    await tester.pump();
+
+    await controller.fetchOutfits();
+
+    expect(
+      controller.outfits.map((o) => o.id),
+      ['o1', 'o2'],
+      reason: 'the non-refresh path must append to the loaded list',
+    );
     controller.onClose();
   });
 

@@ -37,7 +37,7 @@ export function displayName(record: JsonRecord | null | undefined): string {
   return pickString(record, 'full_name') ?? pickString(record, 'email') ?? '—'
 }
 
-/** Extract array value from a dict, or [] when missing/not an array. */
+/** Extract object entries from an array value, or [] when missing/not an array. */
 export function pickArray(
   record: JsonRecord | null | undefined,
   key: string,

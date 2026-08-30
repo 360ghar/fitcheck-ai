@@ -30,6 +30,7 @@ export const routeManifest = {
   iap: { titleKey: 'placeholder:iap.title', permission: 'iap.read' },
   quotas: { titleKey: 'placeholder:quotas.title', permission: 'quotas.read' },
   promo: { titleKey: 'placeholder:promo.title', permission: 'promo.read' },
+  gifts: { titleKey: 'placeholder:gifts.title', permission: 'gifts.read' },
   feedback: { titleKey: 'placeholder:feedback.title', permission: 'feedback.read' },
   audit: { titleKey: 'placeholder:audit.title', permission: 'audit.read' },
   storage: { titleKey: 'placeholder:storage.title', permission: 'ops.read' },
@@ -82,6 +83,11 @@ const QuotasPage = lazyPage(() =>
 const PromoPage = lazyPage(() =>
   import('@/features/promo/pages/PromoPage').then((m) => ({ default: m.PromoPage })),
 )
+const GiftsPage = import.meta.env.VITE_ENABLE_GIFT_VOUCHERS === 'true'
+  ? lazyPage(() =>
+      import('@/features/gifts/pages/GiftsPage').then((m) => ({ default: m.GiftsPage })),
+    )
+  : null
 const FeedbackPage = lazyPage(() =>
   import('@/features/feedback/pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })),
 )
@@ -205,6 +211,15 @@ export const appRouteObjects: RouteObject[] = [
         element: guardedPage(PromoPage, 'promo.read'),
         handle: { titleKey: routeManifest.promo.titleKey },
       },
+      ...(GiftsPage
+        ? [
+            {
+              path: 'gifts',
+              element: guardedPage(GiftsPage, 'gifts.read'),
+              handle: { titleKey: routeManifest.gifts.titleKey },
+            },
+          ]
+        : []),
       {
         path: 'feedback',
         element: guardedPage(FeedbackPage, 'feedback.read'),

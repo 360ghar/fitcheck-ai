@@ -303,14 +303,11 @@ class AuthMiddleware extends GetMiddleware {
       return const RouteSettings(name: Routes.onboarding);
     }
 
-    // If accessing auth route and already authenticated
-    if (authController.isAuthenticated &&
-        (route == Routes.login ||
-            route == Routes.onboarding ||
-            route == Routes.register ||
-            route == Routes.forgotPassword)) {
-      return const RouteSettings(name: Routes.home);
-    }
+    // NOTE: there is deliberately no "authenticated user visiting
+    // login/register/onboarding/forgotPassword" branch here. Those routes do
+    // not attach [AuthMiddleware] (they carry [GuestMiddleware], which owns
+    // that redirect), so this middleware can never be invoked with their
+    // names - such a check would be unreachable dead code.
 
     return null;
   }

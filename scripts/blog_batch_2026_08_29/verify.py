@@ -15,7 +15,7 @@ Usage (from repo root):
 
 Exit codes:
     0  success
-    1  schema error (one or more posts missing required fields)
+    1  verification error (partial batch or missing required fields)
     2  no posts found for the batch date
     3  config / connection error (missing env, bad URL, network)
 """
@@ -120,7 +120,9 @@ def cmd_count(client, posts: list[dict[str, Any]]) -> int:
     n = len(posts)
     suffix = " (matches expected)" if n == EXPECTED_TOTAL else f" (expected {EXPECTED_TOTAL})"
     print(f"{n}{suffix}")
-    return 0 if n > 0 else 2
+    if n == 0:
+        return 2
+    return 0 if n == EXPECTED_TOTAL else 1
 
 
 def cmd_sample(client, posts: list[dict[str, Any]], n: int) -> int:
@@ -183,6 +185,9 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    if args.sample is not None and args.sample < 1:
+        parser.error("--sample must be at least 1")
 
     # Default behaviour: --count --check-schema --sample 3
     if not (args.count or args.sample is not None or args.check_schema or args.slugs):

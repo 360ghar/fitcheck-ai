@@ -71,6 +71,7 @@ def main() -> int:
     print(f"DB slugs not in current script: {pre_slugs - set(slugs)}")
 
     deleted = 0
+    failures = 0
     for slug in matches:
         try:
             res = client.table("blog_posts").delete().eq("slug", slug).eq("date", BATCH_DATE).execute()
@@ -80,12 +81,15 @@ def main() -> int:
                 deleted += n
         except Exception as exc:
             print(f"  ✗ {slug}: {exc}")
+            failures += 1
 
     print(f"\nDeleted: {deleted}")
     # Post-check
     post = client.table("blog_posts").select("slug").eq("date", BATCH_DATE).execute()
     remaining = len(post.data or [])
     print(f"Rows remaining for date {BATCH_DATE}: {remaining}")
+    if failures or remaining:
+        return 1
     return 0
 
 

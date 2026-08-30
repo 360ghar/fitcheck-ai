@@ -49,7 +49,7 @@ export function subscriptionStatus(
 /**
  * i18n key for a role label. Admin roles reuse the layout namespace
  * (`layout:roles.<role>`); `user` and unknown roles fall back to the users
- * namespace. Pages render with `t(key, { defaultValue: rawRole })`.
+ * namespace. Unknown values resolve to the users namespace fallback label.
  */
 export function roleLabelKey(role: string | null | undefined): string {
   if (!role) return 'users:roles.unknown'
@@ -77,21 +77,7 @@ export function displayName(record: JsonRecord | null | undefined): string {
   return stringValue(record, 'full_name') ?? stringValue(record, 'email') ?? '—'
 }
 
-/** Local plan pricing for billing display (mirrors backend PLAN_*_PRICE). */
-export const PLAN_AMOUNTS: Record<string, number> = {
-  plus_monthly: 10,
-  plus_yearly: 100,
-  pro_monthly: 20,
-  pro_yearly: 200,
-}
-
-/** USD display amount for a plan_type, or null for free/unknown. */
-export function planAmount(plan: string | null | undefined): number | null {
-  if (!plan) return null
-  return PLAN_AMOUNTS[plan] ?? null
-}
-
-/** Extract array value from a dict, or [] when missing/not an array. */
+/** Extract object entries from an array value, or [] when missing/not an array. */
 export function arrayValue(
   record: JsonRecord | null | undefined,
   key: string,

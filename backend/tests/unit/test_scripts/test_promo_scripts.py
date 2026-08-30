@@ -37,8 +37,9 @@ def test_code_regex_rejects_malformed_codes():
 def test_parse_expires_normalizes_plain_date_to_timestamp():
     parsed = create_promo._parse_expires("2026-09-01")
     assert parsed.startswith("2026-09-01T00:00:00")
-    # Ends with a numeric UTC offset (e.g. +00:00 / +05:30) from the local zone.
-    assert "+" in parsed[-6:]
+    # Ends with a numeric UTC offset (e.g. +00:00 / -07:00 / +05:30) from the
+    # local zone — the sign depends on the machine, the shape must not.
+    assert parsed[-6] in "+-"
     assert ":" in parsed[-5:]
 
 

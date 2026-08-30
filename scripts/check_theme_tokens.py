@@ -219,7 +219,7 @@ PATH_EXEMPT = {
 # warning, which must be ratcheted down in the same commit that fixes a site.
 # Rules 1-3 never defer.
 RULE4_BUDGETS: dict[str, tuple[int, str]] = {
-    "components/landing": (9, "marketing surfaces; dark mode already ~90% functional, out of active scope. Ratcheted 11 -> 9 after tokenizing shared panels and CTA surfaces; the remainder are on-color CTA pills that are correct as-is"),
+    "components/landing": (8, "marketing surfaces; dark mode already ~90% functional, out of active scope. Ratcheted 11 -> 9 after tokenizing shared panels and CTA surfaces, then 9 -> 8 after the landing rework (2026-08-21) tokenized WhoItsFor/GuidesStrip/Pricing surfaces; the remainder are on-color CTA pills that are correct as-is"),
     "components/seo": (2, "editorial template; same deferral as landing"),
     "pages/blog": (0, "editorial pages; CTA light-on-dark now tokenized via bg-on-image (2026-08-03), budget pinned at zero"),
     "pages/public": (0, "marketing/legal pages; FAQPage cleared, budget pins it at zero"),

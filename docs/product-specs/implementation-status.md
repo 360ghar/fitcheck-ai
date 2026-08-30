@@ -123,6 +123,15 @@ it is not by itself an end-to-end pass.
 | **Virtual stylist** | ❌ | No real stylist connection |
 | **Challenge participation** | ❌ | No challenges system |
 
+### Pro Gift Vouchers
+| Feature | Status | Location |
+|---------|--------|----------|
+| Paid and complimentary issuance | ⚪ | Implemented behind backend and web creation flags; migration and Stripe setup are launch gates |
+| Atomic first claim and stacking | ✅ | `gift_service.py`, migration 056 RPCs |
+| Premium download and social artwork | ✅ | Pillow/QR renderer, portrait and OG endpoints |
+| Customer studio and public claim | ⚪ | `/gifts` and `/gift/:publicId`; customer creation flag defaults off |
+| Admin operations and reporting | ⚪ | `admin/src/features/gifts/`; admin flag defaults off |
+
 ### Shopping Integration
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -270,6 +279,7 @@ story ledger records whether the behavior is actually verified.
 | AI Settings | `src/components/settings/AISettingsPanel.tsx` |
 | Embeddings | `src/lib/embeddings.ts` + `src/api/ai.ts` |
 | Sharing | `src/components/social/ShareOutfitDialog.tsx` |
+| Gift vouchers | `src/pages/gifts/GiftsPage.tsx`, `src/pages/gifts/GiftClaimPage.tsx` |
 
 ### Backend - Implemented APIs
 | Endpoint Group | File |
@@ -284,6 +294,7 @@ story ledger records whether the behavior is actually verified.
 | Calendar | `backend/app/api/v1/calendar.py` |
 | Gamification | `backend/app/api/v1/gamification.py` |
 | Weather | `backend/app/api/v1/weather.py` |
+| Gift vouchers | `backend/app/api/v1/gifts.py`, `backend/app/api/v1/admin/gifts.py` |
 
 ### Flutter - Implemented Features
 | Feature | Primary File |

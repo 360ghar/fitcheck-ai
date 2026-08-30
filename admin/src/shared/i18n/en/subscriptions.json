@@ -71,8 +71,8 @@
     "expired": "expired"
   },
   "banner": {
-    "failed": "{{count}} failed subscription(s) — past due / incomplete / unpaid",
-    "viewFailed": "View failed"
+    "pastDue": "{{count}} past-due subscription(s) on this page",
+    "viewPastDue": "View past due"
   },
   "loadError": {
     "title": "Could not load subscriptions",

@@ -70,7 +70,7 @@ export default function GamificationPage() {
     <div className="app-page max-w-7xl space-y-3">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Streaks &amp; Rewards</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Streaks &amp; Rewards</h1>
           <p className="text-sm text-muted-foreground">Streaks, achievements, and leaderboard</p>
         </div>
         <Button
@@ -154,7 +154,7 @@ export default function GamificationPage() {
                   <Badge variant="secondary">Earned {achievements?.earned?.length ?? 0}</Badge>
                   <Badge variant="outline">Available {achievements?.available?.length ?? 0}</Badge>
                 </div>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-48 md:max-h-72 overflow-y-auto">
                   {(() => {
                     const earned = achievements?.earned || []
                     const catalog = achievements?.available || []

@@ -9,6 +9,16 @@ import '../../../core/services/theme_service.dart';
 import '../../../core/utils/frame_safe.dart';
 import '../../../core/utils/error_handler.dart';
 
+class _PreferenceSaveOutcome {
+  const _PreferenceSaveOutcome({
+    required this.revision,
+    required this.succeeded,
+  });
+
+  final int revision;
+  final bool succeeded;
+}
+
 /// Settings controller - manages settings and preferences state
 class SettingsController extends GetxController {
   final SettingsRepository _repository;
@@ -29,6 +39,10 @@ class SettingsController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxBool isSaving = false.obs;
   final RxString error = ''.obs;
+  Future<void> _preferenceWriteQueue = Future<void>.value();
+  int _preferenceRevision = 0;
+  int _preferenceFetchGeneration = 0;
+  UserPreferencesModel? _lastConfirmedPreferences;
 
   // Action-specific loading states
   final RxBool isChangingPassword = false.obs;
@@ -48,36 +62,74 @@ class SettingsController extends GetxController {
   /// Fetch user preferences
   Future<void> fetchPreferences() async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+    final fetchGeneration = ++_preferenceFetchGeneration;
+    final fetchRevision = _preferenceRevision;
     try {
       isLoading.value = true;
       error.value = '';
-      preferences.value = await _repository.getPreferences();
+      final fetched = await _repository.getPreferences();
+      // Do not overwrite a preference change that started while this initial
+      // fetch was in flight, or a newer fetch response. The queued write owns
+      // newer local state and only the latest fetch owns the loading state.
+      if (isClosed ||
+          fetchGeneration != _preferenceFetchGeneration ||
+          fetchRevision != _preferenceRevision) {
+        return;
+      }
+      _lastConfirmedPreferences = fetched;
+      preferences.value = fetched;
 
       // Sync theme from backend to ThemeService
-      _themeService.syncFromBackend(preferences.value?.themeMode);
+      _themeService.syncFromBackend(fetched.themeMode);
     } catch (e) {
+      if (isClosed ||
+          fetchGeneration != _preferenceFetchGeneration ||
+          fetchRevision != _preferenceRevision) {
+        return;
+      }
       error.value = ErrorHandler.extractMessage(e);
       // If preferences don't exist yet, use defaults
       if (preferences.value == null) {
-        preferences.value = UserPreferencesModel();
+        final defaults = UserPreferencesModel();
+        preferences.value = defaults;
+        _lastConfirmedPreferences ??= defaults;
       }
     } finally {
-      isLoading.value = false;
+      if (!isClosed && fetchGeneration == _preferenceFetchGeneration) {
+        isLoading.value = false;
+      }
     }
   }
 
   /// Update theme mode
+  ///
+  /// Applies optimistically (snappy UI), then persists. If the backend save
+  /// fails, both the controller state AND the ThemeService persistence are
+  /// restored from the latest confirmed preference — otherwise rapid changes
+  /// can restore an older, already superseded mode.
   Future<void> updateThemeMode(AppThemeMode mode) async {
     final current = preferences.value ?? UserPreferencesModel();
-
     final updated = current.copyWith(themeMode: mode);
-    preferences.value = updated;
-
-    // Update ThemeService (handles local storage and applies theme)
+    // Queue the backend write synchronously so a following preference change
+    // builds on this optimistic mode rather than the pre-change model.
+    final outcomeFuture = _queuePreferences(
+      updated,
+      fallbackPreferences: current,
+    );
+    // Update ThemeService (handles local storage and applies theme).
     await _themeService.setThemeMode(mode);
 
-    // Save to backend
-    await savePreferences(updated);
+    // A latest failure rolls back to the most recent successful queued write,
+    // not to the mode captured before an overlapping user choice.
+    final outcome = await outcomeFuture;
+    if (!outcome.succeeded &&
+        outcome.revision == _preferenceRevision &&
+        !isClosed) {
+      final confirmed = _lastConfirmedPreferences ?? current;
+      await _themeService.setThemeMode(
+        confirmed.themeMode ?? AppThemeMode.system,
+      );
+    }
   }
 
   /// Update temperature unit
@@ -140,7 +192,8 @@ class SettingsController extends GetxController {
     final current = preferences.value;
     if (current == null) return;
 
-    final styles = current.preferredStyles?.where((s) => s != style).toList() ?? [];
+    final styles =
+        current.preferredStyles?.where((s) => s != style).toList() ?? [];
     final updated = current.copyWith(preferredStyles: styles);
     await savePreferences(updated);
   }
@@ -160,27 +213,67 @@ class SettingsController extends GetxController {
     final current = preferences.value;
     if (current == null) return;
 
-    final colors = current.preferredColors?.where((c) => c != color).toList() ?? [];
+    final colors =
+        current.preferredColors?.where((c) => c != color).toList() ?? [];
     final updated = current.copyWith(preferredColors: colors);
     await savePreferences(updated);
   }
 
   /// Save preferences
-  Future<void> savePreferences(UserPreferencesModel newPreferences) async {
-    try {
-      isSaving.value = true;
-      error.value = '';
+  ///
+  /// Returns whether the save succeeded so callers that optimistically applied
+  /// state can observe the result. Every latest failure also restores the
+  /// confirmed model, so fire-and-forget callers cannot leave a rejected value
+  /// on screen.
+  Future<bool> savePreferences(UserPreferencesModel newPreferences) async {
+    final current = preferences.value ?? UserPreferencesModel();
+    return (await _queuePreferences(
+      newPreferences,
+      fallbackPreferences: current,
+    )).succeeded;
+  }
 
-      final saved = await _repository.updatePreferences(newPreferences);
-      preferences.value = saved;
+  Future<_PreferenceSaveOutcome> _queuePreferences(
+    UserPreferencesModel newPreferences, {
+    required UserPreferencesModel fallbackPreferences,
+  }) {
+    final revision = ++_preferenceRevision;
+    // A queued write now owns the optimistic local value. A fetch that began
+    // before it must not apply a stale server snapshot or keep its spinner.
+    _preferenceFetchGeneration++;
+    isLoading.value = false;
+    _lastConfirmedPreferences ??= fallbackPreferences;
+    preferences.value = newPreferences;
+    isSaving.value = true;
+    error.value = '';
 
-      ErrorHandler.showSuccess('Your preferences have been updated', title: 'Saved');
-    } catch (e) {
-      error.value = ErrorHandler.extractMessage(e);
-      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
-    } finally {
-      isSaving.value = false;
-    }
+    final operation = _preferenceWriteQueue.then((_) async {
+      try {
+        final saved = await _repository.updatePreferences(newPreferences);
+        _lastConfirmedPreferences = saved;
+        if (!isClosed && revision == _preferenceRevision) {
+          preferences.value = saved;
+          ErrorHandler.showSuccess(
+            'Your preferences have been updated',
+            title: 'Saved',
+          );
+        }
+        return _PreferenceSaveOutcome(revision: revision, succeeded: true);
+      } catch (e) {
+        if (!isClosed && revision == _preferenceRevision) {
+          preferences.value = _lastConfirmedPreferences ?? fallbackPreferences;
+          error.value = ErrorHandler.extractMessage(e);
+          ErrorHandler.showError(error.value, title: 'Error');
+        }
+        return _PreferenceSaveOutcome(revision: revision, succeeded: false);
+      } finally {
+        if (!isClosed && revision == _preferenceRevision) {
+          isSaving.value = false;
+        }
+      }
+    });
+    _preferenceWriteQueue = operation.then<void>((_) {});
+    return operation;
   }
 
   /// Change password via Supabase, RE-AUTHENTICATING with the current one first.
@@ -195,7 +288,10 @@ class SettingsController extends GetxController {
   ///
   /// Signing in with the supplied current password is the re-auth Supabase gives
   /// us: it fails for a wrong password and leaves the session untouched.
-  Future<void> changePassword(String currentPassword, String newPassword) async {
+  Future<void> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
     isChangingPassword.value = true;
     try {
       final email = _authController.currentUserEmail;
@@ -236,7 +332,10 @@ class SettingsController extends GetxController {
       Get.back();
       // The dialog just closed silently; confirm the change happened (the
       // reworked flow was closing with no feedback at all).
-      ErrorHandler.showSuccess('Password updated successfully', title: 'Success');
+      ErrorHandler.showSuccess(
+        'Password updated successfully',
+        title: 'Success',
+      );
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;

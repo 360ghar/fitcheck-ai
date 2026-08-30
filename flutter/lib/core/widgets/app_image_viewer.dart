@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../constants/app_constants.dart';
@@ -78,11 +79,20 @@ class _AppImageViewerState extends State<AppImageViewer> {
   @override
   void dispose() {
     _pageController.dispose();
-    // Restore system UI overlay style
+    // Restore system UI overlay style. The viewer opens over both themes, so
+    // match the brightness of whatever route sits underneath instead of
+    // always restoring to light-mode values.
+    final context = Get.context;
+    final dark =
+        context != null &&
+        Theme.of(context).brightness == Brightness.dark;
     SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarBrightness: Brightness.light,
-        statusBarIconBrightness: Brightness.dark,
+      SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            dark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
     super.dispose();

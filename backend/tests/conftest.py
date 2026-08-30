@@ -96,6 +96,23 @@ def _block_network(monkeypatch, request):
 
 
 # ---------------------------------------------------------------------------
+# Auth hot-path profile cache: reset between tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_user_profile_cache():
+    """The profile cache is module-level process state; without a per-test
+    reset, one test's cached profile leaks into the next (observed as
+    "DID NOT RAISE AuthenticationError" in deps coverage tests)."""
+    from app.core import user_profile_cache
+
+    user_profile_cache.clear()
+    yield
+    user_profile_cache.clear()
+
+
+# ---------------------------------------------------------------------------
 # Database doubles — the suite's "fresh database"
 # ---------------------------------------------------------------------------
 

@@ -8,6 +8,7 @@ import {
   Sparkles,
   Flame,
   Wand2,
+  Gift,
 } from 'lucide-react'
 import { FEATURES } from '@/lib/feature-flags'
 
@@ -33,6 +34,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { name: 'Try On', href: '/try-on', icon: Wand2 },
   { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Recommendations', href: '/recommendations', icon: Sparkles },
+  { name: 'Gift Pro', href: '/gifts', icon: Gift },
   { name: 'Gamification', href: '/gamification', icon: Flame },
 ]
 
@@ -41,5 +43,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
  * consumers (`Sidebar`, `SidebarMobile`) stay untouched and cannot disagree.
  */
 export const navigationItems: NavItem[] = ALL_NAV_ITEMS.filter(
-  (item) => item.href !== '/gamification' || FEATURES.gamification,
+  (item) =>
+    (item.href !== '/gamification' || FEATURES.gamification) &&
+    (item.href !== '/gifts' || FEATURES.gifts),
 )

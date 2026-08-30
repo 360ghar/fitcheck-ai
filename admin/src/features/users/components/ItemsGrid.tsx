@@ -11,7 +11,7 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
     return (
       <Card>
         <CardHeader className="py-2">
-          <CardTitle className="text-sm">{t('detail.uploadSection', { defaultValue: 'Uploads' })}</CardTitle>
+          <CardTitle className="text-sm">{t('detail.uploadSection')}</CardTitle>
         </CardHeader>
         <CardContent className="py-3">
           <EmptyState title={t('detail.itemsGridEmpty')} message={t('detail.itemsGridEmptyHint')} className="py-2" />
@@ -22,7 +22,7 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
   return (
     <Card>
       <CardHeader className="py-2">
-        <CardTitle className="text-sm">{t('detail.uploadSection', { defaultValue: 'Uploads' })}</CardTitle>
+        <CardTitle className="text-sm">{t('detail.uploadSection')}</CardTitle>
       </CardHeader>
       <CardContent className="py-2">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">

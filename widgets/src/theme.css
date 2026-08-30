@@ -1,0 +1,60 @@
+/* Shared widget chrome. ChatGPT iframes have no font/color inheritance; these
+   variables track the widget runtime's theme (set on <html data-theme>). */
+:root {
+  --bg: #ffffff;
+  --fg: #0d0d0d;
+  --muted: #6b6b6b;
+  --card: #f7f7f8;
+  --border: #e5e5e7;
+  --accent: #7c5cff;
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d;
+  --fg: #f5f5f5;
+  --muted: #a0a0a0;
+  --card: #1a1a1c;
+  --border: #2a2a2e;
+  --accent: #9d85ff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  background: var(--border);
+}
+.card-body { padding: 8px 10px 10px; }
+.title { font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { color: var(--muted); font-size: 12px; margin: 2px 0 0; text-transform: capitalize; }
+.badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+}
+.empty { color: var(--muted); text-align: center; padding: 24px 0; }
+h2.heading { font-size: 15px; margin: 0 0 10px; }

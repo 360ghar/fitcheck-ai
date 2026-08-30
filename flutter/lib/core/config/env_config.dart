@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Loads environment values from an asset `.env` file with
@@ -85,6 +86,12 @@ class EnvConfig {
     if (_paywallEnabledEnv.isNotEmpty) {
       return _paywallEnabledEnv.toLowerCase() == 'true';
     }
+    // Fall back to the .env file value (same parsing as dart-define), so
+    // PAYWALL_ENABLED=false in a bundled .env is honored too.
+    final fileValue = _fileValues['PAYWALL_ENABLED'];
+    if (fileValue != null && fileValue.isNotEmpty) {
+      return fileValue.toLowerCase() == 'true';
+    }
     return true;
   }
 
@@ -98,7 +105,14 @@ class EnvConfig {
     try {
       final content = await rootBundle.loadString(path);
       _parseEnv(content);
-    } catch (_) {}
+    } catch (e) {
+      // Missing or unreadable .env assets are an expected fallback path
+      // (dart-defines carry all real values in CI/release builds), so keep the
+      // silent-fallback behavior but leave a debug breadcrumb.
+      if (kDebugMode) {
+        debugPrint('EnvConfig: failed to load .env asset "$path": $e');
+      }
+    }
   }
 
   static void _parseEnv(String content) {
@@ -113,14 +127,61 @@ class EnvConfig {
       if (idx <= 0) continue;
       final key = line.substring(0, idx).trim();
       var value = line.substring(idx + 1).trim();
-      if (value.length >= 2) {
-        final first = value[0];
-        final last = value[value.length - 1];
-        if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
-          value = value.substring(1, value.length - 1);
-        }
+
+      value = _stripInlineComment(value);
+      final fullyQuoted =
+          value.length >= 2 &&
+          ((value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith('\'') && value.endsWith('\'')));
+
+      if (fullyQuoted) {
+        value = value.substring(1, value.length - 1);
       }
       _fileValues[key] = value;
     }
   }
+
+  static String _stripInlineComment(String value) {
+    // Quotes only change comment parsing when they open the entire value.
+    // An unquoted apostrophe in `it's` must not hide a later ` # comment`.
+    final openingQuote = value.isEmpty ? '' : value[0];
+    if (openingQuote == '"' || openingQuote == '\'') {
+      final closingQuote = _closingQuoteIndex(value, openingQuote);
+      if (closingQuote != null) {
+        return value.substring(0, closingQuote + 1) +
+            _stripUnquotedInlineComment(value.substring(closingQuote + 1));
+      }
+    }
+    return _stripUnquotedInlineComment(value);
+  }
+
+  static int? _closingQuoteIndex(String value, String quote) {
+    var escaped = false;
+    for (var index = 1; index < value.length; index++) {
+      final character = value[index];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character == '\\' && quote == '"') {
+        escaped = true;
+      } else if (character == quote) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  static String _stripUnquotedInlineComment(String value) {
+    for (var index = 1; index < value.length; index++) {
+      if (value[index] == '#' && value[index - 1].trim().isEmpty) {
+        return value.substring(0, index).trimRight();
+      }
+    }
+    return value.trimRight();
+  }
+
+  @visibleForTesting
+  static String stripInlineCommentForTesting(String value) =>
+      _stripInlineComment(value);
 }
