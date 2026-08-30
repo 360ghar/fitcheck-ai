@@ -25,6 +25,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { ReferralBanner, useReferralBannerDismissal } from '@/components/dashboard/ReferralBanner'
+import { GiftPriorityCard, resolveGiftPriority } from '@/components/dashboard/GiftPriorityCard'
 import { ActivationChecklist } from '@/components/dashboard/ActivationChecklist'
 import { BatchExtractionFlow, type ItemUploadResult } from '@/components/wardrobe/BatchExtractionFlow'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,8 @@ import {
 import type { BatchJobUiStatus } from '@/types'
 import { ErrorState } from '@/components/ui/error-state'
 import { thumbnailErrorFallback } from '@/hooks/useImageWithFallback'
+import { getGiftDashboardSummary, type GiftDashboardSummary } from '@/api/gifts'
+import { FEATURES } from '@/lib/feature-flags'
 
 const aiTools = [
   {
@@ -92,7 +95,41 @@ export default function DashboardPage() {
   const { isDismissed: isBannerDismissed, dismiss: dismissBanner } = useReferralBannerDismissal(user?.id)
   const nearLimit = useIsNearLimit()
   const isNearLimit = nearLimit.extractions || nearLimit.generations
-  const shouldShowReferralBanner = !isBannerDismissed || isNearLimit
+  const [giftSummary, setGiftSummary] = useState<GiftDashboardSummary | null>(null)
+  const [isGiftSummaryLoading, setIsGiftSummaryLoading] = useState(() => FEATURES.gifts)
+
+  useEffect(() => {
+    if (!FEATURES.gifts || !user?.id || !user.email_verified) {
+      setGiftSummary(null)
+      setIsGiftSummaryLoading(false)
+      return
+    }
+
+    let active = true
+    setIsGiftSummaryLoading(true)
+    void getGiftDashboardSummary()
+      .then((summary) => {
+        if (active) setGiftSummary(summary)
+      })
+      .catch(() => {
+        // Gifts are an optional dashboard enhancement. Fall back to referral
+        // without making a summary outage block the rest of the page.
+        if (active) setGiftSummary(null)
+      })
+      .finally(() => {
+        if (active) setIsGiftSummaryLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [user?.email_verified, user?.id])
+
+  const giftPriority = resolveGiftPriority(giftSummary)
+  const shouldShowGiftPriority = Boolean(giftPriority)
+  const shouldShowReferralBanner =
+    !shouldShowGiftPriority &&
+    !isGiftSummaryLoading &&
+    (!isBannerDismissed || isNearLimit)
 
   const [activationDismissed, setActivationDismissed] = useState(() => {
     try {
@@ -318,6 +355,16 @@ export default function DashboardPage() {
           </Button>
         )}
       </div>
+
+      {shouldShowGiftPriority && (
+        <div className="mb-3 md:mb-4">
+          <GiftPriorityCard
+            incoming={giftPriority?.incoming}
+            incomingCount={giftPriority?.incomingCount}
+            allowance={giftPriority?.allowance}
+          />
+        </div>
+      )}
 
       {shouldShowReferralBanner && (
         <div className="mb-3 md:mb-4">

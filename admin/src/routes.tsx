@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-do
 import { PermissionRoute, PublicOnlyGuard, RouteGuard } from '@/app/guards'
 import { RootLayout } from '@/app/layout/RootLayout'
 import { NotFoundPage } from '@/app/pages/NotFoundPage'
+import { featureFlags } from '@/config/env'
 import { PageLoader } from '@/shared/ui/PageLoader'
 
 /**
@@ -83,7 +84,7 @@ const QuotasPage = lazyPage(() =>
 const PromoPage = lazyPage(() =>
   import('@/features/promo/pages/PromoPage').then((m) => ({ default: m.PromoPage })),
 )
-const GiftsPage = import.meta.env.VITE_ENABLE_GIFT_VOUCHERS === 'true'
+const GiftsPage = featureFlags.giftVouchers
   ? lazyPage(() =>
       import('@/features/gifts/pages/GiftsPage').then((m) => ({ default: m.GiftsPage })),
     )

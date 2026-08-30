@@ -55,6 +55,7 @@ interface ActionForm {
   voucher: GiftDetail | null
   fromName: string
   toName: string
+  recipientEmail: string
   message: string
   duration: '1' | '3' | '12'
   expiresAt: string
@@ -65,6 +66,7 @@ interface ActionForm {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function blankAction(kind: ActionKind, voucher: GiftDetail | null = null): ActionForm {
   return {
@@ -72,6 +74,7 @@ function blankAction(kind: ActionKind, voucher: GiftDetail | null = null): Actio
     voucher,
     fromName: voucher?.from_name ?? '',
     toName: voucher?.to_name ?? '',
+    recipientEmail: voucher?.recipient_email ?? '',
     message: voucher?.message ?? '',
     duration: String(voucher?.duration_months ?? 1) as '1' | '3' | '12',
     expiresAt: '',
@@ -118,6 +121,7 @@ export function GiftsPage() {
           duration_months: Number(form.duration) as 1 | 3 | 12,
           from_name: form.fromName.trim(),
           to_name: form.toName.trim(),
+          recipient_email: form.recipientEmail.trim(),
           message: form.message.trim() || null,
           note: form.note.trim(),
           ...(form.expiresAt ? { expires_at: new Date(form.expiresAt).toISOString() } : {}),
@@ -404,6 +408,7 @@ function isActionValid(form: ActionForm): boolean {
       form.fromName.trim().length <= 80 &&
       form.toName.trim().length >= 1 &&
       form.toName.trim().length <= 80 &&
+      EMAIL_PATTERN.test(form.recipientEmail.trim()) &&
       form.message.trim().length <= 240 &&
       form.note.trim().length >= 3 &&
       form.note.trim().length <= 500 &&
@@ -484,6 +489,7 @@ function GiftDetailDialog({
             <dl className="grid content-start gap-x-5 gap-y-4 sm:grid-cols-2">
               <DetailField label={t('detail.from')} value={detail.from_name} />
               <DetailField label={t('detail.to')} value={detail.to_name} />
+              <DetailField label={t('detail.recipientEmail')} value={detailValue(detail.recipient_email, fallback)} wide />
               <DetailField label={t('detail.message')} value={detailValue(detail.message, fallback)} wide />
               <DetailField label={t('detail.publicId')} value={detail.public_id} mono />
               <DetailField label={t('detail.claimCode')} value={detailValue(detail.claim_code, fallback)} mono />
@@ -607,6 +613,17 @@ function ActionDialog({
                   <Input id="gift-admin-to" value={action.toName} maxLength={80} onChange={(event) => update('toName', event.target.value)} />
                 </Field>
               </div>
+              {action.kind === 'create' ? (
+                <Field label={t('forms.recipientEmail')} htmlFor="gift-admin-recipient-email">
+                  <Input
+                    id="gift-admin-recipient-email"
+                    type="email"
+                    value={action.recipientEmail}
+                    maxLength={320}
+                    onChange={(event) => update('recipientEmail', event.target.value)}
+                  />
+                </Field>
+              ) : null}
               <Field label={t('forms.message')} htmlFor="gift-admin-message">
                 <Textarea id="gift-admin-message" value={action.message} maxLength={240} onChange={(event) => update('message', event.target.value)} />
               </Field>

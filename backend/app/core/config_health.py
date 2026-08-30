@@ -302,9 +302,9 @@ def validate_production_config() -> List[ConfigIssue]:
             ),
         ))
 
-    # Gift issuance stays disabled until all one-time prices and the dedicated
-    # claim-credential key are present. Existing links and entitlements do not
-    # depend on this creation flag.
+    # Gift issuance is on by default, so production requires all one-time
+    # prices and the dedicated claim-credential key. Existing links and
+    # entitlements do not depend on this creation flag.
     if settings.ENABLE_GIFT_VOUCHER_CREATION:
         missing_gift_config = [
             name

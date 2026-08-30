@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 GiftDuration = Literal[1, 3, 12]
@@ -33,6 +33,7 @@ class GiftStatus(str, Enum):
 class GiftPersonalization(BaseModel):
     from_name: str = Field(min_length=1, max_length=80)
     to_name: str = Field(min_length=1, max_length=80)
+    recipient_email: EmailStr
     message: Optional[str] = Field(default=None, max_length=240)
 
     @field_validator("from_name", "to_name")
@@ -50,6 +51,12 @@ class GiftPersonalization(BaseModel):
             return None
         value = value.strip()
         return value or None
+
+    @field_validator("recipient_email")
+    @classmethod
+    def normalize_recipient_email(cls, value: EmailStr) -> str:
+        """Store one canonical address for private incoming-gift matching."""
+        return str(value).strip().lower()
 
 
 class ComplimentaryGiftCreate(GiftPersonalization):
@@ -149,6 +156,13 @@ class GiftListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class GiftDashboardSummary(BaseModel):
+    """Private dashboard data for invitation sending and incoming claims."""
+
+    allowances: list[GiftAllowance]
+    incoming: list[GiftVoucherResponse]
 
 
 class GiftClaimResponse(BaseModel):

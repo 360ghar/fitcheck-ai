@@ -70,6 +70,16 @@ async def get_allowances(
     }
 
 
+@router.get("/summary")
+async def get_gift_dashboard_summary(
+    user: dict[str, Any] = Depends(get_current_user),
+    db: Client = Depends(get_db),
+) -> dict[str, Any]:
+    """Return dashboard priority inputs without exposing recipient data."""
+    summary = await GiftService.get_dashboard_summary(user, db)
+    return {"data": summary.model_dump(mode="json", exclude_none=True), "message": "OK"}
+
+
 @router.get("/sent")
 async def list_sent_gifts(
     page: int = Query(1, ge=1),
@@ -77,9 +87,7 @@ async def list_sent_gifts(
     user: dict[str, Any] = Depends(get_current_user),
     db: Client = Depends(get_db),
 ) -> dict[str, Any]:
-    result = await GiftService.list_for_user(
-        str(user["id"]), db, received=False, page=page, page_size=page_size
-    )
+    result = await GiftService.list_for_user(str(user["id"]), db, received=False, page=page, page_size=page_size)
     return {"data": result.model_dump(mode="json"), "message": "OK"}
 
 
@@ -90,9 +98,7 @@ async def list_received_gifts(
     user: dict[str, Any] = Depends(get_current_user),
     db: Client = Depends(get_db),
 ) -> dict[str, Any]:
-    result = await GiftService.list_for_user(
-        str(user["id"]), db, received=True, page=page, page_size=page_size
-    )
+    result = await GiftService.list_for_user(str(user["id"]), db, received=True, page=page, page_size=page_size)
     return {"data": result.model_dump(mode="json"), "message": "OK"}
 
 
@@ -146,6 +152,19 @@ async def claim_gift(
     return {"data": result.model_dump(mode="json"), "message": "Gift claimed"}
 
 
+@router.post("/{voucher_id}/claim-assigned")
+async def claim_assigned_gift(
+    voucher_id: UUID,
+    http_request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+    db: Client = Depends(get_db),
+) -> dict[str, Any]:
+    """Claim a dashboard-listed named gift with the verified recipient email."""
+    async with auth_rate_limited_operation(http_request, "gift claim"):
+        result = await GiftService.claim_assigned(user, voucher_id, db)
+    return {"data": result.model_dump(mode="json"), "message": "Gift claimed"}
+
+
 @router.get("/{voucher_id}")
 async def get_owned_gift(
     voucher_id: UUID,
@@ -166,9 +185,7 @@ async def update_owned_gift(
     user: dict[str, Any] = Depends(get_current_user),
     db: Client = Depends(get_db),
 ) -> dict[str, Any]:
-    voucher = await GiftService.update_presentation(
-        str(voucher_id), str(user["id"]), body, db
-    )
+    voucher = await GiftService.update_presentation(str(voucher_id), str(user["id"]), body, db)
     return {"data": voucher.model_dump(mode="json"), "message": "Gift updated"}
 
 

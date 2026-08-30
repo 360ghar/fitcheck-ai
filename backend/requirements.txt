@@ -20,7 +20,6 @@ python-dateutil==2.9.0.post0
 beautifulsoup4==4.15.0
 cryptography==49.0.0
 Pillow==11.3.0
-qrcode==8.2
 # HEIC/HEIF decode (iPhone/modern-camera photos). Registers a PIL opener at
 # import (see app/utils/image_processing.py); uploads are transcoded to WebP.
 pillow-heif==1.5.0

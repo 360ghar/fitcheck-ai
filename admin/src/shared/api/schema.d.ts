@@ -2343,6 +2343,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gifts/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gift Dashboard Summary
+         * @description Return dashboard priority inputs without exposing recipient data.
+         */
+        get: operations["get_gift_dashboard_summary_api_v1_gifts_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gifts/{voucher_id}": {
         parameters: {
             query?: never;
@@ -2372,6 +2392,26 @@ export interface paths {
         get: operations["download_owned_gift_artwork_api_v1_gifts__voucher_id__artwork_portrait_png_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gifts/{voucher_id}/claim-assigned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Assigned Gift
+         * @description Claim a dashboard-listed named gift with the verified recipient email.
+         */
+        post: operations["claim_assigned_gift_api_v1_gifts__voucher_id__claim_assigned_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4745,6 +4785,11 @@ export interface components {
             message?: string | null;
             /** Note */
             note: string;
+            /**
+             * Recipient Email
+             * Format: email
+             */
+            recipient_email: string;
             /** To Name */
             to_name: string;
         };
@@ -5860,6 +5905,11 @@ export interface components {
             from_name: string;
             /** Message */
             message?: string | null;
+            /**
+             * Recipient Email
+             * Format: email
+             */
+            recipient_email: string;
             /** To Name */
             to_name: string;
         };
@@ -6786,6 +6836,11 @@ export interface components {
             from_name: string;
             /** Message */
             message?: string | null;
+            /**
+             * Recipient Email
+             * Format: email
+             */
+            recipient_email: string;
             /**
              * Success Url
              * @default /gifts?checkout=success&session_id={CHECKOUT_SESSION_ID}
@@ -11173,6 +11228,28 @@ export interface operations {
             };
         };
     };
+    get_gift_dashboard_summary_api_v1_gifts_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     get_owned_gift_api_v1_gifts__voucher_id__get: {
         parameters: {
             query?: never;
@@ -11260,6 +11337,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_assigned_gift_api_v1_gifts__voucher_id__claim_assigned_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voucher_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
             /** @description Validation Error */
             422: {

@@ -35,6 +35,7 @@ class Routes {
   static const gamification = '/gamification';
   static const subscription = '/subscription';
   static const referral = '/referral';
+  static const gifts = '/gifts';
   static const bodyProfiles = '/profile/body-profiles';
   static const help = '/help';
   static const legal = '/legal';

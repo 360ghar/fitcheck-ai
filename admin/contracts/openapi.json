@@ -506,6 +506,11 @@
             "title": "Note",
             "type": "string"
           },
+          "recipient_email": {
+            "format": "email",
+            "title": "Recipient Email",
+            "type": "string"
+          },
           "to_name": {
             "maxLength": 80,
             "minLength": 1,
@@ -516,6 +521,7 @@
         "required": [
           "from_name",
           "to_name",
+          "recipient_email",
           "duration_months",
           "note"
         ],
@@ -3160,6 +3166,11 @@
             ],
             "title": "Message"
           },
+          "recipient_email": {
+            "format": "email",
+            "title": "Recipient Email",
+            "type": "string"
+          },
           "to_name": {
             "maxLength": 80,
             "minLength": 1,
@@ -3170,6 +3181,7 @@
         "required": [
           "from_name",
           "to_name",
+          "recipient_email",
           "duration_months",
           "client_request_id"
         ],
@@ -5632,6 +5644,11 @@
             ],
             "title": "Message"
           },
+          "recipient_email": {
+            "format": "email",
+            "title": "Recipient Email",
+            "type": "string"
+          },
           "success_url": {
             "default": "/gifts?checkout=success&session_id={CHECKOUT_SESSION_ID}",
             "maxLength": 500,
@@ -5648,6 +5665,7 @@
         "required": [
           "from_name",
           "to_name",
+          "recipient_email",
           "duration_months",
           "client_request_id"
         ],
@@ -13870,6 +13888,35 @@
         ]
       }
     },
+    "/api/v1/gifts/summary": {
+      "get": {
+        "description": "Return dashboard priority inputs without exposing recipient data.",
+        "operationId": "get_gift_dashboard_summary_api_v1_gifts_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Gift Dashboard Summary Api V1 Gifts Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Gift Dashboard Summary",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
     "/api/v1/gifts/{voucher_id}": {
       "get": {
         "operationId": "get_owned_gift_api_v1_gifts__voucher_id__get",
@@ -14014,6 +14061,57 @@
           }
         ],
         "summary": "Download Owned Gift Artwork",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/{voucher_id}/claim-assigned": {
+      "post": {
+        "description": "Claim a dashboard-listed named gift with the verified recipient email.",
+        "operationId": "claim_assigned_gift_api_v1_gifts__voucher_id__claim_assigned_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Claim Assigned Gift Api V1 Gifts  Voucher Id  Claim Assigned Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Claim Assigned Gift",
         "tags": [
           "Gift Vouchers"
         ]

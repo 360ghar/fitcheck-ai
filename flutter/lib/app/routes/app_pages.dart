@@ -43,6 +43,8 @@ import '../../features/gamification/bindings/gamification_binding.dart';
 import '../../features/subscription/views/subscription_page.dart';
 import '../../features/subscription/views/referral_page.dart';
 import '../../features/subscription/bindings/subscription_binding.dart';
+import '../../features/gifts/bindings/gift_binding.dart';
+import '../../features/gifts/views/gift_vouchers_page.dart';
 import '../../features/feedback/views/feedback_page.dart';
 import '../../features/feedback/bindings/feedback_binding.dart';
 import '../../features/wardrobe/views/batch_image_selector_page.dart';
@@ -249,6 +251,12 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
+      name: Routes.gifts,
+      page: () => const GiftVouchersPage(),
+      binding: GiftBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
       name: Routes.profileEdit,
       page: () => const ProfileEditPage(),
       binding: HomeBinding(),
@@ -271,10 +279,7 @@ class AppPages {
     // and the abuse/support contact reachable without signing in
     // (Guideline 1.2). HomeBinding would eagerly wire dashboard/settings
     // controllers that immediately fire authenticated requests.
-    GetPage(
-      name: Routes.legal,
-      page: () => const LegalPage(),
-    ),
+    GetPage(name: Routes.legal, page: () => const LegalPage()),
     GetPage(
       name: Routes.feedback,
       page: () => const FeedbackPage(),

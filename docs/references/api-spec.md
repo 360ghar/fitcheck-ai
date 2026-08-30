@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **240** operations across **212** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **242** operations across **214** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -3751,6 +3751,7 @@ Create Paid Gift Checkout
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `recipient_email` | string (email) | yes |  |
 | `success_url` | string | no |  |
 | `to_name` | string | yes |  |
 
@@ -3808,6 +3809,7 @@ Create Complimentary Gift
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
 **Responses:**
@@ -3885,6 +3887,16 @@ List Sent Gifts
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 - **Errors:** 422 Unprocessable Entity
 
+### GET /api/v1/gifts/summary
+
+Return dashboard priority inputs without exposing recipient data.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
 ### GET /api/v1/gifts/{voucher_id}
 
 Get Owned Gift
@@ -3942,6 +3954,23 @@ Download Owned Gift Artwork
 **Responses:**
 
 - **200** OK
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/gifts/{voucher_id}/claim-assigned
+
+Claim a dashboard-listed named gift with the verified recipient email.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 - **Errors:** 422 Unprocessable Entity
 
 ### POST /api/v1/gifts/{voucher_id}/rotate
@@ -4489,6 +4518,7 @@ Create Gift
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
 | `note` | string | yes |  |
+| `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
 **Responses:**
@@ -5365,6 +5395,7 @@ One funnel step: label, count, pct_of_prev (100.0 for first).
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
 | `note` | string | yes |  |
+| `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
 ### `AdminIapTransactionListItem`
@@ -5954,6 +5985,7 @@ Model for updating body profile (all fields optional).
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
 ### `ConfirmResetRequest`
@@ -6465,6 +6497,7 @@ Model for updating an outfit (all fields optional).
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `recipient_email` | string (email) | yes |  |
 | `success_url` | string | no |  |
 | `to_name` | string | yes |  |
 

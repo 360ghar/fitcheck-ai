@@ -94,6 +94,7 @@ class ApiConstants {
   static const String referral = '$apiVersion/referral';
   static const String feedback = '$apiVersion/feedback';
   static const String photoshoot = '$apiVersion/photoshoot';
+  static const String gifts = '$apiVersion/gifts';
 
   // Image serving: re-mint a fresh client-fetchable URL for a storage_path
   // (the API serves short-lived presigned URLs; clients re-mint on expiry).

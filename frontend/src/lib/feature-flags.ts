@@ -7,10 +7,9 @@
  * pulls in) is eliminated by the minifier's dead-code pass. That means a
  * disabled feature costs no bytes, not just no pixels.
  *
- * The comparison is `=== 'true'` on purpose: env vars are always strings, and
- * an unset var is therefore `false`. That is the intended default for
- * `gamification` — it must stay off unless someone explicitly opts in, because
- * nothing on the backend ever writes streaks or achievements.
+ * Gamification uses `=== 'true'`: an unset var is false because the feature
+ * must stay off unless someone explicitly opts in. Gift vouchers are enabled
+ * by default and use an explicit `false` opt-out instead.
  *
  * Keep these in step with the backend's `ENABLE_*` settings by hand. There is
  * no `/config` endpoint, so the two sides are independent switches: the
@@ -25,6 +24,6 @@ export const FEATURES = {
   socialImport: import.meta.env.VITE_ENABLE_SOCIAL_IMPORT === 'true',
   /** Streaks / achievements / leaderboard. Backend: `ENABLE_GAMIFICATION` (default OFF). */
   gamification: import.meta.env.VITE_ENABLE_GAMIFICATION === 'true',
-  /** Gift voucher studio. Public claim links remain available independently. */
-  gifts: import.meta.env.VITE_ENABLE_GIFT_VOUCHERS === 'true',
+  /** Gift studio and dashboard priority. Set false only for a UI rollback. */
+  gifts: import.meta.env.VITE_ENABLE_GIFT_VOUCHERS !== 'false',
 } as const

@@ -4,9 +4,9 @@
  * Typed build-time env for the feature flags.
  *
  * Both are optional `string` because Vite inlines a literal only when the var
- * is actually set; unset means `undefined`. That is exactly why flags compare
- * with `=== 'true'` rather than coercing — see `src/lib/feature-flags.ts`,
- * which is the only place flags should be read.
+ * is actually set; unset means `undefined`. Most flags compare with
+ * `=== 'true'`; gift vouchers use an explicit `false` opt-out. See
+ * `src/lib/feature-flags.ts`, which is the only place flags should be read.
  *
  * Two honest caveats:
  *

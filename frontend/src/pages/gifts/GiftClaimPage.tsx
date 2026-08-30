@@ -133,7 +133,7 @@ export default function GiftClaimPage() {
       setPrintedCode('')
     } catch (claimError) {
       if (requestId !== requestIdRef.current) return
-      const message = giftErrorMessage(claimError, 'This gift could not be claimed. Check the code and try again.')
+      const message = giftErrorMessage(claimError, 'This gift could not be claimed. Check the secure link or legacy code and try again.')
       setError(message)
       if (message.includes('already been claimed') || message.includes('expired')) {
         void getPublicGift(publicId).then((loaded) => {
@@ -256,7 +256,7 @@ export default function GiftClaimPage() {
                     {!isAuthenticated ? (
                       <div>
                         <p className="text-sm leading-relaxed text-[#6b655d]">
-                          Sign in or create a verified account to accept this gift. The private claim credential stays in this browser through sign-in, OAuth, and email verification.
+                          Sign in or create a verified FitCheck account to accept this gift. New named gifts require the email your sender entered; older private-link gifts work as before. The private claim credential stays in this browser through sign-in, OAuth, and email verification.
                         </p>
                         <div className="mt-4 grid gap-2 sm:grid-cols-2">
                           <Button asChild size="lg">
@@ -277,7 +277,7 @@ export default function GiftClaimPage() {
                       <>
                         {!credential && (
                           <div className="space-y-2">
-                            <Label htmlFor="printed-gift-code" className="text-[#151411]">Enter the code printed on the gift</Label>
+                            <Label htmlFor="printed-gift-code" className="text-[#151411]">Enter a code from a legacy gift</Label>
                             <Input
                               id="printed-gift-code"
                               name="gift_code"
@@ -310,7 +310,7 @@ export default function GiftClaimPage() {
                     )}
 
                     <p className="text-xs leading-relaxed text-[#6b655d]">
-                      The “To” name is part of the presentation. The first different, verified FitCheck account that claims the valid link or code receives the gift. Gift access does not auto-renew.
+                      The “To” name is part of the presentation. Named gifts can only be claimed by the recipient's verified email. Older link-only gifts go to the first different, verified FitCheck account with the valid link or code. Gift access does not auto-renew.
                     </p>
                   </div>
                 )}

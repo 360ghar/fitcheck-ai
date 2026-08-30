@@ -9,7 +9,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
 from app.core.config import settings
@@ -83,16 +82,10 @@ def _fit_text(draw: ImageDraw.ImageDraw, value: str, width: int, start_size: int
     return _font(8, display=True, weight=600)
 
 
-def _make_qr(link: str, size: int) -> Image.Image:
-    code = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
-    code.add_data(link)
-    code.make(fit=True)
-    image = code.make_image(fill_color=INK, back_color=PAPER).convert("RGB")
-    return image.resize((size, size), Image.Resampling.NEAREST)
-
-
 class GiftArtworkService:
-    """Render premium gift artwork and cache it in the private object store."""
+    """Render premium gift artwork and cache credential-free image bytes."""
+
+    ARTWORK_LAYOUT_VERSION = 2
 
     @staticmethod
     def _message_lines(message: str) -> list[str]:
@@ -107,8 +100,8 @@ class GiftArtworkService:
     @staticmethod
     def storage_key(voucher: dict[str, Any], variant: ArtworkVariant) -> str:
         return (
-            f"public/gifts/{voucher['public_id']}/"
-            f"v{int(voucher.get('artwork_version') or 1)}/{variant}.png"
+            f"public/gifts/{voucher['public_id']}/v{int(voucher.get('artwork_version') or 1)}"
+            f"/layout{GiftArtworkService.ARTWORK_LAYOUT_VERSION}/{variant}.png"
         )
 
     @staticmethod
@@ -116,10 +109,8 @@ class GiftArtworkService:
         voucher: dict[str, Any],
         *,
         variant: ArtworkVariant,
-        claim_url: str | None = None,
-        claim_code: str | None = None,
     ) -> bytes:
-        width, height = ((1080, 1350) if variant == "portrait" else (1200, 630))
+        width, height = (1080, 1350) if variant == "portrait" else (1200, 630)
         image = Image.new("RGB", (width, height), IVORY)
         draw = ImageDraw.Draw(image)
         seed = int(str(voucher["public_id"]).replace("-", "")[:16], 16)
@@ -198,40 +189,30 @@ class GiftArtworkService:
 
             term_y = 1012
             draw.rounded_rectangle((inner_x, term_y, 610, term_y + 112), radius=24, fill=INK)
-            draw.text((inner_x + 28, term_y + 20), _term(int(voucher["duration_months"])), font=_font(29, display=True, weight=700), fill=PAPER)
-            draw.text((inner_x + 28, term_y + 62), _money(int(voucher["retail_value_cents"])), font=_font(21), fill="#D9D1C6")
+            draw.text(
+                (inner_x + 28, term_y + 20),
+                _term(int(voucher["duration_months"])),
+                font=_font(29, display=True, weight=700),
+                fill=PAPER,
+            )
+            draw.text(
+                (inner_x + 28, term_y + 62), _money(int(voucher["retail_value_cents"])), font=_font(21), fill="#D9D1C6"
+            )
 
-            if claim_url and claim_code:
-                qr = _make_qr(claim_url, 170)
-                image.paste(qr, (inner_right - 170, 970))
-                code_groups = claim_code.split("-")
-                split_at = (len(code_groups) + 1) // 2
-                code_lines = (
-                    "-".join(code_groups[:split_at]),
-                    "-".join(code_groups[split_at:]),
-                )
-                draw.text(
-                    (inner_right, 1151),
-                    "VOUCHER CODE",
-                    font=_font(11, display=True),
-                    fill=MUTED,
-                    anchor="ra",
-                )
-                draw.text(
-                    (inner_right, 1170),
-                    code_lines[0],
-                    font=_font(13, display=True),
-                    fill=MUTED,
-                    anchor="ra",
-                )
-                if code_lines[1]:
-                    draw.text(
-                        (inner_right, 1190),
-                        code_lines[1],
-                        font=_font(13, display=True),
-                        fill=MUTED,
-                        anchor="ra",
-                    )
+            draw.text(
+                (inner_right, 1115),
+                "PRIVATE LINK",
+                font=_font(13, display=True),
+                fill=MUTED,
+                anchor="ra",
+            )
+            draw.text(
+                (inner_right, 1140),
+                "SHARED SEPARATELY",
+                font=_font(12, display=True),
+                fill=MUTED,
+                anchor="ra",
+            )
 
             expiry = voucher.get("expires_at")
             if expiry:
@@ -243,7 +224,12 @@ class GiftArtworkService:
             draw.text((inner_x, 1245), footer, font=_font(16, display=True), fill=MUTED)
         else:
             draw.text((inner_x, 165), "A FITCHECK PRO GIFT", font=_font(62, display=True, weight=700), fill=INK)
-            draw.text((inner_x, 250), f"For {voucher['to_name']}", font=_fit_text(draw, str(voucher["to_name"]), 700, 42), fill=RED)
+            draw.text(
+                (inner_x, 250),
+                f"For {voucher['to_name']}",
+                font=_fit_text(draw, str(voucher["to_name"]), 700, 42),
+                fill=RED,
+            )
             from_label = f"From {voucher['from_name']}"
             draw.text(
                 (inner_x, 322),
@@ -252,7 +238,12 @@ class GiftArtworkService:
                 fill=MUTED,
             )
             draw.rounded_rectangle((inner_x, 405, inner_x + 360, 492), radius=22, fill=INK)
-            draw.text((inner_x + 25, 421), _term(int(voucher["duration_months"])), font=_font(25, display=True, weight=700), fill=PAPER)
+            draw.text(
+                (inner_x + 25, 421),
+                _term(int(voucher["duration_months"])),
+                font=_font(25, display=True, weight=700),
+                fill=PAPER,
+            )
             draw.text((inner_x + 25, 456), _money(int(voucher["retail_value_cents"])), font=_font(18), fill="#D9D1C6")
 
         output = io.BytesIO()
@@ -265,8 +256,6 @@ class GiftArtworkService:
         voucher: dict[str, Any],
         *,
         variant: ArtworkVariant,
-        claim_url: str | None = None,
-        claim_code: str | None = None,
     ) -> bytes:
         key = cls.storage_key(voucher, variant)
         storage_configured = bool(
@@ -283,12 +272,7 @@ class GiftArtworkService:
             except Exception as exc:  # noqa: BLE001 - cache miss must not break artwork
                 logger.warning("Gift artwork cache read failed", storage_key=key, error=str(exc))
 
-        rendered = cls.render(
-            voucher,
-            variant=variant,
-            claim_url=claim_url,
-            claim_code=claim_code,
-        )
+        rendered = cls.render(voucher, variant=variant)
         if backend is not None:
             try:
                 await backend.upload(

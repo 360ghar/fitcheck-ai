@@ -60,6 +60,11 @@ export interface GiftList {
   page_size: number
 }
 
+export interface GiftDashboardSummary {
+  allowances: GiftAllowance[]
+  incoming: GiftVoucher[]
+}
+
 export interface GiftClaimResult {
   voucher: GiftVoucher
   entitlement_status: 'active' | 'queued'
@@ -72,6 +77,7 @@ export interface GiftPersonalization {
   duration_months: GiftDuration
   from_name: string
   to_name: string
+  recipient_email: string
   message?: string
   client_request_id: string
 }
@@ -107,6 +113,10 @@ export function getPublicGift(publicId: string): Promise<GiftVoucher> {
 
 export function getGiftAllowances(): Promise<GiftAllowance[]> {
   return unwrap(apiClient.get('/api/v1/gifts/allowances', skipToast))
+}
+
+export function getGiftDashboardSummary(): Promise<GiftDashboardSummary> {
+  return unwrap(apiClient.get('/api/v1/gifts/summary', skipToast))
 }
 
 export function getSentGifts(page = 1): Promise<GiftList> {
@@ -151,6 +161,10 @@ export function claimGift(publicId: string, secret: string): Promise<GiftClaimRe
   )
 }
 
+export function claimAssignedGift(voucherId: string): Promise<GiftClaimResult> {
+  return unwrap(apiClient.post(`/api/v1/gifts/${voucherId}/claim-assigned`, null, skipToast))
+}
+
 export function updateGift(
   voucherId: string,
   body: GiftPresentationUpdate,
@@ -165,7 +179,7 @@ export function rotateGiftLink(voucherId: string): Promise<GiftVoucher> {
 export async function downloadGiftArtwork(voucher: GiftVoucher): Promise<void> {
   try {
     const response = await apiClient.get<Blob>(
-      `/api/v1/gifts/${voucher.id}/artwork/portrait.png?v=${voucher.artwork_version}`,
+      `/api/v1/gifts/${voucher.id}/artwork/portrait.png?v=${voucher.artwork_version}&layout=2`,
       { responseType: 'blob', ...skipToast },
     )
     const objectUrl = URL.createObjectURL(response.data)
@@ -189,6 +203,10 @@ const SAFE_GIFT_MESSAGES = new Set([
   'This gift is no longer valid',
   'This gift is not ready to claim',
   'The voucher code is invalid',
+  'This gift is reserved for another verified account',
+  'No claimable gift was found',
+  "Use this gift's private link to claim it",
+  'A verified email is required for this gift',
   'Verify your email before you create or claim a gift',
   'Gift voucher creation is not enabled',
   'The payment has not completed',
