@@ -87,6 +87,26 @@ async def test_dcr_rejects_redirect_lookalike(oauth_enabled, async_client: httpx
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "redirect_uri",
+    [
+        "https://chatgpt.com/connector_platform_oauth_redirect/../evil",
+        "https://chatgpt.com/connector_platform_oauth_redirect/%2e%2e/evil",
+        "https://chatgpt.com/connector_platform_oauth_redirect/%252e%252e/evil",
+    ],
+)
+async def test_dcr_rejects_dot_segment_redirect_bypasses(
+    oauth_enabled, async_client: httpx.AsyncClient, redirect_uri: str
+):
+    response = await async_client.post(
+        "/api/v1/oauth/register",
+        json={"redirect_uris": [redirect_uri], "client_name": "path bypass"},
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_dcr_registers_public_client(oauth_enabled, async_client: httpx.AsyncClient, db):
     response = await async_client.post(
         "/api/v1/oauth/register",

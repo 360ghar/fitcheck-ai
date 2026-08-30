@@ -464,9 +464,9 @@ class SubscriptionPage extends GetView<SubscriptionController> {
         final restoring = controller.isRestoring.value;
         final checkingOut = controller.isCheckingOut.value;
         return TextButton.icon(
-          // A restore completes asynchronously on the purchase stream, so
-          // it stays disabled until isRestoring clears. Do not start it
-          // while a checkout is also in progress.
+          // A restore completes asynchronously on the purchase stream, so it
+          // stays disabled until isRestoring clears. Checkout has its own
+          // state and must not begin a competing restore.
           onPressed: restoring || checkingOut
               ? null
               : controller.restorePurchases,

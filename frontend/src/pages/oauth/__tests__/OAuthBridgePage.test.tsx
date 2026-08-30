@@ -1,6 +1,6 @@
 import { render, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getSupabase, trackEvent, useAuthStore, authState } = vi.hoisted(() => {
   const state: {
@@ -34,6 +34,10 @@ vi.mock('@/stores/authStore', () => ({ useAuthStore }))
 import OAuthBridgePage from '../OAuthBridgePage'
 
 describe('OAuthBridgePage', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   beforeEach(() => {
     authState.hasHydrated = true
     authState.tokens = {
@@ -66,6 +70,33 @@ describe('OAuthBridgePage', () => {
     expect(JSON.parse(options.body)).toEqual({
       state: 'txn-1',
       access_token: 'app-access-token',
+    })
+  })
+
+  it('refreshes a malformed app auth-store token before OAuth completion', async () => {
+    authState.tokens = {
+      access_token: 'not-a-jwt',
+      refresh_token: 'app-refresh-token',
+    }
+    authState.refreshToken.mockImplementation(async () => {
+      authState.tokens = {
+        access_token: 'refreshed-access-token',
+        refresh_token: 'rotated-refresh-token',
+      }
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/oauth/bridge?state=txn-2']}>
+        <OAuthBridgePage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    expect(authState.refreshToken).toHaveBeenCalledTimes(1)
+    const [, options] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(JSON.parse(options.body)).toEqual({
+      state: 'txn-2',
+      access_token: 'refreshed-access-token',
     })
   })
 })

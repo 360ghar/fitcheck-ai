@@ -24,12 +24,15 @@ type Phase = 'connecting' | 'needs_login' | 'error';
 function tokenExpiresSoon(token: string): boolean {
   try {
     const payload = token.split('.')[1];
-    if (!payload) return false;
+    // An opaque or malformed token cannot satisfy the backend's required exp
+    // claim. Treat it as expired so the normal refresh/sign-in path runs
+    // instead of posting an unusable credential to the OAuth bridge.
+    if (!payload) return true;
     const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
     const decoded = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')));
-    return typeof decoded.exp === 'number' && decoded.exp <= Date.now() / 1000 + 30;
+    return typeof decoded.exp !== 'number' || decoded.exp <= Date.now() / 1000 + 30;
   } catch {
-    return false;
+    return true;
   }
 }
 

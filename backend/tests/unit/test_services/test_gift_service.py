@@ -160,6 +160,33 @@ def test_gift_tables_are_not_directly_readable_by_browser_roles():
     assert "CREATE POLICY gift_vouchers_read_own" not in migration
 
 
+def test_atomic_admin_gift_revoke_migration_keeps_voucher_and_grant_guards():
+    """Static SQL contract for the hosted-Supabase-only revoke transaction."""
+    migration = (
+        Path(__file__).resolve().parents[3]
+        / "db"
+        / "supabase"
+        / "migrations"
+        / "059_atomic_admin_gift_revoke.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "BEGIN;" in migration and "COMMIT;" in migration
+    assert "IF p_expected_status NOT IN ('issued', 'claimed') THEN" in migration
+
+    voucher_update = migration.split("UPDATE public.gift_vouchers", 1)[1].split(
+        "RETURNING * INTO v_voucher", 1
+    )[0]
+    assert "source <> 'paid'" in voucher_update
+    assert "status = p_expected_status" in voucher_update
+
+    grant_update_index = migration.index("UPDATE public.gift_entitlement_grants")
+    assert migration.index("IF NOT FOUND THEN") < grant_update_index
+    grant_update = migration[grant_update_index:]
+    assert "IF p_expected_status = 'claimed' THEN" in migration[:grant_update_index]
+    assert "WHERE voucher_id = p_voucher_id" in grant_update
+    assert "status IN ('queued', 'active')" in grant_update
+
+
 @pytest.mark.parametrize(
     ("variant", "expected_size"),
     [("portrait", (1080, 1350)), ("og", (1200, 630))],

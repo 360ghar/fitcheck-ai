@@ -142,30 +142,46 @@ class EnvConfig {
   }
 
   static String _stripInlineComment(String value) {
-    String? quote;
+    // Quotes only change comment parsing when they open the entire value.
+    // An unquoted apostrophe in `it's` must not hide a later ` # comment`.
+    final openingQuote = value.isEmpty ? '' : value[0];
+    if (openingQuote == '"' || openingQuote == '\'') {
+      final closingQuote = _closingQuoteIndex(value, openingQuote);
+      if (closingQuote != null) {
+        return value.substring(0, closingQuote + 1) +
+            _stripUnquotedInlineComment(value.substring(closingQuote + 1));
+      }
+    }
+    return _stripUnquotedInlineComment(value);
+  }
+
+  static int? _closingQuoteIndex(String value, String quote) {
     var escaped = false;
-    for (var index = 0; index < value.length; index++) {
+    for (var index = 1; index < value.length; index++) {
       final character = value[index];
       if (escaped) {
         escaped = false;
         continue;
       }
-      if (quote != null) {
-        if (character == '\\' && quote == '"') {
-          escaped = true;
-        } else if (character == quote) {
-          quote = null;
-        }
-        continue;
+      if (character == '\\' && quote == '"') {
+        escaped = true;
+      } else if (character == quote) {
+        return index;
       }
-      if (character == '"' || character == '\'') {
-        quote = character;
-        continue;
-      }
-      if (character == '#' && (index == 0 || value[index - 1].trim().isEmpty)) {
+    }
+    return null;
+  }
+
+  static String _stripUnquotedInlineComment(String value) {
+    for (var index = 1; index < value.length; index++) {
+      if (value[index] == '#' && value[index - 1].trim().isEmpty) {
         return value.substring(0, index).trimRight();
       }
     }
     return value.trimRight();
   }
+
+  @visibleForTesting
+  static String stripInlineCommentForTesting(String value) =>
+      _stripInlineComment(value);
 }

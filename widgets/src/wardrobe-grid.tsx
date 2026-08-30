@@ -41,26 +41,29 @@ function App() {
         <p className="empty">No wardrobe items found for this view.</p>
       ) : (
         <div className="grid">
-          {items.map((item, index) => (
-            <figure className="card" key={item.id ?? index} style={{ margin: 0 }}>
-              {firstImageUrl(item) ? (
-                <img className="thumb" src={firstImageUrl(item) ?? undefined} alt={item.name ?? "item"} loading="lazy" />
-              ) : (
-                <div className="thumb" aria-hidden="true" />
-              )}
-              <figcaption className="card-body">
-                <p className="title">{item.name ?? "Untitled item"}</p>
-                <p className="meta">
-                  {[item.brand, item.category].filter(Boolean).join(" · ") ||
-                    normalizerColor(item.colors?.[0])}
-                </p>
-                {item.is_favorite ? <span className="badge">Favorite</span> : null}
-                {typeof item.wear_count === "number" && item.wear_count > 0 ? (
-                  <span className="badge">Worn {item.wear_count}×</span>
-                ) : null}
-              </figcaption>
-            </figure>
-          ))}
+          {items.map((item, index) => {
+            const imageUrl = firstImageUrl(item);
+            return (
+              <figure className="card" key={item.id ?? index} style={{ margin: 0 }}>
+                {imageUrl ? (
+                  <img className="thumb" src={imageUrl} alt={item.name ?? "item"} loading="lazy" />
+                ) : (
+                  <div className="thumb" aria-hidden="true" />
+                )}
+                <figcaption className="card-body">
+                  <p className="title">{item.name ?? "Untitled item"}</p>
+                  <p className="meta">
+                    {[item.brand, item.category].filter(Boolean).join(" · ") ||
+                      normalizerColor(item.colors?.[0])}
+                  </p>
+                  {item.is_favorite ? <span className="badge">Favorite</span> : null}
+                  {typeof item.wear_count === "number" && item.wear_count > 0 ? (
+                    <span className="badge">Worn {item.wear_count}×</span>
+                  ) : null}
+                </figcaption>
+              </figure>
+            );
+          })}
         </div>
       )}
       {widgetApi().callTool ? null : (

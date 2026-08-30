@@ -93,9 +93,9 @@ describe('GiftClaimPage credential safety', () => {
     await waitFor(() => expect(getPublicGift).toHaveBeenCalledWith('gift-456'))
 
     await act(async () => {
-      resolveFirst({
-        public_id: 'gift-123',
-        from_name: 'First sender',
+      resolveSecond({
+        public_id: 'gift-456',
+        from_name: 'Second sender',
         to_name: 'Alex',
         duration_months: 1,
         retail_value_cents: 1200,
@@ -106,9 +106,9 @@ describe('GiftClaimPage credential safety', () => {
       })
     })
     await act(async () => {
-      resolveSecond({
-        public_id: 'gift-456',
-        from_name: 'Second sender',
+      resolveFirst({
+        public_id: 'gift-123',
+        from_name: 'First sender',
         to_name: 'Alex',
         duration_months: 1,
         retail_value_cents: 1200,

@@ -28,7 +28,7 @@ import logging
 import secrets
 import uuid
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import unquote, urlencode, urlsplit
 
 import jwt
 from supabase import Client
@@ -78,15 +78,49 @@ def redirect_uri_allowlist() -> List[str]:
     return [item.strip().rstrip("/") for item in raw.split(",") if item.strip()]
 
 
+def _has_unsafe_redirect_path(path: str) -> bool:
+    """Return whether a redirect path can escape an allowlisted root.
+
+    Browsers normalize dot segments in special-scheme URLs, including their
+    percent-encoded form. Decode repeatedly so an allowlist check cannot
+    approve ``/connector/../evil`` or ``/connector/%2e%2e/evil`` before the
+    browser resolves it. Backslashes are path separators for these URLs too.
+    """
+    decoded = path
+    for _ in range(8):
+        next_value = unquote(decoded)
+        if next_value == decoded:
+            break
+        decoded = next_value
+    else:
+        # A deeply nested encoded path has no legitimate redirect use and
+        # leaves normalization ambiguous. Reject it rather than guessing.
+        return True
+
+    if "\\" in decoded:
+        return True
+    return any(segment in {".", ".."} for segment in decoded.split("/"))
+
+
 def _redirect_uri_allowed(redirect_uri: str) -> bool:
-    candidate = urlsplit((redirect_uri or "").strip())
+    try:
+        candidate = urlsplit((redirect_uri or "").strip())
+    except ValueError:
+        return False
     if not candidate.scheme or not candidate.netloc or candidate.fragment:
+        return False
+    if _has_unsafe_redirect_path(candidate.path):
         return False
     candidate_path = candidate.path.rstrip("/")
 
     for configured in redirect_uri_allowlist():
-        allowed = urlsplit(configured)
+        try:
+            allowed = urlsplit(configured)
+        except ValueError:
+            continue
         if not allowed.scheme or not allowed.netloc:
+            continue
+        if _has_unsafe_redirect_path(allowed.path):
             continue
         if candidate.scheme != allowed.scheme or candidate.netloc != allowed.netloc:
             continue

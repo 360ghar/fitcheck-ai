@@ -22,10 +22,13 @@ import '../../../core/utils/frame_safe.dart';
 enum StoreStatus {
   /// No store query has completed yet (page still loading).
   unknown,
+
   /// The store resolved the plan's products (localized prices available).
   ready,
+
   /// The backend published no store product IDs for this rail.
   notConfigured,
+
   /// The store query failed, or the store answered with zero products.
   unavailable,
 }
@@ -42,9 +45,9 @@ class SubscriptionController extends GetxController {
     IapService? iapService,
     SubscriptionRepository? repository,
     String? Function()? currentUserId,
-  })  : iapService = iapService ?? IapService(),
-        _repository = repository ?? SubscriptionRepository(),
-        _currentUserId = currentUserId ?? _defaultCurrentUserId;
+  }) : iapService = iapService ?? IapService(),
+       _repository = repository ?? SubscriptionRepository(),
+       _currentUserId = currentUserId ?? _defaultCurrentUserId;
 
   final SubscriptionRepository _repository;
   final IapService iapService;
@@ -71,16 +74,22 @@ class SubscriptionController extends GetxController {
   final Rx<ReferralCodeModel?> referralCode = Rx<ReferralCodeModel?>(null);
   final Rx<ReferralStatsModel?> referralStats = Rx<ReferralStatsModel?>(null);
   final RxList<PlanDetailsModel> plans = <PlanDetailsModel>[].obs;
-  final Rx<StoreProductsModel> storeProducts = Rx<StoreProductsModel>(StoreProductsModel());
+  final Rx<StoreProductsModel> storeProducts = Rx<StoreProductsModel>(
+    StoreProductsModel(),
+  );
+
   /// Whether the store rail is currently serving products (see [StoreStatus]).
   /// Set by [refreshStoreProducts]; the paywall banner and fail-fast checkout
   /// read it so a store that cannot serve the plans is never presented as
   /// ready.
   final Rx<StoreStatus> storeStatus = Rx<StoreStatus>(StoreStatus.unknown);
+
   /// Store product details (localized prices) keyed by plan type
   /// (e.g. `plus_monthly`). `refreshStoreProducts` populates this on page
   /// load and `_startStorePurchase` reads it cache-first at checkout.
-  final RxMap<String, ProductDetails> storeProductDetails = <String, ProductDetails>{}.obs;
+  final RxMap<String, ProductDetails> storeProductDetails =
+      <String, ProductDetails>{}.obs;
+
   /// Product IDs the store answered for but did not recognize. Non-empty means
   /// a store-side setup problem (product missing in App Store Connect / Play,
   /// agreements unsigned, wrong bundle namespace) — the paywall would
@@ -88,14 +97,17 @@ class SubscriptionController extends GetxController {
   final RxList<String> missingStoreProductIds = <String>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isCheckingOut = false.obs;
+
   /// True while a store restore is in flight. Distinct from [isCheckingOut]
   /// so the Restore button spins/disables on its own signal: unlike checkout,
   /// a restore has no synchronous completion — results arrive later on the
   /// purchase stream, so the flag is cleared there (or by a safety timer).
   final RxBool isRestoring = false.obs;
+
   /// Safety net for restores where the store never emits an update (sandbox
   /// hangs): releases [isRestoring] so the button cannot stay disabled forever.
   Timer? _restoreTimeoutTimer;
+
   /// The plan variant currently launching a store checkout ('' when none).
   /// Drives the per-card loading state so only the tapped plan card spins
   /// instead of every card in the tier.
@@ -126,6 +138,7 @@ class SubscriptionController extends GetxController {
     // section for a user whose entitlement is unknown.
     return plan != null && plan != PlanType.free;
   }
+
   bool get isCancelled => subscription.value?.cancelAtPeriodEnd ?? false;
 
   /// Whether this subscription is billed through a store (App Store or Play)
@@ -143,7 +156,8 @@ class SubscriptionController extends GetxController {
   /// `!isPro` would leave them with no way to do it.
   bool get canUpgrade {
     final plan = subscription.value?.planType;
-    if (plan == null) return false; // entitlement unknown (fetch failed / pending)
+    if (plan == null)
+      return false; // entitlement unknown (fetch failed / pending)
     return plan != PlanType.proMonthly && plan != PlanType.proYearly;
   }
 
@@ -185,7 +199,8 @@ class SubscriptionController extends GetxController {
 
   /// Localized store price for a plan type ("plus_monthly", ...), or null
   /// when the store product details have not loaded yet.
-  String? storePriceFor(String planType) => storeProductDetails[planType]?.price;
+  String? storePriceFor(String planType) =>
+      storeProductDetails[planType]?.price;
 
   /// Whether a checkout is in flight for exactly [planType]; drives the
   /// per-card loading state so only the tapped card shows a spinner.
@@ -220,16 +235,22 @@ class SubscriptionController extends GetxController {
         for (final details in updates) {
           try {
             final result = _handlePurchaseUpdate(details);
-            unawaited(result.catchError((Object e, StackTrace s) {
-              // _handlePurchaseUpdate's own paths are caught internally; a
-              // rejection here means something escaped — keep the listener
-              // alive and let telemetry see it.
-              ErrorHandler.reportError(e, 'Purchase update handler failed');
-            }));
+            unawaited(
+              result.catchError((Object e, StackTrace s) {
+                // _handlePurchaseUpdate's own paths are caught internally; a
+                // rejection here means something escaped — keep the listener
+                // alive and let telemetry see it.
+                ErrorHandler.reportError(e, 'Purchase update handler failed');
+              }),
+            );
           } catch (e, stackTrace) {
             // Synchronous throw from the switch itself: log, keep going with
             // the remaining updates in this batch, and keep the subscription.
-            ErrorHandler.reportError(e, 'Purchase update handler threw', stackTrace: stackTrace);
+            ErrorHandler.reportError(
+              e,
+              'Purchase update handler threw',
+              stackTrace: stackTrace,
+            );
           }
         }
       },
@@ -324,7 +345,10 @@ class SubscriptionController extends GetxController {
   Future<void> _queryStoreProducts() async {
     try {
       const planTypes = [
-        'plus_monthly', 'plus_yearly', 'pro_monthly', 'pro_yearly',
+        'plus_monthly',
+        'plus_yearly',
+        'pro_monthly',
+        'pro_yearly',
       ];
       final ids = <String>{};
       // Reverse lookup from store product ID back to plan type so the map
@@ -395,10 +419,14 @@ class SubscriptionController extends GetxController {
           storeStatus.value == StoreStatus.unavailable;
       storeStatus.value =
           (e is IapException && e.errorCode == 'storekit_no_response') ||
-                  wasDefinitivelyUnavailable
-              ? StoreStatus.unavailable
-              : StoreStatus.unknown;
-      ErrorHandler.reportError(e, 'Store product query failed', stackTrace: stackTrace);
+              wasDefinitivelyUnavailable
+          ? StoreStatus.unavailable
+          : StoreStatus.unknown;
+      ErrorHandler.reportError(
+        e,
+        'Store product query failed',
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -460,7 +488,7 @@ class SubscriptionController extends GetxController {
     // Re-entry guard: a checkout is already in flight (per-card loading via
     // checkingOutPlanType still shows which plan is spinning); ignore taps on
     // other cards so two store flows can never launch concurrently.
-    if (isCheckingOut.value) return;
+    if (isCheckingOut.value || isRestoring.value) return;
     isCheckingOut.value = true;
     checkingOutPlanType.value = planType;
     error.value = '';
@@ -542,9 +570,7 @@ class SubscriptionController extends GetxController {
   }
 
   Future<void> _startStripeCheckout(String planType) async {
-    final session = await _repository.createCheckoutSession(
-      planType: planType,
-    );
+    final session = await _repository.createCheckoutSession(planType: planType);
     if (session.updated) {
       // Paid-plan changes are applied directly to the existing Stripe
       // subscription. Refresh local entitlements instead of opening a
@@ -659,8 +685,7 @@ class SubscriptionController extends GetxController {
   Future<void> restorePurchases() async {
     if (!iapService.isStoreBillingAvailable) return;
     // Re-entry guard: a restore is already in flight; ignore duplicate taps.
-    if (isRestoring.value) return;
-    isCheckingOut.value = true;
+    if (isRestoring.value || isCheckingOut.value) return;
     error.value = '';
     try {
       isRestoring.value = true;
@@ -678,9 +703,10 @@ class SubscriptionController extends GetxController {
       isRestoring.value = false;
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
-      ErrorHandler.showError('Could not restore purchases.', title: 'Restore failed');
-    } finally {
-      isCheckingOut.value = false;
+      ErrorHandler.showError(
+        'Could not restore purchases.',
+        title: 'Restore failed',
+      );
     }
   }
 
@@ -737,7 +763,10 @@ class SubscriptionController extends GetxController {
     try {
       await _repository.cancelSubscription();
       await fetchSubscription();
-      ErrorHandler.showSuccess('Subscription cancelled. You\'ll retain access until period end.', title: 'Success');
+      ErrorHandler.showSuccess(
+        'Subscription cancelled. You\'ll retain access until period end.',
+        title: 'Success',
+      );
     } catch (e, stackTrace) {
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
@@ -754,13 +783,19 @@ class SubscriptionController extends GetxController {
     }
     final code = referralCode.value;
     if (code == null) {
-      ErrorHandler.showError(referralError.value.isNotEmpty
+      ErrorHandler.showError(
+        referralError.value.isNotEmpty
             ? referralError.value
-            : 'Could not load your referral link. Try again.', title: 'Error');
+            : 'Could not load your referral link. Try again.',
+        title: 'Error',
+      );
       return;
     }
     await Clipboard.setData(ClipboardData(text: code.shareUrl));
-    ErrorHandler.showSuccess('Referral link copied to clipboard', title: 'Copied');
+    ErrorHandler.showSuccess(
+      'Referral link copied to clipboard',
+      title: 'Copied',
+    );
   }
 
   /// Share referral link via the platform share sheet.
@@ -771,9 +806,12 @@ class SubscriptionController extends GetxController {
     }
     final code = referralCode.value;
     if (code == null) {
-      ErrorHandler.showError(referralError.value.isNotEmpty
+      ErrorHandler.showError(
+        referralError.value.isNotEmpty
             ? referralError.value
-            : 'Could not load your referral link. Try again.', title: 'Error');
+            : 'Could not load your referral link. Try again.',
+        title: 'Error',
+      );
       return;
     }
     try {
@@ -786,9 +824,15 @@ class SubscriptionController extends GetxController {
       // Fall back to clipboard so the user still gets a working path
       try {
         await Clipboard.setData(ClipboardData(text: code.shareUrl));
-        ErrorHandler.showError('Share sheet failed — link copied to clipboard instead.', title: 'Link copied');
+        ErrorHandler.showError(
+          'Share sheet failed — link copied to clipboard instead.',
+          title: 'Link copied',
+        );
       } catch (_) {
-        ErrorHandler.showValidation('Please copy the link instead.', title: 'Share failed');
+        ErrorHandler.showValidation(
+          'Please copy the link instead.',
+          title: 'Share failed',
+        );
       }
     }
   }

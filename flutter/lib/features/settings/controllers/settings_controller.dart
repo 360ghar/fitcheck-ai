@@ -41,6 +41,7 @@ class SettingsController extends GetxController {
   final RxString error = ''.obs;
   Future<void> _preferenceWriteQueue = Future<void>.value();
   int _preferenceRevision = 0;
+  UserPreferencesModel? _lastConfirmedPreferences;
 
   // Action-specific loading states
   final RxBool isChangingPassword = false.obs;
@@ -60,18 +61,27 @@ class SettingsController extends GetxController {
   /// Fetch user preferences
   Future<void> fetchPreferences() async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+    final fetchRevision = _preferenceRevision;
     try {
       isLoading.value = true;
       error.value = '';
-      preferences.value = await _repository.getPreferences();
+      final fetched = await _repository.getPreferences();
+      // Do not overwrite a preference change that started while this initial
+      // fetch was in flight. The queued write owns the newer local state.
+      if (isClosed || fetchRevision != _preferenceRevision) return;
+      _lastConfirmedPreferences = fetched;
+      preferences.value = fetched;
 
       // Sync theme from backend to ThemeService
-      _themeService.syncFromBackend(preferences.value?.themeMode);
+      _themeService.syncFromBackend(fetched.themeMode);
     } catch (e) {
+      if (isClosed || fetchRevision != _preferenceRevision) return;
       error.value = ErrorHandler.extractMessage(e);
       // If preferences don't exist yet, use defaults
       if (preferences.value == null) {
-        preferences.value = UserPreferencesModel();
+        final defaults = UserPreferencesModel();
+        preferences.value = defaults;
+        _lastConfirmedPreferences ??= defaults;
       }
     } finally {
       isLoading.value = false;
@@ -82,23 +92,30 @@ class SettingsController extends GetxController {
   ///
   /// Applies optimistically (snappy UI), then persists. If the backend save
   /// fails, both the controller state AND the ThemeService persistence are
-  /// reverted to the previous mode — otherwise the app keeps showing and
-  /// storing a theme the server rejected.
+  /// restored from the latest confirmed preference — otherwise rapid changes
+  /// can restore an older, already superseded mode.
   Future<void> updateThemeMode(AppThemeMode mode) async {
     final current = preferences.value ?? UserPreferencesModel();
-    final previousMode = current.themeMode ?? AppThemeMode.system;
-
     final updated = current.copyWith(themeMode: mode);
-    // Update ThemeService (handles local storage and applies theme)
+    // Queue the backend write synchronously so a following preference change
+    // builds on this optimistic mode rather than the pre-change model.
+    final outcomeFuture = _queuePreferences(
+      updated,
+      fallbackPreferences: current,
+    );
+    // Update ThemeService (handles local storage and applies theme).
     await _themeService.setThemeMode(mode);
 
-    // Save to backend; on failure roll back the optimistic apply above.
-    final outcome = await _queuePreferences(updated);
+    // A latest failure rolls back to the most recent successful queued write,
+    // not to the mode captured before an overlapping user choice.
+    final outcome = await outcomeFuture;
     if (!outcome.succeeded &&
         outcome.revision == _preferenceRevision &&
         !isClosed) {
-      await _themeService.setThemeMode(previousMode);
-      preferences.value = current.copyWith(themeMode: previousMode);
+      final confirmed = _lastConfirmedPreferences ?? current;
+      await _themeService.setThemeMode(
+        confirmed.themeMode ?? AppThemeMode.system,
+      );
     }
   }
 
@@ -192,16 +209,23 @@ class SettingsController extends GetxController {
   /// Save preferences
   ///
   /// Returns whether the save succeeded so callers that optimistically applied
-  /// state (e.g. [updateThemeMode]) can roll back on failure. Existing
-  /// fire-and-forget callers ignore the result, so this is backward compatible.
+  /// state can observe the result. Every latest failure also restores the
+  /// confirmed model, so fire-and-forget callers cannot leave a rejected value
+  /// on screen.
   Future<bool> savePreferences(UserPreferencesModel newPreferences) async {
-    return (await _queuePreferences(newPreferences)).succeeded;
+    final current = preferences.value ?? UserPreferencesModel();
+    return (await _queuePreferences(
+      newPreferences,
+      fallbackPreferences: current,
+    )).succeeded;
   }
 
   Future<_PreferenceSaveOutcome> _queuePreferences(
-    UserPreferencesModel newPreferences,
-  ) {
+    UserPreferencesModel newPreferences, {
+    required UserPreferencesModel fallbackPreferences,
+  }) {
     final revision = ++_preferenceRevision;
+    _lastConfirmedPreferences ??= fallbackPreferences;
     preferences.value = newPreferences;
     isSaving.value = true;
     error.value = '';
@@ -209,6 +233,7 @@ class SettingsController extends GetxController {
     final operation = _preferenceWriteQueue.then((_) async {
       try {
         final saved = await _repository.updatePreferences(newPreferences);
+        _lastConfirmedPreferences = saved;
         if (!isClosed && revision == _preferenceRevision) {
           preferences.value = saved;
           ErrorHandler.showSuccess(
@@ -219,6 +244,7 @@ class SettingsController extends GetxController {
         return _PreferenceSaveOutcome(revision: revision, succeeded: true);
       } catch (e) {
         if (!isClosed && revision == _preferenceRevision) {
+          preferences.value = _lastConfirmedPreferences ?? fallbackPreferences;
           error.value = ErrorHandler.extractMessage(e);
           ErrorHandler.showError(error.value, title: 'Error');
         }

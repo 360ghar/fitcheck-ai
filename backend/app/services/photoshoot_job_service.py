@@ -44,6 +44,7 @@ _TERMINAL_STATUSES = frozenset({
     PhotoshootJobStatus.CANCELLED,
     PhotoshootJobStatus.FAILED,
 })
+_TERMINAL_EVENT_TYPES = frozenset({"job_complete", "job_failed", "job_cancelled"})
 
 
 def _build_persisted_payload(
@@ -174,6 +175,9 @@ class PhotoshootJob:
     # Event history for replay on late subscriber connect
     event_history: List[Dict[str, Any]] = field(default_factory=list)
     next_event_id: int = 1
+    # Event ID of the terminal update. Event history is released after a job
+    # finishes, so retain this scalar for Last-Event-ID reconnects.
+    terminal_event_id: int | None = None
 
     # Error info
     error_message: Optional[str] = None
@@ -663,6 +667,8 @@ class PhotoshootJobService:
 
             event = {"type": event_type, "data": data, "id": job.next_event_id}
             job.next_event_id += 1
+            if event_type in _TERMINAL_EVENT_TYPES:
+                job.terminal_event_id = event["id"]
 
             # Always store in event history for late-connecting subscribers.
             # History is STRIPPED of base64 payloads (see strip_history_base64)
@@ -744,6 +750,24 @@ class PhotoshootJobService:
             if up_to_index is not None:
                 return list(job.event_history[:up_to_index])
             return list(job.event_history)
+
+    @classmethod
+    async def get_terminal_event_id(cls, job_id: str) -> int | None:
+        """Return a stable terminal SSE ID, allocating one for recovered jobs.
+
+        Finished jobs free their replay history to release image payloads. A
+        recovered terminal row therefore has no historic event ID, but still
+        needs a stable synthetic ID so a client that acknowledged it does not
+        receive the same terminal event on every reconnect.
+        """
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job or job.status not in _TERMINAL_STATUSES:
+                return None
+            if job.terminal_event_id is None:
+                job.terminal_event_id = job.next_event_id
+                job.next_event_id += 1
+            return job.terminal_event_id
 
     @classmethod
     async def get_job_status(cls, job_id: str) -> Optional[Dict[str, Any]]:

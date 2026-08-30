@@ -31,7 +31,13 @@ WIDGET_MIME = "text/html"
 def _widget_csp() -> dict[str, Any]:
     """Apps-SDK CSP declaration attached to every widget resource."""
     def origin(value: str) -> str | None:
-        parsed = urlsplit((value or "").strip())
+        try:
+            parsed = urlsplit((value or "").strip())
+        except ValueError:
+            # A malformed configured host (for example ``https://[bad``)
+            # must not make every widget resource unreadable. Omit that
+            # optional origin and preserve the safe API fallback instead.
+            return None
         if not parsed.scheme or not parsed.netloc:
             return None
         return f"{parsed.scheme}://{parsed.netloc}"

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
 import '../models/outfit_model.dart';
+import '../../wardrobe/controllers/wardrobe_controller.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../wardrobe/repositories/item_repository.dart';
@@ -48,11 +49,26 @@ class OutfitBuilderController extends GetxController {
   // Filters
   final RxString searchQuery = ''.obs;
   final RxString categoryFilter = 'all'.obs;
+  Worker? _wardrobeItemsWorker;
 
   @override
   void onInit() {
     super.onInit();
+    _watchWardrobeChanges();
     _loadAvailableItems();
+  }
+
+  void _watchWardrobeChanges() {
+    // The picker owns a complete, paginated snapshot while the shell owns a
+    // short wardrobe page. Watch the shell for mutations, then re-fetch the
+    // full picker list so changes outside its first page are represented too.
+    if (!Get.isRegistered<WardrobeController>()) return;
+    final wardrobeController = Get.find<WardrobeController>();
+    _wardrobeItemsWorker = debounce<List<ItemModel>>(wardrobeController.items, (
+      _,
+    ) {
+      if (!isClosed) _loadItemsFromRepository();
+    }, time: const Duration(milliseconds: 250));
   }
 
   Future<void> _loadAvailableItems() async {
@@ -364,6 +380,7 @@ class OutfitBuilderController extends GetxController {
 
   @override
   void onClose() {
+    _wardrobeItemsWorker?.dispose();
     clearSelection();
     super.onClose();
   }

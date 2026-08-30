@@ -182,12 +182,46 @@ void main() {
       await controller.fetchItems(refresh: true);
       await tester.pumpAndSettle();
 
-      expect(controller.items.map((i) => i.id), ['item-1', 'item-2'],
-          reason: 'a failed refresh must not wipe the loaded closet');
+      expect(
+        controller.items.map((i) => i.id),
+        ['item-1', 'item-2'],
+        reason: 'a failed refresh must not wipe the loaded closet',
+      );
       expect(controller.error.value, isNotEmpty);
       controller.onClose();
       await settle(tester);
     });
+
+    testWidgets(
+      'overlapping failed refreshes restore the original pagination',
+      (tester) async {
+        await pumpApp(tester);
+        final first = Completer<ItemsListResponse>();
+        final second = Completer<ItemsListResponse>();
+        fakeRepo.onGetItems = () =>
+            fakeRepo.getItemsCalls == 1 ? first.future : second.future;
+        final controller = WardrobeController(itemRepository: fakeRepo);
+        controller.items.addAll([_item('item-1'), _item('item-2')]);
+        controller.currentPage.value = 3;
+        controller.hasMore.value = false;
+
+        final firstRefresh = controller.fetchItems(refresh: true);
+        await tester.pump();
+        final secondRefresh = controller.fetchItems(refresh: true);
+        await tester.pump();
+
+        second.completeError(AuthException.unauthorized());
+        await tester.pump();
+        first.completeError(AuthException.unauthorized());
+        await Future.wait([firstRefresh, secondRefresh]);
+
+        expect(controller.items.map((item) => item.id), ['item-1', 'item-2']);
+        expect(controller.currentPage.value, 3);
+        expect(controller.hasMore.value, isFalse);
+        controller.onClose();
+        await settle(tester);
+      },
+    );
 
     testWidgets('load-more appends instead of replacing', (tester) async {
       await pumpApp(tester);
@@ -208,8 +242,11 @@ void main() {
 
       await controller.fetchItems();
 
-      expect(controller.items.map((i) => i.id), ['item-1', 'item-2'],
-          reason: 'the non-refresh path must append to the loaded list');
+      expect(
+        controller.items.map((i) => i.id),
+        ['item-1', 'item-2'],
+        reason: 'the non-refresh path must append to the loaded list',
+      );
       controller.onClose();
       await settle(tester);
     });

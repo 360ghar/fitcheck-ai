@@ -22,7 +22,6 @@ class ImageUtils {
 
   /// The batch extraction endpoint accepts at most 7 MB of decoded image data.
   static const int maxFileSize = 7 * 1024 * 1024;
-  static const int maxBase64Size = 10 * 1024 * 1024;
 
   /// Filename prefix used by [generateThumbnail] for generated thumbnails.
   static const String _thumbnailPrefix = 'thumb_';
@@ -94,11 +93,7 @@ class ImageUtils {
     if (bytes.length > maxFileSize) {
       throw FileUploadException.fileTooLarge(maxFileSize ~/ (1024 * 1024));
     }
-    final encoded = base64Encode(bytes);
-    if (encoded.length > maxBase64Size) {
-      throw FileUploadException.fileTooLarge(maxFileSize ~/ (1024 * 1024));
-    }
-    return encoded;
+    return base64Encode(bytes);
   }
 
   /// Generate a thumbnail for preview

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 // Two silent failures in SettingsController, both of which told the user
 // something had happened when it had not.
 //
@@ -85,13 +87,16 @@ class _FakeSettingsRepository implements SettingsRepository {
 
   int exportCalls = 0;
   final List<UserPreferencesModel> preferenceWrites = [];
+  Future<UserPreferencesModel> Function(UserPreferencesModel preferences)?
+  onUpdatePreferences;
 
   @override
   Future<UserPreferencesModel> updatePreferences(
     UserPreferencesModel preferences,
   ) async {
     preferenceWrites.add(preferences);
-    return preferences;
+    final handler = onUpdatePreferences;
+    return handler == null ? preferences : handler(preferences);
   }
 
   @override
@@ -102,6 +107,20 @@ class _FakeSettingsRepository implements SettingsRepository {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeThemeService extends ThemeService {
+  _FakeThemeService(this._mode);
+
+  AppThemeMode _mode;
+
+  @override
+  AppThemeMode get appThemeMode => _mode;
+
+  @override
+  Future<void> setThemeMode(AppThemeMode mode) async {
+    _mode = mode;
+  }
 }
 
 /// Captures the url_launcher platform calls so a launch can be made to fail.
@@ -321,6 +340,75 @@ void main() {
   });
 
   group('preference saves preserve pending mutations', () {
+    testWidgets('rolls back a rejected latest non-theme preference', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
+      final repository = _FakeSettingsRepository()
+        ..onUpdatePreferences = (_) async => throw StateError('write rejected');
+      final controller = SettingsController(
+        repository: repository,
+        authController: _FakeAuthController(),
+      );
+      controller.preferences.value = UserPreferencesModel(
+        notificationsEnabled: true,
+      );
+
+      await controller.toggleNotifications(false);
+
+      expect(controller.preferences.value?.notificationsEnabled, isTrue);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+      'reverts a failed latest theme change to the last confirmed mode',
+      (tester) async {
+        await tester.pumpWidget(
+          const GetMaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final firstWrite = Completer<UserPreferencesModel>();
+        final secondWrite = Completer<UserPreferencesModel>();
+        var writes = 0;
+        final repository = _FakeSettingsRepository()
+          ..onUpdatePreferences = (_) {
+            writes++;
+            return writes == 1 ? firstWrite.future : secondWrite.future;
+          };
+        final themeService = _FakeThemeService(AppThemeMode.system);
+        final controller = SettingsController(
+          repository: repository,
+          authController: _FakeAuthController(),
+          themeService: themeService,
+        );
+        final initial = UserPreferencesModel(themeMode: AppThemeMode.system);
+        controller.preferences.value = initial;
+
+        final chooseLight = controller.updateThemeMode(AppThemeMode.light);
+        // Let the first backend write enter its pending state before the next
+        // user choice arrives. This preserves the overlapping-write scenario
+        // without racing the test's completer setup.
+        await tester.pump();
+        final chooseDark = controller.updateThemeMode(AppThemeMode.dark);
+        expect(themeService.appThemeMode, AppThemeMode.dark);
+
+        firstWrite.complete(initial.copyWith(themeMode: AppThemeMode.light));
+        await tester.pump();
+        await chooseLight;
+        await tester.pump();
+        expect(repository.preferenceWrites, hasLength(2));
+
+        secondWrite.completeError(StateError('write rejected'));
+        await tester.pump();
+        await chooseDark;
+
+        expect(controller.preferences.value?.themeMode, AppThemeMode.light);
+        expect(themeService.appThemeMode, AppThemeMode.light);
+        await tester.pumpAndSettle();
+      },
+    );
+
     testWidgets(
       'serializes rapid style selections with the latest local state',
       (tester) async {

@@ -387,16 +387,22 @@ async def photoshoot_job_events(
             # If job already completed, send final status
             if job.status in (PhotoshootJobStatus.COMPLETE, PhotoshootJobStatus.FAILED, PhotoshootJobStatus.CANCELLED):
                 status_data = await PhotoshootJobService.get_job_status(job_id)
-                if status_data:
+                terminal_event_id = await PhotoshootJobService.get_terminal_event_id(job_id)
+                if status_data and (
+                    terminal_event_id is None or terminal_event_id > replay_after
+                ):
                     event_map = {
                         PhotoshootJobStatus.COMPLETE: "job_complete",
                         PhotoshootJobStatus.FAILED: "job_failed",
                         PhotoshootJobStatus.CANCELLED: "job_cancelled",
                     }
-                    yield {
+                    payload = {
                         "event": event_map.get(job.status, "job_complete"),
                         "data": json.dumps(status_data),
                     }
+                    if terminal_event_id is not None:
+                        payload["id"] = str(terminal_event_id)
+                    yield payload
                 return
 
             if job.recovered_from_persistence:

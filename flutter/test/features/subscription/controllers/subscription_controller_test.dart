@@ -31,9 +31,11 @@ class FakeUrlLauncherPlatform extends UrlLauncherPlatform {
 
 /// Fake IAP gateway with manually pumped purchase events.
 class FakeIapService extends IapService {
-  FakeIapService({bool storeBillingAvailable = true, String storeName = 'google'})
-      : _storeBillingAvailable = storeBillingAvailable,
-        _storeName = storeName;
+  FakeIapService({
+    bool storeBillingAvailable = true,
+    String storeName = 'google',
+  }) : _storeBillingAvailable = storeBillingAvailable,
+       _storeName = storeName;
 
   final bool _storeBillingAvailable;
   final String _storeName;
@@ -43,16 +45,22 @@ class FakeIapService extends IapService {
   int restoreCalls = 0;
   int completeCalls = 0;
   Set<String>? lastQueriedIds;
+
   /// The appAccountToken the controller attached to the last purchase.
   String? lastAppAccountToken;
   List<ProductDetails> productsToReturn = const [];
   bool startPurchaseResult = true;
+
   /// When set, fetchProducts throws it instead of returning products (e.g.
   /// the storekit_no_response lookup failure).
   Object? fetchError;
+
   /// When set, fetchProducts waits on it before returning so tests can
   /// observe the in-flight checkout state.
   Completer<void>? fetchGate;
+
+  /// When set, restorePurchases never returns until the test releases it.
+  Completer<void>? restoreGate;
 
   @override
   bool get isStoreBillingAvailable => _storeBillingAvailable;
@@ -61,8 +69,7 @@ class FakeIapService extends IapService {
   bool get isApple => _storeName == 'apple';
 
   @override
-  String get storeName =>
-      _storeName; // flutter_test defaults to android; pass 'apple' for iOS tests
+  String get storeName => _storeName; // flutter_test defaults to android; pass 'apple' for iOS tests
 
   @override
   Stream<List<PurchaseDetails>> get purchaseStream => _streamController.stream;
@@ -100,6 +107,8 @@ class FakeIapService extends IapService {
   @override
   Future<void> restorePurchases() async {
     restoreCalls++;
+    final gate = restoreGate;
+    if (gate != null) await gate.future;
   }
 
   @override
@@ -110,8 +119,8 @@ class FakeIapService extends IapService {
   @override
   String? transactionIdFor(PurchaseDetails details) =>
       details.verificationData.serverVerificationData.isEmpty
-          ? details.purchaseID
-          : details.verificationData.serverVerificationData;
+      ? details.purchaseID
+      : details.verificationData.serverVerificationData;
 
   void emit(PurchaseDetails details) {
     _streamController.add([details]);
@@ -141,7 +150,9 @@ class FakeSubscriptionRepository extends SubscriptionRepository {
   // without touching the real API client.
   /// What [getSubscription] returns; page tests override this to simulate
   /// free / Plus / Pro subscribers.
-  SubscriptionModel subscriptionResult = const SubscriptionModel(userId: 'user-1');
+  SubscriptionModel subscriptionResult = const SubscriptionModel(
+    userId: 'user-1',
+  );
 
   @override
   Future<SubscriptionWithUsage> getSubscription() async {
@@ -160,11 +171,10 @@ class FakeSubscriptionRepository extends SubscriptionRepository {
   Future<PlansResponse> getPlans() async => plansResponse;
 
   @override
-  Future<ReferralCodeModel> getReferralCode() async =>
-      const ReferralCodeModel(
-        code: 'TESTCODE',
-        shareUrl: 'https://example.com/r/TESTCODE',
-      );
+  Future<ReferralCodeModel> getReferralCode() async => const ReferralCodeModel(
+    code: 'TESTCODE',
+    shareUrl: 'https://example.com/r/TESTCODE',
+  );
 
   @override
   Future<ReferralStatsModel> getReferralStats() async =>
@@ -224,10 +234,9 @@ StoreProductsModel _storeProducts({
   String store = 'google',
   String planType = 'plus_monthly',
   String productId = 'plus_monthly',
-}) =>
-    StoreProductsModel.fromJson({
-      store: {planType: productId},
-    });
+}) => StoreProductsModel.fromJson({
+  store: {planType: productId},
+});
 
 PurchaseDetails _purchase({
   String productId = 'plus_monthly',
@@ -309,27 +318,28 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('store purchase result registers with the backend and completes', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      final controller = buildController();
-      final purchase = _purchase();
+    testWidgets(
+      'store purchase result registers with the backend and completes',
+      (tester) async {
+        await pumpApp(tester);
+        final controller = buildController();
+        final purchase = _purchase();
 
-      iapService.emit(purchase);
-      await tester.pump();
-      await tester.pump();
+        iapService.emit(purchase);
+        await tester.pump();
+        await tester.pump();
 
-      expect(repository.registerCalls, 1);
-      expect(repository.lastStore, 'google');
-      expect(repository.lastTransactionId, 'token-abc');
-      expect(repository.lastProductId, 'plus_monthly');
-      expect(iapService.completeCalls, 1);
-      expect(controller.subscription.value?.billingProvider, 'google');
-      expect(controller.subscription.value?.planType, PlanType.plusMonthly);
-      await settle(tester);
-      controller.onClose();
-    });
+        expect(repository.registerCalls, 1);
+        expect(repository.lastStore, 'google');
+        expect(repository.lastTransactionId, 'token-abc');
+        expect(repository.lastProductId, 'plus_monthly');
+        expect(iapService.completeCalls, 1);
+        expect(controller.subscription.value?.billingProvider, 'google');
+        expect(controller.subscription.value?.planType, PlanType.plusMonthly);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
 
     testWidgets('registration failure keeps the purchase uncompleted', (
       tester,
@@ -455,58 +465,86 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('unavailable plan product is surfaced without launching a purchase', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      iapService.productsToReturn = const [];
-      final controller = buildController();
+    testWidgets(
+      'restore timeout releases a hung store call without checkout state',
+      (tester) async {
+        await pumpApp(tester);
+        iapService.restoreGate = Completer<void>();
+        final controller = buildController();
 
-      await controller.startCheckout('pro_yearly');
-      await tester.pump();
+        final restoring = controller.restorePurchases();
+        await tester.pump();
+        expect(controller.isRestoring.value, isTrue);
+        expect(controller.isCheckingOut.value, isFalse);
 
-      expect(iapService.startPurchaseCalls, 0);
-      expect(controller.error.value, contains('not available'));
-      // The Upgrade tap must never look like it did nothing.
-      expect(Get.isSnackbarOpen, isTrue);
-      // Drain the snackbar animation before the tree is disposed, or its
-      // controller leaks into the next test.
-      await settle(tester);
-      controller.onClose();
-    });
+        await tester.pump(const Duration(seconds: 15));
+        expect(controller.isRestoring.value, isFalse);
+        expect(controller.isCheckingOut.value, isFalse);
 
-    testWidgets('store lookup failure surfaces a friendly message, never the raw StoreKit error', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      // The plugin's storekit_no_response: StoreKit resolved zero products
-      // for the requested ID. Regression: the message used to interpolate
-      // the raw APError(...) dump into the "Purchase failed" snackbar, and
-      // the wording used to promise "try again in a moment" for a state that
-      // only clears on the App Store Connect side.
-      iapService.fetchError = IapException(
-        message: kPlanNotAvailableInStoreMessage,
-        errorCode: 'storekit_no_response',
-        details: 'IAPError(code: storekit_no_response, source: app_store, '
-            'message: StoreKit: Failed to get response from platform., '
-            'details: null)',
-      );
-      final controller = buildController();
-      controller.storeProducts.value = _storeProducts();
+        iapService.restoreGate!.complete();
+        await restoring;
+        controller.onClose();
+      },
+    );
 
-      await controller.startCheckout('plus_monthly');
-      await tester.pump();
+    testWidgets(
+      'unavailable plan product is surfaced without launching a purchase',
+      (tester) async {
+        await pumpApp(tester);
+        iapService.productsToReturn = const [];
+        final controller = buildController();
 
-      expect(iapService.fetchProductsCalls, 1);
-      expect(iapService.startPurchaseCalls, 0);
-      // No raw platform dump may reach the user.
-      expect(controller.error.value, isNot(contains('APError')));
-      expect(controller.error.value, isNot(contains('StoreKit')));
-      expect(controller.error.value, contains('not available in the store yet'));
-      expect(Get.isSnackbarOpen, isTrue);
-      await settle(tester);
-      controller.onClose();
-    });
+        await controller.startCheckout('pro_yearly');
+        await tester.pump();
+
+        expect(iapService.startPurchaseCalls, 0);
+        expect(controller.error.value, contains('not available'));
+        // The Upgrade tap must never look like it did nothing.
+        expect(Get.isSnackbarOpen, isTrue);
+        // Drain the snackbar animation before the tree is disposed, or its
+        // controller leaks into the next test.
+        await settle(tester);
+        controller.onClose();
+      },
+    );
+
+    testWidgets(
+      'store lookup failure surfaces a friendly message, never the raw StoreKit error',
+      (tester) async {
+        await pumpApp(tester);
+        // The plugin's storekit_no_response: StoreKit resolved zero products
+        // for the requested ID. Regression: the message used to interpolate
+        // the raw APError(...) dump into the "Purchase failed" snackbar, and
+        // the wording used to promise "try again in a moment" for a state that
+        // only clears on the App Store Connect side.
+        iapService.fetchError = IapException(
+          message: kPlanNotAvailableInStoreMessage,
+          errorCode: 'storekit_no_response',
+          details:
+              'IAPError(code: storekit_no_response, source: app_store, '
+              'message: StoreKit: Failed to get response from platform., '
+              'details: null)',
+        );
+        final controller = buildController();
+        controller.storeProducts.value = _storeProducts();
+
+        await controller.startCheckout('plus_monthly');
+        await tester.pump();
+
+        expect(iapService.fetchProductsCalls, 1);
+        expect(iapService.startPurchaseCalls, 0);
+        // No raw platform dump may reach the user.
+        expect(controller.error.value, isNot(contains('APError')));
+        expect(controller.error.value, isNot(contains('StoreKit')));
+        expect(
+          controller.error.value,
+          contains('not available in the store yet'),
+        );
+        expect(Get.isSnackbarOpen, isTrue);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
 
     testWidgets('billing unavailable surfaces a snackbar', (tester) async {
       await pumpApp(tester);
@@ -575,55 +613,57 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('purchase error surfaces a friendly message, never raw platform text', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      final controller = buildController();
+    testWidgets(
+      'purchase error surfaces a friendly message, never raw platform text',
+      (tester) async {
+        await pumpApp(tester);
+        final controller = buildController();
 
-      // The plugin reports purchase failures with a raw platform error dump
-      // (IAPError). Regression: the snackbar used to show it verbatim.
-      final purchase = _purchase(status: PurchaseStatus.error);
-      // `error` is a mutable field on PurchaseDetails (not a ctor param).
-      purchase.error = IAPError(
-        source: 'app_store',
-        code: 'payment_failed',
-        message: 'StoreKit: Failed to get response from platform.',
-      );
-      iapService.emit(purchase);
-      await tester.pump();
-      await tester.pump();
+        // The plugin reports purchase failures with a raw platform error dump
+        // (IAPError). Regression: the snackbar used to show it verbatim.
+        final purchase = _purchase(status: PurchaseStatus.error);
+        // `error` is a mutable field on PurchaseDetails (not a ctor param).
+        purchase.error = IAPError(
+          source: 'app_store',
+          code: 'payment_failed',
+          message: 'StoreKit: Failed to get response from platform.',
+        );
+        iapService.emit(purchase);
+        await tester.pump();
+        await tester.pump();
 
-      expect(repository.registerCalls, 0);
-      expect(iapService.completeCalls, 0);
-      // User-visible text is the stable friendly message only.
-      expect(controller.error.value, contains('Please try again'));
-      expect(controller.error.value, isNot(contains('StoreKit')));
-      expect(controller.error.value, isNot(contains('IAPError')));
-      expect(Get.isSnackbarOpen, isTrue);
-      await settle(tester);
-      controller.onClose();
-    });
+        expect(repository.registerCalls, 0);
+        expect(iapService.completeCalls, 0);
+        // User-visible text is the stable friendly message only.
+        expect(controller.error.value, contains('Please try again'));
+        expect(controller.error.value, isNot(contains('StoreKit')));
+        expect(controller.error.value, isNot(contains('IAPError')));
+        expect(Get.isSnackbarOpen, isTrue);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
 
-    testWidgets('localized store price resolves by plan type for real product IDs', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      // Real store product IDs (e.g. the FitCheck.storekit scheme): the
-      // price must still resolve for the plan type the UI asks for.
-      final productId = 'com.fitcheckaiapp.fitcheckai.plus.monthly';
-      iapService.productsToReturn = [_product(productId)];
-      final controller = buildController();
-      controller.storeProducts.value = StoreProductsModel.fromJson({
-        'google': {'plus_monthly': productId},
-      });
+    testWidgets(
+      'localized store price resolves by plan type for real product IDs',
+      (tester) async {
+        await pumpApp(tester);
+        // Real store product IDs (e.g. the FitCheck.storekit scheme): the
+        // price must still resolve for the plan type the UI asks for.
+        final productId = 'com.fitcheckaiapp.fitcheckai.plus.monthly';
+        iapService.productsToReturn = [_product(productId)];
+        final controller = buildController();
+        controller.storeProducts.value = StoreProductsModel.fromJson({
+          'google': {'plus_monthly': productId},
+        });
 
-      await controller.refreshStoreProducts();
+        await controller.refreshStoreProducts();
 
-      expect(iapService.lastQueriedIds, {productId});
-      expect(controller.storePriceFor('plus_monthly'), r'$9.99');
-      controller.onClose();
-    });
+        expect(iapService.lastQueriedIds, {productId});
+        expect(controller.storePriceFor('plus_monthly'), r'$9.99');
+        controller.onClose();
+      },
+    );
 
     testWidgets('store-billed cancel is refused locally', (tester) async {
       await pumpApp(tester);
@@ -642,44 +682,48 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('checkout uses cached product details and skips the store query', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      final controller = buildController();
-      controller.storeProducts.value = _storeProducts();
-      // Page-load already cached the product; checkout must reuse it instead
-      // of re-querying the store. A transient storekit error at the tap used
-      // to hard-fail even with valid details on hand.
-      controller.storeProductDetails['plus_monthly'] = _product('plus_monthly');
-      // Would trip the empty-list branch if the cache were ignored.
-      iapService.productsToReturn = const [];
+    testWidgets(
+      'checkout uses cached product details and skips the store query',
+      (tester) async {
+        await pumpApp(tester);
+        final controller = buildController();
+        controller.storeProducts.value = _storeProducts();
+        // Page-load already cached the product; checkout must reuse it instead
+        // of re-querying the store. A transient storekit error at the tap used
+        // to hard-fail even with valid details on hand.
+        controller.storeProductDetails['plus_monthly'] = _product(
+          'plus_monthly',
+        );
+        // Would trip the empty-list branch if the cache were ignored.
+        iapService.productsToReturn = const [];
 
-      await controller.startCheckout('plus_monthly');
+        await controller.startCheckout('plus_monthly');
 
-      expect(iapService.fetchProductsCalls, 0);
-      expect(iapService.startPurchaseCalls, 1);
-      expect(controller.error.value, isEmpty);
-      await settle(tester);
-      controller.onClose();
-    });
+        expect(iapService.fetchProductsCalls, 0);
+        expect(iapService.startPurchaseCalls, 1);
+        expect(controller.error.value, isEmpty);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
 
-    testWidgets('checkout falls back to the store query when the cache misses', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      iapService.productsToReturn = [_product('plus_monthly')];
-      final controller = buildController();
-      controller.storeProducts.value = _storeProducts();
+    testWidgets(
+      'checkout falls back to the store query when the cache misses',
+      (tester) async {
+        await pumpApp(tester);
+        iapService.productsToReturn = [_product('plus_monthly')];
+        final controller = buildController();
+        controller.storeProducts.value = _storeProducts();
 
-      await controller.startCheckout('plus_monthly');
+        await controller.startCheckout('plus_monthly');
 
-      expect(iapService.fetchProductsCalls, 1);
-      expect(iapService.startPurchaseCalls, 1);
-      expect(controller.error.value, isEmpty);
-      await settle(tester);
-      controller.onClose();
-    });
+        expect(iapService.fetchProductsCalls, 1);
+        expect(iapService.startPurchaseCalls, 1);
+        expect(controller.error.value, isEmpty);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
   });
 
   group('SubscriptionController iOS (Apple IAP only)', () {
@@ -701,10 +745,12 @@ void main() {
       expect(repository.checkoutCalls, 0);
 
       // A completed StoreKit transaction registers with the backend as Apple.
-      iapService.emit(_purchase(
-        purchaseID: '100000123456789',
-        serverVerificationData: '100000123456789',
-      ));
+      iapService.emit(
+        _purchase(
+          purchaseID: '100000123456789',
+          serverVerificationData: '100000123456789',
+        ),
+      );
       await tester.pump();
       await tester.pump();
 
@@ -716,121 +762,132 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('iOS manage subscription opens App Store settings, never the Stripe portal', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      iapService = FakeIapService(storeName: 'apple');
-      repository = FakeSubscriptionRepository();
-      final controller = buildController();
-      // Stub the URL launcher so the harness cannot hang on the real
-      // platform channel; the App Store URL is not launchable here.
-      UrlLauncherPlatform.instance = FakeUrlLauncherPlatform(canLaunchResult: false);
+    testWidgets(
+      'iOS manage subscription opens App Store settings, never the Stripe portal',
+      (tester) async {
+        await pumpApp(tester);
+        iapService = FakeIapService(storeName: 'apple');
+        repository = FakeSubscriptionRepository();
+        final controller = buildController();
+        // Stub the URL launcher so the harness cannot hang on the real
+        // platform channel; the App Store URL is not launchable here.
+        UrlLauncherPlatform.instance = FakeUrlLauncherPlatform(
+          canLaunchResult: false,
+        );
 
-      await controller.openManageSubscription();
+        await controller.openManageSubscription();
 
-      // The Stripe billing portal is web-only. iOS points at App Store
-      // subscription settings; the stub cannot launch the URL, so the
-      // controller reports that instead of falling through to Stripe.
-      expect(repository.portalCalls, 0);
-      expect(controller.error.value, contains('Could not open'));
-      await settle(tester);
-      controller.onClose();
-    });
+        // The Stripe billing portal is web-only. iOS points at App Store
+        // subscription settings; the stub cannot launch the URL, so the
+        // controller reports that instead of falling through to Stripe.
+        expect(repository.portalCalls, 0);
+        expect(controller.error.value, contains('Could not open'));
+        await settle(tester);
+        controller.onClose();
+      },
+    );
   });
 
   group('SubscriptionPage upgrade flow', () {
     // End-to-end regression for "clicking Upgrade under a plan does
     // nothing": the real page, the real button, a store that has no
     // products -> the tap must surface a snackbar.
-    testWidgets('tapping Upgrade on a plan card shows why the purchase failed', (
-      tester,
-    ) async {
-      // Single GetMaterialApp: mounting a second one (as pumpApp + pumpWidget
-      // would) leaves GetX's snackbar overlay pointing at the disposed app.
-      iapService.productsToReturn = const [];
-      // The backend publishes a resolvable product ID, but the store itself
-      // has no products: the tap must surface the store-level message.
-      repository.plansResponse = PlansResponse(
-        storeProducts: _storeProducts(),
-      );
-      final controller = SubscriptionController(
-        iapService: iapService,
-        repository: repository,
-      );
-      Get.put(controller);
-      await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'tapping Upgrade on a plan card shows why the purchase failed',
+      (tester) async {
+        // Single GetMaterialApp: mounting a second one (as pumpApp + pumpWidget
+        // would) leaves GetX's snackbar overlay pointing at the disposed app.
+        iapService.productsToReturn = const [];
+        // The backend publishes a resolvable product ID, but the store itself
+        // has no products: the tap must surface the store-level message.
+        repository.plansResponse = PlansResponse(
+          storeProducts: _storeProducts(),
+        );
+        final controller = SubscriptionController(
+          iapService: iapService,
+          repository: repository,
+        );
+        Get.put(controller);
+        await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
+        await tester.pumpAndSettle();
 
-      // Free user sees both tiers; the first Upgrade button is Plus Monthly.
-      expect(find.text('Upgrade'), findsWidgets);
+        // Free user sees both tiers; the first Upgrade button is Plus Monthly.
+        expect(find.text('Upgrade'), findsWidgets);
 
-      final upgradeButton = find.text('Upgrade').first;
-      // The plan rows sit below the fold in the test viewport; scroll the
-      // tapped card into view so the tap actually lands on the button.
-      await tester.ensureVisible(upgradeButton);
-      await tester.pumpAndSettle();
-      await tester.tap(upgradeButton);
-      await tester.pump();
+        final upgradeButton = find.text('Upgrade').first;
+        // The plan rows sit below the fold in the test viewport; scroll the
+        // tapped card into view so the tap actually lands on the button.
+        await tester.ensureVisible(upgradeButton);
+        await tester.pumpAndSettle();
+        await tester.tap(upgradeButton);
+        await tester.pump();
 
-      // The tap must never look like it did nothing.
-      expect(iapService.startPurchaseCalls, 0);
-      expect(controller.error.value, contains('not available in the store yet'));
-      // The snackbar (with its message) is the visible outcome of the tap.
-      expect(Get.isSnackbarOpen, isTrue);
-      expect(
-        find.textContaining('not available in the store yet'),
-        findsOneWidget,
-      );
-      await settle(tester);
-    });
+        // The tap must never look like it did nothing.
+        expect(iapService.startPurchaseCalls, 0);
+        expect(
+          controller.error.value,
+          contains('not available in the store yet'),
+        );
+        // The snackbar (with its message) is the visible outcome of the tap.
+        expect(Get.isSnackbarOpen, isTrue);
+        expect(
+          find.textContaining('not available in the store yet'),
+          findsOneWidget,
+        );
+        await settle(tester);
+      },
+    );
 
-    testWidgets('paywall shows a store-unavailable banner whose Retry self-heals', (
-      tester,
-    ) async {
-      // The store answers with zero products (e.g. App Store Connect not
-      // serving them yet): the paywall must say so above the cards instead of
-      // presenting dead Upgrade buttons, and Retry must recover once the
-      // store starts serving products — without an app restart.
-      iapService.productsToReturn = const [];
-      repository.plansResponse = PlansResponse(
-        storeProducts: _storeProducts(),
-      );
-      final controller = SubscriptionController(
-        iapService: iapService,
-        repository: repository,
-      );
-      Get.put(controller);
-      await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'paywall shows a store-unavailable banner whose Retry self-heals',
+      (tester) async {
+        // The store answers with zero products (e.g. App Store Connect not
+        // serving them yet): the paywall must say so above the cards instead of
+        // presenting dead Upgrade buttons, and Retry must recover once the
+        // store starts serving products — without an app restart.
+        iapService.productsToReturn = const [];
+        repository.plansResponse = PlansResponse(
+          storeProducts: _storeProducts(),
+        );
+        final controller = SubscriptionController(
+          iapService: iapService,
+          repository: repository,
+        );
+        Get.put(controller);
+        await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
+        await tester.pumpAndSettle();
 
-      expect(controller.storeStatus.value, StoreStatus.unavailable);
-      final banner = find.textContaining('aren\'t available in the store yet');
-      await tester.scrollUntilVisible(
-        banner,
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(banner, findsOneWidget);
+        expect(controller.storeStatus.value, StoreStatus.unavailable);
+        final banner = find.textContaining(
+          'aren\'t available in the store yet',
+        );
+        await tester.scrollUntilVisible(
+          banner,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(banner, findsOneWidget);
 
-      // Retry: the store now resolves the product; the banner disappears and
-      // prices (and the Upgrade flow) come back. Target the banner's
-      // TextButton explicitly — the load-error card also uses a "Retry"
-      // label (on an OutlinedButton, which would not match).
-      iapService.productsToReturn = [_product('plus_monthly')];
-      await tester.tap(find.widgetWithText(TextButton, 'Retry'));
-      await tester.pumpAndSettle();
+        // Retry: the store now resolves the product; the banner disappears and
+        // prices (and the Upgrade flow) come back. Target the banner's
+        // TextButton explicitly — the load-error card also uses a "Retry"
+        // label (on an OutlinedButton, which would not match).
+        iapService.productsToReturn = [_product('plus_monthly')];
+        await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+        await tester.pumpAndSettle();
 
-      expect(controller.storeStatus.value, StoreStatus.ready);
-      expect(find.textContaining('aren\'t available in the store yet'), findsNothing);
-      await settle(tester);
-    });
+        expect(controller.storeStatus.value, StoreStatus.ready);
+        expect(
+          find.textContaining('aren\'t available in the store yet'),
+          findsNothing,
+        );
+        await settle(tester);
+      },
+    );
 
     testWidgets('no store banner when the store is ready', (tester) async {
       iapService.productsToReturn = [_product('plus_monthly')];
-      repository.plansResponse = PlansResponse(
-        storeProducts: _storeProducts(),
-      );
+      repository.plansResponse = PlansResponse(storeProducts: _storeProducts());
       final controller = SubscriptionController(
         iapService: iapService,
         repository: repository,
@@ -847,38 +904,39 @@ void main() {
       await settle(tester);
     });
 
-    testWidgets('Restore Purchases renders for a Pro subscriber with no upgrade section', (
-      tester,
-    ) async {
-      // Pro users have no higher tier (canUpgrade == false), so the upgrade
-      // section — and with it the old restore button — used to disappear.
-      // Restore must render independently of the upgrade section.
-      repository.subscriptionResult = const SubscriptionModel(
-        userId: 'user-1',
-        planType: PlanType.proMonthly,
-        billingProvider: 'apple',
-      );
-      final controller = SubscriptionController(
-        iapService: iapService,
-        repository: repository,
-      );
-      Get.put(controller);
-      await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'Restore Purchases renders for a Pro subscriber with no upgrade section',
+      (tester) async {
+        // Pro users have no higher tier (canUpgrade == false), so the upgrade
+        // section — and with it the old restore button — used to disappear.
+        // Restore must render independently of the upgrade section.
+        repository.subscriptionResult = const SubscriptionModel(
+          userId: 'user-1',
+          planType: PlanType.proMonthly,
+          billingProvider: 'apple',
+        );
+        final controller = SubscriptionController(
+          iapService: iapService,
+          repository: repository,
+        );
+        Get.put(controller);
+        await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Upgrade'), findsNothing);
-      expect(find.text('Restore Purchases'), findsOneWidget);
-      // The manage section sits at the bottom of the ListView, below the
-      // fold in the test viewport; scroll it into view (ListView children
-      // build lazily, so it does not exist in the tree until scrolled to).
-      await tester.scrollUntilVisible(
-        find.text('Manage in Store'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      // Store-billed Pro row still shows the manage entry.
-      expect(find.text('Manage in Store'), findsOneWidget);
-    });
+        expect(find.text('Upgrade'), findsNothing);
+        expect(find.text('Restore Purchases'), findsOneWidget);
+        // The manage section sits at the bottom of the ListView, below the
+        // fold in the test viewport; scroll it into view (ListView children
+        // build lazily, so it does not exist in the tree until scrolled to).
+        await tester.scrollUntilVisible(
+          find.text('Manage in Store'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        // Store-billed Pro row still shows the manage entry.
+        expect(find.text('Manage in Store'), findsOneWidget);
+      },
+    );
 
     testWidgets('a refunded subscription renders as not entitled', (
       tester,
@@ -912,35 +970,41 @@ void main() {
       expect(find.text('Upgrade'), findsWidgets);
     });
 
-    testWidgets('the paywall discloses auto-renewal and links Terms + Privacy', (
-      tester,
-    ) async {
-      // App Store Guideline 3.1.2: the purchase screen itself must state the
-      // auto-renewing terms and carry functional Terms of Use / Privacy
-      // Policy links. Links at signup or in Settings do not satisfy it.
-      repository.plansResponse = PlansResponse(storeProducts: _storeProducts());
-      final controller = SubscriptionController(
-        iapService: iapService,
-        repository: repository,
-      );
-      Get.put(controller);
-      await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'the paywall discloses auto-renewal and links Terms + Privacy',
+      (tester) async {
+        // App Store Guideline 3.1.2: the purchase screen itself must state the
+        // auto-renewing terms and carry functional Terms of Use / Privacy
+        // Policy links. Links at signup or in Settings do not satisfy it.
+        repository.plansResponse = PlansResponse(
+          storeProducts: _storeProducts(),
+        );
+        final controller = SubscriptionController(
+          iapService: iapService,
+          repository: repository,
+        );
+        Get.put(controller);
+        await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
+        await tester.pumpAndSettle();
 
-      final disclosure = find.byType(SubscriptionDisclosure);
-      await tester.scrollUntilVisible(
-        disclosure,
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
+        final disclosure = find.byType(SubscriptionDisclosure);
+        await tester.scrollUntilVisible(
+          disclosure,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
 
-      expect(find.text('Terms of Use'), findsOneWidget);
-      expect(find.text('Privacy Policy'), findsOneWidget);
-      expect(find.textContaining('auto-renewing subscriptions'), findsOneWidget);
-      expect(find.textContaining('renews automatically'), findsOneWidget);
-      // Price and duration must be on the purchase screen too.
-      expect(find.textContaining(r'$10/month'), findsOneWidget);
-    });
+        expect(find.text('Terms of Use'), findsOneWidget);
+        expect(find.text('Privacy Policy'), findsOneWidget);
+        expect(
+          find.textContaining('auto-renewing subscriptions'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('renews automatically'), findsOneWidget);
+        // Price and duration must be on the purchase screen too.
+        expect(find.textContaining(r'$10/month'), findsOneWidget);
+      },
+    );
 
     testWidgets('a Plus subscriber only sees terms for the plan they can buy', (
       tester,
@@ -1036,21 +1100,22 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('store status is notConfigured when the backend publishes no IDs', (
-      tester,
-    ) async {
-      // The default PlansResponse has an all-null store map (fail-closed):
-      // nothing is queried and the rail is marked not configured.
-      await pumpApp(tester);
-      final controller = buildController();
+    testWidgets(
+      'store status is notConfigured when the backend publishes no IDs',
+      (tester) async {
+        // The default PlansResponse has an all-null store map (fail-closed):
+        // nothing is queried and the rail is marked not configured.
+        await pumpApp(tester);
+        final controller = buildController();
 
-      await controller.refreshStoreProducts();
+        await controller.refreshStoreProducts();
 
-      expect(controller.storeStatus.value, StoreStatus.notConfigured);
-      expect(iapService.fetchProductsCalls, 0);
-      await settle(tester);
-      controller.onClose();
-    });
+        expect(controller.storeStatus.value, StoreStatus.notConfigured);
+        expect(iapService.fetchProductsCalls, 0);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
 
     testWidgets('store status is ready when products resolve', (tester) async {
       await pumpApp(tester);
@@ -1065,21 +1130,22 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('store status is unavailable when the store answers with zero products', (
-      tester,
-    ) async {
-      await pumpApp(tester);
-      iapService.productsToReturn = const [];
-      final controller = buildController();
-      controller.storeProducts.value = _storeProducts();
+    testWidgets(
+      'store status is unavailable when the store answers with zero products',
+      (tester) async {
+        await pumpApp(tester);
+        iapService.productsToReturn = const [];
+        final controller = buildController();
+        controller.storeProducts.value = _storeProducts();
 
-      await controller.refreshStoreProducts();
+        await controller.refreshStoreProducts();
 
-      expect(controller.storeStatus.value, StoreStatus.unavailable);
-      expect(controller.missingStoreProductIds, ['plus_monthly']);
-      await settle(tester);
-      controller.onClose();
-    });
+        expect(controller.storeStatus.value, StoreStatus.unavailable);
+        expect(controller.missingStoreProductIds, ['plus_monthly']);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
 
     testWidgets('store status is unavailable when the store query fails', (
       tester,
@@ -1109,7 +1175,8 @@ void main() {
       // "couldn't be reached" message.
       await pumpApp(tester);
       iapService.fetchError = IapException(
-        message: 'The store couldn\'t be reached for this plan right now. '
+        message:
+            'The store couldn\'t be reached for this plan right now. '
             'Please try again in a moment.',
         errorCode: 'storekit2_products_error',
       );
@@ -1123,58 +1190,66 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('a transient retry does not clear an already-unavailable store', (
-      tester,
-    ) async {
-      // Page load: definitive zero-products failure -> unavailable. A later
-      // Retry hitting a transient store error must not clear the banner —
-      // the underlying state (products not served) has not changed.
-      await pumpApp(tester);
-      iapService.productsToReturn = const [];
-      final controller = buildController();
-      controller.storeProducts.value = _storeProducts();
-      await controller.refreshStoreProducts();
-      expect(controller.storeStatus.value, StoreStatus.unavailable);
+    testWidgets(
+      'a transient retry does not clear an already-unavailable store',
+      (tester) async {
+        // Page load: definitive zero-products failure -> unavailable. A later
+        // Retry hitting a transient store error must not clear the banner —
+        // the underlying state (products not served) has not changed.
+        await pumpApp(tester);
+        iapService.productsToReturn = const [];
+        final controller = buildController();
+        controller.storeProducts.value = _storeProducts();
+        await controller.refreshStoreProducts();
+        expect(controller.storeStatus.value, StoreStatus.unavailable);
 
-      iapService.fetchError = IapException(
-        message: 'The store couldn\'t be reached for this plan right now. '
-            'Please try again in a moment.',
-        errorCode: 'storekit2_products_error',
-      );
-      await controller.refreshStoreProducts();
+        iapService.fetchError = IapException(
+          message:
+              'The store couldn\'t be reached for this plan right now. '
+              'Please try again in a moment.',
+          errorCode: 'storekit2_products_error',
+        );
+        await controller.refreshStoreProducts();
 
-      expect(controller.storeStatus.value, StoreStatus.unavailable);
-      await settle(tester);
-      controller.onClose();
-    });
+        expect(controller.storeStatus.value, StoreStatus.unavailable);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
 
-    testWidgets('checkout fails fast when the store already failed this session', (
-      tester,
-    ) async {
-      // The page-load store query failed; re-querying at the tap can only
-      // repeat the same failure after its retry delay. The tap must report
-      // the accurate message immediately without touching the store again.
-      await pumpApp(tester);
-      iapService.productsToReturn = const [];
-      final controller = buildController();
-      controller.storeProducts.value = _storeProducts();
-      await controller.refreshStoreProducts();
-      expect(controller.storeStatus.value, StoreStatus.unavailable);
-      final callsBefore = iapService.fetchProductsCalls;
+    testWidgets(
+      'checkout fails fast when the store already failed this session',
+      (tester) async {
+        // The page-load store query failed; re-querying at the tap can only
+        // repeat the same failure after its retry delay. The tap must report
+        // the accurate message immediately without touching the store again.
+        await pumpApp(tester);
+        iapService.productsToReturn = const [];
+        final controller = buildController();
+        controller.storeProducts.value = _storeProducts();
+        await controller.refreshStoreProducts();
+        expect(controller.storeStatus.value, StoreStatus.unavailable);
+        final callsBefore = iapService.fetchProductsCalls;
 
-      await controller.startCheckout('plus_monthly');
+        await controller.startCheckout('plus_monthly');
 
-      expect(iapService.fetchProductsCalls, callsBefore);
-      expect(iapService.startPurchaseCalls, 0);
-      expect(controller.error.value, contains('not available in the store yet'));
-      expect(Get.isSnackbarOpen, isTrue);
-      await settle(tester);
-      controller.onClose();
-    });
+        expect(iapService.fetchProductsCalls, callsBefore);
+        expect(iapService.startPurchaseCalls, 0);
+        expect(
+          controller.error.value,
+          contains('not available in the store yet'),
+        );
+        expect(Get.isSnackbarOpen, isTrue);
+        await settle(tester);
+        controller.onClose();
+      },
+    );
   });
 
   group('purchase stream resilience + redelivery dedupe', () {
-    testWidgets('a throwing handler does not kill the listener', (tester) async {
+    testWidgets('a throwing handler does not kill the listener', (
+      tester,
+    ) async {
       // Regression: a synchronous throw inside one update handler cancelled
       // the purchaseStream subscription. The store then redelivered the
       // unfinished transaction to a dead listener forever — a charged user
@@ -1192,10 +1267,9 @@ void main() {
       // Second delivery: registration succeeds. This proves the listener
       // survived the failing first pass.
       repository.registerError = null;
-      iapService.emit(_purchase(
-        serverVerificationData: 'token-1',
-        purchaseID: 'GPA.retry',
-      ));
+      iapService.emit(
+        _purchase(serverVerificationData: 'token-1', purchaseID: 'GPA.retry'),
+      );
       await tester.pump();
       await tester.pump();
 

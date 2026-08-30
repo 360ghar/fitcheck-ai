@@ -37,23 +37,26 @@ function App() {
         <p className="empty">No outfits found for this view.</p>
       ) : (
         <div className="grid">
-          {outfits.map((outfit, index) => (
-            <figure className="card" key={outfit.id ?? index} style={{ margin: 0 }}>
-              {firstImageUrl(outfit) ? (
-                <img className="thumb" src={firstImageUrl(outfit) ?? undefined} alt={outfit.name ?? "outfit"} loading="lazy" />
-              ) : (
-                <div className="thumb" aria-hidden="true" />
-              )}
-              <figcaption className="card-body">
-                <p className="title">{outfit.name ?? "Untitled outfit"}</p>
-                <p className="meta">
-                  {outfit.occasion ||
-                    firstTag(outfit.tags) ||
-                    (outfit.items?.length ? `${outfit.items.length} pieces` : "")}
-                </p>
-              </figcaption>
-            </figure>
-          ))}
+          {outfits.map((outfit, index) => {
+            const imageUrl = firstImageUrl(outfit);
+            return (
+              <figure className="card" key={outfit.id ?? index} style={{ margin: 0 }}>
+                {imageUrl ? (
+                  <img className="thumb" src={imageUrl} alt={outfit.name ?? "outfit"} loading="lazy" />
+                ) : (
+                  <div className="thumb" aria-hidden="true" />
+                )}
+                <figcaption className="card-body">
+                  <p className="title">{outfit.name ?? "Untitled outfit"}</p>
+                  <p className="meta">
+                    {outfit.occasion ||
+                      firstTag(outfit.tags) ||
+                      (outfit.items?.length ? `${outfit.items.length} pieces` : "")}
+                  </p>
+                </figcaption>
+              </figure>
+            );
+          })}
         </div>
       )}
       {widgetApi().callTool ? null : (

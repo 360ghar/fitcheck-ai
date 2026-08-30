@@ -60,6 +60,21 @@ def test_csp_includes_configured_image_origins(monkeypatch):
 
 
 @pytest.mark.unit
+def test_csp_ignores_malformed_configured_origins(monkeypatch):
+    monkeypatch.setattr(widgets.settings, "PUBLIC_API_BASE_URL", "https://[bad")
+    monkeypatch.setattr(widgets.settings, "OBJECT_STORAGE_ENDPOINT", "https://[bad")
+    monkeypatch.setattr(widgets.settings, "IMAGE_CDN_BASE_URL", "https://[bad")
+
+    resolved = WidgetProvider().read("ui://fitcheck/wardrobe-grid.html")
+
+    assert resolved is not None
+    _, meta = resolved
+    csp = meta["openai/widgetCSP"]
+    assert csp["connect_domains"] == ["https://fitcheckaiapp.com"]
+    assert csp["resource_domains"] == ["https://fitcheckaiapp.com", "https://*.r2.dev"]
+
+
+@pytest.mark.unit
 def test_read_rejects_unknown_and_unsafe_uris():
     provider = WidgetProvider()
     assert provider.read("ui://fitcheck/nope.html") is None

@@ -71,6 +71,7 @@ class _FakeReferralService extends ReferralService {
   bool redeemResult = true;
   int oauthCallbackCalls = 0;
   final List<String> stashedCodes = [];
+  final List<String> redeemedCodes = [];
 
   @override
   Future<bool> redeemReferralCode(String code) async => redeemResult;
@@ -83,6 +84,12 @@ class _FakeReferralService extends ReferralService {
   @override
   Future<void> handleOAuthCallback() async {
     oauthCallbackCalls++;
+    if (stashedCodes.isEmpty) return;
+    final code = stashedCodes.last;
+    if (await redeemReferralCode(code)) {
+      redeemedCodes.add(code);
+      stashedCodes.remove(code);
+    }
   }
 }
 
@@ -201,6 +208,7 @@ void main() {
         user: _user(),
         session: _session(),
       );
+      await referralService.setPendingReferralCode('FIT-ABC123');
 
       final controller = AuthController();
       await controller.login('confirmed@example.com', 'aaaaaaaa');
@@ -208,6 +216,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(referralService.oauthCallbackCalls, 1);
+      expect(referralService.redeemedCodes, ['FIT-ABC123']);
+      expect(referralService.stashedCodes, isEmpty);
     },
   );
 }

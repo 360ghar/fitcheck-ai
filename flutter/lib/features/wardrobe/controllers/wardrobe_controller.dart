@@ -26,6 +26,11 @@ class WardrobeController extends GetxController {
   // Workers for cleanup
   final List<Worker> _workers = [];
   int _fetchGeneration = 0;
+  // The first active refresh owns the baseline. Later refreshes share it so a
+  // latest failure restores pagination for the retained list, not an earlier
+  // request's temporary page-one reset.
+  int? _refreshBaselinePage;
+  bool? _refreshBaselineHasMore;
   // Monotonic token for single-item detail fetches (fetchItemById). Bumped
   // before each fetch so an earlier detail fetch (A) resolving AFTER a newer
   // one (B) cannot overwrite B's fetchedItem and leave B on a permanent
@@ -183,6 +188,8 @@ class WardrobeController extends GetxController {
     }
 
     if (refresh) {
+      _refreshBaselinePage ??= currentPage.value;
+      _refreshBaselineHasMore ??= hasMore.value;
       _fetchGeneration++;
       currentPage.value = 1;
       hasMore.value = true;
@@ -251,6 +258,7 @@ class WardrobeController extends GetxController {
         items
           ..clear()
           ..addAll(response.items);
+        _clearRefreshBaseline();
       } else {
         items.addAll(response.items);
       }
@@ -260,8 +268,9 @@ class WardrobeController extends GetxController {
     } catch (e) {
       if (requestGeneration != _fetchGeneration || isClosed) return;
       if (refresh) {
-        currentPage.value = previousPage;
-        hasMore.value = previousHasMore;
+        currentPage.value = _refreshBaselinePage ?? previousPage;
+        hasMore.value = _refreshBaselineHasMore ?? previousHasMore;
+        _clearRefreshBaseline();
       }
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');
@@ -271,6 +280,11 @@ class WardrobeController extends GetxController {
         isLoadingMore.value = false;
       }
     }
+  }
+
+  void _clearRefreshBaseline() {
+    _refreshBaselinePage = null;
+    _refreshBaselineHasMore = null;
   }
 
   /// Fetch a single item from the server.

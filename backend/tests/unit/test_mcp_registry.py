@@ -118,6 +118,20 @@ def make_mini_app() -> FastAPI:
     return app
 
 
+def make_collision_app(operation_id: str, count: int = 3) -> FastAPI:
+    """Build distinct operations that intentionally share an MCP base name."""
+    app = FastAPI()
+    for index in range(count):
+        async def duplicate_operation():  # pragma: no cover - schema only
+            return {"ok": True}
+
+        app.get(
+            f"/api/v1/collisions/{index}",
+            operation_id=operation_id,
+        )(duplicate_operation)
+    return app
+
+
 @pytest.mark.unit
 def test_build_tool_registry_merges_params_and_body():
     registry = build_tool_registry(make_mini_app())
@@ -140,6 +154,21 @@ def test_build_tool_registry_merges_params_and_body():
 
     get_tool = by_name["things_get_thing"]
     assert "thing_id" in get_tool.input_schema["required"]
+
+
+@pytest.mark.unit
+def test_build_tool_registry_suffixes_colliding_names_within_mcp_limit():
+    registry = build_tool_registry(make_collision_app("dup"))
+    assert [tool.name for tool in registry] == ["dup", "dup_2", "dup_3"]
+
+    long_base = "x" * 64
+    long_registry = build_tool_registry(make_collision_app(long_base))
+    assert [tool.name for tool in long_registry] == [
+        long_base,
+        f"{'x' * 62}_2",
+        f"{'x' * 62}_3",
+    ]
+    assert all(len(tool.name) <= 64 for tool in long_registry)
 
 
 # ---------------------------------------------------------------------------
