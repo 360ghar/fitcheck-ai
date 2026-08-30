@@ -346,6 +346,137 @@
         "title": "AdminFeedbackUpdate",
         "type": "object"
       },
+      "AdminGiftAction": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "AdminGiftAction",
+        "type": "object"
+      },
+      "AdminGiftAllowanceAdjust": {
+        "properties": {
+          "add_count": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Add Count",
+            "type": "integer"
+          },
+          "duration_months": {
+            "enum": [
+              1,
+              3,
+              12
+            ],
+            "title": "Duration Months",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "duration_months",
+          "add_count",
+          "reason"
+        ],
+        "title": "AdminGiftAllowanceAdjust",
+        "type": "object"
+      },
+      "AdminGiftAssign": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "reason"
+        ],
+        "title": "AdminGiftAssign",
+        "type": "object"
+      },
+      "AdminGiftCreate": {
+        "properties": {
+          "duration_months": {
+            "enum": [
+              1,
+              3,
+              12
+            ],
+            "title": "Duration Months",
+            "type": "integer"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "from_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "From Name",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "note": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Note",
+            "type": "string"
+          },
+          "to_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "To Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_name",
+          "to_name",
+          "duration_months",
+          "note"
+        ],
+        "title": "AdminGiftCreate",
+        "type": "object"
+      },
       "AdminIapTransactionListItem": {
         "additionalProperties": true,
         "description": "One row of GET /admin/iap/transactions (store-billed subscriptions).",
@@ -2368,6 +2499,24 @@
         "title": "BodyProfileUpdate",
         "type": "object"
       },
+      "Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post": {
+        "properties": {
+          "provider_page_id": {
+            "title": "Provider Page Id",
+            "type": "string"
+          },
+          "selection_token": {
+            "title": "Selection Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "selection_token",
+          "provider_page_id"
+        ],
+        "title": "Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post",
+        "type": "object"
+      },
       "Body_start_batch_extraction_multipart_api_v1_ai_batch_extract_multipart_post": {
         "properties": {
           "auto_generate": {
@@ -2552,6 +2701,18 @@
             ],
             "title": "Body Profile Id"
           },
+          "client_request_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Request Id"
+          },
           "file": {
             "contentMediaType": "application/octet-stream",
             "title": "File",
@@ -2576,6 +2737,7 @@
           "lighting": {
             "anyOf": [
               {
+                "maxLength": 50,
                 "type": "string"
               },
               {
@@ -2586,6 +2748,7 @@
           },
           "pose": {
             "default": "front",
+            "maxLength": 20,
             "title": "Pose",
             "type": "string"
           }
@@ -2686,6 +2849,57 @@
           }
         },
         "title": "CompleteLookRequest",
+        "type": "object"
+      },
+      "ComplimentaryGiftCreate": {
+        "properties": {
+          "client_request_id": {
+            "maxLength": 100,
+            "minLength": 8,
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "duration_months": {
+            "enum": [
+              1,
+              3,
+              12
+            ],
+            "title": "Duration Months",
+            "type": "integer"
+          },
+          "from_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "From Name",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "to_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "To Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_name",
+          "to_name",
+          "duration_months",
+          "client_request_id"
+        ],
+        "title": "ComplimentaryGiftCreate",
         "type": "object"
       },
       "ConfirmResetRequest": {
@@ -3127,12 +3341,14 @@
         "properties": {
           "background": {
             "default": "transparent",
+            "maxLength": 500,
             "title": "Background",
             "type": "string"
           },
           "custom_prompt": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {
@@ -3161,6 +3377,7 @@
           },
           "lighting": {
             "default": "professional studio lighting",
+            "maxLength": 500,
             "title": "Lighting",
             "type": "string"
           },
@@ -3171,6 +3388,7 @@
           },
           "pose": {
             "default": "standing front",
+            "maxLength": 500,
             "title": "Pose",
             "type": "string"
           },
@@ -3181,6 +3399,7 @@
           },
           "style": {
             "default": "casual",
+            "maxLength": 500,
             "title": "Style",
             "type": "string"
           },
@@ -3196,6 +3415,7 @@
           },
           "view_angle": {
             "default": "full body",
+            "maxLength": 500,
             "title": "View Angle",
             "type": "string"
           }
@@ -3211,10 +3431,12 @@
         "properties": {
           "background": {
             "default": "transparent",
+            "maxLength": 500,
             "title": "Background",
             "type": "string"
           },
           "category": {
+            "maxLength": 500,
             "title": "Category",
             "type": "string"
           },
@@ -3231,12 +3453,14 @@
             "type": "boolean"
           },
           "item_description": {
+            "maxLength": 500,
             "title": "Item Description",
             "type": "string"
           },
           "material": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -3278,6 +3502,7 @@
           "sub_category": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -3288,6 +3513,7 @@
           },
           "view_angle": {
             "default": "front",
+            "maxLength": 500,
             "title": "View Angle",
             "type": "string"
           }
@@ -3344,6 +3570,86 @@
         "title": "GenerationRequest",
         "type": "object"
       },
+      "GiftCheckoutFulfill": {
+        "properties": {
+          "session_id": {
+            "maxLength": 255,
+            "minLength": 8,
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "GiftCheckoutFulfill",
+        "type": "object"
+      },
+      "GiftClaimRequest": {
+        "properties": {
+          "public_id": {
+            "format": "uuid",
+            "title": "Public Id",
+            "type": "string"
+          },
+          "secret": {
+            "maxLength": 160,
+            "minLength": 16,
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "public_id",
+          "secret"
+        ],
+        "title": "GiftClaimRequest",
+        "type": "object"
+      },
+      "GiftUpdate": {
+        "properties": {
+          "from_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Name"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "to_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Name"
+          }
+        },
+        "title": "GiftUpdate",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3375,6 +3681,18 @@
           "category": {
             "title": "Category",
             "type": "string"
+          },
+          "client_request_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Request Id"
           },
           "colors": {
             "items": {
@@ -3458,6 +3776,7 @@
           "price": {
             "anyOf": [
               {
+                "maximum": 99999999.99,
                 "minimum": 0.0,
                 "type": "number"
               },
@@ -3775,6 +4094,7 @@
           "price": {
             "anyOf": [
               {
+                "maximum": 99999999.99,
                 "minimum": 0.0,
                 "type": "number"
               },
@@ -4141,7 +4461,6 @@
           },
           "name": {
             "maxLength": 255,
-            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -4290,8 +4609,7 @@
             "type": "string"
           },
           "pose": {
-            "maxLength": 50,
-            "minLength": 1,
+            "maxLength": 20,
             "title": "Pose",
             "type": "string"
           },
@@ -4340,7 +4658,7 @@
         "type": "object"
       },
       "OutfitItemInput": {
-        "description": "Input item for outfit generation.\n\n`item_id` is the caller's own wardrobe item. When present, the backend\nresolves that item's stored image server-side (scoped to the caller) and\nsends it to the image model as a labelled garment reference, so the\ngenerated outfit reproduces the real garment instead of inventing a\nlookalike from the text attributes below. Absent \u2014 or an item with no\nstored image \u2014 degrades to the text-only inventory.\n\nClients never send image URLs or base64 here: a client-supplied URL the\nbackend fetches is an SSRF primitive (StorageService.download_to_base64\nfollows redirects with no host allow-list), and inline base64 would\ntriple mobile request size.",
+        "description": "Input item for outfit generation.\n\n`item_id` is the caller's own wardrobe item. When present, the backend\nresolves that item's stored image server-side (scoped to the caller) and\nsends it to the image model as a labelled garment reference, so the\ngenerated outfit reproduces the real garment instead of inventing a\nlookalike from the text attributes below. Absent \u2014 or an item with no\nstored image \u2014 degrades to the text-only inventory.\n\nClients never send image URLs or base64 here: a client-supplied URL the\nbackend fetches would be an SSRF primitive, so references are resolved\nserver-side to a bucket key and read from object storage only\n(StorageService.download_to_base64 reduces any input to a key via\nkey_from_path and never follows arbitrary URLs), and inline base64 would\ntriple mobile request size.",
         "properties": {
           "brand": {
             "anyOf": [
@@ -4395,6 +4713,7 @@
             "title": "Material"
           },
           "name": {
+            "maxLength": 500,
             "title": "Name",
             "type": "string"
           },
@@ -4541,7 +4860,6 @@
           },
           "name": {
             "maxLength": 255,
-            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -4982,6 +5300,69 @@
         "title": "PageResponse[Dict[str, Any]]",
         "type": "object"
       },
+      "PaidGiftCheckoutCreate": {
+        "properties": {
+          "cancel_url": {
+            "default": "/gifts?checkout=cancelled",
+            "maxLength": 500,
+            "title": "Cancel Url",
+            "type": "string"
+          },
+          "client_request_id": {
+            "maxLength": 100,
+            "minLength": 8,
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "duration_months": {
+            "enum": [
+              1,
+              3,
+              12
+            ],
+            "title": "Duration Months",
+            "type": "integer"
+          },
+          "from_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "From Name",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "success_url": {
+            "default": "/gifts?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+            "maxLength": 500,
+            "title": "Success Url",
+            "type": "string"
+          },
+          "to_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "To Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_name",
+          "to_name",
+          "duration_months",
+          "client_request_id"
+        ],
+        "title": "PaidGiftCheckoutCreate",
+        "type": "object"
+      },
       "PhotoshootUseCase": {
         "description": "Predefined use cases for photoshoot generation.",
         "enum": [
@@ -5359,6 +5740,8 @@
           },
           "top_k": {
             "default": 10,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Top K",
             "type": "integer"
           }
@@ -5793,12 +6176,14 @@
           },
           "background": {
             "default": "studio white",
+            "maxLength": 500,
             "title": "Background",
             "type": "string"
           },
           "clothing_description": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -5835,11 +6220,13 @@
           },
           "lighting": {
             "default": "professional studio lighting",
+            "maxLength": 500,
             "title": "Lighting",
             "type": "string"
           },
           "pose": {
             "default": "standing front",
+            "maxLength": 500,
             "title": "Pose",
             "type": "string"
           },
@@ -5850,6 +6237,7 @@
           },
           "style": {
             "default": "casual",
+            "maxLength": 500,
             "title": "Style",
             "type": "string"
           }
@@ -6066,6 +6454,7 @@
           "color_temperature": {
             "anyOf": [
               {
+                "maxLength": 20,
                 "type": "string"
               },
               {
@@ -6158,6 +6547,7 @@
           "style_personality": {
             "anyOf": [
               {
+                "maxLength": 50,
                 "type": "string"
               },
               {
@@ -6187,6 +6577,7 @@
           "default_location": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -6209,6 +6600,7 @@
           "language": {
             "anyOf": [
               {
+                "maxLength": 10,
                 "type": "string"
               },
               {
@@ -6242,6 +6634,7 @@
           "timezone": {
             "anyOf": [
               {
+                "maxLength": 50,
                 "type": "string"
               },
               {
@@ -7070,6 +7463,724 @@
         ]
       }
     },
+    "/api/v1/admin/gifts": {
+      "get": {
+        "operationId": "list_gifts_api_v1_admin_gifts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(paid|complimentary|admin)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "duration_months",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duration Months"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse_Dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Gifts",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "post": {
+        "operationId": "create_gift_api_v1_admin_gifts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Gift Api V1 Admin Gifts Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/allowances/{user_id}": {
+      "post": {
+        "operationId": "adjust_gift_allowance_api_v1_admin_gifts_allowances__user_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftAllowanceAdjust"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Adjust Gift Allowance Api V1 Admin Gifts Allowances  User Id  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Adjust Gift Allowance",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/export.csv": {
+      "get": {
+        "operationId": "export_gifts_api_v1_admin_gifts_export_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(paid|complimentary|admin)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "duration_months",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duration Months"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Gifts",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/summary": {
+      "get": {
+        "operationId": "gift_summary_api_v1_admin_gifts_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Gift Summary Api V1 Admin Gifts Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Gift Summary",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/{voucher_id}": {
+      "get": {
+        "operationId": "get_gift_api_v1_admin_gifts__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Gift Api V1 Admin Gifts  Voucher Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Gift",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "patch": {
+        "operationId": "update_gift_api_v1_admin_gifts__voucher_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiftUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Gift Api V1 Admin Gifts  Voucher Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/{voucher_id}/assign": {
+      "post": {
+        "operationId": "assign_gift_api_v1_admin_gifts__voucher_id__assign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftAssign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Assign Gift Api V1 Admin Gifts  Voucher Id  Assign Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assign Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/{voucher_id}/rotate": {
+      "post": {
+        "operationId": "rotate_gift_api_v1_admin_gifts__voucher_id__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rotate Gift Api V1 Admin Gifts  Voucher Id  Rotate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/gifts/{voucher_id}/void-or-revoke": {
+      "post": {
+        "operationId": "void_or_revoke_gift_api_v1_admin_gifts__voucher_id__void_or_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminGiftAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Void Or Revoke Gift Api V1 Admin Gifts  Voucher Id  Void Or Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Void Or Revoke Gift",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/iap/transactions": {
       "get": {
         "description": "Paginated store transactions (Apple App Store / Google Play).",
@@ -7236,7 +8347,7 @@
     },
     "/api/v1/admin/iap/transactions/{txn_id}/mark-refunded": {
       "post": {
-        "description": "Mark a store transaction refunded (status-only update + audit).\n\nStore-side refunds arrive via webhooks; this endpoint only records the\nrefunded state for the admin UI.",
+        "description": "Mark a store transaction refunded (status-only update + audit).\n\nStore-side refunds arrive via webhooks; this endpoint only records the\nrefunded state for the admin UI.\n\nA4-14/M2: gated by ``iap.write`` (super_admin/admin/ops) instead of the\nblanket ``require_admin`` \u2014 a content_editor has no IAP surface and must\nnot be able to flip store transactions to refunded.",
         "operationId": "admin_iap_mark_refunded_api_v1_admin_iap_transactions__txn_id__mark_refunded_post",
         "parameters": [
           {
@@ -8375,7 +9486,7 @@
     },
     "/api/v1/admin/users/{user_id}/quota-override": {
       "patch": {
-        "description": "Set (or clear with null) a per-user daily AI quota override.\n\nThe override lives on ``users.custom_daily_quota`` (migration 037);\nnull restores the plan default. Audit: ``quota.override``.",
+        "description": "Set (or clear with null) a per-user daily AI quota override.\n\nThe override lives on ``users.custom_daily_quota`` (migration 037);\nnull restores the plan default. Audit: ``quota.override``.\n\nA4-14/M2: gated by ``quotas.write`` (super_admin/admin) instead of the\nblanket ``require_admin`` \u2014 a content_editor has no quotas surface and\nmust not be able to change another user's daily AI quota.",
         "operationId": "admin_quota_override_api_v1_admin_users__user_id__quota_override_patch",
         "parameters": [
           {
@@ -9680,6 +10791,61 @@
         ]
       }
     },
+    "/api/v1/ai/social-import/jobs/{job_id}/auth/oauth/select-page": {
+      "post": {
+        "description": "Complete a multi-account Instagram OAuth by selecting the page.\n\nThe account picker (served by the callback when several business pages\nare connected) POSTs the chosen ``provider_page_id`` with a signed\n``selection_token``. The token pins the job + user (short-TTL HMAC, same\nconstruction as the OAuth state) because the picker's browser context\ncannot present the app's Authorization header. Identity is resolved from\nthe token persisted by the callback (``store_selection_pending_session``)\nusing the selected page, then the real session is stored and the import\nresumes \u2014 no re-run of the OAuth flow (A4-28).\n\nFails closed: an invalid/expired token, no pending session, a page id\noutside the candidate list, or a resolution error all return a validation\nerror asking the user to reconnect.\n\nSingle-use ordering (backend #16): an already-consumed token is rejected\nwith a cheap non-destructive check BEFORE the outbound Graph API call, and\nthe token is only burned immediately before ``accept_auth``. If auth\npersistence fails, the burn is released so the link stays usable.",
+        "operationId": "select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Select Oauth Page Api V1 Ai Social Import Jobs  Job Id  Auth Oauth Select Page Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Oauth Page",
+        "tags": [
+          "Social Import"
+        ]
+      }
+    },
     "/api/v1/ai/social-import/jobs/{job_id}/auth/scraper-login": {
       "post": {
         "operationId": "submit_scraper_login_api_v1_ai_social_import_jobs__job_id__auth_scraper_login_post",
@@ -10465,7 +11631,7 @@
     },
     "/api/v1/blog/admin/posts": {
       "get": {
-        "description": "List all blog posts including unpublished ones.\n\n**Admin only.** Returns all blog posts with pagination.\nUseful for content management.",
+        "description": "List all blog posts including unpublished ones.\n\n**Content readers and admins only** (``content.read``, A8-02).\nReturns all blog posts with pagination.\nUseful for content management.",
         "operationId": "list_all_posts_api_v1_blog_admin_posts_get",
         "parameters": [
           {
@@ -10707,7 +11873,7 @@
         ]
       },
       "post": {
-        "description": "Create a new blog post.\n\n**Admin only.** Creates a new blog post with the provided data.\nSlug must be unique.",
+        "description": "Create a new blog post.\n\n**Content editors and admins only** (``content.write``, A8-02).\nCreates a new blog post with the provided data. Slug must be unique.\nAudited as ``blog.created``.",
         "operationId": "create_post_api_v1_blog_posts_post",
         "requestBody": {
           "content": {
@@ -10756,7 +11922,7 @@
     },
     "/api/v1/blog/posts/{slug}": {
       "delete": {
-        "description": "Delete a blog post.\n\n**Admin only.** Permanently deletes the blog post identified by slug.\nThis action cannot be undone.",
+        "description": "Delete a blog post.\n\n**Content editors and admins only** (``content.write``, A8-02).\nPermanently deletes the blog post identified by slug.\nThis action cannot be undone. Audited as ``blog.deleted``.",
         "operationId": "delete_post_api_v1_blog_posts__slug__delete",
         "parameters": [
           {
@@ -10847,7 +12013,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing blog post.\n\n**Admin only.** Updates the blog post identified by slug.\nIf slug is being changed, the new slug must be unique.",
+        "description": "Update an existing blog post.\n\n**Content editors and admins only** (``content.write``, A8-02).\nUpdates the blog post identified by slug.\nIf slug is being changed, the new slug must be unique.\nAudited as ``blog.updated``.",
         "operationId": "update_post_api_v1_blog_posts__slug__put",
         "parameters": [
           {
@@ -11570,6 +12736,8 @@
             "required": false,
             "schema": {
               "default": 20,
+              "maximum": 100,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -11580,6 +12748,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "Offset",
               "type": "integer"
             }
@@ -11701,6 +12870,658 @@
         "summary": "Get Streak",
         "tags": [
           "Gamification"
+        ]
+      }
+    },
+    "/api/v1/gifts/allowances": {
+      "get": {
+        "operationId": "get_allowances_api_v1_gifts_allowances_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Allowances Api V1 Gifts Allowances Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Allowances",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/catalog": {
+      "get": {
+        "description": "Return fixed USD gift terms and paid-checkout availability.",
+        "operationId": "catalog_api_v1_gifts_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Catalog Api V1 Gifts Catalog Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Catalog",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/checkout": {
+      "post": {
+        "operationId": "create_paid_gift_checkout_api_v1_gifts_checkout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaidGiftCheckoutCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Paid Gift Checkout Api V1 Gifts Checkout Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Paid Gift Checkout",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/checkout/fulfill": {
+      "post": {
+        "operationId": "fulfill_paid_gift_checkout_api_v1_gifts_checkout_fulfill_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiftCheckoutFulfill"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fulfill Paid Gift Checkout Api V1 Gifts Checkout Fulfill Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Fulfill Paid Gift Checkout",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/claim": {
+      "post": {
+        "operationId": "claim_gift_api_v1_gifts_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiftClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Claim Gift Api V1 Gifts Claim Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Claim Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/complimentary": {
+      "post": {
+        "operationId": "create_complimentary_gift_api_v1_gifts_complimentary_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComplimentaryGiftCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Complimentary Gift Api V1 Gifts Complimentary Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Complimentary Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/public/{public_id}": {
+      "get": {
+        "description": "Return presentation and lifecycle state without private account data.",
+        "operationId": "get_public_gift_api_v1_gifts_public__public_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Public Gift Api V1 Gifts Public  Public Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/public/{public_id}/artwork/og.png": {
+      "get": {
+        "description": "Return the versioned 1200 x 630 social preview.",
+        "operationId": "get_public_gift_artwork_api_v1_gifts_public__public_id__artwork_og_png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Gift Artwork",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/received": {
+      "get": {
+        "operationId": "list_received_gifts_api_v1_gifts_received_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Received Gifts Api V1 Gifts Received Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Received Gifts",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/sent": {
+      "get": {
+        "operationId": "list_sent_gifts_api_v1_gifts_sent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Sent Gifts Api V1 Gifts Sent Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Sent Gifts",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/{voucher_id}": {
+      "get": {
+        "operationId": "get_owned_gift_api_v1_gifts__voucher_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Owned Gift Api V1 Gifts  Voucher Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Owned Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      },
+      "patch": {
+        "operationId": "update_owned_gift_api_v1_gifts__voucher_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiftUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Owned Gift Api V1 Gifts  Voucher Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Owned Gift",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/{voucher_id}/artwork/portrait.png": {
+      "get": {
+        "operationId": "download_owned_gift_artwork_api_v1_gifts__voucher_id__artwork_portrait_png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Owned Gift Artwork",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/{voucher_id}/rotate": {
+      "post": {
+        "operationId": "rotate_owned_gift_link_api_v1_gifts__voucher_id__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rotate Owned Gift Link Api V1 Gifts  Voucher Id  Rotate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Owned Gift Link",
+        "tags": [
+          "Gift Vouchers"
         ]
       }
     },
@@ -11914,6 +13735,43 @@
                 }
               ],
               "title": "Is Favorite"
+            }
+          },
+          {
+            "description": "created_at | name | worn_count",
+            "in": "query",
+            "name": "sort_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "created_at | name | worn_count",
+              "title": "Sort By"
+            }
+          },
+          {
+            "description": "asc | desc",
+            "in": "query",
+            "name": "sort_order",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "desc",
+              "description": "asc | desc",
+              "title": "Sort Order"
             }
           }
         ],
@@ -13633,7 +15491,7 @@
     },
     "/api/v1/outfits/public/{outfit_id}": {
       "get": {
-        "description": "Public outfit view for share links (no auth).\n\nOnly returns data when `is_public=true` on the outfit record.",
+        "description": "Public outfit view for share links (no auth).\n\nOnly returns data when the outfit has an active shared_outfits row AND\n`is_public=true` on the outfit record. The share row is the source of\ntruth: an outfit without one is not shared, even if is_public somehow\ngot set (legacy/crash residue).",
         "operationId": "get_public_outfit_api_v1_outfits_public__outfit_id__get",
         "parameters": [
           {
@@ -14377,7 +16235,7 @@
     },
     "/api/v1/outfits/{outfit_id}/share": {
       "post": {
-        "description": "Enable public sharing for an outfit and return a share URL.\n\nMVP: visibility/expires_at are accepted but only `public` visibility is enforced.",
+        "description": "Enable public sharing for an outfit and return a share URL.\n\nMVP: only `public` visibility is supported; anything else is rejected\nrather than persisted (the public route could never serve it).",
         "operationId": "share_outfit_api_v1_outfits__outfit_id__share_post",
         "parameters": [
           {
@@ -15701,7 +17559,7 @@
     },
     "/api/v1/recommendations/{recommendation_id}/rate": {
       "post": {
-        "description": "Store user feedback to improve future recommendations.",
+        "description": "Store user feedback to improve future recommendations.\n\nThe recommendation_id is client-supplied and used as the primary key; a\nsecond rating for the same id must update the existing row (upsert), not\nfail with a duplicate-key 500.",
         "operationId": "rate_recommendation_api_v1_recommendations__recommendation_id__rate_post",
         "parameters": [
           {
@@ -16553,6 +18411,35 @@
         ]
       }
     },
+    "/api/v1/users/bootstrap": {
+      "get": {
+        "description": "One-roundtrip app-launch aggregate.\n\nThe mobile/web launch sequence used to fire 5+ parallel reads\n(/users/me, /items, /outfits, /subscription/usage, /referral/code);\neach paid its own auth-profile lookup and DB roundtrip, which showed up\nin the Aug 2026 logs as 400-1500 ms cold-start clusters. This endpoint\nreturns the same payloads under one request. The individual routes stay\nfor compatibility and partial refreshes.",
+        "operationId": "get_bootstrap_api_v1_users_bootstrap_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Bootstrap Api V1 Users Bootstrap Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bootstrap",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
     "/api/v1/users/dashboard": {
       "get": {
         "description": "Aggregate endpoint for the dashboard UI.",
@@ -16584,7 +18471,7 @@
     },
     "/api/v1/users/export": {
       "post": {
-        "description": "Generate a JSON archive of the current user's data and return a\nshort-lived presigned download URL.\n\nMetadata only: rows carry their storage keys (``storage_path``); image\nbytes are never included. The archive is written to a single\ndeterministic key per user (``{user_id}/export/data.json``, overwritten on\neach call - the same key account deletion cleans up), and served as a\nshort-lived presigned GET URL (the repo's ~15-minute pattern). Every call\nreturns a fresh URL, so repeat requests never hand out a stale link.",
+        "description": "Generate a JSON archive of the current user's data and return a\nshort-lived presigned download URL.\n\nMetadata only: rows carry their storage keys (``storage_path``); image\nbytes are never included. The archive is written to a single\ndeterministic key per user (``users/{user_id}/export/data.json``, overwritten on\neach call - the same key account deletion cleans up), and served as a\nshort-lived presigned GET URL (the repo's ~15-minute pattern). Every call\nreturns a fresh URL, so repeat requests never hand out a stale link.",
         "operationId": "export_user_data_api_v1_users_export_post",
         "responses": {
           "200": {

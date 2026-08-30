@@ -366,7 +366,7 @@ export default function ProfilePage() {
               size="icon"
               onClick={handleBack}
               aria-label="Back to profile settings"
-              className="shrink-0"
+              className="touch-target shrink-0"
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
@@ -413,8 +413,8 @@ export default function ProfilePage() {
             <div className="space-y-4 md:space-y-6">
               <div>
                 <h3 className="text-base md:text-lg font-medium text-foreground mb-4">Profile Information</h3>
-                <div className="grid grid-cols-1 gap-y-4 md:gap-y-6 gap-x-4 md:grid-cols-6">
-                  <div className="md:col-span-6">
+                <div className="grid grid-cols-1 gap-y-4 md:gap-y-6 gap-x-4 sm:grid-cols-2 md:grid-cols-6">
+                  <div className="sm:col-span-2 md:col-span-6">
                     <label
                       htmlFor="fullName"
                       className="block text-sm font-medium text-foreground"
@@ -433,7 +433,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  <div className="md:col-span-6">
+                  <div className="sm:col-span-2 md:col-span-6">
                     <label
                       htmlFor="gender"
                       className="block text-sm font-medium text-foreground"
@@ -457,7 +457,7 @@ export default function ProfilePage() {
                     </select>
                   </div>
 
-                  <div className="md:col-span-6">
+                  <div className="sm:col-span-2 md:col-span-6">
                     <label
                       htmlFor="email"
                       className="block text-sm font-medium text-foreground"
@@ -481,7 +481,7 @@ export default function ProfilePage() {
                     </p>
                   </div>
 
-                  <div className="md:col-span-3">
+                  <div className="sm:col-span-1 md:col-span-3">
                     <label htmlFor="birthDate" className="block text-sm font-medium text-foreground">
                       Date of Birth (Optional)
                     </label>
@@ -498,7 +498,7 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  <div className="md:col-span-3">
+                  <div className="sm:col-span-1 md:col-span-3">
                     <label htmlFor="birthTime" className="block text-sm font-medium text-foreground">
                       Birth Time (Optional)
                     </label>

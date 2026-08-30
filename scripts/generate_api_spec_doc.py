@@ -72,6 +72,7 @@ GROUPS = [
     ("/api/v1/subscription", "Subscription"),
     ("/api/v1/referral", "Referral"),
     ("/api/v1/promo", "Promo"),
+    ("/api/v1/gifts", "Gift Vouchers"),
     ("/api/v1/feedback", "Feedback"),
     ("/api/v1/blog", "Blog"),
     ("/api/v1/admin", "Admin"),

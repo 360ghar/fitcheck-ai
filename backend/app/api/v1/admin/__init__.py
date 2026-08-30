@@ -15,6 +15,7 @@ from app.api.v1.admin import (
     audit,
     dashboards,
     feedback,
+    gifts,
     iap,
     me,
     ops,
@@ -36,6 +37,7 @@ router.include_router(quotas.router)
 router.include_router(dashboards.router)
 router.include_router(promo.router)
 router.include_router(feedback.router)
+router.include_router(gifts.router)
 router.include_router(ops.router)
 router.include_router(audit.router)
 router.include_router(search.router)

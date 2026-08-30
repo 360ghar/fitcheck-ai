@@ -77,3 +77,11 @@ Plus and Pro unlock the same features; only usage limits differ. Confirm live pr
 - Support: https://fitcheckaiapp.com/support · Contact: info@fitcheckaiapp.com
 - Privacy: https://fitcheckaiapp.com/privacy · Terms: https://fitcheckaiapp.com/terms
 - Referral: share a link from the app; both sides get one month of Pro.
+
+## For developers & AI agents
+
+- MCP server: FitCheck exposes its API as MCP (Model Context Protocol) tools at `https://api.fitcheckaiapp.com/mcp` (full mirror) and `https://api.fitcheckaiapp.com/mcp/chatgpt` (curated ChatGPT app with widget UI). Streamable HTTP, stateless.
+- Auth: send the user's Supabase access token as `Authorization: Bearer <jwt>` on every call. AI agents connect on behalf of a signed-in user only; there is no anonymous access.
+- ChatGPT connector: add `https://api.fitcheckaiapp.com/mcp/chatgpt` in ChatGPT developer mode; OAuth 2.1 with dynamic client registration is supported (PKCE S256, refresh-token rotation).
+- API contract: OpenAPI at `https://api.fitcheckaiapp.com/api/v1/openapi.json` · Docs: `https://api.fitcheckaiapp.com/api/v1/docs`.
+- Not exposed to agents: admin console endpoints, auth session management, webhooks, streaming (SSE) jobs, and binary uploads.

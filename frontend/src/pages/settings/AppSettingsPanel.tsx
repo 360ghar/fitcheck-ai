@@ -55,7 +55,10 @@ function ThemeSelector() {
               )}
             >
               <Icon className="h-4 w-4" />
-              <span className="hidden xs:inline whitespace-nowrap">{option.label}</span>
+              {/* Labels wait for sm: (where the grid becomes a flex row) —
+                  nowrap text inside grid-cols-3 can blow out the tracks on
+                  375–420px phones. */}
+              <span className="hidden sm:inline whitespace-nowrap">{option.label}</span>
             </button>
           )
         })}

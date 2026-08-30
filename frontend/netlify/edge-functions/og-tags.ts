@@ -30,6 +30,16 @@ interface PublicOutfit {
   }>
 }
 
+interface PublicGift {
+  public_id: string
+  duration_months: 1 | 3 | 12
+  retail_value_cents: number
+  from_name: string
+  to_name: string
+  status: string
+  og_image_url: string
+}
+
 // User agent patterns for social media crawlers
 const CRAWLER_USER_AGENTS = [
   'facebookexternalhit',
@@ -134,6 +144,38 @@ function generateOgTags(outfit: PublicOutfit, url: string): string {
   `
 }
 
+function generateGiftOgTags(gift: PublicGift, url: string): string {
+  const toName = escapeHtml(gift.to_name)
+  const fromName = escapeHtml(gift.from_name)
+  const term = gift.duration_months === 12
+    ? '1 year'
+    : `${gift.duration_months} month${gift.duration_months === 1 ? '' : 's'}`
+  const title = `A FitCheck Pro gift for ${toName}`
+  const description = `${fromName} created a private ${term} FitCheck Pro invitation.`
+  const image = gift.og_image_url.startsWith('http')
+    ? gift.og_image_url
+    : `${BACKEND_API_URL}${gift.og_image_url}`
+
+  return `
+    <title>${title}</title>
+    <meta name="title" content="${title}" />
+    <meta name="description" content="${description}" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${escapeHtml(url)}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${escapeHtml(image)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="FitCheck AI" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${escapeHtml(image)}" />
+  `
+}
+
 export default async function handler(
   request: Request,
   context: Context
@@ -141,13 +183,11 @@ export default async function handler(
   const url = new URL(request.url)
   const userAgent = request.headers.get('user-agent')
 
-  // Only process shared outfit routes
-  const match = url.pathname.match(/^\/shared\/outfits\/([a-f0-9-]+)$/i)
-  if (!match) {
+  const outfitMatch = url.pathname.match(/^\/shared\/outfits\/([a-f0-9-]+)$/i)
+  const giftMatch = url.pathname.match(/^\/gift\/([a-f0-9-]+)$/i)
+  if (!outfitMatch && !giftMatch) {
     return context.next()
   }
-
-  const outfitId = match[1]
 
   // For non-crawlers, pass through to the SPA
   if (!isCrawler(userAgent)) {
@@ -155,6 +195,31 @@ export default async function handler(
   }
 
   try {
+    if (giftMatch) {
+      const apiResponse = await fetch(
+        `${BACKEND_API_URL}/api/v1/gifts/public/${giftMatch[1]}`,
+        { headers: { Accept: 'application/json' } },
+      )
+      if (!apiResponse.ok) return context.next()
+      const json = await apiResponse.json()
+      const gift: PublicGift = json.data
+      const response = await context.next()
+      const html = await response.text()
+      const modifiedHtml = html.replace(
+        /<head[^>]*>/i,
+        `<head>${generateGiftOgTags(gift, url.href)}`,
+      )
+      return new Response(modifiedHtml, {
+        status: response.status,
+        headers: {
+          ...Object.fromEntries(response.headers.entries()),
+          'content-type': 'text/html; charset=utf-8',
+          'x-robots-tag': 'noindex, nofollow',
+        },
+      })
+    }
+
+    const outfitId = outfitMatch![1]
     // Fetch outfit data from backend
     const apiResponse = await fetch(
       `${BACKEND_API_URL}/api/v1/outfits/public/${outfitId}`,
@@ -201,5 +266,5 @@ export default async function handler(
 }
 
 export const config = {
-  path: '/shared/outfits/*',
+  path: ['/shared/outfits/*', '/gift/*'],
 }

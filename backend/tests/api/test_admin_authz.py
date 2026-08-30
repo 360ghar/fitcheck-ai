@@ -32,7 +32,8 @@ ADMIN_USER = {
 
 # Path-param sample values used to build request URLs.
 PARAM_SAMPLES = {
-    "user_id": "user-1",
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "voucher_id": "22222222-2222-4222-8222-222222222222",
     "txn_id": "txn-1",
     "ticket_id": "ticket-1",
     "code_id": "code-1",
@@ -70,6 +71,22 @@ def _fill_path(path: str) -> str:
 def _body_for(method: str, path: str):
     if method == "POST" and path == "/api/v1/admin/promo-codes":
         return {"code": "TEST100", "plan_type": "pro_monthly", "months": 1}
+    if method == "POST" and path == "/api/v1/admin/gifts":
+        return {
+            "from_name": "Admin",
+            "to_name": "Recipient",
+            "duration_months": 1,
+            "note": "Authorization route test",
+        }
+    if method == "POST" and path == "/api/v1/admin/gifts/allowances/{user_id}":
+        return {"duration_months": 1, "add_count": 1, "reason": "Route test"}
+    if method == "POST" and path.endswith("/assign") and "/gifts/" in path:
+        return {
+            "user_id": "11111111-1111-4111-8111-111111111111",
+            "reason": "Route test",
+        }
+    if method == "POST" and "/gifts/" in path:
+        return {"reason": "Route test"}
     if method in ("POST", "PATCH", "DELETE"):
         return None if method == "DELETE" else {}
     return None
@@ -153,6 +170,9 @@ def test_admin_reaches_every_admin_route(client, method, path):
         response = client.request(method, url, json=_body_for(method, path))
         if method == "POST" and path == "/api/v1/admin/subscriptions/user/{user_id}/refund":
             allowed = (200, 404, 503)
+        elif method == "POST" and path == "/api/v1/admin/gifts":
+            # The safe rollout flag blocks new issuance after authorization.
+            allowed = (201, 403)
         elif method == "POST":
             allowed = (200, 201, 404)
         elif method == "PATCH":
@@ -206,12 +226,11 @@ def test_has_permission_star_and_role_maps():
     assert has_permission({"role": "user", "email": "p@example.com"}, "search") is False
 
 
-def test_write_permission_matrix_for_quotas_and_iap():
-    """A4-14: quotas.write is admin-only; iap.write is admin+ops (the
-    refund-capable roles). No lesser role holds either write gate."""
+def test_write_permission_matrix_for_quotas_iap_and_gifts():
+    """Admin-only value writes stay separate from the ops refund gate."""
     from app.core.permissions import ADMIN_ONLY_WRITE_PERMISSIONS, has_permission
 
-    assert ADMIN_ONLY_WRITE_PERMISSIONS == frozenset({"quotas.write"})
+    assert ADMIN_ONLY_WRITE_PERMISSIONS == frozenset({"quotas.write", "gifts.write"})
     # quotas.write: super_admin/admin only (via the `*` marker).
     assert has_permission({"role": "super_admin"}, "quotas.write") is True
     assert has_permission({"role": "admin"}, "quotas.write") is True
@@ -230,6 +249,12 @@ def test_write_permission_matrix_for_quotas_and_iap():
     assert has_permission({"role": "support"}, "iap.read") is True
     assert has_permission({"role": "support"}, "quotas.read") is True
     assert has_permission({"role": "ops"}, "iap.read") is True
+    # gifts.write: super_admin/admin only; ops and support can inspect gifts.
+    assert has_permission({"role": "admin"}, "gifts.write") is True
+    assert has_permission({"role": "ops"}, "gifts.write") is False
+    assert has_permission({"role": "support"}, "gifts.write") is False
+    assert has_permission({"role": "ops"}, "gifts.read") is True
+    assert has_permission({"role": "support"}, "gifts.read") is True
 
 
 def test_ops_can_mark_iap_refund_but_not_override_quotas(client):

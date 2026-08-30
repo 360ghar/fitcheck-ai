@@ -7,6 +7,7 @@ import '../repositories/feedback_repository.dart';
 import '../models/feedback_model.dart';
 import '../../../core/utils/frame_safe.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/permission_helper.dart';
 
 /// Controller for feedback submission
 class FeedbackController extends GetxController {
@@ -70,28 +71,36 @@ class FeedbackController extends GetxController {
       return;
     }
 
-    final pickedFile = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
+    // Pre-prompt rationale, then recover (route to Settings) on permanent
+    // denial — otherwise image_picker throws and the button silently dies.
+    if (!await PermissionHelper.confirmPhotoRationale()) return;
 
-    if (pickedFile != null) {
-      if (isClosed) return;
-      final file = File(pickedFile.path);
-      final size = await file.length();
-      if (isClosed) return;
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
 
-      if (size > 5 * 1024 * 1024) {
-        ErrorHandler.showValidation(
-          'Image must be under 5MB',
-          title: 'File Too Large',
-        );
-        return;
+      if (pickedFile != null) {
+        if (isClosed) return;
+        final file = File(pickedFile.path);
+        final size = await file.length();
+        if (isClosed) return;
+
+        if (size > 5 * 1024 * 1024) {
+          ErrorHandler.showValidation(
+            'Image must be under 5MB',
+            title: 'File Too Large',
+          );
+          return;
+        }
+
+        attachments.add(file);
       }
-
-      attachments.add(file);
+    } catch (e) {
+      await PermissionHelper.showDeniedRecovery(permissionName: 'Photos');
     }
   }
 
@@ -105,28 +114,36 @@ class FeedbackController extends GetxController {
       return;
     }
 
-    final pickedFile = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
+    // Pre-prompt rationale, then recover (route to Settings) on permanent
+    // denial — otherwise image_picker throws and the button silently dies.
+    if (!await PermissionHelper.confirmCameraRationale()) return;
 
-    if (pickedFile != null) {
-      if (isClosed) return;
-      final file = File(pickedFile.path);
-      final size = await file.length();
-      if (isClosed) return;
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
 
-      if (size > 5 * 1024 * 1024) {
-        ErrorHandler.showValidation(
-          'Image must be under 5MB',
-          title: 'File Too Large',
-        );
-        return;
+      if (pickedFile != null) {
+        if (isClosed) return;
+        final file = File(pickedFile.path);
+        final size = await file.length();
+        if (isClosed) return;
+
+        if (size > 5 * 1024 * 1024) {
+          ErrorHandler.showValidation(
+            'Image must be under 5MB',
+            title: 'File Too Large',
+          );
+          return;
+        }
+
+        attachments.add(file);
       }
-
-      attachments.add(file);
+    } catch (e) {
+      await PermissionHelper.showDeniedRecovery(permissionName: 'Camera');
     }
   }
 

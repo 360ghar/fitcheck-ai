@@ -307,6 +307,44 @@ Always honor `prefers-reduced-motion` (the global `@media` reset already exists
 in `src/index.css`). Long AI jobs use the processing-status vocabulary below —
 honest progress, never fake completion animations.
 
+### Enterprise landing guidance (updated 2026-08-27)
+
+Marketing pages use a **CSS-only** motion system (the "Landing motion system"
+block in `src/index.css`; JSX hook is `components/landing/AnimatedSection.tsx`).
+The public landing page adds these rules without changing the foundational
+system above:
+
+- **The signature is an outfit decision canvas.** Combine wardrobe imagery,
+  one selected flat lay, and plain-language product reasoning. Do not use a
+  generic phone frame, fake controls, invented activity counts, or screenshots
+  that expose personal information.
+- **Enterprise trust comes from verified facts.** Use documented privacy,
+  deletion, billing, and working-demo evidence. Do not add customer marks,
+  certifications, testimonials, or adoption metrics without a source.
+- **Information uses ledgers, sequences, and matrices.** Prefer ruled rows and
+  exact grid alignment over bento-card collections. Use a comparison table on
+  desktop and locally scrolling snap cards or demos on narrow screens.
+- **Landing surfaces stay flat.** Do not use gradients, glass, glow, decorative
+  blur, card shadows, or ambient infinite motion. Use Canvas, Soft Surface,
+  Card, Ink, Hairline, and Brand Red with 16px or 32px radii.
+
+Rules for landing motion:
+
+- **No JS, no libraries, no IntersectionObserver.** Reveals ride native CSS
+  scroll-driven animations (`animation-timeline: view()/scroll()`) and are
+  wrapped in `@supports (animation-timeline: view())` — unsupported browsers
+  render the static, fully-visible page. Prerendered HTML is never opacity-gated.
+- **Reveals are transform-only.** Text and product images stay fully painted;
+  no landing content changes opacity during entry.
+- **Hero entrance is time-based** (`.hero-in`, less than 1 second,
+  `animation-delay` stagger), so it runs without JS; the reduced-motion
+  kill-switch disables it.
+- **Micro-interactions are transform/opacity only** (arrow nudges, border
+  fades, `active:scale-[0.98]`, FAQ height via Radix's
+  `--radix-collapsible-content-height` keyframes) — never layout properties.
+- **No count-up theatrics on real numbers** (plan limits, prices): proof stays
+  static; motion decorates structure, not claims.
+
 ---
 
 ## 09 — Accessibility
@@ -340,6 +378,34 @@ Masonry collapses from 5–6 columns down to 1, preserving aspect ratios.
 | tablet | 768px | Grid → 2 cols; nav → hamburger |
 | mobile | 480px | 1-col grid; hero 70px → ~44px |
 | mobile-narrow | 320px | Hero → ~36px; section padding 32px |
+
+### Canonical responsive patterns (reuse these before inventing new ones)
+
+- **Dual CTA** — header action `hidden md:flex` + a `md:hidden w-full` duplicate
+  below the header (WardrobePage, OutfitsPage).
+- **Chip rail** — horizontally scrollable filter chips with hidden scrollbar:
+  `-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide` (WardrobePage).
+- **Hover-reveal overlay** — image-grid controls that are always visible on
+  touch, hover-revealed on desktop:
+  `opacity-100 md:opacity-0 md:group-hover:opacity-100` + `touch-target`
+  (PhotoshootResultsStep).
+- **Carousel ⇄ grid morph** — mobile snap carousel that becomes a static grid
+  at `md`: `flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x
+  md:grid md:overflow-visible` with cards `min-w-[200px] md:min-w-0
+  scroll-snap-start` (RecommendationsPage).
+- **`xs:` short-label swap** — icon-only below 375px, label above:
+  `hidden xs:inline` / `xs:hidden` pairs (TryOnPage, ProfilePage tabs).
+- **`inline-lead` master-detail** — when the detail pane is the task (not a
+  lookup), use `MasterDetailLayout smallScreenMode="inline-lead"` so it stacks
+  above the list on phones instead of opening as an overlay (OutfitCreatePage).
+- **Stacking rows** — `flex flex-col gap-3 sm:flex-row` (+ `w-full sm:w-auto`
+  buttons); use `flex-col-reverse … sm:flex-row sm:justify-end` for save bars so
+  the primary action lands closest to the thumb.
+- **Dialog height guard** — long dialogs get `max-h-[85dvh] overflow-y-auto`;
+  bounded pickers inside dialogs get `max-h-[40vh] md:max-h-[18rem]
+  overflow-y-auto pr-1`.
+- **Type ramps** — page titles `text-xl md:text-2xl`; hero H1s
+  `text-3xl sm:text-4xl md:text-5xl`; body `prose prose-lg md:prose-xl`.
 
 ---
 

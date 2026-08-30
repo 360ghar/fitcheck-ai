@@ -159,6 +159,155 @@ void main() {
       await settle(tester);
     });
 
+    testWidgets('a failed refresh preserves the previously loaded items', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      final controller = WardrobeController(itemRepository: fakeRepo);
+      controller.onInit();
+      fakeRepo.onGetItems = () async => ItemsListResponse(
+        items: [_item('item-1'), _item('item-2')],
+        total: 2,
+        page: 1,
+        limit: 20,
+        hasMore: false,
+      );
+      await tester.pumpAndSettle();
+      expect(controller.items.length, 2);
+
+      // Pull-to-refresh hits a server error. Regression: the list used to be
+      // cleared BEFORE the fetch resolved, so a transient failure left a
+      // fake "empty closet" state.
+      fakeRepo.onGetItems = () async => throw AuthException.unauthorized();
+      await controller.fetchItems(refresh: true);
+      await tester.pumpAndSettle();
+
+      expect(
+        controller.items.map((i) => i.id),
+        ['item-1', 'item-2'],
+        reason: 'a failed refresh must not wipe the loaded closet',
+      );
+      expect(controller.error.value, isNotEmpty);
+      controller.onClose();
+      await settle(tester);
+    });
+
+    testWidgets(
+      'overlapping failed refreshes restore the original pagination',
+      (tester) async {
+        await pumpApp(tester);
+        final first = Completer<ItemsListResponse>();
+        final second = Completer<ItemsListResponse>();
+        fakeRepo.onGetItems = () =>
+            fakeRepo.getItemsCalls == 1 ? first.future : second.future;
+        final controller = WardrobeController(itemRepository: fakeRepo);
+        controller.items.addAll([_item('item-1'), _item('item-2')]);
+        controller.currentPage.value = 3;
+        controller.hasMore.value = false;
+
+        final firstRefresh = controller.fetchItems(refresh: true);
+        await tester.pump();
+        final secondRefresh = controller.fetchItems(refresh: true);
+        await tester.pump();
+
+        second.completeError(AuthException.unauthorized());
+        await tester.pump();
+        first.completeError(AuthException.unauthorized());
+        await Future.wait([firstRefresh, secondRefresh]);
+
+        expect(controller.items.map((item) => item.id), ['item-1', 'item-2']);
+        expect(controller.currentPage.value, 3);
+        expect(controller.hasMore.value, isFalse);
+        controller.onClose();
+        await settle(tester);
+      },
+    );
+
+    testWidgets(
+      'offline invalidation clears a stale refresh pagination baseline',
+      (tester) async {
+        await pumpApp(tester);
+        final firstRefresh = Completer<ItemsListResponse>();
+        fakeRepo.onGetItems = () {
+          switch (fakeRepo.getItemsCalls) {
+            case 1:
+              return firstRefresh.future;
+            case 2:
+              return Future.value(
+                ItemsListResponse(
+                  items: [_item('reconnected-page-one')],
+                  total: 2,
+                  page: 1,
+                  limit: 20,
+                  hasMore: true,
+                ),
+              );
+            default:
+              return Future.error(AuthException.unauthorized());
+          }
+        };
+        final controller = WardrobeController(itemRepository: fakeRepo);
+        controller.items.add(_item('existing'));
+        controller.currentPage.value = 3;
+        controller.hasMore.value = false;
+
+        final activeRefresh = controller.fetchItems(refresh: true);
+        await tester.pump();
+        fakeNetwork.connected = false;
+        await controller.fetchItems(refresh: true);
+        firstRefresh.complete(
+          ItemsListResponse(
+            items: [_item('stale')],
+            total: 1,
+            page: 1,
+            limit: 20,
+            hasMore: false,
+          ),
+        );
+        await activeRefresh;
+
+        fakeNetwork.connected = true;
+        await controller.fetchItems();
+        expect(controller.currentPage.value, 2);
+        expect(controller.hasMore.value, isTrue);
+
+        await controller.fetchItems(refresh: true);
+
+        expect(controller.currentPage.value, 2);
+        expect(controller.hasMore.value, isTrue);
+        controller.onClose();
+        await settle(tester);
+      },
+    );
+
+    testWidgets('load-more appends instead of replacing', (tester) async {
+      await pumpApp(tester);
+      var call = 0;
+      fakeRepo.onGetItems = () async {
+        call++;
+        return ItemsListResponse(
+          items: [_item('item-$call')],
+          total: 2,
+          page: call,
+          limit: 20,
+          hasMore: call < 2,
+        );
+      };
+      final controller = WardrobeController(itemRepository: fakeRepo);
+      controller.onInit();
+      await tester.pumpAndSettle();
+
+      await controller.fetchItems();
+
+      expect(
+        controller.items.map((i) => i.id),
+        ['item-1', 'item-2'],
+        reason: 'the non-refresh path must append to the loaded list',
+      );
+      controller.onClose();
+      await settle(tester);
+    });
+
     testWidgets('populates items on successful response', (tester) async {
       await pumpApp(tester);
       fakeRepo.onGetItems = () async => ItemsListResponse(

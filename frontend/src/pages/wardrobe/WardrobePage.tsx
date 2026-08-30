@@ -65,9 +65,6 @@ const CATEGORY_CHIPS: { value: Category | 'all'; label: string }[] = [
 ]
 
 const LIST_PATH = '/wardrobe'
-// With the pane taking its share of a 1280px cap, the masonry gives up columns
-// rather than the page giving up width (DESIGN.md 05).
-const SPLIT_COLUMNS = 'lg:columns-2 xl:columns-3 2xl:columns-4'
 
 export default function WardrobePage() {
   const { id } = useParams()
@@ -582,7 +579,7 @@ export default function WardrobePage() {
     <LoadingGrid
       count={14}
       variant={showMasonry ? 'masonry' : 'list'}
-      className={showMasonry && isDetailOpen ? SPLIT_COLUMNS : undefined}
+      columnCount={columnCount}
     />
   ) : filteredItems.length === 0 ? (
     hasActiveFilters ? (
@@ -717,13 +714,14 @@ export default function WardrobePage() {
             selected
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="tertiary" size="sm" onClick={() => clearSelectedItems()}>
+            <Button variant="tertiary" size="sm" className="touch-target" onClick={() => clearSelectedItems()}>
               <X className="h-4 w-4 mr-1.5" />
               Clear
             </Button>
             <Button
               variant="destructive"
               size="sm"
+              className="touch-target"
               onClick={() => setIsBulkDeleteOpen(true)}
             >
               <Trash2 className="h-4 w-4 mr-1.5" />

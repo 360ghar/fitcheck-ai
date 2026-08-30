@@ -9,7 +9,8 @@ import 'package:fitcheck_ai/features/auth/services/user_initialization_service.d
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthResponse, Session, User;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthResponse, Session, User;
 
 /// Referral durability across signup failure points (RCA 2026-08-04):
 ///
@@ -23,7 +24,13 @@ import 'package:supabase_flutter/supabase_flutter.dart' show AuthResponse, Sessi
 class _FakeAuthService extends AuthService {
   _FakeAuthService() : super(googleSignInLauncher: () async => true);
 
+  AuthResponse? loginResponse;
   AuthResponse? registerResponse;
+
+  @override
+  Future<AuthResponse> login(String email, String password) async {
+    return loginResponse!;
+  }
 
   @override
   Future<AuthResponse> register(
@@ -49,20 +56,22 @@ class _FakeAuthService extends AuthService {
 
 class _FakeRedemptionRepo implements ReferralRedemptionService {
   @override
-  Future<void> redeemReferralCode(String code) async {}
+  Future<bool> redeemReferralCode(String code) async => true;
 }
 
 class _FakeReferralService extends ReferralService {
   _FakeReferralService()
-      : super(
-          persistence: PersistenceService(),
-          userInitService: UserInitializationService(
-            subscriptionRepo: _FakeRedemptionRepo(),
-          ),
-        );
+    : super(
+        persistence: PersistenceService(),
+        userInitService: UserInitializationService(
+          subscriptionRepo: _FakeRedemptionRepo(),
+        ),
+      );
 
   bool redeemResult = true;
+  int oauthCallbackCalls = 0;
   final List<String> stashedCodes = [];
+  final List<String> redeemedCodes = [];
 
   @override
   Future<bool> redeemReferralCode(String code) async => redeemResult;
@@ -71,23 +80,34 @@ class _FakeReferralService extends ReferralService {
   Future<void> setPendingReferralCode(String code) async {
     stashedCodes.add(code);
   }
+
+  @override
+  Future<void> handleOAuthCallback() async {
+    oauthCallbackCalls++;
+    if (stashedCodes.isEmpty) return;
+    final code = stashedCodes.last;
+    if (await redeemReferralCode(code)) {
+      redeemedCodes.add(code);
+      stashedCodes.remove(code);
+    }
+  }
 }
 
 User _user() => User(
-      id: 'user-referral-test',
-      appMetadata: <String, dynamic>{},
-      userMetadata: <String, dynamic>{},
-      aud: 'authenticated',
-      createdAt: DateTime.now().toIso8601String(),
-    );
+  id: 'user-referral-test',
+  appMetadata: <String, dynamic>{},
+  userMetadata: <String, dynamic>{},
+  aud: 'authenticated',
+  createdAt: DateTime.now().toIso8601String(),
+);
 
 Session _session() => Session(
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      tokenType: 'bearer',
-      expiresIn: 3600,
-      user: _user(),
-    );
+  accessToken: 'access-token',
+  refreshToken: 'refresh-token',
+  tokenType: 'bearer',
+  expiresIn: 3600,
+  user: _user(),
+);
 
 void main() {
   late _FakeAuthService authService;
@@ -106,15 +126,23 @@ void main() {
       GetMaterialApp(
         home: const Scaffold(body: SizedBox()),
         getPages: [
-          GetPage(name: Routes.home, page: () => const Scaffold(body: SizedBox())),
+          GetPage(
+            name: Routes.home,
+            page: () => const Scaffold(body: SizedBox()),
+          ),
         ],
       ),
     );
   }
 
-  testWidgets('transient redeem failure stashes the referral code', (tester) async {
+  testWidgets('transient redeem failure stashes the referral code', (
+    tester,
+  ) async {
     await pumpApp(tester);
-    authService.registerResponse = AuthResponse(user: _user(), session: _session());
+    authService.registerResponse = AuthResponse(
+      user: _user(),
+      session: _session(),
+    );
     referralService.redeemResult = false;
 
     final controller = AuthController();
@@ -131,7 +159,9 @@ void main() {
     expect(referralService.stashedCodes, ['FIT-ABC123']);
   });
 
-  testWidgets('email-confirmation signup stashes the referral code', (tester) async {
+  testWidgets('email-confirmation signup stashes the referral code', (
+    tester,
+  ) async {
     await pumpApp(tester);
     // No session => Supabase requires email confirmation; the redemption
     // cannot run until the account is confirmed, so the code must be
@@ -152,7 +182,10 @@ void main() {
 
   testWidgets('successful redemption does not stash the code', (tester) async {
     await pumpApp(tester);
-    authService.registerResponse = AuthResponse(user: _user(), session: _session());
+    authService.registerResponse = AuthResponse(
+      user: _user(),
+      session: _session(),
+    );
     referralService.redeemResult = true;
 
     final controller = AuthController();
@@ -166,4 +199,25 @@ void main() {
 
     expect(referralService.stashedCodes, isEmpty);
   });
+
+  testWidgets(
+    'email login processes a referral saved before email confirmation',
+    (tester) async {
+      await pumpApp(tester);
+      authService.loginResponse = AuthResponse(
+        user: _user(),
+        session: _session(),
+      );
+      await referralService.setPendingReferralCode('FIT-ABC123');
+
+      final controller = AuthController();
+      await controller.login('confirmed@example.com', 'aaaaaaaa');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      expect(referralService.oauthCallbackCalls, 1);
+      expect(referralService.redeemedCodes, ['FIT-ABC123']);
+      expect(referralService.stashedCodes, isEmpty);
+    },
+  );
 }

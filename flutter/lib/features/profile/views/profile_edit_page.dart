@@ -109,17 +109,15 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         avatarUrl = await _repository.uploadAvatar(newAvatar.value!);
       }
 
-      // Update profile
+      // Update profile. Empty text fields are sent as the clear sentinel
+      // ('') so a user can actually ERASE an optional birth field; null
+      // would mean "leave unchanged" server-side.
       final result = await _repository.updateProfile(
         fullName: _nameController.text.trim(),
         avatarUrl: avatarUrl,
-        birthDate: _birthDateController.text.trim().isEmpty
-            ? null
-            : _birthDateController.text.trim(),
-        birthTime: _toApiTime(_birthTimeController.text),
-        birthPlace: _birthPlaceController.text.trim().isEmpty
-            ? null
-            : _birthPlaceController.text.trim(),
+        birthDate: _birthDateController.text.trim(),
+        birthTime: _toApiTimeOrClear(_birthTimeController.text),
+        birthPlace: _birthPlaceController.text.trim(),
       );
 
       final meta = result['meta'];
@@ -388,9 +386,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     return TimeOfDay(hour: hour, minute: minute);
   }
 
-  String? _toApiTime(String value) {
+  /// API format (HH:mm:ss), or '' — the repository's clear sentinel when the
+  /// field was emptied.
+  String _toApiTimeOrClear(String value) {
     final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
+    if (trimmed.isEmpty) return '';
     if (trimmed.length == 5) return '$trimmed:00';
     return trimmed;
   }

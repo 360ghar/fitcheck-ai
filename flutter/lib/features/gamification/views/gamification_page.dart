@@ -123,8 +123,12 @@ class GamificationPage extends StatelessWidget {
 
     final currentStreak = streak.currentStreak;
     final longestStreak = streak.longestStreak;
-    final nextMilestone = streak.nextMilestone ?? 30;
-    final progress = (currentStreak / nextMilestone).clamp(0.0, 1.0);
+    // Null means the backend has no further milestone (streak past max):
+    // hide the progress block instead of fabricating a default target.
+    final nextMilestone = streak.nextMilestone;
+    final progress = nextMilestone == null
+        ? null
+        : (currentStreak / nextMilestone).clamp(0.0, 1.0).toDouble();
 
     return AppGlassCard(
       padding: const EdgeInsets.all(AppConstants.spacing20),
@@ -186,40 +190,43 @@ class GamificationPage extends StatelessWidget {
 
           const SizedBox(height: AppConstants.spacing16),
 
-          // Progress to next milestone
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Progress to $nextMilestone days',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textMuted,
-                        ),
-                  ),
-                  Text(
-                    '${(progress * 100).toInt()}%',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.brandColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radius8),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: tokens.cardColor.withValues(alpha: 0.3),
-                  valueColor: AlwaysStoppedAnimation<Color>(tokens.brandColor),
-                  minHeight: 8,
+          // Progress to next milestone. Hidden entirely when the backend
+          // reports none (streak past the max milestone) — a fabricated
+          // default target used to mislabel long streaks.
+          if (nextMilestone != null && progress != null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Progress to $nextMilestone days',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: tokens.textMuted,
+                          ),
+                    ),
+                    Text(
+                      '${(progress * 100).toInt()}%',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: tokens.brandColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(height: AppConstants.spacing8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppConstants.radius8),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: tokens.cardColor.withValues(alpha: 0.3),
+                    valueColor: AlwaysStoppedAnimation<Color>(tokens.brandColor),
+                    minHeight: 8,
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -377,7 +384,11 @@ class GamificationPage extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 final entry = leaderboard[index];
-                final rank = index + 1;
+                // Backend-computed global rank wins; index+1 is the fallback
+                // for entries missing a rank (ties/ordering drift otherwise
+                // mislabels medals).
+                final rank =
+                    entry.rank > 0 ? entry.rank : index + 1;
                 return _buildLeaderboardItem(context, entry, rank, tokens);
               },
             ),
@@ -420,6 +431,8 @@ class GamificationPage extends StatelessWidget {
           CircleAvatar(
             backgroundColor: tokens.brandColor,
             radius: 16,
+            // Empty username must not RangeError on [0] (backend defaults
+            // to 'User' today, but the guard is free).
             child: entry.avatarUrl != null
                 ? ClipOval(
                     child: AppNetworkImage(
@@ -428,7 +441,7 @@ class GamificationPage extends StatelessWidget {
                       height: 32,
                       fit: BoxFit.cover,
                       errorWidget: (_, _, _) => Text(
-                        entry.username[0].toUpperCase(),
+                        _initialFor(entry.username),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -437,7 +450,7 @@ class GamificationPage extends StatelessWidget {
                     ),
                   )
                 : Text(
-                    entry.username[0].toUpperCase(),
+                    _initialFor(entry.username),
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -472,6 +485,10 @@ class GamificationPage extends StatelessWidget {
       ),
     );
   }
+
+  /// First character for an avatar initial; '?' when the name is empty.
+  String _initialFor(String username) =>
+      username.isEmpty ? '?' : username[0].toUpperCase();
 
   IconData _getIconForAchievement(String? iconName) {
     switch (iconName) {

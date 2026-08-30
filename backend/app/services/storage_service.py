@@ -742,6 +742,16 @@ class StorageService:
             raise StorageServiceError(f"Failed to delete images: {str(e)}")
 
     @staticmethod
+    async def list_owned_user_storage_paths(user_id: str) -> List[str]:
+        """List every current-layout object structurally owned by one user."""
+        if not settings.OBJECT_STORAGE_ENDPOINT or not settings.OBJECT_STORAGE_BUCKET:
+            return []
+        backend = get_storage_backend()
+        prefix = f"users/{user_id}/"
+        keys = await backend.list_keys(prefix=prefix)
+        return [key for key in keys if is_owned_storage_key(key, user_id)]
+
+    @staticmethod
     async def resolve_owned_storage_paths(
         db,
         user_id: str,

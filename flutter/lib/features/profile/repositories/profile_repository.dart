@@ -18,7 +18,14 @@ class ProfileRepository {
     }
   }
 
-  /// Update user profile (full_name, avatar_url, gender)
+  /// Update user profile (full_name, avatar_url, gender, birth details).
+  ///
+  /// Null means "leave unchanged" (the key is omitted from the PUT body).
+  /// Pass an empty string to CLEAR an optional field: the backend's
+  /// `normalize_birth_place` maps blank strings to null, and `birth_date`
+  /// / `birth_time` accept null explicitly via `exclude_unset` semantics.
+  /// Without this sentinel an emptied field could never be erased once set
+  /// (omitted == unchanged server-side).
   Future<Map<String, dynamic>> updateProfile({
     String? fullName,
     String? avatarUrl,
@@ -32,9 +39,15 @@ class ProfileRepository {
       if (fullName != null) data['full_name'] = fullName;
       if (avatarUrl != null) data['avatar_url'] = avatarUrl;
       if (gender != null) data['gender'] = gender;
-      if (birthDate != null) data['birth_date'] = birthDate;
-      if (birthTime != null) data['birth_time'] = birthTime;
-      if (birthPlace != null) data['birth_place'] = birthPlace;
+      if (birthDate != null) {
+        data['birth_date'] = birthDate.isEmpty ? null : birthDate;
+      }
+      if (birthTime != null) {
+        data['birth_time'] = birthTime.isEmpty ? null : birthTime;
+      }
+      if (birthPlace != null) {
+        data['birth_place'] = birthPlace.isEmpty ? null : birthPlace;
+      }
 
       final response = await _apiClient.put(
         '${ApiConstants.users}/me',

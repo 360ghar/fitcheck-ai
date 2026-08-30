@@ -42,6 +42,8 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _handleRegister() async {
+    // Keyboard submit bypasses the button's disabled state; guard here too.
+    if (Get.find<AuthController>().isLoading.value) return;
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -157,7 +159,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         Obx(() => _buildAppleSignInButton(authController)),
                         const SizedBox(height: AppConstants.spacing12),
                       ],
-                      _buildGoogleSignInButton(tokens),
+                      _buildGoogleSignInButton(authController, tokens),
                     ],
                   ),
                 ),
@@ -443,29 +445,45 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Widget _buildGoogleSignInButton(AuthUiTokens tokens) {
-    return Semantics(
-      label: 'Continue with Google',
-      button: true,
-      child: OutlinedButton.icon(
-        onPressed: _handleGoogleSignIn,
-      icon: const Icon(Icons.login),
-      label: const Text('Continue with Google'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: tokens.textColor,
-        side: BorderSide(color: tokens.textColor.withValues(alpha: 0.4)),
-        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
+  Widget _buildGoogleSignInButton(
+    AuthController authController,
+    AuthUiTokens tokens,
+  ) {
+    // Obx-gated like the login page: a rapid double-tap must not launch two
+    // OAuth flows (two consent sheets race and each re-stashes the referral
+    // code).
+    return Obx(() {
+      final isLoading = authController.isGoogleSigningIn.value;
+      return Semantics(
+        label: 'Continue with Google',
+        button: true,
+        enabled: !isLoading,
+        child: OutlinedButton.icon(
+          onPressed: isLoading ? null : _handleGoogleSignIn,
+          icon: isLoading
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.login),
+          label: Text(isLoading ? 'Signing in...' : 'Continue with Google'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: tokens.textColor,
+            side: BorderSide(color: tokens.textColor.withValues(alpha: 0.4)),
+            padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppConstants.radius16),
+            ),
+            textStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
         ),
-        textStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.3,
-        ),
-      ),
-    ),
-    );
+      );
+    });
   }
 
   Widget _buildLoginLink(AuthUiTokens tokens) {

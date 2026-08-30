@@ -38,6 +38,8 @@ describe('Pinterest visual primitives', () => {
 
     expect(screen.getByText('Visible wardrobe content')).toBeVisible()
     expect(container.firstChild).not.toHaveClass('opacity-0')
-    expect(container.firstChild).toHaveAttribute('data-reveal-delay', '240')
+    // Reveal timing is CSS-driven (scroll timelines in index.css); the delay
+    // prop only maps to the --reveal-step cascade variable consumed there.
+    expect(container.firstChild).toHaveStyle({ '--reveal-step': '4' })
   })
 })

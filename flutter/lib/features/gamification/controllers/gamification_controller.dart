@@ -38,24 +38,29 @@ class GamificationController extends GetxController {
   Future<void> fetchStreak() async {
     try {
       streak.value = await _repository.getStreak();
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = ErrorHandler.extractMessage(e);
+      // Sibling controllers report to telemetry; without this the gamification
+      // feature was Sentry-blind on API failures.
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
 
   Future<void> fetchAchievements() async {
     try {
       achievements.value = await _repository.getAchievements();
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
 
   Future<void> fetchLeaderboard() async {
     try {
       leaderboard.value = await _repository.getLeaderboard();
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
 }

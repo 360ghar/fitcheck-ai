@@ -46,12 +46,12 @@ const socialLinks: { name: string; href: string; icon: LucideIcon }[] = []
 
 export default function Footer() {
   return (
-    <footer className="bg-stone-950 text-stone-400 pt-14 pb-8 border-t border-stone-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
-          <div className="lg:col-span-2">
+    <footer className="border-t border-stone-900 bg-stone-950 pb-7 pt-12 text-stone-400">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-10 grid grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-6">
+          <div className="col-span-2 lg:col-span-2">
             <Link to="/" className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-primary">
                 <Shirt className="w-4 h-4 text-white" />
               </div>
               <span className="text-lg font-semibold tracking-tight text-stone-50">
@@ -129,7 +129,7 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="border-t border-stone-900 pt-6 flex flex-col md:flex-row justify-between items-center gap-3">
+        <div className="flex flex-col items-start justify-between gap-3 border-t border-stone-900 pt-6 md:flex-row md:items-center">
           <p className="text-xs text-stone-400">
             &copy; {new Date().getFullYear()} FitCheck AI. All rights reserved.
           </p>

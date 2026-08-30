@@ -11,7 +11,7 @@ export default function PrivacyPage() {
         canonicalUrl={`${SEO_CONFIG.siteUrl}/privacy`}
       />
     <div className="pt-20">
-      <section className="py-24 bg-stone-50 dark:bg-stone-950">
+      <section className="py-16 bg-stone-50 dark:bg-stone-950 md:py-24">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
             <div className="text-center mb-12">
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
       <section className="py-16 bg-white dark:bg-stone-950">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
-            <div className="prose prose-gray dark:prose-invert max-w-none">
+            <div className="prose prose-gray dark:prose-invert max-w-none [overflow-wrap:anywhere]">
               <h2>1. Introduction</h2>
               <p>
                 FitCheck AI ("we," "our," or "us") is committed to protecting

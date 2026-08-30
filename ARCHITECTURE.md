@@ -53,7 +53,7 @@ Dependency direction is **strictly forward**. Violations fail `scripts/check_arc
 ```text
 api/v1 (routes)  →  services  →  { models, db, core, agents }
                                       ↑
-                    main.py wires routers + middleware only
+                    main.py wires routers + middleware + MCP servers only
 ```
 
 | Layer | Path | May import | Must not import |
@@ -65,6 +65,7 @@ api/v1 (routes)  →  services  →  { models, db, core, agents }
 | Core | `app/core/` | stdlib, settings libs | services, api |
 | DB | `app/db/` | core | services, api |
 | Utils | `app/utils/` | core, stdlib | `app.api`, `app.services` (infrastructure helpers only) |
+| MCP | `app/mcp/` | core, itself (tool calls go through in-process ASGI loopback to `/api/v1`) | api, services, models, db, agents; only `main.py` may import it |
 
 ### Backend principles
 

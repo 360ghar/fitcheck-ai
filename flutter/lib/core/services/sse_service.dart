@@ -26,19 +26,38 @@ class SSEService {
   }) async* {
     final url = '${ApiConstants.baseUrl}$path';
     int retryCount = 0;
+    // Resume point for the backend's event replay. Sent as Last-Event-ID on
+    // reconnects so a dropped stream does not re-deliver already-seen events.
+    int? lastEventId;
 
     while (retryCount < maxRetries) {
       try {
-        await for (final event in _connectInternal(url, headers: headers)) {
+        bool sawTerminalEvent = false;
+        await for (
+          final event in _connectInternal(
+            url,
+            headers: headers,
+            lastEventId: lastEventId,
+          )
+        ) {
           retryCount = 0; // Reset on successful event
+          if (event.id != null) {
+            lastEventId = event.id;
+          }
           yield event;
 
           // Check for terminal events
           if (_isTerminalEvent(event.type, terminalEvents)) {
+            sawTerminalEvent = true;
             return;
           }
         }
-        // Stream ended normally
+        // A stream that ends without a terminal event is a dropped
+        // connection, not success — treat it like an error and retry,
+        // otherwise silent progress loss on mid-stream disconnects.
+        if (!sawTerminalEvent) {
+          throw SSEException('SSE stream ended without a terminal event');
+        }
         return;
       } catch (e) {
         retryCount++;
@@ -46,11 +65,14 @@ class SSEService {
           print('SSE connection error (attempt $retryCount/$maxRetries): $e');
         }
         if (retryCount >= maxRetries) {
+          // Single failure contract: one synthetic error event to the
+          // caller, then stop. Rethrowing here would double-report the same
+          // failure (event AND exception) at every call site.
           yield ServerSentEvent(
             type: 'error',
             data: {'message': 'Connection failed after $maxRetries attempts'},
           );
-          rethrow;
+          return;
         }
         // Exponential backoff with jitter
         final delay = Duration(
@@ -73,19 +95,26 @@ class SSEService {
   Stream<ServerSentEvent> _connectInternal(
     String url, {
     Map<String, String>? headers,
+    int? lastEventId,
   }) async* {
     final client = http.Client();
 
     try {
       final request = http.Request('GET', Uri.parse(url));
 
-      // Add headers
+      // Add headers. Auth is assembled per-attempt (inside the caller's
+      // retry loop) so each reconnect carries a freshly refreshed token;
+      // a token minted before the first attempt would be stale by the
+      // last retry.
       request.headers.addAll({
         'Accept': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         ...?headers,
         ..._getAuthHeaders(),
+        // Tell the backend where we left off so it can skip already-seen
+        // events on reconnect.
+        if (lastEventId != null) 'Last-Event-ID': '$lastEventId',
       });
 
       final response = await client.send(request);

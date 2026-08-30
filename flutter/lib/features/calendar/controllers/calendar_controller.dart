@@ -272,7 +272,12 @@ class CalendarController extends GetxController {
     }
   }
 
-  /// Link outfit to event
+  /// Link outfit to event.
+  ///
+  /// Does NOT pop any route: the caller (link-outfit bottom sheet in
+  /// calendar_page.dart) owns sheet dismissal before awaiting this. Popping
+  /// here double-popped — after the sheet closed it removed the calendar
+  /// route itself.
   Future<void> linkOutfit(String eventId, String outfitId) async {
     isLinkingOutfitMap[eventId] = true;
     try {
@@ -282,7 +287,6 @@ class CalendarController extends GetxController {
         events[index] = events[index].copyWith(outfitId: linkedOutfitId);
         _groupEventsByDate();
       }
-      Get.back();
       ErrorHandler.showInfo('Outfit linked to event', title: 'Linked');
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');

@@ -25,6 +25,16 @@ type Props = Record<string, string | number | boolean | null | undefined>
 let posthog: PostHog | null = null
 let readyPromise: Promise<PostHog | null> | null = null
 
+/**
+ * Buffer for events fired before PostHog has loaded. `trackEvent` pushes here
+ * when the SDK is not ready, then kicks off `initAnalytics()`; once the SDK
+ * lands, the queue is flushed exactly once. Without this, events fired during
+ * the lazy-load window (e.g. `register_view` on a direct visit to
+ * `/auth/register?promo=TRYPRO`) were dropped permanently.
+ */
+const eventQueue: Array<{ event: string; properties?: Props }> = []
+let queueFlushed = false
+
 const apiKey = import.meta.env.VITE_PUBLIC_POSTHOG_KEY as string | undefined
 const apiHost = import.meta.env.VITE_PUBLIC_POSTHOG_HOST as string | undefined
 
@@ -59,6 +69,7 @@ function initClient(key: string): Promise<PostHog | null> {
           disable_session_recording: false,
         })
         posthog = client
+        flushEventQueue()
         return client
       })
       .catch(() => null)
@@ -97,13 +108,42 @@ function sanitize(props?: Props): Record<string, string | number | boolean> | un
   return Object.keys(out).length ? out : undefined
 }
 
-/** Fire a named product event. No-ops if PostHog is not ready. */
+/**
+ * Fire a named product event. If PostHog is ready, it is captured directly.
+ * Otherwise the event is buffered and `initAnalytics()` is (re)triggered so the
+ * SDK starts loading; the buffered event is flushed once the SDK lands. Never
+ * throws — analytics must never break product flows.
+ */
 export function trackEvent(event: string, properties?: Props): void {
   try {
-    if (typeof posthog?.capture !== 'function') return
-    posthog.capture(event, sanitize(properties))
+    if (typeof posthog?.capture === 'function') {
+      posthog.capture(event, sanitize(properties))
+      return
+    }
+    eventQueue.push({ event, properties })
+    void initAnalytics()
   } catch {
     // Analytics must never break product flows.
+  }
+}
+
+/**
+ * Replay buffered events into PostHog once it is ready. Guarded so a queued
+ * event that arrives after the SDK has already loaded (and the direct-capture
+ * path) can never double-flush.
+ */
+function flushEventQueue(): void {
+  if (queueFlushed) return
+  queueFlushed = true
+  if (typeof posthog?.capture !== 'function') return
+  while (eventQueue.length) {
+    const entry = eventQueue.shift()
+    if (!entry) continue
+    try {
+      posthog.capture(entry.event, sanitize(entry.properties))
+    } catch {
+      // A single bad event must not abort the rest of the queue.
+    }
   }
 }
 

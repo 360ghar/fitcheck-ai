@@ -1,143 +1,188 @@
+import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { ArrowRight, Smartphone } from 'lucide-react'
-import { PLATFORM_AVAILABILITY } from '@/lib/plan-limits'
+import { ArrowRight, Check, Sun } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
+import { trackEvent } from '@/lib/analytics'
+import { trialRegisterHref, TRIAL_PROMO_CODE } from '@/lib/trial-offer'
+
+const heroDelay = (ms: number) => ({ '--hero-delay': `${ms}ms` }) as CSSProperties
+
+const closetCrops = [
+  'object-[center_24%]',
+  'object-[center_52%]',
+  'object-[center_78%]',
+]
+
+/**
+ * The landing signature is a factual decision canvas, not a device mockup.
+ * It combines existing wardrobe photography, one selected flat lay, and the
+ * inputs FitCheck can use to explain an outfit recommendation.
+ */
 export default function Hero() {
   return (
-    <section className="relative min-h-[100dvh] flex items-center pt-16 overflow-x-hidden bg-stone-50 dark:bg-stone-950">
-      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-14 pb-16 sm:pb-20">
-        <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-          <div className="lg:col-span-5 text-left">
-            <h1 className="landing-display text-4xl sm:text-5xl lg:text-[3.25rem] xl:text-6xl font-semibold text-stone-900 dark:text-stone-50 leading-[1.08]">
+    <section
+      aria-labelledby="landing-hero-heading"
+      className="overflow-x-clip bg-background pt-16"
+    >
+      <div className="mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:px-8 lg:pb-20 lg:pt-20">
+        <div className="grid grid-cols-1 items-end gap-8 lg:grid-cols-12 lg:gap-12">
+          <div className="min-w-0 lg:col-span-8">
+            <p
+              className="hero-in flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+              style={heroDelay(0)}
+            >
+              <span className="h-px w-8 bg-primary" aria-hidden="true" />
+              AI wardrobe workspace · Web + Android
+            </p>
+            <h1
+              id="landing-hero-heading"
+              className="hero-in landing-display mt-6 max-w-4xl text-4xl font-semibold leading-[1.04] text-foreground sm:text-5xl lg:text-6xl xl:text-[4.25rem]"
+              style={heroDelay(60)}
+            >
               AI virtual closet for better outfits every day
             </h1>
-
-            <p className="mt-5 text-base sm:text-lg text-stone-600 dark:text-stone-400 max-w-md leading-relaxed">
-              FitCheck AI turns photos of your clothes into a digital wardrobe, then helps you pick weather-aware outfits, try looks on, and generate photoshoot-style images from what you already own. Start free on the web.
+            <p
+              className="hero-in mt-6 max-w-2xl text-base leading-relaxed text-body sm:text-lg"
+              style={heroDelay(120)}
+            >
+              Turn clothing photos into a private digital wardrobe. Plan weather-aware outfits,
+              preview combinations, and create studio-style images from what you already own.
             </p>
+          </div>
 
-            <p className="mt-3 text-sm text-stone-500 dark:text-stone-400 max-w-md">
-              Web + Android live · iOS waitlist
-            </p>
-
-            {/* Real plan numbers — the GEO "statistics" lever (no fabricated claims) */}
-            <div className="mt-8 grid grid-cols-3 gap-2 max-w-md">
-              {[
-                { value: '50', label: 'AI extractions / month' },
-                { value: '10', label: 'Photoshoot images / day' },
-                { value: '1,000', label: 'Visualizations / month' },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 dark:border-stone-800 dark:bg-stone-900"
-                >
-                  <p className="landing-display text-lg font-semibold text-stone-900 dark:text-stone-50">
-                    {stat.value}
-                  </p>
-                  <p className="mt-0.5 text-[11px] leading-tight text-stone-500 dark:text-stone-400">
-                    {stat.label}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-8 flex flex-col sm:flex-row gap-3">
+          <div className="hero-in min-w-0 lg:col-span-4" style={heroDelay(180)}>
+            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
               <Button
                 size="lg"
-                className="h-12 px-6 text-base font-medium"
+                className="group h-12 px-6 text-base font-medium transition-[color,background-color,border-color,transform] active:scale-[0.98]"
                 asChild
               >
-                <Link to="/auth/register">
+                <Link
+                  to={trialRegisterHref()}
+                  onClick={() =>
+                    trackEvent('landing_cta_click', {
+                      location: 'hero',
+                      promo: TRIAL_PROMO_CODE,
+                    })
+                  }
+                >
                   Start free
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </Button>
               <Button
                 size="lg"
                 variant="outline"
-                className="h-12 px-6 text-base font-medium text-ink"
+                className="h-12 px-6 text-base font-medium text-ink transition-[color,background-color,border-color,transform] active:scale-[0.98]"
                 asChild
               >
-                <a
-                  href={PLATFORM_AVAILABILITY.androidStoreUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Smartphone className="mr-2 h-4 w-4" />
-                  Get the Android app
-                </a>
+                <a href="#demo">Try the live demo</a>
               </Button>
             </div>
+            <p className="mt-4 flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              First month free · No card · Returns to Free unless upgraded
+            </p>
+          </div>
+        </div>
+
+        <figure
+          className="hero-in-frame mt-12 overflow-hidden rounded-[2rem] border border-border bg-card lg:mt-16"
+          style={heroDelay(240)}
+          aria-labelledby="decision-canvas-title"
+        >
+          <div className="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <figcaption
+              id="decision-canvas-title"
+              className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground"
+            >
+              Outfit decision canvas
+            </figcaption>
+            <span className="text-xs text-muted-foreground">From your saved wardrobe</span>
           </div>
 
-          <div className="lg:col-span-7 relative pb-6 sm:pb-8">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-stone-200/80 bg-stone-200 dark:border-stone-800 dark:bg-stone-900">
-              {/* LCP element, fetchpriority="high". PageSpeed flags "LCP request
-                  discovery" here: on the scored Moto G Power the image's
-                  visible area (~3x the h1's) makes it the Largest Contentful
-                  Paint, and it loaded at 3.6s behind the deferred vendor JS.
-                  fetchpriority="high" moves it ahead of those scripts. On
-                  mobile the srcset serves the 20KB 640w tier; on desktop it is
-                  the 58vw 1152w tier. The prerender puts this tag in the
-                  initial HTML, so the preload scanner finds it at parse time.
-                  It also gets an explicit <link rel="preload"> in index.html.
-                  Not lazy: at >=lg it is the LCP, and lazy-loading an LCP
-                  image delays it. */}
-              <img
-                src="/landing/wardrobe.webp"
-                srcSet="/landing/wardrobe-640.webp 640w, /landing/wardrobe.webp 1152w"
-                sizes="(min-width: 1024px) 58vw, 100vw"
-                alt="A neatly arranged wardrobe of everyday clothes"
-                className="absolute inset-0 w-full h-full object-cover"
-                width={1152}
-                height={864}
-                decoding="async"
-                // Spread (not `fetchPriority="high"`) on purpose: React 18.3's
-                // SSR does not know the prop and renders it camelCase, which
-                // browsers ignore. The spread passes the lowercase attribute
-                // through verbatim so the hint actually applies.
-                {...{ fetchpriority: 'high' }}
-              />
-              <div className="absolute inset-0 bg-stone-950/35" />
-
-              <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-auto sm:w-[min(100%,320px)]">
-                <div className="rounded-xl border border-white/15 bg-stone-950/90 p-4 text-white">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-stone-300 mb-2">
-                    Today&apos;s outfit
-                  </p>
-                  <p className="font-medium text-[15px] leading-snug">
-                    Navy overshirt, ecru tee, stone chinos
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {/* Explicit label colour: this span inherited `text-white`
-                        from the panel, which is only 3.5:1 on the lightened
-                        dark --primary. --primary-foreground pairs correctly in
-                        both themes (4.8:1 light, 5.2:1 dark). */}
-                    <span className="inline-flex h-7 items-center rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground">
-                      Recommended
-                    </span>
-                    <span className="text-xs text-stone-300">Weather-aware pick</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12">
+            <div className="order-2 min-w-0 border-t border-border p-4 sm:p-5 lg:order-1 lg:col-span-3 lg:border-r lg:border-t-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Closet rail
+              </p>
+              <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-1">
+                {closetCrops.map((position, index) => (
+                  <div
+                    key={position}
+                    className="min-w-0 overflow-hidden rounded-2xl border border-border bg-surface-soft lg:aspect-[16/7]"
+                  >
+                    <img
+                      src="/landing/wardrobe-640.webp"
+                      alt={index === 0 ? 'Neutral clothes arranged on a wardrobe rail' : ''}
+                      className={`aspect-square h-full w-full object-cover lg:aspect-auto ${position}`}
+                      width={640}
+                      height={480}
+                      loading="lazy"
+                      aria-hidden={index > 0 ? true : undefined}
+                    />
                   </div>
-                </div>
+                ))}
+              </div>
+              <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                Clothing references stay connected to the outfit decision.
+              </p>
+            </div>
+
+            <div className="order-1 min-w-0 bg-surface-soft p-3 sm:p-5 lg:order-2 lg:col-span-5">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card">
+                <img
+                  src="/landing/flatlay-640.webp"
+                  srcSet="/landing/flatlay-640.webp 640w, /landing/flatlay.webp 1024w"
+                  sizes="(min-width: 1024px) 42vw, calc(100vw - 32px)"
+                  alt="Workday outfit flat lay with a white shirt, navy trousers, brown shoes, and a watch"
+                  className="aspect-square h-full w-full object-cover"
+                  width={1024}
+                  height={1024}
+                  decoding="async"
+                  {...{ fetchpriority: 'high' }}
+                />
               </div>
             </div>
 
-            {/* Secondary photo - reserved space below so it is not clipped */}
-            <div className="hidden sm:block absolute bottom-0 right-0 lg:right-4 w-36 h-44 rounded-xl overflow-hidden border-4 border-stone-50 dark:border-stone-950 rotate-2 translate-y-2">
-              <img
-                src="/landing/outfit.webp"
-                srcSet="/landing/outfit-640.webp 640w, /landing/outfit.webp 864w"
-                sizes="144px"
-                alt="Styled everyday outfit"
-                className="w-full h-full object-cover"
-                width={864}
-                height={1152}
-                loading="lazy"
-              />
+            <div className="order-3 min-w-0 border-t border-border p-6 sm:p-8 lg:col-span-4 lg:border-l lg:border-t-0 lg:p-10">
+              <div className="flex items-center justify-between gap-4 border-b border-border pb-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Weather input
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-foreground">24° Clear</p>
+                </div>
+                <Sun className="h-6 w-6 text-primary" aria-hidden="true" />
+              </div>
+
+              <div className="py-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+                  Selected workday outfit
+                </p>
+                <h2 className="landing-display mt-3 text-2xl font-semibold leading-tight text-foreground">
+                  Clear-day structure without the guesswork
+                </h2>
+                <p className="mt-4 text-sm leading-relaxed text-body sm:text-base">
+                  A white shirt, navy trousers, and brown shoes form a focused workday option.
+                  The reason stays visible beside the clothes that support it.
+                </p>
+              </div>
+
+              <dl className="border-t border-border pt-5 text-sm">
+                <div className="flex items-center justify-between gap-4 py-2">
+                  <dt className="text-muted-foreground">Context</dt>
+                  <dd className="font-medium text-foreground">Workday</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 py-2">
+                  <dt className="text-muted-foreground">Source</dt>
+                  <dd className="font-medium text-foreground">Saved wardrobe</dd>
+                </div>
+              </dl>
             </div>
           </div>
-        </div>
+        </figure>
       </div>
     </section>
   )

@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/collapsible'
 import { ChevronDown, Mail } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { trialRegisterHref } from '@/lib/trial-offer'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
@@ -195,7 +196,7 @@ export default function FAQPage() {
                 <Badge className="mb-4 border-0 bg-secondary text-secondary-foreground">
                   FAQ
                 </Badge>
-                <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
                   Frequently Asked Questions
                 </h1>
                 <p className="text-lg text-gray-600 dark:text-gray-300">
@@ -204,7 +205,7 @@ export default function FAQPage() {
               </div>
             </AnimatedSection>
 
-            <div className="space-y-12">
+            <div className="space-y-8 md:space-y-12">
               {faqCategories.map((category, catIndex) => (
                 <AnimatedSection key={category.category} delay={catIndex * 100}>
                   <div>
@@ -222,7 +223,7 @@ export default function FAQPage() {
             </div>
 
             <AnimatedSection delay={400}>
-              <div className="mt-16 text-center p-8 bg-secondary rounded-2xl">
+              <div className="mt-16 text-center p-6 bg-secondary rounded-2xl md:p-8">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                   Still have questions?
                 </h3>
@@ -252,7 +253,7 @@ export default function FAQPage() {
                 Start with the clothes you already own
               </p>
               <Link
-                to="/auth/register"
+                to={trialRegisterHref()}
                 className="inline-flex min-h-11 items-center gap-2 bg-on-image text-on-image-foreground px-8 py-4 rounded-full font-semibold text-lg transition-colors hover:bg-on-image/90"
               >
                 Get Started Free

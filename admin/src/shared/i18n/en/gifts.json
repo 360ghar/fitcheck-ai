@@ -1,0 +1,165 @@
+{
+  "title": "Gift vouchers",
+  "description": "Monitor gift value, claims, entitlement queues, and complimentary allowances.",
+  "metrics": {
+    "totalIssued": "Total issued",
+    "paidRevenue": "Paid revenue",
+    "complimentary": "Complimentary",
+    "claimed": "Claimed",
+    "redemptionRate": "Redemption rate",
+    "queuedMonths": "Queued months",
+    "expired": "Expired",
+    "expiringSoon": "Expiring in 30 days"
+  },
+  "columns": {
+    "recipient": "Recipient",
+    "source": "Source",
+    "term": "Term",
+    "value": "Value",
+    "status": "Status",
+    "payment": "Payment",
+    "created": "Created"
+  },
+  "sources": {
+    "paid": "Paid",
+    "partially_refunded": "Partially refunded",
+    "complimentary": "Complimentary",
+    "admin": "Admin-issued"
+  },
+  "statuses": {
+    "pending": "Pending payment",
+    "issued": "Issued",
+    "claimed": "Claimed",
+    "expired": "Expired",
+    "voided": "Voided",
+    "revoked": "Revoked",
+    "payment_failed": "Payment failed",
+    "payment_review": "Payment review",
+    "active": "Active",
+    "queued": "Queued",
+    "consumed": "Consumed",
+    "not_applicable": "Not applicable",
+    "paid": "Paid",
+    "failed": "Failed",
+    "review": "Under review",
+    "refunded": "Refunded",
+    "disputed": "Disputed"
+  },
+  "terms": {
+    "1": "1 month",
+    "3": "3 months",
+    "12": "1 year"
+  },
+  "filters": {
+    "search": "Search sender, recipient, or request ID",
+    "status": "Status",
+    "allStatuses": "All statuses",
+    "source": "Source",
+    "allSources": "All sources",
+    "term": "Term",
+    "allTerms": "All terms",
+    "createdFrom": "Created from",
+    "createdTo": "Created to"
+  },
+  "export": {
+    "label": "Export CSV",
+    "filename": "gift-vouchers.csv",
+    "toast": "Exported {{count}} gift vouchers",
+    "failed": "Gift vouchers could not be exported"
+  },
+  "empty": {
+    "title": "No gift vouchers found",
+    "message": "Change the filters or issue a new gift voucher."
+  },
+  "loadError": {
+    "title": "Gift vouchers could not be loaded",
+    "message": "Retry the request. If it fails again, check migration 056 and backend readiness."
+  },
+  "detail": {
+    "title": "Gift voucher details",
+    "description": "Presentation, payment, claim, and entitlement state.",
+    "artwork": "Social artwork preview",
+    "from": "From",
+    "to": "To",
+    "message": "Message",
+    "publicId": "Public ID",
+    "claimCode": "Claim code",
+    "ownerId": "Sender account",
+    "claimantId": "Claimant account",
+    "checkoutId": "Stripe Checkout",
+    "paymentIntent": "Payment intent",
+    "amountPaid": "Amount paid",
+    "amountRefunded": "Amount refunded",
+    "issuedAt": "Issued",
+    "claimedAt": "Claimed",
+    "expiresAt": "Expires",
+    "entitlement": "Entitlement",
+    "notAvailable": "Not available"
+  },
+  "actions": {
+    "manualIssue": "Issue gift",
+    "edit": "Edit presentation",
+    "rotate": "Rotate link",
+    "assign": "Assign",
+    "void": "Void gift",
+    "revoke": "Revoke gift",
+    "adjustAllowance": "Adjust allowance",
+    "close": "Close"
+  },
+  "forms": {
+    "fromName": "From name",
+    "toName": "To name",
+    "message": "Message",
+    "duration": "Pro term",
+    "expiresAt": "Claim expiry (optional)",
+    "note": "Internal note",
+    "reason": "Reason",
+    "recipientUserId": "Recipient user ID",
+    "userId": "User ID",
+    "addCount": "Extra slots",
+    "required": "This field is required",
+    "nameLength": "Use 1 to 80 characters",
+    "messageLength": "Use no more than 240 characters",
+    "reasonLength": "Use at least 3 characters",
+    "uuid": "Enter a valid UUID"
+  },
+  "create": {
+    "title": "Issue an admin gift",
+    "description": "Create premium gift value without a payment. The action is audited.",
+    "submit": "Issue gift"
+  },
+  "edit": {
+    "title": "Edit unclaimed presentation",
+    "description": "This regenerates versioned artwork. The term and value cannot change.",
+    "submit": "Save changes"
+  },
+  "assign": {
+    "title": "Assign through normal claim flow",
+    "description": "The recipient must be a different verified account. Entitlement queue rules still apply.",
+    "submit": "Assign gift"
+  },
+  "allowance": {
+    "title": "Add complimentary slots",
+    "description": "This is an exceptional audited adjustment. Used slots are not restored.",
+    "submit": "Add slots"
+  },
+  "rotate": {
+    "title": "Rotate private link and code?",
+    "description": "Every previous link, QR code, and printed code for this unclaimed gift will stop working.",
+    "confirm": "Rotate link"
+  },
+  "void": {
+    "title": "Void or revoke this gift?",
+    "description": "Only complimentary and admin-issued value can be changed here. Paid value has no manual control.",
+    "confirm": "Confirm action"
+  },
+  "toast": {
+    "created": "Admin gift issued",
+    "edited": "Gift presentation updated",
+    "rotated": "Private link rotated",
+    "assigned": "Gift assigned",
+    "voided": "Gift value updated",
+    "allowance": "Complimentary allowance increased",
+    "failed": "The gift action failed"
+  }
+}

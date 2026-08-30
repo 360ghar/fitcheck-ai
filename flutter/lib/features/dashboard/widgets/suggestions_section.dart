@@ -134,10 +134,14 @@ class _OutfitSuggestion extends StatelessWidget {
               width: 64,
               height: 64,
               color: tokens.cardBorderColor.withValues(alpha: 0.2),
-              child: outfit.imageUrl == null
+              child: _nonEmpty(outfit.imageUrl) == null
                   ? Icon(Icons.image, color: tokens.textMuted)
                   : AppImage(
-                      imageUrl: outfit.imageUrl!,
+                      // Prefer the small variant for a 64px tile; the full
+                      // size is retried once if the thumb object is missing.
+                      imageUrl:
+                          _nonEmpty(outfit.thumbnailUrl) ?? outfit.imageUrl,
+                      fallbackUrl: outfit.imageUrl,
                       fit: BoxFit.contain,
                       enableZoom: false,
                       errorIcon: Icons.image,
@@ -176,4 +180,9 @@ class _OutfitSuggestion extends StatelessWidget {
       ),
     );
   }
+
+  /// Empty strings count as absent — clients fall back only on EMPTY,
+  /// never on a 404 (see `AppNetworkImage.fallbackUrl`).
+  String? _nonEmpty(String? value) =>
+      value == null || value.isEmpty ? null : value;
 }

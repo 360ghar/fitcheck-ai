@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +6,7 @@ import '../../../core/services/analytics_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../shell/controllers/main_shell_controller.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/referral_service.dart';
@@ -24,6 +24,13 @@ class AuthController extends GetxController {
 
   // Workers for cleanup (prevent memory leaks)
   final List<Worker> _workers = [];
+
+  /// True while a credential flow (login / register / Apple) is driving the
+  /// post-auth pipeline itself. The auth-state worker below also fires when
+  /// those flows flip `isAuthenticated`, and without this flag every login
+  /// ran the pipeline twice: two `/users/me` loads, two stacked
+  /// `offAllNamed` transitions, and racing `user.value` writes.
+  bool _credentialFlowDriving = false;
 
   // Reactive state
   final Rx<UserModel?> user = Rx<UserModel?>(null);
@@ -71,6 +78,11 @@ class AuthController extends GetxController {
           user.value = null;
           return;
         }
+        // A credential flow (login / register / Apple) is already running the
+        // load + referral + navigation pipeline; let it own the sequence.
+        // This worker remains the driver for OAuth deep-link restores and
+        // session-restore events, which have no explicit flow.
+        if (_credentialFlowDriving) return;
         await _loadUserData();
         // Check for pending referral code from OAuth flow
         await _referralService.handleOAuthCallback();
@@ -137,7 +149,9 @@ class AuthController extends GetxController {
   /// Load user data from Supabase and backend via [AuthService].
   Future<void> _loadUserData({User? supabaseUser}) async {
     try {
-      final loaded = await _authService.loadUserData(supabaseUser: supabaseUser);
+      final loaded = await _authService.loadUserData(
+        supabaseUser: supabaseUser,
+      );
       if (loaded != null) {
         user.value = loaded;
       }
@@ -152,16 +166,24 @@ class AuthController extends GetxController {
       isLoading.value = true;
       error.value = '';
       showEmailNotVerifiedError.value = false;
+      _credentialFlowDriving = true;
 
       final response = await _authService.login(email, password);
 
       if (response.user != null) {
         await _loadUserData(supabaseUser: response.user);
+        // Email-confirmed signups resume through this explicit credential
+        // flow, which suppresses the auth-state worker. Redeem the pending
+        // referral before any later logout can clear it.
+        await _referralService.handleOAuthCallback();
         _authService.trackLogin('email');
 
         // Navigate first so snackbar isn't dismissed by stack replacement
         Get.offAllNamed(Routes.home);
-        ErrorHandler.showInfo('Successfully logged in as ${user.value?.fullName ?? user.value?.email}', title: 'Welcome back!');
+        ErrorHandler.showInfo(
+          'Successfully logged in as ${user.value?.fullName ?? user.value?.email}',
+          title: 'Welcome back!',
+        );
       } else {
         throw Exception('Login failed. Please try again.');
       }
@@ -184,6 +206,7 @@ class AuthController extends GetxController {
       rethrow;
     } finally {
       isLoading.value = false;
+      _credentialFlowDriving = false;
     }
   }
 
@@ -197,6 +220,7 @@ class AuthController extends GetxController {
     try {
       isLoading.value = true;
       error.value = '';
+      _credentialFlowDriving = true;
 
       final response = await _authService.register(
         email,
@@ -233,7 +257,9 @@ class AuthController extends GetxController {
 
         // Redeem referral code if provided
         if (referralCode != null && referralCode.isNotEmpty) {
-          final redeemed = await _referralService.redeemReferralCode(referralCode);
+          final redeemed = await _referralService.redeemReferralCode(
+            referralCode,
+          );
           if (!redeemed) {
             // Transient failure (missing backend RPC, dead connection):
             // stash so the next auth event (login / OAuth callback / app
@@ -243,7 +269,10 @@ class AuthController extends GetxController {
           }
         }
 
-        ErrorHandler.showInfo('Account created successfully', title: 'Welcome to Fit Check!');
+        ErrorHandler.showInfo(
+          'Account created successfully',
+          title: 'Welcome to Fit Check!',
+        );
 
         // Navigate to home
         Get.offAllNamed(Routes.home);
@@ -262,6 +291,7 @@ class AuthController extends GetxController {
       rethrow;
     } finally {
       isLoading.value = false;
+      _credentialFlowDriving = false;
     }
   }
 
@@ -294,6 +324,7 @@ class AuthController extends GetxController {
     try {
       isAppleSigningIn.value = true;
       error.value = '';
+      _credentialFlowDriving = true;
 
       final response = await _authService.signInWithApple();
 
@@ -329,6 +360,7 @@ class AuthController extends GetxController {
       rethrow;
     } finally {
       isAppleSigningIn.value = false;
+      _credentialFlowDriving = false;
     }
   }
 
@@ -344,12 +376,24 @@ class AuthController extends GetxController {
       user.value = null;
       error.value = '';
 
+      // The shell controller is permanent, so its tab state would otherwise
+      // carry over to the next session (previous user's tab + all tabs
+      // mounted at once for the new account).
+      if (Get.isRegistered<MainShellController>()) {
+        Get.find<MainShellController>().resetForNewSession();
+      }
+
       Get.offAllNamed(Routes.splash);
 
-      ErrorHandler.showInfo('You have been logged out successfully', title: 'Logged Out');
+      ErrorHandler.showInfo(
+        'You have been logged out successfully',
+        title: 'Logged Out',
+      );
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
-      debugPrint('Logout error: $e');
+      // A failed logout used to only debugPrint: the spinner stopped and the
+      // user appeared still-logged-in with no explanation.
+      ErrorHandler.showError(error.value, title: 'Logout Failed');
     } finally {
       isLoggingOut.value = false;
     }
@@ -363,7 +407,10 @@ class AuthController extends GetxController {
 
       await _authService.requestPasswordReset(email);
 
-      ErrorHandler.showSuccess('Check your email for password reset instructions', title: 'Email Sent');
+      ErrorHandler.showSuccess(
+        'Check your email for password reset instructions',
+        title: 'Email Sent',
+      );
     } on AuthException catch (e) {
       error.value = e.message;
       ErrorHandler.showError(e.message, title: 'Request Failed');
@@ -407,7 +454,10 @@ class AuthController extends GetxController {
 
       await _authService.updatePassword(newPassword);
 
-      ErrorHandler.showSuccess('Your password has been updated successfully', title: 'Password Updated');
+      ErrorHandler.showSuccess(
+        'Your password has been updated successfully',
+        title: 'Password Updated',
+      );
     } on AuthException catch (e) {
       error.value = e.message;
       ErrorHandler.showError(e.message, title: 'Update Failed');
@@ -447,7 +497,10 @@ class AuthController extends GetxController {
 
       await _authService.resendVerificationEmail(unverifiedEmail.value);
 
-      ErrorHandler.showSuccess('Verification email has been sent. Please check your inbox.', title: 'Email Sent');
+      ErrorHandler.showSuccess(
+        'Verification email has been sent. Please check your inbox.',
+        title: 'Email Sent',
+      );
     } on AuthException catch (e) {
       error.value = e.message;
       ErrorHandler.showError(e.message, title: 'Failed to Send Email');

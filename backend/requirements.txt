@@ -12,12 +12,15 @@ aioboto3==13.4.0
 pinecone==9.1.0
 google-genai==2.11.0
 sse-starlette==3.4.5
+# MCP (Model Context Protocol) server SDK — agent surface at /mcp
+mcp==1.28.1
 python-dotenv==1.2.2
 stripe==15.3.0
 python-dateutil==2.9.0.post0
 beautifulsoup4==4.15.0
 cryptography==49.0.0
 Pillow==11.3.0
+qrcode==8.2
 # HEIC/HEIF decode (iPhone/modern-camera photos). Registers a PIL opener at
 # import (see app/utils/image_processing.py); uploads are transcoded to WebP.
 pillow-heif==1.5.0

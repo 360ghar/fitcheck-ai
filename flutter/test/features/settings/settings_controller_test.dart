@@ -1,3 +1,5 @@
+import 'dart:async';
+
 // Two silent failures in SettingsController, both of which told the user
 // something had happened when it had not.
 //
@@ -24,13 +26,11 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 import 'package:fitcheck_ai/core/services/theme_service.dart';
 import 'package:fitcheck_ai/features/auth/controllers/auth_controller.dart';
 import 'package:fitcheck_ai/features/settings/controllers/settings_controller.dart';
+import 'package:fitcheck_ai/features/settings/models/user_preferences_model.dart';
 import 'package:fitcheck_ai/features/settings/repositories/settings_repository.dart';
 
 class _FakeAuthController extends GetxController implements AuthController {
-  _FakeAuthController({
-    this.wrongPassword = false,
-    this.provider,
-  });
+  _FakeAuthController({this.wrongPassword = false, this.provider});
 
   /// Google/Apple sessions carry an email; kept non-null like a real session.
   final String? email = 'user@example.com';
@@ -86,6 +86,25 @@ class _FakeSettingsRepository implements SettingsRepository {
   static const exportUrl = 'https://example.com/export.json';
 
   int exportCalls = 0;
+  final List<UserPreferencesModel> preferenceWrites = [];
+  Future<UserPreferencesModel> Function()? onGetPreferences;
+  Future<UserPreferencesModel> Function(UserPreferencesModel preferences)?
+  onUpdatePreferences;
+
+  @override
+  Future<UserPreferencesModel> getPreferences() {
+    final handler = onGetPreferences;
+    return handler == null ? Future.value(UserPreferencesModel()) : handler();
+  }
+
+  @override
+  Future<UserPreferencesModel> updatePreferences(
+    UserPreferencesModel preferences,
+  ) async {
+    preferenceWrites.add(preferences);
+    final handler = onUpdatePreferences;
+    return handler == null ? preferences : handler(preferences);
+  }
 
   @override
   Future<String> requestDataExport() async {
@@ -95,6 +114,25 @@ class _FakeSettingsRepository implements SettingsRepository {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeThemeService extends ThemeService {
+  _FakeThemeService(this._mode);
+
+  AppThemeMode _mode;
+
+  @override
+  AppThemeMode get appThemeMode => _mode;
+
+  @override
+  Future<void> setThemeMode(AppThemeMode mode) async {
+    _mode = mode;
+  }
+
+  @override
+  void syncFromBackend(AppThemeMode? backendMode) {
+    if (backendMode != null) _mode = backendMode;
+  }
 }
 
 /// Captures the url_launcher platform calls so a launch can be made to fail.
@@ -108,26 +146,26 @@ class _LauncherStub {
   void install() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/url_launcher'),
-      (call) async {
-        switch (call.method) {
-          case 'canLaunch':
-            return canLaunch;
-          case 'launch':
-            launched.add(call.arguments['url']?.toString() ?? '');
-            return launchSucceeds;
-        }
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/url_launcher'),
+          (call) async {
+            switch (call.method) {
+              case 'canLaunch':
+                return canLaunch;
+              case 'launch':
+                launched.add(call.arguments['url']?.toString() ?? '');
+                return launchSucceeds;
+            }
+            return null;
+          },
+        );
   }
 
   void remove() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/url_launcher'),
-      null,
-    );
+          const MethodChannel('plugins.flutter.io/url_launcher'),
+          null,
+        );
   }
 }
 
@@ -142,11 +180,13 @@ void main() {
     clipboardWrites.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'Clipboard.setData') {
-        clipboardWrites.add((call.arguments as Map)['text']?.toString() ?? '');
-      }
-      return null;
-    });
+          if (call.method == 'Clipboard.setData') {
+            clipboardWrites.add(
+              (call.arguments as Map)['text']?.toString() ?? '',
+            );
+          }
+          return null;
+        });
   });
 
   tearDown(() {
@@ -156,8 +196,12 @@ void main() {
   });
 
   group('changePassword re-authenticates', () {
-    testWidgets('verifies the current password before updating', (tester) async {
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+    testWidgets('verifies the current password before updating', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final auth = _FakeAuthController();
       final controller = SettingsController(
         repository: _FakeSettingsRepository(),
@@ -179,8 +223,12 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('does NOT update when the current password is wrong', (tester) async {
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+    testWidgets('does NOT update when the current password is wrong', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final auth = _FakeAuthController(wrongPassword: true);
       final controller = SettingsController(
         repository: _FakeSettingsRepository(),
@@ -191,12 +239,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(auth.reauthCalls, ['wrong-pw']);
-      expect(auth.updateCalls, isEmpty, reason: 'a wrong current password must not change it');
+      expect(
+        auth.updateCalls,
+        isEmpty,
+        reason: 'a wrong current password must not change it',
+      );
       expect(controller.isChangingPassword.value, isFalse);
     });
 
-    testWidgets('does NOT reauthenticate an OAuth-only (Google) account', (tester) async {
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+    testWidgets('does NOT reauthenticate an OAuth-only (Google) account', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       // Google/Apple sessions DO carry an email, so the guard must key on the
       // auth provider, not the email field.
       final auth = _FakeAuthController(provider: 'google');
@@ -210,8 +266,11 @@ void main() {
       // snackbar's dismiss timer, so the feedback would be gone by then.
       await tester.pump();
 
-      expect(auth.reauthCalls, isEmpty,
-          reason: 'an OAuth account has no password to verify');
+      expect(
+        auth.reauthCalls,
+        isEmpty,
+        reason: 'an OAuth account has no password to verify',
+      );
       expect(auth.updateCalls, isEmpty);
       // The intended guidance surfaces instead of the misleading
       // "Current password is incorrect" from a doomed reauth attempt.
@@ -230,7 +289,9 @@ void main() {
       final launcher = _LauncherStub(canLaunch: true)..install();
       addTearDown(launcher.remove);
 
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final repository = _FakeSettingsRepository();
       final controller = SettingsController(
         repository: repository,
@@ -245,11 +306,15 @@ void main() {
       expect(clipboardWrites, isEmpty);
     });
 
-    testWidgets('copies the link when the browser cannot be opened', (tester) async {
+    testWidgets('copies the link when the browser cannot be opened', (
+      tester,
+    ) async {
       final launcher = _LauncherStub(canLaunch: false)..install();
       addTearDown(launcher.remove);
 
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final controller = SettingsController(
         repository: _FakeSettingsRepository(),
         authController: _FakeAuthController(),
@@ -264,11 +329,16 @@ void main() {
       expect(controller.isExportingData.value, isFalse);
     });
 
-    testWidgets('copies the link when launch is attempted but fails', (tester) async {
-      final launcher = _LauncherStub(canLaunch: true, launchSucceeds: false)..install();
+    testWidgets('copies the link when launch is attempted but fails', (
+      tester,
+    ) async {
+      final launcher = _LauncherStub(canLaunch: true, launchSucceeds: false)
+        ..install();
       addTearDown(launcher.remove);
 
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final controller = SettingsController(
         repository: _FakeSettingsRepository(),
         authController: _FakeAuthController(),
@@ -279,5 +349,183 @@ void main() {
 
       expect(clipboardWrites, ['https://example.com/export.json']);
     });
+  });
+
+  group('preference saves preserve pending mutations', () {
+    testWidgets('keeps the latest overlapping preference fetch', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
+      final first = Completer<UserPreferencesModel>();
+      final second = Completer<UserPreferencesModel>();
+      var fetches = 0;
+      final repository = _FakeSettingsRepository()
+        ..onGetPreferences = () {
+          fetches++;
+          return fetches == 1 ? first.future : second.future;
+        };
+      final controller = SettingsController(
+        repository: repository,
+        authController: _FakeAuthController(),
+        themeService: _FakeThemeService(AppThemeMode.system),
+      );
+
+      final oldFetch = controller.fetchPreferences();
+      await tester.pump();
+      final newestFetch = controller.fetchPreferences();
+      await tester.pump();
+
+      first.complete(UserPreferencesModel(themeMode: AppThemeMode.light));
+      await oldFetch;
+      await tester.pump();
+
+      expect(controller.isLoading.value, isTrue);
+      expect(controller.preferences.value, isNull);
+
+      second.complete(UserPreferencesModel(themeMode: AppThemeMode.dark));
+      await newestFetch;
+      await tester.pump();
+
+      expect(controller.preferences.value?.themeMode, AppThemeMode.dark);
+      expect(controller.isLoading.value, isFalse);
+      controller.onClose();
+    });
+
+    testWidgets('rolls back a rejected latest non-theme preference', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
+      final repository = _FakeSettingsRepository()
+        ..onUpdatePreferences = (_) async => throw StateError('write rejected');
+      final controller = SettingsController(
+        repository: repository,
+        authController: _FakeAuthController(),
+      );
+      controller.preferences.value = UserPreferencesModel(
+        notificationsEnabled: true,
+      );
+
+      await controller.toggleNotifications(false);
+
+      expect(controller.preferences.value?.notificationsEnabled, isTrue);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+      'reverts a failed latest theme change to the last confirmed mode',
+      (tester) async {
+        await tester.pumpWidget(
+          const GetMaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final firstWrite = Completer<UserPreferencesModel>();
+        final secondWrite = Completer<UserPreferencesModel>();
+        var writes = 0;
+        final repository = _FakeSettingsRepository()
+          ..onUpdatePreferences = (_) {
+            writes++;
+            return writes == 1 ? firstWrite.future : secondWrite.future;
+          };
+        final themeService = _FakeThemeService(AppThemeMode.system);
+        final controller = SettingsController(
+          repository: repository,
+          authController: _FakeAuthController(),
+          themeService: themeService,
+        );
+        final initial = UserPreferencesModel(themeMode: AppThemeMode.system);
+        controller.preferences.value = initial;
+
+        final chooseLight = controller.updateThemeMode(AppThemeMode.light);
+        // Let the first backend write enter its pending state before the next
+        // user choice arrives. This preserves the overlapping-write scenario
+        // without racing the test's completer setup.
+        await tester.pump();
+        final chooseDark = controller.updateThemeMode(AppThemeMode.dark);
+        expect(themeService.appThemeMode, AppThemeMode.dark);
+
+        firstWrite.complete(initial.copyWith(themeMode: AppThemeMode.light));
+        await tester.pump();
+        await chooseLight;
+        await tester.pump();
+        expect(repository.preferenceWrites, hasLength(2));
+
+        secondWrite.completeError(StateError('write rejected'));
+        await tester.pump();
+        await chooseDark;
+
+        expect(controller.preferences.value?.themeMode, AppThemeMode.light);
+        expect(themeService.appThemeMode, AppThemeMode.light);
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'serializes rapid style selections with the latest local state',
+      (tester) async {
+        await tester.pumpWidget(
+          const GetMaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final repository = _FakeSettingsRepository();
+        final controller = SettingsController(
+          repository: repository,
+          authController: _FakeAuthController(),
+        );
+        controller.preferences.value = UserPreferencesModel(
+          preferredStyles: const [],
+        );
+
+        await Future.wait([
+          controller.addPreferredStyle('casual'),
+          controller.addPreferredStyle('formal'),
+        ]);
+
+        expect(
+          repository.preferenceWrites
+              .map((preferences) => preferences.preferredStyles)
+              .toList(),
+          const [
+            ['casual'],
+            ['casual', 'formal'],
+          ],
+        );
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'serializes rapid color selections with the latest local state',
+      (tester) async {
+        await tester.pumpWidget(
+          const GetMaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final repository = _FakeSettingsRepository();
+        final controller = SettingsController(
+          repository: repository,
+          authController: _FakeAuthController(),
+        );
+        controller.preferences.value = UserPreferencesModel(
+          preferredColors: const [],
+        );
+
+        await Future.wait([
+          controller.addPreferredColor('blue'),
+          controller.addPreferredColor('black'),
+        ]);
+
+        expect(
+          repository.preferenceWrites
+              .map((preferences) => preferences.preferredColors)
+              .toList(),
+          const [
+            ['blue'],
+            ['blue', 'black'],
+          ],
+        );
+        await tester.pumpAndSettle();
+      },
+    );
   });
 }

@@ -62,6 +62,19 @@ class OutfitListController extends GetxController {
       <String, List<WearHistoryEntry>>{}.obs;
   final RxBool isLoadingWearHistory = false.obs;
 
+  /// Outfit IDs whose most recent wear-history fetch failed.
+  ///
+  /// Chosen over caching an empty-with-TTL result: empty history is a real,
+  /// cacheable outcome ([] is stored on success), so a separate failure
+  /// marker keeps those two states distinct and needs no expiry hook. The
+  /// detail page consults this before rescheduling a fetch — otherwise a
+  /// persistent failure loops forever (page rebuilds -> history still empty
+  /// -> schedule fetch -> fails -> repeat).
+  final Set<String> _wearHistoryFailed = <String>{};
+
+  bool isWearHistoryFailed(String outfitId) =>
+      _wearHistoryFailed.contains(outfitId);
+
   // Offline state
   final RxBool isOffline = false.obs;
 
@@ -148,9 +161,16 @@ class OutfitListController extends GetxController {
       _fetchGeneration++;
       currentPage.value = 1;
       hasMore.value = true;
-      outfits.clear();
+      // The old list stays visible until the refreshed page arrives: a
+      // failed refresh must not leave a fake "no outfits yet" state. The
+      // grid swaps atomically on success below.
     } else {
-      if (isLoadingMore.value) return;
+      // Block load-more while ANY fetch is in flight. During a refresh
+      // (isLoading=true) a scroll notification would otherwise start a
+      // concurrent page-N fetch that gets stale-guarded later — wasted
+      // bandwidth. Safe for initial load: it runs from onInit before any
+      // scroll exists, and InfiniteScrollWrapper only ever calls load-more.
+      if (isLoadingMore.value || isLoading.value) return;
       _fetchGeneration++;
     }
     final requestGeneration = _fetchGeneration;
@@ -189,11 +209,17 @@ class OutfitListController extends GetxController {
 
       if (requestGeneration != _fetchGeneration || isClosed) return;
 
+      // Refresh swaps atomically: the previous list stays visible during the
+      // fetch and is replaced only once the new page has actually loaded, so
+      // a failed refresh never blanks the grid. Initial load / load-more
+      // append instead of clearing.
       if (refresh) {
-        outfits.clear();
+        outfits
+          ..clear()
+          ..addAll(response.outfits);
+      } else {
+        outfits.addAll(response.outfits);
       }
-
-      outfits.addAll(response.outfits);
       totalOutfits.value = response.total;
       hasMore.value = response.hasMore;
       currentPage.value++;
@@ -262,10 +288,15 @@ class OutfitListController extends GetxController {
     }
   }
 
-  /// Fetch wear history for an outfit
-  Future<List<WearHistoryEntry>> fetchWearHistory(String outfitId) async {
-    // Return cached if available
+  /// Fetch wear history for an outfit.
+  ///
+  /// Returns the cached list on success (possibly empty), or `null` when the
+  /// fetch failed — callers can then distinguish "no history yet" from
+  /// "couldn't load history" and offer a retry.
+  Future<List<WearHistoryEntry>?> fetchWearHistory(String outfitId) async {
+    // Return cached if available; a prior success clears any failure marker.
     if (wearHistoryCache.containsKey(outfitId)) {
+      _wearHistoryFailed.remove(outfitId);
       return wearHistoryCache[outfitId]!;
     }
 
@@ -273,14 +304,24 @@ class OutfitListController extends GetxController {
     try {
       final history = await _repository.getWearHistory(outfitId);
       wearHistoryCache[outfitId] = history;
+      _wearHistoryFailed.remove(outfitId);
       return history;
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e));
-      return [];
+      // Record the failure so view-layer auto-fetch loops stop rescheduling
+      // for this outfit; cleared on a later successful fetch or retry.
+      _wearHistoryFailed.add(outfitId);
+      return null;
     } finally {
       isLoadingWearHistory.value = false;
     }
   }
+
+  /// Explicit retry for a previously failed wear-history fetch. Deliberately
+  /// the same call as [fetchWearHistory]; kept as an intent point so future
+  /// retry logic (backoff, telemetry) has one place to live.
+  Future<List<WearHistoryEntry>?> retryWearHistory(String outfitId) =>
+      fetchWearHistory(outfitId);
 
   /// Apply filters - triggers server refetch with current filters
   void applyFilters() {
@@ -347,6 +388,10 @@ class OutfitListController extends GetxController {
       } else {
         wearHistoryCache[outfitId] = [entry];
       }
+      // A successful wear action proves the history endpoint works; release
+      // a stale failure marker so the detail page renders the entry instead
+      // of a permanent "Couldn't load" retry card.
+      _wearHistoryFailed.remove(outfitId);
 
       NotificationService.instance.showSuccess(
         'Marked as worn',

@@ -22,6 +22,11 @@ class DashboardController extends GetxController {
   final RxString error = ''.obs;
   final RxBool referralBannerDismissed = false.obs;
 
+  /// In-flight fetch, for single-flight de-duplication. Rapid pull-to-refresh
+  /// used to race two fetches where the OLDER response could land after the
+  /// newer one and overwrite fresh data with stale data.
+  Future<void>? _fetchFuture;
+
   DashboardController({DashboardRepository? repository})
     : _repository = repository ?? DashboardRepository();
 
@@ -59,6 +64,24 @@ class DashboardController extends GetxController {
   }
 
   Future<void> fetchDashboard({bool showLoader = true}) async {
+    // Single-flight: join the in-flight fetch instead of starting a second
+    // one, so two overlapping fetches can never interleave and let the older
+    // response land last.
+    final existing = _fetchFuture;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+    try {
+      final future = _doFetchDashboard(showLoader: showLoader);
+      _fetchFuture = future;
+      await future;
+    } finally {
+      _fetchFuture = null;
+    }
+  }
+
+  Future<void> _doFetchDashboard({bool showLoader = true}) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     if (showLoader) {
       isLoading.value = true;

@@ -55,15 +55,16 @@ class _NoDiskFileSystem implements FileSystem {
   }
 }
 
-Widget _appImageHarness(AppImage image) {
+Widget _appImageHarness(AppImage image, {BaseCacheManager? cacheManager}) {
   return MaterialApp(
     home: Scaffold(
       body: Center(
         child: AppImage(
           imageUrl: image.imageUrl,
+          fallbackUrl: image.fallbackUrl,
           storagePath: image.storagePath,
           remintUrl: image.remintUrl,
-          cacheManager: _failingImageCacheManager(),
+          cacheManager: cacheManager ?? _failingImageCacheManager(),
         ),
       ),
     ),
@@ -113,7 +114,8 @@ void main() {
         expect(
           remintCalls,
           ['users/u/items/1.png'],
-          reason: 'the failed load must trigger exactly one re-mint of the '
+          reason:
+              'the failed load must trigger exactly one re-mint of the '
               'durable storage key',
         );
 
@@ -122,7 +124,8 @@ void main() {
         expect(
           renderedImage().imageUrl,
           'https://cdn.example.com/fresh/1.png',
-          reason: 'the widget must retry with the freshly minted URL, not the '
+          reason:
+              'the widget must retry with the freshly minted URL, not the '
               'expired one',
         );
         expect(
@@ -133,7 +136,8 @@ void main() {
         expect(
           find.byIcon(Icons.image_not_supported_outlined),
           findsOneWidget,
-          reason: 'with both URLs unreadable the honest result is an error '
+          reason:
+              'with both URLs unreadable the honest result is an error '
               'tile',
         );
 
@@ -162,11 +166,57 @@ void main() {
       expect(
         remintCalls,
         0,
-        reason: 'without a durable storage key there is nothing safe to '
+        reason:
+            'without a durable storage key there is nothing safe to '
             're-mint from',
       );
       expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
 
+      await flushCacheManagerTimers(tester);
+    });
+
+    testWidgets('uses a new primary URL after a fallback failed', (
+      tester,
+    ) async {
+      final cacheManager = _failingImageCacheManager();
+      await tester.pumpWidget(
+        _appImageHarness(
+          const AppImage(
+            imageUrl: 'https://cdn.example.com/expired/1.png',
+            fallbackUrl: 'https://cdn.example.com/fallback/1.png',
+          ),
+          cacheManager: cacheManager,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      CachedNetworkImage renderedImage() =>
+          tester.widget<CachedNetworkImage>(find.byType(CachedNetworkImage));
+      expect(
+        renderedImage().imageUrl,
+        'https://cdn.example.com/fallback/1.png',
+      );
+
+      await tester.pumpWidget(
+        _appImageHarness(
+          const AppImage(
+            imageUrl: 'https://cdn.example.com/fresh/1.png',
+            fallbackUrl: 'https://cdn.example.com/fresh-fallback/1.png',
+          ),
+          cacheManager: cacheManager,
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        renderedImage().imageUrl,
+        'https://cdn.example.com/fresh/1.png',
+        reason: 'a new configuration must always start from its primary URL',
+      );
+      await tester.pump();
+      await tester.pump();
       await flushCacheManagerTimers(tester);
     });
 
@@ -194,7 +244,8 @@ void main() {
       expect(
         remintCalls,
         ['users/u/items/1.png'],
-        reason: 'the re-mint must be attempted even when the backend cannot '
+        reason:
+            'the re-mint must be attempted even when the backend cannot '
             'serve a fresh URL',
       );
       expect(remintCalls, hasLength(1));

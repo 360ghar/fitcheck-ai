@@ -225,7 +225,7 @@ export default function OutfitCreatePage() {
         </Button>
       )}
 
-      <div className="flex items-center justify-between gap-sm">
+      <div className="flex flex-wrap items-center justify-between gap-sm">
         {hasLook ? (
           <>
             <Button

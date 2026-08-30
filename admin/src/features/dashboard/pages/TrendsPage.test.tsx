@@ -36,7 +36,10 @@ describe('TrendsPage', () => {
     expect(screen.getByText('Last 90 days')).toBeInTheDocument()
 
     // Lazy recharts chunk mounts four charts with aria labels.
-    expect(await screen.findByRole('img', { name: 'Signups' })).toBeInTheDocument()
+    // The first test performs the cold lazy import of the Recharts chunk.
+    expect(
+      await screen.findByRole('img', { name: 'Signups' }, { timeout: 5_000 }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'AI jobs' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Paid subscriptions' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'AI-active users' })).toBeInTheDocument()

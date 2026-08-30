@@ -19,6 +19,7 @@ import '../../../core/utils/permission_helper.dart';
 import '../models/photoshoot_models.dart';
 import '../repositories/photoshoot_repository.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/widgets/app_network_image.dart' show authHeadersForUrl;
 
 /// Steps in the photoshoot generation flow
 enum PhotoshootStep { upload, configure, generating, results }
@@ -57,6 +58,12 @@ class PhotoshootController extends GetxController {
   // Photo upload state (1-4 photos)
   final RxList<File> selectedPhotos = <File>[].obs;
   static const int maxPhotos = 4;
+
+  // Base64 encodings of selectedPhotos keyed by file path, computed via
+  // compute() during generatePhotoshoot. retryFailedSlot reads this
+  // cache-first so a slot retry skips re-encoding every photo (multi-second
+  // UI-visible stall). Invalidated wherever the selection changes.
+  final Map<String, String> _encodedPhotoCache = {};
 
   // Configuration state
   final Rx<PhotoshootUseCase> selectedUseCase = PhotoshootUseCase.linkedin.obs;
@@ -170,6 +177,9 @@ class PhotoshootController extends GetxController {
             .map((x) => File(x.path))
             .toList();
         selectedPhotos.addAll(newFiles);
+        // The selection changed: cached encodings of the previous set no
+        // longer match retryFailedSlot's expected photo order.
+        _encodedPhotoCache.clear();
         error.value = '';
       }
     } catch (e) {
@@ -196,6 +206,9 @@ class PhotoshootController extends GetxController {
 
       if (image != null) {
         selectedPhotos.add(File(image.path));
+        // The selection changed: cached encodings of the previous set no
+        // longer match retryFailedSlot's expected photo order.
+        _encodedPhotoCache.clear();
         error.value = '';
       }
     } catch (e) {
@@ -207,6 +220,9 @@ class PhotoshootController extends GetxController {
   void removePhoto(int index) {
     if (index >= 0 && index < selectedPhotos.length) {
       selectedPhotos.removeAt(index);
+      // The selection changed: cached encodings of the previous set no
+      // longer match retryFailedSlot's expected photo order.
+      _encodedPhotoCache.clear();
     }
   }
 
@@ -331,12 +347,14 @@ class PhotoshootController extends GetxController {
     );
 
     try {
-      // Convert photos to base64
+      // Convert photos to base64, caching each encoding by path so a later
+      // retryFailedSlot skips re-encoding unchanged photos.
       generationStatus.value = 'Processing photos...';
       final List<String> photosBase64 = await Future.wait(
         selectedPhotos.map((file) async {
           final bytes = await file.readAsBytes();
-          return await compute(_encodeBase64, bytes);
+          return _encodedPhotoCache[file.path] ??=
+              await compute(_encodeBase64, bytes);
         }),
       );
 
@@ -487,11 +505,23 @@ class PhotoshootController extends GetxController {
           // history, so a duplicate id must not re-append or re-roll ETA.
           if (!generatedImages.any((g) => g.id == image.id)) {
             generatedImages.add(image);
-            // Update progress: 10% for upload, 90% for generation
-            generationProgress.value =
-                10 + ((generatedImages.length / numImages.value) * 90).toInt();
+            // Update progress: 10% for upload, 90% for generation. The
+            // backend's event-provided total (total_count) wins when present
+            // (numImages is only the user's request; the server may produce a
+            // different number); fall back to it otherwise. The fraction is
+            // clamped so an overshoot can never push progress past 100.
+            final eventTotal = imageData['total_count'];
+            final denominator = eventTotal is int && eventTotal > 0
+                ? eventTotal
+                : numImages.value;
+            // Clamp the FRACTION (not the scaled value) so an overshoot can
+            // never push progress past 100.
+            final fraction =
+                (generatedImages.length / denominator).clamp(0.0, 1.0);
+            final progress = 10 + (fraction * 90).toInt();
+            generationProgress.value = progress;
             generationStatus.value =
-                'Generated ${generatedImages.length}/${numImages.value} images...';
+                'Generated ${generatedImages.length}/$denominator images...';
             // Rolling latency for the ETA; the first sample is the planning
             // phase + first image, so the ETA only kicks in from image 2+.
             final now = DateTime.now();
@@ -765,10 +795,15 @@ class PhotoshootController extends GetxController {
     error.value = '';
 
     try {
+      // Cache-first: generatePhotoshoot already encoded these photos, so a
+      // slot retry must not pay the multi-second compute() re-encode again.
       final List<String> photosBase64 = await Future.wait(
         selectedPhotos.map((file) async {
+          final cached = _encodedPhotoCache[file.path];
+          if (cached != null) return cached;
           final bytes = await file.readAsBytes();
-          return await compute(_encodeBase64, bytes);
+          return _encodedPhotoCache[file.path] =
+              await compute(_encodeBase64, bytes);
         }),
       );
 
@@ -900,8 +935,12 @@ class PhotoshootController extends GetxController {
 
     final url = image.imageUrl;
     if (url != null && url.isNotEmpty) {
+      // authHeadersForUrl attaches the Supabase bearer token only for our own
+      // worker-mode serving URLs and returns null for presigned / third-party
+      // hosts (an Authorization header would break their signatures), so it is
+      // safe to pass unconditionally.
       final response = await http
-          .get(Uri.parse(url))
+          .get(Uri.parse(url), headers: authHeadersForUrl(url))
           .timeout(const Duration(seconds: 30));
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return response.bodyBytes;
@@ -944,6 +983,9 @@ class PhotoshootController extends GetxController {
     _completionHandled = false;
     if (!keepPhotos) {
       selectedPhotos.clear();
+      // The selection changed: cached encodings of the previous set no
+      // longer match retryFailedSlot's expected photo order.
+      _encodedPhotoCache.clear();
     }
     customPrompt.value = '';
     customPromptController.clear();

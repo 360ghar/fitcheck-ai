@@ -1,133 +1,183 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Check, Minus } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { AnimatedSection } from './AnimatedSection'
-import { Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { trackEvent } from '@/lib/analytics'
 import {
+  PLAN_LIMITS,
   PLAN_PRICES,
   freePlanFeatureBullets,
   plusPlanFeatureBullets,
   proPlanFeatureBullets,
+  yearlySavings,
 } from '@/lib/plan-limits'
+import { cn } from '@/lib/utils'
+import { trialPlanHref, TRIAL_PROMO_CODE } from '@/lib/trial-offer'
+import { AnimatedSection } from './AnimatedSection'
+import { SectionKicker } from './SectionKicker'
+
+type PlanKey = keyof typeof PLAN_PRICES
 
 const tiers = [
   {
+    key: 'free' as const,
     name: 'Free',
-    price: PLAN_PRICES.free,
-    description: 'Perfect for getting started',
+    description: 'Start a useful wardrobe at no cost',
     features: freePlanFeatureBullets(),
-    cta: 'Start free',
-    highlighted: false,
+    mobileCta: 'Start free',
   },
   {
+    key: 'plus' as const,
     name: 'Plus',
-    price: PLAN_PRICES.plus,
-    description: 'Every paid feature, everyday limits',
+    description: 'Every paid feature with everyday limits',
     features: plusPlanFeatureBullets(),
-    cta: 'Get Plus',
-    highlighted: true,
-    badge: 'Most popular',
+    mobileCta: 'Get Plus',
   },
   {
+    key: 'pro' as const,
     name: 'Pro',
-    price: PLAN_PRICES.pro,
     description: 'The same features at the highest limits',
     features: proPlanFeatureBullets(),
-    cta: 'Upgrade to Pro',
-    highlighted: false,
+    mobileCta: 'Upgrade to Pro',
   },
 ]
 
-interface PricingCardProps {
-  name: string
-  price: { monthly: number; yearly: number }
-  description: string
-  features: string[]
-  cta: string
-  highlighted: boolean
-  badge?: string
-  isYearly: boolean
+const comparisonRows = [
+  {
+    label: 'Item extractions / month',
+    values: tiers.map(({ key }) => PLAN_LIMITS[key].monthlyExtractions.toLocaleString('en-US')),
+  },
+  {
+    label: 'Outfit visualizations / month',
+    values: tiers.map(({ key }) => PLAN_LIMITS[key].monthlyGenerations.toLocaleString('en-US')),
+  },
+  {
+    label: 'Photoshoot images / day',
+    values: tiers.map(({ key }) => PLAN_LIMITS[key].dailyPhotoshootImages.toLocaleString('en-US')),
+  },
+  {
+    label: 'Virtual try-on',
+    values: ['Not included', 'Included', 'Included'],
+  },
+  {
+    label: 'Advanced wardrobe analytics',
+    values: ['Not included', 'Included', 'Included'],
+  },
+  {
+    label: 'Calendar planning and priority support',
+    values: ['Not included', 'Included', 'Included'],
+  },
+]
+
+function planHref(plan: PlanKey, isYearly: boolean) {
+  return plan === 'free' ? '/auth/register' : trialPlanHref(plan, isYearly)
+}
+
+function displayPrice(plan: PlanKey, isYearly: boolean) {
+  const price = PLAN_PRICES[plan]
+  return isYearly ? price.yearly : price.monthly
+}
+
+function Price({ plan, isYearly }: { plan: PlanKey; isYearly: boolean }) {
+  const price = displayPrice(plan, isYearly)
+
+  return (
+    <>
+      <span className="landing-display text-4xl font-semibold text-foreground">
+        ${price.toFixed(price % 1 === 0 ? 0 : 2)}
+      </span>
+      {price > 0 && (
+        <span className="ml-1 text-sm font-normal text-muted-foreground">
+          /{isYearly ? 'year' : 'month'}
+        </span>
+      )}
+    </>
+  )
 }
 
 function PricingCard({
-  name,
-  price,
-  description,
-  features,
-  cta,
-  highlighted,
-  badge,
+  tier,
   isYearly,
-}: PricingCardProps) {
-  const displayPrice = isYearly ? price.yearly : price.monthly
-  // Each tier states its own real saving rather than one hardcoded figure.
-  const savings = price.monthly * 12 - price.yearly
-  const planType = name === 'Plus' ? 'plus' : name === 'Pro' ? 'pro' : null
-  const registerHref = planType
-    ? `/auth/register?plan_type=${planType}_${isYearly ? 'yearly' : 'monthly'}`
-    : '/auth/register'
+}: {
+  tier: (typeof tiers)[number]
+  isYearly: boolean
+}) {
+  const highlighted = tier.key === 'plus'
+  const saving = yearlySavings(tier.key)
 
   return (
-    <div
+    <article
       className={cn(
-        'relative flex h-full flex-col overflow-hidden rounded-2xl border p-6 md:p-8',
-        highlighted
-          ? 'border-primary bg-white dark:bg-stone-950'
-          : 'border-stone-200/90 bg-white dark:border-stone-800 dark:bg-stone-950'
+        'flex h-full flex-col overflow-hidden rounded-[2rem] border bg-card',
+        highlighted ? 'border-primary' : 'border-border'
       )}
     >
-      {badge && (
-        <div className="absolute top-0 right-0 rounded-bl-lg bg-primary px-4 py-1 text-sm font-medium text-primary-foreground">
-          {badge}
+      <div className={cn('border-b px-6 py-5', highlighted ? 'border-primary bg-primary' : 'border-border')}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className={cn('text-xl font-semibold', highlighted ? 'text-primary-foreground' : 'text-foreground')}>
+              {tier.name}
+            </h3>
+            <p className={cn('mt-1 text-sm', highlighted ? 'text-primary-foreground/90' : 'text-muted-foreground')}>
+              {tier.description}
+            </p>
+          </div>
+          {highlighted && (
+            <span className="rounded-full border border-primary-foreground/30 px-2.5 py-1 text-xs font-semibold text-primary-foreground">
+              Everyday
+            </span>
+          )}
         </div>
-      )}
-
-      <div className="mb-6">
-        <h3 className="text-2xl font-semibold text-stone-900 dark:text-stone-50">{name}</h3>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{description}</p>
       </div>
 
-      <div className="mb-6">
-        <span className="landing-display text-5xl font-semibold text-stone-900 dark:text-stone-50">
-          ${displayPrice.toFixed(displayPrice % 1 === 0 ? 0 : 2)}
-        </span>
-        {displayPrice > 0 && (
-          <span className="text-stone-500 dark:text-stone-400">
-            /{isYearly ? 'year' : 'month'}
-          </span>
-        )}
-        {/* Reserve the line in every card so the feature lists and CTAs stay
-            on a shared baseline across all three columns. */}
-        <p className="mt-1 h-5 text-sm text-stone-500 dark:text-stone-400">
-          {isYearly && savings > 0 ? `Saves $${savings} a year` : ''}
+      <div className="px-6 pt-6">
+        <Price plan={tier.key} isYearly={isYearly} />
+        <p className="mt-2 min-h-5 text-sm text-muted-foreground">
+          {isYearly && saving > 0 ? `Save $${saving} each year` : 'No contract'}
         </p>
       </div>
 
-      <ul className="mb-8 flex-1 space-y-3">
-        {features.map((feature) => (
-          <li key={feature} className="flex items-start gap-3">
-            <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
-            <span className="text-stone-600 dark:text-stone-300 text-[15px]">{feature}</span>
+      <ul className="mt-6 flex-1 space-y-3 px-6">
+        {tier.features.map((feature) => (
+          <li key={feature} className="flex items-start gap-3 text-sm leading-relaxed text-body">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+            {feature}
           </li>
         ))}
       </ul>
 
-      <Button
-        className={cn(
-          'w-full h-12 text-base font-medium',
-          highlighted
-            ? 'bg-primary text-primary-foreground hover:bg-primary-pressed'
-            : 'border-stone-300 dark:border-stone-700'
-        )}
-        variant={highlighted ? 'default' : 'outline'}
-        size="lg"
-        asChild
-      >
-        <Link to={registerHref}>{cta}</Link>
-      </Button>
-    </div>
+      <div className="p-6">
+        <Button variant={highlighted ? 'default' : 'outline'} size="lg" className="h-12 w-full" asChild>
+          <Link
+            to={planHref(tier.key, isYearly)}
+            onClick={() =>
+              trackEvent('landing_cta_click', {
+                location: 'pricing',
+                plan: tier.key,
+                promo: TRIAL_PROMO_CODE,
+              })
+            }
+          >
+            {tier.mobileCta}
+          </Link>
+        </Button>
+      </div>
+    </article>
+  )
+}
+
+function ComparisonValue({ value }: { value: string }) {
+  const included = value === 'Included'
+  const unavailable = value === 'Not included'
+
+  return (
+    <span className="inline-flex items-center justify-center gap-2">
+      {included && <Check className="h-4 w-4 text-success" aria-hidden="true" />}
+      {unavailable && <Minus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+      <span className={unavailable ? 'sr-only' : undefined}>{value}</span>
+    </span>
   )
 }
 
@@ -135,71 +185,145 @@ export default function Pricing() {
   const [isYearly, setIsYearly] = useState(false)
 
   return (
-    <section id="pricing" className="py-20 md:py-28 bg-stone-50 dark:bg-stone-900/40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <AnimatedSection>
-          <div className="max-w-2xl mb-12 md:mb-14">
-            <h2 className="landing-display text-3xl sm:text-4xl md:text-[2.75rem] font-semibold text-stone-900 dark:text-stone-50 leading-tight">
-              Simple, transparent pricing
-            </h2>
-            <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400">
-              Start free. Plus and Pro unlock the same features — pick the limits that match how much you generate.
-            </p>
+    <section id="pricing" className="scroll-mt-16 bg-surface-soft py-20 md:py-28">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <AnimatedSection className="reveal">
+          <div className="grid gap-8 lg:grid-cols-12 lg:items-end">
+            <div className="max-w-2xl lg:col-span-7">
+              <SectionKicker>Pricing matrix</SectionKicker>
+              <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
+                Compare limits without decoding the fine print
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-body md:text-lg">
+                Start on Free. Plus and Pro contain the same paid capabilities; only their usage limits differ.
+              </p>
+            </div>
 
-            <div className="mt-8 flex items-center gap-4">
-              <span
-                className={cn(
-                  'font-medium transition-colors text-sm',
-                  !isYearly
-                    ? 'text-stone-900 dark:text-stone-50'
-                    : 'text-stone-500 dark:text-stone-400'
-                )}
-              >
-                Monthly
-              </span>
-              <Switch
-                checked={isYearly}
-                onCheckedChange={setIsYearly}
-                aria-label="Billing period"
-              />
-              <span
-                className={cn(
-                  'font-medium transition-colors text-sm flex items-center gap-2',
-                  isYearly
-                    ? 'text-stone-900 dark:text-stone-50'
-                    : 'text-stone-500 dark:text-stone-400'
-                )}
-              >
-                Yearly
-                <span className="text-xs font-medium text-primary">
-                  2 months free
+            <div className="min-w-0 lg:col-span-5 lg:justify-self-end">
+              <p className="text-sm font-medium text-primary">
+                First month of Pro free · No credit card · Returns to Free
+              </p>
+              <div className="mt-5 flex min-h-11 items-center gap-4">
+                <span className={cn('text-sm font-medium', !isYearly ? 'text-foreground' : 'text-muted-foreground')}>
+                  Monthly
                 </span>
-              </span>
+                <Switch checked={isYearly} onCheckedChange={setIsYearly} aria-label="Billing period" />
+                <span className={cn('text-sm font-medium', isYearly ? 'text-foreground' : 'text-muted-foreground')}>
+                  Yearly <span className="ml-1 text-primary">2 months free</span>
+                </span>
+              </div>
             </div>
           </div>
         </AnimatedSection>
 
-        {/* items-stretch + h-full cards keep every row (price, features, CTA)
-            on one baseline regardless of copy length. */}
-        <div className="grid items-stretch gap-5 md:grid-cols-3 md:gap-6 max-w-6xl">
-          {tiers.map((tier, index) => (
-            <AnimatedSection key={tier.name} delay={index * 80} className="h-full">
-              <PricingCard {...tier} isYearly={isYearly} />
-            </AnimatedSection>
-          ))}
+        <div className="mt-12 hidden overflow-hidden rounded-[2rem] border border-border bg-card lg:block">
+          <table className="w-full table-fixed border-collapse text-left">
+            <caption className="sr-only">FitCheck plan and usage limit comparison</caption>
+            <thead>
+              <tr className="border-b border-border align-top">
+                <th scope="col" className="w-[28%] px-7 py-8 text-sm font-semibold text-muted-foreground">
+                  Plan comparison
+                </th>
+                {tiers.map((tier) => (
+                  <th
+                    key={tier.key}
+                    scope="col"
+                    className={cn(
+                      'w-[24%] border-l border-border px-6 py-8',
+                      tier.key === 'plus' && 'bg-primary/5'
+                    )}
+                  >
+                    <p className="text-lg font-semibold text-foreground">{tier.name}</p>
+                    <p className="mt-1 min-h-10 text-sm font-normal leading-relaxed text-muted-foreground">
+                      {tier.description}
+                    </p>
+                    <div className="mt-5">
+                      <Price plan={tier.key} isYearly={isYearly} />
+                    </div>
+                    <p className="mt-2 min-h-5 text-xs font-normal text-muted-foreground">
+                      {isYearly && yearlySavings(tier.key) > 0
+                        ? `Save $${yearlySavings(tier.key)} each year`
+                        : 'No contract'}
+                    </p>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {comparisonRows.map((row) => (
+                <tr key={row.label} className="border-b border-border last:border-b-0">
+                  <th scope="row" className="px-7 py-5 text-sm font-medium text-foreground">
+                    {row.label}
+                  </th>
+                  {row.values.map((value, index) => (
+                    <td
+                      key={`${row.label}-${tiers[index].key}`}
+                      className={cn(
+                        'border-l border-border px-6 py-5 text-center text-sm text-body',
+                        tiers[index].key === 'plus' && 'bg-primary/5'
+                      )}
+                    >
+                      <ComparisonValue value={value} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              <tr>
+                <th scope="row" className="px-7 py-6 text-sm font-medium text-foreground">
+                  Next step
+                </th>
+                {tiers.map((tier) => (
+                  <td
+                    key={tier.key}
+                    className={cn(
+                      'border-l border-border px-6 py-6',
+                      tier.key === 'plus' && 'bg-primary/5'
+                    )}
+                  >
+                    <Button variant={tier.key === 'plus' ? 'default' : 'outline'} className="w-full" asChild>
+                      <Link
+                        to={planHref(tier.key, isYearly)}
+                        onClick={() =>
+                          trackEvent('landing_cta_click', {
+                            location: 'pricing',
+                            plan: tier.key,
+                            promo: TRIAL_PROMO_CODE,
+                          })
+                        }
+                      >
+                        Choose {tier.name}
+                      </Link>
+                    </Button>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <AnimatedSection delay={200}>
-          <p className="mt-8 text-sm text-stone-500 dark:text-stone-400">
-            No credit card required. Cancel anytime.{' '}
-            <a
-              href="#faq"
-              className="text-primary hover:text-primary-pressed transition-colors"
-            >
-              Compare plan details
-            </a>
-          </p>
-        </AnimatedSection>
+        <div className="min-w-0 max-w-full overflow-hidden [contain:paint] lg:hidden">
+          <div
+            data-testid="mobile-pricing-rail"
+            className="mt-12 flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4"
+          >
+            {tiers.map((tier, index) => (
+              <AnimatedSection
+                key={tier.key}
+                delay={index * 80}
+                className="w-[90%] min-w-0 shrink-0 snap-start sm:w-[24rem]"
+              >
+                <PricingCard tier={tier} isYearly={isYearly} />
+              </AnimatedSection>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-6 text-sm text-muted-foreground">
+          No credit card is required for the free month. Cancel paid plans at any time.{' '}
+          <a href="#faq" className="text-primary hover:text-primary-pressed">
+            Read billing answers
+          </a>
+        </p>
       </div>
     </section>
   )

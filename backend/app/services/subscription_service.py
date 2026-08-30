@@ -199,7 +199,25 @@ class SubscriptionService:
         )
 
     @staticmethod
-    async def get_subscription(user_id: str, db: Client) -> SubscriptionResponse:
+    async def _overlay_gift_entitlement(
+        user_id: str,
+        db: Client,
+        response: SubscriptionResponse,
+    ) -> SubscriptionResponse:
+        """Resolve gifts after a billing read or billing-provider sync."""
+        # Keep the import local so the billing service does not own gift
+        # issuance and GiftService can still read the base billing row.
+        from app.services.gift_service import GiftService
+
+        return await GiftService.overlay_subscription(user_id, response, db)
+
+    @staticmethod
+    async def get_subscription(
+        user_id: str,
+        db: Client,
+        *,
+        include_gifts: bool = True,
+    ) -> SubscriptionResponse:
         """Get user's current subscription."""
         try:
             result = await execute_with_reconnect(
@@ -241,10 +259,13 @@ class SubscriptionService:
             consumed = await SubscriptionService._consume_banked_referral_credit(
                 user_id, db, data
             )
-            if consumed is not None:
-                return SubscriptionService._response_from_row(consumed)
+            response = SubscriptionService._response_from_row(consumed or data)
+            if not include_gifts:
+                return response
 
-            return SubscriptionService._response_from_row(data)
+            return await SubscriptionService._overlay_gift_entitlement(
+                user_id, db, response
+            )
         except Exception as e:
             logger.error(f"Error getting subscription for user {user_id}: {e}")
             raise DatabaseError(f"Failed to get subscription: {str(e)}")
@@ -605,7 +626,9 @@ class SubscriptionService:
                     plan_type=plan_type.value,
                     status=status.value,
                 )
-                return cls._response_from_row(update_rows[0])
+                return await cls._overlay_gift_entitlement(
+                    user_id, db, cls._response_from_row(update_rows[0])
+                )
             # Filtered out — a live store entitlement committed after our
             # snapshot read. It is the survivor; do not clobber it.
             logger.info(
@@ -631,7 +654,9 @@ class SubscriptionService:
         # affected rows for on_conflict upserts).
         upserted_rows = getattr(upsert_result, "data", None) or []
         if upserted_rows:
-            return cls._response_from_row(upserted_rows[0])
+            return await cls._overlay_gift_entitlement(
+                user_id, db, cls._response_from_row(upserted_rows[0])
+            )
         return await cls.get_subscription(user_id, db)
 
     @classmethod
@@ -784,7 +809,9 @@ class SubscriptionService:
             # fall back to the read path only if it does not.
             downgraded_rows = getattr(downgrade_result, "data", None) or []
             if downgraded_rows:
-                return cls._response_from_row(downgraded_rows[0])
+                return await cls._overlay_gift_entitlement(
+                    user_id, db, cls._response_from_row(downgraded_rows[0])
+                )
             return await cls.get_subscription(user_id, db)
 
         status_map = {
@@ -1047,7 +1074,9 @@ class SubscriptionService:
         # instead of re-reading it (one fewer SELECT per webhook).
         upserted_rows = getattr(upsert_result, "data", None) or []
         if upserted_rows:
-            return cls._response_from_row(upserted_rows[0])
+            return await cls._overlay_gift_entitlement(
+                user_id, db, cls._response_from_row(upserted_rows[0])
+            )
         return await cls.get_subscription(user_id, db)
 
     @staticmethod

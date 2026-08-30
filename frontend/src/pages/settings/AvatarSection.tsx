@@ -50,7 +50,7 @@ export function AvatarSection() {
 
   return (
     <div className="px-4 py-4 md:px-6 md:py-6 lg:px-8 border-b border-border">
-      <div className="flex flex-col items-center xs:flex-row xs:items-center w-full">
+      <div className="flex flex-col items-center xs:flex-row w-full">
         <div className="relative">
           {userAvatar ? (
             <img loading="lazy" decoding="async"

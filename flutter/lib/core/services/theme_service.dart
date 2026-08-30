@@ -16,6 +16,7 @@ class ThemeService extends GetxController {
   final Rx<AppThemeMode> _themeMode = _defaultTheme.obs;
 
   final Completer<void> _ready = Completer<void>();
+  Future<void> _themeSaveQueue = Future<void>.value();
 
   /// Completes once the cached theme has been read from storage.
   ///
@@ -72,7 +73,12 @@ class ThemeService extends GetxController {
   Future<void> setThemeMode(AppThemeMode mode) async {
     _themeMode.value = mode;
     Get.changeThemeMode(currentThemeMode);
-    await _saveToLocalStorage(mode);
+    // Apply the latest choice immediately, but serialize persistence writes.
+    // Without the queue, a slow earlier write can complete after a newer tap
+    // and persist the stale mode for the next app launch.
+    final save = _themeSaveQueue.then((_) => _saveToLocalStorage(mode));
+    _themeSaveQueue = save.then<void>((_) {});
+    await save;
   }
 
   /// Save theme to local storage
@@ -88,9 +94,7 @@ class ThemeService extends GetxController {
   /// Backend is source of truth when online
   void syncFromBackend(AppThemeMode? backendMode) {
     if (backendMode != null && backendMode != _themeMode.value) {
-      _themeMode.value = backendMode;
-      Get.changeThemeMode(currentThemeMode);
-      _saveToLocalStorage(backendMode);
+      unawaited(setThemeMode(backendMode));
     }
   }
 }

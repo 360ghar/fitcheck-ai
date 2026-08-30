@@ -25,4 +25,6 @@ export const FEATURES = {
   socialImport: import.meta.env.VITE_ENABLE_SOCIAL_IMPORT === 'true',
   /** Streaks / achievements / leaderboard. Backend: `ENABLE_GAMIFICATION` (default OFF). */
   gamification: import.meta.env.VITE_ENABLE_GAMIFICATION === 'true',
+  /** Gift voucher studio. Public claim links remain available independently. */
+  gifts: import.meta.env.VITE_ENABLE_GIFT_VOUCHERS === 'true',
 } as const

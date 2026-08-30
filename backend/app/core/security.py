@@ -157,10 +157,63 @@ def _decode_asymmetric(token: str, *, alg: str, kid: Optional[str]) -> Dict[str,
         )
 
 
+def decode_supabase_token(token: str) -> Dict[str, Any]:
+    """Verify a Supabase access token and return its claims (non-dependency
+    variant for service code, e.g. the OAuth authorize bridge)."""
+    return _decode_payload(token)
+
+
+def _mcp_signing_key() -> str:
+    return settings.MCP_JWT_SECRET or settings.SUPABASE_JWT_SECRET
+
+
+def verify_mcp_token(token: str) -> TokenData:
+    """Verify a backend-minted OAuth access token (mcp_oauth_service).
+
+    These tokens carry ``aud=fitcheck-mcp`` and ``typ=mcp``; they never pass
+    Supabase verification, and Supabase tokens never pass here (audience
+    differs), so trying both in order is unambiguous.
+    """
+    if not (settings.MCP_JWT_SECRET or settings.SUPABASE_JWT_SECRET):
+        raise _unauthorized()
+    try:
+        # When the OAuth gateway is configured, also pin the issuer so tokens
+        # minted by a different deployment sharing the signing secret fail.
+        issuer = (getattr(settings, "MCP_OAUTH_ISSUER", None) or "").strip()
+        decode_kwargs: dict = {
+            "algorithms": ["HS256"],
+            "audience": "fitcheck-mcp",
+            "options": {"require": ["exp"]},
+        }
+        if issuer:
+            decode_kwargs["issuer"] = issuer
+        payload = jwt.decode(token, _mcp_signing_key(), **decode_kwargs)
+    except jwt.PyJWTError as error:
+        logger.debug("MCP token verification failed: %s", error)
+        raise _unauthorized() from error
+
+    if payload.get("typ") != "mcp":
+        raise _unauthorized()
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise _unauthorized()
+
+    token_data = TokenData(sub=user_id, exp=payload.get("exp"), aud=payload.get("aud"))
+    token_data.email = payload.get("email")
+    return token_data
+
+
 async def verify_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> TokenData:
     """Verify JWT token and extract user claims.
+
+    Two token families are accepted, tried in order:
+    1. Supabase access tokens (web/mobile clients) — JWKS or legacy HS256.
+    2. MCP OAuth access tokens (agents via /mcp, ChatGPT apps) — HS256 with
+       aud=fitcheck-mcp minted by ``mcp_oauth_service``. Without this branch,
+       every loopbacked MCP tool call would 401 at the route dependency.
 
     Args:
         credentials: HTTP Bearer credentials from Authorization header
@@ -188,7 +241,15 @@ async def verify_token(
 
         # Local verification only — no network call to Supabase Auth per request
         # when JWKS is cached. Login still uses Supabase Auth for password checks.
-        payload = _decode_payload(token)
+        try:
+            payload = _decode_payload(token)
+        except (HTTPException, jwt.PyJWTError):
+            # Not a Supabase token: accept backend-minted MCP OAuth tokens
+            # (agents calling /mcp, ChatGPT connectors). Raises 401 if this
+            # isn't one either, so failures are indistinguishable to callers.
+            # PyJWTError is caught raw: the legacy HS256 branch raises before
+            # its own HTTPException wrapping.
+            return verify_mcp_token(token)
 
         user_id = payload.get("sub")
         if not user_id:

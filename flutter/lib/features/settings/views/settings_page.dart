@@ -380,7 +380,10 @@ class _SettingsPageState extends State<SettingsPage> {
       'Vintage',
       'Preppy',
     ];
-    final selected = prefs.preferredStyles ?? [];
+    // Capture once into a local RxList: chips render from this list, not the
+    // controller's preferences object, so a tap toggles immediately and can
+    // never be visually reverted by an in-flight save.
+    final selected = (prefs.preferredStyles ?? <String>[]).obs;
 
     Get.bottomSheet(
       Container(
@@ -401,23 +404,28 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: AppConstants.spacing16),
-              Wrap(
-                spacing: AppConstants.spacing8,
-                runSpacing: AppConstants.spacing8,
-                children: styles.map((style) {
-                  final isSelected = selected.contains(style);
-                  return FilterChip(
-                    label: Text(style),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      if (selected) {
-                        controller.addPreferredStyle(style);
-                      } else {
-                        controller.removePreferredStyle(style);
-                      }
-                    },
-                  );
-                }).toList(),
+              Obx(
+                () => Wrap(
+                  spacing: AppConstants.spacing8,
+                  runSpacing: AppConstants.spacing8,
+                  children: styles.map((style) {
+                    final isSelected = selected.contains(style);
+                    return FilterChip(
+                      label: Text(style),
+                      selected: isSelected,
+                      // `value` (not `selected`) avoids shadowing the local
+                      // RxList above.
+                      onSelected: (value) {
+                        value ? selected.add(style) : selected.remove(style);
+                        if (value) {
+                          controller.addPreferredStyle(style);
+                        } else {
+                          controller.removePreferredStyle(style);
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
               ),
               const SizedBox(height: AppConstants.spacing16),
               Center(
@@ -448,7 +456,10 @@ class _SettingsPageState extends State<SettingsPage> {
       'Yellow',
       'Orange',
     ];
-    final selected = prefs.preferredColors ?? [];
+    // Capture once into a local RxList: chips render from this list, not the
+    // controller's preferences object, so a tap toggles immediately and can
+    // never be visually reverted by an in-flight save.
+    final selected = (prefs.preferredColors ?? <String>[]).obs;
 
     Get.bottomSheet(
       Container(
@@ -469,23 +480,28 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: AppConstants.spacing16),
-              Wrap(
-                spacing: AppConstants.spacing8,
-                runSpacing: AppConstants.spacing8,
-                children: colors.map((color) {
-                  final isSelected = selected.contains(color);
-                  return FilterChip(
-                    label: Text(color),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      if (selected) {
-                        controller.addPreferredColor(color);
-                      } else {
-                        controller.removePreferredColor(color);
-                      }
-                    },
-                  );
-                }).toList(),
+              Obx(
+                () => Wrap(
+                  spacing: AppConstants.spacing8,
+                  runSpacing: AppConstants.spacing8,
+                  children: colors.map((color) {
+                    final isSelected = selected.contains(color);
+                    return FilterChip(
+                      label: Text(color),
+                      selected: isSelected,
+                      // `value` (not `selected`) avoids shadowing the local
+                      // RxList above.
+                      onSelected: (value) {
+                        value ? selected.add(color) : selected.remove(color);
+                        if (value) {
+                          controller.addPreferredColor(color);
+                        } else {
+                          controller.removePreferredColor(color);
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
               ),
               const SizedBox(height: AppConstants.spacing16),
               Center(

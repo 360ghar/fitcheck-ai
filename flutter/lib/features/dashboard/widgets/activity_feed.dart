@@ -65,16 +65,21 @@ class _ActivityRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
     final icon = _activityIcon(activity.type);
+    final hasImage = _nonEmpty(activity.imageUrl) != null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing8),
       child: Row(
         children: [
-          if (activity.imageUrl != null && activity.imageUrl!.isNotEmpty)
+          if (hasImage)
             ClipRRect(
               borderRadius: BorderRadius.circular(AppConstants.radius12),
               child: AppImage(
-                imageUrl: activity.imageUrl!,
+                // Prefer the small variant for a 44px row; the full size is
+                // retried once if the thumb object does not exist.
+                imageUrl:
+                    _nonEmpty(activity.thumbnailUrl) ?? activity.imageUrl,
+                fallbackUrl: activity.imageUrl,
                 fit: BoxFit.cover,
                 width: 44,
                 height: 44,
@@ -136,4 +141,9 @@ class _ActivityRow extends StatelessWidget {
     final local = timestamp.toLocal();
     return '${local.month}/${local.day}';
   }
+
+  /// Empty strings count as absent — clients fall back only on EMPTY,
+  /// never on a 404 (see `AppNetworkImage.fallbackUrl`).
+  String? _nonEmpty(String? value) =>
+      value == null || value.isEmpty ? null : value;
 }
