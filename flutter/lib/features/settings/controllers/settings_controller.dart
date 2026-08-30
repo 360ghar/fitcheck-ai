@@ -41,6 +41,7 @@ class SettingsController extends GetxController {
   final RxString error = ''.obs;
   Future<void> _preferenceWriteQueue = Future<void>.value();
   int _preferenceRevision = 0;
+  int _preferenceFetchGeneration = 0;
   UserPreferencesModel? _lastConfirmedPreferences;
 
   // Action-specific loading states
@@ -61,21 +62,31 @@ class SettingsController extends GetxController {
   /// Fetch user preferences
   Future<void> fetchPreferences() async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+    final fetchGeneration = ++_preferenceFetchGeneration;
     final fetchRevision = _preferenceRevision;
     try {
       isLoading.value = true;
       error.value = '';
       final fetched = await _repository.getPreferences();
       // Do not overwrite a preference change that started while this initial
-      // fetch was in flight. The queued write owns the newer local state.
-      if (isClosed || fetchRevision != _preferenceRevision) return;
+      // fetch was in flight, or a newer fetch response. The queued write owns
+      // newer local state and only the latest fetch owns the loading state.
+      if (isClosed ||
+          fetchGeneration != _preferenceFetchGeneration ||
+          fetchRevision != _preferenceRevision) {
+        return;
+      }
       _lastConfirmedPreferences = fetched;
       preferences.value = fetched;
 
       // Sync theme from backend to ThemeService
       _themeService.syncFromBackend(fetched.themeMode);
     } catch (e) {
-      if (isClosed || fetchRevision != _preferenceRevision) return;
+      if (isClosed ||
+          fetchGeneration != _preferenceFetchGeneration ||
+          fetchRevision != _preferenceRevision) {
+        return;
+      }
       error.value = ErrorHandler.extractMessage(e);
       // If preferences don't exist yet, use defaults
       if (preferences.value == null) {
@@ -84,7 +95,9 @@ class SettingsController extends GetxController {
         _lastConfirmedPreferences ??= defaults;
       }
     } finally {
-      isLoading.value = false;
+      if (!isClosed && fetchGeneration == _preferenceFetchGeneration) {
+        isLoading.value = false;
+      }
     }
   }
 
@@ -225,6 +238,10 @@ class SettingsController extends GetxController {
     required UserPreferencesModel fallbackPreferences,
   }) {
     final revision = ++_preferenceRevision;
+    // A queued write now owns the optimistic local value. A fetch that began
+    // before it must not apply a stale server snapshot or keep its spinner.
+    _preferenceFetchGeneration++;
+    isLoading.value = false;
     _lastConfirmedPreferences ??= fallbackPreferences;
     preferences.value = newPreferences;
     isSaving.value = true;

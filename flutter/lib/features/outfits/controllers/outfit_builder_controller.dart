@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../domain/enums/style.dart';
@@ -50,6 +52,9 @@ class OutfitBuilderController extends GetxController {
   final RxString searchQuery = ''.obs;
   final RxString categoryFilter = 'all'.obs;
   Worker? _wardrobeItemsWorker;
+  Timer? _wardrobeWatcherTimer;
+  WardrobeController? _watchedWardrobeController;
+  int _itemsLoadGeneration = 0;
 
   @override
   void onInit() {
@@ -59,16 +64,43 @@ class OutfitBuilderController extends GetxController {
   }
 
   void _watchWardrobeChanges() {
-    // The picker owns a complete, paginated snapshot while the shell owns a
-    // short wardrobe page. Watch the shell for mutations, then re-fetch the
-    // full picker list so changes outside its first page are represented too.
-    if (!Get.isRegistered<WardrobeController>()) return;
+    _tryWatchWardrobeChanges();
+    // WardrobeController is a Fenix lazy dependency. Polling its registration
+    // state is intentionally lightweight and avoids calling Get.find while it
+    // is still only a lazy factory, which would start an unnecessary wardrobe
+    // fetch whenever this picker opens.
+    _wardrobeWatcherTimer = Timer.periodic(const Duration(milliseconds: 250), (
+      _,
+    ) {
+      if (!isClosed) _tryWatchWardrobeChanges();
+    });
+  }
+
+  void _tryWatchWardrobeChanges() {
+    // Get.isPrepared is true only while a lazyPut factory has not created its
+    // controller. Do not materialize the shell's lazy wardrobe state here.
+    if (!Get.isRegistered<WardrobeController>() ||
+        Get.isPrepared<WardrobeController>()) {
+      _clearWardrobeWatch();
+      return;
+    }
+
     final wardrobeController = Get.find<WardrobeController>();
+    if (identical(_watchedWardrobeController, wardrobeController)) return;
+
+    _clearWardrobeWatch();
+    _watchedWardrobeController = wardrobeController;
     _wardrobeItemsWorker = debounce<List<ItemModel>>(wardrobeController.items, (
       _,
     ) {
       if (!isClosed) _loadItemsFromRepository();
     }, time: const Duration(milliseconds: 250));
+  }
+
+  void _clearWardrobeWatch() {
+    _wardrobeItemsWorker?.dispose();
+    _wardrobeItemsWorker = null;
+    _watchedWardrobeController = null;
   }
 
   Future<void> _loadAvailableItems() async {
@@ -80,6 +112,7 @@ class OutfitBuilderController extends GetxController {
 
   Future<void> _loadItemsFromRepository() async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+    final requestGeneration = ++_itemsLoadGeneration;
     try {
       isLoading.value = true;
       // Load the full wardrobe for the picker (not just the first 100):
@@ -92,11 +125,15 @@ class OutfitBuilderController extends GetxController {
         allItems.addAll(response.items);
         page++;
       } while (response.hasMore && page <= _maxPickerPages);
+      if (isClosed || requestGeneration != _itemsLoadGeneration) return;
       availableItems.value = allItems;
     } catch (e) {
+      if (isClosed || requestGeneration != _itemsLoadGeneration) return;
       error.value = ErrorHandler.extractMessage(e);
     } finally {
-      isLoading.value = false;
+      if (!isClosed && requestGeneration == _itemsLoadGeneration) {
+        isLoading.value = false;
+      }
     }
   }
 
@@ -380,7 +417,10 @@ class OutfitBuilderController extends GetxController {
 
   @override
   void onClose() {
-    _wardrobeItemsWorker?.dispose();
+    _itemsLoadGeneration++;
+    _wardrobeWatcherTimer?.cancel();
+    _wardrobeWatcherTimer = null;
+    _clearWardrobeWatch();
     clearSelection();
     super.onClose();
   }

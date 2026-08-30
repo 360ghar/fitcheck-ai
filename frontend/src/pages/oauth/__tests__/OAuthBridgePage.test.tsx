@@ -1,11 +1,11 @@
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getSupabase, trackEvent, useAuthStore, authState } = vi.hoisted(() => {
   const state: {
     hasHydrated: boolean
-    tokens: { access_token: string; refresh_token: string } | null
+    tokens: { access_token: string; refresh_token?: string } | null
     refreshToken: ReturnType<typeof vi.fn>
   } = {
     hasHydrated: true,
@@ -98,5 +98,21 @@ describe('OAuthBridgePage', () => {
       state: 'txn-2',
       access_token: 'refreshed-access-token',
     })
+  })
+
+  it('prompts for sign-in instead of posting an opaque token without refresh credentials', async () => {
+    authState.tokens = { access_token: 'not-a-jwt' }
+
+    render(
+      <MemoryRouter initialEntries={['/oauth/bridge?state=txn-3']}>
+        <OAuthBridgePage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Sign in to continue' })).toBeInTheDocument(),
+    )
+    expect(authState.refreshToken).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

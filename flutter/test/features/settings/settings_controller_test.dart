@@ -87,8 +87,15 @@ class _FakeSettingsRepository implements SettingsRepository {
 
   int exportCalls = 0;
   final List<UserPreferencesModel> preferenceWrites = [];
+  Future<UserPreferencesModel> Function()? onGetPreferences;
   Future<UserPreferencesModel> Function(UserPreferencesModel preferences)?
   onUpdatePreferences;
+
+  @override
+  Future<UserPreferencesModel> getPreferences() {
+    final handler = onGetPreferences;
+    return handler == null ? Future.value(UserPreferencesModel()) : handler();
+  }
 
   @override
   Future<UserPreferencesModel> updatePreferences(
@@ -120,6 +127,11 @@ class _FakeThemeService extends ThemeService {
   @override
   Future<void> setThemeMode(AppThemeMode mode) async {
     _mode = mode;
+  }
+
+  @override
+  void syncFromBackend(AppThemeMode? backendMode) {
+    if (backendMode != null) _mode = backendMode;
   }
 }
 
@@ -340,6 +352,47 @@ void main() {
   });
 
   group('preference saves preserve pending mutations', () {
+    testWidgets('keeps the latest overlapping preference fetch', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
+      final first = Completer<UserPreferencesModel>();
+      final second = Completer<UserPreferencesModel>();
+      var fetches = 0;
+      final repository = _FakeSettingsRepository()
+        ..onGetPreferences = () {
+          fetches++;
+          return fetches == 1 ? first.future : second.future;
+        };
+      final controller = SettingsController(
+        repository: repository,
+        authController: _FakeAuthController(),
+        themeService: _FakeThemeService(AppThemeMode.system),
+      );
+
+      final oldFetch = controller.fetchPreferences();
+      await tester.pump();
+      final newestFetch = controller.fetchPreferences();
+      await tester.pump();
+
+      first.complete(UserPreferencesModel(themeMode: AppThemeMode.light));
+      await oldFetch;
+      await tester.pump();
+
+      expect(controller.isLoading.value, isTrue);
+      expect(controller.preferences.value, isNull);
+
+      second.complete(UserPreferencesModel(themeMode: AppThemeMode.dark));
+      await newestFetch;
+      await tester.pump();
+
+      expect(controller.preferences.value?.themeMode, AppThemeMode.dark);
+      expect(controller.isLoading.value, isFalse);
+      controller.onClose();
+    });
+
     testWidgets('rolls back a rejected latest non-theme preference', (
       tester,
     ) async {

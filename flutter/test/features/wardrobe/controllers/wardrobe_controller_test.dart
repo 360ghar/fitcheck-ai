@@ -223,6 +223,63 @@ void main() {
       },
     );
 
+    testWidgets(
+      'offline invalidation clears a stale refresh pagination baseline',
+      (tester) async {
+        await pumpApp(tester);
+        final firstRefresh = Completer<ItemsListResponse>();
+        fakeRepo.onGetItems = () {
+          switch (fakeRepo.getItemsCalls) {
+            case 1:
+              return firstRefresh.future;
+            case 2:
+              return Future.value(
+                ItemsListResponse(
+                  items: [_item('reconnected-page-one')],
+                  total: 2,
+                  page: 1,
+                  limit: 20,
+                  hasMore: true,
+                ),
+              );
+            default:
+              return Future.error(AuthException.unauthorized());
+          }
+        };
+        final controller = WardrobeController(itemRepository: fakeRepo);
+        controller.items.add(_item('existing'));
+        controller.currentPage.value = 3;
+        controller.hasMore.value = false;
+
+        final activeRefresh = controller.fetchItems(refresh: true);
+        await tester.pump();
+        fakeNetwork.connected = false;
+        await controller.fetchItems(refresh: true);
+        firstRefresh.complete(
+          ItemsListResponse(
+            items: [_item('stale')],
+            total: 1,
+            page: 1,
+            limit: 20,
+            hasMore: false,
+          ),
+        );
+        await activeRefresh;
+
+        fakeNetwork.connected = true;
+        await controller.fetchItems();
+        expect(controller.currentPage.value, 2);
+        expect(controller.hasMore.value, isTrue);
+
+        await controller.fetchItems(refresh: true);
+
+        expect(controller.currentPage.value, 2);
+        expect(controller.hasMore.value, isTrue);
+        controller.onClose();
+        await settle(tester);
+      },
+    );
+
     testWidgets('load-more appends instead of replacing', (tester) async {
       await pumpApp(tester);
       var call = 0;

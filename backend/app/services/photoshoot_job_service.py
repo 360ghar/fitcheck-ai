@@ -665,10 +665,19 @@ class PhotoshootJobService:
             if not job:
                 return
 
-            event = {"type": event_type, "data": data, "id": job.next_event_id}
-            job.next_event_id += 1
-            if event_type in _TERMINAL_EVENT_TYPES:
-                job.terminal_event_id = event["id"]
+            # The events route may observe a terminal status just before the
+            # pipeline publishes its terminal event. In that window it reserves
+            # the next id for the status payload. Reuse that reservation here
+            # so reconnects see one terminal event id, not two completions.
+            if event_type in _TERMINAL_EVENT_TYPES and job.terminal_event_id is not None:
+                event_id = job.terminal_event_id
+            else:
+                event_id = job.next_event_id
+                job.next_event_id += 1
+                if event_type in _TERMINAL_EVENT_TYPES:
+                    job.terminal_event_id = event_id
+
+            event = {"type": event_type, "data": data, "id": event_id}
 
             # Always store in event history for late-connecting subscribers.
             # History is STRIPPED of base64 payloads (see strip_history_base64)
@@ -753,16 +762,20 @@ class PhotoshootJobService:
 
     @classmethod
     async def get_terminal_event_id(cls, job_id: str) -> int | None:
-        """Return a stable terminal SSE ID, allocating one for recovered jobs.
+        """Return a stable terminal SSE ID for the current worker epoch.
 
         Finished jobs free their replay history to release image payloads. A
-        recovered terminal row therefore has no historic event ID, but still
-        needs a stable synthetic ID so a client that acknowledged it does not
-        receive the same terminal event on every reconnect.
+        recovered terminal row therefore has no historic event ID. It cannot
+        safely compare a new in-memory id with a client's id from a prior
+        worker, so return ``None`` and let the events route resend an unnumbered
+        terminal state. Clients can safely process that idempotent payload more
+        than once; suppressing it could leave them waiting forever.
         """
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if not job or job.status not in _TERMINAL_STATUSES:
+                return None
+            if job.recovered_from_persistence:
                 return None
             if job.terminal_event_id is None:
                 job.terminal_event_id = job.next_event_id

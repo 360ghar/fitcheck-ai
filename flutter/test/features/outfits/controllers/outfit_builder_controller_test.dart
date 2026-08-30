@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fitcheck_ai/domain/enums/category.dart';
 import 'package:fitcheck_ai/domain/enums/condition.dart';
 import 'package:fitcheck_ai/features/outfits/controllers/outfit_builder_controller.dart';
@@ -67,6 +69,7 @@ class FakeOutfitBuilderItemRepository extends ItemRepository {
 
   final List<ItemModel> serverItems;
   int getItemsCalls = 0;
+  Future<ItemsListResponse> Function()? onGetItems;
 
   @override
   Future<ItemsListResponse> getItems({
@@ -82,6 +85,8 @@ class FakeOutfitBuilderItemRepository extends ItemRepository {
     String? sortOrder,
   }) async {
     getItemsCalls++;
+    final handler = onGetItems;
+    if (handler != null) return handler();
     final start = (page - 1) * limit;
     final pageItems = serverItems.skip(start).take(limit).toList();
     return ItemsListResponse(
@@ -262,5 +267,115 @@ void main() {
       controller.onClose();
       wardrobe.onClose();
     });
+
+    testWidgets('ignores a stale picker refresh after a wardrobe mutation', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
+      final first = Completer<ItemsListResponse>();
+      final second = Completer<ItemsListResponse>();
+      final newItem = availableItem('new');
+      final pickerRepository = FakeOutfitBuilderItemRepository([]);
+      pickerRepository.onGetItems = () =>
+          pickerRepository.getItemsCalls == 1 ? first.future : second.future;
+      final wardrobe = Get.put<WardrobeController>(
+        WardrobeController(
+          itemRepository: FakeOutfitBuilderItemRepository([]),
+          networkService: _BuilderNetworkService(),
+        ),
+      );
+      final controller = OutfitBuilderController(
+        outfitRepository: FakeOutfitBuilderRepository(),
+        itemRepository: pickerRepository,
+      );
+      controller.onInit();
+      await tester.pump();
+      expect(pickerRepository.getItemsCalls, 1);
+
+      wardrobe.addItem(newItem);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      expect(pickerRepository.getItemsCalls, 2);
+
+      second.complete(
+        ItemsListResponse(
+          items: [newItem],
+          total: 1,
+          page: 1,
+          limit: 100,
+          hasMore: false,
+        ),
+      );
+      await tester.pump();
+      first.complete(
+        ItemsListResponse(
+          items: [availableItem('old')],
+          total: 1,
+          page: 1,
+          limit: 100,
+          hasMore: false,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(controller.availableItems.map((item) => item.id), ['new']);
+      controller.onClose();
+      wardrobe.onClose();
+    });
+
+    testWidgets(
+      'does not materialize lazy wardrobe state and re-arms after Fenix recreation',
+      (tester) async {
+        await tester.pumpWidget(
+          const GetMaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final pickerRepository = FakeOutfitBuilderItemRepository([]);
+        final wardrobeRepository = FakeOutfitBuilderItemRepository([]);
+        var wardrobeCreates = 0;
+        Get.lazyPut<WardrobeController>(() {
+          wardrobeCreates++;
+          return WardrobeController(
+            itemRepository: wardrobeRepository,
+            networkService: _BuilderNetworkService(),
+          );
+        }, fenix: true);
+        final controller = OutfitBuilderController(
+          outfitRepository: FakeOutfitBuilderRepository(),
+          itemRepository: pickerRepository,
+        );
+        controller.onInit();
+        await tester.pump();
+
+        expect(wardrobeCreates, 0);
+
+        final firstWardrobe = Get.find<WardrobeController>();
+        await tester.pump(const Duration(milliseconds: 300));
+        pickerRepository.serverItems.add(availableItem('first'));
+        firstWardrobe.addItem(availableItem('first'));
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump();
+        expect(controller.availableItems.map((item) => item.id), ['first']);
+
+        await Get.delete<WardrobeController>();
+        await tester.pump(const Duration(milliseconds: 300));
+        final recreatedWardrobe = Get.find<WardrobeController>();
+        await tester.pump(const Duration(milliseconds: 300));
+        pickerRepository.serverItems.add(availableItem('second'));
+        recreatedWardrobe.addItem(availableItem('second'));
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump();
+
+        expect(wardrobeCreates, 2);
+        expect(controller.availableItems.map((item) => item.id), [
+          'first',
+          'second',
+        ]);
+        controller.onClose();
+        recreatedWardrobe.onClose();
+      },
+    );
   });
 }

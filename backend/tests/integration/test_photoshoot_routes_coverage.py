@@ -479,6 +479,51 @@ async def test_events_generator_skips_an_acknowledged_synthetic_terminal_event(m
 
 
 @pytest.mark.asyncio
+async def test_events_generator_resends_recovered_terminal_after_prior_worker_event(monkeypatch):
+    """A recovered job has no durable in-memory event sequence to compare.
+
+    A reconnect may carry an id from a previous worker, so the terminal state
+    must still be delivered instead of being suppressed by a newly allocated
+    local id.
+    """
+    job = await _seed_job()
+    job.status = PhotoshootJobStatus.COMPLETE
+    job.recovered_from_persistence = True
+    monkeypatch.setattr(ps, "EventSourceResponse", _CapturingESR)
+
+    response = await ps.photoshoot_job_events(
+        job_id=job.job_id,
+        last_event_id="4",
+        user={"id": USER_ID},
+        db=None,
+    )
+    events = await _drain(response.content)
+
+    assert _event_types(events) == ["connected", "job_complete"]
+    assert "id" not in events[1]
+    assert job.terminal_event_id is None
+
+
+@pytest.mark.asyncio
+async def test_terminal_broadcast_reuses_id_reserved_by_reconnect():
+    """A terminal status observed before its broadcast has one event id."""
+    job = await _seed_job()
+    job.status = PhotoshootJobStatus.COMPLETE
+
+    reserved_id = await PhotoshootJobService.get_terminal_event_id(job.job_id)
+    await PhotoshootJobService.broadcast_event(
+        job.job_id,
+        "job_complete",
+        {"job_id": job.job_id},
+    )
+
+    assert reserved_id == 1
+    assert job.terminal_event_id == reserved_id
+    assert job.event_history[-1]["id"] == reserved_id
+    assert job.next_event_id == 2
+
+
+@pytest.mark.asyncio
 async def test_events_generator_terminal_job_without_status_data(monkeypatch):
     """A terminal job whose status payload is gone (e.g. evicted from the
     in-memory store) closes the stream after 'connected' without crashing."""

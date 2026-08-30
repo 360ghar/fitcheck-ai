@@ -178,8 +178,11 @@ class WardrobeController extends GetxController {
 
     if (!_networkService.isConnected.value) {
       // Invalidate any in-flight fetch so stale results for the previous
-      // filters cannot populate the new filter state after reconnect.
+      // filters cannot populate the new filter state after reconnect. Its
+      // refresh baseline belongs to that invalidated request as well; keeping
+      // it would let a later failed refresh restore obsolete pagination.
       _fetchGeneration++;
+      _clearRefreshBaseline();
       isLoading.value = false;
       isLoadingMore.value = false;
       isOffline.value = true;

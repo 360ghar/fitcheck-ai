@@ -70,14 +70,21 @@ export default function OAuthBridgePage() {
         if (!accessToken) {
           const auth = useAuthStore.getState();
           accessToken = auth.tokens?.access_token;
-          if (accessToken && tokenExpiresSoon(accessToken) && auth.tokens?.refresh_token) {
-            try {
-              await auth.refreshToken();
-              accessToken = useAuthStore.getState().tokens?.access_token;
-            } catch {
-              // refreshToken clears invalid credentials. Continue to the
-              // sign-in prompt instead of showing an opaque bridge error.
+          if (accessToken && tokenExpiresSoon(accessToken)) {
+            if (!auth.tokens?.refresh_token) {
+              // The local token cannot meet the backend's exp requirement and
+              // there is no credential to refresh it. Do not post it to the
+              // bridge; send the user through the normal sign-in flow.
               accessToken = undefined;
+            } else {
+              try {
+                await auth.refreshToken();
+                accessToken = useAuthStore.getState().tokens?.access_token;
+              } catch {
+                // refreshToken clears invalid credentials. Continue to the
+                // sign-in prompt instead of showing an opaque bridge error.
+                accessToken = undefined;
+              }
             }
           }
         }
