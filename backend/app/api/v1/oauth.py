@@ -23,7 +23,7 @@ import secrets
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from supabase import Client
 
 from app.core.config import settings
@@ -142,6 +142,16 @@ async def authorize(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "unsupported_response_type"},
         )
+    try:
+        oauth_service.validate_scope(scope)
+    except ValidationError as error:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "invalid_scope",
+                "error_description": error.message,
+            },
+        )
     txn_state = state or secrets.token_urlsafe(16)
     try:
         oauth_service.create_pending_authorization(
@@ -206,7 +216,7 @@ async def issue_token(
     code_verifier: Optional[str] = Form(None),
     refresh_token: Optional[str] = Form(None),
     db: Client = Depends(get_db),
-) -> Dict[str, Any]:
+) -> Any:
     """RFC 6749 token endpoint: authorization_code (PKCE) or refresh_token."""
     _require_enabled()
     try:
@@ -230,10 +240,10 @@ async def issue_token(
         raise ValidationError(message=f"unsupported grant_type: {grant_type}", error_code="OAUTH_GRANT_UNSUPPORTED")
     except AuthenticationError as error:
         # RFC 6749 §5.2: grant failures are 400 invalid_grant.
-        raise HTTPException(
+        return JSONResponse(
             status_code=_OAUTH_GRANT_ERROR,
-            detail={"error": "invalid_grant", "error_description": error.message},
-        ) from error
+            content={"error": "invalid_grant", "error_description": error.message},
+        )
 
 
 @router.post("/revoke")

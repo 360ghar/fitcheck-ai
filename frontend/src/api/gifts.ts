@@ -195,6 +195,6 @@ const SAFE_GIFT_MESSAGES = new Set([
 ])
 
 export function giftErrorMessage(error: unknown, fallback: string): string {
-  const message = error instanceof Error ? error.message : ''
+  const message = getApiError(error).message
   return SAFE_GIFT_MESSAGES.has(message) ? message : fallback
 }

@@ -9,6 +9,16 @@ import '../../../core/services/theme_service.dart';
 import '../../../core/utils/frame_safe.dart';
 import '../../../core/utils/error_handler.dart';
 
+class _PreferenceSaveOutcome {
+  const _PreferenceSaveOutcome({
+    required this.revision,
+    required this.succeeded,
+  });
+
+  final int revision;
+  final bool succeeded;
+}
+
 /// Settings controller - manages settings and preferences state
 class SettingsController extends GetxController {
   final SettingsRepository _repository;
@@ -29,6 +39,8 @@ class SettingsController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxBool isSaving = false.obs;
   final RxString error = ''.obs;
+  Future<void> _preferenceWriteQueue = Future<void>.value();
+  int _preferenceRevision = 0;
 
   // Action-specific loading states
   final RxBool isChangingPassword = false.obs;
@@ -77,14 +89,14 @@ class SettingsController extends GetxController {
     final previousMode = current.themeMode ?? AppThemeMode.system;
 
     final updated = current.copyWith(themeMode: mode);
-    preferences.value = updated;
-
     // Update ThemeService (handles local storage and applies theme)
     await _themeService.setThemeMode(mode);
 
     // Save to backend; on failure roll back the optimistic apply above.
-    final saved = await savePreferences(updated);
-    if (!saved && !isClosed) {
+    final outcome = await _queuePreferences(updated);
+    if (!outcome.succeeded &&
+        outcome.revision == _preferenceRevision &&
+        !isClosed) {
       await _themeService.setThemeMode(previousMode);
       preferences.value = current.copyWith(themeMode: previousMode);
     }
@@ -150,7 +162,8 @@ class SettingsController extends GetxController {
     final current = preferences.value;
     if (current == null) return;
 
-    final styles = current.preferredStyles?.where((s) => s != style).toList() ?? [];
+    final styles =
+        current.preferredStyles?.where((s) => s != style).toList() ?? [];
     final updated = current.copyWith(preferredStyles: styles);
     await savePreferences(updated);
   }
@@ -170,7 +183,8 @@ class SettingsController extends GetxController {
     final current = preferences.value;
     if (current == null) return;
 
-    final colors = current.preferredColors?.where((c) => c != color).toList() ?? [];
+    final colors =
+        current.preferredColors?.where((c) => c != color).toList() ?? [];
     final updated = current.copyWith(preferredColors: colors);
     await savePreferences(updated);
   }
@@ -181,22 +195,42 @@ class SettingsController extends GetxController {
   /// state (e.g. [updateThemeMode]) can roll back on failure. Existing
   /// fire-and-forget callers ignore the result, so this is backward compatible.
   Future<bool> savePreferences(UserPreferencesModel newPreferences) async {
-    try {
-      isSaving.value = true;
-      error.value = '';
+    return (await _queuePreferences(newPreferences)).succeeded;
+  }
 
-      final saved = await _repository.updatePreferences(newPreferences);
-      preferences.value = saved;
+  Future<_PreferenceSaveOutcome> _queuePreferences(
+    UserPreferencesModel newPreferences,
+  ) {
+    final revision = ++_preferenceRevision;
+    preferences.value = newPreferences;
+    isSaving.value = true;
+    error.value = '';
 
-      ErrorHandler.showSuccess('Your preferences have been updated', title: 'Saved');
-      return true;
-    } catch (e) {
-      error.value = ErrorHandler.extractMessage(e);
-      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
-      return false;
-    } finally {
-      isSaving.value = false;
-    }
+    final operation = _preferenceWriteQueue.then((_) async {
+      try {
+        final saved = await _repository.updatePreferences(newPreferences);
+        if (!isClosed && revision == _preferenceRevision) {
+          preferences.value = saved;
+          ErrorHandler.showSuccess(
+            'Your preferences have been updated',
+            title: 'Saved',
+          );
+        }
+        return _PreferenceSaveOutcome(revision: revision, succeeded: true);
+      } catch (e) {
+        if (!isClosed && revision == _preferenceRevision) {
+          error.value = ErrorHandler.extractMessage(e);
+          ErrorHandler.showError(error.value, title: 'Error');
+        }
+        return _PreferenceSaveOutcome(revision: revision, succeeded: false);
+      } finally {
+        if (!isClosed && revision == _preferenceRevision) {
+          isSaving.value = false;
+        }
+      }
+    });
+    _preferenceWriteQueue = operation.then<void>((_) {});
+    return operation;
   }
 
   /// Change password via Supabase, RE-AUTHENTICATING with the current one first.
@@ -211,7 +245,10 @@ class SettingsController extends GetxController {
   ///
   /// Signing in with the supplied current password is the re-auth Supabase gives
   /// us: it fails for a wrong password and leaves the session untouched.
-  Future<void> changePassword(String currentPassword, String newPassword) async {
+  Future<void> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
     isChangingPassword.value = true;
     try {
       final email = _authController.currentUserEmail;
@@ -252,7 +289,10 @@ class SettingsController extends GetxController {
       Get.back();
       // The dialog just closed silently; confirm the change happened (the
       // reworked flow was closing with no feedback at all).
-      ErrorHandler.showSuccess('Password updated successfully', title: 'Success');
+      ErrorHandler.showSuccess(
+        'Password updated successfully',
+        title: 'Success',
+      );
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;

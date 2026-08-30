@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.mcp import widgets
 from app.mcp.widgets import WidgetProvider
 
 
@@ -27,8 +28,35 @@ def test_read_returns_html_with_csp_meta():
     html, meta = resolved
     assert html.lstrip().lower().startswith("<!doctype html")
     csp = meta["openai/widgetCSP"]
-    assert "connectDomains" in csp
-    assert "resourceDomains" in csp
+    assert "connect_domains" in csp
+    assert "resource_domains" in csp
+    assert "connectDomains" not in csp
+    assert "resourceDomains" not in csp
+
+
+@pytest.mark.unit
+def test_csp_includes_configured_image_origins(monkeypatch):
+    monkeypatch.setattr(widgets.settings, "PUBLIC_API_BASE_URL", "https://api.example.com/v1")
+    monkeypatch.setattr(
+        widgets.settings,
+        "OBJECT_STORAGE_ENDPOINT",
+        "https://account.r2.cloudflarestorage.com",
+    )
+    monkeypatch.setattr(
+        widgets.settings,
+        "IMAGE_CDN_BASE_URL",
+        "https://images.example.com/assets",
+    )
+
+    csp = widgets._widget_csp()["openai/widgetCSP"]
+    assert csp["connect_domains"] == ["https://api.example.com"]
+    assert csp["resource_domains"] == [
+        "https://api.example.com",
+        "https://account.r2.cloudflarestorage.com",
+        "https://images.example.com",
+        "https://*.r2.dev",
+        "https://fitcheckaiapp.com",
+    ]
 
 
 @pytest.mark.unit

@@ -33,8 +33,9 @@ class ReferralRedemptionResult {
 class UserInitializationService extends GetxService {
   final ReferralRedemptionService _subscriptionRepo;
 
-  UserInitializationService({required ReferralRedemptionService subscriptionRepo})
-      : _subscriptionRepo = subscriptionRepo;
+  UserInitializationService({
+    required ReferralRedemptionService subscriptionRepo,
+  }) : _subscriptionRepo = subscriptionRepo;
 
   /// Redeem a referral code, returning whether it succeeded so callers can
   /// decide whether to keep the pending code for a later retry. Never throws:
@@ -51,7 +52,12 @@ class UserInitializationService extends GetxService {
     String code,
   ) async {
     try {
-      await _subscriptionRepo.redeemReferralCode(code);
+      final redeemed = await _subscriptionRepo.redeemReferralCode(code);
+      if (!redeemed) {
+        return const ReferralRedemptionResult(
+          ReferralRedemptionStatus.definitiveRejection,
+        );
+      }
       ErrorHandler.showInfo(
         'You and your friend both get 1 month of Pro free!',
         title: 'Referral Applied!',

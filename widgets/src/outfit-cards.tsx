@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { extractList, toolOutput, useTheme, widgetApi } from "./lib/openai";
+import { extractOutfits, firstImageUrl, toolOutput, useTheme, widgetApi } from "./lib/openai";
 import "./theme.css";
 
 interface Outfit {
@@ -10,6 +10,7 @@ interface Outfit {
   tags?: unknown;
   occasion?: string;
   image_url?: string | null;
+  images?: { image_url?: string | null; thumbnail_url?: string | null }[];
   items?: { name?: string }[];
 }
 
@@ -21,7 +22,7 @@ function firstTag(value: unknown): string {
 
 function App() {
   const theme = useTheme();
-  const outfits = extractList<Outfit>(toolOutput());
+  const outfits = extractOutfits<Outfit>(toolOutput());
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -38,8 +39,8 @@ function App() {
         <div className="grid">
           {outfits.map((outfit, index) => (
             <figure className="card" key={outfit.id ?? index} style={{ margin: 0 }}>
-              {outfit.image_url ? (
-                <img className="thumb" src={outfit.image_url} alt={outfit.name ?? "outfit"} loading="lazy" />
+              {firstImageUrl(outfit) ? (
+                <img className="thumb" src={firstImageUrl(outfit) ?? undefined} alt={outfit.name ?? "outfit"} loading="lazy" />
               ) : (
                 <div className="thumb" aria-hidden="true" />
               )}

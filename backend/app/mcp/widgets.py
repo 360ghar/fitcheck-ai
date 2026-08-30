@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.core.config import settings
 
@@ -29,14 +30,33 @@ WIDGET_MIME = "text/html"
 
 def _widget_csp() -> dict[str, Any]:
     """Apps-SDK CSP declaration attached to every widget resource."""
-    base = (settings.PUBLIC_API_BASE_URL or "https://fitcheckaiapp.com").rstrip("/")
+    def origin(value: str) -> str | None:
+        parsed = urlsplit((value or "").strip())
+        if not parsed.scheme or not parsed.netloc:
+            return None
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    base = origin(settings.PUBLIC_API_BASE_URL) or "https://fitcheckaiapp.com"
+    resource_domains = list(
+        dict.fromkeys(
+            domain
+            for domain in (
+                base,
+                origin(settings.OBJECT_STORAGE_ENDPOINT),
+                origin(settings.IMAGE_CDN_BASE_URL),
+                "https://*.r2.dev",
+                "https://fitcheckaiapp.com",
+            )
+            if domain
+        )
+    )
     return {
         "openai/widgetCSP": {
             # Widgets talk to the API through window.openai.callTool, not
             # fetch(); the API origin is whitelisted for outbound images
             # (R2/Cloudflare Worker photo URLs live on their own domain).
-            "connectDomains": [base],
-            "resourceDomains": [base, "https://*.r2.dev", "https://fitcheckaiapp.com"],
+            "connect_domains": [base],
+            "resource_domains": resource_domains,
         }
     }
 

@@ -12,8 +12,10 @@ class FindMatchesController extends GetxController {
   // Reactive state
   final RxBool isLoading = false.obs;
   final RxString error = ''.obs;
-  final RxList<Map<String, dynamic>> matchingItems = <Map<String, dynamic>>[].obs;
-  final RxList<Map<String, dynamic>> completeLooks = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> matchingItems =
+      <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> completeLooks =
+      <Map<String, dynamic>>[].obs;
 
   // Filters
   final RxString searchQuery = ''.obs;
@@ -31,6 +33,8 @@ class FindMatchesController extends GetxController {
       _findGeneration++; // discard any in-flight fetch's results
       matchingItems.clear();
       completeLooks.clear();
+      isLoading.value = false;
+      error.value = '';
       return;
     }
 
@@ -127,16 +131,19 @@ class FindMatchesController extends GetxController {
   }
 
   List<Map<String, dynamic>> _normalizeCompleteLooks(
-      List<Map<String, dynamic>> looks) {
+    List<Map<String, dynamic>> looks,
+  ) {
     return looks.map((look) {
       final itemsRaw = look['items'];
       final items = itemsRaw is List
           ? itemsRaw
-              .whereType<Map>()
-              .map((e) => itemModelFromRecommendationJson(
+                .whereType<Map>()
+                .map(
+                  (e) => itemModelFromRecommendationJson(
                     Map<String, dynamic>.from(e),
-                  ))
-              .toList()
+                  ),
+                )
+                .toList()
           : <ItemModel>[];
       return {
         'items': items,
@@ -161,7 +168,8 @@ class FindMatchesController extends GetxController {
             break;
           }
         }
-        final first = primary ??
+        final first =
+            primary ??
             (images.first is Map
                 ? Map<String, dynamic>.from(images.first as Map)
                 : null);
@@ -172,7 +180,8 @@ class FindMatchesController extends GetxController {
           // best-effort), and this value is flattened into a map consumed by
           // `AppImage`, which has no error-fallback to retry with — so a missing
           // thumb here would be a permanently broken tile.
-          final url = first['image_url']?.toString() ??
+          final url =
+              first['image_url']?.toString() ??
               first['url']?.toString() ??
               first['thumbnail_url']?.toString();
           if (url != null && url.isNotEmpty) return url;

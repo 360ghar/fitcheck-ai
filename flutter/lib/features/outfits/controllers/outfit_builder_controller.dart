@@ -6,7 +6,6 @@ import '../models/outfit_model.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../wardrobe/repositories/item_repository.dart';
-import '../../wardrobe/controllers/wardrobe_controller.dart';
 import 'outfit_list_controller.dart';
 import '../../../core/utils/frame_safe.dart';
 import '../../../core/utils/error_handler.dart';
@@ -30,9 +29,6 @@ class OutfitBuilderController extends GetxController {
     ItemRepository? itemRepository,
   }) : _outfitRepository = outfitRepository ?? OutfitRepository(),
        _itemRepository = itemRepository ?? ItemRepository();
-
-  // Worker for cleanup
-  Worker? _wardrobeItemsWorker;
 
   // Reactive state
   final RxList<ItemModel> availableItems = <ItemModel>[].obs;
@@ -61,33 +57,9 @@ class OutfitBuilderController extends GetxController {
 
   Future<void> _loadAvailableItems() async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
-    // Try to sync with WardrobeController for real-time updates
-    if (Get.isRegistered<WardrobeController>()) {
-      final wardrobeController = Get.find<WardrobeController>();
-
-      // Use wardrobe's items directly. Safe to write synchronously: the
-      // settleBuildPhase above already put us outside the build phase.
-      availableItems.value = wardrobeController.items.toList();
-
-      // Listen for changes to wardrobe items. The wardrobe controller is kept
-      // alive by the shell IndexedStack and can emit during a
-      // build/layout/paint phase, so the write is deferred in that case.
-      // See [afterBuildPhase].
-      _wardrobeItemsWorker = ever(wardrobeController.items, (items) {
-        final updated = items.toList();
-        afterBuildPhase(() {
-          if (!isClosed) availableItems.value = updated;
-        });
-      });
-
-      // If wardrobe is empty, load independently as fallback
-      if (availableItems.isEmpty) {
-        await _loadItemsFromRepository();
-      }
-    } else {
-      // Fallback: load independently
-      await _loadItemsFromRepository();
-    }
+    // The shell controller keeps only a paginated wardrobe cache. The picker
+    // needs its own bounded full list or it hides items from later pages.
+    await _loadItemsFromRepository();
   }
 
   Future<void> _loadItemsFromRepository() async {
@@ -186,7 +158,9 @@ class OutfitBuilderController extends GetxController {
 
     final swapIndex = selectedItems.indexWhere((oi) => oi.layer == newLayer);
     if (swapIndex != -1) {
-      selectedItems[swapIndex] = selectedItems[swapIndex].copyWith(layer: item.layer);
+      selectedItems[swapIndex] = selectedItems[swapIndex].copyWith(
+        layer: item.layer,
+      );
     }
     selectedItems[index] = item.copyWith(layer: newLayer);
     selectedItems.refresh();
@@ -234,15 +208,17 @@ class OutfitBuilderController extends GetxController {
     try {
       final visibleItems = selectedItems
           .where((oi) => oi.isVisible)
-          .map((oi) => AIOutfitItem(
-                itemId: oi.item.id,
-                name: oi.item.name,
-                category: oi.item.category.name,
-                colors: oi.item.colors,
-                brand: oi.item.brand,
-                material: oi.item.material,
-                pattern: oi.item.pattern,
-              ).toJson())
+          .map(
+            (oi) => AIOutfitItem(
+              itemId: oi.item.id,
+              name: oi.item.name,
+              category: oi.item.category.name,
+              colors: oi.item.colors,
+              brand: oi.item.brand,
+              material: oi.item.material,
+              pattern: oi.item.pattern,
+            ).toJson(),
+          )
           .toList();
 
       final result = await _outfitRepository.generateOutfitVisualization(
@@ -260,7 +236,10 @@ class OutfitBuilderController extends GetxController {
           ? url
           : 'data:image/png;base64,${result.imageBase64}';
 
-      ErrorHandler.showSuccess('Outfit visualization generated', title: 'Success');
+      ErrorHandler.showSuccess(
+        'Outfit visualization generated',
+        title: 'Success',
+      );
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');
@@ -272,12 +251,18 @@ class OutfitBuilderController extends GetxController {
   /// Save outfit
   Future<void> saveOutfit() async {
     if (name.value.trim().isEmpty) {
-      ErrorHandler.showValidation('Please enter an outfit name', title: 'Error');
+      ErrorHandler.showValidation(
+        'Please enter an outfit name',
+        title: 'Error',
+      );
       return;
     }
 
     if (selectedItems.isEmpty) {
-      ErrorHandler.showValidation('Please add at least one item', title: 'Error');
+      ErrorHandler.showValidation(
+        'Please add at least one item',
+        title: 'Error',
+      );
       return;
     }
 
@@ -379,7 +364,6 @@ class OutfitBuilderController extends GetxController {
 
   @override
   void onClose() {
-    _wardrobeItemsWorker?.dispose();
     clearSelection();
     super.onClose();
   }

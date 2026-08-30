@@ -77,6 +77,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `056_gift_vouchers.sql`
 - `057_mcp_oauth.sql`
 - `058_mcp_oauth_atomic_token_exchange.sql`
+- `059_atomic_admin_gift_revoke.sql`
 
 ## Tables (CREATE TABLE)
 

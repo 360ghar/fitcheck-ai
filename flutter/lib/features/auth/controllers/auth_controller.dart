@@ -149,7 +149,9 @@ class AuthController extends GetxController {
   /// Load user data from Supabase and backend via [AuthService].
   Future<void> _loadUserData({User? supabaseUser}) async {
     try {
-      final loaded = await _authService.loadUserData(supabaseUser: supabaseUser);
+      final loaded = await _authService.loadUserData(
+        supabaseUser: supabaseUser,
+      );
       if (loaded != null) {
         user.value = loaded;
       }
@@ -170,11 +172,18 @@ class AuthController extends GetxController {
 
       if (response.user != null) {
         await _loadUserData(supabaseUser: response.user);
+        // Email-confirmed signups resume through this explicit credential
+        // flow, which suppresses the auth-state worker. Redeem the pending
+        // referral before any later logout can clear it.
+        await _referralService.handleOAuthCallback();
         _authService.trackLogin('email');
 
         // Navigate first so snackbar isn't dismissed by stack replacement
         Get.offAllNamed(Routes.home);
-        ErrorHandler.showInfo('Successfully logged in as ${user.value?.fullName ?? user.value?.email}', title: 'Welcome back!');
+        ErrorHandler.showInfo(
+          'Successfully logged in as ${user.value?.fullName ?? user.value?.email}',
+          title: 'Welcome back!',
+        );
       } else {
         throw Exception('Login failed. Please try again.');
       }
@@ -248,7 +257,9 @@ class AuthController extends GetxController {
 
         // Redeem referral code if provided
         if (referralCode != null && referralCode.isNotEmpty) {
-          final redeemed = await _referralService.redeemReferralCode(referralCode);
+          final redeemed = await _referralService.redeemReferralCode(
+            referralCode,
+          );
           if (!redeemed) {
             // Transient failure (missing backend RPC, dead connection):
             // stash so the next auth event (login / OAuth callback / app
@@ -258,7 +269,10 @@ class AuthController extends GetxController {
           }
         }
 
-        ErrorHandler.showInfo('Account created successfully', title: 'Welcome to Fit Check!');
+        ErrorHandler.showInfo(
+          'Account created successfully',
+          title: 'Welcome to Fit Check!',
+        );
 
         // Navigate to home
         Get.offAllNamed(Routes.home);
@@ -371,15 +385,15 @@ class AuthController extends GetxController {
 
       Get.offAllNamed(Routes.splash);
 
-      ErrorHandler.showInfo('You have been logged out successfully', title: 'Logged Out');
+      ErrorHandler.showInfo(
+        'You have been logged out successfully',
+        title: 'Logged Out',
+      );
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
       // A failed logout used to only debugPrint: the spinner stopped and the
       // user appeared still-logged-in with no explanation.
-      ErrorHandler.showError(
-        error.value,
-        title: 'Logout Failed',
-      );
+      ErrorHandler.showError(error.value, title: 'Logout Failed');
     } finally {
       isLoggingOut.value = false;
     }
@@ -393,7 +407,10 @@ class AuthController extends GetxController {
 
       await _authService.requestPasswordReset(email);
 
-      ErrorHandler.showSuccess('Check your email for password reset instructions', title: 'Email Sent');
+      ErrorHandler.showSuccess(
+        'Check your email for password reset instructions',
+        title: 'Email Sent',
+      );
     } on AuthException catch (e) {
       error.value = e.message;
       ErrorHandler.showError(e.message, title: 'Request Failed');
@@ -437,7 +454,10 @@ class AuthController extends GetxController {
 
       await _authService.updatePassword(newPassword);
 
-      ErrorHandler.showSuccess('Your password has been updated successfully', title: 'Password Updated');
+      ErrorHandler.showSuccess(
+        'Your password has been updated successfully',
+        title: 'Password Updated',
+      );
     } on AuthException catch (e) {
       error.value = e.message;
       ErrorHandler.showError(e.message, title: 'Update Failed');
@@ -477,7 +497,10 @@ class AuthController extends GetxController {
 
       await _authService.resendVerificationEmail(unverifiedEmail.value);
 
-      ErrorHandler.showSuccess('Verification email has been sent. Please check your inbox.', title: 'Email Sent');
+      ErrorHandler.showSuccess(
+        'Verification email has been sent. Please check your inbox.',
+        title: 'Email Sent',
+      );
     } on AuthException catch (e) {
       error.value = e.message;
       ErrorHandler.showError(e.message, title: 'Failed to Send Email');

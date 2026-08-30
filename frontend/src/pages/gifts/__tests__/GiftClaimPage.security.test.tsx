@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import GiftClaimPage from '../GiftClaimPage'
@@ -59,5 +59,67 @@ describe('GiftClaimPage credential safety', () => {
     expect(
       await screen.findByRole('textbox', { name: 'Enter the code printed on the gift' }),
     ).toHaveClass('ph-no-capture')
+  })
+
+  it('ignores a public-gift response superseded by route navigation', async () => {
+    let resolveFirst!: (value: Record<string, unknown>) => void
+    let resolveSecond!: (value: Record<string, unknown>) => void
+    const first = new Promise<Record<string, unknown>>((resolve) => {
+      resolveFirst = resolve
+    })
+    const second = new Promise<Record<string, unknown>>((resolve) => {
+      resolveSecond = resolve
+    })
+    getPublicGift.mockReset()
+    getPublicGift.mockReturnValueOnce(first)
+    getPublicGift.mockReturnValueOnce(second)
+
+    function NavigateToSecondGift() {
+      const navigate = useNavigate()
+      return <button onClick={() => navigate('/gift/gift-456')}>Next gift</button>
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/gift/gift-123']}>
+        <NavigateToSecondGift />
+        <Routes>
+          <Route path="/gift/:publicId" element={<GiftClaimPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(getPublicGift).toHaveBeenCalledWith('gift-123'))
+    fireEvent.click(screen.getByRole('button', { name: 'Next gift' }))
+    await waitFor(() => expect(getPublicGift).toHaveBeenCalledWith('gift-456'))
+
+    await act(async () => {
+      resolveFirst({
+        public_id: 'gift-123',
+        from_name: 'First sender',
+        to_name: 'Alex',
+        duration_months: 1,
+        retail_value_cents: 1200,
+        status: 'issued',
+        created_at: '2026-08-29T00:00:00Z',
+        artwork_version: 1,
+        og_image_url: '/gift.png',
+      })
+    })
+    await act(async () => {
+      resolveSecond({
+        public_id: 'gift-456',
+        from_name: 'Second sender',
+        to_name: 'Alex',
+        duration_months: 1,
+        retail_value_cents: 1200,
+        status: 'issued',
+        created_at: '2026-08-29T00:00:00Z',
+        artwork_version: 1,
+        og_image_url: '/gift.png',
+      })
+    })
+
+    expect(await screen.findByText('Second sender made this for you.')).toBeInTheDocument()
+    expect(screen.queryByText('First sender made this for you.')).not.toBeInTheDocument()
   })
 })

@@ -11,7 +11,7 @@ from app.utils.datetime_util import parse_utc_datetime, utcnow_iso
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Form, Header, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
@@ -458,6 +458,10 @@ async def get_social_import_status(
 async def social_import_events(
     job_id: str,
     last_event_id: Optional[int] = Query(default=None),
+    last_event_id_header: Optional[str] = Header(
+        default=None,
+        alias="Last-Event-ID",
+    ),
     user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
@@ -467,6 +471,12 @@ async def social_import_events(
     job = await SocialImportJobStore.get_job(db, job_id=job_id, user_id=user_id)
     if not job:
         raise SocialImportJobNotFoundError(job_id)
+    replay_after = last_event_id
+    if last_event_id_header is not None:
+        try:
+            replay_after = max(0, int(last_event_id_header))
+        except (TypeError, ValueError):
+            pass
 
     async def event_generator():
         queue: asyncio.Queue = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
@@ -485,9 +495,9 @@ async def social_import_events(
                 db,
                 job_id=job_id,
                 user_id=user_id,
-                after_id=last_event_id,
+                after_id=replay_after,
             )
-            max_replayed_id = last_event_id
+            max_replayed_id = replay_after
             for event in history:
                 max_replayed_id = event.get("id") or max_replayed_id
                 yield {

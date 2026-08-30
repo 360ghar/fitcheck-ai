@@ -128,24 +128,44 @@ class EnvConfig {
       final key = line.substring(0, idx).trim();
       var value = line.substring(idx + 1).trim();
 
-      // Detect fully-quoted values first: quotes may legitimately contain '#'
-      // and must not be truncated by the inline-comment strip below.
-      final fullyQuoted = value.length >= 2 &&
+      value = _stripInlineComment(value);
+      final fullyQuoted =
+          value.length >= 2 &&
           ((value.startsWith('"') && value.endsWith('"')) ||
               (value.startsWith('\'') && value.endsWith('\'')));
-
-      if (!fullyQuoted) {
-        // Strip unquoted inline comments (`KEY=value # note`) before storing.
-        final commentIdx = value.indexOf(' #');
-        if (commentIdx >= 0) {
-          value = value.substring(0, commentIdx).trimRight();
-        }
-      }
 
       if (fullyQuoted) {
         value = value.substring(1, value.length - 1);
       }
       _fileValues[key] = value;
     }
+  }
+
+  static String _stripInlineComment(String value) {
+    String? quote;
+    var escaped = false;
+    for (var index = 0; index < value.length; index++) {
+      final character = value[index];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (quote != null) {
+        if (character == '\\' && quote == '"') {
+          escaped = true;
+        } else if (character == quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (character == '"' || character == '\'') {
+        quote = character;
+        continue;
+      }
+      if (character == '#' && (index == 0 || value[index - 1].trim().isEmpty)) {
+        return value.substring(0, index).trimRight();
+      }
+    }
+    return value.trimRight();
   }
 }

@@ -64,6 +64,7 @@ _NON_JSON_CONTENT_TYPES: Final[tuple[str, ...]] = (
 # Request body content types that are not JSON-tool compatible.
 _NON_JSON_BODY_TYPES: Final[tuple[str, ...]] = (
     "multipart/form-data",
+    "application/x-www-form-urlencoded",
     "application/octet-stream",
     "image/",
 )

@@ -14,9 +14,9 @@ import asyncio
 import hashlib
 import json
 from app.utils.datetime_util import utcnow_iso
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
@@ -328,6 +328,7 @@ async def get_usage(
 @router.get("/{job_id}/events")
 async def photoshoot_job_events(
     job_id: str,
+    last_event_id: Optional[str] = Header(default=None, alias="Last-Event-ID"),
     user = Depends(get_current_user),
     db: Client = Depends(get_db),
 ):
@@ -354,6 +355,10 @@ async def photoshoot_job_events(
     job = await PhotoshootJobService.get_job(job_id, user_id, db=persistence_db)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    try:
+        replay_after = max(0, int(last_event_id or 0))
+    except (TypeError, ValueError):
+        replay_after = 0
 
     async def event_generator():
         queue: asyncio.Queue = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
@@ -409,6 +414,12 @@ async def photoshoot_job_events(
             # Only replay up to replay_up_to index to avoid duplicates with live queue
             event_history = await PhotoshootJobService.get_event_history(job_id, up_to_index=replay_up_to)
             for event in event_history:
+                event_id = event.get("id")
+                try:
+                    if event_id is not None and int(event_id) <= replay_after:
+                        continue
+                except (TypeError, ValueError):
+                    pass
                 payload = {
                     "event": event["type"],
                     "data": json.dumps(event["data"]),

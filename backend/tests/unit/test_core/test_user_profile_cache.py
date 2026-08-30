@@ -97,6 +97,56 @@ async def test_get_or_load_single_flight_one_db_read():
     assert all(r["id"] == "u1" for r in results)
 
 
+@pytest.mark.asyncio
+async def test_get_or_load_caches_negative_result_once():
+    import asyncio
+
+    calls = 0
+
+    async def loader():
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0)
+        return None
+
+    results = await asyncio.gather(
+        *[user_profile_cache.get_or_load("missing", loader) for _ in range(8)]
+    )
+    assert results == [None] * 8
+    assert calls == 1
+
+    assert await user_profile_cache.get_or_load("missing", loader) is None
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_invalidation_during_load_does_not_recache_stale_profile():
+    import asyncio
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+    calls = 0
+
+    async def loader():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            started.set()
+            await release.wait()
+            return {"id": "u1", "name": "stale"}
+        return {"id": "u1", "name": "fresh"}
+
+    task = asyncio.create_task(user_profile_cache.get_or_load("u1", loader))
+    await started.wait()
+    user_profile_cache.invalidate("u1")
+    release.set()
+
+    result = await task
+    assert result == {"id": "u1", "name": "fresh"}
+    assert calls == 2
+    assert user_profile_cache.get("u1") == {"id": "u1", "name": "fresh"}
+
+
 # ---------------------------------------------------------------------------
 # deps.get_current_user wiring
 # ---------------------------------------------------------------------------

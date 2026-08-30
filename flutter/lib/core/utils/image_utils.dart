@@ -20,8 +20,9 @@ class ImageUtils {
   /// Thumbnail size for preview
   static const int thumbnailSize = 200;
 
-  /// Max file size in bytes (10MB)
-  static const int maxFileSize = 10 * 1024 * 1024;
+  /// The batch extraction endpoint accepts at most 7 MB of decoded image data.
+  static const int maxFileSize = 7 * 1024 * 1024;
+  static const int maxBase64Size = 10 * 1024 * 1024;
 
   /// Filename prefix used by [generateThumbnail] for generated thumbnails.
   static const String _thumbnailPrefix = 'thumb_';
@@ -75,12 +76,7 @@ class ImageUtils {
       // upload exception instead of silently base64-encoding oversized bytes.
       try {
         final bytes = await file.readAsBytes();
-        if (bytes.length > maxFileSize) {
-          throw FileUploadException.fileTooLarge(
-            maxFileSize ~/ (1024 * 1024),
-          );
-        }
-        return base64Encode(bytes);
+        return _encodeBatchImage(bytes);
       } on FileUploadException {
         rethrow;
       } catch (e) {
@@ -91,7 +87,18 @@ class ImageUtils {
       }
     }
 
-    return base64Encode(compressed);
+    return _encodeBatchImage(compressed);
+  }
+
+  static String _encodeBatchImage(Uint8List bytes) {
+    if (bytes.length > maxFileSize) {
+      throw FileUploadException.fileTooLarge(maxFileSize ~/ (1024 * 1024));
+    }
+    final encoded = base64Encode(bytes);
+    if (encoded.length > maxBase64Size) {
+      throw FileUploadException.fileTooLarge(maxFileSize ~/ (1024 * 1024));
+    }
+    return encoded;
   }
 
   /// Generate a thumbnail for preview
@@ -179,11 +186,13 @@ class ImageUtils {
 
       // Process batch in parallel
       final batchResults = await Future.wait(
-        batch.map((file) => compressAndEncode(
-              file,
-              maxDimension: maxDimension,
-              quality: quality,
-            )),
+        batch.map(
+          (file) => compressAndEncode(
+            file,
+            maxDimension: maxDimension,
+            quality: quality,
+          ),
+        ),
       );
 
       results.addAll(batchResults);

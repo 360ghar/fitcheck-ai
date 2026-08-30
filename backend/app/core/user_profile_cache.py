@@ -39,48 +39,70 @@ logger = logging.getLogger(__name__)
 _TTL_SECONDS = 30.0
 _MAX_ENTRIES = 2048
 
-_cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+_MISSING = object()
+_cache: "OrderedDict[str, Dict[str, Any] | object]" = OrderedDict()
 _expiry: Dict[str, float] = {}
 _locks: Dict[str, asyncio.Lock] = {}
+_generation = 0
 
 
 def _now() -> float:
     return time.monotonic()
 
 
-def get(user_id: str) -> Optional[Dict[str, Any]]:
-    """Return a copy of the cached profile, or None on miss/expiry."""
+def _get_entry(user_id: str) -> tuple[bool, Optional[Dict[str, Any]]]:
+    """Return whether the cached entry exists and its copied profile."""
     expires_at = _expiry.get(user_id)
     if expires_at is None or _now() >= expires_at:
-        return None
+        _cache.pop(user_id, None)
+        _expiry.pop(user_id, None)
+        return False, None
     entry = _cache.get(user_id)
+    if entry is _MISSING:
+        _cache.move_to_end(user_id)
+        return True, None
     if not isinstance(entry, dict):
-        return None
+        _cache.pop(user_id, None)
+        _expiry.pop(user_id, None)
+        return False, None
     _cache.move_to_end(user_id)
-    return dict(entry)
+    return True, dict(entry)
 
 
-def set_(user_id: str, profile: Dict[str, Any]) -> None:
-    """Cache a copy of ``profile`` for the TTL window."""
-    if not isinstance(profile, dict):
-        return
-    _cache[user_id] = dict(profile)
+def get(user_id: str) -> Optional[Dict[str, Any]]:
+    """Return a copy of the cached profile, or None on miss/negative hit."""
+    _, profile = _get_entry(user_id)
+    return profile
+
+
+def _set_entry(user_id: str, profile: Optional[Dict[str, Any]]) -> None:
+    """Store a positive or negative lookup result for the TTL window."""
+    _cache[user_id] = dict(profile) if isinstance(profile, dict) else _MISSING
     _expiry[user_id] = _now() + _TTL_SECONDS
     _cache.move_to_end(user_id)
     while len(_cache) > _MAX_ENTRIES:
         evicted, _ = _cache.popitem(last=False)
         _expiry.pop(evicted, None)
-        _locks.pop(evicted, None)
+
+
+def set_(user_id: str, profile: Dict[str, Any]) -> None:
+    """Cache a copy of the profile for the TTL window."""
+    if isinstance(profile, dict):
+        _set_entry(user_id, profile)
 
 
 def invalidate(user_id: str) -> None:
     """Drop the cached profile (call after any write to that users row)."""
+    global _generation
+    _generation += 1
     _cache.pop(user_id, None)
     _expiry.pop(user_id, None)
 
 
 def clear() -> None:
     """Drop all cached profiles (tests, admin bulk operations)."""
+    global _generation
+    _generation += 1
     _cache.clear()
     _expiry.clear()
     _locks.clear()
@@ -107,15 +129,18 @@ async def get_or_load(user_id: str, loader) -> Optional[Dict[str, Any]]:
     the row does not exist). Concurrent callers for the same user share one
     load; the winner's result is cached for the TTL window.
     """
-    cached = get(user_id)
-    if cached is not None:
+    hit, cached = _get_entry(user_id)
+    if hit:
         return cached
 
-    async with lock_for(user_id):
-        cached = get(user_id)
-        if cached is not None:
-            return cached
-        profile = await loader()
-        if profile is not None:
-            set_(user_id, profile)
-        return profile
+    while True:
+        async with lock_for(user_id):
+            hit, cached = _get_entry(user_id)
+            if hit:
+                return cached
+            generation = _generation
+            profile = await loader()
+            if generation != _generation:
+                continue
+            _set_entry(user_id, profile)
+            return dict(profile) if isinstance(profile, dict) else None

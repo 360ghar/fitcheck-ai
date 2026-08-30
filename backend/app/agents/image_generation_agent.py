@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from app.agents.prompt_fidelity import (
     GARMENT_REFERENCE_LOCK,
     NO_PERSON_NEGATIVES,
+    PRODUCT_TEXT_ONLY_NEGATIVES,
     OUTFIT_LOCK,
     PERSON_REFERENCE_FIDELITY,
     PRODUCT_CUSTOM_BACKGROUND_LOCK,
@@ -863,7 +864,7 @@ Specs:
 - Soft studio light, sharp focus
 - Only this single item; no model, extra garments, or second item
 
-{NO_PERSON_NEGATIVES}""".strip()
+{PRODUCT_TEXT_ONLY_NEGATIVES}""".strip()
 
         generated = await self._generate_image(prompt, reference_image=reference_image)
         return await self._matte(generated, context="product image") if matte_requested else generated

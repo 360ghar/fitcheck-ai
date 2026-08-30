@@ -18,6 +18,8 @@ from typing import Any
 
 import httpx
 
+from app.mcp.auth import get_forwarded_for
+
 logger = logging.getLogger(__name__)
 
 _asgi_app: Any = None
@@ -88,6 +90,11 @@ async def call_endpoint(
     }
     if authorization:
         headers["Authorization"] = authorization
+    forwarded_for = get_forwarded_for()
+    if forwarded_for:
+        # ASGITransport uses a loopback client address. Preserve the inbound
+        # chain so routes using the shared IP limiter key on the real caller.
+        headers["X-Forwarded-For"] = forwarded_for
 
     transport = httpx.ASGITransport(app=_get_asgi_app())
     async with httpx.AsyncClient(transport=transport, base_url="http://fitcheck-mcp.loopback", timeout=_LOOPBACK_TIMEOUT_SECONDS) as client:

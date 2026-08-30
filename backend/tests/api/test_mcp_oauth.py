@@ -73,6 +73,20 @@ async def test_dcr_rejects_unlisted_redirect(oauth_enabled, async_client: httpx.
 
 
 @pytest.mark.asyncio
+async def test_dcr_rejects_redirect_lookalike(oauth_enabled, async_client: httpx.AsyncClient):
+    response = await async_client.post(
+        "/api/v1/oauth/register",
+        json={
+            "redirect_uris": [
+                "https://chatgpt.com/connector_platform_oauth_redirect.evil/callback"
+            ],
+            "client_name": "lookalike",
+        },
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_dcr_registers_public_client(oauth_enabled, async_client: httpx.AsyncClient, db):
     response = await async_client.post(
         "/api/v1/oauth/register",
@@ -155,7 +169,7 @@ async def test_full_code_flow_issues_and_rotates_tokens(
         },
     )
     assert replay.status_code == 400
-    assert replay.json()["error"]["error"] == "invalid_grant"
+    assert replay.json()["error"] == "invalid_grant"
 
     # Refresh rotation: first use works and mints a NEW refresh token.
     first_refresh = tokens["refresh_token"]
@@ -173,7 +187,7 @@ async def test_full_code_flow_issues_and_rotates_tokens(
         data={"grant_type": "refresh_token", "client_id": client_id, "refresh_token": first_refresh},
     )
     assert reuse.status_code == 400
-    assert reuse.json()["error"]["error"] == "invalid_grant"
+    assert reuse.json()["error"] == "invalid_grant"
 
     after = await async_client.post(
         "/api/v1/oauth/token",
@@ -252,7 +266,30 @@ async def test_pkce_failure_rejects_exchange(oauth_enabled, async_client: httpx.
         },
     )
     assert response.status_code == 400
-    assert "PKCE" in response.json()["error"]["error_description"]
+    assert response.json()["error"] == "invalid_grant"
+    assert "PKCE" in response.json()["error_description"]
+
+
+@pytest.mark.asyncio
+async def test_authorize_rejects_unsupported_scope(oauth_enabled, async_client: httpx.AsyncClient):
+    _, challenge = _verifier_and_challenge("scope-verifier-1234567890abcdef")
+
+    response = await async_client.get(
+        "/api/v1/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "unused-client-id",
+            "redirect_uri": CHATGPT_REDIRECT,
+            "code_challenge": challenge,
+            "scope": "mcp profile",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": "invalid_scope",
+        "error_description": "unsupported scope",
+    }
 
 
 # ---------------------------------------------------------------------------

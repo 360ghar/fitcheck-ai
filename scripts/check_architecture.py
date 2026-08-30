@@ -200,7 +200,7 @@ def check_backend_file(path: Path) -> None:
                 f"logic into services; keep utils pure. See ARCHITECTURE.md."
             )
         # mcp is an agent surface: talks HTTP-loopback only, never domain imports
-        if file_layer == "mcp" and target in {"api", "services", "models", "db", "agents", "utils"}:
+        if file_layer == "mcp" and target in {"api", "services", "models", "db", "agents", "utils", "main"}:
             errors.append(
                 f"{path}: layer 'mcp' imports '{imp}' ({target}). "
                 f"REMEDIATE: app/mcp/ executes tool calls as in-process loopback "

@@ -64,6 +64,7 @@ class WardrobeController extends GetxController {
   // Single-item fetch state (deep links, items beyond the loaded page)
   final RxBool isFetchingItem = false.obs;
   final RxString itemFetchError = ''.obs;
+
   /// The item fetched by id when it is NOT on the loaded page and cannot be
   /// merged (a server-side filter is active — A10b-09). ItemDetailPage renders
   /// this directly so a deep link to an item beyond the current page leaves
@@ -167,6 +168,8 @@ class WardrobeController extends GetxController {
   /// Fetch items from server with filters
   Future<void> fetchItems({bool refresh = false}) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+    final previousPage = currentPage.value;
+    final previousHasMore = hasMore.value;
 
     if (!_networkService.isConnected.value) {
       // Invalidate any in-flight fetch so stale results for the previous
@@ -256,6 +259,10 @@ class WardrobeController extends GetxController {
       currentPage.value++;
     } catch (e) {
       if (requestGeneration != _fetchGeneration || isClosed) return;
+      if (refresh) {
+        currentPage.value = previousPage;
+        hasMore.value = previousHasMore;
+      }
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');
     } finally {
@@ -531,7 +538,10 @@ class WardrobeController extends GetxController {
         selectedItem.value = null;
       }
 
-      ErrorHandler.showSuccess('Item removed from your closet', title: 'Deleted');
+      ErrorHandler.showSuccess(
+        'Item removed from your closet',
+        title: 'Deleted',
+      );
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;
@@ -553,7 +563,10 @@ class WardrobeController extends GetxController {
       clearSelection();
       applyFilters();
 
-      ErrorHandler.showSuccess('$count items removed from your closet', title: 'Deleted');
+      ErrorHandler.showSuccess(
+        '$count items removed from your closet',
+        title: 'Deleted',
+      );
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;

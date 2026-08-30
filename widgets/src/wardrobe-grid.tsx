@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { extractList, toolOutput, useTheme, widgetApi } from "./lib/openai";
+import { extractItems, firstImageUrl, toolOutput, useTheme, widgetApi } from "./lib/openai";
 import "./theme.css";
 
 interface Item {
@@ -10,6 +10,7 @@ interface Item {
   brand?: string;
   colors?: unknown;
   image_url?: string | null;
+  images?: { image_url?: string | null; thumbnail_url?: string | null }[];
   wear_count?: number;
   is_favorite?: boolean;
 }
@@ -25,7 +26,7 @@ function normalizerColor(value: unknown): string {
 
 function App() {
   const theme = useTheme();
-  const items = extractList<Item>(toolOutput());
+  const items = extractItems<Item>(toolOutput());
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -42,8 +43,8 @@ function App() {
         <div className="grid">
           {items.map((item, index) => (
             <figure className="card" key={item.id ?? index} style={{ margin: 0 }}>
-              {item.image_url ? (
-                <img className="thumb" src={item.image_url} alt={item.name ?? "item"} loading="lazy" />
+              {firstImageUrl(item) ? (
+                <img className="thumb" src={firstImageUrl(item) ?? undefined} alt={item.name ?? "item"} loading="lazy" />
               ) : (
                 <div className="thumb" aria-hidden="true" />
               )}

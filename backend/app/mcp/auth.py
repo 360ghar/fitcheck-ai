@@ -24,11 +24,20 @@ from app.core.config import settings
 # practice; set by BearerPresenceMiddleware before JSON-RPC processing and
 # read by tool handlers to forward credentials into the loopback call.
 current_authorization: ContextVar[str | None] = ContextVar("mcp_authorization", default=None)
+current_forwarded_for: ContextVar[str | None] = ContextVar(
+    "mcp_forwarded_for",
+    default=None,
+)
 
 
 def get_authorization() -> str | None:
     """The caller's Authorization header (or None), for the executor."""
     return current_authorization.get()
+
+
+def get_forwarded_for() -> str | None:
+    """The original request address chain for loopback rate-limit checks."""
+    return current_forwarded_for.get()
 
 
 def www_authenticate_header() -> str:
@@ -113,8 +122,16 @@ class BearerPresenceMiddleware:
             await send_unauthorized(send)
             return
 
+        forwarded_for = headers.get("x-forwarded-for")
+        if not forwarded_for:
+            client = scope.get("client")
+            if client and client[0]:
+                forwarded_for = str(client[0])
+
         token = current_authorization.set(authorization)
+        forwarded_for_token = current_forwarded_for.set(forwarded_for)
         try:
             await self.app(scope, receive, send)
         finally:
+            current_forwarded_for.reset(forwarded_for_token)
             current_authorization.reset(token)

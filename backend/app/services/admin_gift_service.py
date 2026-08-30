@@ -381,32 +381,21 @@ class AdminGiftService:
             )
         if voucher.get("status") not in {"issued", "claimed"}:
             raise ValidationError("This gift cannot be voided or revoked")
-        next_status = "revoked" if voucher.get("status") == "claimed" else "voided"
+        expected_status = str(voucher["status"])
         result = await asyncio.to_thread(
-            db.table("gift_vouchers")
-            .update({"status": next_status, "admin_note": reason, "updated_at": utcnow_iso()})
-            .eq("id", voucher_id)
-            .in_("status", ["issued", "claimed"])
-            .execute
+            db.rpc(
+                "void_or_revoke_gift_voucher",
+                {
+                    "p_voucher_id": voucher_id,
+                    "p_expected_status": expected_status,
+                    "p_reason": reason,
+                    "p_now": utcnow_iso(),
+                },
+            ).execute
         )
         rows = _rows(result)
         if not rows:
             raise ValidationError("The gift changed before the action completed")
-        if next_status == "revoked":
-            await asyncio.to_thread(
-                db.table("gift_entitlement_grants")
-                .update(
-                    {
-                        "status": "revoked",
-                        "revoked_at": utcnow_iso(),
-                        "revoke_reason": reason,
-                        "updated_at": utcnow_iso(),
-                    }
-                )
-                .eq("voucher_id", voucher_id)
-                .in_("status", ["queued", "active"])
-                .execute
-            )
         return GiftService.serialize(rows[0], audience="admin").model_dump(mode="json")
 
     @staticmethod

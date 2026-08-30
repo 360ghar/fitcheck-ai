@@ -29,6 +29,75 @@ def _is_missing_profile_error(error: Exception) -> bool:
     return getattr(error, "code", None) == "PGRST116"
 
 
+async def _provision_profile(token_data: TokenData, db: Client) -> Dict[str, Any]:
+    """Create a first-login profile while the cache single-flight lock is held."""
+    logger.info("Auto-creating profile for OAuth user %s", token_data.sub)
+
+    def _create_profile() -> Dict[str, Any]:
+        client = SupabaseDB.get_service_client()
+        auth_user = client.auth.admin.get_user_by_id(token_data.sub)
+        if not auth_user or not auth_user.user:
+            raise AuthenticationError(
+                "User account no longer exists",
+                error_code="AUTH_PROFILE_NOT_FOUND",
+            )
+
+        user_metadata = auth_user.user.user_metadata or {}
+        email = auth_user.user.email or token_data.email
+        full_name = (
+            user_metadata.get("full_name")
+            or user_metadata.get("name")
+            or ""
+        )[:255]
+        avatar_url = (
+            user_metadata.get("avatar_url")
+            or user_metadata.get("picture")
+        )
+        if avatar_url is not None:
+            avatar_url = avatar_url[:500]
+
+        now = utcnow_iso()
+        profile = {
+            "id": token_data.sub,
+            "email": email,
+            "full_name": full_name,
+            "avatar_url": avatar_url,
+            "email_verified": True,
+            "is_active": True,
+            "created_at": now,
+            "updated_at": now,
+            "last_login_at": now,
+        }
+        db.table("users").upsert(profile, on_conflict="id").execute()
+
+        try:
+            db.table("user_preferences").upsert({
+                "user_id": token_data.sub,
+                "favorite_colors": [],
+                "preferred_styles": [],
+                "liked_brands": [],
+                "disliked_patterns": [],
+                "preferred_occasions": [],
+                "data_points_collected": 0,
+            }, on_conflict="user_id").execute()
+        except Exception:
+            pass
+        try:
+            db.table("user_settings").upsert({
+                "user_id": token_data.sub,
+                "language": "en",
+                "measurement_units": "imperial",
+                "notifications_enabled": True,
+                "email_marketing": False,
+                "dark_mode": False,
+            }, on_conflict="user_id").execute()
+        except Exception:
+            pass
+        return profile
+
+    return await asyncio.to_thread(_create_profile)
+
+
 async def get_current_user(
     db: Client = Depends(get_db),
     token_data: TokenData = Depends(verify_token)
@@ -80,133 +149,70 @@ async def get_current_user(
             )
             return maybe_single_data(result)
 
-        user = await user_profile_cache.get_or_load(token_data.sub, _load_profile)
+        async def _load_or_provision_profile():
+            try:
+                profile = await _load_profile()
+            except Exception as error:
+                if not _is_missing_profile_error(error):
+                    raise
+                profile = None
+            if profile is not None:
+                return profile
+            try:
+                return await _provision_profile(token_data, db)
+            except AuthenticationError:
+                raise
+            except Exception as error:
+                logger.warning(
+                    "Failed to auto-create user profile for %s: %s",
+                    token_data.sub,
+                    error,
+                )
+                raise AuthenticationError(
+                    message="User profile could not be loaded or created",
+                    error_code="AUTH_PROFILE_ERROR",
+                ) from error
+
+        user = await user_profile_cache.get_or_load(
+            token_data.sub,
+            _load_or_provision_profile,
+        )
+    except AuthenticationError:
+        raise
     except Exception as error:
         # With maybe_single, a raised error is NEVER a missing profile (the
         # id lookup is on the PK, so PGRST116/multi-row is impossible) —
         # timeouts, permissions and other database errors must not be
         # misclassified as a missing profile. `_is_missing_profile_error` is
         # kept for legacy error surfaces that still raise PGRST116.
-        if not _is_missing_profile_error(error):
-            logger.warning("Failed to load user profile for %s: %s", token_data.sub, error)
-            raise AuthenticationError(
-                message="User profile lookup failed",
-                error_code="AUTH_PROFILE_LOOKUP_ERROR",
-            ) from error
-        user = None
+        logger.warning("Failed to load user profile for %s: %s", token_data.sub, error)
+        raise AuthenticationError(
+            message="User profile lookup failed",
+            error_code="AUTH_PROFILE_LOOKUP_ERROR",
+        ) from error
 
-    if user is not None:
-        # Suspended accounts are rejected before anything else: the admin
-        # panel (and every client) must not keep serving a user whose
-        # account was disabled by an admin. is_active defaults to True for
-        # rows created before the flag existed, so only an explicit False
-        # counts as suspended. Raised OUTSIDE the lookup try/except so it is
-        # not re-wrapped as AUTH_PROFILE_LOOKUP_ERROR.
-        if user.get("is_active") is False:
-            raise AuthenticationError(
-                message="Account is suspended",
-                error_code="ACCOUNT_SUSPENDED",
-            )
-        # Add email from token if not in database
-        if not user.get("email") and token_data.email:
-            user["email"] = token_data.email
-        return user
-
-    # Profile doesn't exist - attempt auto-creation for OAuth users.
-    # All sync Supabase calls run in a worker thread so first-login does not
-    # block the single event loop (same rationale as the select above).
-    try:
-        logger.info(f"Auto-creating profile for user {token_data.sub}")
-
-        def _create_profile():
-            client = SupabaseDB.get_service_client()
-            auth_user = client.auth.admin.get_user_by_id(token_data.sub)
-            if not auth_user or not auth_user.user:
-                # The Supabase Auth user no longer exists (account deleted)
-                # while the access token is still valid. Do NOT resurrect the
-                # profile: a deleted account must stay deleted (A1-04).
-                raise AuthenticationError(
-                    "User account no longer exists",
-                    error_code="AUTH_PROFILE_NOT_FOUND",
-                )
-            user_metadata = {}
-            email = token_data.email
-
-            user_metadata = auth_user.user.user_metadata or {}
-            email = auth_user.user.email or email
-
-            full_name = (
-                user_metadata.get("full_name")
-                or user_metadata.get("name")  # Google OAuth
-                or ""
-            )[:255]  # users.full_name is VARCHAR(255); an overlong OAuth name
-            # would otherwise 500 the very first login with 22001.
-            avatar_url = (
-                user_metadata.get("avatar_url")
-                or user_metadata.get("picture")  # Google OAuth
-            )
-            if avatar_url is not None:
-                avatar_url = avatar_url[:500]  # users.avatar_url is VARCHAR(500)
-
-            now = utcnow_iso()
-            profile = {
-                "id": token_data.sub,
-                "email": email,
-                "full_name": full_name,
-                "avatar_url": avatar_url,
-                "email_verified": True,
-                "is_active": True,
-                "created_at": now,
-                "updated_at": now,
-                "last_login_at": now,
-            }
-
-            db.table("users").upsert(profile, on_conflict="id").execute()
-
-            try:
-                db.table("user_preferences").upsert({
-                    "user_id": token_data.sub,
-                    "favorite_colors": [],
-                    "preferred_styles": [],
-                    "liked_brands": [],
-                    "disliked_patterns": [],
-                    "preferred_occasions": [],
-                    "data_points_collected": 0,
-                }, on_conflict="user_id").execute()
-            except Exception:
-                pass  # May already exist from trigger
-
-            try:
-                db.table("user_settings").upsert({
-                    "user_id": token_data.sub,
-                    "language": "en",
-                    "measurement_units": "imperial",
-                    "notifications_enabled": True,
-                    "email_marketing": False,
-                    "dark_mode": False,
-                }, on_conflict="user_id").execute()
-            except Exception:
-                pass  # May already exist from trigger
-
-            return profile
-
-        profile = await asyncio.to_thread(_create_profile)
-        logger.info(f"Auto-created profile for OAuth user {token_data.sub}")
-        # The freshly created row is by definition current; cache it so the
-        # request burst that triggered provisioning does not re-read it.
-        user_profile_cache.set_(token_data.sub, profile)
-        return profile
-
-    except AuthenticationError:
-        # A deleted Auth user (AUTH_PROFILE_NOT_FOUND) must surface as-is, not
-        # be re-wrapped into the generic provisioning error.
-        raise
-    except Exception as e:
-        logger.warning(f"Failed to auto-create user profile: {e}")
+    if user is None:
+        # The loader provisions a missing profile while it holds the cache
+        # single-flight lock, so this would only be possible for a malformed
+        # loader result. Never revive the removed pre-lock provisioning path.
         raise AuthenticationError(
             message="User profile could not be loaded or created",
-            error_code="AUTH_PROFILE_ERROR"
+            error_code="AUTH_PROFILE_ERROR",
         )
+
+    # Suspended accounts are rejected before anything else: the admin panel
+    # must not keep serving a user whose account was disabled by an admin.
+    # is_active defaults to True for rows created before the flag existed, so
+    # only an explicit False counts as suspended.
+    if user.get("is_active") is False:
+        raise AuthenticationError(
+            message="Account is suspended",
+            error_code="ACCOUNT_SUSPENDED",
+        )
+    # Add email from token if not in database.
+    if not user.get("email") and token_data.email:
+        user["email"] = token_data.email
+    return user
 
 
 # =============================================================================

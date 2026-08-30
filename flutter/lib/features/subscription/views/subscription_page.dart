@@ -393,7 +393,8 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           SubscriptionDisclosure(
             priceSummary: _priceSummary(includePlus: !onPlus),
             isApple: controller.iapService.isApple,
-            planNames: onPlus ? 'Pro is an auto-renewing subscription'
+            planNames: onPlus
+                ? 'Pro is an auto-renewing subscription'
                 : 'Plus and Pro are auto-renewing subscriptions',
           ),
         ],
@@ -443,7 +444,8 @@ class SubscriptionPage extends GetView<SubscriptionController> {
   String _priceSummary({required bool includePlus}) {
     String price(String planType, String fallback) =>
         controller.storePriceFor(planType) ?? fallback;
-    final pro = 'Pro is ${price('pro_monthly', '\$20')}/month or '
+    final pro =
+        'Pro is ${price('pro_monthly', '\$20')}/month or '
         '${price('pro_yearly', '\$200')}/year.';
     if (!includePlus) return pro;
     return 'Plus is ${price('plus_monthly', '\$10')}/month or '
@@ -458,26 +460,26 @@ class SubscriptionPage extends GetView<SubscriptionController> {
   Widget _buildRestorePurchasesRow() {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Obx(
-        () {
-          final restoring = controller.isRestoring.value;
-          return TextButton.icon(
-            // Gated on isRestoring, not isCheckingOut: a restore completes
-            // asynchronously on the purchase stream (see
-            // SubscriptionController.isRestoring), so the button must spin
-            // until that lands — checkout state would release too early.
-            onPressed: restoring ? null : controller.restorePurchases,
-            icon: restoring
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, size: 18),
-            label: const Text('Restore Purchases'),
-          );
-        },
-      ),
+      child: Obx(() {
+        final restoring = controller.isRestoring.value;
+        final checkingOut = controller.isCheckingOut.value;
+        return TextButton.icon(
+          // A restore completes asynchronously on the purchase stream, so
+          // it stays disabled until isRestoring clears. Do not start it
+          // while a checkout is also in progress.
+          onPressed: restoring || checkingOut
+              ? null
+              : controller.restorePurchases,
+          icon: restoring
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh, size: 18),
+          label: const Text('Restore Purchases'),
+        );
+      }),
     );
   }
 
@@ -588,7 +590,9 @@ class SubscriptionPage extends GetView<SubscriptionController> {
   /// Store-billed subscriptions cannot be cancelled in-app (the store owns
   /// billing); point the user at the store's subscription settings.
   Widget _buildManageSection(BuildContext context, ThemeData theme) {
-    final storeName = controller.iapService.isApple ? 'App Store' : 'Play Store';
+    final storeName = controller.iapService.isApple
+        ? 'App Store'
+        : 'Play Store';
     return AppGlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -677,5 +681,4 @@ class SubscriptionPage extends GetView<SubscriptionController> {
       ),
     );
   }
-
 }

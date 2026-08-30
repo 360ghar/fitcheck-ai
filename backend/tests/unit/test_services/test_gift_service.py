@@ -661,3 +661,46 @@ async def test_admin_cannot_manually_void_paid_value():
     ):
         with pytest.raises(PermissionDeniedError, match="Stripe refund"):
             await AdminGiftService.void_or_revoke(VOUCHER_ID, "manual attempt", Mock())
+
+
+@pytest.mark.asyncio
+async def test_admin_revoke_uses_one_atomic_voucher_and_grant_rpc():
+    claimed = voucher(
+        status="claimed",
+        claimed_by_user_id=OTHER_USER_ID,
+        claimed_at=utcnow().isoformat(),
+    )
+    revoked = {**claimed, "status": "revoked", "admin_note": "fraud review"}
+    db = FakeDB(
+        rows={"gift_vouchers": [claimed]},
+        rpc_results={"void_or_revoke_gift_voucher": [revoked]},
+    )
+
+    result = await AdminGiftService.void_or_revoke(
+        VOUCHER_ID,
+        "fraud review",
+        db,
+    )
+
+    assert result["status"] == "revoked"
+    rpc_name, params = db.rpc_calls[0]
+    assert rpc_name == "void_or_revoke_gift_voucher"
+    assert params["p_voucher_id"] == VOUCHER_ID
+    assert params["p_expected_status"] == "claimed"
+    assert params["p_reason"] == "fraud review"
+    assert params["p_now"]
+    assert not [update for update in db.updates if update[0] == "gift_entitlement_grants"]
+
+
+@pytest.mark.asyncio
+async def test_admin_void_rejects_a_voucher_claimed_after_the_initial_read():
+    issued = voucher(status="issued")
+    db = FakeDB(
+        rows={"gift_vouchers": [issued]},
+        rpc_results={"void_or_revoke_gift_voucher": []},
+    )
+
+    with pytest.raises(ValidationError, match="gift changed"):
+        await AdminGiftService.void_or_revoke(VOUCHER_ID, "manual void", db)
+
+    assert db.rpc_calls[0][1]["p_expected_status"] == "issued"

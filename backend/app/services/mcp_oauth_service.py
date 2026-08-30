@@ -28,7 +28,7 @@ import logging
 import secrets
 import uuid
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import jwt
 from supabase import Client
@@ -71,7 +71,7 @@ def _require_enabled() -> None:
 
 
 def redirect_uri_allowlist() -> List[str]:
-    """Allowed redirect-URI *prefixes* for dynamic registration (comma-sep env)."""
+    """Allowed redirect-URI roots for dynamic registration (comma-separated)."""
     raw = (settings.MCP_REDIRECT_URI_ALLOWLIST or "").strip()
     if not raw:
         return []
@@ -79,8 +79,30 @@ def redirect_uri_allowlist() -> List[str]:
 
 
 def _redirect_uri_allowed(redirect_uri: str) -> bool:
-    uri = (redirect_uri or "").strip().rstrip("/")
-    return any(uri.startswith(prefix) for prefix in redirect_uri_allowlist())
+    candidate = urlsplit((redirect_uri or "").strip())
+    if not candidate.scheme or not candidate.netloc or candidate.fragment:
+        return False
+    candidate_path = candidate.path.rstrip("/")
+
+    for configured in redirect_uri_allowlist():
+        allowed = urlsplit(configured)
+        if not allowed.scheme or not allowed.netloc:
+            continue
+        if candidate.scheme != allowed.scheme or candidate.netloc != allowed.netloc:
+            continue
+        allowed_path = allowed.path.rstrip("/")
+        if not allowed_path:
+            return True
+        if candidate_path == allowed_path or candidate_path.startswith(f"{allowed_path}/"):
+            return True
+    return False
+
+
+def validate_scope(scope: str) -> str:
+    """Validate the only OAuth scope exposed by the MCP resource."""
+    if (scope or "").strip() != MCP_SCOPE:
+        raise ValidationError(message="unsupported scope")
+    return MCP_SCOPE
 
 
 def signing_key() -> str:
@@ -249,6 +271,8 @@ def complete_authorization(
         .select("*")
         .eq("txn_state", state)
         .is_("used_at", "null")
+        .is_("code_hash", "null")
+        .gt("expires_at", utcnow().isoformat())
         .maybe_single()
         .execute()
     )
@@ -265,14 +289,21 @@ def complete_authorization(
         raise AuthenticationError(message="Supabase session invalid")
 
     code = secrets.token_urlsafe(_CODE_BYTES)
-    db.table("mcp_oauth_auth_codes").update(
+    claimed = db.table("mcp_oauth_auth_codes").update(
         {
             "code_hash": _hash(code),
             "txn_state": None,  # single binding: state cannot be replayed
             "user_id": user_id,
             "expires_at": _seconds_from_now(AUTH_CODE_TTL_SECONDS),
         }
-    ).eq("id", pending["id"]).execute()
+    ).eq("id", pending["id"]).eq("txn_state", state).is_(
+        "used_at", "null"
+    ).is_("code_hash", "null").gt(
+        "expires_at", utcnow().isoformat()
+    ).execute()
+    claimed_rows = getattr(claimed, "data", None)
+    if not claimed_rows:
+        raise AuthenticationError(message="unknown or expired authorization state")
 
     query = urlencode({"code": code, "state": state, "scope": pending["scope"]})
     separator = "&" if "?" in pending["redirect_uri"] else "?"

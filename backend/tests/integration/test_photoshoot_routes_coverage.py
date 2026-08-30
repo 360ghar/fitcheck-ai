@@ -515,6 +515,27 @@ async def test_events_generator_replays_buffered_history_including_ids(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_events_generator_honors_last_event_id_header(monkeypatch):
+    job = await _seed_job()
+    job.event_history = [
+        {"type": "generation_started", "data": {"total_batches": 1}, "id": 1},
+        {"type": "job_complete", "data": {"done": True}, "id": 2},
+    ]
+    monkeypatch.setattr(ps, "EventSourceResponse", _CapturingESR)
+
+    response = await ps.photoshoot_job_events(
+        job_id=job.job_id,
+        last_event_id="1",
+        user={"id": USER_ID},
+        db=None,
+    )
+    events = await _drain(response.content)
+
+    assert _event_types(events) == ["connected", "job_complete"]
+    assert events[1]["id"] == "2"
+
+
+@pytest.mark.asyncio
 async def test_events_generator_streams_live_events_until_terminal(monkeypatch):
     job = await _seed_job()
     monkeypatch.setattr(ps, "EventSourceResponse", _CapturingESR)

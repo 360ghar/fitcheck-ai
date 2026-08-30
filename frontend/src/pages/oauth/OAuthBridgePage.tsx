@@ -17,8 +17,21 @@ import { Loader2 } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
 import { API_BASE_URL } from '@/lib/apiBaseUrl';
 import { trackEvent } from '@/lib/analytics';
+import { useAuthStore } from '@/stores/authStore';
 
 type Phase = 'connecting' | 'needs_login' | 'error';
+
+function tokenExpiresSoon(token: string): boolean {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return false;
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')));
+    return typeof decoded.exp === 'number' && decoded.exp <= Date.now() / 1000 + 30;
+  } catch {
+    return false;
+  }
+}
 
 export default function OAuthBridgePage() {
   const [searchParams] = useSearchParams();
@@ -26,8 +39,10 @@ export default function OAuthBridgePage() {
   const [phase, setPhase] = useState<Phase>('connecting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasStartedRef = useRef(false);
+  const hasHydrated = useAuthStore((auth) => auth.hasHydrated);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
@@ -38,11 +53,31 @@ export default function OAuthBridgePage() {
         return;
       }
       try {
-        const supabase = await getSupabase();
-        // detectSessionInUrl has already consumed any hash tokens from the
-        // hosted login redirect by effect time.
-        const { data } = await supabase.auth.getSession();
-        const accessToken = data.session?.access_token;
+        let accessToken: string | undefined;
+        try {
+          const supabase = await getSupabase();
+          // detectSessionInUrl has already consumed any hash tokens from the
+          // hosted login redirect by effect time.
+          const { data } = await supabase.auth.getSession();
+          accessToken = data.session?.access_token;
+        } catch {
+          // Email/password sign-in stores the same Supabase tokens in the
+          // app auth store even when the SDK has no persisted session.
+        }
+        if (!accessToken) {
+          const auth = useAuthStore.getState();
+          accessToken = auth.tokens?.access_token;
+          if (accessToken && tokenExpiresSoon(accessToken) && auth.tokens?.refresh_token) {
+            try {
+              await auth.refreshToken();
+              accessToken = useAuthStore.getState().tokens?.access_token;
+            } catch {
+              // refreshToken clears invalid credentials. Continue to the
+              // sign-in prompt instead of showing an opaque bridge error.
+              accessToken = undefined;
+            }
+          }
+        }
         if (!accessToken) {
           setPhase('needs_login');
           return;
@@ -55,7 +90,7 @@ export default function OAuthBridgePage() {
     };
 
     run();
-  }, [state]);
+  }, [hasHydrated, state]);
 
   const complete = async (stateValue: string, accessToken: string) => {
     const response = await fetch(`${API_BASE_URL}/api/v1/oauth/authorize/complete`, {
@@ -66,7 +101,11 @@ export default function OAuthBridgePage() {
     const body = await response.json().catch(() => null);
     const redirect = body?.redirect;
     if (!response.ok || !redirect) {
-      const description = body?.error?.error_description || body?.error || 'Authorization failed';
+      const description =
+        body?.error_description ||
+        body?.error?.error_description ||
+        body?.error ||
+        'Authorization failed';
       throw new Error(String(description));
     }
     trackEvent('mcp_oauth_authorized');

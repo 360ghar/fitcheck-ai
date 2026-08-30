@@ -145,6 +145,7 @@ class _AppImageState extends State<AppImage> {
         oldWidget.storagePath != widget.storagePath) {
       // A stale failure must never suppress a freshly-configured URL.
       _reminted = false;
+      _usingFallback = false;
       _resolveActiveUrl();
     }
   }
@@ -153,7 +154,10 @@ class _AppImageState extends State<AppImage> {
   /// distinct fallback exists (identical/empty fallbacks are dropped — see
   /// [resolveFallbackUrl]).
   void _resolveActiveUrl() {
-    final fallback = resolveFallbackUrl(widget.imageUrl ?? '', widget.fallbackUrl);
+    final fallback = resolveFallbackUrl(
+      widget.imageUrl ?? '',
+      widget.fallbackUrl,
+    );
     if (_usingFallback && fallback != null) {
       _activeUrl = fallback;
     } else {
@@ -201,8 +205,7 @@ class _AppImageState extends State<AppImage> {
     if (_activeUrl == null || _activeUrl!.isEmpty) {
       imageWidget = _buildErrorWidget(context, tokens);
     } else {
-      final canRemint =
-          widget.storagePath != null && widget.remintUrl != null;
+      final canRemint = widget.storagePath != null && widget.remintUrl != null;
       imageWidget = CachedNetworkImage(
         imageUrl: _activeUrl!,
         cacheManager: widget.cacheManager,
@@ -223,8 +226,10 @@ class _AppImageState extends State<AppImage> {
         errorWidget: (context, url, error) {
           // A distinct fallback URL gets one retry before the re-mint: a
           // missing `thumbnail_url` object is recovered by the full size.
-          final fallback =
-              resolveFallbackUrl(_activeUrl ?? '', widget.fallbackUrl);
+          final fallback = resolveFallbackUrl(
+            _activeUrl ?? '',
+            widget.fallbackUrl,
+          );
           if (!_usingFallback && fallback != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _retryWithFallback();
@@ -292,10 +297,7 @@ class _AppImageState extends State<AppImage> {
       height: widget.height,
       color: widget.borderRadius == null ? bgColor : null,
       decoration: widget.borderRadius != null
-          ? BoxDecoration(
-              color: bgColor,
-              borderRadius: widget.borderRadius,
-            )
+          ? BoxDecoration(color: bgColor, borderRadius: widget.borderRadius)
           : null,
       child: imageWidget,
     );
@@ -333,11 +335,7 @@ class _AppImageState extends State<AppImage> {
         height: widget.height,
         color: tokens.cardColor.withValues(alpha: 0.3),
         child: Center(
-          child: Icon(
-            widget.errorIcon,
-            size: 48,
-            color: tokens.textMuted,
-          ),
+          child: Icon(widget.errorIcon, size: 48, color: tokens.textMuted),
         ),
       ),
     );

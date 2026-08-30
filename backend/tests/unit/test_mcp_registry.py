@@ -74,6 +74,9 @@ def test_is_excluded_path(path: str, excluded: bool):
 @pytest.mark.unit
 def test_multipart_and_streaming_operations_excluded():
     assert denylist.has_non_json_body({"requestBody": {"content": {"multipart/form-data": {}}}})
+    assert denylist.has_non_json_body(
+        {"requestBody": {"content": {"application/x-www-form-urlencoded": {}}}}
+    )
     assert not denylist.has_non_json_body({"requestBody": {"content": {"application/json": {}}}})
     assert denylist.has_non_json_response(
         {"responses": {"200": {"content": {"text/event-stream": {}}}}}
@@ -186,6 +189,32 @@ async def test_call_endpoint_loopback_forwards_auth_and_parses_json():
 
     assert result == {"pong": True, "detail": "x"}
     assert seen["authorization"] == "Bearer test-token"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_call_endpoint_forwards_original_client_address():
+    from app.mcp.auth import current_forwarded_for
+
+    seen: dict[str, Any] = {}
+    stub = FastAPI()
+
+    @stub.get("/api/v1/ping")
+    async def ping(request: Request):
+        seen["forwarded_for"] = request.headers.get("x-forwarded-for")
+        return {"pong": True}
+
+    set_asgi_app(stub)
+    token = current_forwarded_for.set("203.0.113.10, 198.51.100.7")
+    try:
+        await call_endpoint("GET", "/api/v1/ping", {}, "Bearer test-token")
+    finally:
+        current_forwarded_for.reset(token)
+        from app.main import app as real_app
+
+        set_asgi_app(real_app)
+
+    assert seen["forwarded_for"] == "203.0.113.10, 198.51.100.7"
 
 
 @pytest.mark.unit

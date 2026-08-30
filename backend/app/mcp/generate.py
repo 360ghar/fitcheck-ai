@@ -211,8 +211,12 @@ def build_tool_registry(app: FastAPI) -> list[MCPTool]:
             tags = list(operation.get("tags") or [])
 
             name = _friendly_tool_name(operation_id, tags)
+            base_name = name
+            collision = 2
             while name in used_names:
-                name = f"{name[:_MAX_NAME_LENGTH - 2]}_x"
+                suffix = f"_{collision}"
+                name = f"{base_name[:_MAX_NAME_LENGTH - len(suffix)]}{suffix}"
+                collision += 1
             used_names.add(name)
 
             registry.append(

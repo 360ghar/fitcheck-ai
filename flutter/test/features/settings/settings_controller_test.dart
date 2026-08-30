@@ -24,13 +24,11 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 import 'package:fitcheck_ai/core/services/theme_service.dart';
 import 'package:fitcheck_ai/features/auth/controllers/auth_controller.dart';
 import 'package:fitcheck_ai/features/settings/controllers/settings_controller.dart';
+import 'package:fitcheck_ai/features/settings/models/user_preferences_model.dart';
 import 'package:fitcheck_ai/features/settings/repositories/settings_repository.dart';
 
 class _FakeAuthController extends GetxController implements AuthController {
-  _FakeAuthController({
-    this.wrongPassword = false,
-    this.provider,
-  });
+  _FakeAuthController({this.wrongPassword = false, this.provider});
 
   /// Google/Apple sessions carry an email; kept non-null like a real session.
   final String? email = 'user@example.com';
@@ -86,6 +84,15 @@ class _FakeSettingsRepository implements SettingsRepository {
   static const exportUrl = 'https://example.com/export.json';
 
   int exportCalls = 0;
+  final List<UserPreferencesModel> preferenceWrites = [];
+
+  @override
+  Future<UserPreferencesModel> updatePreferences(
+    UserPreferencesModel preferences,
+  ) async {
+    preferenceWrites.add(preferences);
+    return preferences;
+  }
 
   @override
   Future<String> requestDataExport() async {
@@ -108,26 +115,26 @@ class _LauncherStub {
   void install() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/url_launcher'),
-      (call) async {
-        switch (call.method) {
-          case 'canLaunch':
-            return canLaunch;
-          case 'launch':
-            launched.add(call.arguments['url']?.toString() ?? '');
-            return launchSucceeds;
-        }
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/url_launcher'),
+          (call) async {
+            switch (call.method) {
+              case 'canLaunch':
+                return canLaunch;
+              case 'launch':
+                launched.add(call.arguments['url']?.toString() ?? '');
+                return launchSucceeds;
+            }
+            return null;
+          },
+        );
   }
 
   void remove() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/url_launcher'),
-      null,
-    );
+          const MethodChannel('plugins.flutter.io/url_launcher'),
+          null,
+        );
   }
 }
 
@@ -142,11 +149,13 @@ void main() {
     clipboardWrites.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'Clipboard.setData') {
-        clipboardWrites.add((call.arguments as Map)['text']?.toString() ?? '');
-      }
-      return null;
-    });
+          if (call.method == 'Clipboard.setData') {
+            clipboardWrites.add(
+              (call.arguments as Map)['text']?.toString() ?? '',
+            );
+          }
+          return null;
+        });
   });
 
   tearDown(() {
@@ -156,8 +165,12 @@ void main() {
   });
 
   group('changePassword re-authenticates', () {
-    testWidgets('verifies the current password before updating', (tester) async {
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+    testWidgets('verifies the current password before updating', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final auth = _FakeAuthController();
       final controller = SettingsController(
         repository: _FakeSettingsRepository(),
@@ -179,8 +192,12 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('does NOT update when the current password is wrong', (tester) async {
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+    testWidgets('does NOT update when the current password is wrong', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final auth = _FakeAuthController(wrongPassword: true);
       final controller = SettingsController(
         repository: _FakeSettingsRepository(),
@@ -191,12 +208,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(auth.reauthCalls, ['wrong-pw']);
-      expect(auth.updateCalls, isEmpty, reason: 'a wrong current password must not change it');
+      expect(
+        auth.updateCalls,
+        isEmpty,
+        reason: 'a wrong current password must not change it',
+      );
       expect(controller.isChangingPassword.value, isFalse);
     });
 
-    testWidgets('does NOT reauthenticate an OAuth-only (Google) account', (tester) async {
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+    testWidgets('does NOT reauthenticate an OAuth-only (Google) account', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       // Google/Apple sessions DO carry an email, so the guard must key on the
       // auth provider, not the email field.
       final auth = _FakeAuthController(provider: 'google');
@@ -210,8 +235,11 @@ void main() {
       // snackbar's dismiss timer, so the feedback would be gone by then.
       await tester.pump();
 
-      expect(auth.reauthCalls, isEmpty,
-          reason: 'an OAuth account has no password to verify');
+      expect(
+        auth.reauthCalls,
+        isEmpty,
+        reason: 'an OAuth account has no password to verify',
+      );
       expect(auth.updateCalls, isEmpty);
       // The intended guidance surfaces instead of the misleading
       // "Current password is incorrect" from a doomed reauth attempt.
@@ -230,7 +258,9 @@ void main() {
       final launcher = _LauncherStub(canLaunch: true)..install();
       addTearDown(launcher.remove);
 
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final repository = _FakeSettingsRepository();
       final controller = SettingsController(
         repository: repository,
@@ -245,11 +275,15 @@ void main() {
       expect(clipboardWrites, isEmpty);
     });
 
-    testWidgets('copies the link when the browser cannot be opened', (tester) async {
+    testWidgets('copies the link when the browser cannot be opened', (
+      tester,
+    ) async {
       final launcher = _LauncherStub(canLaunch: false)..install();
       addTearDown(launcher.remove);
 
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final controller = SettingsController(
         repository: _FakeSettingsRepository(),
         authController: _FakeAuthController(),
@@ -264,11 +298,16 @@ void main() {
       expect(controller.isExportingData.value, isFalse);
     });
 
-    testWidgets('copies the link when launch is attempted but fails', (tester) async {
-      final launcher = _LauncherStub(canLaunch: true, launchSucceeds: false)..install();
+    testWidgets('copies the link when launch is attempted but fails', (
+      tester,
+    ) async {
+      final launcher = _LauncherStub(canLaunch: true, launchSucceeds: false)
+        ..install();
       addTearDown(launcher.remove);
 
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold(body: SizedBox())));
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
       final controller = SettingsController(
         repository: _FakeSettingsRepository(),
         authController: _FakeAuthController(),
@@ -279,5 +318,73 @@ void main() {
 
       expect(clipboardWrites, ['https://example.com/export.json']);
     });
+  });
+
+  group('preference saves preserve pending mutations', () {
+    testWidgets(
+      'serializes rapid style selections with the latest local state',
+      (tester) async {
+        await tester.pumpWidget(
+          const GetMaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final repository = _FakeSettingsRepository();
+        final controller = SettingsController(
+          repository: repository,
+          authController: _FakeAuthController(),
+        );
+        controller.preferences.value = UserPreferencesModel(
+          preferredStyles: const [],
+        );
+
+        await Future.wait([
+          controller.addPreferredStyle('casual'),
+          controller.addPreferredStyle('formal'),
+        ]);
+
+        expect(
+          repository.preferenceWrites
+              .map((preferences) => preferences.preferredStyles)
+              .toList(),
+          const [
+            ['casual'],
+            ['casual', 'formal'],
+          ],
+        );
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'serializes rapid color selections with the latest local state',
+      (tester) async {
+        await tester.pumpWidget(
+          const GetMaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final repository = _FakeSettingsRepository();
+        final controller = SettingsController(
+          repository: repository,
+          authController: _FakeAuthController(),
+        );
+        controller.preferences.value = UserPreferencesModel(
+          preferredColors: const [],
+        );
+
+        await Future.wait([
+          controller.addPreferredColor('blue'),
+          controller.addPreferredColor('black'),
+        ]);
+
+        expect(
+          repository.preferenceWrites
+              .map((preferences) => preferences.preferredColors)
+              .toList(),
+          const [
+            ['blue'],
+            ['blue', 'black'],
+          ],
+        );
+        await tester.pumpAndSettle();
+      },
+    );
   });
 }

@@ -1,7 +1,7 @@
 # Security
 
 Status: verified  
-Last updated: 2026-08-08
+Last updated: 2026-08-29
 
 ## Authentication and authorization
 
@@ -23,7 +23,7 @@ Details: `docs/references/mcp.md`. Security posture:
   SSE, multipart/binary, demo/waitlist never become tools
   (`app/mcp/denylist.py`, enforced in tests).
 - **OAuth gateway (opt-in via `MCP_OAUTH_ISSUER`)**: DCR restricted to
-  `MCP_REDIRECT_URI_ALLOWLIST` prefixes (default blank = registration
+  `MCP_REDIRECT_URI_ALLOWLIST` origins and path boundaries (default blank = registration
   disabled); PKCE S256 mandatory; access tokens expire after one hour;
   60-second codes are consumed atomically; refresh tokens are SHA-256-hashed,
   atomically rotated per use, and family-revoked on replay. All three tables

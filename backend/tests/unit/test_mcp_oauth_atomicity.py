@@ -54,6 +54,10 @@ class _ConcurrentQuery:
         self._filters.append(("is", column, value))
         return self
 
+    def gt(self, column: str, value: Any):
+        self._filters.append(("gt", column, value))
+        return self
+
     def maybe_single(self):
         self._single = True
         return self
@@ -104,6 +108,8 @@ class _ConcurrentQuery:
         if op == "is":
             wants_null = value is None or str(value).lower() == "null"
             return (row.get(column) is None) == wants_null
+        if op == "gt":
+            return row.get(column) is not None and row[column] > value
         raise AssertionError(f"unsupported filter: {op}")
 
 
@@ -238,6 +244,49 @@ def _code_row(code: str, verifier: str) -> dict[str, Any]:
         "expires_at": oauth_service._seconds_from_now(60),
         "used_at": None,
     }
+
+
+def _pending_row() -> dict[str, Any]:
+    return {
+        "id": str(uuid.uuid4()),
+        "txn_state": "pending-state",
+        "code_hash": None,
+        "user_id": None,
+        "client_id": "mcp_test_client",
+        "redirect_uri": CHATGPT_REDIRECT,
+        "scope": oauth_service.MCP_SCOPE,
+        "code_challenge": "challenge",
+        "expires_at": oauth_service._seconds_from_now(600),
+        "used_at": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_concurrent_authorization_completion_mints_one_code(oauth_enabled):
+    pending = _pending_row()
+    db = _ConcurrentOAuthDB(
+        {"mcp_oauth_auth_codes": [pending]},
+        barrier_table="mcp_oauth_auth_codes",
+    )
+
+    results = await asyncio.gather(
+        *[
+            asyncio.to_thread(
+                oauth_service.complete_authorization,
+                db,
+                state="pending-state",
+                supabase_access_token="supabase-token",
+                decode_supabase_token=lambda _token: {"sub": str(uuid.uuid4())},
+            )
+            for _ in range(2)
+        ],
+        return_exceptions=True,
+    )
+
+    assert sum(isinstance(result, str) for result in results) == 1
+    assert sum(isinstance(result, AuthenticationError) for result in results) == 1
+    assert db.rows["mcp_oauth_auth_codes"][0]["txn_state"] is None
+    assert db.rows["mcp_oauth_auth_codes"][0]["code_hash"]
 
 
 @pytest.mark.asyncio

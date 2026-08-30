@@ -1,5 +1,7 @@
 # MCP server & ChatGPT app (agent surface)
 
+Last updated: 2026-08-29
+
 FitCheck exposes its API to AI agents through **MCP** (Model Context
 Protocol, streamable HTTP). One codebase in `backend/app/mcp/`, two mounts:
 
@@ -66,7 +68,8 @@ issuer = `MCP_OAUTH_ISSUER` (convention: `{PUBLIC_API_BASE_URL}/api/v1/oauth`):
 - `GET  {issuer}/.well-known/oauth-authorization-server` and
   `.../oauth-protected-resource` — RFC 8414 / 9728 discovery
 - `POST {issuer}/register` — dynamic client registration (RFC 7591); public
-  clients only, redirect URIs must match `MCP_REDIRECT_URI_ALLOWLIST`
+  clients only, redirect URIs must match an allowed origin and path boundary
+  in `MCP_REDIRECT_URI_ALLOWLIST`
 - `GET  {issuer}/authorize` — validates PKCE S256, redirects to the frontend
   bridge `/oauth/bridge` (`frontend/src/pages/oauth/OAuthBridgePage.tsx`),
   which signs the user in via Supabase and POSTs the session to
@@ -103,7 +106,7 @@ Regenerate after widget changes: `cd widgets && npm run build`.
 | `PUBLIC_API_BASE_URL` | Public origin of the backend (metadata URLs) |
 | `MCP_OAUTH_ISSUER` | OAuth issuer URL; **setting it enables** `/oauth/*` (blank = OAuth disabled, 503) |
 | `MCP_JWT_SECRET` | HS256 key for MCP tokens (falls back to `SUPABASE_JWT_SECRET`) |
-| `MCP_REDIRECT_URI_ALLOWLIST` | Comma-separated redirect-URI *prefixes* for DCR; blank disables registration |
+| `MCP_REDIRECT_URI_ALLOWLIST` | Comma-separated redirect URI roots for DCR. Each root matches its exact scheme, host, and port; a path root matches that path or a child path. Blank disables registration. |
 
 Local dev: `./run-dev.sh`, then connect Claude to
 `http://localhost:8000/mcp` with a local Supabase JWT. For ChatGPT developer

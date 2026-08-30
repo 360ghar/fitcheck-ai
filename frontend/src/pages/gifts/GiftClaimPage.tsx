@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   Check,
@@ -63,18 +63,41 @@ export default function GiftClaimPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isClaiming, setIsClaiming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
+    const requestId = ++requestIdRef.current
+    let active = true
+    setVoucher(null)
+    setClaimResult(null)
+    setPrintedCode('')
+    setError(null)
+    setIsClaiming(false)
+    setIsLoading(true)
+    setCredential(publicId ? captureCredential(publicId) : '')
+
     if (!publicId) {
       setError('This gift link is incomplete.')
       setIsLoading(false)
-      return
+      return () => {
+        active = false
+      }
     }
-    setCredential(captureCredential(publicId))
     getPublicGift(publicId)
-      .then(setVoucher)
-      .catch((loadError) => setError(giftErrorMessage(loadError, 'This private gift could not be found.')))
-      .finally(() => setIsLoading(false))
+      .then((loaded) => {
+        if (active && requestId === requestIdRef.current) setVoucher(loaded)
+      })
+      .catch((loadError) => {
+        if (active && requestId === requestIdRef.current) {
+          setError(giftErrorMessage(loadError, 'This private gift could not be found.'))
+        }
+      })
+      .finally(() => {
+        if (active && requestId === requestIdRef.current) setIsLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [publicId])
 
   const artworkUrl = useMemo(() => {
@@ -97,23 +120,28 @@ export default function GiftClaimPage() {
 
   async function submitClaim(): Promise<void> {
     if (!publicId || !canClaim) return
+    const requestId = requestIdRef.current
     setIsClaiming(true)
     setError(null)
     try {
       const result = await claimGift(publicId, claimCredential)
+      if (requestId !== requestIdRef.current) return
       setClaimResult(result)
       setVoucher(result.voucher)
       forgetGiftClaimCredential(publicId)
       setCredential('')
       setPrintedCode('')
     } catch (claimError) {
+      if (requestId !== requestIdRef.current) return
       const message = giftErrorMessage(claimError, 'This gift could not be claimed. Check the code and try again.')
       setError(message)
       if (message.includes('already been claimed') || message.includes('expired')) {
-        void getPublicGift(publicId).then(setVoucher)
+        void getPublicGift(publicId).then((loaded) => {
+          if (requestId === requestIdRef.current) setVoucher(loaded)
+        })
       }
     } finally {
-      setIsClaiming(false)
+      if (requestId === requestIdRef.current) setIsClaiming(false)
     }
   }
 

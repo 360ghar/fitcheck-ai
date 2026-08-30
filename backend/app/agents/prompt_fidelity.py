@@ -43,6 +43,14 @@ NO_PERSON_NEGATIVES = (
     "watermark, text, cast shadow, gradient background"
 )
 
+# Text-only product generation may explicitly request a custom gradient or a
+# shadow. Keep its person/item exclusions separate from the matted flat-lay
+# rules above so the caller's visual settings are not contradicted.
+PRODUCT_TEXT_ONLY_NEGATIVES = (
+    "AVOID: people, mannequin faces, extra garments, second item, "
+    "watermark, text"
+)
+
 # Outfit fidelity when inventory is provided
 OUTFIT_LOCK = """OUTFIT LOCK:
 - Match every listed clothing/footwear/accessory item exactly.

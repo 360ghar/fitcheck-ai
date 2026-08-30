@@ -180,12 +180,21 @@ class SubscriptionRepository implements ReferralRedemptionService {
 
   /// Redeem a referral code (implements [ReferralRedemptionService])
   @override
-  Future<void> redeemReferralCode(String code) async {
+  Future<bool> redeemReferralCode(String code) async {
     try {
-      await _apiClient.post(
+      final response = await _apiClient.post(
         '${ApiConstants.referral}/redeem',
         data: {'code': code},
       );
+      final payload = response.data;
+      if (payload is! Map<String, dynamic>) {
+        throw const FormatException('Invalid referral redemption response');
+      }
+      final data = payload['data'];
+      if (data is! Map<String, dynamic> || data['success'] is! bool) {
+        throw const FormatException('Invalid referral redemption response');
+      }
+      return data['success'] as bool;
     } on DioException catch (e) {
       throw handleDioException(e);
     }

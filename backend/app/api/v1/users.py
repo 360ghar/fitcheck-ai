@@ -538,6 +538,13 @@ async def delete_current_user(
         # bucket listing; delete it with the rest of the owned storage. A
         # missing object is a no-op delete on the S3 side.
         storage_paths.append(mint_export_key(user_id))
+        # Database rows only reference durable objects. A user can also have
+        # short-lived generated or temporary images that are never attached
+        # to a row, so enumerate their owned namespace before deletion.
+        storage_paths.extend(
+            await StorageService.list_owned_user_storage_paths(user_id)
+        )
+        storage_paths = list(dict.fromkeys(storage_paths))
 
         async def _delete_storage() -> None:
             if storage_paths:  # pragma: no cover - export path always appended above

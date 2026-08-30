@@ -96,12 +96,11 @@ _CURATED: tuple[CuratedSpec, ...] = (
         name="get_todays_outfit_ideas",
         title="Get today's outfit ideas",
         description=(
-            "Weather- and calendar-aware outfit recommendations grounded in the "
-            "user's own wardrobe for a given city/date."
+            "Weather conditions and clothing guidance for a given city and date. "
+            "Does not read the user's wardrobe or calendar."
         ),
-        invoking="Styling today's looks…",
-        invoked="Today's ideas ready",
-        widget="outfit-cards.html",
+        invoking="Checking weather guidance…",
+        invoked="Weather guidance ready",
     ),
     CuratedSpec(
         method="GET",
