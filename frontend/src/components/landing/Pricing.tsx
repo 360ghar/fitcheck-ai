@@ -304,18 +304,20 @@ export default function Pricing() {
         <div className="min-w-0 max-w-full overflow-hidden [contain:paint] lg:hidden">
           <div
             data-testid="mobile-pricing-rail"
-            className="mt-12 flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4"
+            className="mt-12 flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4 pr-4"
           >
             {tiers.map((tier, index) => (
               <AnimatedSection
                 key={tier.key}
                 delay={index * 80}
-                className="w-[90%] min-w-0 shrink-0 snap-start sm:w-[24rem]"
+                className="w-full min-w-0 shrink-0 snap-start sm:w-[24rem]"
               >
                 <PricingCard tier={tier} isYearly={isYearly} />
               </AnimatedSection>
             ))}
           </div>
+
+          <p className="mt-4 text-xs text-muted-foreground lg:hidden">Swipe to compare plans.</p>
         </div>
 
         <p className="mt-6 text-sm text-muted-foreground">

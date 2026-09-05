@@ -13,7 +13,7 @@ from supabase import Client
 
 from app.core.config import settings
 from app.core.exceptions import NotFoundError, PermissionDeniedError, ValidationError
-from app.models.gift import AdminGiftCreate, GiftUpdate
+from app.models.gift import AdminGiftCreate, GiftUpdate, presentation_payload
 from app.services.gift_service import CATALOG, GiftService, _rows
 from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
 
@@ -63,9 +63,7 @@ class AdminGiftService:
                 .execute
             ),
             asyncio.to_thread(
-                db.table("gift_entitlement_grants")
-                .select("status,duration_months,remaining_seconds")
-                .execute
+                db.table("gift_entitlement_grants").select("status,duration_months,remaining_seconds").execute
             ),
         )
         vouchers = _rows(vouchers_result)
@@ -73,11 +71,7 @@ class AdminGiftService:
         now = utcnow()
         issued = [row for row in vouchers if row.get("issued_at")]
         claimed_count = sum(row.get("status") in {"claimed", "revoked"} for row in vouchers)
-        queued_months = sum(
-            int(row.get("duration_months") or 0)
-            for row in grants
-            if row.get("status") == "queued"
-        )
+        queued_months = sum(int(row.get("duration_months") or 0) for row in grants if row.get("status") == "queued")
         expiring_30_days = sum(
             bool(
                 row.get("status") == "issued"
@@ -91,12 +85,10 @@ class AdminGiftService:
             "paid_revenue_cents": sum(
                 max(
                     0,
-                    int(row.get("amount_paid_cents") or 0)
-                    - int(row.get("amount_refunded_cents") or 0),
+                    int(row.get("amount_paid_cents") or 0) - int(row.get("amount_refunded_cents") or 0),
                 )
                 for row in vouchers
-                if row.get("source") == "paid"
-                and row.get("payment_status") in {"paid", "partially_refunded"}
+                if row.get("source") == "paid" and row.get("payment_status") in {"paid", "partially_refunded"}
             ),
             "complimentary_count": sum(row.get("source") == "complimentary" for row in issued),
             "claimed_count": claimed_count,
@@ -130,9 +122,7 @@ class AdminGiftService:
         query = table.select("*", count="exact") if count else table.select("*")
         if q:
             term = _safe_search(q)
-            query = query.or_(
-                f"from_name.ilike.%{term}%,to_name.ilike.%{term}%,client_request_id.ilike.%{term}%"
-            )
+            query = query.or_(f"from_name.ilike.%{term}%,to_name.ilike.%{term}%,client_request_id.ilike.%{term}%")
         if source:
             query = query.eq("source", source)
         if duration_months:
@@ -199,9 +189,7 @@ class AdminGiftService:
         while total is None or len(rows) < total:
             query = cls._list_query(db, count=total is None, **filters)
             result = await asyncio.to_thread(
-                query.order("created_at", desc=True)
-                .range(len(rows), len(rows) + batch_size - 1)
-                .execute
+                query.order("created_at", desc=True).range(len(rows), len(rows) + batch_size - 1).execute
             )
             batch = _rows(result)
             if total is None:
@@ -230,13 +218,7 @@ class AdminGiftService:
         ]
         writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows(
-            {
-                field: _safe_csv_cell(row.get(field))
-                for field in fields
-            }
-            for row in rows
-        )
+        writer.writerows({field: _safe_csv_cell(row.get(field)) for field in fields} for row in rows)
         return output.getvalue().encode("utf-8")
 
     @staticmethod
@@ -249,11 +231,7 @@ class AdminGiftService:
             raise NotFoundError("Gift voucher not found", "gift_voucher", voucher_id)
         voucher = rows[0]
         grant_result = await asyncio.to_thread(
-            db.table("gift_entitlement_grants")
-            .select("*")
-            .eq("voucher_id", voucher_id)
-            .maybe_single()
-            .execute
+            db.table("gift_entitlement_grants").select("*").eq("voucher_id", voucher_id).maybe_single().execute
         )
         grant_rows = _rows(grant_result)
         response = GiftService.serialize(
@@ -263,6 +241,7 @@ class AdminGiftService:
         ).model_dump(mode="json")
         response.update(
             {
+                "recipient_email": voucher.get("recipient_email"),
                 "purchaser_user_id": voucher.get("purchaser_user_id"),
                 "claimed_by_user_id": voucher.get("claimed_by_user_id"),
                 "stripe_checkout_session_id": voucher.get("stripe_checkout_session_id"),
@@ -296,7 +275,10 @@ class AdminGiftService:
             "currency": "USD",
             "from_name": body.from_name,
             "to_name": body.to_name,
+            "recipient_email": body.recipient_email,
             "message": body.message,
+            "occasion": body.occasion.value if body.occasion else None,
+            "occasion_greeting": body.occasion_greeting,
             "status": "issued",
             "payment_status": "not_applicable",
             "client_request_id": f"admin:{uuid4()}",
@@ -308,24 +290,20 @@ class AdminGiftService:
         rows = _rows(result)
         if not rows:
             raise ValidationError("The admin gift could not be created")
-        return GiftService.serialize(rows[0], audience="admin").model_dump(mode="json")
+        response = GiftService.serialize(rows[0], audience="admin").model_dump(mode="json")
+        response["recipient_email"] = rows[0].get("recipient_email")
+        return response
 
     @classmethod
-    async def update(
-        cls, voucher_id: str, body: GiftUpdate, db: Client
-    ) -> dict[str, Any]:
+    async def update(cls, voucher_id: str, body: GiftUpdate, db: Client) -> dict[str, Any]:
         voucher = await cls.get(voucher_id, db)
         if voucher.get("status") != "issued":
             raise ValidationError("Only an unclaimed gift can be edited")
-        payload = body.model_dump(exclude_unset=True)
+        payload = presentation_payload(voucher, body)
         payload["artwork_version"] = int(voucher.get("artwork_version") or 1) + 1
         payload["updated_at"] = utcnow_iso()
         result = await asyncio.to_thread(
-            db.table("gift_vouchers")
-            .update(payload)
-            .eq("id", voucher_id)
-            .eq("status", "issued")
-            .execute
+            db.table("gift_vouchers").update(payload).eq("id", voucher_id).eq("status", "issued").execute
         )
         rows = _rows(result)
         if not rows:
@@ -358,9 +336,7 @@ class AdminGiftService:
     @classmethod
     async def assign(cls, voucher_id: str, user_id: str, db: Client) -> dict[str, Any]:
         voucher = await cls.get(voucher_id, db)
-        user_result = await asyncio.to_thread(
-            db.table("users").select("*").eq("id", user_id).maybe_single().execute
-        )
+        user_result = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).maybe_single().execute)
         users = _rows(user_result)
         if not users:
             raise NotFoundError("Recipient account not found", "user", user_id)
@@ -405,14 +381,10 @@ class AdminGiftService:
         add_count: int,
         db: Client,
     ) -> dict[str, Any]:
-        user_result = await asyncio.to_thread(
-            db.table("users").select("id").eq("id", user_id).maybe_single().execute
-        )
+        user_result = await asyncio.to_thread(db.table("users").select("id").eq("id", user_id).maybe_single().execute)
         if not _rows(user_result):
             raise NotFoundError("Account not found", "user", user_id)
-        await asyncio.to_thread(
-            db.rpc("initialize_gift_allowances", {"user_uuid": user_id}).execute
-        )
+        await asyncio.to_thread(db.rpc("initialize_gift_allowances", {"user_uuid": user_id}).execute)
         # PostgREST cannot express ``granted_count = granted_count + n``.
         # Re-read and use an optimistic compare-and-swap so concurrent admin
         # adjustments cannot overwrite each other.
@@ -438,8 +410,6 @@ class AdminGiftService:
             rows = _rows(update)
             if rows:
                 row = rows[0]
-                row["remaining_count"] = max(
-                    0, int(row["granted_count"]) - int(row["used_count"])
-                )
+                row["remaining_count"] = max(0, int(row["granted_count"]) - int(row["used_count"]))
                 return row
         raise ValidationError("The allowance changed concurrently. Try again.")

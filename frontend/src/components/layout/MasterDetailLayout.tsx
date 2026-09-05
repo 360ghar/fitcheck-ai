@@ -192,7 +192,7 @@ export function MasterDetailLayout({
             if (!open) onCloseDetail()
           }}
         >
-          <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+          <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 pt-[calc(1rem+var(--safe-area-top))] sm:max-w-md">
             {/* pr-14 clears the Sheet's own close button so a long name is never
                 shaved by it. */}
             <SheetHeader className="shrink-0 px-lg pb-md pr-14 pt-lg text-left">

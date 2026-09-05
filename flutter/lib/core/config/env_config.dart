@@ -22,6 +22,9 @@ class EnvConfig {
   static const String _paywallEnabledEnv = String.fromEnvironment(
     'PAYWALL_ENABLED',
   );
+  static const String _giftVouchersEnabledEnv = String.fromEnvironment(
+    'ENABLE_GIFT_VOUCHERS',
+  );
   static const String _sentryDsnEnv = String.fromEnvironment('SENTRY_DSN');
 
   static final Map<String, String> _fileValues = {};
@@ -89,6 +92,22 @@ class EnvConfig {
     // Fall back to the .env file value (same parsing as dart-define), so
     // PAYWALL_ENABLED=false in a bundled .env is honored too.
     final fileValue = _fileValues['PAYWALL_ENABLED'];
+    if (fileValue != null && fileValue.isNotEmpty) {
+      return fileValue.toLowerCase() == 'true';
+    }
+    return true;
+  }
+
+  /// Enables the native gift inbox and complimentary invitation flow.
+  ///
+  /// This is separate from [paywallEnabled]: gifts never use an external
+  /// payment flow in the mobile app. It is enabled by default; use an explicit
+  /// false build or file value only for a release rollback.
+  static bool get giftVouchersEnabled {
+    if (_giftVouchersEnabledEnv.isNotEmpty) {
+      return _giftVouchersEnabledEnv.toLowerCase() == 'true';
+    }
+    final fileValue = _fileValues['ENABLE_GIFT_VOUCHERS'];
     if (fileValue != null && fileValue.isNotEmpty) {
       return fileValue.toLowerCase() == 'true';
     }

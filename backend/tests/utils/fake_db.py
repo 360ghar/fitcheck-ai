@@ -38,6 +38,8 @@ from app.utils.datetime_util import utcnow
 UNIQUE_KEYS: Dict[str, Tuple[str, ...]] = {
     # 007_subscriptions_and_referrals.sql: subscriptions UNIQUE(user_id)
     "subscriptions": ("user_id",),
+    # 007_subscriptions_and_referrals.sql: one row per user/month
+    "subscription_usage": ("user_id", "period_start"),
     # 031_promo_codes.sql: promo_redemptions UNIQUE (user_id)
     "promo_redemptions": ("user_id",),
     # 011_shared_outfits_unique_constraint.sql: UNIQUE (outfit_id, user_id)
@@ -551,7 +553,89 @@ class FakeDB:
             return self._consume_mcp_oauth_authorization_code(params)
         if name == "rotate_mcp_oauth_refresh_token":
             return self._rotate_mcp_oauth_refresh_token(params)
+        if name == "admin_extend_user_trial":
+            return self._admin_extend_user_trial(params)
+        if name == "admin_clear_user_daily_ai_counters":
+            return self._admin_clear_user_daily_ai_counters(params)
         return FakeResult(data=[])
+
+    def _admin_extend_user_trial(self, params: Dict[str, Any]) -> FakeResult:
+        """Mirror migration 060's row-locked trial extension outcome."""
+        user_id = params.get("p_user_id")
+        days = int(params.get("p_days") or 0)
+        record = next(
+            (row for row in self._rows_for("subscriptions") if row.get("user_id") == user_id),
+            None,
+        )
+        if not record:
+            return FakeResult(data=[])
+        before = record.get("trial_end")
+        before_dt: Optional[datetime] = None
+        if before:
+            try:
+                before_dt = datetime.fromisoformat(str(before).replace("Z", "+00:00"))
+                if before_dt.tzinfo is None:
+                    before_dt = before_dt.replace(tzinfo=timezone.utc)
+            except ValueError:
+                before_dt = None
+        now = utcnow()
+        base = max(before_dt, now) if before_dt else now
+        after = base + timedelta(days=days)
+        record["trial_end"] = after.isoformat()
+        return FakeResult(
+            data=[
+                {
+                    "subscription": dict(record),
+                    "before_trial_end": before,
+                    "after_trial_end": after.isoformat(),
+                }
+            ]
+        )
+
+    def _admin_clear_user_daily_ai_counters(self, params: Dict[str, Any]) -> FakeResult:
+        """Mirror migration 060's all-or-nothing daily-counter reset."""
+        user_id = params.get("p_user_id")
+        if not any(row.get("id") == user_id for row in self._rows_for("users")):
+            return FakeResult(data=[])
+        today = utcnow().date()
+        today_iso = today.isoformat()
+        period_start = today.replace(day=1).isoformat()
+
+        settings = next(
+            (row for row in self._rows_for("user_ai_settings") if row.get("user_id") == user_id),
+            None,
+        )
+        if settings is None:
+            settings = {"user_id": user_id}
+            self._rows_for("user_ai_settings").append(settings)
+        settings.update(
+            {
+                "daily_extraction_count": 0,
+                "daily_generation_count": 0,
+                "daily_embedding_count": 0,
+                "last_reset_date": today_iso,
+            }
+        )
+
+        usage = next(
+            (
+                row
+                for row in self._rows_for("subscription_usage")
+                if row.get("user_id") == user_id and str(row.get("period_start")) == period_start
+            ),
+            None,
+        )
+        if usage is None:
+            usage = {
+                "user_id": user_id,
+                "period_start": period_start,
+                "monthly_extractions": 0,
+                "monthly_generations": 0,
+                "monthly_embeddings": 0,
+            }
+            self._rows_for("subscription_usage").append(usage)
+        usage.update({"daily_photoshoot_images": 0, "last_photoshoot_reset": today_iso})
+        return FakeResult(data=[{"today": today_iso, "period_start": period_start}])
 
     def _consume_mcp_oauth_authorization_code(self, params: Dict[str, Any]) -> FakeResult:
         record = next(

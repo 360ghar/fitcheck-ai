@@ -179,14 +179,17 @@
       "installUrl": "https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai"
     }
     </script>
-    <!-- Theme initialization - prevents flash of wrong theme -->
+    <!-- Theme initialization - prevents flash of wrong theme.
+         The fallback below must match ThemeProvider's `defaultTheme`
+         (src/components/theme/ThemeProvider.tsx) and its call sites — keep
+         them in step or the default repaints over this class on mount. -->
     <script>
       (function() {
         var STORAGE_KEY = 'fitcheck-theme';
         var stored = localStorage.getItem(STORAGE_KEY);
         var theme = stored;
         if (!theme || (theme !== 'light' && theme !== 'dark' && theme !== 'system')) {
-          theme = 'system';
+          theme = 'light';
         }
         var resolved = theme;
         if (theme === 'system') {

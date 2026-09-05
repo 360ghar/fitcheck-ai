@@ -10,15 +10,19 @@ from supabase import Client
 
 from app.api.v1.deps import get_db, require_permission
 from app.models.admin import (
+    AdminFunnelResponse,
     AdminOverviewResponse,
     AdminReferralsResponse,
+    AdminRetentionResponse,
     AdminRevenueResponse,
     AdminTopUsersResponse,
     AdminTrendsResponse,
 )
 from app.services.admin_service import (
+    dashboard_funnel,
     dashboard_overview,
     dashboard_referrals,
+    dashboard_retention,
     dashboard_revenue,
     dashboard_top_users,
     dashboard_trends,
@@ -76,3 +80,25 @@ async def trends(
     """Daily signups / AI jobs / paid / active series over the window."""
     result = await dashboard_trends(db, days=days)
     return AdminTrendsResponse(**result)
+
+
+@router.get("/dashboards/funnel", response_model=AdminFunnelResponse)
+async def funnel(
+    days: int = Query(30, ge=1, le=90, description="Window in days (1-90, default 30)"),
+    db: Client = Depends(get_db),
+    user: Dict[str, Any] = Depends(require_permission("dashboards.read")),
+) -> AdminFunnelResponse:
+    """Funnel: signups -> items (24h) -> outfits (7d) -> paid (window)."""
+    result = await dashboard_funnel(db, days=days)
+    return AdminFunnelResponse(**result)
+
+
+@router.get("/dashboards/retention", response_model=AdminRetentionResponse)
+async def retention(
+    weeks: int = Query(4, ge=1, le=12, description="Number of weekly cohorts (1-12, default 4)"),
+    db: Client = Depends(get_db),
+    user: Dict[str, Any] = Depends(require_permission("dashboards.read")),
+) -> AdminRetentionResponse:
+    """Cohort retention: last N Mondays UTC × retained 7d later."""
+    result = await dashboard_retention(db, weeks=weeks)
+    return AdminRetentionResponse(**result)

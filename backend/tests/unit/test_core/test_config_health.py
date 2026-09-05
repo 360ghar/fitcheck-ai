@@ -111,6 +111,14 @@ def test_vision_provider_defaults_to_gemini():
     assert default == "gemini"
 
 
+def test_gift_voucher_creation_defaults_to_enabled():
+    """New issuance is enabled unless an operator explicitly disables it."""
+    from app.core.config import Settings
+
+    default = Settings.model_fields["ENABLE_GIFT_VOUCHER_CREATION"].default
+    assert default is True
+
+
 def test_healthy_prod_config_returns_no_issues():
     with _force_prod(), patch.object(config_health, "settings", _settings()):
         assert validate_production_config() == []

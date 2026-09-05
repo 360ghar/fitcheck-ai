@@ -2,6 +2,10 @@ import 'package:fitcheck_ai/core/config/env_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('gift vouchers are enabled when no override is supplied', () {
+    expect(EnvConfig.giftVouchersEnabled, isTrue);
+  });
+
   group('EnvConfig inline comments', () {
     test(
       'keeps literal hashes and quoted hashes while removing real comments',

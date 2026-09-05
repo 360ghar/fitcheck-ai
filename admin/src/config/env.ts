@@ -21,8 +21,8 @@ const envSchema = z.object({
    */
   VITE_SUPABASE_URL: z.string().optional(),
   VITE_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
-  /** Gift voucher reporting and controls. Disabled until migration 056 is live. */
-  VITE_ENABLE_GIFT_VOUCHERS: z.enum(['true', 'false']).default('false'),
+  /** Gift voucher reporting and controls. Set false only for a UI rollback. */
+  VITE_ENABLE_GIFT_VOUCHERS: z.enum(['true', 'false']).default('true'),
 })
 
 const parsed = envSchema.safeParse({
@@ -31,7 +31,7 @@ const parsed = envSchema.safeParse({
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL || undefined,
   VITE_SUPABASE_PUBLISHABLE_KEY:
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || undefined,
-  VITE_ENABLE_GIFT_VOUCHERS: import.meta.env.VITE_ENABLE_GIFT_VOUCHERS ?? 'false',
+  VITE_ENABLE_GIFT_VOUCHERS: import.meta.env.VITE_ENABLE_GIFT_VOUCHERS ?? 'true',
 })
 
 if (!parsed.success) {

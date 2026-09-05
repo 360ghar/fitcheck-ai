@@ -3,6 +3,7 @@ Admin authorization tests: every /api/v1/admin/* endpoint 403s for a plain
 user and is reachable for an admin. The route list is derived from the live
 OpenAPI schema so a newly added admin endpoint cannot silently miss the gate.
 """
+
 from contextlib import contextmanager
 
 import pytest
@@ -71,10 +72,15 @@ def _fill_path(path: str) -> str:
 def _body_for(method: str, path: str):
     if method == "POST" and path == "/api/v1/admin/promo-codes":
         return {"code": "TEST100", "plan_type": "pro_monthly", "months": 1}
+    if method == "POST" and path.endswith("/subscription/extend-trial"):
+        return {"days": 7}
+    if method == "POST" and path.endswith("/ai/clear-daily"):
+        return {}
     if method == "POST" and path == "/api/v1/admin/gifts":
         return {
             "from_name": "Admin",
             "to_name": "Recipient",
+            "recipient_email": "recipient@example.com",
             "duration_months": 1,
             "note": "Authorization route test",
         }
@@ -180,9 +186,7 @@ def test_admin_reaches_every_admin_route(client, method, path):
         else:
             # GETs: list endpoints 200; detail endpoints 404 on empty DB.
             allowed = (200, 404)
-        assert response.status_code in allowed, (
-            f"{method} {path} -> {response.status_code} {response.text[:200]}"
-        )
+        assert response.status_code in allowed, f"{method} {path} -> {response.status_code} {response.text[:200]}"
 
 
 def test_ops_network_routes_still_gated_for_non_admin(client):
@@ -262,7 +266,14 @@ def test_ops_can_mark_iap_refund_but_not_override_quotas(client):
     store-billed refund-marked endpoint (iap.write) and is 403 on the
     quota-override endpoint (quotas.write)."""
     db = FakeDB(rows={"subscriptions": [{"id": "txn-1", "user_id": "user-1"}]})
-    ops = {"id": "user-ops", "email": "ops@example.com", "full_name": "Ops", "is_active": True, "is_admin": False, "role": "ops"}
+    ops = {
+        "id": "user-ops",
+        "email": "ops@example.com",
+        "full_name": "Ops",
+        "is_active": True,
+        "is_admin": False,
+        "role": "ops",
+    }
     with _with_user(client, ops, db):
         response = client.post("/api/v1/admin/iap/transactions/txn-1/mark-refunded")
         assert response.status_code in (200, 404, 422), response.text[:200]
@@ -302,9 +313,7 @@ def test_self_role_change_rejected(client):
     (previously only self-demotion/self-suspension were blocked)."""
     db = FakeDB(rows={"users": [ADMIN_USER]})
     with _with_user(client, ADMIN_USER, db):
-        response = client.patch(
-            "/api/v1/admin/users/user-admin", json={"role": "super_admin"}
-        )
+        response = client.patch("/api/v1/admin/users/user-admin", json={"role": "super_admin"})
     assert response.status_code == 422
     assert "own role" in response.json()["error"].lower()
 
@@ -314,9 +323,7 @@ def test_support_cannot_grant_admin_roles(client):
     last-admin check existed before, so promotions were unrestricted)."""
     db = FakeDB(rows={"users": [PLAIN_USER]})
     with _with_user(client, SUPPORT_USER, db):
-        response = client.patch(
-            "/api/v1/admin/users/user-plain", json={"role": "admin"}
-        )
+        response = client.patch("/api/v1/admin/users/user-plain", json={"role": "admin"})
     assert response.status_code == 422
     assert "grant admin" in response.json()["error"].lower()
 
@@ -325,9 +332,7 @@ def test_admin_demote_by_support_rejected(client):
     """support/ops must not demote existing admins either."""
     db = FakeDB(rows={"users": [TARGET_ADMIN_ROW]})
     with _with_user(client, SUPPORT_USER, db):
-        response = client.patch(
-            "/api/v1/admin/users/user-1", json={"role": "user"}
-        )
+        response = client.patch("/api/v1/admin/users/user-1", json={"role": "user"})
     assert response.status_code == 422
     assert "admin" in response.json()["error"].lower()
 
@@ -337,8 +342,6 @@ def test_last_admin_suspension_rejected(client):
     the last-admin existence check now also runs for is_active=False."""
     db = FakeDB(rows={"users": [TARGET_ADMIN_ROW]})
     with _with_user(client, ADMIN_USER, db):
-        response = client.patch(
-            "/api/v1/admin/users/user-1", json={"is_active": False}
-        )
+        response = client.patch("/api/v1/admin/users/user-1", json={"is_active": False})
     assert response.status_code == 422
     assert "suspend the last admin" in response.json()["error"].lower()

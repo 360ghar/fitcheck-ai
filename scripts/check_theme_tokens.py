@@ -169,6 +169,13 @@ PAIRED_FILLS = (
     ("--destructive-foreground", "--destructive"),
     ("--on-dark", "--foreground"),
     ("--on-image-foreground", "--on-image"),
+    # Editorial tint palette (DESIGN.md 01): deep text/icon role on its pale
+    # fill. Both invert in .dark, so each pair is asserted in BOTH themes.
+    ("--tint-coral", "--tint-coral-pale"),
+    ("--tint-amber", "--tint-amber-pale"),
+    ("--tint-teal", "--tint-teal-pale"),
+    ("--tint-violet", "--tint-violet-pale"),
+    ("--tint-blue", "--tint-blue-pale"),
 )
 
 # Pre-existing sub-threshold pairs, recorded with their measured ratio so they

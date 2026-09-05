@@ -346,6 +346,51 @@
         "title": "AdminFeedbackUpdate",
         "type": "object"
       },
+      "AdminFunnelResponse": {
+        "additionalProperties": true,
+        "description": "GET /admin/dashboards/funnel \u2014 signups -> items -> outfits -> paid.",
+        "properties": {
+          "days": {
+            "default": 30,
+            "title": "Days",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AdminFunnelStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "title": "AdminFunnelResponse",
+        "type": "object"
+      },
+      "AdminFunnelStep": {
+        "additionalProperties": true,
+        "description": "One funnel step: label, count, pct_of_prev (100.0 for first).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pct_of_prev": {
+            "default": 0.0,
+            "title": "Pct Of Prev",
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "count"
+        ],
+        "title": "AdminFunnelStep",
+        "type": "object"
+      },
       "AdminGiftAction": {
         "properties": {
           "reason": {
@@ -461,6 +506,33 @@
             "title": "Note",
             "type": "string"
           },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
+          },
+          "recipient_email": {
+            "format": "email",
+            "title": "Recipient Email",
+            "type": "string"
+          },
           "to_name": {
             "maxLength": 80,
             "minLength": 1,
@@ -471,6 +543,7 @@
         "required": [
           "from_name",
           "to_name",
+          "recipient_email",
           "duration_months",
           "note"
         ],
@@ -691,6 +764,16 @@
             },
             "title": "Signups",
             "type": "object"
+          },
+          "tickets_open_48h": {
+            "default": 0,
+            "title": "Tickets Open 48H",
+            "type": "integer"
+          },
+          "trials_ending_7d": {
+            "default": 0,
+            "title": "Trials Ending 7D",
+            "type": "integer"
           }
         },
         "title": "AdminOverviewResponse",
@@ -907,6 +990,18 @@
             ],
             "title": "Daily Photoshoot Images"
           },
+          "effective_embedding_limit": {
+            "title": "Effective Embedding Limit",
+            "type": "integer"
+          },
+          "effective_extraction_limit": {
+            "title": "Effective Extraction Limit",
+            "type": "integer"
+          },
+          "effective_generation_limit": {
+            "title": "Effective Generation Limit",
+            "type": "integer"
+          },
           "email": {
             "anyOf": [
               {
@@ -955,7 +1050,10 @@
           }
         },
         "required": [
-          "user_id"
+          "user_id",
+          "effective_extraction_limit",
+          "effective_generation_limit",
+          "effective_embedding_limit"
         ],
         "title": "AdminQuotaUsageItem",
         "type": "object"
@@ -1038,6 +1136,56 @@
           "status"
         ],
         "title": "AdminRefundResponse",
+        "type": "object"
+      },
+      "AdminRetentionCohort": {
+        "additionalProperties": true,
+        "description": "One weekly cohort row for retention.",
+        "properties": {
+          "retained_7d": {
+            "default": 0,
+            "title": "Retained 7D",
+            "type": "integer"
+          },
+          "retention_pct": {
+            "default": 0.0,
+            "title": "Retention Pct",
+            "type": "number"
+          },
+          "signups": {
+            "default": 0,
+            "title": "Signups",
+            "type": "integer"
+          },
+          "week_start": {
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_start"
+        ],
+        "title": "AdminRetentionCohort",
+        "type": "object"
+      },
+      "AdminRetentionResponse": {
+        "additionalProperties": true,
+        "description": "GET /admin/dashboards/retention \u2014 last N Mondays \u00d7 retained 7d.",
+        "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/AdminRetentionCohort"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
+          "weeks": {
+            "default": 4,
+            "title": "Weeks",
+            "type": "integer"
+          }
+        },
+        "title": "AdminRetentionResponse",
         "type": "object"
       },
       "AdminRevenueResponse": {
@@ -1584,12 +1732,57 @@
       },
       "AdminUserDetail": {
         "additionalProperties": true,
-        "description": "GET /admin/users/{user_id} \u2014 full profile detail.",
+        "description": "GET /admin/users/{user_id} \u2014 full profile detail (360 view).\n\nCore keys (user, subscription, usage, counts, recent_jobs) are always\npresent; 360 keys are optional and best-effort (missing table -> []).\n``extra=\"allow\"`` keeps the contract stable when the service adds a new\nsection without a model bump (the admin console reads via schema.d.ts).",
         "properties": {
+          "achievements": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Achievements",
+            "type": "array"
+          },
+          "achievements_meta": {
+            "additionalProperties": true,
+            "title": "Achievements Meta",
+            "type": "object"
+          },
+          "collections": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Collections",
+            "type": "array"
+          },
           "counts": {
             "additionalProperties": true,
             "title": "Counts",
             "type": "object"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "outfits": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Outfits",
+            "type": "array"
+          },
+          "photoshoot_jobs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Photoshoot Jobs",
+            "type": "array"
           },
           "recent_jobs": {
             "items": {
@@ -1598,6 +1791,24 @@
             },
             "title": "Recent Jobs",
             "type": "array"
+          },
+          "social_import_jobs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Social Import Jobs",
+            "type": "array"
+          },
+          "streak": {
+            "additionalProperties": true,
+            "title": "Streak",
+            "type": "object"
+          },
+          "streaks": {
+            "additionalProperties": true,
+            "title": "Streaks",
+            "type": "object"
           },
           "subscription": {
             "anyOf": [
@@ -1610,6 +1821,22 @@
               }
             ],
             "title": "Subscription"
+          },
+          "support_tickets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Support Tickets",
+            "type": "array"
+          },
+          "trips": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Trips",
+            "type": "array"
           },
           "usage": {
             "additionalProperties": true,
@@ -2499,6 +2726,81 @@
         "title": "BodyProfileUpdate",
         "type": "object"
       },
+      "Body_issue_token_api_v1_oauth_token_post": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "code_verifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Verifier"
+          },
+          "grant_type": {
+            "title": "Grant Type",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redirect Uri"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          }
+        },
+        "required": [
+          "grant_type",
+          "client_id"
+        ],
+        "title": "Body_issue_token_api_v1_oauth_token_post",
+        "type": "object"
+      },
+      "Body_revoke_token_api_v1_oauth_revoke_post": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "Body_revoke_token_api_v1_oauth_revoke_post",
+        "type": "object"
+      },
       "Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post": {
         "properties": {
           "provider_page_id": {
@@ -2886,6 +3188,33 @@
             ],
             "title": "Message"
           },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
+          },
+          "recipient_email": {
+            "format": "email",
+            "title": "Recipient Email",
+            "type": "string"
+          },
           "to_name": {
             "maxLength": 80,
             "minLength": 1,
@@ -2896,6 +3225,7 @@
         "required": [
           "from_name",
           "to_name",
+          "recipient_email",
           "duration_months",
           "client_request_id"
         ],
@@ -3263,6 +3593,23 @@
         "title": "EmbeddingRequest",
         "type": "object"
       },
+      "ExtendTrialRequest": {
+        "description": "POST /admin/users/{id}/subscription/extend-trial body.",
+        "properties": {
+          "days": {
+            "description": "Days to extend trial (1..90)",
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "title": "ExtendTrialRequest",
+        "type": "object"
+      },
       "ExtractItemsRequest": {
         "description": "Request to extract items from an image (inline or stored).",
         "properties": {
@@ -3606,6 +3953,15 @@
         "title": "GiftClaimRequest",
         "type": "object"
       },
+      "GiftOccasion": {
+        "enum": [
+          "birthday",
+          "anniversary",
+          "other"
+        ],
+        "title": "GiftOccasion",
+        "type": "string"
+      },
       "GiftUpdate": {
         "properties": {
           "from_name": {
@@ -3632,6 +3988,28 @@
               }
             ],
             "title": "Message"
+          },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
           },
           "to_name": {
             "anyOf": [
@@ -5341,6 +5719,33 @@
             ],
             "title": "Message"
           },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
+          },
+          "recipient_email": {
+            "format": "email",
+            "title": "Recipient Email",
+            "type": "string"
+          },
           "success_url": {
             "default": "/gifts?checkout=success&session_id={CHECKOUT_SESSION_ID}",
             "maxLength": 500,
@@ -5357,6 +5762,7 @@
         "required": [
           "from_name",
           "to_name",
+          "recipient_email",
           "duration_months",
           "client_request_id"
         ],
@@ -7117,6 +7523,59 @@
         ]
       }
     },
+    "/api/v1/admin/dashboards/funnel": {
+      "get": {
+        "description": "Funnel: signups -> items (24h) -> outfits (7d) -> paid (window).",
+        "operationId": "funnel_api_v1_admin_dashboards_funnel_get",
+        "parameters": [
+          {
+            "description": "Window in days (1-90, default 30)",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Window in days (1-90, default 30)",
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminFunnelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Funnel",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/dashboards/overview": {
       "get": {
         "description": "Signups / active users / paid subscriptions / AI jobs aggregates.",
@@ -7166,6 +7625,59 @@
           }
         ],
         "summary": "Referrals",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/dashboards/retention": {
+      "get": {
+        "description": "Cohort retention: last N Mondays UTC \u00d7 retained 7d later.",
+        "operationId": "retention_api_v1_admin_dashboards_retention_get",
+        "parameters": [
+          {
+            "description": "Number of weekly cohorts (1-12, default 4)",
+            "in": "query",
+            "name": "weeks",
+            "required": false,
+            "schema": {
+              "default": 4,
+              "description": "Number of weekly cohorts (1-12, default 4)",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Weeks",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRetentionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retention",
         "tags": [
           "Admin"
         ]
@@ -8942,7 +9454,7 @@
     },
     "/api/v1/admin/subscriptions": {
       "get": {
-        "description": "Paginated subscriptions with user email and display amount.",
+        "description": "Paginated subscriptions with user email and display amount.\n\n``billing_provider`` filters by billing rail; ``stripe`` includes legacy\nrows whose ``billing_provider`` is NULL (see admin_service).",
         "operationId": "list_admin_subscriptions_api_v1_admin_subscriptions_get",
         "parameters": [
           {
@@ -8979,6 +9491,27 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "billing_provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "stripe",
+                    "apple",
+                    "google"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Billing Provider"
             }
           },
           {
@@ -9484,6 +10017,56 @@
         ]
       }
     },
+    "/api/v1/admin/users/{user_id}/ai/clear-daily": {
+      "post": {
+        "description": "Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).\n\nSets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to\ntoday, plus ``subscription_usage.daily_photoshoot_images`` to 0 for the\nactive monthly usage period. Writes audit ``user.ai_daily_cleared`` and invalidates\nthe cached profile.",
+        "operationId": "admin_clear_daily_api_v1_admin_users__user_id__ai_clear_daily_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Clear Daily Api V1 Admin Users  User Id  Ai Clear Daily Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Clear Daily",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/users/{user_id}/quota-override": {
       "patch": {
         "description": "Set (or clear with null) a per-user daily AI quota override.\n\nThe override lives on ``users.custom_daily_quota`` (migration 037);\nnull restores the plan default. Audit: ``quota.override``.\n\nA4-14/M2: gated by ``quotas.write`` (super_admin/admin) instead of the\nblanket ``require_admin`` \u2014 a content_editor has no quotas surface and\nmust not be able to change another user's daily AI quota.",
@@ -9539,6 +10122,66 @@
           }
         ],
         "summary": "Admin Quota Override",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/subscription/extend-trial": {
+      "post": {
+        "description": "Extend a user's trial by ``days`` (1..90).\n\nIf ``subscriptions.trial_end`` is set it is moved forward; otherwise\n``now + days`` becomes the new trial end. Writes audit\n``user.trial_extended`` with ``{days, before, after}`` and\ninvalidates the cached profile (service helper).",
+        "operationId": "admin_extend_trial_api_v1_admin_users__user_id__subscription_extend_trial_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtendTrialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Extend Trial Api V1 Admin Users  User Id  Subscription Extend Trial Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Extend Trial",
         "tags": [
           "Admin"
         ]
@@ -10981,6 +11624,22 @@
                 }
               ],
               "title": "Last Event Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
             }
           }
         ],
@@ -13326,6 +13985,35 @@
         ]
       }
     },
+    "/api/v1/gifts/summary": {
+      "get": {
+        "description": "Return dashboard priority inputs without exposing recipient data.",
+        "operationId": "get_gift_dashboard_summary_api_v1_gifts_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Gift Dashboard Summary Api V1 Gifts Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Gift Dashboard Summary",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
     "/api/v1/gifts/{voucher_id}": {
       "get": {
         "operationId": "get_owned_gift_api_v1_gifts__voucher_id__get",
@@ -13470,6 +14158,57 @@
           }
         ],
         "summary": "Download Owned Gift Artwork",
+        "tags": [
+          "Gift Vouchers"
+        ]
+      }
+    },
+    "/api/v1/gifts/{voucher_id}/claim-assigned": {
+      "post": {
+        "description": "Claim a dashboard-listed named gift with the verified recipient email.",
+        "operationId": "claim_assigned_gift_api_v1_gifts__voucher_id__claim_assigned_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voucher_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Voucher Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Claim Assigned Gift Api V1 Gifts  Voucher Id  Claim Assigned Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Claim Assigned Gift",
         "tags": [
           "Gift Vouchers"
         ]
@@ -14729,6 +15468,330 @@
         "summary": "Mark Worn",
         "tags": [
           "Items"
+        ]
+      }
+    },
+    "/api/v1/oauth/.well-known/oauth-authorization-server": {
+      "get": {
+        "description": "RFC 8414 authorization-server metadata (public clients, PKCE S256).",
+        "operationId": "authorization_server_metadata_api_v1_oauth__well_known_oauth_authorization_server_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Authorization Server Metadata Api V1 Oauth  Well Known Oauth Authorization Server Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Authorization Server Metadata",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/.well-known/oauth-protected-resource": {
+      "get": {
+        "description": "RFC 9728 protected-resource metadata for the /mcp resource.",
+        "operationId": "protected_resource_metadata_api_v1_oauth__well_known_oauth_protected_resource_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Protected Resource Metadata Api V1 Oauth  Well Known Oauth Protected Resource Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Protected Resource Metadata",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/authorize": {
+      "get": {
+        "description": "Validate the client's authorization request and bounce the user to the\nfrontend bridge (Supabase hosted login runs there).",
+        "operationId": "authorize_api_v1_oauth_authorize_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "response_type",
+            "required": true,
+            "schema": {
+              "title": "Response Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "redirect_uri",
+            "required": true,
+            "schema": {
+              "title": "Redirect Uri",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code_challenge",
+            "required": true,
+            "schema": {
+              "title": "Code Challenge",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code_challenge_method",
+            "required": false,
+            "schema": {
+              "default": "S256",
+              "title": "Code Challenge Method",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "mcp",
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/authorize/complete": {
+      "post": {
+        "description": "Frontend bridge callback: bind the Supabase session to the pending\nauthorization. Returns the redirect URL the browser must follow.",
+        "operationId": "authorize_complete_api_v1_oauth_authorize_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Authorize Complete Api V1 Oauth Authorize Complete Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize Complete",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/register": {
+      "post": {
+        "description": "RFC 7591 dynamic registration. Public clients only (PKCE, no secret);\nredirect URIs must match MCP_REDIRECT_URI_ALLOWLIST.",
+        "operationId": "register_client_api_v1_oauth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Register Client Api V1 Oauth Register Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Client",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/revoke": {
+      "post": {
+        "description": "RFC 7009 revocation (idempotent; always 200 for valid requests).",
+        "operationId": "revoke_token_api_v1_oauth_revoke_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_revoke_token_api_v1_oauth_revoke_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revoke Token Api V1 Oauth Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Token",
+        "tags": [
+          "OAuth"
+        ]
+      }
+    },
+    "/api/v1/oauth/token": {
+      "post": {
+        "description": "RFC 6749 token endpoint: authorization_code (PKCE) or refresh_token.",
+        "operationId": "issue_token_api_v1_oauth_token_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_issue_token_api_v1_oauth_token_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Issue Token Api V1 Oauth Token Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue Token",
+        "tags": [
+          "OAuth"
         ]
       }
     },
@@ -16664,6 +17727,22 @@
             "schema": {
               "title": "Job Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
             }
           }
         ],

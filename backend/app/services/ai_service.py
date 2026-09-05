@@ -79,14 +79,23 @@ class EmbeddingService:
             # The google-genai module-level client is the SYNC client; the
             # blocking embed_content call must never run on the event loop
             # (it would stall every other coroutine for the request duration).
-            result = await asyncio.to_thread(
-                _client.models.embed_content,
-                model=settings.AI_GEMINI_EMBEDDING_MODEL,
-                contents=text,
-                config=types.EmbedContentConfig(
-                    task_type="RETRIEVAL_DOCUMENT",
-                    output_dimensionality=settings.PINECONE_DIMENSION,
+            # asyncio.wait_for bounds the call: the SDK retries 429/5xx with
+            # internal backoff, so a stalled provider call can hold a worker
+            # thread for minutes — well past every client's request timeout.
+            # TimeoutError is re-raised as AIServiceError below, which callers
+            # already degrade on (e.g. /items/check-duplicates falls back to
+            # text matching) — bounded failure instead of a hung request.
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _client.models.embed_content,
+                    model=settings.AI_GEMINI_EMBEDDING_MODEL,
+                    contents=text,
+                    config=types.EmbedContentConfig(
+                        task_type="RETRIEVAL_DOCUMENT",
+                        output_dimensionality=settings.PINECONE_DIMENSION,
+                    ),
                 ),
+                timeout=settings.AI_EMBEDDING_TIMEOUT_S,
             )
 
             embeddings = getattr(result, "embeddings", None) or []

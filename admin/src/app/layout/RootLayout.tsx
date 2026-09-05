@@ -41,19 +41,19 @@ export function RootLayout() {
 
   return (
     <div className="min-h-dvh bg-background">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — v2 denser rail (240 → 72px) */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-border transition-[width] duration-150 lg:block',
-          sidebarCollapsed && 'w-16',
+          'fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-border bg-background transition-[width] duration-150 lg:block',
+          sidebarCollapsed && 'w-[72px]',
         )}
       >
         <Sidebar collapsed={sidebarCollapsed} />
       </aside>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — 300px per spec */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-72 p-0">
+        <SheetContent side="left" className="w-[300px] p-0">
           <SheetTitle className="sr-only">{t('brand')}</SheetTitle>
           <Sidebar collapsed={false} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
@@ -62,11 +62,11 @@ export function RootLayout() {
       <div
         className={cn(
           'flex min-h-dvh flex-col transition-[padding] duration-150',
-          sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-60',
+          sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-60',
         )}
       >
         <Topbar onMenuClick={() => setMobileOpen(true)} />
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 lg:px-8">
           <Outlet />
         </main>
       </div>

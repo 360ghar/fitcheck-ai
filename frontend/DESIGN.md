@@ -52,6 +52,13 @@ single editorial secondary (purple) for AI-pick / recommendation badges.
 There is no dark-CTA-strip surface token. A rare dark strip uses `bg-ink`, whose
 label is `text-on-dark` — and both invert, so the strip stays a strip in dark.
 
+**Light is the default theme.** A visitor with no saved choice gets light,
+whatever the OS preference says; Dark and System are explicit picks in the
+theme toggle (`src/components/theme/`, `fitcheck-theme` in localStorage). The
+default is declared in three places that must stay in step: the pre-hydration
+script in `index.html`, `ThemeProvider`'s `defaultTheme`, and its call sites
+(`main.tsx`, `entry-prerender.tsx`).
+
 ### Text
 
 | Token | Var | HSL channels | Hex | vs `--background` | vs `--card` | Use |
@@ -90,6 +97,34 @@ repaints to `bg-surface-card`, so that pairing does not occur.
 > a CSS variable, so it inverts. A fixed hex in `tailwind.config.ts` has no
 > `.dark` counterpart in the emitted CSS — that is precisely how dark mode
 > broke. Add colors as a `:root` + `.dark` var pair, never as a literal.
+
+### Editorial tints (added 2026-09-01)
+
+One brand accent, five editorial tints. The tints give dashboards, empty
+states, and landing icon marks warmth without becoming second brand colors:
+they decorate *marks and small tiles* (icon chips, accent bars, kicker dots),
+never flood panels or rows. Each tint is a `DEFAULT` (deep, text/icon role) +
+`-pale` (fill) pair with the same contract as `--success` / `--success-pale`:
+roles invert in dark mode, and `scripts/check_theme_tokens.py` asserts every
+pair at ≥4.5:1 in BOTH themes via `PAIRED_FILLS`.
+
+| Tint | Light deep / pale | Dark deep / pale | Measured |
+|------|-------------------|------------------|----------|
+| `--tint-coral` | `#af301d` / `#fce1d9` | `#f59f89` / `#432019` | 5.17 / 7.00 |
+| `--tint-amber` | `#985716` / `#fbebd0` | `#f4c87b` / `#433119` | 4.85 / 7.95 |
+| `--tint-teal` | `#176d62` / `#d6f5f1` | `#85e0d1` / `#15322e` | 5.32 / 8.91 |
+| `--tint-violet` | `#7a3399` / `#f0dff6` | `#d69aea` / `#3b1f47` | 6.01 / 6.57 |
+| `--tint-blue` | `#27599b` / `#dceaf9` | `#88bdf2` / `#1c2b40` | 5.73 / 7.17 |
+
+Usage rules:
+
+- Utilities are `text-tint-*` / `bg-tint-*-pale` (Tailwind `tint.*` map). A
+  tinted *label* always rides its own `-pale` fill — never a tint directly on
+  `--background`/`--card`.
+- AI/recommendation badges keep `accent-purple`; the AI tool voice does not
+  fragment across the five tints.
+- Category/condition indexes (`event-*`, `condition-*`) keep their quieter
+  tonal band; they are data encodings, not decoration.
 
 ### Dark mode
 
@@ -307,6 +342,27 @@ Always honor `prefers-reduced-motion` (the global `@media` reset already exists
 in `src/index.css`). Long AI jobs use the processing-status vocabulary below —
 honest progress, never fake completion animations.
 
+### Product motion system (updated 2026-09-01)
+
+Sanctioned interaction feedback, all transform/opacity only and reduced-motion
+safe. These live in the primitives, not per call site:
+
+- **Press scale** — every Button gets `motion-safe:active:scale-[0.97]`; the
+  FAB and icon-circular variants scale slightly more. Press feedback should
+  feel mechanical, not like a repaint.
+- **Grounded lift** — `Card variant="interactive"` pairs
+  `motion-safe:hover:-translate-y-0.5` with a border tone shift. A bare
+  translate over a shadowless flat surface reads as a jump (see StatCard
+  history); the hairline grounds the motion. Shadows stay banned (§07).
+- **Shimmer** — the `.skeleton` class sweeps a transform-only highlight over
+  the resting tone (replaces flat `animate-pulse`); direction communicates
+  "loading", which a pulse never did.
+- **Toast spring** — toasts enter on `animate-toast-in` (380ms
+  cubic-bezier(0.22,1,0.36,1) with a small overshoot); swipe/exit behavior is
+  unchanged from tailwindcss-animate.
+- **Tab indicator pop** — BottomNav's active pill replays a 200ms scale-in on
+  activation (remount-by-key), never on hover.
+
 ### Enterprise landing guidance (updated 2026-08-27)
 
 Marketing pages use a **CSS-only** motion system (the "Landing motion system"
@@ -324,9 +380,14 @@ system above:
 - **Information uses ledgers, sequences, and matrices.** Prefer ruled rows and
   exact grid alignment over bento-card collections. Use a comparison table on
   desktop and locally scrolling snap cards or demos on narrow screens.
-- **Landing surfaces stay flat.** Do not use gradients, glass, glow, decorative
-  blur, card shadows, or ambient infinite motion. Use Canvas, Soft Surface,
-  Card, Ink, Hairline, and Brand Red with 16px or 32px radii.
+- **Landing surfaces stay flat.** No glass, glow, decorative blur, card
+  shadows, or ambient infinite motion. Use Canvas, Soft Surface, Card, Ink,
+  Hairline, and Brand Red with 16px or 32px radii. Exactly two gradient
+  exceptions are sanctioned (2026-09-01): one warm var-backed radial wash
+  behind the hero canvas (`--primary` at 7% alpha, fades by mid-page), and the
+  hex-locked `gradient-primary` on the final CTA button — brand red does not
+  invert, and that CTA rides the ink strip, not a theme surface. Section
+  kicker dots and small icon tiles may use the editorial tints (§01).
 
 Rules for landing motion:
 

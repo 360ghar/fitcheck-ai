@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { apiGet, apiPatch } from '@/shared/api/client'
+import { apiGet, apiPatch, apiPost } from '@/shared/api/client'
 import type {
   AdminUserActivity,
   AdminUserDetail,
@@ -91,6 +91,49 @@ export function useUserActivityQuery(userId: string, options?: { enabled?: boole
 
 export function patchUser(userId: string, body: AdminUserPatch): Promise<Record<string, unknown>> {
   return apiPatch<Record<string, unknown>>(`/api/v1/admin/users/${userId}`, body)
+}
+
+export function extendTrial(
+  userId: string,
+  days: number,
+): Promise<Record<string, unknown>> {
+  return apiPost<Record<string, unknown>>(
+    `/api/v1/admin/users/${userId}/subscription/extend-trial`,
+    {
+      days,
+    },
+  )
+}
+
+export function clearDailyCounters(userId: string): Promise<Record<string, unknown>> {
+  return apiPost<Record<string, unknown>>(
+    `/api/v1/admin/users/${userId}/ai/clear-daily`,
+  )
+}
+
+export function useExtendTrial() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, days }: { userId: string; days: number }) =>
+      extendTrial(userId, days),
+    onSettled: (_data, _error, { userId }) => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) })
+      void queryClient.invalidateQueries({ queryKey: userKeys.activity(userId) })
+    },
+    retry: QUERY_RETRY.mutations,
+  })
+}
+
+export function useClearDailyCounters() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId }: { userId: string }) => clearDailyCounters(userId),
+    onSettled: (_data, _error, { userId }) => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) })
+      void queryClient.invalidateQueries({ queryKey: userKeys.activity(userId) })
+    },
+    retry: QUERY_RETRY.mutations,
+  })
 }
 
 /**

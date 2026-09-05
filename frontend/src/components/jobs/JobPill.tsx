@@ -43,7 +43,7 @@ export function JobPill() {
       onClick={handleClick}
       disabled={!canOpen}
       className={cn(
-        'fixed bottom-20 md:bottom-6 left-1/2 z-40 -translate-x-1/2',
+        'fixed bottom-[calc(var(--bottom-nav-height)+var(--safe-area-bottom)+0.75rem)] md:bottom-6 left-1/2 z-40 -translate-x-1/2',
         'flex items-center gap-2 rounded-full border border-border bg-background',
         'min-h-11 px-4 py-2.5 text-sm font-medium text-foreground',
         'max-w-[min(92vw,24rem)]',

@@ -291,7 +291,7 @@ Typical custom stack (`AI_DEFAULT_PROVIDER=custom`, the default):
 - Vision: `gemini-3.6-flash` **primary** via the native Gemini leg (default
   `AI_VISION_PROVIDER=gemini`) → `agnes-2.5-flash` fallback (`AI_VISION_FALLBACK_MODEL`)
   on **any** failure, not after a fixed retry count
-- Images: `agnes-image-2.1-flash` primary → `agnes-image-2.0-flash` fallback via `/v1/images/generations`
+- Images: `agnes-image-2.5-flash` primary → `agnes-image-2.1-flash` fallback via `/v1/images/generations`
 - Transient failures (429/503/timeout/empty images) retry fallback; non-transient raise
 - Embeddings: Google `google.genai` via `AI_GEMINI_API_KEY` (not the same code path as the
   native Gemini chat/vision/image provider above, though it shares the same key)
@@ -453,30 +453,51 @@ cannot erase a gift. Free and Plus accounts activate a gift immediately;
 existing Pro access queues it. A new non-gift Pro entitlement pauses an active
 gift and banks its exact unused seconds.
 
+Migration 061 adds a normalized recipient email to new vouchers and an indexed
+incoming-gift lookup. New vouchers require a recipient name and email. A named
+gift can be claimed only by the matching verified email. Legacy vouchers with
+no recipient email remain compatible with the private-link claim flow.
+
+Migration 062 adds nullable `occasion` and `occasion_greeting` fields. NULL
+means no occasion and no greeting. Birthday and anniversary use fixed public
+greetings; Other requires a trimmed 1–80 character sender greeting. The
+private note remains independent. Only unclaimed gifts can change this
+presentation data.
+
 `/api/v1/gifts` exposes a safe public catalog/detail/social-artwork surface and
 authenticated allowance, sent/received, issuance, Checkout fulfillment,
 claim, edit, rotation, and portrait-artwork operations. Public responses omit
 voucher source, payment data, account identifiers, email addresses, and claim
 credentials. A random public ID selects the presentation. A separate
-HMAC-derived secret lives only in the URL fragment; the printed base32 code is
-high entropy and is accepted with or without separators. Creation and claim
-attempts are rate limited.
+HMAC-derived secret lives only in the URL fragment. Legacy vouchers may also
+use their high-entropy base32 code, accepted with or without separators.
+Creation and claim attempts are rate limited.
+
+Authenticated GET /api/v1/gifts/summary returns remaining free allowances and
+claimable incoming named gifts. POST /api/v1/gifts/{voucher_id}/claim-assigned
+uses the signed-in verified email without exposing a claim credential. Recipient
+email is not returned in public, owner, recipient, or summary payloads, and is
+not placed in artwork, analytics, or logs.
 
 Paid gifts use Stripe Checkout `mode=payment`. Fulfillment verifies the
 authenticated owner, reserved session, one line item, quantity, configured
 Price ID, amount, and USD currency. The shared Stripe webhook ledger makes
 Checkout completion, asynchronous success/failure, expiry, refunds, and final
 dispute outcomes repeat safe. Paid value cannot be voided through the admin
-API. Pillow and `qrcode` render deterministic 1080x1350 portrait and 1200x630
-social PNGs; versioned objects use the private object-storage cache when it is
-available.
+API. Pillow renders deterministic 1080x1350 portrait and 1200x630 social
+PNGs. Neither artwork variant contains a claim credential. Artwork layout 3
+uses a separate storage namespace and response URL. It adds an occasion
+greeting only when one exists, and does not invent greeting or note text for
+generic gifts.
 
-Launch config is fail-closed. `ENABLE_GIFT_VOUCHER_CREATION=false` blocks new
-complimentary, admin, and paid issuance without disabling existing public
-links, claims, or entitlements. When it is true, config health requires
-`GIFT_TOKEN_SECRET` and all three `STRIPE_GIFT_PRO_*_PRICE_ID` values. The
-three gift tables are included in readiness checks. See
+New voucher issuance defaults on. Set `ENABLE_GIFT_VOUCHER_CREATION=false` only
+for an emergency rollback; this blocks new complimentary, admin, and paid
+issuance without disabling existing public links, claims, or entitlements.
+Config health requires `GIFT_TOKEN_SECRET` and all three
+`STRIPE_GIFT_PRO_*_PRICE_ID` values while issuance is enabled. The three gift
+tables are included in readiness checks. See
 `docs/product-specs/features/gift-vouchers.md`.
+Migrations 056 and 061 must both be live before creation is enabled.
 
 ## Route registration
 
@@ -492,7 +513,7 @@ admin API (`app.api.v1.admin` under `/api/v1/admin`, see "Admin API & RBAC").
 |------|---------|----------------|
 | `ENABLE_SOCIAL_IMPORT` | `true` | **Router not mounted.** The paths 404 and vanish from OpenAPI. |
 | `ENABLE_GAMIFICATION` | `false` | **Router stays mounted.** Handlers return `200` with a neutral zeroed payload. |
-| `ENABLE_GIFT_VOUCHER_CREATION` | `false` | **Routers stay mounted.** Existing links, claims, history, artwork, and entitlements work; new issuance returns 403. |
+| `ENABLE_GIFT_VOUCHER_CREATION` | `true` | **Routers stay mounted.** Set `false` only for an emergency rollback; existing links, claims, history, artwork, and entitlements continue to work. |
 
 The gamification asymmetry is deliberate and must not be "made consistent".
 Unmounting the router would 404 `/api/v1/gamification/streak` while the shipped
@@ -545,9 +566,11 @@ AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`
 
 Optional: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, social import flags,
 `ENABLE_GAMIFICATION` (default `false`),
-`ENABLE_GIFT_VOUCHER_CREATION` (default `false`), `GIFT_TOKEN_SECRET`,
+`ENABLE_GIFT_VOUCHER_CREATION` (default `true`), `GIFT_TOKEN_SECRET`,
 `AI_ENCRYPTION_KEY`
 
+Optional: `SENTRY_DSN` (empty = Sentry fully disabled; `app/core/sentry_config.py`
+becomes a no-op), `SENTRY_TRACES_SAMPLE_RATE` (default `0.1`)
 Full templates: `backend/.env.example`. Backend also loads repo root `.env`.
 
 ## Logging
@@ -556,6 +579,16 @@ Full templates: `backend/.env.example`. Backend also loads repo root `.env`.
 - Files under `backend/logs/`
 - `LOG_LEVEL` (default INFO)
 - Correlation ID on requests for agent grepping
+
+## Error tracking (Sentry)
+
+- `app/core/sentry_config.py` — no-op unless `SENTRY_DSN` is set
+- Unhandled 500s are captured from `unhandled_exception_handler` (a catch-all
+  handler for `Exception` intercepts errors before Sentry's own middleware
+  integration would see them) and carry the request correlation ID as a tag
+- Expected traffic is never reported: `FitCheckException` (business 4xx) and
+  422 validation errors
+- `/health` + `/ready` transactions are dropped so probes never consume quota
 
 ## API surface reference
 

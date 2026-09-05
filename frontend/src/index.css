@@ -100,6 +100,22 @@
     --surface-soft: 60 20% 98%;
     --accent-purple: 296 60% 34%;
 
+    /* Editorial tint palette (DESIGN.md 01: one brand accent, five tints).
+       DEFAULT = text/icon role, -pale = its fill — same contract as
+       --success / --success-pale. The pair swaps roles in .dark, and
+       scripts/check_theme_tokens.py enforces both at >=4.5:1 via
+       PAIRED_FILLS, so neither end can silently regress. */
+    --tint-coral: 8 72% 40%;
+    --tint-coral-pale: 14 85% 92%;
+    --tint-amber: 30 75% 34%;
+    --tint-amber-pale: 38 85% 90%;
+    --tint-teal: 172 65% 26%;
+    --tint-teal-pale: 172 60% 90%;
+    --tint-violet: 282 50% 40%;
+    --tint-violet-pale: 285 55% 92%;
+    --tint-blue: 214 60% 38%;
+    --tint-blue-pale: 212 70% 92%;
+
     /* Text roles from DESIGN.md 01. `body` is the default paragraph ink,
        `ash` the placeholder / disabled tier, `on-dark` the label that sits on
        an ink fill (bg-ink). Every one of these must have a .dark counterpart —
@@ -197,6 +213,19 @@
     --surface-soft: 60 5% 16%;
     --accent-purple: 296 55% 46%;
 
+    /* Editorial tints invert exactly like the success pair: DEFAULT becomes
+       the pale text role, -pale becomes the deep fill role. */
+    --tint-coral: 12 85% 75%;
+    --tint-coral-pale: 10 45% 18%;
+    --tint-amber: 38 85% 72%;
+    --tint-amber-pale: 34 45% 18%;
+    --tint-teal: 170 60% 70%;
+    --tint-teal-pale: 172 40% 14%;
+    --tint-violet: 285 65% 76%;
+    --tint-violet-pale: 282 40% 20%;
+    --tint-blue: 210 80% 74%;
+    --tint-blue-pale: 214 40% 18%;
+
     --body: 60 10% 88%;
     --ash: 60 5% 52%;
     /* on-dark rides an ink fill, and ink IS --foreground — so on dark it is a
@@ -224,6 +253,13 @@
     @apply w-full max-w-[100vw] overflow-x-hidden;
   }
 
+  /* Mobile interaction resets: no grey tap flash; contain scroll chaining;
+     images aren't drag handles; long-press on controls doesn't select text. */
+  * { -webkit-tap-highlight-color: transparent; }
+  body { overscroll-behavior-y: contain; }
+  img { -webkit-user-drag: none; user-select: none; }
+  [role='button'] { -webkit-user-select: none; user-select: none; }
+
   /* Focus styles */
   *:focus-visible {
     outline: 4px solid hsl(var(--ring));
@@ -239,6 +275,39 @@
 
   .skip-link:focus-visible {
     transform: translateY(0);
+  }
+}
+
+/* Component-layer helpers */
+@layer components {
+  /* Loading shimmer: a transform-only sweep over the resting skeleton tone.
+     The highlight rides `--foreground` at 5% alpha, so it reads as a sheen on
+     the warm-grey card in light mode and a faint lift on near-black in dark.
+     The global reduced-motion kill-switch freezes the pseudo-element at
+     translateX(-100%) — off the element — leaving a static placeholder. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.05),
+      transparent
+    );
+    animation: skeleton-sweep 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
   }
 }
 
@@ -347,6 +416,29 @@
   /* Touch-friendly utility - minimum 44x44px touch target */
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Invisible hit-area expander: a pseudo-element grows the tappable region
+     past the visible control without changing layout. Default -8px on every
+     side; override with --hit (uniform) or --hit-x/--hit-y (per axis), e.g.
+     the Tailwind arbitrary property [--hit:-12px]. */
+  .hit-expand {
+    position: relative;
+  }
+
+  .hit-expand::after {
+    content: '';
+    position: absolute;
+    inset: var(--hit-y, var(--hit, -8px)) var(--hit-x, var(--hit, -8px));
+  }
+
+  /* Horizontal rail that scrolls on its own axis without chaining to the
+     page. pan-y keeps vertical swipes that start on the rail scrolling the
+     page; affordance for more content = partial next item visible. */
+  .scroll-rail {
+    touch-action: pan-x pan-y;
+    overscroll-behavior-x: contain;
+    position: relative;
   }
 
   /* Horizontal scroll with snap */

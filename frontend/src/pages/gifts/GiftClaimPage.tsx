@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { withAuthContext } from '@/pages/auth/authRedirect'
 import { useAuthStore, useIsAuthenticated } from '@/stores/authStore'
+import { formatUsd } from '@/lib/utils'
 import {
   captureGiftClaimCredentialFromLocation,
   forgetGiftClaimCredential,
@@ -133,7 +134,7 @@ export default function GiftClaimPage() {
       setPrintedCode('')
     } catch (claimError) {
       if (requestId !== requestIdRef.current) return
-      const message = giftErrorMessage(claimError, 'This gift could not be claimed. Check the code and try again.')
+      const message = giftErrorMessage(claimError, 'This gift could not be claimed. Check the secure link or legacy code and try again.')
       setError(message)
       if (message.includes('already been claimed') || message.includes('expired')) {
         void getPublicGift(publicId).then((loaded) => {
@@ -157,7 +158,7 @@ export default function GiftClaimPage() {
         noIndex
       />
 
-      <main className="min-h-screen bg-[#f7f2e9] px-4 py-5 text-[#151411] sm:px-6 lg:px-10 lg:py-8">
+      <main className="min-h-svh bg-[#f7f2e9] px-4 py-5 text-[#151411] sm:px-6 lg:px-10 lg:py-8">
         <div className="mx-auto max-w-6xl">
           <header className="flex items-center justify-between gap-4 border-b border-[#d8cfc1] pb-5">
             <Link to="/" className="font-display text-lg font-extrabold tracking-[-0.04em] text-[#151411]">
@@ -169,7 +170,7 @@ export default function GiftClaimPage() {
           </header>
 
           {isLoading ? (
-            <div className="grid min-h-[70vh] place-items-center">
+            <div className="grid min-h-[70dvh] place-items-center">
               <div className="text-center">
                 <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#e00016]" aria-hidden="true" />
                 <p className="mt-3 text-sm text-[#6b655d]">Opening private gift…</p>
@@ -189,6 +190,8 @@ export default function GiftClaimPage() {
                   fromName={voucher.from_name}
                   toName={voucher.to_name}
                   message={voucher.message}
+                  occasion={voucher.occasion}
+                  occasionGreeting={voucher.occasion_greeting}
                   duration={voucher.duration_months}
                   retailValueCents={voucher.retail_value_cents}
                   expiresAt={voucher.expires_at}
@@ -242,7 +245,7 @@ export default function GiftClaimPage() {
                       </div>
                       <div>
                         <p className="text-xs uppercase tracking-[0.16em] text-[#6b655d]">Retail value</p>
-                        <p className="mt-1 font-display text-lg font-bold">${voucher.retail_value_cents / 100}</p>
+                        <p className="mt-1 font-display text-lg font-bold">{formatUsd(voucher.retail_value_cents)}</p>
                       </div>
                     </div>
 
@@ -256,7 +259,7 @@ export default function GiftClaimPage() {
                     {!isAuthenticated ? (
                       <div>
                         <p className="text-sm leading-relaxed text-[#6b655d]">
-                          Sign in or create a verified account to accept this gift. The private claim credential stays in this browser through sign-in, OAuth, and email verification.
+                          Sign in or create a verified FitCheck account to accept this gift. New named gifts require the email your sender entered; older private-link gifts work as before. The private claim credential stays in this browser through sign-in, OAuth, and email verification.
                         </p>
                         <div className="mt-4 grid gap-2 sm:grid-cols-2">
                           <Button asChild size="lg">
@@ -277,7 +280,7 @@ export default function GiftClaimPage() {
                       <>
                         {!credential && (
                           <div className="space-y-2">
-                            <Label htmlFor="printed-gift-code" className="text-[#151411]">Enter the code printed on the gift</Label>
+                            <Label htmlFor="printed-gift-code" className="text-[#151411]">Enter a code from a legacy gift</Label>
                             <Input
                               id="printed-gift-code"
                               name="gift_code"
@@ -310,7 +313,7 @@ export default function GiftClaimPage() {
                     )}
 
                     <p className="text-xs leading-relaxed text-[#6b655d]">
-                      The “To” name is part of the presentation. The first different, verified FitCheck account that claims the valid link or code receives the gift. Gift access does not auto-renew.
+                      The “To” name is part of the presentation. Named gifts can only be claimed by the recipient's verified email. Older link-only gifts go to the first different, verified FitCheck account with the valid link or code. Gift access does not auto-renew.
                     </p>
                   </div>
                 )}

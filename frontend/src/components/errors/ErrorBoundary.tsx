@@ -79,7 +79,7 @@ class ErrorBoundary extends Component<Props, State> {
       const { error, errorInfo, isDetailsExpanded } = this.state
 
       return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="min-h-svh bg-background flex items-center justify-center p-4">
           <div className="max-w-lg w-full bg-card rounded-2xl border border-border p-8">
             {/* Error Icon */}
             <div className="flex justify-center mb-6">

@@ -32,6 +32,50 @@ describe('GiftCardPreview', () => {
       />,
     )
 
-    expect(screen.getByText(/Promotional gift · claim by Jan 15, 2030/i)).toBeVisible()
+    // toLocaleDateString output order varies by runtime locale ("Jan 15, 2030" / "15 Jan 2030").
+    expect(screen.getByText(/Promotional gift · claim by (Jan 15, 2030|15 Jan 2030)/i)).toBeVisible()
+  })
+
+  it('keeps a no-occasion card free of a default greeting or message', () => {
+    render(
+      <GiftCardPreview
+        fromName="Alex Morgan"
+        toName="Taylor Reed"
+        duration={1}
+        retailValueCents={2_000}
+      />,
+    )
+
+    expect(screen.queryByText(/private invitation to make getting dressed/i)).not.toBeInTheDocument()
+    expect(screen.queryByText('Happy Birthday')).not.toBeInTheDocument()
+  })
+
+  it('uses the selected occasion greeting', () => {
+    render(
+      <GiftCardPreview
+        fromName="Alex Morgan"
+        toName="Taylor Reed"
+        occasion="other"
+        occasionGreeting="Happy Diwali!"
+        duration={3}
+        retailValueCents={6_000}
+      />,
+    )
+
+    expect(screen.getByText('Happy Diwali!')).toBeVisible()
+  })
+
+  it('pins the exact fixed birthday greeting (kept in sync with backend artwork)', () => {
+    render(
+      <GiftCardPreview
+        fromName="Alex Morgan"
+        toName="Taylor Reed"
+        occasion="birthday"
+        duration={3}
+        retailValueCents={6_000}
+      />,
+    )
+
+    expect(screen.getByText('Happy Birthday')).toBeVisible()
   })
 })

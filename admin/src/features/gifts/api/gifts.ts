@@ -13,6 +13,8 @@ export type GiftUpdate = components['schemas']['GiftUpdate']
 
 export const GIFT_SOURCES = ['paid', 'complimentary', 'admin'] as const
 export const GIFT_DURATIONS = [1, 3, 12] as const
+export const GIFT_OCCASIONS = ['birthday', 'anniversary', 'other'] as const
+export type GiftOccasion = (typeof GIFT_OCCASIONS)[number]
 export const GIFT_STATUSES = [
   'pending',
   'issued',
@@ -45,6 +47,8 @@ export interface GiftItem {
   from_name: string
   to_name: string
   message: string | null
+  occasion: GiftOccasion | null
+  occasion_greeting: string | null
   status: string
   payment_status: string | null
   issued_at: string | null
@@ -64,6 +68,7 @@ export interface GiftItem {
 }
 
 export interface GiftDetail extends GiftItem {
+  recipient_email: string | null
   purchaser_user_id: string | null
   claimed_by_user_id: string | null
   stripe_payment_intent_id: string | null
@@ -107,6 +112,8 @@ export function toGiftItem(row: Record<string, unknown>): GiftItem {
     from_name: text(row, 'from_name') ?? '',
     to_name: text(row, 'to_name') ?? '',
     message: text(row, 'message'),
+    occasion: text(row, 'occasion') as GiftOccasion | null,
+    occasion_greeting: text(row, 'occasion_greeting'),
     status: text(row, 'status') ?? 'pending',
     payment_status: text(row, 'payment_status'),
     issued_at: text(row, 'issued_at'),
@@ -129,6 +136,7 @@ export function toGiftItem(row: Record<string, unknown>): GiftItem {
 function toGiftDetail(row: Record<string, unknown>): GiftDetail {
   return {
     ...toGiftItem(row),
+    recipient_email: text(row, 'recipient_email'),
     purchaser_user_id: text(row, 'purchaser_user_id'),
     claimed_by_user_id: text(row, 'claimed_by_user_id'),
     stripe_payment_intent_id: text(row, 'stripe_payment_intent_id'),

@@ -775,8 +775,8 @@ class AIProviderService:
                     # on the same gateway share one upstream safety policy, so
                     # re-POSTing the identical blocked prompt just 400s again and
                     # costs the user ~double latency for the same error (that is
-                    # the production default: agnes-image-2.1-flash ->
-                    # agnes-image-2.0-flash, both on apihub.agnes-ai.com).
+                    # the production default: agnes-image-2.5-flash ->
+                    # agnes-image-2.1-flash, both on apihub.agnes-ai.com).
                     # Pointing AI_IMAGE_FALLBACK_API_URL at another vendor
                     # restores the cross-vendor retry the 08-03 pass intended.
                     # (RCA 2026-08-05: "trying fallback model" -> 400 both models.)

@@ -6,11 +6,15 @@ import type {
   PageResponse_AdminQuotaUsageItem_,
 } from '@/shared/api/schemaTypes'
 
+const DEFAULT_QUOTA_LIMITS = {
+  effective_extraction_limit: 100,
+  effective_generation_limit: 50,
+  effective_embedding_limit: 500,
+} as const
+
 /**
  * Quotas fixtures + handlers, typed against the generated schema. Rows carry
- * today's per-op daily counters; the effective limit is either
- * `custom_daily_quota` or the plan default (the backend doesn't return the
- * computed limit, so the UI renders "Plan default").
+ * today's per-operation counters and their effective server-calculated limits.
  */
 
 export const adminQuotaUsageFixture: AdminQuotaUsageItem[] = [
@@ -25,6 +29,9 @@ export const adminQuotaUsageFixture: AdminQuotaUsageItem[] = [
     daily_photoshoot_images: 3,
     last_reset_date: '2026-08-06',
     custom_daily_quota: 150,
+    effective_extraction_limit: 150,
+    effective_generation_limit: 150,
+    effective_embedding_limit: 150,
   },
   {
     user_id: 'user_2',
@@ -37,6 +44,7 @@ export const adminQuotaUsageFixture: AdminQuotaUsageItem[] = [
     daily_photoshoot_images: 0,
     last_reset_date: '2026-08-06',
     custom_daily_quota: null,
+    ...DEFAULT_QUOTA_LIMITS,
   },
   {
     user_id: 'user_3',
@@ -49,6 +57,7 @@ export const adminQuotaUsageFixture: AdminQuotaUsageItem[] = [
     daily_photoshoot_images: 2,
     last_reset_date: '2026-08-06',
     custom_daily_quota: null,
+    ...DEFAULT_QUOTA_LIMITS,
   },
   {
     user_id: 'user_4',
@@ -61,6 +70,7 @@ export const adminQuotaUsageFixture: AdminQuotaUsageItem[] = [
     daily_photoshoot_images: 0,
     last_reset_date: '2026-08-06',
     custom_daily_quota: null,
+    ...DEFAULT_QUOTA_LIMITS,
   },
 ]
 
@@ -128,6 +138,16 @@ export function createQuotasHandlers(initial?: Partial<QuotasHandlersState>) {
       }
       const customDailyQuota = body.daily_limit ?? null
       row.custom_daily_quota = customDailyQuota
+      Object.assign(
+        row,
+        customDailyQuota === null
+          ? DEFAULT_QUOTA_LIMITS
+          : {
+              effective_extraction_limit: customDailyQuota,
+              effective_generation_limit: customDailyQuota,
+              effective_embedding_limit: customDailyQuota,
+            },
+      )
       return HttpResponse.json({ user_id: userId, custom_daily_quota: customDailyQuota })
     }),
   ]

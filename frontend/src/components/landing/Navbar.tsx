@@ -152,7 +152,7 @@ export default function Navbar() {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[85vw] max-w-[360px] bg-background">
+            <SheetContent side="right" className="w-[85vw] max-w-[360px] overflow-y-auto bg-background">
               <SheetTitle className="sr-only">Navigation menu</SheetTitle>
               <SheetDescription className="sr-only">
                 Open FitCheck product, resource, account, and theme links.

@@ -35,6 +35,7 @@ export const adminSubscriptionListFixture: AdminSubscriptionListItem[] = [
     amount: 19.99,
     currency: 'usd',
     billing_provider: 'stripe',
+    stripe_customer_id: 'cus_1',
     cancel_at_period_end: false,
     current_period_start: '2026-07-10T00:00:00Z',
     current_period_end: '2026-08-10T00:00:00Z',
@@ -53,6 +54,7 @@ export const adminSubscriptionListFixture: AdminSubscriptionListItem[] = [
     amount: 8.99,
     currency: 'usd',
     billing_provider: 'stripe',
+    stripe_customer_id: 'cus_2',
     cancel_at_period_end: true,
     current_period_start: '2026-06-01T00:00:00Z',
     current_period_end: '2026-07-01T00:00:00Z',
@@ -70,11 +72,34 @@ export const adminSubscriptionListFixture: AdminSubscriptionListItem[] = [
     status: 'active',
     amount: null,
     billing_provider: 'apple',
+    apple_original_transaction_id: '1000000000000001',
+    billing_product_id: 'plus_yearly_ios',
     cancel_at_period_end: false,
     current_period_start: '2026-01-01T00:00:00Z',
     current_period_end: '2027-01-01T00:00:00Z',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'sub_4',
+    user_id: 'user_4',
+    user: {
+      email: 'dave@example.com',
+      full_name: 'Dave Example',
+    },
+    plan_type: 'pro_monthly',
+    status: 'active',
+    amount: 19.99,
+    currency: 'usd',
+    billing_provider: 'google',
+    google_order_id: 'GPA.3300-1111-2222',
+    google_purchase_token: 'token_google_4444',
+    billing_product_id: 'pro_monthly_android',
+    cancel_at_period_end: false,
+    current_period_start: '2026-07-01T00:00:00Z',
+    current_period_end: '2026-08-01T00:00:00Z',
+    created_at: '2026-07-01T00:00:00Z',
+    updated_at: '2026-07-01T00:00:00Z',
   },
 ]
 
@@ -119,16 +144,36 @@ export function createSubscriptionsHandlers(initial?: Partial<SubscriptionsHandl
       const params = url.searchParams
       const plan = params.get('plan')
       const status = params.get('status')
+      // Mirrors the backend: billing_provider=stripe includes legacy NULL rows.
+      const provider = params.get('billing_provider')
       const page = Number(params.get('page') ?? '1')
       const pageSize = Number(params.get('page_size') ?? '20')
 
       const rows = subscriptions.filter((row) => {
         if (plan && row.plan_type !== plan) return false
         if (status && row.status !== status) return false
+        if (provider) {
+          const bp = row.billing_provider ?? 'stripe'
+          if (bp !== provider) return false
+        }
         return true
       })
 
       return HttpResponse.json(paginate(rows, page, pageSize))
+    }),
+
+    http.get('*/api/v1/admin/subscriptions/user/:userId', ({ request, params }) => {
+      const url = new URL(request.url)
+      requests.push(url)
+      const userId = String(params.userId)
+      const row = subscriptions.find((sub) => sub.user_id === userId)
+      if (!row) {
+        return HttpResponse.json(
+          { error: 'No subscription found for user', code: 'NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      return HttpResponse.json({ subscription: row, user: row.user ?? {}, usage: {} })
     }),
 
     http.post('*/api/v1/admin/subscriptions/user/:userId/refund', ({ params }) => {
@@ -139,6 +184,18 @@ export function createSubscriptionsHandlers(initial?: Partial<SubscriptionsHandl
         return HttpResponse.json(
           { error: 'No subscription found for user', code: 'NOT_FOUND', details: {} },
           { status: 404 },
+        )
+      }
+      // A8-05: mirror the backend — only Stripe-billed rows are refundable.
+      const provider = row.billing_provider ?? 'stripe'
+      if (provider !== 'stripe' || !row.stripe_customer_id) {
+        return HttpResponse.json(
+          {
+            error: 'This subscription has no Stripe customer; only Stripe-billed rows are refundable here',
+            code: 'VALIDATION_ERROR',
+            details: { user_id: userId, billing_provider: provider },
+          },
+          { status: 422 },
         )
       }
       // AdminSubscriptionListItem has no `currency` key in the schema (extra

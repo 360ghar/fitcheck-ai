@@ -72,7 +72,7 @@ const PhotoshootPage = lazy(() => import('./pages/photoshoot/PhotoshootPage'))
 // Loading spinner for hydration state (theme-aware)
 function LoadingSpinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="min-h-svh flex items-center justify-center bg-background">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
     </div>
   )

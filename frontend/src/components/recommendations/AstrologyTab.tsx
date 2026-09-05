@@ -196,7 +196,7 @@ export function AstrologyTab({
                       />
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-foreground truncate">{color.name}</div>
-                        <div className="text-xs text-muted-foreground truncate">{color.reason}</div>
+                        <div className="text-xs text-muted-foreground truncate" title={color.reason}>{color.reason}</div>
                       </div>
                     </div>
                     <Badge variant="secondary">{Math.round(color.confidence * 100)}%</Badge>
@@ -222,7 +222,7 @@ export function AstrologyTab({
                         />
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">{color.name}</div>
-                          <div className="text-xs text-muted-foreground truncate">{color.reason}</div>
+                          <div className="text-xs text-muted-foreground truncate" title={color.reason}>{color.reason}</div>
                         </div>
                       </div>
                       <Badge variant="outline">{Math.round(color.confidence * 100)}%</Badge>

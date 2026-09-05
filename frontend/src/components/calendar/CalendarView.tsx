@@ -39,6 +39,7 @@ import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import type { Outfit } from '@/types'
 import { thumbnailErrorFallback } from '@/hooks/useImageWithFallback'
+import { useMediaQuery, SPLIT_VIEWPORT_QUERY } from '@/hooks/useMediaQuery'
 
 // ============================================================================
 // TYPES
@@ -183,7 +184,7 @@ function EventBadge({ event, onClick }: EventBadgeProps) {
     <button
       type="button"
       onClick={() => onClick(event)}
-      className="flex w-full items-center gap-1.5 truncate rounded border border-border bg-card px-2 py-1 text-left text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex w-full min-h-[44px] items-center gap-1.5 truncate rounded border border-border bg-card px-2 py-1 text-left text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       title={event.title}
     >
       {/* Rounded caps: a bare square-capped hairline used as ornament is its own
@@ -251,7 +252,7 @@ function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: Outfi
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-h-[60vh] overflow-y-auto">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 sm:max-h-[60vh] sm:overflow-y-auto">
           {outfits.map((outfit) => (
             <button
               type="button"
@@ -321,17 +322,12 @@ export function CalendarView({
   const [isLoadingWeather, setIsLoadingWeather] = useState(false)
   const lastWeatherFetcherRef = useRef(onGetWeather)
 
-  // Detect mobile and set default view mode
-  const [_isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
+  // Split-viewport default via matchMedia (not a one-shot resize listener), so
+  // the initial view stays correct across rotation/resize before any re-render.
+  const isSplit = useMediaQuery(SPLIT_VIEWPORT_QUERY)
 
   const [viewMode, setViewMode] = useState<CalendarViewMode>(
-    initialViewMode || (typeof window !== 'undefined' && window.innerWidth < 768 ? 'week' : 'month')
+    () => initialViewMode ?? (isSplit ? 'month' : 'week')
   )
 
   useEffect(() => {
@@ -726,7 +722,7 @@ export function CalendarView({
                               <button
                                 type="button"
                                 onClick={(e) => handleQuickAssign(e, event)}
-                                className="text-xs text-primary hover:text-primary/80 shrink-0"
+                                className="text-xs text-primary hover:text-primary/80 shrink-0 touch-target inline-flex items-center px-2 -my-1"
                               >
                                 + Outfit
                               </button>
@@ -825,7 +821,7 @@ export function CalendarView({
                           <button
                             type="button"
                             onClick={(e) => handleQuickAssign(e, event)}
-                            className="text-xs text-primary hover:text-primary/80 mt-1"
+                            className="text-xs text-primary hover:text-primary/80 touch-target inline-flex items-center px-2 -my-1"
                           >
                             + Assign outfit
                           </button>
@@ -928,7 +924,7 @@ export function CalendarView({
                           />
                         ))}
                         {day.events.length > 3 && (
-                          <span className="text-[10px] text-muted-foreground">+{day.events.length - 3}</span>
+                          <span className="hidden sm:inline text-[10px] text-muted-foreground">+{day.events.length - 3}</span>
                         )}
                       </div>
 
@@ -941,7 +937,7 @@ export function CalendarView({
                               <button
                                 type="button"
                                 onClick={(e) => handleQuickAssign(e, event)}
-                                className="text-xs text-primary hover:text-primary/80 ml-1"
+                                className="text-xs text-primary hover:text-primary/80 ml-1 touch-target inline-flex items-center px-2 -my-1"
                               >
                                 + Outfit
                               </button>

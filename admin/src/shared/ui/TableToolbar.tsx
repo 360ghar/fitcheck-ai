@@ -115,13 +115,13 @@ export function TableToolbar({
   const hasPopoverFilters = filters.length > 0 || dateFilters.length > 0
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-3', className)}>
+    <div className={cn('flex flex-wrap items-center gap-2', className)}>
       {hideSearch ? null : (
         <SearchInput
           value={searchValue}
           onValueChange={onSearchChange}
           {...(searchPlaceholder ? { placeholder: searchPlaceholder } : {})}
-          className="w-full sm:max-w-xs"
+          className="w-full sm:max-w-[260px] [&_input]:h-8"
           aria-label={t('toolbar.searchAriaLabel')}
         />
       )}
@@ -131,7 +131,7 @@ export function TableToolbar({
           {...(primaryFilter.value !== undefined ? { value: primaryFilter.value } : {})}
           onValueChange={(value) => primaryFilter.onValueChange(value)}
         >
-          <SelectTrigger className="h-10 w-full sm:w-44" aria-label={primaryFilter.label}>
+          <SelectTrigger className="h-8 w-full text-xs sm:w-44" aria-label={primaryFilter.label}>
             <SelectValue placeholder={primaryFilter.placeholder} />
           </SelectTrigger>
           <SelectContent>
@@ -150,7 +150,7 @@ export function TableToolbar({
             <Button
               variant="outline"
               size="sm"
-              className="h-10"
+              className="h-8"
               aria-label={
                 activePopoverFilters > 0
                   ? t('toolbar.filtersWithCount', { count: activePopoverFilters })
@@ -175,7 +175,7 @@ export function TableToolbar({
                     {...(filter.value !== undefined ? { value: filter.value } : {})}
                     onValueChange={(value) => filter.onValueChange(value)}
                   >
-                    <SelectTrigger className="h-10 w-full" aria-label={filter.label}>
+                    <SelectTrigger className="h-8 w-full text-xs" aria-label={filter.label}>
                       <SelectValue placeholder={filter.placeholder} />
                     </SelectTrigger>
                     <SelectContent>
@@ -235,7 +235,7 @@ export function TableToolbar({
           type="button"
           onClick={chip.onClear}
           aria-label={t('toolbar.clearFilter', { label: chip.label })}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-card px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:border-muted-foreground/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-card px-2 py-1 text-xs font-medium text-ink transition-colors hover:border-muted-foreground/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           {chip.label}
           <X className="size-3" aria-hidden="true" />

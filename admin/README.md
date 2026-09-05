@@ -41,7 +41,7 @@ All optional (see `.env.example`); env access is zod-validated in
 | `VITE_SENTRY_DSN` | empty disables Sentry | Error monitoring via `@sentry/react` |
 | `VITE_SUPABASE_URL` | empty hides the Google button | Supabase project URL for "Continue with Google" (same project as the main app) |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | empty hides the Google button | Supabase publishable (anon) key for Google OAuth |
-| `VITE_ENABLE_GIFT_VOUCHERS` | `false` | Shows the gift voucher navigation and admin route; backend RBAC remains authoritative |
+| `VITE_ENABLE_GIFT_VOUCHERS` | `true` | Shows the gift voucher navigation and admin route; set `false` only for a UI rollback. Backend RBAC remains authoritative |
 
 Google sign-in requires both Supabase vars AND the callback URL in the
 Supabase Auth allowlist: **Authentication → URL Configuration → Redirect

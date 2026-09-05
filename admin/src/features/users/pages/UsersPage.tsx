@@ -201,8 +201,7 @@ export function UsersPage() {
 
   if (table.query.isError) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
+      <div className="space-y-3">
         <ErrorState
           message={normalizeError(table.query.error).message}
           onRetry={() => void table.query.refetch()}
@@ -212,8 +211,9 @@ export function UsersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('description')} />
+    <div className="space-y-3">
+
+      <PageHeader dense title={t('title')} description={t('description')} />
 
       <TableToolbar
         searchValue={table.tableState.q}

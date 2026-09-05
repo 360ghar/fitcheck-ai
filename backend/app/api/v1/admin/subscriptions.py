@@ -28,6 +28,7 @@ router = APIRouter()
 async def list_admin_subscriptions(
     plan: Optional[str] = Query(None, min_length=1, max_length=20),
     status: Optional[str] = Query(None, min_length=1, max_length=20),
+    billing_provider: Optional[Literal["stripe", "apple", "google"]] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     sort_by: Literal["created_at", "current_period_start", "plan_type", "status"] = Query("created_at"),
@@ -35,11 +36,16 @@ async def list_admin_subscriptions(
     db: Client = Depends(get_db),
     user: Dict[str, Any] = Depends(require_permission("subscriptions.read")),
 ) -> PageResponse[AdminSubscriptionListItem]:
-    """Paginated subscriptions with user email and display amount."""
+    """Paginated subscriptions with user email and display amount.
+
+    ``billing_provider`` filters by billing rail; ``stripe`` includes legacy
+    rows whose ``billing_provider`` is NULL (see admin_service).
+    """
     result = await list_subscriptions(
         db,
         plan=plan,
         status=status,
+        billing_provider=billing_provider,
         page=page,
         page_size=page_size,
         sort_by=sort_by,

@@ -103,7 +103,7 @@ Stripe, browser-E2E, mobile integration, or production-load behavior.
 
 | App | SDK | Status |
 |-----|-----|--------|
-| Backend (FastAPI) | — | **Not integrated.** `sentry-sdk` is not in `requirements.txt`. Structured logging with correlation IDs provides request tracing, but there is no centralized error tracking/alerting. |
+| Backend (FastAPI) | `sentry-sdk[fastapi]` | **Integrated 2026-08-31.** Initializes from `SENTRY_DSN` (empty = fully disabled) in `app/core/sentry_config.py`; release is `RAILWAY_GIT_COMMIT_SHA`, environment from `is_production()`. Unhandled 500s are captured explicitly by `unhandled_exception_handler` (a catch-all handler intercepts errors before Sentry's middleware integration sees them) with the request correlation ID as a tag. `/health` + `/ready` transactions are dropped so probes never consume quota. |
 | Frontend (React) | `@sentry/react` | **Integrated 2026-07-25.** Initializes only when `VITE_SENTRY_DSN` is set. `ErrorBoundary.componentDidCatch` reports to Sentry. Add the DSN to the deployment environment to activate. |
 | Flutter (mobile) | `sentry_flutter ^9.0.0` | **Fully integrated.** Initializes from `EnvConfig.sentryDsn`; wraps `runApp` in `SentryFlutter.init` with `runZonedGuarded` for uncaught async errors. |
 

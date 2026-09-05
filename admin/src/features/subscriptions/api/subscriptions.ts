@@ -16,6 +16,7 @@ import { QUERY_STALE_TIMES } from '@/shared/lib/constants'
 
 type AdminSubscriptionListItem = components['schemas']['AdminSubscriptionListItem']
 type PageResponseSubscriptions = components['schemas']['PageResponse_AdminSubscriptionListItem_']
+type AdminSubscriptionDetail = components['schemas']['AdminSubscriptionDetail']
 type AdminRefundResponse = components['schemas']['AdminRefundResponse']
 
 export const subscriptionKeys = {
@@ -43,7 +44,17 @@ export function listSubscriptions(params: TableStateParams): Promise<PageRespons
   if (params.sort_dir) search.set('sort_dir', params.sort_dir)
   if (params.filters.plan) search.set('plan', params.filters.plan)
   if (params.filters.status) search.set('status', params.filters.status)
+  // Provider filter is SERVER-side (backend billing_provider param; "stripe"
+  // includes legacy NULL-provider rows).
+  const provider = params.filters.provider ?? params.filters.billing_provider
+  if (provider && provider !== 'all') search.set('billing_provider', provider)
   return apiGet<PageResponseSubscriptions>(`/api/v1/admin/subscriptions?${search.toString()}`)
+}
+
+export function getSubscriptionDetail(userId: string): Promise<AdminSubscriptionDetail> {
+  return apiGet<AdminSubscriptionDetail>(
+    `/api/v1/admin/subscriptions/user/${encodeURIComponent(userId)}`,
+  )
 }
 
 export function useSubscriptionsQuery(params: TableStateParams) {
@@ -61,4 +72,4 @@ export function refundSubscription(userId: string): Promise<AdminRefundResponse>
   )
 }
 
-export type { AdminSubscriptionListItem, AdminRefundResponse }
+export type { AdminSubscriptionListItem, AdminSubscriptionDetail, AdminRefundResponse }

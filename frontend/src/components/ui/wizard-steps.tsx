@@ -27,7 +27,7 @@ export function WizardSteps({
 
   if (variant === 'bars') {
     return (
-      <ul className={cn('flex gap-2', className)} aria-label="Progress">
+      <ul className={cn('flex justify-start gap-2 md:justify-center', className)} aria-label="Progress">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex
           const isComplete = index < currentIndex
@@ -47,7 +47,7 @@ export function WizardSteps({
               >
                 <div
                   className={cn(
-                    'h-1 rounded-full transition-colors',
+                    'hit-expand h-1 rounded-full transition-colors [--hit-x:-4px] [--hit-y:-20px]',
                     index <= currentIndex ? 'bg-primary' : 'bg-muted'
                   )}
                 />
@@ -77,7 +77,9 @@ export function WizardSteps({
   return (
     <ul
       className={cn(
-        'flex items-center justify-center gap-2 md:gap-4 mb-4 md:mb-6 px-2 overflow-x-auto scrollbar-hide',
+        // NOTE: md:justify-center is safe only while content fits at md+ (4 steps ≈ 416px
+        // vs ~736px available). A 7+-step consumer would reintroduce leading-item clipping.
+        'flex items-center justify-start gap-2 md:justify-center md:gap-4 mb-4 md:mb-6 px-2 overflow-x-auto scrollbar-hide',
         className
       )}
       aria-label="Progress"
@@ -103,7 +105,7 @@ export function WizardSteps({
             >
               <div
                 className={cn(
-                  'w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors shrink-0',
+                  'hit-expand w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors shrink-0',
                   isCompleted && 'bg-primary text-primary-foreground',
                   isCurrent &&
                     'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background',

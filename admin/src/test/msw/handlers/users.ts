@@ -110,7 +110,7 @@ export const adminUserListFixture: AdminUserListItem[] = [
   },
 ]
 
-export const adminUserDetailFixture: AdminUserDetail = {
+export const adminUserDetailFixture: AdminUserDetail & Record<string, unknown> = {
   user: {
     id: 'user_1',
     email: 'alice@example.com',
@@ -133,6 +133,7 @@ export const adminUserDetailFixture: AdminUserDetail = {
     cancel_at_period_end: false,
     billing_provider: 'stripe',
     stripe_customer_id: 'cus_test_1',
+    stripe_subscription_id: 'sub_test_1',
     referral_credit_months: 0,
     trial_end: null,
   },
@@ -158,6 +159,10 @@ export const adminUserDetailFixture: AdminUserDetail = {
     outfits: 12,
     items: 42,
     referral_codes: 2,
+    gifts: 1,
+    referrals: 3,
+    collections: 4,
+    trips: 2,
   },
   recent_jobs: [
     {
@@ -177,6 +182,65 @@ export const adminUserDetailFixture: AdminUserDetail = {
       created_at: '2026-08-05T18:00:00Z',
       completed_at: '2026-08-05T18:01:00Z',
       error_message: 'Image generation failed: provider timeout',
+    },
+  ],
+  // Extended 360 keys — JsonRecord typed via Record<string, unknown>, gracefully missing on older fixtures
+  items: Array.from({ length: 12 }, (_, i) => ({
+    id: `item_${i + 1}`,
+    name: `Linen Shirt ${i + 1}`,
+    category: i % 2 === 0 ? 'tops' : 'bottoms',
+    image_url: `https://cdn.example.com/items/${i + 1}.jpg`,
+    thumbnail_url: `https://cdn.example.com/items/${i + 1}_thumb.jpg`,
+    created_at: `2026-08-0${(i % 5) + 1}T10:00:00Z`,
+  })),
+  outfits: Array.from({ length: 12 }, (_, i) => ({
+    id: `outfit_${i + 1}`,
+    title: `Summer Look ${i + 1}`,
+    cover_image_url: `https://cdn.example.com/outfits/${i + 1}.jpg`,
+    is_shared: i % 3 === 0,
+    created_at: `2026-08-0${(i % 5) + 1}T12:00:00Z`,
+  })),
+  photoshoot_jobs: Array.from({ length: 3 }, (_, i) => ({
+    id: `ps_job_${i + 1}`,
+    status: i === 1 ? 'failed' : 'complete',
+    use_case: i === 0 ? 'linkedin' : i === 1 ? 'dating' : 'fashion',
+    error_message: i === 1 ? 'Image generation failed' : null,
+    image_failures: i === 1 ? 2 : 0,
+    created_at: `2026-08-0${i + 4}T14:00:00Z`,
+  })),
+  collections: Array.from({ length: 4 }, (_, i) => ({
+    id: `col_${i + 1}`,
+    name: `Collection ${i + 1}`,
+    created_at: `2026-07-${10 + i}T09:00:00Z`,
+  })),
+  trips: Array.from({ length: 2 }, (_, i) => ({
+    id: `trip_${i + 1}`,
+    name: `Trip to ${i === 0 ? 'Paris' : 'Tokyo'}`,
+    start_date: `2026-09-0${i + 1}T00:00:00Z`,
+    created_at: `2026-07-${15 + i}T10:00:00Z`,
+  })),
+  achievements: Array.from({ length: 5 }, (_, i) => ({
+    id: `ach_${i + 1}`,
+    name: `Achievement ${i + 1}`,
+    unlocked_at: `2026-08-0${i + 1}T08:00:00Z`,
+  })),
+  streaks: {
+    current_streak: 7,
+    longest_streak: 14,
+  },
+  social_import_jobs: [
+    {
+      id: 'import_1',
+      status: 'completed',
+      created_at: '2026-08-05T11:00:00Z',
+    },
+  ],
+  support_tickets: [
+    {
+      id: 'ticket_1',
+      subject: 'Login help',
+      status: 'open',
+      created_at: '2026-08-04T09:00:00Z',
     },
   ],
 }
@@ -228,6 +292,10 @@ export interface UsersHandlersState {
   requests: URL[]
   /** Body of the most recent PATCH, for test assertions */
   lastPatchBody: AdminUserPatch | null
+  /** Last extend-trial payload */
+  lastExtendTrial: { userId: string; days: number } | null
+  /** Whether clear-counters was called */
+  lastClearCounters: string | null
 }
 
 function defaultState(): UsersHandlersState {
@@ -235,6 +303,8 @@ function defaultState(): UsersHandlersState {
     users: structuredClone(adminUserListFixture),
     requests: [],
     lastPatchBody: null,
+    lastExtendTrial: null,
+    lastClearCounters: null,
   }
 }
 
@@ -339,6 +409,16 @@ export function createUsersHandlers(initial?: Partial<UsersHandlersState>) {
         outfits: row.outfits_count ?? 0,
         items: row.items_count ?? 0,
       }
+      // Degrade: free users with 0 items get empty arrays for 360 sections
+      if (row.id === 'user_2') {
+        ;(detail as Record<string, unknown>)['items'] = []
+        ;(detail as Record<string, unknown>)['outfits'] = []
+        ;(detail as Record<string, unknown>)['photoshoot_jobs'] = []
+        ;(detail as Record<string, unknown>)['collections'] = []
+        ;(detail as Record<string, unknown>)['trips'] = []
+        ;(detail as Record<string, unknown>)['achievements'] = []
+        ;(detail as Record<string, unknown>)['streaks'] = { current_streak: 0, longest_streak: 0 }
+      }
       return HttpResponse.json(detail)
     }),
 
@@ -397,6 +477,33 @@ export function createUsersHandlers(initial?: Partial<UsersHandlersState>) {
         )
       }
       return HttpResponse.json(adminUserActivityFixture)
+    }),
+
+    http.post('*/api/v1/admin/users/:userId/subscription/extend-trial', async ({ request, params }) => {
+      const userId = params.userId as string
+      const body = (await request.json()) as { days?: number }
+      const row = users.find((user) => user.id === userId)
+      if (!row) {
+        return HttpResponse.json(
+          { error: 'User not found', code: 'USER_NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      state.lastExtendTrial = { userId, days: body.days ?? 0 }
+      return HttpResponse.json({ user_id: userId, trial_end: new Date(Date.now() + (body.days ?? 7) * 86400000).toISOString() })
+    }),
+
+    http.post('*/api/v1/admin/users/:userId/ai/clear-daily', ({ params }) => {
+      const userId = params.userId as string
+      const row = users.find((user) => user.id === userId)
+      if (!row) {
+        return HttpResponse.json(
+          { error: 'User not found', code: 'USER_NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      state.lastClearCounters = userId
+      return HttpResponse.json({ user_id: userId, cleared: true })
     }),
   ]
 

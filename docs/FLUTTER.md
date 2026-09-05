@@ -1,6 +1,6 @@
 # Flutter
 
-Last updated: 2026-08-08
+Last updated: 2026-08-30
 
 Mobile client under `flutter/` using GetX feature modules.
 
@@ -145,6 +145,22 @@ Play Billing, every purchase verified server-side via
 `pubspec.yaml`; `PAYWALL_ENABLED` in `flutter/.env.example` gates every
 purchase CTA (default on). Social sharing and body profiles live under
 `features/social/` and `features/profile/` (`body_profiles_page.dart`).
+
+### Gift vouchers
+
+The native gift feature is under features/gifts. It has a GetX binding,
+repository, models, controller, /gifts route, and gift page. The home tab
+uses the same priority as web: incoming gift, then a free invitation, then
+referral. The form defaults to no occasion. Birthday and anniversary show
+fixed greetings; Other requires a 1–80 character greeting. A private note is
+always optional.
+
+ENABLE_GIFT_VOUCHERS defaults to true in flutter/.env.example. Set it to false
+only for a release rollback. The app can create and share a free named
+invitation, show incoming named gifts, and claim them with the signed-in
+verified account. The app does not show paid voucher purchase, Stripe Checkout,
+or another external payment path. Paid vouchers remain available in web and
+admin, and a named paid voucher can still be claimed in Flutter.
 
 ### iOS minimum deployment target is 15.0
 

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../app/routes/app_routes.dart';
+import '../../../core/config/env_config.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../gifts/controllers/gift_controller.dart';
+import '../../gifts/models/gift_models.dart';
+import '../../gifts/views/widgets/gift_priority_banner.dart';
 import '../../shell/controllers/main_shell_controller.dart';
 import '../../subscription/controllers/subscription_controller.dart';
 import '../controllers/dashboard_controller.dart';
@@ -25,14 +30,14 @@ class _DashboardContentState extends State<DashboardContent> {
   final DashboardController dashboardController =
       Get.find<DashboardController>();
   final AuthController authController = Get.find<AuthController>();
+  final GiftController giftController = Get.find<GiftController>();
 
   @override
   Widget build(BuildContext context) {
     return AppPageBackground(
       child: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () =>
-              dashboardController.fetchDashboard(showLoader: false),
+          onRefresh: _refreshDashboard,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -74,8 +79,7 @@ class _DashboardContentState extends State<DashboardContent> {
                             const SizedBox(height: AppConstants.spacing16),
                           ],
                         ),
-                      // Referral promo banner
-                      _buildReferralBanner(),
+                      _buildPromotionBanner(),
                       const SnapshotCard(),
                       const SizedBox(height: AppConstants.spacing16),
                       const QuickActionsSection(),
@@ -145,7 +149,8 @@ class _DashboardContentState extends State<DashboardContent> {
             // Avatar wrapped in single Obx
             child: Obx(() {
               final user = authController.user.value;
-              final initial = (user?.fullName?.isNotEmpty == true
+              final initial =
+                  (user?.fullName?.isNotEmpty == true
                       ? user!.fullName!.substring(0, 1).toUpperCase()
                       : null) ??
                   (user?.email.isNotEmpty == true
@@ -240,6 +245,77 @@ class _DashboardContentState extends State<DashboardContent> {
         const SizedBox(height: AppConstants.spacing16),
       ],
     );
+  }
+
+  Future<void> _refreshDashboard() async {
+    final refreshes = <Future<void>>[
+      dashboardController.fetchDashboard(showLoader: false),
+    ];
+    if (EnvConfig.giftVouchersEnabled) {
+      refreshes.add(giftController.load(showLoader: false));
+    }
+    await Future.wait(refreshes);
+  }
+
+  Widget _buildPromotionBanner() {
+    if (!EnvConfig.giftVouchersEnabled) {
+      return _buildReferralBanner();
+    }
+
+    final currentSummary = giftController.summary.value;
+    // Do not briefly surface referral before the first gift lookup resolves.
+    // If the lookup fails, hasLoaded becomes true and referral remains usable.
+    if (currentSummary == null && !giftController.hasLoaded.value) {
+      return const SizedBox.shrink();
+    }
+
+    final priority = giftController.priority;
+    if (priority == GiftDashboardPriority.incoming) {
+      final incoming = giftController.incomingGift;
+      if (incoming != null) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GiftPriorityBanner(
+              priority: GiftDashboardPriority.incoming,
+              incoming: incoming,
+              incomingCount: currentSummary?.incoming.length ?? 1,
+              onOpen: () => Get.toNamed(
+                Routes.gifts,
+                arguments: GiftRouteIntent.claim(
+                  incomingVoucherId: incoming.id,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacing16),
+          ],
+        );
+      }
+    }
+
+    if (priority == GiftDashboardPriority.complimentary) {
+      final allowance = giftController.freeAllowance;
+      if (allowance != null) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GiftPriorityBanner(
+              priority: GiftDashboardPriority.complimentary,
+              allowance: allowance,
+              onOpen: () => Get.toNamed(
+                Routes.gifts,
+                arguments: GiftRouteIntent.create(
+                  durationMonths: allowance.durationMonths,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacing16),
+          ],
+        );
+      }
+    }
+
+    return _buildReferralBanner();
   }
 
   String _getGreeting() {

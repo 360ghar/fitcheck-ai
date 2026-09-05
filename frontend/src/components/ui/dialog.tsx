@@ -58,7 +58,7 @@ const DialogContent = React.forwardRef<
       <div className="overflow-y-auto max-h-full sm:max-h-none">
         {children}
       </div>
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full bg-surface-card text-ink transition-colors hover:bg-secondary disabled:pointer-events-none touch-target flex items-center justify-center">
+      <DialogPrimitive.Close className="absolute right-4 top-[calc(1rem+var(--safe-area-top))] sm:top-4 rounded-full bg-surface-card text-ink transition-colors hover:bg-secondary disabled:pointer-events-none touch-target flex items-center justify-center">
         <X className="h-5 w-5 sm:h-4 sm:w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>

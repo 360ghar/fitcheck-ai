@@ -3,13 +3,17 @@
   "refresh": "Refresh",
   "updatedJustNow": "Updated just now",
   "updatedAgo": "Updated {{seconds}}s ago",
+  "updatedMinsAgo": "Updated {{count}}m ago",
+  "updatedHoursAgo": "Updated {{count}}h ago",
   "metrics": {
     "signups7d": "Signups (7 days)",
     "signups30d": "Signups (30 days)",
     "activeUsers7d": "Active users (7 days)",
     "activeUsers30d": "Active users (30 days)",
     "paidSubscriptions": "Paid subscriptions",
-    "aiJobs7d": "AI jobs (7 days)"
+    "aiJobs7d": "AI jobs (7 days)",
+    "trialsEnding7d": "Trials ending (7d)",
+    "ticketsOpen48h": "Tickets open (48h)"
   },
   "aiJobsHint": "{{succeeded}} succeeded · {{failed}} failed",
   "charts": {
@@ -34,7 +38,9 @@
     "codesIssued": "Codes issued",
     "redemptions": "Redemptions",
     "creditsGranted": "Credits granted",
-    "creditsPending": "Credits pending"
+    "creditsPending": "Credits pending",
+    "promoActive": "Promo active",
+    "giftsIssued": "Gifts issued"
   },
   "activity": {
     "title": "Recent admin activity",
@@ -52,7 +58,11 @@
     "paidSubscriptions": "Paid subscriptions",
     "trialSubscriptions": "Trials",
     "churnEvents30d": "Churn events (30d)",
-    "churnHint": "{{refunds}} refunds (30d)"
+    "churnHint": "{{refunds}} refunds (30d)",
+    "arpu": "ARPU",
+    "arpuHint": "MRR / paid subs",
+    "trialConversion": "Trial → Paid",
+    "trialConversionHint": "{{value}} conversion"
   },
   "trends": {
     "title": "Daily trends",
@@ -70,6 +80,51 @@
       "active": "AI-active users",
       "activeHint": "Users with ≥1 AI job that day"
     }
+  },
+  "sections": {
+    "overview": "Key metrics",
+    "revenue": "Revenue",
+    "trends": "Trends",
+    "funnel": "Funnel",
+    "retention": "Retention",
+    "referralsPulse": "Referrals & promos",
+    "ops": "Ops & health",
+    "navLabel": "Dashboard sections"
+  },
+  "funnel": {
+    "title": "Funnel",
+    "description": "Signup → active → trial → paid progression (client-side approximation when backend funnel not yet available).",
+    "stepSignups": "Signups (30d)",
+    "stepActive": "Active (7d)",
+    "stepTrials": "Trials",
+    "stepPaid": "Paid",
+    "dropOff": "{{value}}% drop-off",
+    "empty": "Funnel data not yet available — showing approximation from overview metrics.",
+    "comingSoon": "Real funnel will appear when the backend exposes /dashboards/funnel.",
+    "approxCaption": "Approximation from overview metrics — real funnel when backend ready."
+  },
+  "retention": {
+    "title": "Retention glance",
+    "description": "4-week active retention (degrades gracefully until the backend exposes /dashboards/retention).",
+    "week": "Week {{n}}",
+    "weekHeader": "Week",
+    "activeUsers": "Active users",
+    "retentionRate": "Retention",
+    "empty": "Retention data not yet available.",
+    "emptyHint": "Cohort retention will appear when the backend exposes /dashboards/retention."
+  },
+  "ops": {
+    "title": "Ops health",
+    "status": "Status",
+    "version": "Version",
+    "commit": "Commit",
+    "schemaReady": "Schema ready",
+    "empty": "Ops health not yet available.",
+    "viewStorage": "View storage"
+  },
+  "collapsible": {
+    "expand": "Expand",
+    "collapse": "Collapse"
   },
   "error": "Couldn't load dashboard data."
 }

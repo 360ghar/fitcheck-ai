@@ -1,30 +1,51 @@
 import { Link } from 'react-router-dom'
 import { CreditCard, LockKeyhole, ShieldCheck, Trash2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-const trustFacts = [
+type FactTone = 'coral' | 'amber' | 'teal' | 'blue'
+
+// Literal class map: Tailwind's JIT needs complete class names at scan time.
+const FACT_TILE: Record<FactTone, string> = {
+  coral: 'bg-tint-coral-pale text-tint-coral',
+  amber: 'bg-tint-amber-pale text-tint-amber',
+  teal: 'bg-tint-teal-pale text-tint-teal',
+  blue: 'bg-tint-blue-pale text-tint-blue',
+}
+
+const trustFacts: Array<{
+  icon: typeof ShieldCheck
+  title: string
+  body: string
+  href: string
+  tone: FactTone
+}> = [
   {
     icon: ShieldCheck,
     title: 'Private by default',
     body: 'Wardrobe photos and account data stay tied to your account.',
     href: '/privacy',
+    tone: 'teal',
   },
   {
     icon: LockKeyhole,
     title: 'Encrypted',
     body: 'Photos and wardrobe data are encrypted in transit and at rest.',
     href: '/privacy',
+    tone: 'blue',
   },
   {
     icon: Trash2,
     title: 'Delete account data',
     body: 'You can delete your account and stored wardrobe data.',
     href: '/privacy',
+    tone: 'coral',
   },
   {
     icon: CreditCard,
     title: 'No-card trial',
     body: 'The first month returns to Free unless you choose to upgrade.',
     href: '#faq',
+    tone: 'amber',
   },
 ]
 
@@ -36,7 +57,12 @@ export default function TrustBar() {
           {trustFacts.map((fact) => {
             const content = (
               <>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-card text-primary">
+                <span
+                  className={cn(
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border',
+                    FACT_TILE[fact.tone]
+                  )}
+                >
                   <fact.icon className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span>

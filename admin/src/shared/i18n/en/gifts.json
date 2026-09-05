@@ -81,7 +81,10 @@
     "artwork": "Social artwork preview",
     "from": "From",
     "to": "To",
-    "message": "Message",
+    "recipientEmail": "Recipient email",
+    "message": "Private note",
+    "occasion": "Occasion",
+    "occasionGreeting": "Occasion greeting",
     "publicId": "Public ID",
     "claimCode": "Claim code",
     "ownerId": "Sender account",
@@ -109,7 +112,10 @@
   "forms": {
     "fromName": "From name",
     "toName": "To name",
-    "message": "Message",
+    "recipientEmail": "Recipient email",
+    "message": "Private note (optional)",
+    "occasion": "Occasion (optional)",
+    "occasionGreeting": "Card greeting",
     "duration": "Pro term",
     "expiresAt": "Claim expiry (optional)",
     "note": "Internal note",
@@ -122,6 +128,12 @@
     "messageLength": "Use no more than 240 characters",
     "reasonLength": "Use at least 3 characters",
     "uuid": "Enter a valid UUID"
+  },
+  "occasions": {
+    "none": "No occasion",
+    "birthday": "Birthday",
+    "anniversary": "Anniversary",
+    "other": "Other"
   },
   "create": {
     "title": "Issue an admin gift",
@@ -144,8 +156,8 @@
     "submit": "Add slots"
   },
   "rotate": {
-    "title": "Rotate private link and code?",
-    "description": "Every previous link, QR code, and printed code for this unclaimed gift will stop working.",
+    "title": "Rotate private link?",
+    "description": "Every previous private link and any legacy code for this unclaimed gift will stop working.",
     "confirm": "Rotate link"
   },
   "void": {

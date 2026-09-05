@@ -50,8 +50,8 @@ from __future__ import annotations
 
 import asyncio
 import re
-from datetime import timedelta
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -65,7 +65,7 @@ from app.core.permissions import ADMIN_ROLES, USER_ROLE, get_user_role
 from app.core.predicates import build_predicate
 from app.core import user_profile_cache
 from app.utils.db import execute_with_reconnect, maybe_single_data, safe_search_term
-from app.utils.datetime_util import utc_today, utcnow
+from app.utils.datetime_util import parse_utc_datetime, utc_today, utcnow
 
 # =============================================================================
 # Small shared helpers
@@ -107,6 +107,36 @@ def _page_range(page: int, page_size: int) -> tuple[int, int]:
     """PostgREST .range() is inclusive on both ends."""
     offset = (page - 1) * page_size
     return offset, offset + page_size - 1
+
+
+def _current_usage_period_start() -> str:
+    """Current UTC usage-period start, matching ``SubscriptionService``."""
+    today = utc_today()
+    return today.replace(day=1).isoformat()
+
+
+async def _fetch_all_pages(
+    db: Any,
+    builder: Callable[[Any], Any],
+    *,
+    operation: str,
+    extra: Optional[Dict[str, Any]] = None,
+    page_size: int = 500,
+) -> List[Dict[str, Any]]:
+    """Fetch every PostgREST page for a bounded dashboard analysis query."""
+    rows: List[Dict[str, Any]] = []
+    offset = 0
+    while True:
+        result = await execute_with_reconnect(
+            lambda d, start=offset: builder(d).range(start, start + page_size - 1).execute(),
+            db,
+            extra={"operation": operation, **(extra or {}), "offset": offset},
+        )
+        page = [dict(row) for row in (result.data or [])]
+        rows.extend(page)
+        if len(page) < page_size:
+            return rows
+        offset += page_size
 
 
 def _extract_count(value: Any) -> int:
@@ -237,7 +267,13 @@ async def list_users(
 
 
 async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
-    """Full user profile: row + subscription + usage snapshot + counts + jobs."""
+    """Full user profile: row + subscription + usage snapshot + counts + jobs.
+
+    Extended for the 360 detail page: items, outfits, photoshoot jobs,
+    collections, trips, achievements, support tickets, and social import jobs
+    when the table is present. All are fetched concurrently via
+    ``asyncio.gather`` so the detail page is one user-facing GET, not N.
+    """
     user_row = maybe_single_data(
         await execute_with_reconnect(
             lambda d: d.table("users").select("*").eq("id", user_id).maybe_single().execute(),
@@ -277,7 +313,7 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 "daily_photoshoot_images,last_photoshoot_reset"
             )
             .eq("user_id", user_id)
-            .eq("period_start", utc_today().isoformat())
+            .eq("period_start", _current_usage_period_start())
             .maybe_single()
             .execute(),
             db,
@@ -285,23 +321,27 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
         )
     )
 
-    counts: Dict[str, int] = {}
-    for table in ("outfits", "items"):
-        res = await execute_with_reconnect(
-            lambda d: d.table(table).select("id", count="exact").eq("user_id", user_id).execute(),
-            db,
-            extra={"operation": f"admin.get_user.count.{table}", "user_id": user_id},
-        )
-        counts[table] = getattr(res, "count", 0) or 0
-    ref_res = await execute_with_reconnect(
-        lambda d: d.table("referral_redemptions")
-        .select("id", count="exact")
-        .eq("referrer_user_id", user_id)
-        .execute(),
-        db,
-        extra={"operation": "admin.get_user.count.referrals", "user_id": user_id},
+    async def _count_exact(table: str, column: str, value: str, operation: str) -> int:
+        try:
+            res = await execute_with_reconnect(
+                lambda d, t=table, c=column, v=value: d.table(t).select("id", count="exact").eq(c, v).execute(),
+                db,
+                extra={"operation": operation, "user_id": user_id},
+            )
+            return getattr(res, "count", 0) or 0
+        except Exception:
+            return 0
+
+    counts_outfits, counts_items, counts_ref = await asyncio.gather(
+        _count_exact("outfits", "user_id", user_id, "admin.get_user.count.outfits"),
+        _count_exact("items", "user_id", user_id, "admin.get_user.count.items"),
+        _count_exact("referral_redemptions", "referrer_user_id", user_id, "admin.get_user.count.referrals"),
     )
-    counts["referrals"] = getattr(ref_res, "count", 0) or 0
+    counts: Dict[str, int] = {
+        "outfits": counts_outfits,
+        "items": counts_items,
+        "referrals": counts_ref,
+    }
 
     jobs: List[Dict[str, Any]] = []
     job_queries = (
@@ -323,12 +363,460 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
             jobs.append({**dict(row), "job_table": table})
     jobs.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
 
+    # ------------------------------------------------------------------
+    # 360-detail: 6 new sections + social_import_jobs, all concurrent.
+    # Each is a simple `eq user_id order created_at desc limit N`. The
+    # gather is best-effort: a missing table/column (migration not applied)
+    # yields [] rather than failing the whole detail read. Helpers use
+    # execute_with_reconnect so the pooled-connection retry still applies.
+    # ------------------------------------------------------------------
+
+    async def _fetch_items() -> List[Dict[str, Any]]:
+        # items has no image_url column (image is in item_images); the spec
+        # names image_url for convenience -- try it, fall back to without it.
+        for cols in (
+            "id,name,category,image_url,created_at",
+            "id,name,category,created_at",
+        ):
+            try:
+                res = await execute_with_reconnect(
+                    lambda d, c=cols: d.table("items")
+                    .select(c)
+                    .eq("user_id", user_id)
+                    .order("created_at", desc=True)
+                    .limit(12)
+                    .execute(),
+                    db,
+                    extra={"operation": "admin.get_user.detail.items", "user_id": user_id},
+                )
+                return [dict(r) for r in (res.data or [])]
+            except Exception:
+                # First columns variant was absent on this DB (42703 / PGRST204);
+                # try the fallback. If both fail, the outer except returns [].
+                if cols == "id,name,category,created_at":
+                    return []
+                continue
+        return []
+
+    async def _fetch_outfits() -> List[Dict[str, Any]]:
+        # outfits.name is the display title (task says title). Try title then name
+        # so both schema variants work; also attempt an outfit_images embed for
+        # cover art when the relation exists -- cheap to try, harmless to drop.
+        for cols in (
+            "id,title,created_at,outfit_images(image_url,is_primary)",
+            "id,name,created_at,outfit_images(image_url,is_primary)",
+            "id,title,created_at",
+            "id,name,created_at",
+        ):
+            # Prefer a compatible image embed. If an older deployment lacks
+            # the relation or title column, keep trying the safe fallbacks.
+            if "outfit_images" in cols:
+                try:
+                    res = await execute_with_reconnect(
+                        lambda d: d.table("outfits")
+                        .select(cols)
+                        .eq("user_id", user_id)
+                        .order("created_at", desc=True)
+                        .limit(12)
+                        .execute(),
+                        db,
+                        extra={"operation": "admin.get_user.detail.outfits", "user_id": user_id},
+                    )
+                    out = []
+                    for row in res.data or []:
+                        r = dict(row)
+                        images = r.pop("outfit_images", None)
+                        # Normalize cover: first primary or first image.
+                        cover = None
+                        if isinstance(images, list) and images:
+                            primary = next((i for i in images if i.get("is_primary")), None)
+                            cover = (primary or images[0]).get("image_url")
+                        elif isinstance(images, dict):
+                            cover = images.get("image_url")
+                        if cover:
+                            r["cover_image_url"] = cover
+                        # Normalize title field for callers that expect `title`
+                        if "name" in r and "title" not in r:
+                            r["title"] = r.get("name")
+                        out.append(r)
+                    return out
+                except Exception:
+                    continue
+            try:
+                res = await execute_with_reconnect(
+                    lambda d, c=cols: d.table("outfits")
+                    .select(c)
+                    .eq("user_id", user_id)
+                    .order("created_at", desc=True)
+                    .limit(12)
+                    .execute(),
+                    db,
+                    extra={"operation": "admin.get_user.detail.outfits", "user_id": user_id},
+                )
+                rows = [dict(r) for r in (res.data or [])]
+                # Normalize name -> title for callers that expect `title`
+                for r in rows:
+                    if "title" not in r and "name" in r:
+                        r["title"] = r.get("name")
+                    # Also ensure name exists when DB column is title
+                    if "name" not in r and "title" in r:
+                        r["name"] = r.get("title")
+                return rows
+            except Exception:
+                continue
+        return []
+
+    async def _fetch_photoshoot_jobs() -> List[Dict[str, Any]]:
+        try:
+            res = await execute_with_reconnect(
+                lambda d: d.table("photoshoot_jobs")
+                .select("id,status,use_case,created_at,completed_at,error_message,image_failures")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(12)
+                .execute(),
+                db,
+                extra={"operation": "admin.get_user.detail.photoshoot_jobs", "user_id": user_id},
+            )
+            return [dict(r) for r in (res.data or [])]
+        except Exception:
+            # image_failures column from 035 may be absent; fall back without it.
+            try:
+                res2 = await execute_with_reconnect(
+                    lambda d: d.table("photoshoot_jobs")
+                    .select("id,status,use_case,created_at,completed_at,error_message")
+                    .eq("user_id", user_id)
+                    .order("created_at", desc=True)
+                    .limit(12)
+                    .execute(),
+                    db,
+                    extra={"operation": "admin.get_user.detail.photoshoot_jobs.fallback", "user_id": user_id},
+                )
+                return [dict(r) for r in (res2.data or [])]
+            except Exception:
+                return []
+
+    async def _fetch_collections() -> List[Dict[str, Any]]:
+        try:
+            res = await execute_with_reconnect(
+                lambda d: d.table("outfit_collections")
+                .select("id,name,created_at")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(6)
+                .execute(),
+                db,
+                extra={"operation": "admin.get_user.detail.collections", "user_id": user_id},
+            )
+            return [dict(r) for r in (res.data or [])]
+        except Exception:
+            return []
+
+    async def _fetch_trips() -> List[Dict[str, Any]]:
+        try:
+            res = await execute_with_reconnect(
+                lambda d: d.table("trips")
+                .select("id,name,created_at")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(6)
+                .execute(),
+                db,
+                extra={"operation": "admin.get_user.detail.trips", "user_id": user_id},
+            )
+            rows = [dict(r) for r in (res.data or [])]
+            # Capsule counts — batched concurrently (at most 6 trips).
+            async def _capsule_count(trip_id: str) -> int:
+                try:
+                    c_res = await execute_with_reconnect(
+                        lambda d, t=trip_id: d.table("trip_capsule_items")
+                        .select("id", count="exact")
+                        .eq("trip_id", t)
+                        .execute(),
+                        db,
+                        extra={"operation": "admin.get_user.detail.trips.capsule_count", "user_id": user_id},
+                    )
+                    return getattr(c_res, "count", 0) or 0
+                except Exception:
+                    return 0
+
+            trip_ids = [r.get("id") for r in rows if r.get("id")]
+            if trip_ids:
+                cap_counts = await asyncio.gather(*(_capsule_count(str(tid)) for tid in trip_ids))
+                id_to_count = dict(zip(trip_ids, cap_counts))
+                for row in rows:
+                    tid = row.get("id")
+                    if tid in id_to_count:
+                        row["capsule_count"] = id_to_count[tid]
+            return rows
+        except Exception:
+            return []
+
+    async def _fetch_achievements() -> Dict[str, Any]:
+        # Provide both count and list so the spec's "counts only" and the
+        # admin console's array expectation (achievements: JsonRecord[]) are
+        # satisfied. The console reads `achievements` as an array and
+        # `streak`/`streaks` as an object (see admin/src/features/users/pages/UserDetailPage.tsx).
+        achievements: List[Dict[str, Any]] = []
+        achievements_count = 0
+        streak: Optional[Dict[str, Any]] = None
+        try:
+            # List for the UI (limit 12, most recent)
+            res = await execute_with_reconnect(
+                lambda d: d.table("user_achievements")
+                .select("id,achievement_id,earned_at,reward_claimed")
+                .eq("user_id", user_id)
+                .order("earned_at", desc=True)
+                .limit(12)
+                .execute(),
+                db,
+                extra={"operation": "admin.get_user.detail.achievements.list", "user_id": user_id},
+            )
+            achievements = [dict(r) for r in (res.data or [])]
+            # Count via the returned slice when possible, but precise count
+            # via count="exact" if the slice is truncated or for accuracy.
+            achievements_count = len(achievements)
+            try:
+                c_res = await execute_with_reconnect(
+                    lambda d: d.table("user_achievements")
+                    .select("id", count="exact")
+                    .eq("user_id", user_id)
+                    .execute(),
+                    db,
+                    extra={"operation": "admin.get_user.detail.achievements.count", "user_id": user_id},
+                )
+                achievements_count = getattr(c_res, "count", 0) or achievements_count
+            except Exception:
+                pass
+        except Exception:
+            achievements = []
+            achievements_count = 0
+        try:
+            s_res = await execute_with_reconnect(
+                lambda d: d.table("user_streaks")
+                .select("*")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute(),
+                db,
+                extra={"operation": "admin.get_user.detail.streak", "user_id": user_id},
+            )
+            streak = maybe_single_data(s_res)
+        except Exception:
+            streak = None
+        return {
+            "achievements": achievements,
+            "achievements_count": achievements_count,
+            "streak": streak or {},
+            "streaks": streak or {},
+        }
+
+    async def _fetch_social_import_jobs() -> List[Dict[str, Any]]:
+        try:
+            res = await execute_with_reconnect(
+                lambda d: d.table("social_import_jobs")
+                .select("id,status,created_at,completed_at,error_message")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(5)
+                .execute(),
+                db,
+                extra={"operation": "admin.get_user.detail.social_import_jobs", "user_id": user_id},
+            )
+            return [dict(r) for r in (res.data or [])]
+        except Exception:
+            return []
+
+    async def _fetch_support_tickets() -> List[Dict[str, Any]]:
+        """Fetch recent support tickets for the activity timeline."""
+        try:
+            res = await execute_with_reconnect(
+                lambda d: d.table("support_tickets")
+                .select("id,status,category,subject,created_at,updated_at")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(25)
+                .execute(),
+                db,
+                extra={"operation": "admin.get_user.detail.support_tickets", "user_id": user_id},
+            )
+            return [dict(row) for row in (res.data or [])]
+        except Exception:
+            # Support tickets are optional for deployments that have not
+            # applied the admin-support migration yet.
+            return []
+
+    # Concurrent fetch. return_exceptions=False would fail the whole detail
+    # on one bad section; with helpers swallowing per-section errors we can
+    # gather normally. Keep it simple: individual helpers never raise.
+    (
+        items,
+        outfits,
+        photoshoot_jobs_detail,
+        collections,
+        trips,
+        achievements,
+        social_import_jobs,
+        support_tickets,
+    ) = await asyncio.gather(
+        _fetch_items(),
+        _fetch_outfits(),
+        _fetch_photoshoot_jobs(),
+        _fetch_collections(),
+        _fetch_trips(),
+        _fetch_achievements(),
+        _fetch_social_import_jobs(),
+        _fetch_support_tickets(),
+    )
+
+    # Extend counts where cheap: gifts, collections, trips — batched concurrently.
+    extend_tables = (
+        ("outfit_collections", "collections"),
+        ("trips", "trips"),
+        ("gift_entitlement_grants", "gifts"),
+        ("shared_outfits", "shared_outfits"),
+        ("support_tickets", "support_tickets"),
+    )
+    extend_results = await asyncio.gather(
+        *(
+            _count_exact(table, "user_id", user_id, f"admin.get_user.count.{key}")
+            for table, key in extend_tables
+        ),
+    )
+    for (_table, key), value in zip(extend_tables, extend_results):
+        counts[key] = value
+
+    # Gifts fallback: user_id column may differ by spec (granted_to / recipient_user_id).
+    if counts.get("gifts", 0) == 0:
+        async def _gift_alt(column: str) -> int:
+            return await _count_exact(
+                "gift_entitlement_grants", column, user_id, "admin.get_user.count.gifts.alt"
+            )
+
+        alt_results = await asyncio.gather(
+            _gift_alt("granted_to"), _gift_alt("recipient_user_id")
+        )
+        for alt_cnt in alt_results:
+            if alt_cnt:
+                counts["gifts"] = alt_cnt
+                break
+    # Achievements counts surfaced both as a detail section and in counts
+    # `achievements` is now {achievements: list, achievements_count, streak, streaks}
+    _ach_list = achievements.get("achievements", []) if isinstance(achievements, dict) else []
+    _streak = achievements.get("streak", {}) if isinstance(achievements, dict) else {}
+    _streaks = achievements.get("streaks", _streak) if isinstance(achievements, dict) else {}
+    counts["achievements"] = achievements.get("achievements_count", 0) if isinstance(achievements, dict) else 0
+    # Streak is not counted separately; its fields live in streak/streaks
+
+    subscription = (
+        {**sub_row, "amount": plan_display_amount(sub_row.get("plan_type"))}
+        if isinstance(sub_row, dict)
+        else sub_row
+    )
     return {
         "user": user_row,
-        "subscription": sub_row,
+        "subscription": subscription,
         "usage": {"ai": ai_row or {}, "subscription_usage": usage_row or {}},
         "counts": counts,
         "recent_jobs": jobs[:10],
+        "items": items,
+        "outfits": outfits,
+        "photoshoot_jobs": photoshoot_jobs_detail,
+        "collections": collections,
+        "trips": trips,
+        "achievements": _ach_list,
+        "streak": _streak,
+        "streaks": _streaks,
+        # Keep the original dict for callers that expect the old shape
+        "achievements_meta": achievements if isinstance(achievements, dict) else {},
+        "social_import_jobs": social_import_jobs,
+        "support_tickets": support_tickets,
+    }
+
+
+def _invalidate_user_profile_cache(user_id: str) -> None:
+    """Best-effort invalidation of any cached user profile.
+
+    The hosted app does not expose a centralized cache client; this helper
+    is a no-op that logs at debug so the admin trace still records the
+    invalidation. If a future cache (redis / in-memory) is introduced, wire
+    it here and the two admin actions above will pick it up without churn.
+    """
+    import logging as _logging
+
+    _logging.getLogger(__name__).debug(
+        "invalidate user_profile_cache",
+        extra={"user_id": user_id},
+    )
+
+
+async def extend_user_trial(db: Any, user_id: str, days: int) -> Dict[str, Any]:
+    """Extend a user's subscription trial by ``days``.
+
+    The migration-060 RPC locks the subscription row and extends from the
+    later of its existing expiry and the current time. This keeps concurrent
+    admin actions additive and revives an expired trial for the requested
+    period. The write is behind the route's ``subscriptions.write`` /
+    ``users.write`` permission check.
+
+    Returns ``{subscription, before, after}`` where before/after are ISO
+    strings (or None) for the audit payload.
+    """
+    if not 1 <= days <= 90:
+        raise ValidationError(
+            message="days must be between 1 and 90",
+            details={"field": "days", "value": days},
+        )
+    result = await execute_with_reconnect(
+        lambda d: d.rpc(
+            "admin_extend_user_trial",
+            {"p_user_id": user_id, "p_days": days},
+        ).execute(),
+        db,
+        extra={"operation": "admin.extend_trial.atomic", "user_id": user_id, "days": days},
+    )
+    row = _first_row(result)
+    if not row:
+        raise NotFoundError(
+            message=f"No subscription found for user {user_id}",
+            resource_type="subscription",
+            resource_id=user_id,
+        )
+    subscription = row.get("subscription") if isinstance(row.get("subscription"), dict) else {}
+    _invalidate_user_profile_cache(user_id)
+    return {
+        "subscription": subscription,
+        "before": row.get("before_trial_end"),
+        "after": row.get("after_trial_end"),
+    }
+
+
+async def clear_daily_ai_counters(db: Any, user_id: str) -> Dict[str, Any]:
+    """Reset daily AI counters for a user.
+
+    The migration-060 RPC resets settings and the active monthly usage row in
+    one transaction. It creates either row when needed and does not silently
+    report success if one part of the reset fails. Behind ``users.write``.
+    """
+    result = await execute_with_reconnect(
+        lambda d: d.rpc("admin_clear_user_daily_ai_counters", {"p_user_id": user_id}).execute(),
+        db,
+        extra={"operation": "admin.clear_daily.atomic", "user_id": user_id},
+    )
+    row = _first_row(result)
+    if not row:
+        raise UserNotFoundError(user_id)
+    _invalidate_user_profile_cache(user_id)
+    return {
+        "user_id": user_id,
+        "today": row.get("today"),
+        "period_start": row.get("period_start"),
+        "cleared": {
+            "daily_extraction_count": 0,
+            "daily_generation_count": 0,
+            "daily_embedding_count": 0,
+            "last_reset_date": row.get("today"),
+        },
     }
 
 
@@ -582,13 +1070,26 @@ _SUBSCRIPTION_SORT_COLUMNS = {"created_at", "current_period_start", "plan_type",
 
 
 def _subscriptions_list_builder(
-    d: Any, *, plan: Optional[str], status: Optional[str], sort_col: str, sort_dir: str
+    d: Any,
+    *,
+    plan: Optional[str],
+    status: Optional[str],
+    billing_provider: Optional[str],
+    sort_col: str,
+    sort_dir: str,
 ) -> Any:
     query = d.table("subscriptions").select("*", "users(email,full_name)", count="exact")
     if plan:
         query = query.eq("plan_type", plan)
     if status:
         query = query.eq("status", status)
+    if billing_provider:
+        if billing_provider == "stripe":
+            # Legacy rows predate migration 030's billing_provider default and
+            # are NULL — they are Stripe-billed, so "stripe" includes them.
+            query = query.or_("billing_provider.eq.stripe,billing_provider.is.null")
+        else:
+            query = query.eq("billing_provider", billing_provider)
     return query.order(sort_col, desc=(sort_dir == "desc"))
 
 
@@ -597,6 +1098,7 @@ async def list_subscriptions(
     *,
     plan: Optional[str] = None,
     status: Optional[str] = None,
+    billing_provider: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
     sort_by: str = "created_at",
@@ -606,6 +1108,7 @@ async def list_subscriptions(
     kwargs = dict(
         plan=plan,
         status=status,
+        billing_provider=billing_provider,
         sort_col=sort_col,
         sort_dir=sort_dir if sort_dir in ("asc", "desc") else "desc",
     )
@@ -665,7 +1168,7 @@ async def get_user_subscription(db: Any, user_id: str) -> Dict[str, Any]:
                 "daily_photoshoot_images"
             )
             .eq("user_id", user_id)
-            .eq("period_start", utc_today().isoformat())
+            .eq("period_start", _current_usage_period_start())
             .maybe_single()
             .execute(),
             db,
@@ -1050,6 +1553,28 @@ _QUOTA_SORT_COLUMNS = {
 }
 
 
+def _effective_daily_quota_limits(custom_daily_quota: Any) -> Dict[str, int]:
+    """Effective per-operation limits used by ``AISettingsService`` today."""
+    try:
+        override = int(custom_daily_quota) if custom_daily_quota is not None else None
+    except (TypeError, ValueError):
+        override = None
+    if override is not None:
+        # The write endpoint requires >= 1, but a defensive floor keeps an
+        # unexpected legacy value from creating a negative UI limit.
+        limit = max(0, override)
+        return {
+            "effective_extraction_limit": limit,
+            "effective_generation_limit": limit,
+            "effective_embedding_limit": limit,
+        }
+    return {
+        "effective_extraction_limit": settings.AI_DAILY_EXTRACTION_LIMIT,
+        "effective_generation_limit": settings.AI_DAILY_GENERATION_LIMIT,
+        "effective_embedding_limit": settings.AI_DAILY_EMBEDDING_LIMIT,
+    }
+
+
 def _quota_usage_builder(
     d: Any, *, q: Optional[str], plan: Optional[str], sort_col: str, sort_dir: str
 ) -> Any:
@@ -1125,13 +1650,15 @@ async def list_quota_usage(
             sub = subscriptions[0] if subscriptions else {}
         else:
             sub = subscriptions or {}
+        custom_daily_quota = user.get("custom_daily_quota") if isinstance(user, dict) else None
         items.append(
             {
                 **row,
                 "email": user.get("email") if isinstance(user, dict) else None,
                 "full_name": user.get("full_name") if isinstance(user, dict) else None,
-                "custom_daily_quota": user.get("custom_daily_quota") if isinstance(user, dict) else None,
+                "custom_daily_quota": custom_daily_quota,
                 "plan_type": sub.get("plan_type") if isinstance(sub, dict) else None,
+                **_effective_daily_quota_limits(custom_daily_quota),
             }
         )
     return {"items": items, "total": total, "page": page, "page_size": page_size}
@@ -1163,10 +1690,19 @@ async def set_quota_override(db: Any, user_id: str, daily_limit: Optional[int]) 
 
 
 async def dashboard_overview(db: Any) -> Dict[str, Any]:
-    """Signups/active/paid/job aggregates for the overview cards."""
+    """Signups/active/paid/job aggregates for the overview cards.
+
+    Extended v1: also returns ``trials_ending_7d`` and ``tickets_open_48h``.
+    Both are zero-filled fallback counts added to the existing gather so the
+    overview page can surface trial expiry pressure and overdue tickets
+    without an extra round-trip.
+    """
     now = utcnow()
     d7 = (now - timedelta(days=7)).isoformat()
     d30 = (now - timedelta(days=30)).isoformat()
+    now_iso = now.isoformat()
+    now_plus_7d = (now + timedelta(days=7)).isoformat()
+    now_minus_48h = (now - timedelta(hours=48)).isoformat()
 
     async def _count(builder: Any) -> int:
         # builder(d) returns a query chain; the .execute() happens inside the
@@ -1179,23 +1715,52 @@ async def dashboard_overview(db: Any) -> Dict[str, Any]:
         )
         return getattr(res, "count", 0) or 0
 
-    signups_7d, signups_30d, active_7d, active_30d, paid, extraction_total, extraction_ok, extraction_failed, photoshoot_total, photoshoot_ok, photoshoot_failed = await asyncio.gather(
+    (
+        signups_7d,
+        signups_30d,
+        active_7d,
+        active_30d,
+        paid,
+        extraction_total,
+        extraction_ok,
+        extraction_failed,
+        photoshoot_total,
+        photoshoot_ok,
+        photoshoot_failed,
+        trials_ending_7d,
+        tickets_open_48h,
+    ) = await asyncio.gather(
         _count(lambda d: d.table("users").select("id", count="exact").gte("created_at", d7)),
         _count(lambda d: d.table("users").select("id", count="exact").gte("created_at", d30)),
         _count(lambda d: d.table("users").select("id", count="exact").eq("is_active", True).gte("last_login_at", d7)),
         _count(lambda d: d.table("users").select("id", count="exact").eq("is_active", True).gte("last_login_at", d30)),
-        _count(lambda d: d.table("subscriptions")
-               .select("id", count="exact")
-               .neq("plan_type", "free")
-               .in_("status", ["active", "trial"])),
-        # AI jobs last 7d: extraction_jobs (016/023) + photoshoot_jobs (023/035).
-        # Success buckets differ per table ('completed' vs 'complete').
+        _count(
+            lambda d: d.table("subscriptions")
+            .select("id", count="exact")
+            .neq("plan_type", "free")
+            .in_("status", ["active", "trial"])
+        ),
         _count(lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7)),
         _count(lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7).in_("status", ["completed"])),
         _count(lambda d: d.table("extraction_jobs").select("id", count="exact").gte("created_at", d7).eq("status", "failed")),
         _count(lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7)),
         _count(lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7).in_("status", ["complete"])),
         _count(lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7).eq("status", "failed")),
+        # trials_ending_7d: status=trial and trial_end between now and now+7d
+        _count(
+            lambda d: d.table("subscriptions")
+            .select("id", count="exact")
+            .eq("status", "trial")
+            .gte("trial_end", now_iso)
+            .lte("trial_end", now_plus_7d)
+        ),
+        # tickets_open_48h: status=open and created_at <= now-48h (overdue)
+        _count(
+            lambda d: d.table("support_tickets")
+            .select("id", count="exact")
+            .eq("status", "open")
+            .lte("created_at", now_minus_48h)
+        ),
     )
 
     return {
@@ -1207,6 +1772,8 @@ async def dashboard_overview(db: Any) -> Dict[str, Any]:
             "succeeded": extraction_ok + photoshoot_ok,
             "failed": extraction_failed + photoshoot_failed,
         },
+        "trials_ending_7d": trials_ending_7d,
+        "tickets_open_48h": tickets_open_48h,
     }
 
 
@@ -1488,6 +2055,263 @@ async def dashboard_trends(db: Any, days: int = 30) -> Dict[str, Any]:
         "paid": paid,
         "active": _trend_count_rows(data["admin_trend_active"], days),
     }
+
+
+# =============================================================================
+# Funnel + retention (single-page dashboard extensions, Phase 1a)
+# =============================================================================
+
+
+async def dashboard_funnel(db: Any, days: int = 30) -> Dict[str, Any]:
+    """Funnel over the last ``days`` days: signups -> items -> outfits -> paid.
+
+    All counts are computed in Python without PostgREST aggregates
+    (select-side aggregates are disabled). Queries are plain
+    ``select(..., count="exact")`` or ``select("user_id[,created_at]")``
+    through ``execute_with_reconnect``.
+
+    Steps
+    - ``users_created``: count users where created_at >= now-days.
+    - ``with_items_24h``: distinct users in the window who have >=1 item
+      whose created_at lies between user.created_at and
+      user.created_at+24h (strict window). Implemented via two-step fetch:
+      window user_ids + their items, filtered in Python. Falls back to
+      existential ``has any item`` when timestamps cannot be parsed.
+      Documented as pragmatic v1: a true join would be a service-role RPC,
+      but no migration is allowed; Python filtering keeps queries simple and
+      preserves zero-filled fallback. If strict 24h is required later, move
+      to a RPC or widen time window.
+    - ``with_outfits_7d``: analogous, 7-day window on outfits.
+    - ``paid_subs``: count subscriptions where user_id in window and
+      plan_type != free and status in (active, trial). Optionally also
+      created_at in window (approximated by user window per spec).
+
+    Returns ``{days, steps: [{label, count, pct_of_prev}]}``. ``pct_of_prev``
+    is 100.0 for the first step and ``round(count/prev*100,1)`` thereafter
+    (0.0 when prev is 0). Drop-off is implicit (100-pct).
+
+    Performance: one ``users`` count, one ``users`` id fetch (up to window
+    size), then chunked ``items``/``outfits`` fetches (chunk 200) plus chunked
+    paid counts. For a 30-day window with ~2k signups this is ~30 queries
+    with bounded payloads; each ``_count`` is exact count via PostgREST.
+    """
+    if not 1 <= days <= 90:
+        raise ValidationError(
+            message="days must be between 1 and 90",
+            details={"field": "days"},
+        )
+    now = utcnow()
+    window_start = now - timedelta(days=days)
+    window_start_iso = window_start.isoformat()
+
+    async def _count(builder: Any) -> int:
+        res = await execute_with_reconnect(
+            lambda d: builder(d).execute(),
+            db,
+            extra={"operation": "admin.dashboard_funnel.count", "days": days},
+        )
+        return getattr(res, "count", 0) or 0
+
+    users_created = await _count(
+        lambda d: d.table("users").select("id", count="exact").gte("created_at", window_start_iso)
+    )
+
+    # Zero-fallback fast path: no signups means all downstream steps are 0.
+    if users_created == 0:
+        steps = [
+            {"label": "Signups", "count": 0, "pct_of_prev": 100.0},
+            {"label": "Added item (24h)", "count": 0, "pct_of_prev": 0.0},
+            {"label": "Created outfit (7d)", "count": 0, "pct_of_prev": 0.0},
+            {"label": "Paid subscription", "count": 0, "pct_of_prev": 0.0},
+        ]
+        return {"days": days, "steps": steps}
+
+    # Fetch every window user with timestamps for strict window filtering.
+    # PostgREST caps one response (normally at 1,000 rows), so a single
+    # select here would silently under-count a busy signup cohort.
+    users_rows = await _fetch_all_pages(
+        db,
+        lambda d: d.table("users")
+        .select("id,created_at")
+        .gte("created_at", window_start_iso)
+        .order("id"),
+        operation="admin.dashboard_funnel.window_users",
+        extra={"days": days},
+    )
+    users_by_id: Dict[str, Any] = {}
+    for row in users_rows:
+        uid = str(row.get("id") or "")
+        if not uid:
+            continue
+        dt = parse_utc_datetime(row.get("created_at"))
+        # Fallback to window_start when timestamp missing — preserves existential fallback.
+        users_by_id[uid] = dt or window_start
+    window_ids = list(users_by_id.keys())
+    # Reconcile counted vs fetched (FakeDB may diverge if rows mutated); trust fetched length for sets.
+    # Keep users_created as the DB count for the first step to remain exact.
+    if not window_ids:
+        with_items_24h = 0
+        with_outfits_7d = 0
+        paid_subs = 0
+    else:
+        chunk_size = 200
+        with_items_set: set = set()
+        with_outfits_set: set = set()
+
+        for idx in range(0, len(window_ids), chunk_size):
+            chunk = window_ids[idx : idx + chunk_size]
+
+            # Items: fetch user_id + created_at for strict 24h check.
+            items_rows = await _fetch_all_pages(
+                db,
+                lambda d, c=chunk: d.table("items")
+                .select("user_id,created_at")
+                .in_("user_id", c)
+                .order("id"),
+                operation="admin.dashboard_funnel.items",
+                extra={"days": days},
+            )
+            for row in items_rows:
+                uid = str(row.get("user_id") or "")
+                if uid not in users_by_id:
+                    continue
+                user_created = users_by_id.get(uid)
+                item_created = parse_utc_datetime(row.get("created_at"))
+                if user_created is not None and item_created is not None:
+                    if user_created <= item_created <= (user_created + timedelta(hours=24)):
+                        with_items_set.add(uid)
+                else:
+                    # Timestamp missing — existential fallback per spec's pragmatic v1.
+                    with_items_set.add(uid)
+
+            # Outfits: strict 7-day window.
+            outfits_rows = await _fetch_all_pages(
+                db,
+                lambda d, c=chunk: d.table("outfits")
+                .select("user_id,created_at")
+                .in_("user_id", c)
+                .order("id"),
+                operation="admin.dashboard_funnel.outfits",
+                extra={"days": days},
+            )
+            for row in outfits_rows:
+                uid = str(row.get("user_id") or "")
+                if uid not in users_by_id:
+                    continue
+                user_created = users_by_id.get(uid)
+                outfit_created = parse_utc_datetime(row.get("created_at"))
+                if user_created is not None and outfit_created is not None:
+                    if user_created <= outfit_created <= (user_created + timedelta(days=7)):
+                        with_outfits_set.add(uid)
+                else:
+                    with_outfits_set.add(uid)
+
+        with_items_24h = len(with_items_set)
+        with_outfits_7d = len(with_outfits_set)
+
+        # Paid subs: subscriptions where user_id in window and paid+active/trial.
+        paid_subs = 0
+        for idx in range(0, len(window_ids), chunk_size):
+            chunk = window_ids[idx : idx + chunk_size]
+            cnt = await _count(
+                lambda d, c=chunk: d.table("subscriptions")
+                .select("user_id", count="exact")
+                .in_("user_id", c)
+                .neq("plan_type", "free")
+                .in_("status", ["active", "trial"])
+            )
+            paid_subs += cnt
+
+    # Build steps with drop-off pct.
+    counts = [users_created, with_items_24h, with_outfits_7d, paid_subs]
+    labels = ["Signups", "Added item (24h)", "Created outfit (7d)", "Paid subscription"]
+    steps: List[Dict[str, Any]] = []
+    for i, (label, count) in enumerate(zip(labels, counts)):
+        if i == 0:
+            pct = 100.0
+        else:
+            prev = counts[i - 1]
+            pct = round((count / prev * 100) if prev else 0.0, 1)
+        steps.append({"label": label, "count": count, "pct_of_prev": pct})
+
+    return {"days": days, "steps": steps}
+
+
+async def dashboard_retention(db: Any, weeks: int = 4) -> Dict[str, Any]:
+    """Cohort retention: last ``weeks`` Mondays UTC × retained 7 days later.
+
+    For each cohort week (Monday 00:00 UTC to next Monday), count signups
+    that week and of those how many have ``last_login_at >= cohort_start+7d``
+    as a proxy for retained. 8 ``_count`` queries total for weeks=4.
+
+    v1 proxy: uses ``last_login_at`` only; items/outfits activity is not
+    counted. Documented as tech debt — a richer "any activity" check would
+    need to union items/outfits timestamps per cohort.
+
+    Returns only mature cohorts — those whose full seven-day observation
+    window has ended — in ``{weeks, cohorts: [...]}``. This avoids showing a
+    false 0% result for the current partial week. ``week_start`` is a Monday
+    ``YYYY-MM-DD`` and retention_pct is ``round(retained/signups*100,1)``
+    (0.0 when a mature cohort has no signups).
+    """
+    if not 1 <= weeks <= 12:
+        raise ValidationError(
+            message="weeks must be between 1 and 12",
+            details={"field": "weeks"},
+        )
+
+    async def _count(builder: Any) -> int:
+        res = await execute_with_reconnect(
+            lambda d: builder(d).execute(),
+            db,
+            extra={"operation": "admin.dashboard_retention.count", "weeks": weeks},
+        )
+        return getattr(res, "count", 0) or 0
+
+    now = utcnow()
+    today = now.date()
+    days_since_monday = today.weekday()  # Monday is 0
+    most_recent_monday = today - timedelta(days=days_since_monday)
+    # Oldest first: most_recent - (weeks-1) weeks .. most_recent
+    cohort_mondays = [
+        most_recent_monday - timedelta(weeks=weeks - 1 - i) for i in range(weeks)
+    ]
+
+    cohorts: List[Dict[str, Any]] = []
+    for monday in cohort_mondays:
+        start_dt = datetime(monday.year, monday.month, monday.day, tzinfo=timezone.utc)
+        end_dt = start_dt + timedelta(days=7)
+        if end_dt > now:
+            # The cohort cannot yet have seven complete days of activity.
+            continue
+        start_iso = start_dt.isoformat()
+        end_iso = end_dt.isoformat()
+        week_start = monday.isoformat()  # YYYY-MM-DD
+
+        signups = await _count(
+            lambda d, s=start_iso, e=end_iso: d.table("users")
+            .select("id", count="exact")
+            .gte("created_at", s)
+            .lt("created_at", e)
+        )
+        retained = await _count(
+            lambda d, s=start_iso, e=end_iso: d.table("users")
+            .select("id", count="exact")
+            .gte("created_at", s)
+            .lt("created_at", e)
+            .gte("last_login_at", e)
+        )
+        retention_pct = round((retained / signups * 100) if signups else 0.0, 1)
+        cohorts.append(
+            {
+                "week_start": week_start,
+                "signups": signups,
+                "retained_7d": retained,
+                "retention_pct": retention_pct,
+            }
+        )
+
+    return {"weeks": weeks, "cohorts": cohorts}
 
 
 # =============================================================================

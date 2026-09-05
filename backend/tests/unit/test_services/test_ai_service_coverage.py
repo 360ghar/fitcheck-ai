@@ -103,6 +103,29 @@ async def test_generate_embedding_wraps_unexpected_error():
             await EmbeddingService.generate_embedding("hello")
 
 
+@pytest.mark.asyncio
+async def test_generate_embedding_times_out_instead_of_hanging(monkeypatch):
+    """A stalled provider call fails bounded at AI_EMBEDDING_TIMEOUT_S.
+
+    The sync SDK retries 429/5xx with internal backoff, so a wedged
+    embed_content can otherwise hold the request for minutes — the client's
+    30s timeout then surfaces as a false "Connection Error" (2026-08-31
+    check-duplicates RCA). TimeoutError must surface as AIServiceError so
+    callers degrade (text fallback) instead of hanging.
+    """
+    import time
+
+    monkeypatch.setattr(ai_module.settings, "AI_EMBEDDING_TIMEOUT_S", 0.05)
+
+    def _hang(*_args, **_kwargs):
+        time.sleep(1.0)  # outlives the deadline; wait_for must cut it off
+        return SimpleNamespace(embeddings=[SimpleNamespace(values=[0.1])])
+
+    with patch.object(ai_module, "_client", _fake_client(Mock(side_effect=_hang))):
+        with pytest.raises(AIServiceError):
+            await EmbeddingService.generate_embedding("hello")
+
+
 # =============================================================================
 # EmbeddingService.generate_item_embedding
 # =============================================================================

@@ -20,11 +20,11 @@ test.describe('auth', () => {
     // Metric cards from the overview fixture.
     await expect(page.getByText('Signups (7 days)')).toBeVisible()
     await expect(page.getByText('Signups (30 days)')).toBeVisible()
-    await expect(page.getByText('Paid subscriptions')).toBeVisible()
+    await expect(page.locator('#section-overview').getByText('Paid subscriptions', { exact: true })).toBeVisible()
     await expect(page.getByText('AI jobs (7 days)')).toBeVisible()
     // Fixture values: 42 signups (7d), 47 paid subscriptions.
     await expect(page.getByText('42', { exact: true }).first()).toBeVisible()
-    await expect(page.getByText('47', { exact: true })).toBeVisible()
+    await expect(page.locator('#section-overview').getByText('47', { exact: true })).toBeVisible()
   })
 
   test('shows an error banner for invalid credentials', async ({ page }) => {

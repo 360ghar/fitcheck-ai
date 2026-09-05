@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Download, Plus, Tag } from 'lucide-react'
-import { useState } from 'react'
+import { Download, Info, Plus, Tag } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -20,8 +20,10 @@ import {
 import { isApiError } from '@/shared/api/errors'
 import { useCsvExport } from '@/shared/hooks/useCsvExport'
 import { usePermission } from '@/shared/hooks/usePermission'
-import { formatDate, toDate } from '@/shared/lib/formatters'
+import { formatDate, formatNumber, toDate } from '@/shared/lib/formatters'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { Card, CardContent } from '@/shared/ui/card'
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { DataTable } from '@/shared/ui/DataTable'
 import {
@@ -44,11 +46,12 @@ import {
   FormMessage,
 } from '@/shared/ui/form'
 import { Input } from '@/shared/ui/input'
-import { PageHeader } from '@/shared/ui/PageHeader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { Switch } from '@/shared/ui/switch'
 import { TableToolbar } from '@/shared/ui/TableToolbar'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip'
 import { useServerTable } from '@/shared/ui/useServerTable'
 
 type PromoFormValues = {
@@ -65,6 +68,7 @@ export function PromoPage() {
   const { can } = usePermission()
   const queryClient = useQueryClient()
   const canManage = can('content.write')
+  const canRead = can('promo.read')
   const [createOpen, setCreateOpen] = useState(false)
   const [toggleTarget, setToggleTarget] = useState<PromoCodeItem | null>(null)
 
@@ -73,6 +77,15 @@ export function PromoPage() {
     queryFn: listPromoCodes,
     filterKeys: ['active', 'plan_type'],
   })
+
+  // Promo metrics are intentionally current-page scoped; redemption events
+  // can exceed issued codes for reusable promos, so this is not a rate.
+  const roi = useMemo(() => {
+    const issued = table.data.length
+    const redeemed = table.data.reduce((sum, row) => sum + (row.redemptions_count ?? 0), 0)
+    // Conversion to paid is not available from promo data alone; show placeholder
+    return { issued, redeemed, conversion: null as string | null }
+  }, [table.data])
 
   const csvExport = useCsvExport<PromoCodeItem>({
     rows: table.data,
@@ -197,7 +210,7 @@ export function PromoPage() {
       minSize: 110,
       cell: ({ row }) => (
         <span className="rounded-full bg-surface-card px-2.5 py-0.5 text-xs font-medium">
-          {t(`plans.${row.original.plan_type}`, { defaultValue: row.original.plan_type })}
+          {t(`plans.${row.original.plan_type}`)}
         </span>
       ),
     },
@@ -277,19 +290,79 @@ export function PromoPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t('title')}
-        description={t('description')}
-        actions={
-          canManage ? (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus aria-hidden="true" />
-              {t('create.title')}
-            </Button>
-          ) : undefined
-        }
-      />
+    <div className="space-y-3">
+      {canManage ? (
+        <div className="flex justify-end">
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus aria-hidden="true" />
+            {t('create.title')}
+          </Button>
+        </div>
+      ) : null}
+
+      {/* ROI strip — one line, client-side, permission-gated */}
+      {canRead ? (
+        table.query.isPending ? (
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-6 py-3">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-28" />
+            </CardContent>
+          </Card>
+        ) : table.query.isError ? (
+          <Card>
+            <CardContent className="py-3">
+              <p className="text-sm text-muted-foreground">
+                {t('roi.error')}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-4 py-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">{t('roi.issued')}:</span>
+                <Badge variant="secondary">{formatNumber(roi.issued)}</Badge>
+              </div>
+              <span className="hidden text-border sm:inline">•</span>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">{t('roi.redeemed')}:</span>
+                <Badge variant="info">{formatNumber(roi.redeemed)}</Badge>
+              </div>
+              <span className="hidden text-border sm:inline">•</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">{t('roi.conversion')}:</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6"
+                        aria-label={t('roi.conversionTooltip')}
+                      >
+                        <span className="tabular-nums">{roi.conversion ?? '—'}</span>
+                        <Info className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{t('roi.conversionTooltip')}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              {table.data.length === 0 ? (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {t('roi.empty')}
+                </span>
+              ) : null}
+              <span className="basis-full text-xs text-muted-foreground">{t('roi.pageScope')}</span>
+            </CardContent>
+          </Card>
+        )
+      ) : null}
 
       <TableToolbar
         searchValue={table.tableState.q}
@@ -319,7 +392,7 @@ export function PromoPage() {
               { value: 'all', label: t('filters.planPlaceholder') },
               ...PROMO_PLAN_TYPES.map((plan) => ({
                 value: plan,
-                label: t(`plans.${plan}`, { defaultValue: plan }),
+                label: t(`plans.${plan}`),
               })),
             ],
             value: table.tableState.filters.plan_type,
@@ -403,7 +476,7 @@ export function PromoPage() {
                       <SelectContent>
                         {PROMO_PLAN_TYPES.map((plan) => (
                           <SelectItem key={plan} value={plan}>
-                            {t(`plans.${plan}`, { defaultValue: plan })}
+                            {t(`plans.${plan}`)}
                           </SelectItem>
                         ))}
                       </SelectContent>
