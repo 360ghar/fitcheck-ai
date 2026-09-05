@@ -8,7 +8,7 @@
  * 4. Display generated try-on result
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import {
   Wand2,
@@ -34,6 +34,20 @@ export function TryOnDemo() {
   const [result, setResult] = useState<DemoTryOnResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showLoginModal, setShowLoginModal] = useState(false)
+
+  // Blob URLs leak unless revoked: revoke each preview when it is replaced
+  // and on unmount. One effect per URL so replacing one never revokes the
+  // other while it is still rendered.
+  useEffect(() => {
+    return () => {
+      if (personPreview) URL.revokeObjectURL(personPreview)
+    }
+  }, [personPreview])
+  useEffect(() => {
+    return () => {
+      if (outfitPreview) URL.revokeObjectURL(outfitPreview)
+    }
+  }, [outfitPreview])
 
   const onDropPerson = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return
@@ -85,8 +99,6 @@ export function TryOnDemo() {
   })
 
   const handleReset = () => {
-    if (personPreview) URL.revokeObjectURL(personPreview)
-    if (outfitPreview) URL.revokeObjectURL(outfitPreview)
     setPersonFile(null)
     setPersonPreview(null)
     setOutfitPreview(null)
@@ -223,7 +235,7 @@ export function TryOnDemo() {
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={handleReset}>
                 Try Another
               </Button>

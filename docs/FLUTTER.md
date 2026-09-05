@@ -151,7 +151,9 @@ purchase CTA (default on). Social sharing and body profiles live under
 The native gift feature is under features/gifts. It has a GetX binding,
 repository, models, controller, /gifts route, and gift page. The home tab
 uses the same priority as web: incoming gift, then a free invitation, then
-referral.
+referral. The form defaults to no occasion. Birthday and anniversary show
+fixed greetings; Other requires a 1–80 character greeting. A private note is
+always optional.
 
 ENABLE_GIFT_VOUCHERS defaults to true in flutter/.env.example. Set it to false
 only for a release rollback. The app can create and share a free named

@@ -23,6 +23,19 @@ export function formatDate(date: string | Date): string {
   return dateFormatter.format(d);
 }
 
+const usdFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0
+});
+
+/**
+ * Format a cents amount as whole-dollar USD ("$13")
+ */
+export function formatUsd(cents: number): string {
+  return usdFormatter.format(cents / 100);
+}
+
 /**
  * Calculate cost per wear
  */
@@ -99,6 +112,21 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Trigger a browser download for an in-memory Blob, then release the object
+ * URL so the blob is not pinned in memory for the life of the page.
+ */
+export function downloadBlob(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 /**

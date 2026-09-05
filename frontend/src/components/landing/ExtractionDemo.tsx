@@ -8,7 +8,7 @@
  * 4. CTA to save to wardrobe (prompts login)
  */
 
-import { useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import {
   Camera,
@@ -37,6 +37,14 @@ export function ExtractionDemo() {
   const [results, setResults] = useState<DemoExtractItemsResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showLoginModal, setShowLoginModal] = useState(false)
+
+  // Blob URLs leak unless revoked: revoke the previous preview whenever it is
+  // replaced (including reset to null) and on unmount.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return
@@ -70,7 +78,7 @@ export function ExtractionDemo() {
   })
 
   const handleReset = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    // Revocation is centralized in the previewUrl cleanup effect above.
     setPreviewUrl(null)
     setResults(null)
     setError(null)
@@ -160,7 +168,7 @@ export function ExtractionDemo() {
               ))}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={handleReset}>
                 Try Another
               </Button>

@@ -16,7 +16,7 @@ function ZoomControls() {
   const { zoomIn, zoomOut, resetTransform } = useControls();
 
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border border-white/20 bg-black/80 px-3 py-2">
+    <div className="absolute bottom-[calc(1rem+var(--safe-area-bottom))] left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border border-white/20 bg-black/80 px-3 py-2">
       <Button
         variant="ghost"
         size="icon"
@@ -90,7 +90,7 @@ export function ImageLightbox({ src, alt, open, onClose }: ImageLightboxProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-4 right-4 z-[101] h-11 w-11 text-white hover:bg-white/20 hover:text-white"
+            className="absolute top-[calc(1rem+var(--safe-area-top))] right-4 z-[101] h-11 w-11 text-white hover:bg-white/20 hover:text-white"
             onClick={onClose}
             aria-label="Close"
           >
@@ -115,16 +115,20 @@ export function ImageLightbox({ src, alt, open, onClose }: ImageLightboxProps) {
               <img
                 src={src}
                 alt={alt || 'Preview image'}
-                className="max-h-[90vh] max-w-[90vw] object-contain select-none"
+                className="max-h-[90dvh] max-w-[90vw] object-contain select-none"
                 draggable={false}
                 decoding="async"
               />
             </TransformComponent>
           </TransformWrapper>
 
-          {/* Hint text */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 text-white/60 text-sm bg-black/40 backdrop-blur-sm rounded-full px-3 py-1">
+          {/* Hint text — short touch label on phones; full pointer hint from sm up
+              (the full pill overlaps the close button below ~430px) */}
+          <div className="absolute top-[calc(1rem+var(--safe-area-top))] left-1/2 -translate-x-1/2 z-50 hidden sm:block text-white/60 text-sm bg-black/40 backdrop-blur-sm rounded-full px-3 py-1">
             Double-click to zoom • Scroll or pinch to adjust
+          </div>
+          <div className="absolute top-[calc(1rem+var(--safe-area-top))] left-1/2 -translate-x-1/2 z-50 sm:hidden text-white/60 text-xs bg-black/40 backdrop-blur-sm rounded-full px-3 py-1">
+            Pinch to zoom
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

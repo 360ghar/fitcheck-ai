@@ -1,7 +1,14 @@
-import { ArrowRight, Gift, Sparkles } from 'lucide-react'
+import { ArrowRight, Gift, Sparkles, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import type { GiftAllowance, GiftDashboardSummary, GiftVoucher } from '@/api/gifts'
+import {
+  giftIncomingTitle,
+  giftShareText,
+  giftTermLabel,
+  type GiftAllowance,
+  type GiftDashboardSummary,
+  type GiftVoucher,
+} from '@/api/gifts'
 import { cn } from '@/lib/utils'
 
 interface GiftPriorityCardProps {
@@ -25,12 +32,6 @@ export function resolveGiftPriority(summary: GiftDashboardSummary | null): GiftP
   return allowance ? { allowance } : null
 }
 
-function termLabel(months: number): string {
-  if (months === 1) return '1 month'
-  if (months === 12) return '1 year'
-  return `${months} months`
-}
-
 /**
  * A non-dismissible dashboard action. The caller selects the priority so this
  * component does not make network requests or own referral state.
@@ -40,25 +41,29 @@ export function GiftPriorityCard({
   incomingCount = 0,
   allowance,
 }: GiftPriorityCardProps) {
-  const hasIncoming = Boolean(incoming)
-  const href = hasIncoming
-    ? `/gifts?claim=${incoming!.id}`
-    : allowance
-      ? `/gifts?mode=complimentary&duration=${allowance.duration_months}`
-      : '/gifts'
-  const icon = hasIncoming ? Gift : Sparkles
-  const Icon = icon
-  const title = hasIncoming
-    ? incomingCount > 1
-      ? `${incomingCount} gifts are waiting for you`
-      : 'A gift is waiting for you'
-    : `Send a free ${termLabel(allowance!.duration_months)} invitation`
-  const description = hasIncoming
-    ? incomingCount > 1
-      ? 'Open your gift inbox to review and claim them with your verified email.'
-      : `${incoming!.from_name} sent you ${termLabel(incoming!.duration_months)} of FitCheck Pro.`
-    : `${allowance!.remaining_count} free ${termLabel(allowance!.duration_months)} invitation${allowance!.remaining_count === 1 ? '' : 's'} available.`
-  const action = hasIncoming ? 'Open gifts' : 'Send invitation'
+  // Narrowed branches instead of non-null assertions. Render nothing when the
+  // caller passes neither priority (resolveGiftPriority already returns null).
+  let href: string
+  let Icon: LucideIcon
+  let title: string
+  let description: string
+  if (incoming) {
+    href = `/gifts?claim=${incoming.id}`
+    Icon = Gift
+    title = giftIncomingTitle(incomingCount)
+    description =
+      incomingCount > 1
+        ? 'Open your gift inbox to review and claim them with your verified email.'
+        : giftShareText(incoming)
+  } else if (allowance) {
+    href = `/gifts?mode=complimentary&duration=${allowance.duration_months}`
+    Icon = Sparkles
+    title = `Send a free ${giftTermLabel(allowance.duration_months)} invitation`
+    description = `${allowance.remaining_count} free ${giftTermLabel(allowance.duration_months)} invitation${allowance.remaining_count === 1 ? '' : 's'} available.`
+  } else {
+    return null
+  }
+  const action = incoming ? 'Open gifts' : 'Send invitation'
 
   return (
     <Link

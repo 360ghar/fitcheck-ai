@@ -30,7 +30,7 @@ export interface StatCardProps {
   /** Icon component */
   icon: LucideIcon
   /** Semantic tone for the accent bar and icon background. */
-  gradient?: 'primary' | 'accent' | 'cool' | 'warm' | 'success'
+  gradient?: 'primary' | 'accent' | 'cool' | 'warm' | 'success' | 'coral' | 'amber' | 'teal' | 'violet'
   /** Link destination */
   link?: string
   /** Loading state */
@@ -66,6 +66,24 @@ const toneConfig = {
   success: {
     bar: 'bg-success-pale',
     icon: 'bg-success-pale text-success-deep',
+  },
+  // Editorial tints (DESIGN.md 01). Bar carries the deep role, the icon chip
+  // its pale fill — the same fill/label pairing the theme checker enforces.
+  coral: {
+    bar: 'bg-tint-coral',
+    icon: 'bg-tint-coral-pale text-tint-coral',
+  },
+  amber: {
+    bar: 'bg-tint-amber',
+    icon: 'bg-tint-amber-pale text-tint-amber',
+  },
+  teal: {
+    bar: 'bg-tint-teal',
+    icon: 'bg-tint-teal-pale text-tint-teal',
+  },
+  violet: {
+    bar: 'bg-tint-violet',
+    icon: 'bg-tint-violet-pale text-tint-violet',
   },
 }
 
@@ -125,7 +143,7 @@ export const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
                   {value}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground truncate">{name}</p>
+              <p className="text-[11px] leading-tight text-muted-foreground truncate">{name}</p>
             </div>
 
             {/* Arrow indicator - visible on hover */}

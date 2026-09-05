@@ -82,7 +82,9 @@
     "from": "From",
     "to": "To",
     "recipientEmail": "Recipient email",
-    "message": "Message",
+    "message": "Private note",
+    "occasion": "Occasion",
+    "occasionGreeting": "Occasion greeting",
     "publicId": "Public ID",
     "claimCode": "Claim code",
     "ownerId": "Sender account",
@@ -111,7 +113,9 @@
     "fromName": "From name",
     "toName": "To name",
     "recipientEmail": "Recipient email",
-    "message": "Message",
+    "message": "Private note (optional)",
+    "occasion": "Occasion (optional)",
+    "occasionGreeting": "Card greeting",
     "duration": "Pro term",
     "expiresAt": "Claim expiry (optional)",
     "note": "Internal note",
@@ -124,6 +128,12 @@
     "messageLength": "Use no more than 240 characters",
     "reasonLength": "Use at least 3 characters",
     "uuid": "Enter a valid UUID"
+  },
+  "occasions": {
+    "none": "No occasion",
+    "birthday": "Birthday",
+    "anniversary": "Anniversary",
+    "other": "Other"
   },
   "create": {
     "title": "Issue an admin gift",

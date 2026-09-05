@@ -38,6 +38,8 @@ Apple, Google, promo, and referral entitlements.
       referral. A gift summary failure leaves referral available.
 - [x] Flutter has a native gift inbox and free-invitation route. It supports
       named paid gift claims but never starts paid checkout.
+- [x] Gifts can have no occasion, a fixed Birthday or Anniversary greeting, or
+      a sender-written Other greeting. The private note stays optional.
 
 ## Context / links
 
@@ -64,6 +66,7 @@ Apple, Google, promo, and referral entitlements.
 | 2026-08-30 | Review repair: fixed dashboard referral flashes and stale mobile summaries, expiry and sender-deletion edges in incoming-gift selection, Unicode recipient comparison, malformed Unicode claim credentials, and database enforcement for new recipient emails. Removed claim credentials from artwork and put replacement artwork in a new cache namespace. |
 | 2026-08-30 | Final local verification passed: backend 4,165 passed/4 skipped at 95.44% coverage; admin 230 tests; Flutter 271 tests; web lint, tests, and build passed; the flag-enabled admin build, migration, architecture, docs, and diff checks passed. Hosted launch work remains gated below. |
 | 2026-08-30 | Enabled gift voucher issuance and web, admin, and Flutter visibility by default. An explicit `false` remains an emergency rollback. |
+| 2026-08-30 | Added migration 062 and nullable gift occasions across API, web, admin, Flutter, and cache-versioned artwork. Generic gifts remain blank by default. |
 
 ## Decision log
 
@@ -94,9 +97,10 @@ Items pushed to `docs/exec-plans/tech-debt-tracker.md`:
 
 ## Production launch gates
 
-1. Apply migrations 056 and 061 to hosted Supabase, then verify the tables,
-   RPCs, index, and RLS. If 056 portrait cache objects exist, remove them
-   after deploying the credential-free artwork layout.
+1. Apply migrations 056, 061, and 062 to hosted Supabase, then verify the
+   tables, RPCs, index, occasion constraint, and RLS. If 056 portrait cache
+   objects exist, remove them after deploying the credential-free artwork
+   layout.
 2. Create the three one-time Stripe Prices. Configure Checkout, asynchronous
    payment, refund, and dispute webhook events.
 3. Set the price IDs and dedicated gift token secret. Backend creation is

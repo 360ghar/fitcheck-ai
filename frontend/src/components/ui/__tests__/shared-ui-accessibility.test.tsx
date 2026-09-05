@@ -34,7 +34,7 @@ describe('shared UI accessibility and responsive contracts', () => {
     )
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveClass('h-[85vh]')
+    expect(dialog).toHaveClass('h-[85dvh]')
     expect(dialog.style.height).toBe('')
   })
 
@@ -57,7 +57,7 @@ describe('shared UI accessibility and responsive contracts', () => {
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Filters and sort' }))
-    expect(screen.getByRole('dialog')).toHaveClass('h-[85vh]')
+    expect(screen.getByRole('dialog')).toHaveClass('h-[85dvh]')
   })
 
   it('supports roving keyboard navigation for horizontally scrollable tabs', async () => {

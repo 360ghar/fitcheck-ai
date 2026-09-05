@@ -3,12 +3,13 @@
  */
 
 import { useState } from 'react';
-import { Download, CheckCircle, RefreshCw, X, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Download, CheckCircle, RefreshCw, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { usePhotoshoot } from '@/stores/photoshootStore';
 import { useToast } from '@/components/ui/use-toast';
 import { imageFetchOptions } from '@/lib/sessionCookie';
+import { downloadBlob } from '@/lib/utils';
 
 // Transparent 1x1 pixel as placeholder for missing images
 const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -45,16 +46,7 @@ export function PhotoshootResultsStep() {
       // (`credentials: 'include'`); presigned R2 URLs must stay credential-free.
       const response = await fetch(src, imageFetchOptions(src));
       const blob = await response.blob();
-
-      // Create download link
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `photoshoot_${sessionId}_${index + 1}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `photoshoot_${sessionId}_${index + 1}.png`);
 
       if (showToast) {
         toast({ title: 'Downloaded', description: 'Image saved successfully' });
@@ -199,7 +191,7 @@ export function PhotoshootResultsStep() {
 
       {/* Fullscreen Preview Dialog */}
       <Dialog open={previewIndex !== null} onOpenChange={() => setPreviewIndex(null)}>
-        <DialogContent className="max-w-4xl p-0 bg-black/95 border-none">
+        <DialogContent className="max-w-4xl bg-black/95 border-none">
           <DialogTitle className="sr-only">Image Preview</DialogTitle>
           {previewIndex !== null && generatedImages[previewIndex] && (
             <div className="relative">
@@ -208,17 +200,9 @@ export function PhotoshootResultsStep() {
                 alt={`Preview ${generatedImages[previewIndex].index + 1}`}
                 width={1536}
                 height={2048}
-                className="w-full h-auto max-h-[80vh] object-contain"
+                className="w-full h-auto max-h-[80dvh] object-contain"
               />
-              <button
-                type="button"
-                onClick={() => setPreviewIndex(null)}
-                className="absolute top-4 right-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/70 touch-target"
-                aria-label="Close preview"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+              <div className="absolute bottom-[calc(1rem+var(--safe-area-bottom))] left-1/2 -translate-x-1/2">
                 <Button
                   onClick={() => {
                     downloadImage(previewIndex, true);

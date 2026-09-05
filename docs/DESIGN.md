@@ -1,7 +1,7 @@
 # Design
 
 Status: draft  
-Last updated: 2026-08-08
+Last updated: 2026-08-31
 
 Visual and interaction direction for FitCheck web (and guidance for mobile parity).
 
@@ -38,6 +38,29 @@ inventing its own phrasing per component:
 - Tailwind + Radix/shadcn-style primitives in `frontend/src/components/ui/`
 - Feature components under `frontend/src/components/<feature>/`
 - Avoid inventing a second design system ad hoc; extend existing primitives
+
+## Mobile layering & viewport conventions
+
+Locked in by the 2026-08-31 responsive wave (regression tests in
+`frontend/src/components/ui/__tests__/responsive-sweep.test.tsx`).
+
+- **Z-ladder (never exceed your layer):** skip-link 200 > lightbox 100 = toast
+  100 > Radix overlays 50 > header/sidebar/JobPill 40 > BottomNav 30. Pick the
+  lowest rung that clears your neighbors; do not invent new values.
+- **Viewport height:** `svh` for mobile app/auth shells, `dvh` for capped
+  scroll regions inside overlays. Raw `vh` and `min-h-screen` are forbidden on
+  mobile-visible surfaces (they jump when the URL bar shows/hides).
+- **Overlay chrome uses safe-area vars:** dialogs and sheets pad and place
+  close buttons with `var(--safe-area-top)` / `var(--safe-area-bottom)`, never
+  bare fixed offsets.
+- **44px touch targets:** reach the minimum via the `.touch-target` class or
+  the `.hit-expand` utility (invisible `::after` hit-area; override the inset
+  per side with the `--hit` / `--hit-x` / `--hit-y` vars) — not by visually
+  enlarging it.
+- **Horizontal rails:** use the `.scroll-rail` utility so rails scroll on the
+  x-axis only (no page scroll chaining) and get a consistent affordance.
+- **Dialogs are full-screen below `sm`:** mobile dialogs slide up edge-to-edge
+  with safe-area padding; the centered modal is the `sm:` behavior.
 
 ## Agent guidance
 

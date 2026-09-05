@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ZoomableImage } from '@/components/ui/zoomable-image'
+import { EmptyState } from '@/components/ui/empty-state'
 import { normalizeBoundingBoxPercent } from '@/lib/crop-from-bounding-box'
 import { ExtractedItemCard } from './ExtractedItemCard'
 import type { DetectedItem } from '@/types'
@@ -162,7 +163,7 @@ export function ExtractedItemsGrid({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-xs"
+                  className="min-h-11 px-3 text-xs"
                   onClick={() => {
                     group.itemIds.forEach((itemId) => {
                       onItemUpdate(itemId, { includeInWardrobe: true })
@@ -175,7 +176,7 @@ export function ExtractedItemsGrid({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-xs"
+                  className="min-h-11 px-3 text-xs"
                   onClick={() => {
                     group.itemIds.forEach((itemId) => {
                       onItemUpdate(itemId, { includeInWardrobe: false })
@@ -281,13 +282,11 @@ export function ExtractedItemsGrid({
         {/* Items grid */}
         <div className="flex-1 min-w-0 overflow-y-auto">
           {activeItems.length === 0 ? (
-            <Card className="p-8 text-center">
-              <p className="text-muted-foreground mb-4">No items to save</p>
-              <Button variant="outline" onClick={onBack}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                {backLabel || 'Upload Different Image'}
-              </Button>
-            </Card>
+            <EmptyState
+              title="No items to save"
+              secondaryLabel={backLabel || 'Upload Different Image'}
+              onSecondary={onBack}
+            />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
               {activeItems.map((item) => (

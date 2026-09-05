@@ -187,7 +187,7 @@ export async function render(
   const markup = renderToString(
     <StrictMode>
       <HelmetProvider context={helmetContext}>
-        <ThemeProvider defaultTheme="system">
+        <ThemeProvider defaultTheme="light">
           <QueryClientProvider client={queryClient ?? new QueryClient()}>
             <StaticRouter location={pathname}>
               <TooltipProvider delayDuration={0}>

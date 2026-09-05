@@ -285,11 +285,14 @@ page chunk. `App.tsx` does both.
 ### Gift voucher sharing
 
 The protected gifts studio supports paid and free issue, recipient name and
-email, live premium preview, Checkout return, incoming named claims,
-sent/received history, edit, rotation, copy, native Web Share, and portrait
-download. New vouchers require recipient email. The email is not rendered in
-the sent list, public claim page, artwork, or analytics. The secure link is
-shared separately; portrait artwork contains no claim credential.
+email, optional occasion, live premium preview, Checkout return, incoming
+named claims, sent/received history, edit, rotation, copy, native Web Share,
+and portrait download. No occasion is the default. Birthday and anniversary
+show fixed greetings; Other requires a 1–80 character greeting. The private
+note is optional for every choice. New vouchers require recipient email. The
+email is not rendered in the sent list, public claim page, artwork, or
+analytics. The secure link is shared separately; portrait artwork contains no
+claim credential.
 
 DashboardPage requests the gift summary only for a verified signed-in account.
 It shows one non-dismissible card in this order: incoming gift, free

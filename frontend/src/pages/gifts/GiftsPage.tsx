@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Check,
   Copy,
@@ -19,16 +20,21 @@ import {
   createPaidGiftCheckout,
   downloadGiftArtwork,
   fulfillGiftCheckout,
+  giftErrorMessage,
+  giftIncomingTitle,
+  giftOccasionGreeting,
+  giftShareText,
+  giftTermLabel,
   getGiftCatalog,
   getGiftDashboardSummary,
   getReceivedGifts,
   getSentGifts,
-  giftErrorMessage,
   rotateGiftLink,
   updateGift,
   type GiftAllowance,
   type GiftCatalogOption,
   type GiftDuration,
+  type GiftOccasion,
   type GiftVoucher,
 } from '@/api/gifts'
 import { GiftCardPreview } from '@/components/gifts/GiftCardPreview'
@@ -39,13 +45,21 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { EmptyState } from '@/components/ui/empty-state'
 import { copyTextToClipboard } from '@/lib/clipboard'
-import { cn } from '@/lib/utils'
+import { cn, formatUsd } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 
 type GiftMode = 'complimentary' | 'paid'
+
+const GIFT_OCCASIONS = [
+  { value: 'birthday', label: 'Birthday' },
+  { value: 'anniversary', label: 'Anniversary' },
+  { value: 'other', label: 'Other' },
+] as const satisfies readonly { value: GiftOccasion; label: string }[]
 
 const FALLBACK_CATALOG: GiftCatalogOption[] = [
   { duration_months: 1, retail_value_cents: 2_000, currency: 'USD', paid_available: false },
@@ -69,16 +83,38 @@ function previewExpiry(): string {
   return date.toISOString()
 }
 
-function termLabel(duration: GiftDuration): string {
-  if (duration === 1) return '1 month'
-  if (duration === 12) return '1 year'
-  return `${duration} months`
-}
-
 function statusLabel(voucher: GiftVoucher): string {
   if (voucher.entitlement_status === 'active') return 'Active now'
   if (voucher.entitlement_status === 'queued') return 'Queued'
   return voucher.status.replace(/_/g, ' ')
+}
+
+interface VoucherSummaryProps {
+  voucher: GiftVoucher
+  /** "3 months Pro" in the ledger, "3 months of FitCheck Pro" in the inbox. */
+  termText: string
+  className?: string
+  /** The gift inbox omits the sender's private note. */
+  showMessage?: boolean
+}
+
+/**
+ * Shared voucher row metadata: term + value line, occasion greeting, and the
+ * private note. Used by the gift inbox and the sent/received ledger.
+ */
+function VoucherSummary({ voucher, termText, className, showMessage = true }: VoucherSummaryProps) {
+  const occasionGreeting = giftOccasionGreeting(voucher.occasion, voucher.occasion_greeting)
+  return (
+    <>
+      <p className={cn('text-sm text-muted-foreground', className)}>
+        {termText} · {formatUsd(voucher.retail_value_cents)} value
+      </p>
+      {occasionGreeting && <p className="mt-1 text-sm font-medium text-primary">{occasionGreeting}</p>}
+      {showMessage && voucher.message && (
+        <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">“{voucher.message}”</p>
+      )}
+    </>
+  )
 }
 
 interface HistoryListProps {
@@ -104,17 +140,16 @@ function HistoryList({
 }: HistoryListProps) {
   if (!items.length) {
     return (
-      <div className="rounded-md border border-dashed border-border px-5 py-12 text-center">
-        <Gift className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
-        <p className="mt-3 font-display text-lg font-semibold">
-          {kind === 'sent' ? 'Your first gift starts here' : 'No gifts received yet'}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {kind === 'sent'
+      <EmptyState
+        icon={Gift}
+        className="rounded-md border-dashed"
+        title={kind === 'sent' ? 'Your first gift starts here' : 'No gifts received yet'}
+        description={
+          kind === 'sent'
             ? 'Create a private FitCheck Pro invitation above.'
-            : 'Claimed and queued gifts will appear here.'}
-        </p>
-      </div>
+            : 'Claimed and queued gifts will appear here.'
+        }
+      />
     )
   }
 
@@ -137,10 +172,11 @@ function HistoryList({
                   {statusLabel(voucher)}
                 </Badge>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {termLabel(voucher.duration_months)} Pro · ${(voucher.retail_value_cents / 100).toFixed(0)} value
-              </p>
-              {voucher.message && <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">“{voucher.message}”</p>}
+              <VoucherSummary
+                voucher={voucher}
+                termText={`${giftTermLabel(voucher.duration_months)} Pro`}
+                className="mt-1"
+              />
             </div>
 
             <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -177,6 +213,7 @@ function HistoryList({
 
 export default function GiftsPage() {
   const user = useAuthStore((state) => state.user)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [catalog, setCatalog] = useState<GiftCatalogOption[]>(FALLBACK_CATALOG)
   const [allowances, setAllowances] = useState<GiftAllowance[]>([])
   const [sent, setSent] = useState<GiftVoucher[]>([])
@@ -189,6 +226,8 @@ export default function GiftsPage() {
   const [toName, setToName] = useState('')
   const [recipientEmail, setRecipientEmail] = useState('')
   const [message, setMessage] = useState('')
+  const [occasion, setOccasion] = useState<GiftOccasion | null>(null)
+  const [occasionGreeting, setOccasionGreeting] = useState('')
   const [editing, setEditing] = useState<GiftVoucher | null>(null)
   const [created, setCreated] = useState<GiftVoucher | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -208,6 +247,7 @@ export default function GiftsPage() {
       fromName.trim() &&
       toName.trim() &&
       (editing || recipientEmail.trim()) &&
+      (occasion !== 'other' || occasionGreeting.trim()) &&
       (editing || (mode === 'complimentary' ? freeRemaining > 0 : selected.paid_available)),
   )
 
@@ -239,37 +279,42 @@ export default function GiftsPage() {
   }, [loadData])
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const requestedMode = params.get('mode')
-    const requestedDuration = Number(params.get('duration'))
-    const requestedClaim = params.get('claim')
+    if (!fromName && user?.full_name) setFromName(user.full_name)
+  }, [user?.full_name, fromName])
+
+  useEffect(() => {
+    const requestedMode = searchParams.get('mode')
+    const requestedDuration = Number(searchParams.get('duration'))
+    const requestedClaim = searchParams.get('claim')
     if (requestedMode === 'complimentary') setMode('complimentary')
     if (requestedDuration === 1 || requestedDuration === 3 || requestedDuration === 12) {
       setDuration(requestedDuration)
     }
     if (requestedClaim) setSelectedIncomingId(requestedClaim)
-    const checkout = params.get('checkout')
-    const sessionId = params.get('session_id')
+    const checkout = searchParams.get('checkout')
+    const sessionId = searchParams.get('session_id')
     if (checkout === 'cancelled') {
       setNotice('Checkout was cancelled. Your gift was not issued.')
-      window.history.replaceState(null, document.title, '/gifts')
+      setSearchParams({}, { replace: true })
       return
     }
     if (checkout !== 'success' || !sessionId) return
 
+    // Consume the params before the async fulfill so StrictMode's second
+    // effect pass (or a fast re-render) cannot fulfill the checkout twice.
+    setSearchParams({}, { replace: true })
     setIsSubmitting(true)
     fulfillGiftCheckout(sessionId)
       .then((voucher) => {
         setCreated(voucher)
         setNotice('Payment confirmed. Your private gift is ready to share.')
-        window.history.replaceState(null, document.title, '/gifts')
         return loadData()
       })
       .catch((checkoutError) => {
         setError(giftErrorMessage(checkoutError, 'Payment confirmation is still pending. Refresh this page shortly.'))
       })
       .finally(() => setIsSubmitting(false))
-  }, [loadData])
+  }, [loadData, searchParams, setSearchParams])
 
   useEffect(() => {
     if (!selectedIncomingId || !incoming.some((voucher) => voucher.id === selectedIncomingId)) return
@@ -287,6 +332,8 @@ export default function GiftsPage() {
     setToName('')
     setRecipientEmail('')
     setMessage('')
+    setOccasion(null)
+    setOccasionGreeting('')
     requestIdRef.current = null
   }
 
@@ -302,6 +349,8 @@ export default function GiftsPage() {
           from_name: fromName.trim(),
           to_name: toName.trim(),
           message: message.trim() || null,
+          occasion,
+          occasion_greeting: occasion === 'other' ? occasionGreeting.trim() : null,
         })
         setCreated(updated)
         setNotice('Gift details updated. The artwork has been regenerated.')
@@ -316,6 +365,8 @@ export default function GiftsPage() {
         to_name: toName.trim(),
         recipient_email: recipientEmail.trim(),
         message: message.trim() || undefined,
+        occasion: occasion || undefined,
+        occasion_greeting: occasion === 'other' ? occasionGreeting.trim() || undefined : undefined,
         client_request_id: requestIdRef.current || newRequestId(),
       }
       requestIdRef.current = body.client_request_id
@@ -352,7 +403,7 @@ export default function GiftsPage() {
       try {
         await navigator.share({
           title: `A FitCheck Pro gift for ${voucher.to_name}`,
-          text: `${voucher.from_name} sent you ${termLabel(voucher.duration_months)} of FitCheck Pro.`,
+          text: giftShareText(voucher),
           url: voucher.share_url,
         })
         return
@@ -381,6 +432,8 @@ export default function GiftsPage() {
     setToName(voucher.to_name)
     setRecipientEmail('')
     setMessage(voucher.message || '')
+    setOccasion(voucher.occasion || null)
+    setOccasionGreeting(voucher.occasion_greeting || '')
     setCreated(null)
     setNotice('Editing an unclaimed gift. Its term and value cannot change.')
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -421,7 +474,7 @@ export default function GiftsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+    <div className="app-page max-w-[1440px] !py-6 lg:!px-10 lg:!py-10">
       <PageHeader
         title="Gift FitCheck Pro"
         description="Create a private fashion-house invitation for someone you care about."
@@ -453,7 +506,7 @@ export default function GiftsPage() {
             <CardContent className="p-5 sm:p-6">
               <p className="font-display text-xs font-bold uppercase tracking-[0.24em] text-primary">Gift inbox</p>
               <h2 id="incoming-gifts-title" className="mt-2 font-display text-2xl font-bold">
-                {incoming.length === 1 ? 'A gift is waiting for you' : `${incoming.length} gifts are waiting for you`}
+                {giftIncomingTitle(incoming.length)}
               </h2>
               <div className="mt-4 space-y-3">
                 {incoming.map((voucher) => (
@@ -466,9 +519,12 @@ export default function GiftsPage() {
                   >
                     <div>
                       <p className="font-semibold">From {voucher.from_name}</p>
-                      <p className="mt-0.5 text-sm text-muted-foreground">
-                        {termLabel(voucher.duration_months)} of FitCheck Pro · ${(voucher.retail_value_cents / 100).toFixed(0)} value
-                      </p>
+                      <VoucherSummary
+                        voucher={voucher}
+                        termText={`${giftTermLabel(voucher.duration_months)} of FitCheck Pro`}
+                        className="mt-0.5"
+                        showMessage={false}
+                      />
                     </div>
                     <Button onClick={() => void claimIncoming(voucher)} disabled={busyId === voucher.id}>
                       {busyId === voucher.id ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Gift aria-hidden="true" />}
@@ -489,7 +545,7 @@ export default function GiftsPage() {
               01 / Choose the invitation
             </p>
             <h2 className="mt-2 font-display text-2xl font-bold tracking-tight">How much Pro will you give?</h2>
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-4 grid grid-cols-1 xs:grid-cols-3 gap-2">
               {catalog.map((option) => {
                 const remaining = allowances.find((item) => item.duration_months === option.duration_months)?.remaining_count || 0
                 return (
@@ -510,9 +566,9 @@ export default function GiftsPage() {
                       editing && 'cursor-not-allowed opacity-70',
                     )}
                   >
-                    <span className="block font-display text-base font-bold">{termLabel(option.duration_months)}</span>
+                    <span className="block font-display text-base font-bold">{giftTermLabel(option.duration_months)}</span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      ${(option.retail_value_cents / 100).toFixed(0)} value
+                      {formatUsd(option.retail_value_cents)} value
                     </span>
                     <span className="mt-2 block text-xs font-semibold text-primary">{remaining} free left</span>
                   </button>
@@ -561,7 +617,7 @@ export default function GiftsPage() {
                   <Send className="h-5 w-5 text-primary" aria-hidden="true" />
                   <span className="mt-3 block font-display font-bold">Purchase this gift</span>
                   <span className="mt-1 block text-sm text-muted-foreground">
-                    ${(selected.retail_value_cents / 100).toFixed(0)} once. No expiry before claim.
+                    {formatUsd(selected.retail_value_cents)} once. No expiry before claim.
                   </span>
                 </button>
               </div>
@@ -631,6 +687,48 @@ export default function GiftsPage() {
                   }}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="gift-occasion">Occasion (optional)</Label>
+                <Select
+                  value={occasion ?? 'none'}
+                  onValueChange={(value) => {
+                    const nextOccasion = GIFT_OCCASIONS.find((option) => option.value === value)?.value ?? null
+                    setOccasion(nextOccasion)
+                    if (nextOccasion !== 'other') setOccasionGreeting('')
+                    resetIntent()
+                  }}
+                >
+                  <SelectTrigger id="gift-occasion"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No occasion</SelectItem>
+                    {GIFT_OCCASIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {occasion === 'other' && (
+                <div className="space-y-2 sm:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="gift-occasion-greeting">Card greeting</Label>
+                    <span id="gift-occasion-greeting-count" className="text-xs text-muted-foreground">{occasionGreeting.length}/80</span>
+                  </div>
+                  <Input
+                    id="gift-occasion-greeting"
+                    name="occasion_greeting"
+                    value={occasionGreeting}
+                    maxLength={80}
+                    required
+                    placeholder="Congratulations!"
+                    aria-describedby="gift-occasion-greeting-count"
+                    onChange={(event) => {
+                      setOccasionGreeting(event.target.value)
+                      resetIntent()
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">This appears as the card heading exactly as written.</p>
+                </div>
+              )}
               <div className="space-y-2 sm:col-span-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="gift-message">Private note (optional)</Label>
@@ -656,7 +754,7 @@ export default function GiftsPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button type="submit" size="lg" disabled={!canCreate || isSubmitting} className="sm:min-w-52">
               {isSubmitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : editing ? <Edit3 aria-hidden="true" /> : <Gift aria-hidden="true" />}
-              {editing ? 'Save gift details' : mode === 'paid' ? `Continue to pay $${selected.retail_value_cents / 100}` : 'Create free gift'}
+              {editing ? 'Save gift details' : mode === 'paid' ? `Continue to pay ${formatUsd(selected.retail_value_cents)}` : 'Create free gift'}
             </Button>
             {editing && (
               <Button type="button" variant="outline" size="lg" onClick={resetForm}>
@@ -676,6 +774,8 @@ export default function GiftsPage() {
               fromName={fromName}
               toName={toName}
               message={message}
+              occasion={occasion}
+              occasionGreeting={occasionGreeting}
               duration={duration}
               retailValueCents={selected.retail_value_cents}
               expiresAt={mode === 'complimentary' && !editing ? freeExpiry : editing?.expires_at}

@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { withAuthContext } from '@/pages/auth/authRedirect'
 import { useAuthStore, useIsAuthenticated } from '@/stores/authStore'
+import { formatUsd } from '@/lib/utils'
 import {
   captureGiftClaimCredentialFromLocation,
   forgetGiftClaimCredential,
@@ -157,7 +158,7 @@ export default function GiftClaimPage() {
         noIndex
       />
 
-      <main className="min-h-screen bg-[#f7f2e9] px-4 py-5 text-[#151411] sm:px-6 lg:px-10 lg:py-8">
+      <main className="min-h-svh bg-[#f7f2e9] px-4 py-5 text-[#151411] sm:px-6 lg:px-10 lg:py-8">
         <div className="mx-auto max-w-6xl">
           <header className="flex items-center justify-between gap-4 border-b border-[#d8cfc1] pb-5">
             <Link to="/" className="font-display text-lg font-extrabold tracking-[-0.04em] text-[#151411]">
@@ -169,7 +170,7 @@ export default function GiftClaimPage() {
           </header>
 
           {isLoading ? (
-            <div className="grid min-h-[70vh] place-items-center">
+            <div className="grid min-h-[70dvh] place-items-center">
               <div className="text-center">
                 <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#e00016]" aria-hidden="true" />
                 <p className="mt-3 text-sm text-[#6b655d]">Opening private gift…</p>
@@ -189,6 +190,8 @@ export default function GiftClaimPage() {
                   fromName={voucher.from_name}
                   toName={voucher.to_name}
                   message={voucher.message}
+                  occasion={voucher.occasion}
+                  occasionGreeting={voucher.occasion_greeting}
                   duration={voucher.duration_months}
                   retailValueCents={voucher.retail_value_cents}
                   expiresAt={voucher.expires_at}
@@ -242,7 +245,7 @@ export default function GiftClaimPage() {
                       </div>
                       <div>
                         <p className="text-xs uppercase tracking-[0.16em] text-[#6b655d]">Retail value</p>
-                        <p className="mt-1 font-display text-lg font-bold">${voucher.retail_value_cents / 100}</p>
+                        <p className="mt-1 font-display text-lg font-bold">{formatUsd(voucher.retail_value_cents)}</p>
                       </div>
                     </div>
 

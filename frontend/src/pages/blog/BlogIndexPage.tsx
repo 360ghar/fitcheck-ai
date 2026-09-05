@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import { BlogImage } from '@/components/blog/BlogImage'
 import SEO from '@/components/seo/SEO'
-import { cn } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { Calendar, Clock, ArrowRight } from 'lucide-react'
 import { useBlogCategories } from '@/hooks/useBlog'
 import { useInfiniteBlogPosts } from '@/hooks/useInfiniteBlogPosts'
@@ -107,7 +107,7 @@ export default function BlogIndexPage() {
                     value={searchValue}
                     onChange={(event) => setSearchValue(event.target.value)}
                     placeholder="Search articles…"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                   />
                   <div className="flex gap-2">
                     <button type="submit" className="flex-1 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary-pressed sm:flex-none">
@@ -130,20 +130,21 @@ export default function BlogIndexPage() {
                   className={cn(
                     'flex flex-wrap justify-center gap-2',
                     // Stepped reservation: pills wrap to ~3 rows on phones
-                    // (~136px), 1–2 rows on tablets, 1 row on desktop. Keeps
-                    // the CLS guard honest if the pill count changes.
+                    // (~156px at the 44px pill height), 1–2 rows on tablets,
+                    // 1 row on desktop. Keeps the CLS guard honest if the
+                    // pill count changes.
                     (isLoadingCategories || (categories?.length ?? 0) > 0) &&
-                      'min-h-[8.5rem] xs:min-h-[7rem] sm:min-h-[5.5rem] md:min-h-11'
+                      'min-h-[9.75rem] xs:min-h-[8rem] sm:min-h-[6.5rem] md:min-h-11'
                   )}
                 >
                   {isLoadingCategories ? (
-                    // Skeleton pills fill the reserved space (same 36px pill
+                    // Skeleton pills fill the reserved space (same 44px pill
                     // height + wrap) instead of an empty band.
                     Array.from({ length: 6 }).map((_, i) => (
                       <span
                         key={i}
                         aria-hidden="true"
-                        className="h-9 w-20 rounded-full bg-stone-200 dark:bg-stone-800 animate-pulse"
+                        className="h-11 w-20 rounded-full bg-stone-200 dark:bg-stone-800 animate-pulse"
                       />
                     ))
                   ) : (
@@ -152,7 +153,7 @@ export default function BlogIndexPage() {
                       <>
                         <Link
                           to="/blog"
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${!category
+                          className={`inline-flex min-h-11 items-center px-4 py-2 rounded-full text-sm font-medium transition-colors border ${!category
                             ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
                             : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
                             }`}
@@ -166,7 +167,7 @@ export default function BlogIndexPage() {
                             <Link
                               key={cat}
                               to={`/blog/category/${catSlug}`}
-                              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${isActive
+                              className={`inline-flex min-h-11 items-center px-4 py-2 rounded-full text-sm font-medium transition-colors border ${isActive
                                 ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
                                 : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
                                 }`}
@@ -337,18 +338,6 @@ export default function BlogIndexPage() {
       </div>
     </>
   )
-}
-
-/**
- * Format ISO date string to display format
- */
-function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }
 
 export function slugifyCategory(category: string): string {

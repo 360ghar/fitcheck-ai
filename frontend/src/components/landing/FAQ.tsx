@@ -99,7 +99,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         {/* Height animation rides on Radix's --radix-collapsible-content-height
             var via the accordion-down/up keyframes in tailwind.config.ts. */}
         <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-          <div className="space-y-2 pb-5 pr-8 leading-relaxed text-body">
+          <div className="space-y-2 pb-5 pr-8 leading-relaxed text-body [overflow-wrap:anywhere]">
             <p>{answer}</p>
             {question.includes('Acloset') && (
               <p className="text-sm">
@@ -172,7 +172,7 @@ export default function FAQ() {
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8">
         <AnimatedSection className="reveal min-w-0 lg:col-span-4">
           <div className="lg:sticky lg:top-24">
-            <SectionKicker>FAQ</SectionKicker>
+            <SectionKicker tone="amber">FAQ</SectionKicker>
             <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
               Clear answers before you upload
             </h2>

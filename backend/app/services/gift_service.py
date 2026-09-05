@@ -36,6 +36,7 @@ from app.models.gift import (
     GiftUpdate,
     GiftVoucherResponse,
     PaidGiftCheckoutCreate,
+    presentation_payload,
 )
 from app.models.subscription import PlanType, SubscriptionResponse, SubscriptionStatus
 from app.services.gift_artwork_service import GiftArtworkService
@@ -173,6 +174,8 @@ class GiftService:
             from_name=voucher["from_name"],
             to_name=voucher["to_name"],
             message=voucher.get("message"),
+            occasion=voucher.get("occasion"),
+            occasion_greeting=voucher.get("occasion_greeting"),
             status=GiftStatus(effective_status),
             payment_status=voucher.get("payment_status") if include_commerce else None,
             issued_at=parse_utc_datetime(voucher.get("issued_at")),
@@ -221,6 +224,9 @@ class GiftService:
         source: str,
     ) -> bool:
         stored_message = str(voucher.get("message") or "").strip() or None
+        stored_occasion = str(voucher.get("occasion") or "").strip() or None
+        stored_occasion_greeting = str(voucher.get("occasion_greeting") or "").strip() or None
+        request_occasion = request.occasion.value if request.occasion else None
         return (
             voucher.get("source") == source
             and int(voucher.get("duration_months") or 0) == request.duration_months
@@ -228,6 +234,8 @@ class GiftService:
             and str(voucher.get("to_name") or "").strip() == request.to_name
             and str(voucher.get("recipient_email") or "").strip().lower() == request.recipient_email
             and stored_message == request.message
+            and stored_occasion == request_occasion
+            and stored_occasion_greeting == request.occasion_greeting
         )
 
     @classmethod
@@ -284,6 +292,8 @@ class GiftService:
             "p_to_name": request.to_name,
             "p_recipient_email": request.recipient_email,
             "p_message": request.message or "",
+            "p_occasion": request.occasion.value if request.occasion else None,
+            "p_occasion_greeting": request.occasion_greeting or "",
             "p_client_request_id": request.client_request_id,
             "p_expires_at": (now + relativedelta(months=6)).isoformat(),
         }
@@ -358,6 +368,8 @@ class GiftService:
                 "to_name": request.to_name,
                 "recipient_email": request.recipient_email,
                 "message": request.message,
+                "occasion": request.occasion.value if request.occasion else None,
+                "occasion_greeting": request.occasion_greeting,
                 "status": "pending",
                 "payment_status": "pending",
                 "client_request_id": request.client_request_id,
@@ -792,7 +804,7 @@ class GiftService:
         voucher = await cls.get_owned(voucher_id, user_id, db)
         if voucher.get("status") != "issued":
             raise ValidationError("Only an unclaimed gift can be edited")
-        payload = request.model_dump(exclude_unset=True)
+        payload = presentation_payload(voucher, request)
         payload["artwork_version"] = int(voucher.get("artwork_version") or 1) + 1
         payload["updated_at"] = utcnow_iso()
         result = await asyncio.to_thread(

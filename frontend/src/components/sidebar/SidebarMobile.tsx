@@ -34,7 +34,7 @@ export function SidebarMobile() {
 
   return (
     <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-      <SheetContent side="left" className="flex w-72 flex-col p-0">
+      <SheetContent side="left" className="flex w-72 flex-col p-0 pt-[calc(1rem+var(--safe-area-top))]">
         <SheetHeader className="border-b border-border px-2 py-3">
           <SheetTitle className="sr-only">Navigation menu</SheetTitle>
           <SidebarLogo />

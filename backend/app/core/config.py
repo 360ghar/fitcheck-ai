@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # running (VERSION alone never changes deploy-to-deploy).
     RAILWAY_GIT_COMMIT_SHA: str = "unknown"
 
+    # Error tracking (Sentry). Optional: an empty SENTRY_DSN disables Sentry
+    # entirely (init_sentry() in app/core/sentry_config.py becomes a no-op).
+    # The traces rate matches the web app's 0.1. See backend/.env.example.
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
     # CORS
     # First-party origins that are ALWAYS allowed. BACKEND_CORS_ORIGINS is the
     # deploy-time source of truth, but a stale env override must not silently
@@ -202,6 +208,12 @@ class Settings(BaseSettings):
     # directly to Google, so only model names are configurable.
     AI_GEMINI_API_KEY: Optional[str] = None
     AI_GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    # Hard deadline for ONE embeddings API call (see EmbeddingService). The
+    # google-genai sync client retries 429/5xx with internal backoff, so a
+    # stalled call can hold a worker thread for minutes — far past every
+    # client's request timeout. Failing bounded lets callers degrade (e.g.
+    # /items/check-duplicates falls back to text matching) instead of hanging.
+    AI_EMBEDDING_TIMEOUT_S: float = 10.0
     AI_GEMINI_CHAT_MODEL: str = "gemini-3.6-flash"
     AI_GEMINI_VISION_MODEL: Optional[str] = None            # inherits AI_GEMINI_CHAT_MODEL when blank
     AI_GEMINI_VISION_FALLBACK_MODEL: Optional[str] = None
@@ -252,13 +264,13 @@ class Settings(BaseSettings):
 
     AI_IMAGE_API_URL: Optional[str] = None
     AI_IMAGE_API_KEY: Optional[str] = None
-    AI_IMAGE_MODEL: str = "agnes-image-2.1-flash"
+    AI_IMAGE_MODEL: str = "agnes-image-2.5-flash"
     # "chat" (response_modalities on /chat/completions) | "images" (/images/generations)
     AI_IMAGE_API_STYLE: str = "images"
 
     AI_IMAGE_FALLBACK_API_URL: Optional[str] = None
     AI_IMAGE_FALLBACK_API_KEY: Optional[str] = None
-    AI_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.0-flash"
+    AI_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.1-flash"
 
     # Max output tokens per AI call. Both current providers comfortably exceed
     # this: gemini-3.6-flash caps at 64K output, the Agnes gateway (agnes-2.5-

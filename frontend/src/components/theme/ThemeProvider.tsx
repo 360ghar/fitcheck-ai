@@ -33,8 +33,9 @@ interface ThemeProviderProps {
 export function ThemeProvider({
   children,
   // Matches the pre-hydration script in index.html. Keep these in step or the
-  // first paint disagrees with the first render.
-  defaultTheme = 'system',
+  // first paint disagrees with the first render. Light is the product default;
+  // `system` remains an explicit choice via the theme toggle.
+  defaultTheme = 'light',
 }: ThemeProviderProps) {
   // Initialize from localStorage or default
   const [theme, setThemeState] = useState<Theme>(() => {

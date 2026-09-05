@@ -506,6 +506,28 @@
             "title": "Note",
             "type": "string"
           },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
+          },
           "recipient_email": {
             "format": "email",
             "title": "Recipient Email",
@@ -3166,6 +3188,28 @@
             ],
             "title": "Message"
           },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
+          },
           "recipient_email": {
             "format": "email",
             "title": "Recipient Email",
@@ -3909,6 +3953,15 @@
         "title": "GiftClaimRequest",
         "type": "object"
       },
+      "GiftOccasion": {
+        "enum": [
+          "birthday",
+          "anniversary",
+          "other"
+        ],
+        "title": "GiftOccasion",
+        "type": "string"
+      },
       "GiftUpdate": {
         "properties": {
           "from_name": {
@@ -3935,6 +3988,28 @@
               }
             ],
             "title": "Message"
+          },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
           },
           "to_name": {
             "anyOf": [
@@ -5643,6 +5718,28 @@
               }
             ],
             "title": "Message"
+          },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
           },
           "recipient_email": {
             "format": "email",

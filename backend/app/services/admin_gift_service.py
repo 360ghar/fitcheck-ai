@@ -13,7 +13,7 @@ from supabase import Client
 
 from app.core.config import settings
 from app.core.exceptions import NotFoundError, PermissionDeniedError, ValidationError
-from app.models.gift import AdminGiftCreate, GiftUpdate
+from app.models.gift import AdminGiftCreate, GiftUpdate, presentation_payload
 from app.services.gift_service import CATALOG, GiftService, _rows
 from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
 
@@ -277,6 +277,8 @@ class AdminGiftService:
             "to_name": body.to_name,
             "recipient_email": body.recipient_email,
             "message": body.message,
+            "occasion": body.occasion.value if body.occasion else None,
+            "occasion_greeting": body.occasion_greeting,
             "status": "issued",
             "payment_status": "not_applicable",
             "client_request_id": f"admin:{uuid4()}",
@@ -297,7 +299,7 @@ class AdminGiftService:
         voucher = await cls.get(voucher_id, db)
         if voucher.get("status") != "issued":
             raise ValidationError("Only an unclaimed gift can be edited")
-        payload = body.model_dump(exclude_unset=True)
+        payload = presentation_payload(voucher, body)
         payload["artwork_version"] = int(voucher.get("artwork_version") or 1) + 1
         payload["updated_at"] = utcnow_iso()
         result = await asyncio.to_thread(

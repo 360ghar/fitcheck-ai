@@ -13,6 +13,7 @@ import {
   exportGifts,
   giftKeys,
   GIFT_DURATIONS,
+  GIFT_OCCASIONS,
   GIFT_SOURCES,
   GIFT_STATUSES,
   listGifts,
@@ -22,6 +23,7 @@ import {
   voidOrRevokeGift,
   type GiftDetail,
   type GiftItem,
+  type GiftOccasion,
 } from '@/features/gifts/api/gifts'
 import { usePermission } from '@/shared/hooks/usePermission'
 import { downloadCsv } from '@/shared/lib/csv'
@@ -57,6 +59,8 @@ interface ActionForm {
   toName: string
   recipientEmail: string
   message: string
+  occasion: GiftOccasion | 'none'
+  occasionGreeting: string
   duration: '1' | '3' | '12'
   expiresAt: string
   note: string
@@ -76,6 +80,8 @@ function blankAction(kind: ActionKind, voucher: GiftDetail | null = null): Actio
     toName: voucher?.to_name ?? '',
     recipientEmail: voucher?.recipient_email ?? '',
     message: voucher?.message ?? '',
+    occasion: voucher?.occasion ?? 'none',
+    occasionGreeting: voucher?.occasion_greeting ?? '',
     duration: String(voucher?.duration_months ?? 1) as '1' | '3' | '12',
     expiresAt: '',
     note: '',
@@ -116,6 +122,8 @@ export function GiftsPage() {
 
   const mutation = useMutation({
     mutationFn: async (form: ActionForm) => {
+      const occasion = form.occasion === 'none' ? null : form.occasion
+      const occasionGreeting = form.occasion === 'other' ? form.occasionGreeting.trim() || null : null
       if (form.kind === 'create') {
         return createGift({
           duration_months: Number(form.duration) as 1 | 3 | 12,
@@ -123,6 +131,8 @@ export function GiftsPage() {
           to_name: form.toName.trim(),
           recipient_email: form.recipientEmail.trim(),
           message: form.message.trim() || null,
+          occasion,
+          occasion_greeting: occasionGreeting,
           note: form.note.trim(),
           ...(form.expiresAt ? { expires_at: new Date(form.expiresAt).toISOString() } : {}),
         })
@@ -140,6 +150,8 @@ export function GiftsPage() {
           from_name: form.fromName.trim(),
           to_name: form.toName.trim(),
           message: form.message.trim() || null,
+          occasion,
+          occasion_greeting: occasionGreeting,
         })
       }
       if (form.kind === 'assign') {
@@ -402,6 +414,8 @@ export function GiftsPage() {
 }
 
 function isActionValid(form: ActionForm): boolean {
+  const occasionValid =
+    form.occasion !== 'other' || (form.occasionGreeting.trim().length >= 1 && form.occasionGreeting.trim().length <= 80)
   if (form.kind === 'create') {
     return (
       form.fromName.trim().length >= 1 &&
@@ -410,6 +424,7 @@ function isActionValid(form: ActionForm): boolean {
       form.toName.trim().length <= 80 &&
       EMAIL_PATTERN.test(form.recipientEmail.trim()) &&
       form.message.trim().length <= 240 &&
+      occasionValid &&
       form.note.trim().length >= 3 &&
       form.note.trim().length <= 500 &&
       (!form.expiresAt || new Date(form.expiresAt).getTime() > Date.now())
@@ -421,7 +436,8 @@ function isActionValid(form: ActionForm): boolean {
       form.fromName.trim().length <= 80 &&
       form.toName.trim().length >= 1 &&
       form.toName.trim().length <= 80 &&
-      form.message.trim().length <= 240
+      form.message.trim().length <= 240 &&
+      occasionValid
     )
   }
   if (form.kind === 'allowance') {
@@ -490,6 +506,8 @@ function GiftDetailDialog({
               <DetailField label={t('detail.from')} value={detail.from_name} />
               <DetailField label={t('detail.to')} value={detail.to_name} />
               <DetailField label={t('detail.recipientEmail')} value={detailValue(detail.recipient_email, fallback)} wide />
+              <DetailField label={t('detail.occasion')} value={detail.occasion ? t(`occasions.${detail.occasion}`) : t('occasions.none')} />
+              <DetailField label={t('detail.occasionGreeting')} value={detailValue(detail.occasion_greeting, fallback)} />
               <DetailField label={t('detail.message')} value={detailValue(detail.message, fallback)} wide />
               <DetailField label={t('detail.publicId')} value={detail.public_id} mono />
               <DetailField label={t('detail.claimCode')} value={detailValue(detail.claim_code, fallback)} mono />
@@ -621,6 +639,37 @@ function ActionDialog({
                     value={action.recipientEmail}
                     maxLength={320}
                     onChange={(event) => update('recipientEmail', event.target.value)}
+                  />
+                </Field>
+              ) : null}
+              <Field label={t('forms.occasion')} htmlFor="gift-admin-occasion">
+                <Select
+                  value={action.occasion}
+                  onValueChange={(value) => {
+                    const occasion = value as GiftOccasion | 'none'
+                    setAction((current) => current ? {
+                      ...current,
+                      occasion,
+                      occasionGreeting: occasion === 'other' ? current.occasionGreeting : '',
+                    } : null)
+                  }}
+                >
+                  <SelectTrigger id="gift-admin-occasion"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t('occasions.none')}</SelectItem>
+                    {GIFT_OCCASIONS.map((occasion) => (
+                      <SelectItem key={occasion} value={occasion}>{t(`occasions.${occasion}`)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              {action.occasion === 'other' ? (
+                <Field label={t('forms.occasionGreeting')} htmlFor="gift-admin-occasion-greeting">
+                  <Input
+                    id="gift-admin-occasion-greeting"
+                    value={action.occasionGreeting}
+                    maxLength={80}
+                    onChange={(event) => update('occasionGreeting', event.target.value)}
                   />
                 </Field>
               ) : null}

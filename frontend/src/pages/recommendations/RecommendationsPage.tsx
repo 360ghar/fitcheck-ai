@@ -510,7 +510,7 @@ export default function RecommendationsPage() {
             id={`recommendation-tab-${tab.id}`}
             aria-controls={`recommendation-panel-${tab.id}`}
             onClick={() => selectTab(tab.id)}
-            className="min-w-[100px] justify-center"
+            className="min-w-0 flex-1 justify-center"
           >
             <tab.icon className="h-4 w-4" />
             <span className="hidden xs:inline">{tab.name}</span>
@@ -672,7 +672,7 @@ export default function RecommendationsPage() {
                       aria-label="Search items to match"
                     />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[40vh] md:max-h-[18rem] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[18rem] overflow-y-auto pr-1">
                     {filteredMatchItems.map((item) => {
                       const selected = matchItemId === item.id
                       return (
@@ -721,7 +721,7 @@ export default function RecommendationsPage() {
                         {matchData.matches.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No matches found.</div>
                         ) : (
-                          <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
+                          <div className="scroll-rail flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
                             {matchData.matches
                               .filter((m) => m.item?.id)
                               .slice(0, 10)
@@ -747,7 +747,7 @@ export default function RecommendationsPage() {
                         {matchData.complete_looks.length === 0 ? (
                           <div className="text-sm text-muted-foreground">No complete looks yet.</div>
                         ) : (
-                          <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
+                          <div className="scroll-rail flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
                             {matchData.complete_looks.slice(0, 4).map((look) => (
                               <div key={look.items.map((it) => it.id).join('-')} className="p-3 rounded-lg border border-border min-w-[250px] md:min-w-0 scroll-snap-start">
                                 <div className="flex items-center justify-between gap-3">
@@ -805,7 +805,7 @@ export default function RecommendationsPage() {
 
               {closetState === 'loading' && <ClosetLoadingSkeleton />}
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[40vh] md:max-h-[18rem] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[18rem] overflow-y-auto pr-1">
                 {items.map((item) => {
                   const selected = completeSelection.has(item.id)
                   return (

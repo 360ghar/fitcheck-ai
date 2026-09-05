@@ -60,7 +60,16 @@ export default function CTASection() {
                   Use FitCheck on the web or Android. Your first month of Pro is free, no card is required, and the account returns to Free unless you upgrade.
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Button size="lg" className="group h-12 px-6" asChild>
+                  {/* The one brand-gradient CTA on the page (DESIGN.md §08):
+                      hex-locked brand red by design — it rides the ink strip,
+                      not a theme surface. Hover rides `filter` brightness —
+                      the variant's `hover:bg-primary/90` is invisible under a
+                      background-image gradient. */}
+                  <Button
+                    size="lg"
+                    className="group h-12 bg-gradient-primary px-6 transition-[filter] duration-150 hover:brightness-110"
+                    asChild
+                  >
                     <Link
                       to={trialRegisterHref()}
                       onClick={() =>

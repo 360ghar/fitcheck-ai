@@ -130,7 +130,7 @@ export default function OAuthBridgePage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-svh items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         {phase === 'connecting' && (
           <div role="status" aria-live="polite">
@@ -148,7 +148,7 @@ export default function OAuthBridgePage() {
             </p>
             <Link
               to={resumeAfterLogin()}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center rounded-md px-6 py-2.5 text-sm font-medium"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-h-11 items-center justify-center rounded-md px-6 py-2.5 text-sm font-medium"
             >
               Sign in to FitCheck
             </Link>

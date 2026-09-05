@@ -30,6 +30,8 @@ class FakeGiftRepository extends GiftRepository {
   bool shouldFailSummary = false;
   int? createdDurationMonths;
   String? createdRecipientEmail;
+  GiftOccasion? createdOccasion;
+  String? createdOccasionGreeting;
   String? claimedVoucherId;
 
   @override
@@ -46,9 +48,13 @@ class FakeGiftRepository extends GiftRepository {
     required String recipientEmail,
     required String clientRequestId,
     String? message,
+    GiftOccasion? occasion,
+    String? occasionGreeting,
   }) async {
     createdDurationMonths = durationMonths;
     createdRecipientEmail = recipientEmail;
+    createdOccasion = occasion;
+    createdOccasionGreeting = occasionGreeting;
     return _voucher(id: 'created');
   }
 
@@ -138,11 +144,15 @@ void main() {
       toName: 'Sam',
       recipientEmail: 'sam@example.com',
       clientRequestId: 'request-1',
+      occasion: GiftOccasion.other,
+      occasionGreeting: 'Congratulations!',
     );
 
     expect(voucher?.id, 'created');
     expect(repository.createdDurationMonths, 1);
     expect(repository.createdRecipientEmail, 'sam@example.com');
+    expect(repository.createdOccasion, GiftOccasion.other);
+    expect(repository.createdOccasionGreeting, 'Congratulations!');
 
     controller.onClose();
   });

@@ -7,7 +7,7 @@ import SEO from '@/components/seo/SEO'
 import { BreadcrumbJsonLd, buildArticleSchema } from '@/components/seo/JsonLd'
 import { Calendar, Clock, ArrowLeft, User, ArrowRight, Loader2 } from 'lucide-react'
 import { useBlogPost, useBlogPosts } from '@/hooks/useBlog'
-import { escapeHtml, sanitizeMarkdownUrl } from '@/lib/utils'
+import { escapeHtml, formatDate, sanitizeMarkdownUrl } from '@/lib/utils'
 
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -29,7 +29,7 @@ export default function BlogPostPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen pt-32 flex justify-center" role="status" aria-live="polite">
+      <div className="min-h-svh pt-32 flex justify-center" role="status" aria-live="polite">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
       </div>
     )
@@ -39,7 +39,7 @@ export default function BlogPostPage() {
     const errorStatus = (error as (Error & { status?: number }) | null | undefined)?.status
     const isNotFound = !error || errorStatus === 404
     return (
-      <div className="min-h-screen pt-32 px-4 text-center" role="alert">
+      <div className="min-h-svh pt-32 px-4 text-center" role="alert">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-50 mb-2">
           {isNotFound ? 'Post not found' : 'Unable to load article'}
         </h1>
@@ -174,7 +174,7 @@ export default function BlogPostPage() {
         <section className="pb-16 md:pb-24">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
-              <article id="article-body" className="prose prose-lg md:prose-xl dark:prose-invert max-w-none">
+              <article id="article-body" className="prose prose-lg md:prose-xl dark:prose-invert max-w-none [overflow-wrap:anywhere]">
                 {/* Render content as HTML-like structure */}
                 {post.content.split('\n\n').map((paragraph, index) => {
                   const trimmed = paragraph.trim()
@@ -364,16 +364,4 @@ function formatInlineText(text: string): string {
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) =>
       `<a href="${sanitizeMarkdownUrl(url)}" class="text-primary dark:text-primary hover:underline break-words">${label}</a>`
     )
-}
-
-/**
- * Format ISO date string to display format
- */
-function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }

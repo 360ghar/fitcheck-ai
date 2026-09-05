@@ -141,7 +141,10 @@ Roles (`backend/app/core/permissions.py` is authoritative; the registry in
   VITE_ENABLE_GIFT_VOUCHERS=false only for a UI rollback. The route and
   navigation require gifts.read; issue and mutation controls also require
   gifts.write. Admin issue requires recipient name and recipient email. The
-  email appears only in the detail view, not the list or CSV export.
+  email appears only in the detail view, not the list or CSV export. Admins
+  can leave an occasion blank, select Birthday or Anniversary for a fixed
+  greeting, or select Other and provide a 1–80 character greeting. The
+  private note remains optional and separate.
 
 ## API contract / codegen
 
@@ -196,8 +199,9 @@ npm run e2e   # Playwright: 8 critical journeys across 6 spec files, chromium
   `Referrer-Policy: strict-origin-when-cross-origin`, `X-Robots-Tag: noindex`;
   immutable caching for `/assets/*` and `/fonts/*`.
 - Backend migrations 037 (roles/quota override), 038 (audit_events), 056
-  (gift vouchers), and 061 (named recipient matching) must be applied to
-  hosted Supabase before the related features are enabled.
+  (gift vouchers), 061 (named recipient matching), and 062 (optional gift
+  occasions) must be applied to hosted Supabase before the related features
+  are enabled.
 
 ## Pointers
 

@@ -48,26 +48,41 @@ const aiTools = [
     description: 'Pro-style portraits',
     icon: Camera,
     link: '/photoshoot',
+    tone: 'coral',
   },
   {
     name: 'Try On',
     description: 'See clothes on you',
     icon: Wand2,
     link: '/try-on',
+    tone: 'teal',
   },
   {
     name: 'What to wear',
     description: 'Daily outfit ideas',
     icon: Sparkles,
     link: '/recommendations',
+    tone: 'violet',
   },
   {
     name: 'Calendar',
     description: 'Plan looks ahead',
     icon: Calendar,
     link: '/calendar',
+    tone: 'blue',
   },
-]
+] as const
+
+type AiToolTone = (typeof aiTools)[number]['tone']
+
+// Literal class map: Tailwind's JIT needs complete class names at scan time,
+// so tinted tiles are selected from a record, never interpolated.
+const AI_TOOL_TILE: Record<AiToolTone, string> = {
+  coral: 'bg-tint-coral-pale text-tint-coral',
+  teal: 'bg-tint-teal-pale text-tint-teal',
+  violet: 'bg-tint-violet-pale text-tint-violet',
+  blue: 'bg-tint-blue-pale text-tint-blue',
+}
 
 export default function DashboardPage() {
   const userDisplayName = useUserDisplayName()
@@ -271,28 +286,28 @@ export default function DashboardPage() {
       name: 'Total Items',
       value: closetTotalItems,
       icon: Shirt,
-      gradient: 'cool' as const,
+      gradient: 'teal' as const,
       link: '/wardrobe',
     },
     {
       name: 'Outfits Created',
       value: outfitTotalCount,
       icon: Layers,
-      gradient: 'primary' as const,
+      gradient: 'violet' as const,
       link: '/outfits',
     },
     {
       name: 'Total Wears',
       value: totalWears,
       icon: TrendingUp,
-      gradient: 'success' as const,
+      gradient: 'coral' as const,
       link: '/wardrobe',
     },
     {
       name: 'Favorites',
       value: favoriteItems,
       icon: Heart,
-      gradient: 'warm' as const,
+      gradient: 'amber' as const,
       link: '/wardrobe?favorites=true',
     },
   ]
@@ -443,7 +458,14 @@ export default function DashboardPage() {
                 'touch-target'
               )}
             >
-              <tool.icon className="h-5 w-5 text-foreground" />
+              <span
+                className={cn(
+                  'flex h-9 w-9 items-center justify-center rounded-xl',
+                  AI_TOOL_TILE[tool.tone]
+                )}
+              >
+                <tool.icon className="h-5 w-5" aria-hidden="true" />
+              </span>
               <div>
                 <p className="text-sm font-semibold text-foreground">{tool.name}</p>
                 <p className="text-xs text-muted-foreground line-clamp-1">{tool.description}</p>

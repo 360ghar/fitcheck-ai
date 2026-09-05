@@ -9,10 +9,19 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from PIL import Image
+from pydantic import ValidationError as PydanticValidationError
 
 from app.core.config import settings
 from app.core.exceptions import PermissionDeniedError, ServiceError, ValidationError
-from app.models.gift import AdminGiftCreate, ComplimentaryGiftCreate, PaidGiftCheckoutCreate
+from app.models.gift import (
+    AdminGiftCreate,
+    ComplimentaryGiftCreate,
+    GiftOccasion,
+    GiftUpdate,
+    PaidGiftCheckoutCreate,
+    presentation_payload,
+    resolve_occasion_greeting,
+)
 from app.models.subscription import PlanType, SubscriptionResponse, SubscriptionStatus
 from app.services.admin_gift_service import AdminGiftService
 from app.services.gift_artwork_service import GiftArtworkService
@@ -70,8 +79,90 @@ def test_artwork_message_truncation_is_visible():
     assert lines[-1].endswith("…")
 
 
-def test_artwork_uses_a_new_credential_free_layout_namespace():
-    assert GiftArtworkService.storage_key(voucher(), "portrait").endswith("/v1/layout2/portrait.png")
+def test_artwork_uses_a_new_optional_occasion_layout_namespace():
+    assert GiftArtworkService.storage_key(voucher(), "portrait").endswith("/v1/layout3/portrait.png")
+
+
+def test_gifts_default_to_no_occasion_or_greeting():
+    request = ComplimentaryGiftCreate(
+        duration_months=1,
+        from_name="Alex Morgan",
+        to_name="Taylor Reed",
+        recipient_email="taylor@example.com",
+        client_request_id="request-no-occasion",
+    )
+
+    assert request.occasion is None
+    assert request.occasion_greeting is None
+    assert resolve_occasion_greeting(request.occasion, request.occasion_greeting) is None
+
+
+@pytest.mark.parametrize(
+    ("occasion", "greeting", "match"),
+    [
+        (None, "Hello", "requires an occasion"),
+        (GiftOccasion.BIRTHDAY, "Happy birthday Taylor", "only allowed for the Other"),
+        (GiftOccasion.OTHER, None, "required for the Other"),
+    ],
+)
+def test_gift_occasion_validation_rejects_invalid_combinations(occasion, greeting, match):
+    with pytest.raises(PydanticValidationError, match=match):
+        ComplimentaryGiftCreate(
+            duration_months=1,
+            from_name="Alex Morgan",
+            to_name="Taylor Reed",
+            recipient_email="taylor@example.com",
+            client_request_id="request-invalid-occasion",
+            occasion=occasion,
+            occasion_greeting=greeting,
+        )
+
+
+def test_fixed_and_other_occasion_greetings_are_resolved_truthfully():
+    assert resolve_occasion_greeting(GiftOccasion.BIRTHDAY, None) == "Happy Birthday"
+    assert resolve_occasion_greeting(GiftOccasion.ANNIVERSARY, None) == "Happy Anniversary"
+    assert resolve_occasion_greeting(GiftOccasion.OTHER, "Happy Diwali!") == "Happy Diwali!"
+
+
+def test_other_occasion_greeting_is_trimmed_before_length_validation():
+    padded_greeting = f"{'x' * 80} "
+    create = ComplimentaryGiftCreate(
+        duration_months=1,
+        from_name="Alex Morgan",
+        to_name="Taylor Reed",
+        recipient_email="taylor@example.com",
+        client_request_id="request-trimmed-occasion",
+        occasion=GiftOccasion.OTHER,
+        occasion_greeting=padded_greeting,
+    )
+    update = GiftUpdate(
+        occasion=GiftOccasion.OTHER,
+        occasion_greeting=padded_greeting,
+    )
+
+    assert create.occasion_greeting == "x" * 80
+    assert update.occasion_greeting == "x" * 80
+
+
+def test_unclaimed_presentation_updates_can_set_and_clear_an_occasion():
+    birthday = presentation_payload(
+        voucher(occasion="other", occasion_greeting="Congratulations!"),
+        GiftUpdate(occasion=GiftOccasion.BIRTHDAY),
+    )
+    cleared = presentation_payload(
+        voucher(occasion="other", occasion_greeting="Congratulations!"),
+        GiftUpdate(occasion=None, occasion_greeting=None),
+    )
+
+    assert birthday["occasion"] == "birthday"
+    assert birthday["occasion_greeting"] is None
+    assert cleared["occasion"] is None
+    assert cleared["occasion_greeting"] is None
+
+
+def test_presentation_update_rejects_an_orphaned_other_greeting():
+    with pytest.raises(ValidationError, match="requires an occasion"):
+        presentation_payload(voucher(), GiftUpdate(occasion_greeting="Congratulations!"))
 
 
 @pytest.fixture(autouse=True)
@@ -118,7 +209,18 @@ def test_public_serializer_hides_source_payment_and_claim_credential():
     assert public.share_url is None
     assert public.claim_code is None
     assert public.portrait_url is None
-    assert public.og_image_url.endswith("/artwork/og.png?v=1&layout=2")
+    assert public.og_image_url.endswith("/artwork/og.png?v=1&layout=3")
+    assert "recipient_email" not in public.model_dump(exclude_none=True)
+
+
+def test_public_serializer_exposes_an_optional_occasion_without_private_matching_data():
+    public = GiftService.serialize(
+        voucher(occasion="other", occasion_greeting="Happy Diwali!", recipient_email="taylor@example.com"),
+        audience="public",
+    )
+
+    assert public.occasion == GiftOccasion.OTHER
+    assert public.occasion_greeting == "Happy Diwali!"
     assert "recipient_email" not in public.model_dump(exclude_none=True)
 
 
@@ -224,6 +326,23 @@ def test_recipient_matching_migration_keeps_legacy_links_and_secures_new_claims(
     assert "FOR UPDATE" in migration
     assert "v_voucher.status <> 'issued'" in migration
     assert "INSERT INTO public.gift_entitlement_grants" in migration
+
+
+def test_optional_occasion_migration_keeps_legacy_gifts_blank_and_replaces_the_rpc():
+    migration = (
+        Path(__file__).resolve().parents[3]
+        / "db"
+        / "supabase"
+        / "migrations"
+        / "062_gift_voucher_occasions.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "ADD COLUMN IF NOT EXISTS occasion VARCHAR(20)" in migration
+    assert "ADD COLUMN IF NOT EXISTS occasion_greeting VARCHAR(80)" in migration
+    assert "occasion IS NULL AND occasion_greeting IS NULL" in migration
+    assert "DROP FUNCTION IF EXISTS public.issue_complimentary_gift_for_recipient" in migration
+    assert "p_occasion_greeting VARCHAR" in migration
+    assert "GRANT EXECUTE ON FUNCTION public.issue_complimentary_gift_for_recipient" in migration
 
 
 @pytest.mark.asyncio
@@ -426,6 +545,21 @@ def test_artwork_is_deterministic_and_has_exact_dimensions(variant, expected_siz
     with Image.open(io.BytesIO(first)) as image:
         assert image.size == expected_size
         assert image.format == "PNG"
+
+
+def test_artwork_omits_the_old_generic_fallback_and_changes_for_an_occasion():
+    blank = GiftArtworkService.render(voucher(message=None), variant="portrait")
+    old_fallback = GiftArtworkService.render(
+        voucher(message="A private invitation to make getting dressed feel effortless."),
+        variant="portrait",
+    )
+    birthday = GiftArtworkService.render(
+        voucher(message=None, occasion="birthday"),
+        variant="portrait",
+    )
+
+    assert blank != old_fallback
+    assert blank != birthday
 
 
 @pytest.mark.asyncio

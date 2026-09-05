@@ -24,6 +24,9 @@ Pillow==11.3.0
 # import (see app/utils/image_processing.py); uploads are transcoded to WebP.
 pillow-heif==1.5.0
 pyswisseph==2.10.3.2
+# Error tracking (Sentry) — initialized in app/core/sentry_config.py. A blank
+# SENTRY_DSN leaves it fully disabled (no transport, no traffic).
+sentry-sdk[fastapi]==2.68.1
 pytest==9.1.1
 pytest-asyncio==1.4.0
 pytest-cov==6.2.1

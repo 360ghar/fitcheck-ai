@@ -114,7 +114,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
   if (!first) return null
 
   return (
-    <div className="flex items-end justify-center gap-4 h-48 mb-6">
+    <div className="flex items-end justify-center gap-2 sm:gap-4 h-48 mb-6">
       {/* Second place */}
       {second && (
         <div className="flex flex-col items-center">
@@ -129,7 +129,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
           </Avatar>
           <p className="text-sm font-medium mt-2 max-w-20 truncate text-foreground">{second.username}</p>
           <p className="text-xs text-muted-foreground">{second.total_points.toLocaleString()} pts</p>
-          <div className="w-20 h-24 bg-gray-400 rounded-t-lg mt-2 flex items-end justify-center pb-2">
+          <div className="w-16 sm:w-20 h-24 bg-gray-400 rounded-t-lg mt-2 flex items-end justify-center pb-2">
             <span className="text-2xl font-bold text-white">2</span>
           </div>
         </div>
@@ -151,7 +151,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
         </div>
         <p className="text-sm font-semibold mt-2 max-w-24 truncate text-foreground">{first.username}</p>
         <p className="text-xs text-muted-foreground">{first.total_points.toLocaleString()} pts</p>
-        <div className="w-24 h-32 bg-yellow-500 rounded-t-lg mt-2 flex items-end justify-center pb-2">
+        <div className="w-20 sm:w-24 h-32 bg-yellow-500 rounded-t-lg mt-2 flex items-end justify-center pb-2">
           <span className="text-3xl font-bold text-white">1</span>
         </div>
       </div>
@@ -170,7 +170,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
           </Avatar>
           <p className="text-sm font-medium mt-2 max-w-20 truncate text-foreground">{third.username}</p>
           <p className="text-xs text-muted-foreground">{third.total_points.toLocaleString()} pts</p>
-          <div className="w-20 h-16 bg-amber-700 rounded-t-lg mt-2 flex items-end justify-center pb-2">
+          <div className="w-16 sm:w-20 h-16 bg-amber-700 rounded-t-lg mt-2 flex items-end justify-center pb-2">
             <span className="text-2xl font-bold text-white">3</span>
           </div>
         </div>
@@ -224,7 +224,7 @@ function LeaderboardRow({
       {entry.rank <= 3 && (
         <TooltipProvider>
           <Tooltip>
-            <TooltipTrigger>
+            <TooltipTrigger className="touch-target inline-flex items-center justify-center rounded-full">
               <Award className={`h-5 w-5 ${
                 entry.rank === 1 ? 'text-yellow-500' :
                 entry.rank === 2 ? 'text-gray-400' : 'text-amber-600'
@@ -339,15 +339,15 @@ export function Leaderboard({
           <div className="pt-4 border-t border-border">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <p className="text-2xl font-bold text-primary">#{userRank.rank}</p>
+                <p className="text-xl sm:text-2xl font-bold text-primary">#{userRank.rank}</p>
                 <p className="text-xs text-muted-foreground">Your Rank</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">{userRank.level}</p>
+                <p className="text-xl sm:text-2xl font-bold text-foreground">{userRank.level}</p>
                 <p className="text-xs text-muted-foreground">Level</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">{userRank.total_points.toLocaleString()}</p>
+                <p className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-500">{userRank.total_points.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground">Total Points</p>
               </div>
             </div>

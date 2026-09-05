@@ -508,11 +508,11 @@ export default function RegisterPage() {
               <div className="ml-3 text-sm">
                 <label htmlFor="terms" className="text-foreground">
                   I agree to the{' '}
-                  <Link to="/terms" className="font-medium text-primary hover:text-primary/80">
+                  <Link to="/terms" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary/80">
                     Terms of Service
                   </Link>{' '}
                   and{' '}
-                  <Link to="/privacy" className="font-medium text-primary hover:text-primary/80">
+                  <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary/80">
                     Privacy Policy
                   </Link>
                 </label>

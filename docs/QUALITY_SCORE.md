@@ -24,7 +24,7 @@ Scale: **A** solid · **B** workable · **C** fragile · **D** high risk
 | Admin panel | B | 2026-08-08 | Server-enforced RBAC (172 backend admin tests: authz 403s, predicates, CRUD, suspend, refund, audit, dashboards, quotas, revenue trends), 28 Vitest files / 215 app tests (MSW, typed against generated OpenAPI), OpenAPI codegen + CI drift check, audit trail on every mutation, URL-synced table state, i18n + axe in tests, Playwright e2e (6 files / 8 journeys) wired into CI | Token-refresh end-to-end verification pending hardening report; hand-written `types.ts` partially superseded by `schema.d.ts`; role-level permissions only (no field-level) |
 | Flutter | B | 2026-07-31 | Full Flutter suite (106 tests), offline queue hardening, bounded polling, error zone, Sentry | No `integration_test/` suite; SDK cache must be writable for local verification |
 | Docs / harness | B- | 2026-08-08 | Story ledger, architecture/docs/theme checks, conditional repo-wide runner | Curated API/schema docs can drift; unavailable toolchains need explicit follow-up |
-| Infra / CI | B- | 2026-07-31 | Backend + frontend + Flutter CI, Sentry on web + mobile | Backend missing `sentry-sdk`; no hosted smoke/load gate; public storage URL debt remains |
+| Infra / CI | B- | 2026-07-31 | Backend + frontend + Flutter CI, Sentry on web + mobile + backend | No hosted smoke/load gate; public storage URL debt remains |
 
 ## How to use
 

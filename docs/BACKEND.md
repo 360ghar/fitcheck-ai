@@ -291,7 +291,7 @@ Typical custom stack (`AI_DEFAULT_PROVIDER=custom`, the default):
 - Vision: `gemini-3.6-flash` **primary** via the native Gemini leg (default
   `AI_VISION_PROVIDER=gemini`) → `agnes-2.5-flash` fallback (`AI_VISION_FALLBACK_MODEL`)
   on **any** failure, not after a fixed retry count
-- Images: `agnes-image-2.1-flash` primary → `agnes-image-2.0-flash` fallback via `/v1/images/generations`
+- Images: `agnes-image-2.5-flash` primary → `agnes-image-2.1-flash` fallback via `/v1/images/generations`
 - Transient failures (429/503/timeout/empty images) retry fallback; non-transient raise
 - Embeddings: Google `google.genai` via `AI_GEMINI_API_KEY` (not the same code path as the
   native Gemini chat/vision/image provider above, though it shares the same key)
@@ -458,6 +458,12 @@ incoming-gift lookup. New vouchers require a recipient name and email. A named
 gift can be claimed only by the matching verified email. Legacy vouchers with
 no recipient email remain compatible with the private-link claim flow.
 
+Migration 062 adds nullable `occasion` and `occasion_greeting` fields. NULL
+means no occasion and no greeting. Birthday and anniversary use fixed public
+greetings; Other requires a trimmed 1–80 character sender greeting. The
+private note remains independent. Only unclaimed gifts can change this
+presentation data.
+
 `/api/v1/gifts` exposes a safe public catalog/detail/social-artwork surface and
 authenticated allowance, sent/received, issuance, Checkout fulfillment,
 claim, edit, rotation, and portrait-artwork operations. Public responses omit
@@ -479,9 +485,10 @@ Price ID, amount, and USD currency. The shared Stripe webhook ledger makes
 Checkout completion, asynchronous success/failure, expiry, refunds, and final
 dispute outcomes repeat safe. Paid value cannot be voided through the admin
 API. Pillow renders deterministic 1080x1350 portrait and 1200x630 social
-PNGs. Neither artwork variant contains a claim credential. Artwork layout 2
-uses a separate storage namespace and response URL, so the application does
-not reuse an older credential-bearing portrait cache object.
+PNGs. Neither artwork variant contains a claim credential. Artwork layout 3
+uses a separate storage namespace and response URL. It adds an occasion
+greeting only when one exists, and does not invent greeting or note text for
+generic gifts.
 
 New voucher issuance defaults on. Set `ENABLE_GIFT_VOUCHER_CREATION=false` only
 for an emergency rollback; this blocks new complimentary, admin, and paid
@@ -562,6 +569,8 @@ Optional: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, social import flags,
 `ENABLE_GIFT_VOUCHER_CREATION` (default `true`), `GIFT_TOKEN_SECRET`,
 `AI_ENCRYPTION_KEY`
 
+Optional: `SENTRY_DSN` (empty = Sentry fully disabled; `app/core/sentry_config.py`
+becomes a no-op), `SENTRY_TRACES_SAMPLE_RATE` (default `0.1`)
 Full templates: `backend/.env.example`. Backend also loads repo root `.env`.
 
 ## Logging
@@ -570,6 +579,16 @@ Full templates: `backend/.env.example`. Backend also loads repo root `.env`.
 - Files under `backend/logs/`
 - `LOG_LEVEL` (default INFO)
 - Correlation ID on requests for agent grepping
+
+## Error tracking (Sentry)
+
+- `app/core/sentry_config.py` — no-op unless `SENTRY_DSN` is set
+- Unhandled 500s are captured from `unhandled_exception_handler` (a catch-all
+  handler for `Exception` intercepts errors before Sentry's own middleware
+  integration would see them) and carry the request correlation ID as a tag
+- Expected traffic is never reported: `FitCheckException` (business 4xx) and
+  422 validation errors
+- `/health` + `/ready` transactions are dropped so probes never consume quota
 
 ## API surface reference
 
