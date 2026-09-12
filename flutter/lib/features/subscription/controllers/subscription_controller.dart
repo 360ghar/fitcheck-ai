@@ -156,8 +156,9 @@ class SubscriptionController extends GetxController {
   /// `!isPro` would leave them with no way to do it.
   bool get canUpgrade {
     final plan = subscription.value?.planType;
-    if (plan == null)
+    if (plan == null) {
       return false; // entitlement unknown (fetch failed / pending)
+    }
     return plan != PlanType.proMonthly && plan != PlanType.proYearly;
   }
 

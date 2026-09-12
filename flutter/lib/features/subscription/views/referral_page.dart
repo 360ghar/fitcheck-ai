@@ -12,10 +12,7 @@ class ReferralPage extends GetView<SubscriptionController> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Refer a Friend'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Refer a Friend'), elevation: 0),
       body: Obx(() {
         final code = controller.referralCode.value;
         final stats = controller.referralStats.value;
@@ -28,7 +25,7 @@ class ReferralPage extends GetView<SubscriptionController> {
 
         if (code == null) {
           return Center(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -51,7 +48,7 @@ class ReferralPage extends GetView<SubscriptionController> {
                     Text(
                       error,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withAlpha(153),
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -83,8 +80,10 @@ class ReferralPage extends GetView<SubscriptionController> {
 
             // How it works
             Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -124,8 +123,10 @@ class ReferralPage extends GetView<SubscriptionController> {
             if (stats != null) ...[
               const SizedBox(height: 24),
               Card(
-                elevation: 1,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -174,26 +175,29 @@ class ReferralPage extends GetView<SubscriptionController> {
     );
   }
 
-  Widget _buildStep(ThemeData theme, int number, String title, String description) {
+  Widget _buildStep(
+    ThemeData theme,
+    int number,
+    String title,
+    String description,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 28,
-            height: 28,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6366F1), Color(0xFF9333EA)],
-              ),
-              borderRadius: BorderRadius.circular(14),
+              color: theme.colorScheme.primary,
+              shape: BoxShape.circle,
             ),
             child: Center(
               child: Text(
                 number.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: theme.colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -214,7 +218,7 @@ class ReferralPage extends GetView<SubscriptionController> {
                 Text(
                   description,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(153),
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -232,14 +236,14 @@ class ReferralPage extends GetView<SubscriptionController> {
           value,
           style: theme.textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.bold,
-            color: const Color(0xFF6366F1),
+            color: theme.colorScheme.primary,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withAlpha(153),
+            color: theme.colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
         ),

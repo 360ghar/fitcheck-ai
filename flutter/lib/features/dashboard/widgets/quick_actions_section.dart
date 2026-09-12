@@ -1,98 +1,99 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../app/routes/app_routes.dart';
 
-/// Quick Actions grid section for dashboard
 class QuickActionsSection extends StatelessWidget {
   const QuickActionsSection({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
+    final text = Theme.of(context).textTheme;
+    final actions = [
+      ('Add pieces', 'Grow your closet', Icons.add, Routes.wardrobeAdd),
+      (
+        'Create outfit',
+        'Put a look together',
+        Icons.auto_awesome_outlined,
+        Routes.outfitBuilder,
+      ),
+    ];
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppSectionHeader(
-          title: 'Quick Actions',
-          subtitle: 'Jump back into your wardrobe',
+        const AppSectionHeader(title: 'Make it yours'),
+        const SizedBox(height: 12),
+        Material(
+          color: AppCoreColors.editorialLinen,
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (var i = 0; i < actions.length; i++) ...[
+                if (i > 0)
+                  const Divider(
+                    indent: 20,
+                    endIndent: 20,
+                    color: AppCoreColors.borderLight,
+                  ),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  leading: Icon(
+                    actions[i].$3,
+                    size: 26,
+                    color: AppCoreColors.editorialInk,
+                  ),
+                  title: Text(
+                    actions[i].$1,
+                    style: text.titleMedium?.copyWith(
+                      color: AppCoreColors.editorialInk,
+                    ),
+                  ),
+                  subtitle: Text(
+                    actions[i].$2,
+                    style: text.bodySmall?.copyWith(
+                      color: AppCoreColors.editorialInk,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.arrow_outward_rounded,
+                    size: 20,
+                    color: AppCoreColors.editorialInk,
+                  ),
+                  onTap: () => Get.toNamed(actions[i].$4),
+                ),
+              ],
+            ],
+          ),
         ),
-        const SizedBox(height: AppConstants.spacing12),
+        const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 900
-                ? 4
-                : constraints.maxWidth >= 680
-                    ? 3
-                    : 2;
-            final cardWidth = (constraints.maxWidth -
-                    (columns - 1) * AppConstants.spacing12) /
-                columns;
-
+            final oneColumn = MediaQuery.textScalerOf(context).scale(14) > 20;
+            final width = oneColumn
+                ? constraints.maxWidth
+                : (constraints.maxWidth - 12) / 2;
             return Wrap(
-              spacing: AppConstants.spacing12,
-              runSpacing: AppConstants.spacing12,
+              spacing: 12,
+              runSpacing: 12,
               children: [
                 SizedBox(
-                  width: cardWidth,
-                  child: _ActionCard(
-                    title: 'Add Item',
-                    subtitle: 'Capture new pieces',
-                    icon: Icons.add,
-                    gradient: LinearGradient(
-                      colors: [
-                        tokens.brandColor,
-                        tokens.brandColor.withValues(alpha: 0.7),
-                      ],
-                    ),
-                    onTap: () => Get.toNamed(Routes.wardrobeAdd),
+                  width: width,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Get.toNamed(Routes.recommendations),
+                    icon: const Icon(Icons.explore_outlined, size: 20),
+                    label: const Text('For you'),
                   ),
                 ),
                 SizedBox(
-                  width: cardWidth,
-                  child: _ActionCard(
-                    title: 'Create Outfit',
-                    subtitle: 'Mix and match looks',
-                    icon: Icons.auto_awesome,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF111827),
-                        tokens.cardColor,
-                      ],
-                    ),
-                    onTap: () => Get.toNamed(Routes.outfits),
-                  ),
-                ),
-                SizedBox(
-                  width: cardWidth,
-                  child: _ActionCard(
-                    title: 'For You',
-                    subtitle: 'Personalized picks',
-                    icon: Icons.explore,
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF0EA5E9),
-                        Color(0xFF14B8A6),
-                      ],
-                    ),
-                    onTap: () => Get.toNamed(Routes.recommendations),
-                  ),
-                ),
-                SizedBox(
-                  width: cardWidth,
-                  child: _ActionCard(
-                    title: 'Plan Calendar',
-                    subtitle: 'Outfits ahead of time',
-                    icon: Icons.calendar_today,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF0F172A),
-                        tokens.cardColor.withValues(alpha: 0.8),
-                      ],
-                    ),
-                    onTap: () => Get.toNamed(Routes.calendar),
+                  width: width,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Get.toNamed(Routes.calendar),
+                    icon: const Icon(Icons.calendar_today_outlined, size: 20),
+                    label: const Text('Plan ahead'),
                   ),
                 ),
               ],
@@ -100,66 +101,6 @@ class QuickActionsSection extends StatelessWidget {
           },
         ),
       ],
-    );
-  }
-}
-
-class _ActionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Gradient gradient;
-  final VoidCallback onTap;
-
-  const _ActionCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.gradient,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppConstants.spacing12),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 16,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-            ),
-            const SizedBox(height: AppConstants.spacing4),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white70,
-                    fontSize: 11,
-                  ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

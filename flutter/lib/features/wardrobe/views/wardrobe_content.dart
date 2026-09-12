@@ -6,6 +6,7 @@ import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../controllers/wardrobe_controller.dart';
 import '../repositories/item_repository.dart';
+import '../models/item_model.dart';
 import '../../../app/routes/app_routes.dart';
 
 /// Wardrobe content without Scaffold wrapper (for IndexedStack in MainShellPage)
@@ -20,6 +21,39 @@ class WardrobeContent extends StatefulWidget {
 class _WardrobeContentState extends State<WardrobeContent> {
   final WardrobeController controller = Get.find<WardrobeController>();
   final ItemRepository _itemRepository = ItemRepository();
+  late final TextEditingController _searchController;
+  late final Worker _searchWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(
+      text: controller.searchQuery.value,
+    );
+    _searchWorker = ever(controller.searchQuery, (query) {
+      if (_searchController.text != query) {
+        _searchController.value = TextEditingValue(
+          text: query,
+          selection: TextSelection.collapsed(offset: query.length),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchWorker.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool get _hasFilters =>
+      controller.searchQuery.value.isNotEmpty ||
+      controller.selectedCategories.isNotEmpty ||
+      controller.selectedConditions.isNotEmpty ||
+      controller.selectedColors.isNotEmpty ||
+      controller.selectedOccasion.value.isNotEmpty ||
+      controller.favoritesOnly.value;
 
   @override
   Widget build(BuildContext context) {
@@ -33,11 +67,11 @@ class _WardrobeContentState extends State<WardrobeContent> {
               hasMore: controller.hasMore.value,
               isLoadingMore: controller.isLoadingMore.value,
               child: CustomScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 slivers: [
-                  // App bar
-                  _buildAppBar(),
-
-                  // Category filter chips
+                  SliverToBoxAdapter(child: _buildCatalogueHeader()),
+                  SliverToBoxAdapter(child: _buildSearchField()),
                   SliverToBoxAdapter(child: _buildCategoryChips()),
 
                   // Offline / error banner (persistent context, so an offline
@@ -45,9 +79,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   Obx(() {
                     if (controller.error.value.isEmpty ||
                         controller.isLoading.value) {
-                      return const SliverToBoxAdapter(
-                        child: SizedBox.shrink(),
-                      );
+                      return const SliverToBoxAdapter(child: SizedBox.shrink());
                     }
                     return SliverToBoxAdapter(
                       child: AppErrorBanner(message: controller.error.value),
@@ -67,8 +99,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
                       if (controller.isLoading.value &&
                           controller.items.isEmpty) {
                         return const ShimmerGridLoader(
-                          crossAxisCount: 3,
-                          itemCount: 9,
+                          crossAxisCount: 2,
+                          itemCount: 6,
                           childAspectRatio: 0.78,
                         );
                       }
@@ -77,9 +109,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                         return _buildEmptyState();
                       }
 
-                      return controller.viewMode.value == 'grid'
-                          ? _buildItemsGrid()
-                          : _buildItemsList();
+                      return _buildItems();
                     }),
                   ),
 
@@ -98,744 +128,394 @@ class _WardrobeContentState extends State<WardrobeContent> {
     );
   }
 
-  Widget _buildAppBar() {
-    final tokens = AppUiTokens.of(context);
-
-    return SliverAppBar(
-      floating: true,
-      elevation: 0,
-      automaticallyImplyLeading: false,
-      title: Text(
-        'Closet',
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: tokens.textPrimary,
-        ),
+  Widget _buildCatalogueHeader() {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppCoreColors.editorialLinen,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      'Closet',
+                      style: theme.textTheme.displaySmall?.copyWith(
+                        color: AppCoreColors.editorialInk,
+                      ),
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Obx(
+                      () => controller.selectedIds.isNotEmpty
+                          ? IconButton(
+                              tooltip: 'Delete selected',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: _showDeleteConfirmation,
+                            )
+                          : IconButton(
+                              tooltip: controller.viewMode.value == 'grid'
+                                  ? 'List view'
+                                  : 'Grid view',
+                              icon: Icon(
+                                controller.viewMode.value == 'grid'
+                                    ? Icons.view_list_outlined
+                                    : Icons.grid_view_outlined,
+                              ),
+                              onPressed: () => controller.setViewMode(
+                                controller.viewMode.value == 'grid'
+                                    ? 'list'
+                                    : 'grid',
+                              ),
+                            ),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Closet options',
+                      onSelected: (value) {
+                        if (value == 'filter') {
+                          _showFilterBottomSheet();
+                        } else if (value == 'sort') {
+                          _showSortBottomSheet();
+                        } else if (value == 'stats') {
+                          Get.toNamed(Routes.wardrobeStats);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'filter', child: Text('Filter')),
+                        PopupMenuItem(value: 'sort', child: Text('Sort')),
+                        PopupMenuItem(
+                          value: 'stats',
+                          child: Text('Closet Stats'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Obx(
+            () => controller.selectedIds.isNotEmpty
+                ? TextButton(
+                    onPressed: controller.clearSelection,
+                    child: Text('${controller.selectedCount} selected · Clear'),
+                  )
+                : Text(
+                    '${controller.totalItems.value} '
+                    '${controller.totalItems.value == 1 ? 'piece' : 'pieces'} '
+                    '${_hasFilters ? 'found' : 'in your collection'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+          ),
+        ],
       ),
-      actions: [
-        Obx(
-          () => controller.selectedIds.isNotEmpty
-              ? IconButton(
-                  tooltip: 'Delete selected',
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _showDeleteConfirmation(),
-                )
-              : Semantics(
-                  label: 'Search closet',
-                  button: true,
-                  child: IconButton(
-                    tooltip: 'Search closet',
-                    icon: const Icon(Icons.search),
-                    onPressed: () => _showSearchDialog(),
-                  ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Obx(
+              () => TextField(
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                onChanged: (value) => controller.searchQuery.value = value,
+                onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                decoration: InputDecoration(
+                  hintText: 'Search your closet',
+                  prefixIcon: const Icon(Icons.search, size: 22),
+                  suffixIcon: controller.searchQuery.value.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          icon: const Icon(Icons.close),
+                          onPressed: () => controller.searchQuery.value = '',
+                        ),
                 ),
-        ),
-        Obx(
-          () => controller.selectedIds.isNotEmpty
-              ? TextButton(
-                  onPressed: controller.clearSelection,
-                  child: Text('${controller.selectedCount} selected'),
-                )
-              : IconButton(
-                  tooltip: controller.viewMode.value == 'grid'
-                      ? 'List view'
-                      : 'Grid view',
-                  icon: Icon(
-                    controller.viewMode.value == 'grid'
-                        ? Icons.view_list
-                        : Icons.grid_on,
-                  ),
-                  onPressed: () => controller.setViewMode(
-                    controller.viewMode.value == 'grid' ? 'list' : 'grid',
-                  ),
-                ),
-        ),
-        PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'filter') {
-              _showFilterBottomSheet();
-            } else if (value == 'sort') {
-              _showSortBottomSheet();
-            } else if (value == 'stats') {
-              Get.toNamed(Routes.wardrobeStats);
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'filter',
-              child: Row(
-                children: [
-                  Icon(Icons.filter_list),
-                  SizedBox(width: AppConstants.spacing8),
-                  Text('Filter'),
-                ],
               ),
             ),
-            const PopupMenuItem(
-              value: 'sort',
-              child: Row(
-                children: [
-                  Icon(Icons.sort),
-                  SizedBox(width: AppConstants.spacing8),
-                  Text('Sort'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'stats',
-              child: Row(
-                children: [
-                  Icon(Icons.insights_outlined),
-                  SizedBox(width: AppConstants.spacing8),
-                  Text('Closet Stats'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Filter closet',
+            icon: const Icon(Icons.tune_outlined),
+            onPressed: _showFilterBottomSheet,
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildCategoryChips() {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacing16,
-        vertical: AppConstants.spacing8,
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Obx(() {
-          final allSelected = controller.selectedCategories.isEmpty;
-
-          return Row(
-            children: [
-              // "All" chip
-              Padding(
-                padding: const EdgeInsets.only(right: AppConstants.spacing8),
-                child: FilterChip(
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('All'),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Obx(
+                () => Row(
+                  children: [
+                    _categoryChip(
+                      'All',
+                      selected: controller.selectedCategories.isEmpty,
+                      onSelected: controller.clearAllFilters,
+                    ),
+                    // Counts belong to the server result. Loaded-page counts
+                    // must not hide categories or suggest a complete inventory.
+                    for (final category in Category.values)
+                      _categoryChip(
+                        category.displayName,
+                        selected: controller.selectedCategories.contains(
+                          category,
                         ),
-                        decoration: BoxDecoration(
-                          color: allSelected
-                              ? Colors.white.withValues(alpha: 0.2)
-                              : tokens.textMuted.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '${controller.totalItems.value}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: allSelected
-                                ? Colors.white
-                                : tokens.textMuted,
-                          ),
-                        ),
+                        onSelected: () =>
+                            controller.toggleCategoryFilter(category),
                       ),
-                    ],
-                  ),
-                  selected: allSelected,
-                  onSelected: (_) => controller.clearAllFilters(),
-                  selectedColor: tokens.brandColor,
-                  labelStyle: TextStyle(
-                    color: allSelected ? Colors.white : tokens.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  showCheckmark: false,
-                  side: BorderSide(
-                    color: allSelected
-                        ? tokens.brandColor
-                        : tokens.cardBorderColor,
-                  ),
+                  ],
                 ),
               ),
-              // Category chips
-              ...Category.values.map((category) {
-                final isSelected = controller.selectedCategories.contains(
-                  category,
-                );
-                final count = controller.items
-                    .where((item) => item.category == category)
-                    .length;
-
-                if (count == 0) return const SizedBox.shrink();
-
-                return Padding(
-                  padding: const EdgeInsets.only(right: AppConstants.spacing8),
-                  child: FilterChip(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _getCategoryIcon(category),
-                          size: 14,
-                          color: isSelected
-                              ? Colors.white
-                              : tokens.textSecondary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(category.displayName),
-                        const SizedBox(width: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : tokens.textMuted.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$count',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: isSelected
-                                  ? Colors.white
-                                  : tokens.textMuted,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    selected: isSelected,
-                    onSelected: (_) =>
-                        controller.toggleCategoryFilter(category),
-                    selectedColor: tokens.brandColor,
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : tokens.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    showCheckmark: false,
-                    side: BorderSide(
-                      color: isSelected
-                          ? tokens.brandColor
-                          : tokens.cardBorderColor,
-                    ),
-                  ),
-                );
-              }),
-            ],
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildItemsGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 140,
-        mainAxisSpacing: AppConstants.spacing12,
-        crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 0.78,
-      ),
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final item = controller.filteredItems[index];
-        final isSelected = controller.selectedIds.contains(item.id);
-
-        return GestureDetector(
-          onTap: () {
-            if (controller.selectedIds.isNotEmpty) {
-              controller.toggleItemSelection(item);
-            } else {
-              Get.toNamed('/wardrobe/${item.id}');
-            }
-          },
-          onLongPress: () {
-            controller.setSelectedItem(item);
-            _showItemOptions(item);
-          },
-          child: Semantics(
-            label: 'Closet item: ${item.name}',
-            child: _buildItemCard(item, isSelected),
+            ),
           ),
-        );
-      }, childCount: controller.filteredItems.length),
-    );
-  }
-
-  Widget _buildItemsList() {
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final item = controller.filteredItems[index];
-        final isSelected = controller.selectedIds.contains(item.id);
-
-        return GestureDetector(
-          onTap: () {
-            if (controller.selectedIds.isNotEmpty) {
-              controller.toggleItemSelection(item);
-            } else {
-              Get.toNamed('/wardrobe/${item.id}');
-            }
-          },
-          onLongPress: () {
-            controller.setSelectedItem(item);
-            _showItemOptions(item);
-          },
-          child: Semantics(
-            label: 'Closet item: ${item.name}',
-            child: _buildListItemCard(item, isSelected),
+          Container(
+            width: 1,
+            height: 24,
+            color: theme.colorScheme.outlineVariant,
           ),
-        );
-      }, childCount: controller.filteredItems.length),
-    );
-  }
-
-  Widget _buildListItemCard(dynamic item, bool isSelected) {
-    final tokens = AppUiTokens.of(context);
-    final hasImages = item.itemImages != null && item.itemImages!.isNotEmpty;
-    final imageUrls = hasImages
-        ? item.itemImages!.map<String>((img) => img.url as String).toList()
-        : <String>[];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppConstants.spacing12),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(
-          color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
-          width: isSelected ? 2 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: tokens.cardShadowColor,
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+          Obx(
+            () => IconButton(
+              tooltip:
+                  'Sort: ${switch (controller.sortType.value) {
+                    'oldest' => 'oldest first',
+                    'name' => 'name A–Z',
+                    'most_worn' => 'most worn',
+                    _ => 'newest first',
+                  }}',
+              icon: const Icon(Icons.sort),
+              onPressed: _showSortBottomSheet,
+            ),
           ),
         ],
       ),
-      child: Row(
-        children: [
-          // Item image thumbnail
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(AppConstants.radius16 - 1),
-              bottomLeft: Radius.circular(AppConstants.radius16 - 1),
-            ),
-            child: SizedBox(
-              width: 100,
-              height: 100,
-              child: hasImages
-                  ? AppImage(
-                      imageUrl: imageUrls.first,
-                      fit: BoxFit.cover,
-                      backgroundColor: tokens.isDarkMode
-                          ? Colors.black.withValues(alpha: 0.3)
-                          : Colors.grey.withValues(alpha: 0.1),
-                      enableZoom: controller.selectedIds.isEmpty,
-                      galleryUrls: imageUrls,
-                      memCacheWidth: 200,
-                      memCacheHeight: 200,
-                      errorIcon: _getCategoryIcon(item.category),
-                      // Presigned URLs expire after 1h; on a failed load
-                      // re-mint a fresh URL from the durable storage key.
-                      storagePath: item.itemImages?.first.storagePath,
-                      remintUrl: _itemRepository.remintImageUrl,
-                    )
-                  : _buildPlaceholder(item.category),
-            ),
-          ),
+    );
+  }
 
-          // Item details
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(AppConstants.spacing12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    item.name,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppConstants.spacing4),
-                  Row(
-                    children: [
-                      Icon(
-                        _getCategoryIcon(item.category),
-                        size: 14,
-                        color: tokens.textMuted,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        item.category.displayName,
-                        style: TextStyle(
-                          color: tokens.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (item.brand != null && item.brand!.isNotEmpty) ...[
-                    const SizedBox(height: AppConstants.spacing4),
-                    Text(
-                      item.brand!,
-                      style: TextStyle(color: tokens.textMuted, fontSize: 12),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
+  Widget _categoryChip(
+    String label, {
+    required bool selected,
+    required VoidCallback onSelected,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onSelected(),
+        selectedColor: AppCoreColors.editorialLinen,
+        backgroundColor: theme.colorScheme.surface,
+        showCheckmark: false,
+        side: BorderSide.none,
+        labelStyle: theme.textTheme.labelLarge?.copyWith(
+          color: selected
+              ? AppCoreColors.editorialInk
+              : theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildItems() {
+    final items = controller.filteredItems;
+    if (controller.viewMode.value == 'list') {
+      return SliverList.builder(
+        itemCount: items.length,
+        itemBuilder: (context, index) => Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Align(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: AspectRatio(
+                aspectRatio: 0.8,
+                child: _buildItemTile(items[index]),
               ),
             ),
           ),
+        ),
+      );
+    }
 
-          // Indicators (favorite, selection)
-          Padding(
-            padding: const EdgeInsets.only(right: AppConstants.spacing12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+    // Image-only tiles do not need fewer columns when text is enlarged.
+    // The surrounding search and filters still follow the user's text scale.
+    return SliverLayoutBuilder(
+      builder: (context, constraints) => SliverGrid.builder(
+        itemCount: items.length,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: constraints.crossAxisExtent < 600
+              ? 2
+              : (constraints.crossAxisExtent / 200).floor().clamp(2, 4),
+          mainAxisSpacing: 24,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.8,
+        ),
+        itemBuilder: (context, index) => _buildItemTile(items[index]),
+      ),
+    );
+  }
+
+  Widget _buildItemTile(ItemModel item) {
+    final theme = Theme.of(context);
+    final images = item.itemImages ?? [];
+    final photo = images.isEmpty
+        ? null
+        : images.firstWhere(
+            (image) => image.isPrimary,
+            orElse: () => images.first,
+          );
+    return Obx(() {
+      final selectionActive = controller.selectedIds.isNotEmpty;
+      final selected = controller.selectedIds.contains(item.id);
+
+      return Semantics(
+        label: 'Closet item: ${item.name}',
+        button: true,
+        selected: selectionActive ? selected : null,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: () {
+              if (selectionActive) {
+                controller.toggleItemSelection(item);
+              } else {
+                Get.toNamed('/wardrobe/${item.id}');
+              }
+            },
+            onLongPress: () {
+              controller.setSelectedItem(item);
+              _showItemOptions(item);
+            },
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                if (item.isFavorite)
-                  Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.secondary.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
+                if (photo == null || photo.url.trim().isEmpty)
+                  _buildPlaceholder(item.category)
+                else
+                  AppImage(
+                    imageUrl: photo.url,
+                    fallbackUrl: photo.url,
+                    fit: BoxFit.contain,
+                    enableZoom: false,
+                    backgroundColor: Colors.transparent,
+                    placeholder: const Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          semanticsLabel: 'Loading item image',
+                        ),
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.favorite,
-                      color: Colors.white,
-                      size: 14,
+                    semanticLabel: 'Item photo',
+                    errorWidget: _buildPlaceholder(item.category),
+                    memCacheWidth: 500,
+                    memCacheHeight: 650,
+                    storagePath: photo.storagePath,
+                    remintUrl: _itemRepository.remintImageUrl,
+                  ),
+                if (selectionActive)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Icon(
+                      selected ? Icons.check_circle : Icons.circle_outlined,
+                      color: theme.colorScheme.primary,
+                      size: 24,
                     ),
                   ),
-                if (isSelected) ...[
-                  const SizedBox(width: AppConstants.spacing8),
-                  Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing4),
-                    decoration: BoxDecoration(
-                      color: tokens.brandColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildItemCard(dynamic item, bool isSelected) {
-    final tokens = AppUiTokens.of(context);
-    final hasImages = item.itemImages != null && item.itemImages!.isNotEmpty;
-    final imageUrls = hasImages
-        ? item.itemImages!.map<String>((img) => img.url as String).toList()
-        : <String>[];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(
-          color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
-          width: isSelected ? 2 : 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: tokens.cardShadowColor,
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      // LayoutBuilder bounds the category badge: with the fixed 3-column
-      // grid a card is only ~88-101px wide on narrow phones, and an
-      // unconstrained icon+label row would RenderFlex-overflow (worse under
-      // accessibility font scaling).
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            children: [
-              // Item image using AppImage with BoxFit.contain
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    AppConstants.radius16 - 1,
-                  ),
-                  child: hasImages
-                      ? AppImage(
-                          imageUrl: imageUrls.first,
-                          fit: BoxFit.contain,
-                          backgroundColor: tokens.isDarkMode
-                              ? Colors.black.withValues(alpha: 0.3)
-                              : Colors.grey.withValues(alpha: 0.1),
-                          enableZoom: controller.selectedIds.isEmpty,
-                          galleryUrls: imageUrls,
-                          memCacheWidth: 400,
-                          memCacheHeight: 600,
-                          errorIcon: _getCategoryIcon(item.category),
-                          // Presigned URLs expire after 1h; on a failed load
-                          // re-mint a fresh URL from the durable storage key.
-                          storagePath: item.itemImages?.first.storagePath,
-                          remintUrl: _itemRepository.remintImageUrl,
-                        )
-                      : _buildPlaceholder(item.category),
-                ),
-              ),
-
-              // Category badge
-              Positioned(
-                top: AppConstants.spacing8,
-                left: AppConstants.spacing8,
-                child: Container(
-                  width: constraints.maxWidth - AppConstants.spacing16,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacing8,
-                    vertical: AppConstants.spacing4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tokens.cardColor.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(AppConstants.radius8),
-                    border: Border.all(color: tokens.cardBorderColor),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _getCategoryIcon(item.category),
-                        size: 12,
-                        color: tokens.textMuted,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          item.category.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: tokens.textSecondary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Favorite indicator
-              if (item.isFavorite)
-                Positioned(
-                  top: AppConstants.spacing8,
-                  right: AppConstants.spacing8,
-                  child: Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.secondary.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.favorite,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                ),
-
-              // Selection indicator
-              if (isSelected)
-                Positioned(
-                  top: AppConstants.spacing8,
-                  right: item.isFavorite
-                      ? AppConstants.spacing8 + 30
-                      : AppConstants.spacing8,
-                  child: Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing4),
-                    decoration: BoxDecoration(
-                      color: tokens.brandColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                ),
-
-              // Item name (+ brand) on a clean panel — dense closet look, no heavy gradient
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacing8,
-                    vertical: AppConstants.spacing4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tokens.cardColor.withValues(alpha: 0.92),
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(AppConstants.radius16),
-                      bottomRight: Radius.circular(AppConstants.radius16),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        item.name,
-                        style: TextStyle(
-                          color: tokens.textPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (item.brand != null && item.brand!.isNotEmpty)
-                        Text(
-                          item.brand!,
-                          style: TextStyle(
-                            color: tokens.textMuted,
-                            fontSize: 10,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+      );
+    });
   }
 
   Widget _buildPlaceholder(Category category) {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      color: tokens.cardColor.withValues(alpha: 0.6),
-      child: Center(
-        child: Icon(
-          _getCategoryIcon(category),
-          size: 48,
-          color: tokens.textMuted,
-        ),
+    return Center(
+      child: Icon(
+        _getCategoryIcon(category),
+        semanticLabel: 'Image unavailable',
+        size: 48,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
     );
   }
 
   Widget _buildEmptyState() {
-    final tokens = AppUiTokens.of(context);
-
+    final theme = Theme.of(context);
+    final filtered = _hasFilters;
     return SliverFillRemaining(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.spacing24),
-          child: AppGlassCard(
-            padding: const EdgeInsets.all(AppConstants.spacing32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Animated-style icon container
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.checkroom_outlined,
-                    size: 48,
-                    color: tokens.brandColor,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing24),
-                Text(
-                  'Your closet is empty',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: tokens.textPrimary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppConstants.spacing8),
-                Text(
-                  'Start building your digital closet by adding\nyour first clothing item',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textMuted,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppConstants.spacing24),
-                Semantics(
-                  label: 'Add your first closet item',
-                  button: true,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showAddItemOptions(),
-                    icon: const Icon(Icons.add_a_photo),
-                    label: const Text('Add Your First Item'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppConstants.spacing24,
-                        vertical: AppConstants.spacing16,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                Text(
-                  'Take a photo or upload from gallery',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                ),
-              ],
+      hasScrollBody: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              filtered ? Icons.search_off_outlined : Icons.checkroom_outlined,
+              size: 40,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-          ),
+            const SizedBox(height: 16),
+            Text(
+              filtered ? 'No matching pieces' : 'Your closet is empty',
+              style: theme.textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              filtered
+                  ? 'Try another search or clear your filters.'
+                  : 'Add your first piece to start your personal collection.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: filtered
+                  ? controller.clearAllFilters
+                  : _showAddItemOptions,
+              icon: Icon(filtered ? Icons.filter_alt_off_outlined : Icons.add),
+              label: Text(filtered ? 'Clear filters' : 'Add your first item'),
+            ),
+          ],
         ),
       ),
     );
@@ -890,105 +570,103 @@ class _WardrobeContentState extends State<WardrobeContent> {
                     () => Wrap(
                       spacing: AppConstants.spacing8,
                       runSpacing: AppConstants.spacing8,
-                        children: Category.values.map((category) {
-                          final isSelected = controller.selectedCategories
-                              .contains(category);
-                          return FilterChip(
-                            label: Text(category.displayName),
+                      children: Category.values.map((category) {
+                        final isSelected = controller.selectedCategories
+                            .contains(category);
+                        return FilterChip(
+                          label: Text(category.displayName),
+                          selected: isSelected,
+                          onSelected: (_) =>
+                              controller.toggleCategoryFilter(category),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+                  Text(
+                    'Use Case',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.spacing8),
+                  Obx(
+                    () => Wrap(
+                      spacing: AppConstants.spacing8,
+                      runSpacing: AppConstants.spacing8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('All'),
+                          selected: controller.selectedOccasion.value.isEmpty,
+                          onSelected: (_) => controller.setOccasionFilter(''),
+                        ),
+                        ...UseCases.defaults.map((useCase) {
+                          final isSelected =
+                              controller.selectedOccasion.value == useCase;
+                          return ChoiceChip(
+                            label: Text(UseCases.displayLabel(useCase)),
                             selected: isSelected,
                             onSelected: (_) =>
-                                controller.toggleCategoryFilter(category),
+                                controller.setOccasionFilter(useCase),
                           );
-                        }).toList(),
-                      ),
+                        }),
+                      ],
                     ),
-                    const SizedBox(height: AppConstants.spacing16),
-                    Text(
-                      'Use Case',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing8),
-                    Obx(
-                      () => Wrap(
-                        spacing: AppConstants.spacing8,
-                        runSpacing: AppConstants.spacing8,
-                        children: [
-                          ChoiceChip(
-                            label: const Text('All'),
-                            selected:
-                                controller.selectedOccasion.value.isEmpty,
-                            onSelected: (_) =>
-                                controller.setOccasionFilter(''),
+                  ),
+                  const SizedBox(height: AppConstants.spacing8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: customUseCaseController,
+                          decoration: const InputDecoration(
+                            labelText: 'Custom use case',
+                            hintText: 'e.g., brunch',
+                            border: OutlineInputBorder(),
                           ),
-                          ...UseCases.defaults.map((useCase) {
-                            final isSelected =
-                                controller.selectedOccasion.value == useCase;
-                            return ChoiceChip(
-                              label: Text(UseCases.displayLabel(useCase)),
-                              selected: isSelected,
-                              onSelected: (_) =>
-                                  controller.setOccasionFilter(useCase),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: customUseCaseController,
-                            decoration: const InputDecoration(
-                              labelText: 'Custom use case',
-                              hintText: 'e.g., brunch',
-                              border: OutlineInputBorder(),
-                            ),
-                            onSubmitted: (_) {
-                              final value = UseCases.normalize(
-                                customUseCaseController.text,
-                              );
-                              controller.setOccasionFilter(value);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: AppConstants.spacing8),
-                        OutlinedButton(
-                          onPressed: () {
+                          onSubmitted: (_) {
                             final value = UseCases.normalize(
                               customUseCaseController.text,
                             );
                             controller.setOccasionFilter(value);
                           },
-                          child: const Text('Set'),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: AppConstants.spacing24),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            controller.clearAllFilters();
-                            Get.back();
-                          },
-                          child: const Text('Clear All'),
-                        ),
-                        const Spacer(),
-                        ElevatedButton(
-                          onPressed: () => Get.back(),
-                          child: const Text('Apply'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                      const SizedBox(width: AppConstants.spacing8),
+                      OutlinedButton(
+                        onPressed: () {
+                          final value = UseCases.normalize(
+                            customUseCaseController.text,
+                          );
+                          controller.setOccasionFilter(value);
+                        },
+                        child: const Text('Set'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppConstants.spacing24),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          controller.clearAllFilters();
+                          Get.back();
+                        },
+                        child: const Text('Clear All'),
+                      ),
+                      const Spacer(),
+                      ElevatedButton(
+                        onPressed: () => Get.back(),
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
         ),
+      ),
       isScrollControlled: true,
     ).then((_) {
       // Dispose after the sheet's exit transition finishes: disposing here
@@ -1015,77 +693,63 @@ class _WardrobeContentState extends State<WardrobeContent> {
           ),
           border: Border.all(color: tokens.cardBorderColor),
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: const Text('Newest First'),
-                trailing: controller.sortType.value == 'newest'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  controller.setSortType('newest');
-                  Get.back();
-                },
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    title: const Text('Newest First'),
+                    trailing: controller.sortType.value == 'newest'
+                        ? const Icon(Icons.check)
+                        : null,
+                    onTap: () {
+                      controller.setSortType('newest');
+                      Get.back();
+                    },
+                  ),
+                  ListTile(
+                    title: const Text('Oldest First'),
+                    trailing: controller.sortType.value == 'oldest'
+                        ? const Icon(Icons.check)
+                        : null,
+                    onTap: () {
+                      controller.setSortType('oldest');
+                      Get.back();
+                    },
+                  ),
+                  ListTile(
+                    title: const Text('Name (A-Z)'),
+                    trailing: controller.sortType.value == 'name'
+                        ? const Icon(Icons.check)
+                        : null,
+                    onTap: () {
+                      controller.setSortType('name');
+                      Get.back();
+                    },
+                  ),
+                  ListTile(
+                    title: const Text('Most Worn'),
+                    trailing: controller.sortType.value == 'most_worn'
+                        ? const Icon(Icons.check)
+                        : null,
+                    onTap: () {
+                      controller.setSortType('most_worn');
+                      Get.back();
+                    },
+                  ),
+                ],
               ),
-              ListTile(
-                title: const Text('Oldest First'),
-                trailing: controller.sortType.value == 'oldest'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  controller.setSortType('oldest');
-                  Get.back();
-                },
-              ),
-              ListTile(
-                title: const Text('Name (A-Z)'),
-                trailing: controller.sortType.value == 'name'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  controller.setSortType('name');
-                  Get.back();
-                },
-              ),
-              ListTile(
-                title: const Text('Most Worn'),
-                trailing: controller.sortType.value == 'most_worn'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  controller.setSortType('most_worn');
-                  Get.back();
-                },
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _showSearchDialog() {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Search Closet'),
-        content: TextField(
-          decoration: const InputDecoration(
-            hintText: 'Search by name or brand...',
-          ),
-          onChanged: (value) {
-            controller.searchQuery.value = value;
-          },
-        ),
-        actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Done')),
-        ],
-      ),
-    );
-  }
-
-  void _showItemOptions(dynamic item) {
+  void _showItemOptions(ItemModel item) {
     final tokens = AppUiTokens.of(context);
 
     Get.bottomSheet(
@@ -1098,42 +762,59 @@ class _WardrobeContentState extends State<WardrobeContent> {
           ),
           border: Border.all(color: tokens.cardBorderColor),
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  item.isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: item.isFavorite ? Colors.red : null,
-                ),
-                title: Text(
-                  item.isFavorite
-                      ? 'Remove from Favorites'
-                      : 'Add to Favorites',
-                ),
-                onTap: () {
-                  Get.back();
-                  controller.toggleFavorite(item.id);
-                },
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.check_circle_outline),
+                    title: Text(
+                      controller.selectedIds.contains(item.id)
+                          ? 'Deselect item'
+                          : 'Select item',
+                    ),
+                    onTap: () {
+                      Get.back();
+                      controller.toggleItemSelection(item);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      item.isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: item.isFavorite ? Colors.red : null,
+                    ),
+                    title: Text(
+                      item.isFavorite
+                          ? 'Remove from Favorites'
+                          : 'Add to Favorites',
+                    ),
+                    onTap: () {
+                      Get.back();
+                      controller.toggleFavorite(item.id);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.edit),
+                    title: const Text('Edit'),
+                    onTap: () {
+                      Get.back();
+                      Get.toNamed('/wardrobe/${item.id}/edit');
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.delete),
+                    title: const Text('Delete'),
+                    onTap: () {
+                      Get.back();
+                      _showDeleteConfirmation(itemId: item.id);
+                    },
+                  ),
+                ],
               ),
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Edit'),
-                onTap: () {
-                  Get.back();
-                  Get.toNamed('/wardrobe/${item.id}/edit');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: const Text('Delete'),
-                onTap: () {
-                  Get.back();
-                  _showDeleteConfirmation(itemId: item.id);
-                },
-              ),
-            ],
+            ),
           ),
         ),
       ),

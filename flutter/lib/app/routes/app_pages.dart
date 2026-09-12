@@ -27,9 +27,7 @@ import '../../features/gamification/views/gamification_page.dart';
 import '../../features/social/views/shared_outfit_page.dart';
 import '../../features/shell/views/main_shell_page.dart';
 import '../../features/shell/bindings/main_shell_binding.dart';
-import '../../features/shell/controllers/main_shell_controller.dart';
 import '../../features/tryon/views/tryon_page.dart';
-import '../../features/tryon/bindings/tryon_binding.dart';
 import '../bindings/auth_binding.dart';
 import '../bindings/wardrobe_binding.dart';
 import '../bindings/outfit_binding.dart';
@@ -83,43 +81,48 @@ class AppPages {
       middlewares: [GuestMiddleware()],
     ),
 
-    // Main App (Protected Routes) - Shell with IndexedStack for main tabs
+    // One shell for every main destination, including existing deep links.
     GetPage(
       name: Routes.home,
-      page: () => const MainShellPage(),
+      page: () => const MainShellPage(initialTab: 0),
       binding: MainShellBinding(),
       middlewares: [AuthMiddleware()],
     ),
-    // Deep link routes - redirect to shell with correct tab
-    GetPage(
-      name: Routes.photoshoot,
-      page: () => const MainShellPage(),
-      binding: MainShellBinding(),
-      middlewares: [AuthMiddleware(), TabRedirectMiddleware(1)],
-    ),
     GetPage(
       name: Routes.wardrobe,
-      page: () => const MainShellPage(),
-      binding: MainShellBinding(),
-      middlewares: [AuthMiddleware(), TabRedirectMiddleware(2)],
+      page: () => const MainShellPage(initialTab: 1),
+      binding: MainShellBinding(initialTab: 1),
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.outfits,
-      page: () => const MainShellPage(),
-      binding: MainShellBinding(),
-      middlewares: [AuthMiddleware(), TabRedirectMiddleware(3)],
+      page: () => const MainShellPage(initialTab: 2),
+      binding: MainShellBinding(initialTab: 2),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.studio,
+      page: () => const MainShellPage(initialTab: 3),
+      binding: MainShellBinding(initialTab: 3),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.photoshoot,
+      page: () => const MainShellPage(initialTab: 3, initialStudioTool: 0),
+      binding: MainShellBinding(initialTab: 3),
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.tryOn,
       page: () => const TryOnPage(),
-      binding: TryOnBinding(),
+      binding: MainShellBinding(initialTab: 3, initialStudioTool: 1),
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.more,
-      page: () => const MainShellPage(),
-      binding: MainShellBinding(),
-      middlewares: [AuthMiddleware(), TabRedirectMiddleware(4)],
+      page: () => const MainShellPage(initialTab: 4),
+      binding: MainShellBinding(initialTab: 4),
+      middlewares: [AuthMiddleware()],
     ),
     // Sub-routes that push on top of shell
     GetPage(
@@ -201,7 +204,7 @@ class AppPages {
       binding: OutfitBinding(),
       middlewares: [AuthMiddleware()],
     ),
-    // "More" submenu pages (keep their own navbar)
+    // Secondary screens use their own app bar and native Back.
     GetPage(
       name: Routes.calendar,
       page: () => const CalendarPage(),
@@ -211,7 +214,7 @@ class AppPages {
     GetPage(
       name: Routes.profile,
       page: () => const ProfilePage(),
-      binding: HomeBinding(),
+      binding: MainShellBinding(initialTab: 4),
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
@@ -333,23 +336,5 @@ class GuestMiddleware extends GetMiddleware {
     }
 
     return null;
-  }
-}
-
-/// Middleware to set initial tab index for deep links to main tabs
-class TabRedirectMiddleware extends GetMiddleware {
-  final int tabIndex;
-
-  TabRedirectMiddleware(this.tabIndex);
-
-  @override
-  GetPage? onPageCalled(GetPage? page) {
-    // After page loads, set the correct tab
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (Get.isRegistered<MainShellController>()) {
-        Get.find<MainShellController>().changeTab(tabIndex);
-      }
-    });
-    return page;
   }
 }

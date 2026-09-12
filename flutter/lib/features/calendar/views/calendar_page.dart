@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/date_utils.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../outfits/controllers/outfit_list_controller.dart';
 import '../controllers/calendar_controller.dart';
@@ -33,13 +32,12 @@ class _CalendarPageState extends State<CalendarPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(Get.currentRoute);
-
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
           child: RefreshIndicator(
-            onRefresh: () => controller.fetchEventsForMonth(controller.focusedDate.value),
+            onRefresh: () =>
+                controller.fetchEventsForMonth(controller.focusedDate.value),
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
@@ -54,10 +52,10 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
+        tooltip: 'Add calendar event',
         onPressed: () => _showAddEventDialog(),
         child: const Icon(Icons.add),
       ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
     );
   }
 
@@ -70,18 +68,20 @@ class _CalendarPageState extends State<CalendarPage> {
       title: Text(
         'Calendar',
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
+          fontWeight: FontWeight.w700,
+          color: tokens.textPrimary,
+        ),
       ),
       actions: [
-        Obx(() => !controller.hasConnectedCalendar
-            ? IconButton(
-                icon: const Icon(Icons.link),
-                onPressed: () => _showConnectCalendarSheet(),
-                tooltip: 'Connect Calendar',
-              )
-            : const SizedBox.shrink()),
+        Obx(
+          () => !controller.hasConnectedCalendar
+              ? IconButton(
+                  icon: const Icon(Icons.link),
+                  onPressed: () => _showConnectCalendarSheet(),
+                  tooltip: 'Connect Calendar',
+                )
+              : const SizedBox.shrink(),
+        ),
         IconButton(
           icon: const Icon(Icons.today),
           onPressed: () {
@@ -100,6 +100,12 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget _buildContent() {
     return SliverList(
       delegate: SliverChildListDelegate([
+        const AppEditorialHeader(
+          title: 'Dress for the day ahead.',
+          subtitle: 'Plan an outfit for your next event.',
+          color: AppCoreColors.editorialSlate,
+        ),
+        const SizedBox(height: 24),
         _buildCalendar(),
         const SizedBox(height: AppConstants.spacing24),
         _buildEventsList(),
@@ -119,17 +125,40 @@ class _CalendarPageState extends State<CalendarPage> {
       final focusedMonth = controller.focusedDate.value;
       final selectedDate = controller.selectedDate.value;
 
-      return Column(
-        children: [
-          // Month navigation header
-          _buildMonthHeader(focusedMonth),
-
-          // Weekday headers
-          _buildWeekdayHeaders(),
-
-          // Calendar grid
-          _buildCalendarGrid(focusedMonth, selectedDate),
-        ],
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          // A seven-column month cannot keep 48px targets on narrow phones.
+          // Use Flutter's accessible date picker for small/large-text layouts.
+          if (constraints.maxWidth < 364 ||
+              MediaQuery.textScalerOf(context).scale(14) > 21) {
+            return ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              title: Text(
+                MaterialLocalizations.of(context).formatFullDate(selectedDate),
+              ),
+              subtitle: const Text('Choose a date to plan your outfit'),
+              trailing: const Icon(Icons.calendar_month_outlined),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: selectedDate,
+                  firstDate: DateTime(1900),
+                  lastDate: DateTime(2100),
+                );
+                if (!mounted || date == null) return;
+                controller.selectDate(date);
+                controller.changeFocusedDate(date);
+              },
+            );
+          }
+          return Column(
+            children: [
+              _buildMonthHeader(focusedMonth),
+              _buildWeekdayHeaders(),
+              _buildCalendarGrid(focusedMonth, selectedDate),
+            ],
+          );
+        },
       );
     });
   }
@@ -141,22 +170,30 @@ class _CalendarPageState extends State<CalendarPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
+            tooltip: 'Previous month',
             icon: const Icon(Icons.chevron_left),
             onPressed: () {
-              final newDate = DateTime(focusedMonth.year, focusedMonth.month - 1);
+              final newDate = DateTime(
+                focusedMonth.year,
+                focusedMonth.month - 1,
+              );
               controller.changeFocusedDate(newDate);
             },
           ),
           Text(
             AppDateUtils.formatMonthYear(focusedMonth),
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           IconButton(
+            tooltip: 'Next month',
             icon: const Icon(Icons.chevron_right),
             onPressed: () {
-              final newDate = DateTime(focusedMonth.year, focusedMonth.month + 1);
+              final newDate = DateTime(
+                focusedMonth.year,
+                focusedMonth.month + 1,
+              );
               controller.changeFocusedDate(newDate);
             },
           ),
@@ -176,8 +213,8 @@ class _CalendarPageState extends State<CalendarPage> {
               child: Text(
                 day,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           );
@@ -188,7 +225,11 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Widget _buildCalendarGrid(DateTime focusedMonth, DateTime selectedDate) {
     final firstDayOfMonth = DateTime(focusedMonth.year, focusedMonth.month, 1);
-    final lastDayOfMonth = DateTime(focusedMonth.year, focusedMonth.month + 1, 0);
+    final lastDayOfMonth = DateTime(
+      focusedMonth.year,
+      focusedMonth.month + 1,
+      0,
+    );
     final firstWeekday = firstDayOfMonth.weekday % 7; // 0 = Sunday
 
     final daysInMonth = lastDayOfMonth.day;
@@ -206,58 +247,77 @@ class _CalendarPageState extends State<CalendarPage> {
                 final dayNumber = cellIndex - daysBeforeMonth + 1;
 
                 if (dayNumber < 1 || dayNumber > daysInMonth) {
-                  return const Expanded(child: SizedBox(height: 40));
+                  return const Expanded(child: SizedBox(height: 52));
                 }
 
-                final date = DateTime(focusedMonth.year, focusedMonth.month, dayNumber);
+                final date = DateTime(
+                  focusedMonth.year,
+                  focusedMonth.month,
+                  dayNumber,
+                );
                 final dateKey = DateTime(date.year, date.month, date.day);
                 final hasEvents = controller.eventsByDate.containsKey(dateKey);
                 final isSelected = AppDateUtils.isSameDay(date, selectedDate);
                 final isToday = AppDateUtils.isSameDay(date, DateTime.now());
 
                 return Expanded(
-                  child: GestureDetector(
-                    onTap: () => controller.selectDate(date),
-                    child: Container(
-                      height: 40,
-                      margin: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : isToday
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppConstants.radius8),
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Text(
-                            dayNumber.toString(),
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : isToday
-                                      ? Theme.of(context).colorScheme.onPrimaryContainer
-                                      : Theme.of(context).colorScheme.onSurface,
-                              fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.normal,
-                            ),
+                  child: Semantics(
+                    label:
+                        '${MaterialLocalizations.of(context).formatFullDate(date)}${hasEvents ? ', has planned events' : ''}',
+                    selected: isSelected,
+                    button: true,
+                    excludeSemantics: true,
+                    child: InkWell(
+                      onTap: () => controller.selectDate(date),
+                      child: Container(
+                        height: 48,
+                        margin: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : isToday
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radius8,
                           ),
-                          if (hasEvents)
-                            Positioned(
-                              bottom: 2,
-                              child: Container(
-                                width: 4,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? Theme.of(context).colorScheme.onPrimary
-                                      : Theme.of(context).colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Text(
+                              dayNumber.toString(),
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : isToday
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface,
+                                fontWeight: isSelected || isToday
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
-                        ],
+                            if (hasEvents)
+                              Positioned(
+                                bottom: 2,
+                                child: Container(
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimary
+                                        : Theme.of(context).colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -277,11 +337,13 @@ class _CalendarPageState extends State<CalendarPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Events for ${AppDateUtils.formatDate(controller.selectedDate.value)}',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+            Expanded(
+              child: Obx(
+                () => Text(
+                  'Events for ${AppDateUtils.formatDate(controller.selectedDate.value)}',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
             ),
             TextButton.icon(
               onPressed: () => _showAddEventDialog(),
@@ -313,7 +375,9 @@ class _CalendarPageState extends State<CalendarPage> {
           }
 
           return Column(
-            children: controller.selectedDateEvents.map((event) => _buildEventCard(event)).toList(),
+            children: controller.selectedDateEvents
+                .map((event) => _buildEventCard(event))
+                .toList(),
           );
         }),
       ],
@@ -340,7 +404,11 @@ class _CalendarPageState extends State<CalendarPage> {
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_formatTime(event.startTime, event.endTime)),
+              Text(
+                event.isAllDay
+                    ? 'All day'
+                    : _formatTime(event.startTime, event.endTime),
+              ),
               if (event.location != null) Text(event.location!),
             ],
           ),
@@ -354,6 +422,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   size: 20,
                 ),
               PopupMenuButton<String>(
+                tooltip: 'Options for ${event.title}',
                 onSelected: (value) {
                   switch (value) {
                     case 'edit':
@@ -373,12 +442,22 @@ class _CalendarPageState extends State<CalendarPage> {
                 itemBuilder: (context) {
                   final items = <PopupMenuEntry<String>>[
                     const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    const PopupMenuItem(value: 'link_outfit', child: Text('Link Outfit')),
+                    const PopupMenuItem(
+                      value: 'link_outfit',
+                      child: Text('Link Outfit'),
+                    ),
                   ];
                   if (event.outfitId != null) {
-                    items.add(const PopupMenuItem(value: 'unlink_outfit', child: Text('Unlink Outfit')));
+                    items.add(
+                      const PopupMenuItem(
+                        value: 'unlink_outfit',
+                        child: Text('Unlink Outfit'),
+                      ),
+                    );
                   }
-                  items.add(const PopupMenuItem(value: 'delete', child: Text('Delete')));
+                  items.add(
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  );
                   return items;
                 },
               ),
@@ -395,9 +474,13 @@ class _CalendarPageState extends State<CalendarPage> {
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacing32),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
+        color: Theme.of(
+          context,
+        ).colorScheme.errorContainer.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         children: [
@@ -414,9 +497,9 @@ class _CalendarPageState extends State<CalendarPage> {
           const SizedBox(height: AppConstants.spacing8),
           Text(
             controller.error.value.replaceAll('Exception: ', ''),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppConstants.spacing16),
@@ -445,11 +528,7 @@ class _CalendarPageState extends State<CalendarPage> {
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.event,
-            size: 48,
-            color: tokens.textMuted,
-          ),
+          Icon(Icons.event, size: 48, color: tokens.textMuted),
           const SizedBox(height: AppConstants.spacing16),
           Text(
             'No events for this day',
@@ -459,8 +538,8 @@ class _CalendarPageState extends State<CalendarPage> {
           Text(
             'Tap + to add a new event',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -501,150 +580,176 @@ class _CalendarPageState extends State<CalendarPage> {
         },
         child: StatefulBuilder(
           builder: (context, setDialogState) {
-            // Lift the dialog above the keyboard: AlertDialog does not pad
-            // viewInsets itself, so the Create/Save actions can be covered on
-            // small screens. Content is already scrollable.
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: AlertDialog(
-            title: const Text('Add Event'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Title',
-                      border: OutlineInputBorder(),
+            return AlertDialog(
+              title: const Text('Add Event'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Title',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing12),
-                  ListTile(
-                    title: const Text('All Day'),
-                    trailing: Switch(
-                      value: isAllDay,
-                      onChanged: (value) => setDialogState(() => isAllDay = value),
-                    ),
-                  ),
-                  if (!isAllDay) ...[
+                    const SizedBox(height: AppConstants.spacing12),
                     ListTile(
-                      title: const Text('Start Time'),
-                      trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: startTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          if (!context.mounted) return;
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.fromDateTime(startTime),
-                          );
-                          if (time != null) {
-                            setDialogState(() {
-                              startTime = DateTime(
-                                  picked.year, picked.month, picked.day, time.hour, time.minute);
-                            });
-                          }
-                        }
-                      },
+                      title: const Text('All Day'),
+                      trailing: Switch(
+                        value: isAllDay,
+                        onChanged: (value) =>
+                            setDialogState(() => isAllDay = value),
+                      ),
                     ),
-                    ListTile(
-                      title: const Text('End Time'),
-                      trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: endTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          if (!context.mounted) return;
-                          final time = await showTimePicker(
+                    if (!isAllDay) ...[
+                      ListTile(
+                        title: const Text('Start Time'),
+                        trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
+                        onTap: () async {
+                          final picked = await showDatePicker(
                             context: context,
-                            initialTime: TimeOfDay.fromDateTime(endTime),
+                            initialDate: startTime,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2030),
                           );
-                          if (time != null) {
-                            setDialogState(() {
-                              endTime = DateTime(
-                                  picked.year, picked.month, picked.day, time.hour, time.minute);
-                            });
+                          if (picked != null) {
+                            if (!context.mounted) return;
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(startTime),
+                            );
+                            if (time != null) {
+                              setDialogState(() {
+                                startTime = DateTime(
+                                  picked.year,
+                                  picked.month,
+                                  picked.day,
+                                  time.hour,
+                                  time.minute,
+                                );
+                              });
+                            }
                           }
-                        }
-                      },
+                        },
+                      ),
+                      ListTile(
+                        title: const Text('End Time'),
+                        trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: endTime,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2030),
+                          );
+                          if (picked != null) {
+                            if (!context.mounted) return;
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(endTime),
+                            );
+                            if (time != null) {
+                              setDialogState(() {
+                                endTime = DateTime(
+                                  picked.year,
+                                  picked.month,
+                                  picked.day,
+                                  time.hour,
+                                  time.minute,
+                                );
+                              });
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                    TextField(
+                      controller: locationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Location (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacing12),
+                    TextField(
+                      controller: descriptionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Description (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
                     ),
                   ],
-                  TextField(
-                    controller: locationController,
-                    decoration: const InputDecoration(
-                      labelText: 'Location (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing12),
-                  TextField(
-                    controller: descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
+                ),
               ),
-            ),
-            actions: [
-              Obx(() => TextButton(
-                onPressed: controller.isCreatingEvent.value ? null : () => Get.back(),
-                child: const Text('Cancel'),
-              )),
-              Obx(() => ElevatedButton(
-                onPressed: controller.isCreatingEvent.value ? null : () {
-                  if (titleController.text.isEmpty) {
-                    ErrorHandler.showValidation('Please enter a title', title: 'Error');
-                    return;
-                  }
-                  if (!isAllDay && !endTime.isAfter(startTime)) {
-                    ErrorHandler.showValidation('End time must be after start time', title: 'Error');
-                    return;
-                  }
-                  controller.createEvent(
-                    title: titleController.text,
-                    startTime: startTime,
-                    endTime: endTime,
-                    location: locationController.text.isEmpty ? null : locationController.text,
-                    description: descriptionController.text.isEmpty ? null : descriptionController.text,
-                    isAllDay: isAllDay,
-                  );
-                },
-                child: controller.isCreatingEvent.value
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Create'),
-              )),
-            ],
-              ),
-          );
-        },
-      )),
+              actions: [
+                Obx(
+                  () => TextButton(
+                    onPressed: controller.isCreatingEvent.value
+                        ? null
+                        : () => Get.back(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                Obx(
+                  () => ElevatedButton(
+                    onPressed: controller.isCreatingEvent.value
+                        ? null
+                        : () {
+                            if (titleController.text.isEmpty) {
+                              ErrorHandler.showValidation(
+                                'Please enter a title',
+                                title: 'Error',
+                              );
+                              return;
+                            }
+                            if (!isAllDay && !endTime.isAfter(startTime)) {
+                              ErrorHandler.showValidation(
+                                'End time must be after start time',
+                                title: 'Error',
+                              );
+                              return;
+                            }
+                            controller.createEvent(
+                              title: titleController.text,
+                              startTime: startTime,
+                              endTime: endTime,
+                              location: locationController.text.isEmpty
+                                  ? null
+                                  : locationController.text,
+                              description: descriptionController.text.isEmpty
+                                  ? null
+                                  : descriptionController.text,
+                              isAllDay: isAllDay,
+                            );
+                          },
+                    child: controller.isCreatingEvent.value
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Create'),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
   void _showEditEventDialog(CalendarEventModel event) {
     final titleController = TextEditingController(text: event.title);
-    final locationController = TextEditingController(text: event.location ?? '');
-    final descriptionController = TextEditingController(text: event.description ?? '');
+    final locationController = TextEditingController(
+      text: event.location ?? '',
+    );
+    final descriptionController = TextEditingController(
+      text: event.description ?? '',
+    );
 
     void disposeControllers() {
       titleController.dispose();
@@ -670,173 +775,207 @@ class _CalendarPageState extends State<CalendarPage> {
         child: StatefulBuilder(
           builder: (context, setDialogState) {
             // Lift the dialog above the keyboard (same fix as the Add dialog).
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: AlertDialog(
-            title: const Text('Edit Event'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Title',
-                      border: OutlineInputBorder(),
+            return AlertDialog(
+              title: const Text('Edit Event'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Title',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing12),
-                  ListTile(
-                    title: const Text('All Day'),
-                    trailing: Switch(
-                      value: isAllDay,
-                      onChanged: (value) => setDialogState(() => isAllDay = value),
-                    ),
-                  ),
-                  if (!isAllDay) ...[
+                    const SizedBox(height: AppConstants.spacing12),
                     ListTile(
-                      title: const Text('Start Time'),
-                      trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
-                      onTap: () async {
-                        // A10b-05: date + time, mirroring the Add dialog —
-                        // the old edit dialog only offered a time picker, so
-                        // an event's date could never be changed.
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: startTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          if (!context.mounted) return;
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.fromDateTime(startTime),
-                          );
-                          if (time != null) {
-                            setDialogState(() {
-                              startTime = DateTime(
-                                  picked.year, picked.month, picked.day, time.hour, time.minute);
-                            });
-                          }
-                        }
-                      },
+                      title: const Text('All Day'),
+                      trailing: Switch(
+                        value: isAllDay,
+                        onChanged: (value) =>
+                            setDialogState(() => isAllDay = value),
+                      ),
                     ),
-                    ListTile(
-                      title: const Text('End Time'),
-                      trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: endTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          if (!context.mounted) return;
-                          final time = await showTimePicker(
+                    if (!isAllDay) ...[
+                      ListTile(
+                        title: const Text('Start Time'),
+                        trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
+                        onTap: () async {
+                          // A10b-05: date + time, mirroring the Add dialog —
+                          // the old edit dialog only offered a time picker, so
+                          // an event's date could never be changed.
+                          final picked = await showDatePicker(
                             context: context,
-                            initialTime: TimeOfDay.fromDateTime(endTime),
+                            initialDate: startTime,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2030),
                           );
-                          if (time != null) {
-                            setDialogState(() {
-                              endTime = DateTime(
-                                  picked.year, picked.month, picked.day, time.hour, time.minute);
-                            });
+                          if (picked != null) {
+                            if (!context.mounted) return;
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(startTime),
+                            );
+                            if (time != null) {
+                              setDialogState(() {
+                                startTime = DateTime(
+                                  picked.year,
+                                  picked.month,
+                                  picked.day,
+                                  time.hour,
+                                  time.minute,
+                                );
+                              });
+                            }
                           }
-                        }
-                      },
+                        },
+                      ),
+                      ListTile(
+                        title: const Text('End Time'),
+                        trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: endTime,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2030),
+                          );
+                          if (picked != null) {
+                            if (!context.mounted) return;
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(endTime),
+                            );
+                            if (time != null) {
+                              setDialogState(() {
+                                endTime = DateTime(
+                                  picked.year,
+                                  picked.month,
+                                  picked.day,
+                                  time.hour,
+                                  time.minute,
+                                );
+                              });
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                    TextField(
+                      controller: locationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Location (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacing12),
+                    TextField(
+                      controller: descriptionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Description (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
                     ),
                   ],
-                  TextField(
-                    controller: locationController,
-                    decoration: const InputDecoration(
-                      labelText: 'Location (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing12),
-                  TextField(
-                    controller: descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
+                ),
               ),
-            ),
-            actions: [
-              Obx(() => TextButton(
-                onPressed: controller.isUpdatingEvent.value ? null : () => Get.back(),
-                child: const Text('Cancel'),
-              )),
-              Obx(() => ElevatedButton(
-                onPressed: controller.isUpdatingEvent.value ? null : () {
-                  if (titleController.text.isEmpty) {
-                    ErrorHandler.showValidation('Please enter a title', title: 'Error');
-                    return;
-                  }
-                  if (!isAllDay && !endTime.isAfter(startTime)) {
-                    ErrorHandler.showValidation('End time must be after start time', title: 'Error');
-                    return;
-                  }
-                  controller.updateEvent(
-                    event.id,
-                    title: titleController.text,
-                    startTime: startTime,
-                    endTime: endTime,
-                    location: locationController.text.isEmpty ? null : locationController.text,
-                    description: descriptionController.text.isEmpty ? null : descriptionController.text,
-                    isAllDay: isAllDay,
-                  );
-                },
-                child: controller.isUpdatingEvent.value
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
-              )),
-            ],
-              ),
-          );
-        },
-      )),
+              actions: [
+                Obx(
+                  () => TextButton(
+                    onPressed: controller.isUpdatingEvent.value
+                        ? null
+                        : () => Get.back(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                Obx(
+                  () => ElevatedButton(
+                    onPressed: controller.isUpdatingEvent.value
+                        ? null
+                        : () {
+                            if (titleController.text.isEmpty) {
+                              ErrorHandler.showValidation(
+                                'Please enter a title',
+                                title: 'Error',
+                              );
+                              return;
+                            }
+                            if (!isAllDay && !endTime.isAfter(startTime)) {
+                              ErrorHandler.showValidation(
+                                'End time must be after start time',
+                                title: 'Error',
+                              );
+                              return;
+                            }
+                            controller.updateEvent(
+                              event.id,
+                              title: titleController.text,
+                              startTime: startTime,
+                              endTime: endTime,
+                              location: locationController.text.isEmpty
+                                  ? null
+                                  : locationController.text,
+                              description: descriptionController.text.isEmpty
+                                  ? null
+                                  : descriptionController.text,
+                              isAllDay: isAllDay,
+                            );
+                          },
+                    child: controller.isUpdatingEvent.value
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Save'),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
   void _showDeleteConfirmDialog(CalendarEventModel event) {
     Get.dialog(
-      Obx(() => AlertDialog(
-        title: const Text('Delete Event?'),
-        content: Text('Are you sure you want to delete "${event.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: controller.isDeletingEvent(event.id) ? null : () => Get.back(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: controller.isDeletingEvent(event.id) ? null : () => controller.deleteEvent(event.id),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
+      Obx(
+        () => AlertDialog(
+          title: const Text('Delete Event?'),
+          content: Text('Are you sure you want to delete "${event.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: controller.isDeletingEvent(event.id)
+                  ? null
+                  : () => Get.back(),
+              child: const Text('Cancel'),
             ),
-            child: controller.isDeletingEvent(event.id)
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Delete'),
-          ),
-        ],
-      )),
+            ElevatedButton(
+              onPressed: controller.isDeletingEvent(event.id)
+                  ? null
+                  : () => controller.deleteEvent(event.id),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              child: controller.isDeletingEvent(event.id)
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
       barrierDismissible: false,
     );
   }
@@ -844,43 +983,53 @@ class _CalendarPageState extends State<CalendarPage> {
   void _showConnectCalendarSheet() {
     final tokens = AppUiTokens.of(context);
 
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-          border: Border.all(color: tokens.cardBorderColor),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Connect Calendar',
-                style: Theme.of(context).textTheme.titleLarge,
+        child: Container(
+          padding: const EdgeInsets.all(AppConstants.spacing24),
+          decoration: BoxDecoration(
+            color: tokens.cardColor,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppConstants.radius24),
+            ),
+            border: Border.all(color: tokens.cardBorderColor),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Connect Calendar',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppConstants.spacing24),
+                  _buildCalendarProviderTile(
+                    icon: Icons.calendar_today,
+                    name: 'Google Calendar',
+                    provider: CalendarProvider.google,
+                  ),
+                  const SizedBox(height: AppConstants.spacing8),
+                  _buildCalendarProviderTile(
+                    icon: Icons.apple,
+                    name: 'Apple Calendar',
+                    provider: CalendarProvider.apple,
+                  ),
+                  const SizedBox(height: AppConstants.spacing8),
+                  _buildCalendarProviderTile(
+                    icon: Icons.calendar_view_month,
+                    name: 'Outlook Calendar',
+                    provider: CalendarProvider.outlook,
+                  ),
+                ],
               ),
-              const SizedBox(height: AppConstants.spacing24),
-              _buildCalendarProviderTile(
-                icon: Icons.calendar_today,
-                name: 'Google Calendar',
-                provider: CalendarProvider.google,
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              _buildCalendarProviderTile(
-                icon: Icons.apple,
-                name: 'Apple Calendar',
-                provider: CalendarProvider.apple,
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              _buildCalendarProviderTile(
-                icon: Icons.calendar_view_month,
-                name: 'Outlook Calendar',
-                provider: CalendarProvider.outlook,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -911,7 +1060,10 @@ class _CalendarPageState extends State<CalendarPage> {
     }
 
     if (outfitController == null) {
-      ErrorHandler.showInfo('Open the Outfits tab once, then try linking again.', title: 'Outfits unavailable');
+      ErrorHandler.showInfo(
+        'Open the Outfits tab once, then try linking again.',
+        title: 'Outfits unavailable',
+      );
       return;
     }
 
@@ -922,7 +1074,10 @@ class _CalendarPageState extends State<CalendarPage> {
     if (!mounted) return;
 
     if (outfitController.outfits.isEmpty) {
-      ErrorHandler.showInfo('Create an outfit first, then link it to this event.', title: 'No outfits');
+      ErrorHandler.showInfo(
+        'Create an outfit first, then link it to this event.',
+        title: 'No outfits',
+      );
       return;
     }
 
@@ -943,9 +1098,9 @@ class _CalendarPageState extends State<CalendarPage> {
               padding: const EdgeInsets.all(AppConstants.spacing16),
               child: Text(
                 'Link outfit to event',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             Expanded(

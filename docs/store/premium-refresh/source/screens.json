@@ -1,0 +1,17 @@
+{
+  "screens": [
+    {"id":"01-closet","title":"A clearer view\nof your closet.","subtitle":"Find every piece at a glance.","field":"linen","alt":"FitCheck Closet with four garment cutouts, category filters and an Add item action."},
+    {"id":"02-home","title":"Every day,\na fresh perspective.","subtitle":"Rediscover the pieces you already own.","field":"rose","alt":"FitCheck Home with a daily outfit feature and shortcuts to add clothes and create outfits."},
+    {"id":"03-outfits","title":"Good pieces.\nBetter together.","subtitle":"Keep your favourite combinations close.","field":"slate","alt":"FitCheck Outfits showing saved outfit compositions, search and the Create outfit action."},
+    {"id":"04-tryon","title":"One garment.\nA whole new look.","subtitle":"Explore virtual try-on in Studio.","field":"sage","alt":"FitCheck Studio Try-on with a sample portrait and shirt selected as inputs."},
+    {"id":"05-photoshoot","title":"Your next shoot\nstarts here.","subtitle":"Add your photos. Choose your direction.","field":"rose","alt":"FitCheck Studio Photoshoot with a labelled example and actions to add photos or use the camera."},
+    {"id":"06-dark-closet","title":"Your style,\nafter dark.","subtitle":"A quieter view, in light or dark.","field":"dark","alt":"FitCheck Closet in dark mode with garment cutouts and pale moss controls."}
+  ],
+  "presets": [
+    {"id":"app-store-iphone","raw":"ios-phone","width":1320,"height":2868,"layout":"phone","store":"Apple App Store","device":"iPhone 6.9-inch"},
+    {"id":"app-store-ipad","raw":"ios-ipad","width":2064,"height":2752,"layout":"ipad","store":"Apple App Store","device":"iPad 13-inch"},
+    {"id":"play-store-phone","raw":"android-phone","width":1080,"height":1920,"layout":"play-phone","store":"Google Play","device":"Phone"},
+    {"id":"play-store-tablet-7","raw":"android-tablet7","width":1440,"height":2560,"layout":"raw","store":"Google Play","device":"7-inch tablet"},
+    {"id":"play-store-tablet-10","raw":"android-tablet10","width":1800,"height":3200,"layout":"raw","store":"Google Play","device":"10-inch tablet"}
+  ]
+}

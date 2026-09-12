@@ -4,6 +4,8 @@ import '../constants/app_constants.dart';
 
 // Export image widgets for convenience
 export 'app_image.dart';
+export 'sliver_product_grid.dart';
+export '../constants/app_core_colors.dart';
 export 'app_image_viewer.dart';
 
 // Export offline/error banner
@@ -48,7 +50,7 @@ class AppUiTokens {
     final isDarkMode = theme.brightness == Brightness.dark;
     final textPrimary = theme.colorScheme.onSurface;
     final textSecondary = theme.colorScheme.onSurfaceVariant;
-    final textMuted = textSecondary.withValues(alpha: isDarkMode ? 0.7 : 0.65);
+    final textMuted = textSecondary;
     final brandColor = theme.colorScheme.primary;
 
     final cardColor = isDarkMode
@@ -86,7 +88,7 @@ class AppPageBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
 
-    return Container(
+    return Material(
       color: tokens.isDarkMode
           ? AppCoreColors.backgroundDark
           : AppCoreColors.backgroundLight,
@@ -123,16 +125,19 @@ class AppGlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
 
-    return Container(
-      padding: padding ?? const EdgeInsets.all(AppConstants.spacing16),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
+    return Material(
+      color: tokens.cardColor,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(
           borderRadius ?? AppConstants.radius16,
         ),
-        border: Border.all(color: tokens.cardBorderColor),
+        side: BorderSide(color: tokens.cardBorderColor),
       ),
-      child: child,
+      child: Padding(
+        padding: padding ?? const EdgeInsets.all(AppConstants.spacing16),
+        child: child,
+      ),
     );
   }
 }
@@ -162,8 +167,8 @@ class AppSectionHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
                   color: tokens.textPrimary,
                 ),
               ),
@@ -181,6 +186,52 @@ class AppSectionHeader extends StatelessWidget {
         ),
         if (trailing != null) trailing!,
       ],
+    );
+  }
+}
+
+/// A section field, shared by magazine pages without changing control semantics.
+class AppEditorialHeader extends StatelessWidget {
+  const AppEditorialHeader({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    this.trailing,
+  });
+  final String title;
+  final String subtitle;
+  final Color color;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: AppCoreColors.editorialInk,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppCoreColors.editorialInk),
+          ),
+          if (trailing != null) ...[const SizedBox(height: 16), trailing!],
+        ],
+      ),
     );
   }
 }

@@ -1,6 +1,6 @@
 # Quality score
 
-Last updated: 2026-08-08
+Last updated: 2026-09-05
 
 Grades are honest snapshots for agents: where to be careful, where tests are strong, where docs lag. Update when a domain materially improves or regresses.
 
@@ -22,7 +22,7 @@ Scale: **A** solid · **B** workable · **C** fragile · **D** high risk
 | Subscriptions / Stripe | B | 2026-07-31 | Webhook tests (incl. Plus activation), plan-limit/entitlement tests | Three tiers live; Stripe Plus price IDs must be set in env |
 | Web frontend | B- | 2026-08-08 | 44 Vitest files / 229 test cases, API retry, feature error boundaries, Sentry, global error handlers | No authenticated browser E2E; build writes tracked `public/sitemap.xml` |
 | Admin panel | B | 2026-08-08 | Server-enforced RBAC (172 backend admin tests: authz 403s, predicates, CRUD, suspend, refund, audit, dashboards, quotas, revenue trends), 28 Vitest files / 215 app tests (MSW, typed against generated OpenAPI), OpenAPI codegen + CI drift check, audit trail on every mutation, URL-synced table state, i18n + axe in tests, Playwright e2e (6 files / 8 journeys) wired into CI | Token-refresh end-to-end verification pending hardening report; hand-written `types.ts` partially superseded by `schema.d.ts`; role-level permissions only (no field-level) |
-| Flutter | B | 2026-07-31 | Full Flutter suite (106 tests), offline queue hardening, bounded polling, error zone, Sentry | No `integration_test/` suite; SDK cache must be writable for local verification |
+| Flutter | B+ | 2026-09-05 | 458 Flutter tests, clean strict analyzer, fourteen approved muted-palette goldens, 31 validated listing images, real-SDK refresh rate-limit and replacement-session regressions, persistent offline Light/Dark/System modes and platform chrome regressions, image-only transparent Closet, AA contrast, 320px/200%/keyboard layouts, trusted-origin credentials and refresh/SSE/job regressions | Stored manual/legacy photo backgrounds still need processing; final Android debug and iOS simulator builds pass; physical-device performance, screen readers, authenticated journeys and sandbox purchase/restore remain release gates; see [mobile plan](exec-plans/active/flutter-premium-refresh.md) |
 | Docs / harness | B- | 2026-08-08 | Story ledger, architecture/docs/theme checks, conditional repo-wide runner | Curated API/schema docs can drift; unavailable toolchains need explicit follow-up |
 | Infra / CI | B- | 2026-07-31 | Backend + frontend + Flutter CI, Sentry on web + mobile + backend | No hosted smoke/load gate; public storage URL debt remains |
 

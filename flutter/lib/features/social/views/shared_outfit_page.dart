@@ -19,8 +19,8 @@ class HiddenSharedContentStore {
 
   static PersistenceService get _persistence =>
       Get.isRegistered<PersistenceService>()
-          ? Get.find<PersistenceService>()
-          : PersistenceService();
+      ? Get.find<PersistenceService>()
+      : PersistenceService();
 
   static Future<bool> isHidden(String shareId) async {
     final list = (await _persistence.getStringList(_prefsKey)) ?? const [];
@@ -58,10 +58,10 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
   }
 
   Future<_SharedLoadResult> _load() async {
-    if (await HiddenSharedContentStore.isHidden(widget.shareId)) {
-      return const _SharedLoadResult.hidden();
-    }
     try {
+      if (await HiddenSharedContentStore.isHidden(widget.shareId)) {
+        return const _SharedLoadResult.hidden();
+      }
       final outfit = await OutfitRepository().getSharedOutfit(widget.shareId);
       return _SharedLoadResult.ok(outfit);
     } on NotFoundException {
@@ -110,7 +110,10 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
     setState(() {
       _loadFuture = Future.value(const _SharedLoadResult.hidden());
     });
-    ErrorHandler.showInfo('This outfit will no longer be shown on this device.', title: 'Content hidden');
+    ErrorHandler.showInfo(
+      'This outfit will no longer be shown on this device.',
+      title: 'Content hidden',
+    );
   }
 
   @override
@@ -118,14 +121,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
     final tokens = AppUiTokens.of(context);
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [tokens.brandColor.withValues(alpha: 0.1), tokens.cardColor],
-          ),
-        ),
+      body: AppPageBackground(
         child: SafeArea(
           child: Stack(
             children: [
@@ -190,6 +186,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                   return CustomScrollView(
                     slivers: [
                       SliverAppBar(
+                        automaticallyImplyLeading: false,
                         expandedHeight: 400,
                         pinned: true,
                         backgroundColor: Colors.transparent,
@@ -197,6 +194,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                           background: images.isNotEmpty
                               ? AppImage(
                                   imageUrl: images.first,
+                                  semanticLabel: 'Shared outfit: $name',
                                   fit: BoxFit.contain,
                                   enableZoom: true,
                                   galleryUrls: images,
@@ -360,23 +358,26 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
     Widget? action,
   }) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 72, 24, 24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 64, color: tokens.textMuted),
             const SizedBox(height: AppConstants.spacing16),
             Text(
               title,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(color: tokens.textPrimary),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(color: tokens.textPrimary),
             ),
             const SizedBox(height: AppConstants.spacing8),
             Text(
               body,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: tokens.textMuted),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
               textAlign: TextAlign.center,
             ),
             if (action != null) ...[
@@ -399,7 +400,7 @@ class _SharedLoadResult {
   const _SharedLoadResult._(this.status, this.outfit);
 
   const _SharedLoadResult.ok(SharedOutfitModel outfit)
-      : this._(_SharedStatus.ok, outfit);
+    : this._(_SharedStatus.ok, outfit);
 
   const _SharedLoadResult.missing() : this._(_SharedStatus.missing, null);
 

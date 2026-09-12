@@ -3,7 +3,6 @@ import '../controllers/main_shell_controller.dart';
 import '../../dashboard/controllers/dashboard_controller.dart';
 import '../../wardrobe/controllers/wardrobe_controller.dart';
 import '../../outfits/controllers/outfit_list_controller.dart';
-import '../../outfits/controllers/outfit_creation_controller.dart';
 import '../../outfits/controllers/outfit_generation_controller.dart';
 import '../../photoshoot/controllers/photoshoot_controller.dart';
 import '../../tryon/controllers/tryon_controller.dart';
@@ -13,16 +12,31 @@ import '../../gifts/controllers/gift_controller.dart';
 
 /// Binding for MainShellPage - initializes shell and all tab controllers
 class MainShellBinding extends Bindings {
+  MainShellBinding({this.initialTab = 0, this.initialStudioTool = 0});
+
+  final int initialTab;
+  final int initialStudioTool;
+
   @override
   void dependencies() {
     // Shell controller (permanent - stays in memory while shell is active)
-    Get.put<MainShellController>(MainShellController(), permanent: true);
+    if (!Get.isRegistered<MainShellController>()) {
+      Get.put<MainShellController>(
+        MainShellController(
+          initialTab: initialTab,
+          initialStudioTool: initialStudioTool,
+        ),
+        permanent: true,
+      );
+    }
 
     // Dashboard tab controllers
     Get.lazyPut<DashboardController>(() => DashboardController(), fenix: true);
     Get.lazyPut<GiftController>(() => GiftController(), fenix: true);
     Get.lazyPut<SettingsController>(() => SettingsController(), fenix: true);
-    Get.put<SubscriptionController>(SubscriptionController());
+    if (!Get.isRegistered<SubscriptionController>()) {
+      Get.put<SubscriptionController>(SubscriptionController());
+    }
 
     // Wardrobe tab
     Get.lazyPut<WardrobeController>(() => WardrobeController(), fenix: true);
@@ -32,22 +46,18 @@ class MainShellBinding extends Bindings {
       () => OutfitListController(),
       fenix: true,
     );
-    Get.lazyPut<OutfitCreationController>(
-      () => OutfitCreationController(),
-      fenix: true,
-    );
     Get.lazyPut<OutfitGenerationController>(
       () => OutfitGenerationController(),
       fenix: true,
     );
 
-    // Photoshoot tab (replacing Try-On in bottom nav)
+    // Studio tools initialize only when first opened.
     Get.lazyPut<PhotoshootController>(
       () => PhotoshootController(),
       fenix: true,
     );
 
-    // Try-On (available from More menu)
+    // Both Studio tools stay registered while the shell is active.
     Get.lazyPut<TryOnController>(() => TryOnController(), fenix: true);
   }
 }

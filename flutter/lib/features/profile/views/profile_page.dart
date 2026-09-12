@@ -1,20 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
-import 'profile_content.dart';
+import '../../shell/views/main_shell_page.dart';
 
-/// Pushed `/profile` route. The same content is the "More" tab in
-/// MainShellPage; this wrapper only adds a Scaffold and its own navbar.
+/// Compatibility entry point for the profile destination.
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: const ProfileContent(),
-      bottomNavigationBar: AppBottomNavigationBar(
-        currentIndex: AppBottomNavigationBar.getIndexForRoute(Get.currentRoute),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const MainShellPage(initialTab: 4);
 }

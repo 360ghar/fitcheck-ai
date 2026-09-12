@@ -1,6 +1,6 @@
 # Admin console
 
-Last updated: 2026-08-29
+Last updated: 2026-09-05
 
 Internal admin console for FitCheck AI founder + ops/content/support staff,
 under `admin/`. A React 19 SPA deployed to `admin.fitcheckaiapp.com`, separate

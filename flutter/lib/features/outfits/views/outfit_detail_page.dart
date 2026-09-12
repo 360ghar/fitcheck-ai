@@ -16,11 +16,9 @@ import '../../../core/utils/error_handler.dart';
 /// Detail page for a single outfit
 class OutfitDetailPage extends StatefulWidget {
   final String outfitId;
+  final OutfitRepository? repository;
 
-  const OutfitDetailPage({
-    super.key,
-    required this.outfitId,
-  });
+  const OutfitDetailPage({super.key, required this.outfitId, this.repository});
 
   @override
   State<OutfitDetailPage> createState() => _OutfitDetailPageState();
@@ -30,7 +28,8 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
   int _currentImageIndex = 0;
   late final PageController _pageController;
   late final OutfitListController _controller;
-  final OutfitRepository _outfitRepository = OutfitRepository();
+  late final OutfitRepository _outfitRepository =
+      widget.repository ?? OutfitRepository();
 
   @override
   void initState() {
@@ -47,10 +46,11 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
   }
 
   Future<void> _loadOutfit() async {
-    final outfit =
-        _controller.outfits.firstWhereOrNull((o) => o.id == widget.outfitId);
+    final outfit = _controller.outfits.firstWhereOrNull(
+      (o) => o.id == widget.outfitId,
+    );
     if (outfit == null) {
-      await _controller.fetchOutfitById(widget.outfitId);
+      await _fetchOutfit();
     } else {
       // Always refresh on open instead of serving the cached model blind:
       // the API serves short-lived presigned image URLs (1h TTL) minted at
@@ -61,6 +61,20 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
       // the cached model (refreshOutfitById swallows errors).
       await _controller.refreshOutfitById(widget.outfitId);
     }
+  }
+
+  /// Loads the outfit when it is not in the paged list and publishes it as
+  /// the selected model.
+  ///
+  /// [OutfitListController.fetchOutfitById] deliberately leaves the paged
+  /// list alone while a server-side filter is active (A10b-09), so the fetched
+  /// model must be kept here. Otherwise this page renders "Outfit not found"
+  /// for an outfit it just loaded - e.g. Home's outfit-of-the-day card while
+  /// the Outfits tab has a favorites/search filter set.
+  Future<void> _fetchOutfit() async {
+    final fetched = await _controller.fetchOutfitById(widget.outfitId);
+    if (fetched == null || !mounted) return;
+    _controller.setSelectedOutfit(fetched);
   }
 
   Future<void> _refreshOutfit() async {
@@ -77,7 +91,12 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
           child: Stack(
             children: [
               Obx(() {
-                final outfit = _controller.outfits.firstWhereOrNull((o) => o.id == widget.outfitId);
+                final selected = _controller.selectedOutfit.value;
+                final outfit =
+                    _controller.outfits.firstWhereOrNull(
+                      (o) => o.id == widget.outfitId,
+                    ) ??
+                    (selected?.id == widget.outfitId ? selected : null);
 
                 // Loading state
                 if (outfit == null && _controller.isFetchingSingle.value) {
@@ -92,25 +111,27 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.error_outline, size: 64, color: tokens.textMuted),
+                          Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: tokens.textMuted,
+                          ),
                           const SizedBox(height: AppConstants.spacing16),
                           Text(
                             'Failed to load outfit',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: tokens.textPrimary,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(color: tokens.textPrimary),
                           ),
                           const SizedBox(height: AppConstants.spacing8),
                           Text(
                             _controller.singleFetchError.value,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: tokens.textMuted),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: AppConstants.spacing16),
                           ElevatedButton.icon(
-                            onPressed: () => _controller.fetchOutfitById(widget.outfitId),
+                            onPressed: _fetchOutfit,
                             icon: const Icon(Icons.refresh),
                             label: const Text('Retry'),
                           ),
@@ -126,13 +147,16 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.search_off, size: 64, color: tokens.textMuted),
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: tokens.textMuted,
+                        ),
                         const SizedBox(height: AppConstants.spacing16),
                         Text(
                           'Outfit not found',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: tokens.textPrimary,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: tokens.textPrimary),
                         ),
                         const SizedBox(height: AppConstants.spacing16),
                         TextButton.icon(
@@ -177,39 +201,54 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                     ),
                                   ),
                                   // Favorite button
-                                  Obx(() => _controller.isFavoriting(outfit.id)
-                                      ? const SizedBox(
-                                          width: 28,
-                                          height: 28,
-                                          child: Padding(
-                                            padding: EdgeInsets.all(4),
-                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                  Obx(
+                                    () => _controller.isFavoriting(outfit.id)
+                                        ? const SizedBox(
+                                            width: 28,
+                                            height: 28,
+                                            child: Padding(
+                                              padding: EdgeInsets.all(4),
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          )
+                                        : IconButton(
+                                            tooltip: outfit.isFavorite
+                                                ? 'Remove from favorites'
+                                                : 'Add to favorites',
+                                            onPressed: () => _controller
+                                                .toggleFavorite(outfit.id),
+                                            icon: Icon(
+                                              outfit.isFavorite
+                                                  ? Icons.favorite
+                                                  : Icons.favorite_border,
+                                              color: outfit.isFavorite
+                                                  ? Colors.red
+                                                  : null,
+                                              size: 28,
+                                            ),
                                           ),
-                                        )
-                                      : IconButton(
-                                          tooltip: outfit.isFavorite
-                                              ? 'Remove from favorites'
-                                              : 'Add to favorites',
-                                          onPressed: () => _controller.toggleFavorite(outfit.id),
-                                          icon: Icon(
-                                            outfit.isFavorite ? Icons.favorite : Icons.favorite_border,
-                                            color: outfit.isFavorite ? Colors.red : null,
-                                            size: 28,
-                                          ),
-                                        ),
                                   ),
                                   // More options
                                   PopupMenuButton<String>(
                                     onSelected: (value) {
                                       switch (value) {
                                         case 'edit':
-                                          Get.toNamed(Routes.outfitEdit.replaceFirst(':id', outfit.id));
+                                          Get.toNamed(
+                                            Routes.outfitEdit.replaceFirst(
+                                              ':id',
+                                              outfit.id,
+                                            ),
+                                          );
                                           break;
                                         case 'share':
                                           _shareOutfit(outfit);
                                           break;
                                         case 'duplicate':
-                                          _controller.duplicateOutfit(outfit.id);
+                                          _controller.duplicateOutfit(
+                                            outfit.id,
+                                          );
                                           break;
                                         case 'delete':
                                           _showDeleteDialog(outfit);
@@ -222,7 +261,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                         child: Row(
                                           children: [
                                             Icon(Icons.edit),
-                                            SizedBox(width: AppConstants.spacing8),
+                                            SizedBox(
+                                              width: AppConstants.spacing8,
+                                            ),
                                             Text('Edit'),
                                           ],
                                         ),
@@ -232,7 +273,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                         child: Row(
                                           children: [
                                             Icon(Icons.share),
-                                            SizedBox(width: AppConstants.spacing8),
+                                            SizedBox(
+                                              width: AppConstants.spacing8,
+                                            ),
                                             Text('Share'),
                                           ],
                                         ),
@@ -242,7 +285,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                         child: Row(
                                           children: [
                                             Icon(Icons.copy),
-                                            SizedBox(width: AppConstants.spacing8),
+                                            SizedBox(
+                                              width: AppConstants.spacing8,
+                                            ),
                                             Text('Duplicate'),
                                           ],
                                         ),
@@ -251,9 +296,19 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                         value: 'delete',
                                         child: Row(
                                           children: [
-                                            Icon(Icons.delete, color: Colors.red),
-                                            SizedBox(width: AppConstants.spacing8),
-                                            Text('Delete', style: TextStyle(color: Colors.red)),
+                                            Icon(
+                                              Icons.delete,
+                                              color: Colors.red,
+                                            ),
+                                            SizedBox(
+                                              width: AppConstants.spacing8,
+                                            ),
+                                            Text(
+                                              'Delete',
+                                              style: TextStyle(
+                                                color: Colors.red,
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ),
@@ -266,9 +321,8 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                 const SizedBox(height: AppConstants.spacing8),
                                 Text(
                                   outfit.description!,
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: tokens.textMuted,
-                                      ),
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: tokens.textMuted),
                                 ),
                               ],
 
@@ -280,11 +334,23 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                 runSpacing: AppConstants.spacing8,
                                 children: [
                                   if (outfit.style != null)
-                                    _buildChip(context, outfit.style!.displayName, tokens),
+                                    _buildChip(
+                                      context,
+                                      outfit.style!.displayName,
+                                      tokens,
+                                    ),
                                   if (outfit.season != null)
-                                    _buildChip(context, outfit.season!.displayName, tokens),
+                                    _buildChip(
+                                      context,
+                                      outfit.season!.displayName,
+                                      tokens,
+                                    ),
                                   if (outfit.occasion != null)
-                                    _buildChip(context, outfit.occasion!, tokens),
+                                    _buildChip(
+                                      context,
+                                      outfit.occasion!,
+                                      tokens,
+                                    ),
                                 ],
                               ),
 
@@ -308,7 +374,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                               // Information section
                               _buildInformationSection(context, outfit, tokens),
 
-                              const SizedBox(height: 100), // Space for bottom action bar
+                              const SizedBox(
+                                height: 100,
+                              ), // Space for bottom action bar
                             ],
                           ),
                         ),
@@ -341,7 +409,8 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
   }
 
   Widget _buildImageHeader(OutfitModel outfit, AppUiTokens tokens) {
-    final hasImages = outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty;
+    final hasImages =
+        outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty;
     final imageUrls = hasImages
         ? outfit.outfitImages!.map((img) => img.url).toList()
         : <String>[];
@@ -381,8 +450,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                           initialGalleryIndex: index,
                           // Presigned URLs expire after 1h; on a failed load
                           // re-mint a fresh URL from the durable storage key.
-                          storagePath:
-                              outfit.outfitImages?[index].storagePath,
+                          storagePath: outfit.outfitImages?[index].storagePath,
                           remintUrl: _outfitRepository.remintImageUrl,
                         );
                       },
@@ -425,7 +493,11 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     );
   }
 
-  Widget _buildItemsSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens) {
+  Widget _buildItemsSection(
+    BuildContext context,
+    OutfitModel outfit,
+    AppUiTokens tokens,
+  ) {
     final items = outfit.items ?? [];
     final itemCount = items.isNotEmpty ? items.length : outfit.itemIds.length;
 
@@ -435,9 +507,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
         Text(
           'Items ($itemCount)',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
         AppGlassCard(
@@ -455,11 +527,14 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
               // Use actual item data if available
               if (index < items.length) {
                 final item = items[index];
-                final hasImage = item.itemImages != null && item.itemImages!.isNotEmpty;
+                final hasImage =
+                    item.itemImages != null && item.itemImages!.isNotEmpty;
                 final imageUrl = hasImage ? item.itemImages!.first.url : null;
 
                 return GestureDetector(
-                  onTap: () => Get.toNamed(Routes.wardrobeItemDetail.replaceFirst(':id', item.id)),
+                  onTap: () => Get.toNamed(
+                    Routes.wardrobeItemDetail.replaceFirst(':id', item.id),
+                  ),
                   child: Container(
                     decoration: BoxDecoration(
                       color: tokens.cardColor.withValues(alpha: 0.5),
@@ -496,10 +571,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                   border: Border.all(color: tokens.cardBorderColor),
                 ),
                 child: Center(
-                  child: Icon(
-                    Icons.image,
-                    color: tokens.textMuted,
-                  ),
+                  child: Icon(Icons.image, color: tokens.textMuted),
                 ),
               );
             },
@@ -509,16 +581,20 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     );
   }
 
-  Widget _buildStatsSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens) {
+  Widget _buildStatsSection(
+    BuildContext context,
+    OutfitModel outfit,
+    AppUiTokens tokens,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Stats',
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
         AppGlassCard(
@@ -533,11 +609,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                   tokens,
                 ),
               ),
-              Container(
-                width: 1,
-                height: 40,
-                color: tokens.cardBorderColor,
-              ),
+              Container(width: 1, height: 40, color: tokens.cardBorderColor),
               Expanded(
                 child: _buildStatCard(
                   context,
@@ -556,7 +628,13 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     );
   }
 
-  Widget _buildStatCard(BuildContext context, String label, String value, IconData icon, AppUiTokens tokens) {
+  Widget _buildStatCard(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+    AppUiTokens tokens,
+  ) {
     return Padding(
       padding: const EdgeInsets.all(AppConstants.spacing16),
       child: Column(
@@ -566,41 +644,47 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w700,
+              color: tokens.textPrimary,
+            ),
           ),
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildWearHistorySection(BuildContext context, OutfitModel outfit, AppUiTokens tokens) {
+  Widget _buildWearHistorySection(
+    BuildContext context,
+    OutfitModel outfit,
+    AppUiTokens tokens,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               'Wear History',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
             ),
             if (outfit.wornCount > 0)
               Text(
                 '${outfit.wornCount} times',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
           ],
         ),
@@ -617,11 +701,13 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                   children: [
                     Icon(Icons.history, color: tokens.textMuted),
                     const SizedBox(width: AppConstants.spacing12),
-                    Text(
-                      'No wear history yet',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.textMuted,
-                          ),
+                    Expanded(
+                      child: Text(
+                        'No wear history yet',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: tokens.textMuted,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -642,16 +728,13 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                   padding: const EdgeInsets.all(AppConstants.spacing16),
                   child: Row(
                     children: [
-                      Icon(Icons.cloud_off_outlined,
-                          color: tokens.textMuted),
+                      Icon(Icons.cloud_off_outlined, color: tokens.textMuted),
                       const SizedBox(width: AppConstants.spacing12),
                       Expanded(
                         child: Text(
                           'Couldn\'t load wear history.',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: tokens.textMuted,
-                                  ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: tokens.textMuted),
                         ),
                       ),
                       TextButton(
@@ -675,12 +758,18 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
             child: Column(
               children: [
                 for (int i = 0; i < history.length && i < 5; i++)
-                  _buildWearHistoryItem(context, history[i], tokens, isLast: i == history.length - 1 || i == 4),
+                  _buildWearHistoryItem(
+                    context,
+                    history[i],
+                    tokens,
+                    isLast: i == history.length - 1 || i == 4,
+                  ),
                 if (history.length > 5)
                   Padding(
                     padding: const EdgeInsets.all(AppConstants.spacing12),
                     child: TextButton(
-                      onPressed: () => _showFullWearHistory(context, history, tokens),
+                      onPressed: () =>
+                          _showFullWearHistory(context, history, tokens),
                       child: Text('View all ${history.length} entries'),
                     ),
                   ),
@@ -692,7 +781,12 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     );
   }
 
-  Widget _buildWearHistoryItem(BuildContext context, WearHistoryEntry entry, AppUiTokens tokens, {bool isLast = false}) {
+  Widget _buildWearHistoryItem(
+    BuildContext context,
+    WearHistoryEntry entry,
+    AppUiTokens tokens, {
+    bool isLast = false,
+  }) {
     return Column(
       children: [
         Padding(
@@ -718,15 +812,15 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                     Text(
                       AppDateUtils.formatMonthDayYear(entry.wornAt),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     Text(
                       AppDateUtils.formatRelativeTime(entry.wornAt),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.textMuted,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                     ),
                   ],
                 ),
@@ -741,7 +835,11 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     );
   }
 
-  void _showFullWearHistory(BuildContext context, List<WearHistoryEntry> history, AppUiTokens tokens) {
+  void _showFullWearHistory(
+    BuildContext context,
+    List<WearHistoryEntry> history,
+    AppUiTokens tokens,
+  ) {
     Get.bottomSheet(
       Container(
         height: MediaQuery.of(context).size.height * 0.7,
@@ -758,14 +856,17 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Full Wear History',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: tokens.textPrimary,
-                        ),
+                  Expanded(
+                    child: Text(
+                      'Full Wear History',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
                   ),
                   IconButton(
+                    tooltip: 'Close wear history',
                     onPressed: () => Get.back(),
                     icon: const Icon(Icons.close),
                   ),
@@ -790,29 +891,47 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     );
   }
 
-  Widget _buildInformationSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens) {
+  Widget _buildInformationSection(
+    BuildContext context,
+    OutfitModel outfit,
+    AppUiTokens tokens,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Information',
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
         AppGlassCard(
           child: Column(
             children: [
               if (outfit.createdAt != null)
-                _buildDetailRow(context, 'Created', AppDateUtils.formatRelativeTime(outfit.createdAt!), tokens),
+                _buildDetailRow(
+                  context,
+                  'Created',
+                  AppDateUtils.formatRelativeTime(outfit.createdAt!),
+                  tokens,
+                ),
               if (outfit.updatedAt != null)
-                _buildDetailRow(context, 'Updated', AppDateUtils.formatRelativeTime(outfit.updatedAt!), tokens),
+                _buildDetailRow(
+                  context,
+                  'Updated',
+                  AppDateUtils.formatRelativeTime(outfit.updatedAt!),
+                  tokens,
+                ),
               _buildDetailRow(
                 context,
                 'Status',
-                outfit.isDraft ? 'Draft' : outfit.isPublic ? 'Public' : 'Private',
+                outfit.isDraft
+                    ? 'Draft'
+                    : outfit.isPublic
+                    ? 'Public'
+                    : 'Private',
                 tokens,
               ),
             ],
@@ -822,7 +941,12 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     );
   }
 
-  Widget _buildDetailRow(BuildContext context, String label, String value, AppUiTokens tokens) {
+  Widget _buildDetailRow(
+    BuildContext context,
+    String label,
+    String value,
+    AppUiTokens tokens,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppConstants.spacing16,
@@ -834,18 +958,18 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
             width: 100,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
             ),
           ),
           Expanded(
             child: Text(
               value,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -868,22 +992,28 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
       ),
       child: SafeArea(
         top: false,
-        child: Obx(() => ElevatedButton.icon(
-          onPressed: _controller.isMarkingWorn(widget.outfitId)
-              ? null
-              : () => _controller.markAsWorn(widget.outfitId),
-          icon: _controller.isMarkingWorn(widget.outfitId)
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.checkroom),
-          label: Text(_controller.isMarkingWorn(widget.outfitId) ? 'Marking...' : 'Mark as Worn'),
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
+        child: Obx(
+          () => ElevatedButton.icon(
+            onPressed: _controller.isMarkingWorn(widget.outfitId)
+                ? null
+                : () => _controller.markAsWorn(widget.outfitId),
+            icon: _controller.isMarkingWorn(widget.outfitId)
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.checkroom),
+            label: Text(
+              _controller.isMarkingWorn(widget.outfitId)
+                  ? 'Marking...'
+                  : 'Mark as Worn',
+            ),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
           ),
-        )),
+        ),
       ),
     );
   }
@@ -902,111 +1032,132 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: tokens.brandColor,
-              fontWeight: FontWeight.w500,
-            ),
+          color: tokens.brandColor,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
 
   void _shareOutfit(OutfitModel outfit) async {
-    // Show loading dialog
-    Get.dialog(
-      const Center(child: CircularProgressIndicator()),
+    final box = context.findRenderObject() as RenderBox?;
+    final shareOrigin = box != null && box.hasSize
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final loadingRoute = DialogRoute<void>(
+      context: context,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
       barrierDismissible: false,
     );
-
-    try {
-      // Get share URL from API
-      final repository = OutfitRepository();
-      final shareUrl = await repository.shareOutfit(outfit.id);
-
-      // Prepare share text
-      final shareText = 'Check out my outfit "${outfit.name}" on FitCheck AI!\n\n$shareUrl';
-
-      // Check if outfit has images
-      final hasImages = outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty;
-
-      if (hasImages) {
-        final imageUrl = outfit.outfitImages!.first.url;
-
-        try {
-          // Download image to temp file using the configured ApiClient so the
-          // request inherits auth interceptors and timeout settings instead of a
-          // bare Dio() with no timeout and no auth token.
-          final tempDir = await getTemporaryDirectory();
-          final tempFile = File('${tempDir.path}/outfit_share_${outfit.id}.png');
-
-          await ApiClient.instance.dio.download(imageUrl, tempFile.path);
-
-          // Close loading dialog
-          Get.back();
-
-          // Share with image
-          await Share.shareXFiles(
-            [XFile(tempFile.path)],
-            text: shareText,
-            subject: 'Check out my outfit!',
-          );
-
-          // Clean up temp file
-          if (await tempFile.exists()) {
-            await tempFile.delete();
-          }
-        } catch (e) {
-          // Fallback to text-only if image download fails
-          Get.back();
-          await Share.share(shareText, subject: 'Check out my outfit!');
-        }
-      } else {
-        // No image, share text only
-        Get.back();
-        await Share.share(shareText, subject: 'Check out my outfit!');
+    navigator.push(loadingRoute);
+    void closeLoading() {
+      if (navigator.mounted && loadingRoute.isActive) {
+        navigator.removeRoute(loadingRoute);
       }
-    } catch (e) {
-      Get.back();
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
+    }
+
+    File? tempFile;
+    try {
+      final shareUrl = await _outfitRepository.shareOutfit(outfit.id);
+      final shareText =
+          'Check out my outfit "${outfit.name}" on FitCheck AI!\n\n$shareUrl';
+      var imageReady = false;
+      if (outfit.outfitImages?.isNotEmpty == true) {
+        try {
+          final tempDir = await getTemporaryDirectory();
+          tempFile = File('${tempDir.path}/outfit_share_${outfit.id}.png');
+          await ApiClient.instance.dio.download(
+            outfit.outfitImages!.first.url,
+            tempFile.path,
+          );
+          imageReady = true;
+        } catch (error, stackTrace) {
+          ErrorHandler.reportError(
+            error,
+            'Could not attach outfit photo to share',
+            stackTrace: stackTrace,
+          );
+        }
+      }
+      closeLoading();
+      if (!mounted) return;
+      if (imageReady) {
+        await Share.shareXFiles(
+          [XFile(tempFile!.path)],
+          text: shareText,
+          subject: 'Check out my outfit!',
+          sharePositionOrigin: shareOrigin,
+        );
+      } else {
+        await Share.share(
+          shareText,
+          subject: 'Check out my outfit!',
+          sharePositionOrigin: shareOrigin,
+        );
+      }
+    } catch (error) {
+      if (mounted) ErrorHandler.showError(ErrorHandler.extractMessage(error));
+    } finally {
+      closeLoading();
+      if (tempFile != null) {
+        try {
+          if (await tempFile.exists()) await tempFile.delete();
+        } catch (error, stackTrace) {
+          ErrorHandler.reportError(
+            error,
+            'Could not remove temporary share photo',
+            stackTrace: stackTrace,
+          );
+        }
+      }
     }
   }
 
   void _showDeleteDialog(OutfitModel outfit) {
     final errorColor = Theme.of(Get.context ?? context).colorScheme.error;
     Get.dialog(
-      Obx(() => AlertDialog(
-        title: const Text('Delete Outfit?'),
-        content: Text('Are you sure you want to delete "${outfit.name}"? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: _controller.isDeleting(outfit.id) ? null : () => Get.back(),
-            child: const Text('Cancel'),
+      Obx(
+        () => AlertDialog(
+          title: const Text('Delete Outfit?'),
+          content: Text(
+            'Are you sure you want to delete "${outfit.name}"? This action cannot be undone.',
           ),
-          ElevatedButton(
-            onPressed: _controller.isDeleting(outfit.id) ? null : () async {
-              try {
-                await _controller.deleteOutfit(outfit.id);
-                Get.back();
-                Get.back();
-              } catch (e) {
-                // Error already shown by controller
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: errorColor,
+          actions: [
+            TextButton(
+              onPressed: _controller.isDeleting(outfit.id)
+                  ? null
+                  : () => Get.back(),
+              child: const Text('Cancel'),
             ),
-            child: _controller.isDeleting(outfit.id)
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Delete'),
-          ),
-        ],
-      )),
+            ElevatedButton(
+              onPressed: _controller.isDeleting(outfit.id)
+                  ? null
+                  : () async {
+                      try {
+                        await _controller.deleteOutfit(outfit.id);
+                        Get.back();
+                        Get.back();
+                      } catch (e) {
+                        // Error already shown by controller
+                      }
+                    },
+              style: ElevatedButton.styleFrom(backgroundColor: errorColor),
+              child: _controller.isDeleting(outfit.id)
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
       barrierDismissible: false,
     );
   }
-
 }

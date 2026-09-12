@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../app/routes/app_routes.dart';
 import '../controllers/dashboard_controller.dart';
+import '../../shell/controllers/main_shell_controller.dart';
 import '../models/dashboard_models.dart';
 import '../../wardrobe/repositories/item_repository.dart';
 
@@ -27,7 +27,7 @@ class ActivityFeed extends StatelessWidget {
               title: 'Recent Activity',
               subtitle: 'Your latest style moments',
               trailing: TextButton(
-                onPressed: () => Get.toNamed(Routes.outfits),
+                onPressed: () => Get.find<MainShellController>().changeTab(2),
                 child: const Text('See all'),
               ),
             ),
@@ -35,9 +35,9 @@ class ActivityFeed extends StatelessWidget {
             if (activities.isEmpty)
               Text(
                 'Start adding items or outfits to see activity here.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             if (activities.isNotEmpty)
               Column(
@@ -77,8 +77,7 @@ class _ActivityRow extends StatelessWidget {
               child: AppImage(
                 // Prefer the small variant for a 44px row; the full size is
                 // retried once if the thumb object does not exist.
-                imageUrl:
-                    _nonEmpty(activity.thumbnailUrl) ?? activity.imageUrl,
+                imageUrl: _nonEmpty(activity.thumbnailUrl) ?? activity.imageUrl,
                 fallbackUrl: activity.imageUrl,
                 fit: BoxFit.cover,
                 width: 44,
@@ -107,16 +106,16 @@ class _ActivityRow extends StatelessWidget {
                 Text(
                   activity.description,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _formatTimestamp(activity.timestamp),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),

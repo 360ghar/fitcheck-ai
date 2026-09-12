@@ -2,6 +2,8 @@ import 'package:fitcheck_ai/app/routes/app_pages.dart';
 import 'package:fitcheck_ai/features/gifts/views/gift_vouchers_page.dart';
 import 'package:fitcheck_ai/features/outfits/views/outfit_collections_page.dart';
 import 'package:fitcheck_ai/features/wardrobe/views/wardrobe_stats_page.dart';
+import 'package:fitcheck_ai/features/shell/bindings/main_shell_binding.dart';
+import 'package:fitcheck_ai/app/routes/app_routes.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
@@ -20,6 +22,24 @@ void main() {
     }
     return null;
   }
+
+  test('legacy links select the compatible destination and Studio tool', () {
+    const targets = {
+      Routes.home: (0, 0),
+      Routes.wardrobe: (1, 0),
+      Routes.outfits: (2, 0),
+      Routes.studio: (3, 0),
+      Routes.photoshoot: (3, 0),
+      Routes.tryOn: (3, 1),
+      Routes.more: (4, 0),
+      Routes.profile: (4, 0),
+    };
+    for (final entry in targets.entries) {
+      final binding = pageFor(entry.key)!.binding! as MainShellBinding;
+      expect(binding.initialTab, entry.value.$1, reason: entry.key);
+      expect(binding.initialStudioTool, entry.value.$2, reason: entry.key);
+    }
+  });
 
   group('route registration order', () {
     test(

@@ -1,0 +1,250 @@
+[
+  {
+    "file": "exports/app-store-iphone/01-closet.jpg",
+    "width": 1320,
+    "height": 2868,
+    "store": "Apple App Store",
+    "device": "iPhone 6.9-inch",
+    "alt": "FitCheck Closet with four garment cutouts, category filters and an Add item action."
+  },
+  {
+    "file": "exports/app-store-iphone/02-home.jpg",
+    "width": 1320,
+    "height": 2868,
+    "store": "Apple App Store",
+    "device": "iPhone 6.9-inch",
+    "alt": "FitCheck Home with a daily outfit feature and shortcuts to add clothes and create outfits."
+  },
+  {
+    "file": "exports/app-store-iphone/03-outfits.jpg",
+    "width": 1320,
+    "height": 2868,
+    "store": "Apple App Store",
+    "device": "iPhone 6.9-inch",
+    "alt": "FitCheck Outfits showing saved outfit compositions, search and the Create outfit action."
+  },
+  {
+    "file": "exports/app-store-iphone/04-tryon.jpg",
+    "width": 1320,
+    "height": 2868,
+    "store": "Apple App Store",
+    "device": "iPhone 6.9-inch",
+    "alt": "FitCheck Studio Try-on with a sample portrait and shirt selected as inputs."
+  },
+  {
+    "file": "exports/app-store-iphone/05-photoshoot.jpg",
+    "width": 1320,
+    "height": 2868,
+    "store": "Apple App Store",
+    "device": "iPhone 6.9-inch",
+    "alt": "FitCheck Studio Photoshoot with a labelled example and actions to add photos or use the camera."
+  },
+  {
+    "file": "exports/app-store-iphone/06-dark-closet.jpg",
+    "width": 1320,
+    "height": 2868,
+    "store": "Apple App Store",
+    "device": "iPhone 6.9-inch",
+    "alt": "FitCheck Closet in dark mode with garment cutouts and pale moss controls."
+  },
+  {
+    "file": "exports/app-store-ipad/01-closet.jpg",
+    "width": 2064,
+    "height": 2752,
+    "store": "Apple App Store",
+    "device": "iPad 13-inch",
+    "alt": "FitCheck Closet with four garment cutouts, category filters and an Add item action."
+  },
+  {
+    "file": "exports/app-store-ipad/02-home.jpg",
+    "width": 2064,
+    "height": 2752,
+    "store": "Apple App Store",
+    "device": "iPad 13-inch",
+    "alt": "FitCheck Home with a daily outfit feature and shortcuts to add clothes and create outfits."
+  },
+  {
+    "file": "exports/app-store-ipad/03-outfits.jpg",
+    "width": 2064,
+    "height": 2752,
+    "store": "Apple App Store",
+    "device": "iPad 13-inch",
+    "alt": "FitCheck Outfits showing saved outfit compositions, search and the Create outfit action."
+  },
+  {
+    "file": "exports/app-store-ipad/04-tryon.jpg",
+    "width": 2064,
+    "height": 2752,
+    "store": "Apple App Store",
+    "device": "iPad 13-inch",
+    "alt": "FitCheck Studio Try-on with a sample portrait and shirt selected as inputs."
+  },
+  {
+    "file": "exports/app-store-ipad/05-photoshoot.jpg",
+    "width": 2064,
+    "height": 2752,
+    "store": "Apple App Store",
+    "device": "iPad 13-inch",
+    "alt": "FitCheck Studio Photoshoot with a labelled example and actions to add photos or use the camera."
+  },
+  {
+    "file": "exports/app-store-ipad/06-dark-closet.jpg",
+    "width": 2064,
+    "height": 2752,
+    "store": "Apple App Store",
+    "device": "iPad 13-inch",
+    "alt": "FitCheck Closet in dark mode with garment cutouts and pale moss controls."
+  },
+  {
+    "file": "exports/play-store-phone/01-closet.jpg",
+    "width": 1080,
+    "height": 1920,
+    "store": "Google Play",
+    "device": "Phone",
+    "alt": "FitCheck Closet with four garment cutouts, category filters and an Add item action."
+  },
+  {
+    "file": "exports/play-store-phone/02-home.jpg",
+    "width": 1080,
+    "height": 1920,
+    "store": "Google Play",
+    "device": "Phone",
+    "alt": "FitCheck Home with a daily outfit feature and shortcuts to add clothes and create outfits."
+  },
+  {
+    "file": "exports/play-store-phone/03-outfits.jpg",
+    "width": 1080,
+    "height": 1920,
+    "store": "Google Play",
+    "device": "Phone",
+    "alt": "FitCheck Outfits showing saved outfit compositions, search and the Create outfit action."
+  },
+  {
+    "file": "exports/play-store-phone/04-tryon.jpg",
+    "width": 1080,
+    "height": 1920,
+    "store": "Google Play",
+    "device": "Phone",
+    "alt": "FitCheck Studio Try-on with a sample portrait and shirt selected as inputs."
+  },
+  {
+    "file": "exports/play-store-phone/05-photoshoot.jpg",
+    "width": 1080,
+    "height": 1920,
+    "store": "Google Play",
+    "device": "Phone",
+    "alt": "FitCheck Studio Photoshoot with a labelled example and actions to add photos or use the camera."
+  },
+  {
+    "file": "exports/play-store-phone/06-dark-closet.jpg",
+    "width": 1080,
+    "height": 1920,
+    "store": "Google Play",
+    "device": "Phone",
+    "alt": "FitCheck Closet in dark mode with garment cutouts and pale moss controls."
+  },
+  {
+    "file": "exports/play-store-tablet-7/01-closet.jpg",
+    "width": 1440,
+    "height": 2560,
+    "store": "Google Play",
+    "device": "7-inch tablet",
+    "alt": "FitCheck Closet with four garment cutouts, category filters and an Add item action."
+  },
+  {
+    "file": "exports/play-store-tablet-7/02-home.jpg",
+    "width": 1440,
+    "height": 2560,
+    "store": "Google Play",
+    "device": "7-inch tablet",
+    "alt": "FitCheck Home with a daily outfit feature and shortcuts to add clothes and create outfits."
+  },
+  {
+    "file": "exports/play-store-tablet-7/03-outfits.jpg",
+    "width": 1440,
+    "height": 2560,
+    "store": "Google Play",
+    "device": "7-inch tablet",
+    "alt": "FitCheck Outfits showing saved outfit compositions, search and the Create outfit action."
+  },
+  {
+    "file": "exports/play-store-tablet-7/04-tryon.jpg",
+    "width": 1440,
+    "height": 2560,
+    "store": "Google Play",
+    "device": "7-inch tablet",
+    "alt": "FitCheck Studio Try-on with a sample portrait and shirt selected as inputs."
+  },
+  {
+    "file": "exports/play-store-tablet-7/05-photoshoot.jpg",
+    "width": 1440,
+    "height": 2560,
+    "store": "Google Play",
+    "device": "7-inch tablet",
+    "alt": "FitCheck Studio Photoshoot with a labelled example and actions to add photos or use the camera."
+  },
+  {
+    "file": "exports/play-store-tablet-7/06-dark-closet.jpg",
+    "width": 1440,
+    "height": 2560,
+    "store": "Google Play",
+    "device": "7-inch tablet",
+    "alt": "FitCheck Closet in dark mode with garment cutouts and pale moss controls."
+  },
+  {
+    "file": "exports/play-store-tablet-10/01-closet.jpg",
+    "width": 1800,
+    "height": 3200,
+    "store": "Google Play",
+    "device": "10-inch tablet",
+    "alt": "FitCheck Closet with four garment cutouts, category filters and an Add item action."
+  },
+  {
+    "file": "exports/play-store-tablet-10/02-home.jpg",
+    "width": 1800,
+    "height": 3200,
+    "store": "Google Play",
+    "device": "10-inch tablet",
+    "alt": "FitCheck Home with a daily outfit feature and shortcuts to add clothes and create outfits."
+  },
+  {
+    "file": "exports/play-store-tablet-10/03-outfits.jpg",
+    "width": 1800,
+    "height": 3200,
+    "store": "Google Play",
+    "device": "10-inch tablet",
+    "alt": "FitCheck Outfits showing saved outfit compositions, search and the Create outfit action."
+  },
+  {
+    "file": "exports/play-store-tablet-10/04-tryon.jpg",
+    "width": 1800,
+    "height": 3200,
+    "store": "Google Play",
+    "device": "10-inch tablet",
+    "alt": "FitCheck Studio Try-on with a sample portrait and shirt selected as inputs."
+  },
+  {
+    "file": "exports/play-store-tablet-10/05-photoshoot.jpg",
+    "width": 1800,
+    "height": 3200,
+    "store": "Google Play",
+    "device": "10-inch tablet",
+    "alt": "FitCheck Studio Photoshoot with a labelled example and actions to add photos or use the camera."
+  },
+  {
+    "file": "exports/play-store-tablet-10/06-dark-closet.jpg",
+    "width": 1800,
+    "height": 3200,
+    "store": "Google Play",
+    "device": "10-inch tablet",
+    "alt": "FitCheck Closet in dark mode with garment cutouts and pale moss controls."
+  },
+  {
+    "file": "exports/play-store-feature.jpg",
+    "width": 1024,
+    "height": 500,
+    "store": "Google Play",
+    "device": "Feature graphic",
+    "alt": "FitCheck AI wardrobe and outfit tools with an ecru shirt and charcoal trousers."
+  }
+]

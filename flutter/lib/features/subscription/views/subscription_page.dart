@@ -23,7 +23,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
       body: Obx(() {
         if (controller.isLoading.value &&
             controller.subscription.value == null) {
-          return Padding(
+          return SingleChildScrollView(
             padding: const EdgeInsets.all(AppConstants.spacing16),
             child: Column(
               children: const [
@@ -45,7 +45,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
             await controller.fetchReferralStats();
           },
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             children: [
               // When the entitlement fetch failed, the plan card would
               // otherwise silently render as "Free". Surface the failure and
@@ -125,7 +125,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           Text(
             controller.error.value.replaceAll('Exception: ', ''),
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withAlpha(153),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
@@ -150,9 +150,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
             children: [
               Icon(
                 controller.isPro ? Icons.star : Icons.person,
-                color: controller.isPro
-                    ? Colors.amber
-                    : theme.colorScheme.primary,
+                color: theme.colorScheme.primary,
                 size: 28,
               ),
               const SizedBox(width: 12),
@@ -163,11 +161,11 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                     Text(
                       'Current Plan',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withAlpha(153),
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                     Text(
-                      controller.planName,
+                      sub == null ? 'Unavailable' : controller.planName,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -182,15 +180,13 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6366F1), Color(0xFF9333EA)],
-                    ),
+                    color: AppCoreColors.editorialSlate,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text(
-                    'PRO',
-                    style: TextStyle(
-                      color: Colors.white,
+                  child: Text(
+                    controller.canUpgrade ? 'PLUS' : 'PRO',
+                    style: const TextStyle(
+                      color: AppCoreColors.editorialInk,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -218,7 +214,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                     child: Text(
                       'Subscription ends on ${AppDateUtils.formatDate(sub!.currentPeriodEnd!)}',
                       style: TextStyle(
-                        color: Colors.orange.shade800,
+                        color: theme.colorScheme.onSurface,
                         fontSize: 13,
                       ),
                     ),
@@ -244,11 +240,13 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                     size: 20,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '${sub.referralCreditMonths} month${sub.referralCreditMonths > 1 ? 's' : ''} of referral credit',
-                    style: TextStyle(
-                      color: Colors.green.shade800,
-                      fontSize: 13,
+                  Expanded(
+                    child: Text(
+                      '${sub.referralCreditMonths} month${sub.referralCreditMonths > 1 ? 's' : ''} of referral credit',
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
@@ -310,7 +308,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                           ? 'You\'re approaching your usage limit. Upgrade for more!'
                           : 'You\'re approaching your monthly limit. It resets at the start of next month.',
                       style: TextStyle(
-                        color: Colors.amber.shade800,
+                        color: theme.colorScheme.onSurface,
                         fontSize: 13,
                       ),
                     ),
@@ -345,7 +343,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               ? 'Same features, higher limits.'
               : 'Plus and Pro unlock the same features — pick the limits you need.',
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withAlpha(153),
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 16),
@@ -422,7 +420,10 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           Expanded(
             child: Text(
               'Upgrades aren\'t available in the store yet. Check back soon.',
-              style: TextStyle(color: Colors.amber.shade800, fontSize: 13),
+              style: TextStyle(
+                color: theme.colorScheme.onSurface,
+                fontSize: 13,
+              ),
             ),
           ),
           TextButton(
@@ -516,7 +517,9 @@ class SubscriptionPage extends GetView<SubscriptionController> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          spacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               label,
@@ -525,7 +528,6 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               ),
             ),
             if (isRecommended) ...[
-              const SizedBox(width: 8),
               Text(
                 'Most popular',
                 style: theme.textTheme.labelSmall?.copyWith(
@@ -537,20 +539,17 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           ],
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: PlanCard(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cards = [
+              PlanCard(
                 name: 'Monthly',
                 price: monthlyPriceText,
                 period: '/month',
                 onTap: () => controller.startCheckout('${planId}_monthly'),
                 isLoading: controller.isCheckingOutPlan('${planId}_monthly'),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: PlanCard(
+              PlanCard(
                 name: 'Yearly',
                 price: yearlyPriceText,
                 period: '/year',
@@ -559,14 +558,28 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                 isLoading: controller.isCheckingOutPlan('${planId}_yearly'),
                 isHighlighted: isRecommended,
               ),
-            ),
-          ],
+            ];
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            if (constraints.maxWidth < 340 * scale) {
+              return Column(
+                children: [cards.first, const SizedBox(height: 12), cards.last],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: cards.first),
+                const SizedBox(width: 12),
+                Expanded(child: cards.last),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 8),
         Text(
           '$extractionsLimit extractions, $generationsLimit visualizations, virtual try-on, priority support',
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withAlpha(153),
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -609,7 +622,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
             'This subscription is billed through the $storeName. You can '
             'cancel, change, or manage it in your $storeName account settings.',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withAlpha(153),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
@@ -631,7 +644,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           Text(
             'Cancel Subscription',
             style: theme.textTheme.titleSmall?.copyWith(
-              color: Colors.red.shade700,
+              color: theme.colorScheme.error,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -639,7 +652,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           Text(
             'You\'ll retain access until the end of your billing period.',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.red.shade600,
+              color: theme.colorScheme.error,
             ),
           ),
           const SizedBox(height: 12),

@@ -16,6 +16,13 @@ class OutfitListController extends GetxController {
   final OutfitRepository _repository;
   final NetworkService _networkService;
   int _fetchGeneration = 0;
+  (String, String, String, bool, bool) _loadedFilters = (
+    '',
+    '',
+    '',
+    false,
+    false,
+  );
 
   /// [networkService] is injectable for unit tests.
   OutfitListController({
@@ -157,24 +164,8 @@ class OutfitListController extends GetxController {
       return;
     }
 
-    if (refresh) {
-      _fetchGeneration++;
-      currentPage.value = 1;
-      hasMore.value = true;
-      // The old list stays visible until the refreshed page arrives: a
-      // failed refresh must not leave a fake "no outfits yet" state. The
-      // grid swaps atomically on success below.
-    } else {
-      // Block load-more while ANY fetch is in flight. During a refresh
-      // (isLoading=true) a scroll notification would otherwise start a
-      // concurrent page-N fetch that gets stale-guarded later — wasted
-      // bandwidth. Safe for initial load: it runs from onInit before any
-      // scroll exists, and InfiniteScrollWrapper only ever calls load-more.
-      if (isLoadingMore.value || isLoading.value) return;
-      _fetchGeneration++;
-    }
-    final requestGeneration = _fetchGeneration;
-    final requestPage = currentPage.value;
+    // A scroll notification must not start another request during a fetch.
+    if (!refresh && (isLoadingMore.value || isLoading.value)) return;
     final requestSearch = searchQuery.value.isEmpty ? null : searchQuery.value;
     final requestStyles = selectedStyles.isEmpty
         ? null
@@ -184,10 +175,28 @@ class OutfitListController extends GetxController {
         : selectedSeasons.map((s) => s.name.toLowerCase()).toList();
     final requestFavoritesOnly = favoritesOnly.value ? true : null;
     final requestDraftsOnly = draftsOnly.value ? true : null;
+    final requestFilters = (
+      requestSearch ?? '',
+      requestStyles?.join(',') ?? '',
+      requestSeasons?.join(',') ?? '',
+      requestFavoritesOnly == true,
+      requestDraftsOnly == true,
+    );
+    // A failed filter refresh retains the old list and its cursor. Scrolling
+    // must retry the new filters from page 1, not append to that old list.
+    final replace = refresh || requestFilters != _loadedFilters;
+    final requestGeneration = ++_fetchGeneration;
+    final requestPage = replace ? 1 : currentPage.value;
 
     try {
-      if (refresh) {
+      if (replace) {
         isLoading.value = true;
+        if (requestFilters != _loadedFilters) {
+          // The grid still shows a list loaded under different filters, and a
+          // fully-exhausted one has hasMore == false. Re-arm paging so a
+          // failed filter fetch can be retried from page 1 by scrolling.
+          hasMore.value = true;
+        }
       } else {
         isLoadingMore.value = true;
       }
@@ -213,16 +222,17 @@ class OutfitListController extends GetxController {
       // fetch and is replaced only once the new page has actually loaded, so
       // a failed refresh never blanks the grid. Initial load / load-more
       // append instead of clearing.
-      if (refresh) {
+      if (replace) {
         outfits
           ..clear()
           ..addAll(response.outfits);
       } else {
         outfits.addAll(response.outfits);
       }
+      _loadedFilters = requestFilters;
       totalOutfits.value = response.total;
       hasMore.value = response.hasMore;
-      currentPage.value++;
+      currentPage.value = requestPage + 1;
     } catch (e) {
       if (requestGeneration != _fetchGeneration || isClosed) return;
       error.value = ErrorHandler.extractMessage(e);

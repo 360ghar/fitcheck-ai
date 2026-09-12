@@ -32,13 +32,19 @@ class DuplicateDetectionWidget extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(AppConstants.spacing16),
           decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.1),
+            color: Theme.of(context).colorScheme.secondaryContainer,
             borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
           child: Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange[700], size: 32),
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                size: 32,
+              ),
               const SizedBox(width: AppConstants.spacing12),
               Expanded(
                 child: Column(
@@ -47,16 +53,20 @@ class DuplicateDetectionWidget extends StatelessWidget {
                     Text(
                       'Potential Duplicate Found',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.orange[700],
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSecondaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: AppConstants.spacing4),
                     Text(
                       'We found ${duplicates.length} similar item(s) in your closet',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.orange[600],
-                          ),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSecondaryContainer,
+                      ),
                     ),
                   ],
                 ),
@@ -92,16 +102,16 @@ class DuplicateDetectionWidget extends StatelessWidget {
                   children: [
                     Text(
                       'New Item',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.textMuted,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                     ),
                     Text(
                       newItemName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
-                          ),
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                      ),
                     ),
                   ],
                 ),
@@ -119,12 +129,14 @@ class DuplicateDetectionWidget extends StatelessWidget {
               child: Divider(color: tokens.textMuted.withValues(alpha: 0.3)),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacing8,
+              ),
               child: Text(
                 'Similar items',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ),
             Expanded(
@@ -137,9 +149,7 @@ class DuplicateDetectionWidget extends StatelessWidget {
 
         // Duplicate items list
         ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: Get.height * 0.3,
-          ),
+          constraints: BoxConstraints(maxHeight: Get.height * 0.3),
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: duplicates.length,
@@ -175,10 +185,7 @@ class DuplicateDetectionWidget extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
               ),
-              child: Text(
-                'Yes, This is a Duplicate',
-                style: TextStyle(color: Colors.orange[700]),
-              ),
+              child: const Text('Yes, This is a Duplicate'),
             ),
           ],
         ),
@@ -240,14 +247,16 @@ class _DuplicateItemCard extends StatelessWidget {
                 Text(
                   item.name,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: AppConstants.spacing4),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -256,23 +265,23 @@ class _DuplicateItemCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: tokens.brandColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(AppConstants.radius8),
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radius8,
+                        ),
                       ),
                       child: Text(
                         item.category.displayName,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.brandColor,
-                              fontSize: 10,
-                            ),
+                          color: tokens.brandColor,
+                        ),
                       ),
                     ),
                     if (item.brand != null) ...[
-                      const SizedBox(width: AppConstants.spacing8),
                       Text(
                         item.brand!,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                          color: tokens.textMuted,
+                        ),
                       ),
                     ],
                   ],
@@ -281,9 +290,9 @@ class _DuplicateItemCard extends StatelessWidget {
                   const SizedBox(height: AppConstants.spacing4),
                   Text(
                     item.colors!.join(', '),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textMuted,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ],

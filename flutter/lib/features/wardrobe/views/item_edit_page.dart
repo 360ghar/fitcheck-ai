@@ -11,12 +11,16 @@ import '../controllers/wardrobe_controller.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/permission_helper.dart';
 
 /// Edit page for a single wardrobe item
 class ItemEditPage extends StatefulWidget {
   final String itemId;
 
-  const ItemEditPage({super.key, required this.itemId});
+  /// Injectable picker for tests (mirrors ManualEntryForm).
+  final ImagePicker? imagePicker;
+
+  const ItemEditPage({super.key, required this.itemId, this.imagePicker});
 
   @override
   State<ItemEditPage> createState() => _ItemEditPageState();
@@ -48,7 +52,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
   final RxList<File> newImages = <File>[].obs;
   final RxSet<String> imagesToDelete = <String>{}.obs;
 
-  final ImagePicker _imagePicker = ImagePicker();
+  late final ImagePicker _imagePicker = widget.imagePicker ?? ImagePicker();
 
   // Common color options
   static const List<String> commonColors = [
@@ -127,10 +131,22 @@ class _ItemEditPageState extends State<ItemEditPage> {
 
   Future<void> _pickImage() async {
     // Use pickMultipleMedia to select multiple images at once
-    final List<XFile> images = await _imagePicker.pickMultipleMedia(
-      imageQuality: 85,
-    );
+    List<XFile> images;
+    try {
+      images = await _imagePicker.pickMultipleMedia(imageQuality: 85);
+    } catch (error) {
+      // A denied photo permission must not die as an unhandled async error:
+      // offer the Settings recovery like every other wardrobe picker.
+      if (mounted) {
+        await PermissionHelper.handleImagePickerError(
+          error,
+          permissionName: 'Photos',
+        );
+      }
+      return;
+    }
 
+    if (!mounted) return;
     var addedCount = 0;
     for (final image in images) {
       // Only add image files (case-insensitive check)
@@ -150,19 +166,33 @@ class _ItemEditPageState extends State<ItemEditPage> {
     }
 
     if (addedCount > 0 && mounted) {
-      ErrorHandler.showSuccess('$addedCount image(s) added', title: 'Images Added');
+      ErrorHandler.showSuccess(
+        '$addedCount image(s) added',
+        title: 'Images Added',
+      );
     }
   }
 
   Future<void> _takePhoto() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
+    XFile? image;
+    try {
+      image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+    } catch (error) {
+      if (mounted) {
+        await PermissionHelper.handleImagePickerError(
+          error,
+          permissionName: 'Camera',
+        );
+      }
+      return;
+    }
 
-    if (image != null) {
+    if (image != null && mounted) {
       newImages.add(File(image.path));
     }
   }
@@ -320,7 +350,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Images section
-                  _buildImagesSection(tokens),
+                  Obx(() => _buildImagesSection(tokens)),
 
                   const SizedBox(height: AppConstants.spacing24),
 
@@ -344,6 +374,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                   // Category
                   Obx(
                     () => DropdownButtonFormField<Category>(
+                      isExpanded: true,
                       initialValue: selectedCategory.value,
                       decoration: const InputDecoration(
                         labelText: 'Category *',
@@ -366,6 +397,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                   // Condition
                   Obx(
                     () => DropdownButtonFormField<domain.Condition>(
+                      isExpanded: true,
                       initialValue: selectedCondition.value,
                       decoration: const InputDecoration(
                         labelText: 'Condition *',
@@ -514,8 +546,10 @@ class _ItemEditPageState extends State<ItemEditPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               'Photos',
@@ -524,7 +558,8 @@ class _ItemEditPageState extends State<ItemEditPage> {
                 color: tokens.textPrimary,
               ),
             ),
-            Row(
+            Wrap(
+              spacing: 8,
               children: [
                 TextButton.icon(
                   onPressed: _pickImage,
@@ -549,7 +584,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
               scrollDirection: Axis.horizontal,
               children: [
                 // Existing images
-                ..._item!.itemImages!.map((image) {
+                ...(_item!.itemImages ?? []).map((image) {
                   final isDeleting = imagesToDelete.contains(image.id);
                   return Padding(
                     padding: const EdgeInsets.only(
@@ -591,6 +626,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
                                 isDeleting ? Icons.close : Icons.delete_outline,
                                 color: isDeleting ? Colors.white : Colors.black,
                               ),
+                              tooltip: isDeleting
+                                  ? 'Keep photo'
+                                  : 'Remove photo',
                               onPressed: () => _toggleImageDelete(image.id),
                               constraints: const BoxConstraints(
                                 minWidth: 32,
@@ -634,6 +672,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                                 Icons.close,
                                 color: Colors.black,
                               ),
+                              tooltip: 'Remove new photo',
                               onPressed: () => _removeNewImage(index),
                               constraints: const BoxConstraints(
                                 minWidth: 32,
@@ -831,9 +870,15 @@ class _ItemEditPageState extends State<ItemEditPage> {
                 await _itemRepository.deleteItem(widget.itemId);
                 _wardrobeController.fetchItems(refresh: true);
                 Get.back(); // Close edit page
-                ErrorHandler.showSuccess('Item removed from your closet', title: 'Deleted');
+                ErrorHandler.showSuccess(
+                  'Item removed from your closet',
+                  title: 'Deleted',
+                );
               } catch (e) {
-                ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
+                ErrorHandler.showError(
+                  ErrorHandler.extractMessage(e),
+                  title: 'Error',
+                );
               }
             },
             style: ElevatedButton.styleFrom(

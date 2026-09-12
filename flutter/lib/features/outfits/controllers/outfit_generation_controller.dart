@@ -21,6 +21,7 @@ class OutfitGenerationController extends GetxController {
 
       await Get.dialog(
         AlertDialog(
+          scrollable: true,
           title: const Text('Outfit Shared'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -36,30 +37,33 @@ class OutfitGenerationController extends GetxController {
             TextButton(
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: shareUrl));
-                ErrorHandler.showSuccess('Share link copied to clipboard', title: 'Copied');
+                ErrorHandler.showSuccess(
+                  'Share link copied to clipboard',
+                  title: 'Copied',
+                );
               },
               child: const Text('Copy'),
             ),
             TextButton(
               onPressed: () async {
+                final shareContext = Get.overlayContext;
+                final box = shareContext?.findRenderObject() as RenderBox?;
                 await Share.share(
                   'Check out my outfit on FitCheck AI!\n\n$shareUrl',
                   subject: 'Check out my outfit!',
+                  sharePositionOrigin: box == null
+                      ? null
+                      : box.localToGlobal(Offset.zero) & box.size,
                 );
               },
               child: const Text('Share'),
             ),
-            TextButton(
-              onPressed: () => Get.back(),
-              child: const Text('Close'),
-            ),
+            TextButton(onPressed: () => Get.back(), child: const Text('Close')),
           ],
         ),
       );
     } catch (e) {
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
     }
   }
 }

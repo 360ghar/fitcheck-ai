@@ -8,10 +8,13 @@ import '../../../core/widgets/app_ui.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../repositories/profile_repository.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/permission_helper.dart';
 
 /// Edit profile page
 class ProfileEditPage extends StatefulWidget {
-  const ProfileEditPage({super.key});
+  const ProfileEditPage({super.key, this.repository});
+
+  final ProfileRepository? repository;
 
   @override
   State<ProfileEditPage> createState() => _ProfileEditPageState();
@@ -20,7 +23,8 @@ class ProfileEditPage extends StatefulWidget {
 class _ProfileEditPageState extends State<ProfileEditPage> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _imagePicker = ImagePicker();
-  final ProfileRepository _repository = ProfileRepository();
+  late final ProfileRepository _repository =
+      widget.repository ?? ProfileRepository();
 
   late TextEditingController _nameController;
   late TextEditingController _birthDateController;
@@ -76,14 +80,24 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Future<void> _pickAvatar() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 512,
-      maxHeight: 512,
-      imageQuality: 85,
-    );
-
-    if (image != null) {
+    XFile? image;
+    try {
+      image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+    } catch (error) {
+      if (mounted) {
+        await PermissionHelper.handleImagePickerError(
+          error,
+          permissionName: 'Photos',
+        );
+      }
+      return;
+    }
+    if (image != null && mounted) {
       newAvatar.value = File(image.path);
     }
   }
@@ -344,7 +358,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Widget _buildAvatarPlaceholder(AppUiTokens tokens) {
     return Container(
       color: tokens.brandColor,
-      child: const Icon(Icons.person, color: Colors.white, size: 40),
+      child: Icon(
+        Icons.person,
+        color: Theme.of(context).colorScheme.onPrimary,
+        size: 40,
+      ),
     );
   }
 

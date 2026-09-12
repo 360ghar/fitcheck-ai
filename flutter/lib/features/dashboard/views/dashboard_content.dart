@@ -14,6 +14,7 @@ import '../../subscription/controllers/subscription_controller.dart';
 import '../controllers/dashboard_controller.dart';
 import '../widgets/referral_promo_banner.dart';
 import '../widgets/snapshot_card.dart';
+import '../widgets/today_edit.dart';
 import '../widgets/quick_actions_section.dart';
 import '../widgets/suggestions_section.dart';
 import '../widgets/activity_feed.dart';
@@ -79,10 +80,46 @@ class _DashboardContentState extends State<DashboardContent> {
                             const SizedBox(height: AppConstants.spacing16),
                           ],
                         ),
-                      _buildPromotionBanner(),
+                      _buildCover(
+                        TodayEdit(
+                          hasItems:
+                              (dashboardController
+                                      .dashboard
+                                      .value
+                                      ?.statistics
+                                      .totalItems ??
+                                  0) >
+                              0,
+                          outfit: dashboardController
+                              .dashboard
+                              .value
+                              ?.suggestions
+                              .outfitOfTheDay,
+                          onOpen: () {
+                            final outfit = dashboardController
+                                .dashboard
+                                .value
+                                ?.suggestions
+                                .outfitOfTheDay;
+                            Get.toNamed(
+                              outfit?.id != null
+                                  ? '/outfits/${outfit!.id}'
+                                  : (dashboardController
+                                                .dashboard
+                                                .value
+                                                ?.statistics
+                                                .totalItems ??
+                                            0) >
+                                        0
+                                  ? Routes.outfitBuilder
+                                  : Routes.wardrobeAdd,
+                            );
+                          },
+                        ),
+                        _buildPromotionBanner(),
+                      ),
+                      const SizedBox(height: AppConstants.spacing24),
                       const SnapshotCard(),
-                      const SizedBox(height: AppConstants.spacing16),
-                      const QuickActionsSection(),
                       const SizedBox(height: AppConstants.spacing16),
                       const SuggestionsSection(),
                       const SizedBox(height: AppConstants.spacing16),
@@ -98,6 +135,32 @@ class _DashboardContentState extends State<DashboardContent> {
     );
   }
 
+  Widget _buildCover(Widget feature, Widget promotion) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tools = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [promotion, const QuickActionsSection()],
+        );
+        if (constraints.maxWidth >= 640 &&
+            MediaQuery.textScalerOf(context).scale(14) < 22) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 3, child: feature),
+              const SizedBox(width: 24),
+              Expanded(flex: 2, child: tools),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [feature, const SizedBox(height: 24), tools],
+        );
+      },
+    );
+  }
+
   Widget _buildHeader() {
     final tokens = AppUiTokens.of(context);
 
@@ -108,84 +171,92 @@ class _DashboardContentState extends State<DashboardContent> {
         AppConstants.spacing16,
         AppConstants.spacing12,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Good ${_getGreeting()}',
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'FitCheck',
                   style: Theme.of(
                     context,
-                  ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
+                  ).textTheme.headlineSmall?.copyWith(letterSpacing: -0.8),
                 ),
-                const SizedBox(height: AppConstants.spacing4),
-                // User info wrapped in single Obx for efficiency
-                Obx(() {
-                  final user = authController.user.value;
-                  return Text(
-                    user?.fullName ?? user?.email.split('@')[0] ?? 'Welcome',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: tokens.textPrimary,
-                    ),
-                  );
-                }),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  'Your AI wardrobe, tuned for today.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            // Tab 4 is the profile hub — switch in place instead of pushing
-            // a visually identical copy over the shell.
-            onTap: () => Get.find<MainShellController>().changeTab(4),
-            // Avatar wrapped in single Obx
-            child: Obx(() {
-              final user = authController.user.value;
-              final initial =
-                  (user?.fullName?.isNotEmpty == true
-                      ? user!.fullName!.substring(0, 1).toUpperCase()
-                      : null) ??
-                  (user?.email.isNotEmpty == true
-                      ? user!.email.substring(0, 1).toUpperCase()
-                      : null) ??
-                  'U';
-              final avatarUrl = user?.avatarUrl;
-              return CircleAvatar(
-                radius: 22,
-                backgroundColor: tokens.brandColor.withValues(alpha: 0.15),
-                child: avatarUrl != null && avatarUrl.isNotEmpty
-                    ? ClipOval(
-                        child: AppNetworkImage(
-                          avatarUrl,
-                          width: 44,
-                          height: 44,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, _, _) => Text(
-                            initial,
-                            style: TextStyle(
-                              color: tokens.brandColor,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      )
-                    : Text(
-                        initial,
-                        style: TextStyle(
-                          color: tokens.brandColor,
-                          fontWeight: FontWeight.w700,
-                        ),
+              ),
+              Semantics(
+                label: 'Open profile',
+                button: true,
+                child: GestureDetector(
+                  // Tab 4 is the profile hub — switch in place instead of pushing
+                  // a visually identical copy over the shell.
+                  onTap: () => Get.find<MainShellController>().changeTab(4),
+                  // Avatar wrapped in single Obx
+                  child: Obx(() {
+                    final user = authController.user.value;
+                    final initial =
+                        (user?.fullName?.isNotEmpty == true
+                            ? user!.fullName!.substring(0, 1).toUpperCase()
+                            : null) ??
+                        (user?.email.isNotEmpty == true
+                            ? user!.email.substring(0, 1).toUpperCase()
+                            : null) ??
+                        'U';
+                    final avatarUrl = user?.avatarUrl;
+                    return CircleAvatar(
+                      radius: 24,
+                      backgroundColor: tokens.brandColor.withValues(
+                        alpha: 0.15,
                       ),
-              );
-            }),
+                      child: avatarUrl != null && avatarUrl.isNotEmpty
+                          ? ClipOval(
+                              child: AppNetworkImage(
+                                avatarUrl,
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, _, _) => Text(
+                                  initial,
+                                  style: TextStyle(
+                                    color: tokens.brandColor,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Text(
+                              initial,
+                              style: TextStyle(
+                                color: tokens.brandColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Obx(() {
+            final user = authController.user.value;
+            final name = user?.fullName?.trim().split(' ').first;
+            return Text(
+              name == null || name.isEmpty
+                  ? 'A little inspiration, every day.'
+                  : 'A little inspiration for you, $name.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
+            );
+          }),
+          const SizedBox(height: 6),
+          Text(
+            'The daily edit.',
+            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+              height: 1.12,
+              letterSpacing: -1.2,
+            ),
           ),
         ],
       ),
@@ -316,12 +387,5 @@ class _DashboardContentState extends State<DashboardContent> {
     }
 
     return _buildReferralBanner();
-  }
-
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Morning';
-    if (hour < 17) return 'Afternoon';
-    return 'Evening';
   }
 }

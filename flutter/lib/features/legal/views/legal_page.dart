@@ -25,31 +25,11 @@ class LegalPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AppGlassCard(
-                  padding: const EdgeInsets.all(AppConstants.spacing16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.shield_outlined, color: tokens.brandColor),
-                          const SizedBox(width: AppConstants.spacing12),
-                          Text(
-                            'Legal Information',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppConstants.spacing16),
-                      Text(
-                        'Review our policies to understand how we protect your privacy and the terms governing your use of FitCheck AI.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: tokens.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
+                const AppEditorialHeader(
+                  title: 'Your privacy',
+                  subtitle:
+                      'Review our policies, account terms, and support options.',
+                  color: AppCoreColors.editorialSlate,
                 ),
 
                 const SizedBox(height: AppConstants.spacing24),
@@ -65,7 +45,7 @@ class LegalPage extends StatelessWidget {
                     title: const Text('Privacy Policy'),
                     subtitle: const Text('How we collect and use your data'),
                     trailing: const Icon(Icons.open_in_new),
-                    onTap: () => _openUrl(privacyPolicyUrl),
+                    onTap: () => _openUrl(context, privacyPolicyUrl),
                   ),
                 ),
 
@@ -82,7 +62,7 @@ class LegalPage extends StatelessWidget {
                     title: const Text('Terms of Service'),
                     subtitle: const Text('Rules for using our service'),
                     trailing: const Icon(Icons.open_in_new),
-                    onTap: () => _openUrl(termsOfServiceUrl),
+                    onTap: () => _openUrl(context, termsOfServiceUrl),
                   ),
                 ),
 
@@ -97,11 +77,9 @@ class LegalPage extends StatelessWidget {
                       color: tokens.brandColor,
                     ),
                     title: const Text('Support'),
-                    subtitle: const Text(
-                      'Help, contact, and privacy requests',
-                    ),
+                    subtitle: const Text('Help, contact, and privacy requests'),
                     trailing: const Icon(Icons.open_in_new),
-                    onTap: () => _openUrl(AppConstants.supportUrl),
+                    onTap: () => _openUrl(context, AppConstants.supportUrl),
                   ),
                 ),
 
@@ -123,7 +101,7 @@ class LegalPage extends StatelessWidget {
                       'within 24 hours.',
                     ),
                     trailing: const Icon(Icons.email_outlined),
-                    onTap: _openSupportEmail,
+                    onTap: () => _openSupportEmail(context),
                   ),
                 ),
 
@@ -151,21 +129,29 @@ class LegalPage extends StatelessWidget {
     );
   }
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+  Future<void> _openUrl(BuildContext context, String url) async {
+    try {
+      if (await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      )) {
+        return;
+      }
+    } catch (_) {}
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Could not open this link. Please try again.'),
+      ),
+    );
   }
 
-  Future<void> _openSupportEmail() async {
-    final uri = Uri(
+  Future<void> _openSupportEmail(BuildContext context) => _openUrl(
+    context,
+    Uri(
       scheme: 'mailto',
       path: AppConstants.supportEmail,
       query: 'subject=${Uri.encodeComponent('Report a Problem / Abuse')}',
-    );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
-  }
+    ).toString(),
+  );
 }

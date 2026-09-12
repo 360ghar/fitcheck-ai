@@ -29,7 +29,19 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
     _pulseController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context) ||
+        !TickerMode.valuesOf(context).enabled) {
+      _pulseController.stop();
+      _pulseController.value = 0.5;
+    } else if (!_pulseController.isAnimating) {
+      _pulseController.repeat();
+    }
   }
 
   @override
@@ -43,7 +55,9 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
     if (seconds < 60) return '~${seconds}s left';
     final minutes = seconds ~/ 60;
     final remainder = seconds % 60;
-    return remainder > 0 ? '~${minutes}m ${remainder}s left' : '~${minutes}m left';
+    return remainder > 0
+        ? '~${minutes}m ${remainder}s left'
+        : '~${minutes}m left';
   }
 
   @override
@@ -61,7 +75,8 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
             animation: _pulseController,
             builder: (context, child) {
               return Transform.scale(
-                scale: 0.9 +
+                scale:
+                    0.9 +
                     (0.1 *
                         (1 +
                             math.sin(_pulseController.value * 2 * math.pi) /
@@ -87,14 +102,16 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
           const SizedBox(height: AppConstants.spacing24),
 
           // Status text
-          Obx(() => Text(
-                controller.generationStatus.value,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-              )),
+          Obx(
+            () => Text(
+              controller.generationStatus.value,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+          ),
 
           // Current scene being generated
           Obx(() {
@@ -109,9 +126,9 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             );
           }),
@@ -119,51 +136,52 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
           const SizedBox(height: AppConstants.spacing16),
 
           // Progress indicator + ETA
-          Obx(() => Column(
-                children: [
-                  LinearProgressIndicator(
-                    value:
-                        (controller.generationProgress.value / 100).clamp(0.0, 1.0),
-                    backgroundColor: tokens.cardBorderColor,
-                    valueColor: AlwaysStoppedAnimation(tokens.brandColor),
-                    minHeight: 8,
-                    borderRadius: BorderRadius.circular(4),
+          Obx(
+            () => Column(
+              children: [
+                LinearProgressIndicator(
+                  value: (controller.generationProgress.value / 100).clamp(
+                    0.0,
+                    1.0,
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '${controller.generationProgress.value}%',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                      ),
-                      Obx(() {
-                        final eta = _formatEta(controller.etaSeconds.value);
-                        if (eta.isEmpty) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(left: 12),
-                          child: Text(
-                            eta,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: tokens.textMuted),
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ],
-              )),
+                  backgroundColor: tokens.cardBorderColor,
+                  valueColor: AlwaysStoppedAnimation(tokens.brandColor),
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${controller.generationProgress.value}%',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
+                    Obx(() {
+                      final eta = _formatEta(controller.etaSeconds.value);
+                      if (eta.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 12),
+                        child: Text(
+                          eta,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: tokens.textMuted),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ],
+            ),
+          ),
 
           const SizedBox(height: AppConstants.spacing24),
 
           // Live gallery: filled slots + skeleton placeholders for pending ones
           Obx(() {
-            final images = controller.generatedImages
-                .toList()
+            final images = controller.generatedImages.toList()
               ..sort((a, b) => a.index.compareTo(b.index));
             final total = controller.numImages.value;
             final slots = <Widget>[];
@@ -191,21 +209,20 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
                 Text(
                   'Generated so far',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: tokens.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 GridView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 190,
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: 8,
-                        childAspectRatio: 3 / 4,
-                      ),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 190,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: 3 / 4,
+                  ),
                   children: slots,
                 ),
               ],
@@ -219,17 +236,18 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
             padding: const EdgeInsets.all(AppConstants.spacing16),
             child: Row(
               children: [
-                Icon(Icons.auto_awesome,
-                    color: tokens.brandColor, size: 20),
+                Icon(Icons.auto_awesome, color: tokens.brandColor, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Obx(() => Text(
-                        'AI is creating ${controller.numImages.value} unique '
-                        'professional images just for you...',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                      )),
+                  child: Obx(
+                    () => Text(
+                      'AI is creating ${controller.numImages.value} unique '
+                      'professional images just for you...',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -286,10 +304,7 @@ class _GeneratedThumbnail extends StatelessWidget {
       child = _fallbackBox(context);
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: child,
-    );
+    return ClipRRect(borderRadius: BorderRadius.circular(8), child: child);
   }
 
   Widget _fallbackBox(BuildContext context) {

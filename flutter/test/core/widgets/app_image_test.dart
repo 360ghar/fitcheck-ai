@@ -15,6 +15,7 @@
 // request with 400 — the exact failure mode an expired presigned URL
 // produces. All of it resolves on microtasks, so plain pumps drive it.
 
+import 'dart:async';
 import 'dart:io' show HttpStatus;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -81,6 +82,41 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('AppImage re-mint fallback', () {
+    testWidgets('ignores a late re-mint after the tile changes items', (
+      tester,
+    ) async {
+      final pending = Completer<String?>();
+      final cache = _failingImageCacheManager();
+      await tester.pumpWidget(
+        _appImageHarness(
+          AppImage(
+            imageUrl: 'https://cdn.example.com/old.png',
+            storagePath: 'items/old.png',
+            remintUrl: (_) => pending.future,
+          ),
+          cacheManager: cache,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      await tester.pumpWidget(
+        _appImageHarness(
+          const AppImage(imageUrl: 'https://cdn.example.com/new.png'),
+          cacheManager: cache,
+        ),
+      );
+      pending.complete('https://cdn.example.com/reminted-old.png');
+      await tester.pump();
+      expect(
+        tester
+            .widget<CachedNetworkImage>(find.byType(CachedNetworkImage))
+            .imageUrl,
+        'https://cdn.example.com/new.png',
+      );
+      await flushCacheManagerTimers(tester);
+    });
+
     testWidgets(
       're-mints a fresh URL once when the primary URL fails and retries it',
       (tester) async {

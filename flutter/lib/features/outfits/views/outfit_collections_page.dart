@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../controllers/outfit_list_controller.dart';
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../../core/utils/error_handler.dart';
@@ -12,13 +10,8 @@ import '../../../core/utils/error_handler.dart';
 /// Allows users to organize their outfits into collections
 class OutfitCollectionsPage extends StatefulWidget {
   final OutfitRepository? repository;
-  final OutfitListController? outfitListController;
 
-  const OutfitCollectionsPage({
-    super.key,
-    this.repository,
-    this.outfitListController,
-  });
+  const OutfitCollectionsPage({super.key, this.repository});
 
   @override
   State<OutfitCollectionsPage> createState() => _OutfitCollectionsPageState();
@@ -30,7 +23,6 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
   final RxList<Map<String, dynamic>> collections = <Map<String, dynamic>>[].obs;
   final RxBool isLoading = true.obs;
   final RxString error = ''.obs;
-  final RxBool isCreating = false.obs;
 
   @override
   void initState() {
@@ -44,20 +36,16 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
       isLoading.value = true;
       error.value = '';
       final result = await _outfitRepository.getCollections();
-      collections.value = result;
+      if (mounted) collections.value = result;
     } catch (e) {
-      error.value = ErrorHandler.extractMessage(e);
+      if (mounted) error.value = ErrorHandler.extractMessage(e);
     } finally {
-      isLoading.value = false;
+      if (mounted) isLoading.value = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
-      Get.currentRoute,
-    );
-
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
@@ -91,7 +79,6 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
         ),
       ),
       floatingActionButton: _buildFloatingActionButton(),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
     );
   }
 
@@ -110,6 +97,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
       ),
       actions: [
         IconButton(
+          tooltip: 'Refresh collections',
           icon: const Icon(Icons.refresh),
           onPressed: _loadCollections,
         ),
@@ -129,6 +117,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
     final tokens = AppUiTokens.of(context);
 
     return SliverFillRemaining(
+      hasScrollBody: false,
       child: Center(
         child: AppGlassCard(
           padding: const EdgeInsets.all(AppConstants.spacing24),
@@ -169,6 +158,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
     final tokens = AppUiTokens.of(context);
 
     return SliverFillRemaining(
+      hasScrollBody: false,
       child: Center(
         child: AppGlassCard(
           padding: const EdgeInsets.all(AppConstants.spacing24),
@@ -205,17 +195,12 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
   }
 
   Widget _buildCollectionsGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 190,
-        mainAxisSpacing: AppConstants.spacing12,
-        crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 1.0,
+    return SliverProductGrid(
+      itemCount: collections.length,
+      itemBuilder: (context, index) => AspectRatio(
+        aspectRatio: 1,
+        child: _buildCollectionCard(collections[index]),
       ),
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final collection = collections[index];
-        return _buildCollectionCard(collection);
-      }, childCount: collections.length),
     );
   }
 
@@ -234,7 +219,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
       child: Semantics(
         button: true,
         label: 'Collection $name',
-        hint: 'Double tap to view collection. Long press for options.',
+        hint: 'View collection',
         child: Container(
           decoration: BoxDecoration(
             color: tokens.cardColor,
@@ -274,11 +259,24 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                 ),
               ),
 
+              Positioned(
+                top: 4,
+                right: 4,
+                child: IconButton.filled(
+                  tooltip: 'Options for $name',
+                  onPressed: () => _showCollectionOptions(collection),
+                  style: IconButton.styleFrom(
+                    backgroundColor: tokens.cardColor,
+                    foregroundColor: tokens.textPrimary,
+                  ),
+                  icon: const Icon(Icons.more_horiz),
+                ),
+              ),
               // Favorite indicator
               if (isFavorite)
                 Positioned(
                   top: AppConstants.spacing8,
-                  right: AppConstants.spacing8,
+                  left: AppConstants.spacing8,
                   child: Container(
                     padding: const EdgeInsets.all(AppConstants.spacing4),
                     decoration: BoxDecoration(
@@ -287,9 +285,9 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                       ).colorScheme.secondary.withValues(alpha: 0.9),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.favorite,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onSecondary,
                       size: 14,
                     ),
                   ),
@@ -360,8 +358,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
 
-    Get.dialog(
-      AlertDialog(
+    final route = DialogRoute<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        scrollable: true,
         title: const Text('Create Collection'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -420,7 +420,9 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           ),
         ],
       ),
-    ).then((_) {
+    );
+    Navigator.of(context).push(route);
+    route.completed.then((_) {
       nameController.dispose();
       descriptionController.dispose();
     });
@@ -442,57 +444,59 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           ),
           border: Border.all(color: tokens.cardBorderColor),
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              if (description != null && description.isNotEmpty) ...[
-                const SizedBox(height: AppConstants.spacing8),
-                Text(
-                  description,
-                  style: TextStyle(color: tokens.textSecondary),
-                ),
-              ],
-              const SizedBox(height: AppConstants.spacing16),
-              Text(
-                '${outfitIds.length} outfit${outfitIds.length == 1 ? '' : 's'}',
-                style: TextStyle(color: tokens.textMuted, fontSize: 14),
-              ),
-              const SizedBox(height: AppConstants.spacing24),
-              Row(
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Get.back();
-                        _showAddOutfitsDialog(collection);
-                      },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Outfits'),
+                  Text(
+                    name,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: tokens.textPrimary,
                     ),
                   ),
-                  const SizedBox(width: AppConstants.spacing12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Get.back();
-                        _showDeleteCollectionDialog(collection);
-                      },
-                      icon: const Icon(Icons.delete),
-                      label: const Text('Delete'),
+                  if (description != null && description.isNotEmpty) ...[
+                    const SizedBox(height: AppConstants.spacing8),
+                    Text(
+                      description,
+                      style: TextStyle(color: tokens.textSecondary),
                     ),
+                  ],
+                  const SizedBox(height: AppConstants.spacing16),
+                  Text(
+                    '${outfitIds.length} outfit${outfitIds.length == 1 ? '' : 's'}',
+                    style: TextStyle(color: tokens.textMuted, fontSize: 14),
+                  ),
+                  const SizedBox(height: AppConstants.spacing24),
+                  Wrap(
+                    spacing: AppConstants.spacing12,
+                    runSpacing: AppConstants.spacing8,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Get.back();
+                          _showAddOutfitsDialog(collection);
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Outfits'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Get.back();
+                          _showDeleteCollectionDialog(collection);
+                        },
+                        icon: const Icon(Icons.delete),
+                        label: const Text('Delete'),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -512,35 +516,40 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           ),
           border: Border.all(color: tokens.cardBorderColor),
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.visibility),
-                title: const Text('View Collection'),
-                onTap: () {
-                  Get.back();
-                  _showCollectionDetail(collection);
-                },
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.visibility),
+                    title: const Text('View Collection'),
+                    onTap: () {
+                      Get.back();
+                      _showCollectionDetail(collection);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.edit),
+                    title: const Text('Edit Collection'),
+                    onTap: () {
+                      Get.back();
+                      _showEditCollectionDialog(collection);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.delete),
+                    title: const Text('Delete Collection'),
+                    onTap: () {
+                      Get.back();
+                      _showDeleteCollectionDialog(collection);
+                    },
+                  ),
+                ],
               ),
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Edit Collection'),
-                onTap: () {
-                  Get.back();
-                  _showEditCollectionDialog(collection);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: const Text('Delete Collection'),
-                onTap: () {
-                  Get.back();
-                  _showDeleteCollectionDialog(collection);
-                },
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -593,6 +602,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
       OutfitsListResponse response;
       do {
         response = await _outfitRepository.getOutfits(page: page, limit: 100);
+        if (!mounted) return;
         allOutfits.addAll(response.outfits);
         page++;
       } while (response.hasMore);
@@ -600,6 +610,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           .where((outfit) => !existingIds.contains(outfit.id))
           .toList();
     } catch (e) {
+      if (!mounted) return;
       ErrorHandler.showError(
         ErrorHandler.extractMessage(e),
         title: 'Could not load outfits',
@@ -688,8 +699,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
       text: collection['description'] as String? ?? '',
     );
 
-    Get.dialog(
-      AlertDialog(
+    final route = DialogRoute<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        scrollable: true,
         title: const Text('Edit Collection'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -736,7 +749,9 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           ),
         ],
       ),
-    ).then((_) {
+    );
+    Navigator.of(context).push(route);
+    route.completed.then((_) {
       nameController.dispose();
       descriptionController.dispose();
     });

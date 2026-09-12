@@ -105,6 +105,8 @@ class _BuilderNetworkService extends NetworkService {
   }
 
   @override
+  // Skip real connectivity subscriptions in this fake.
+  // ignore: must_call_super
   void onInit() {}
 }
 

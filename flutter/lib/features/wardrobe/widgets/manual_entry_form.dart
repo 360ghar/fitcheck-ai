@@ -11,13 +11,23 @@ import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 import '../services/wardrobe_sync_service.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/permission_helper.dart';
 
 /// Manual entry form for adding items
 /// Can be used with or without an image
 class ManualEntryForm extends StatefulWidget {
   final File? imageFile;
+  final ItemRepository? repository;
+  final ImagePicker? imagePicker;
+  final ValueChanged<ItemModel>? onSaved;
 
-  const ManualEntryForm({super.key, this.imageFile});
+  const ManualEntryForm({
+    super.key,
+    this.imageFile,
+    this.repository,
+    this.imagePicker,
+    this.onSaved,
+  });
 
   @override
   State<ManualEntryForm> createState() => _ManualEntryFormState();
@@ -44,7 +54,8 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   final RxBool isSaving = false.obs;
   final RxList<File> additionalImages = <File>[].obs;
 
-  final ImagePicker _imagePicker = ImagePicker();
+  late final ImagePicker _imagePicker = widget.imagePicker ?? ImagePicker();
+  late final ItemRepository _repository = widget.repository ?? ItemRepository();
 
   // Common color options
   static const List<String> commonColors = [
@@ -65,15 +76,15 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   ];
 
   void _submitForm() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (isSaving.value || !_formKey.currentState!.validate()) return;
 
     isSaving.value = true;
 
     try {
-      // Use provided image or first additional image
-      final imageToUse =
-          widget.imageFile ??
-          (additionalImages.isNotEmpty ? additionalImages.first : null);
+      final photos = [
+        if (widget.imageFile != null) widget.imageFile!,
+        ...additionalImages,
+      ];
 
       // A10-02: "Add item details without a photo" is the advertised flow and
       // the backend supports photo-less items (createItem posts no image) —
@@ -110,25 +121,27 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
             : UseCases.normalizeList(selectedUseCases),
       );
 
-      final created = imageToUse == null
-          ? await ItemRepository().createItem(request)
-          : await ItemRepository().createItemWithImage(
-              image: imageToUse,
-              request: request,
+      var created = await _repository.createItem(request);
+      var failedUploads = 0;
+      // Use one upload path for every selected photo. A supplied primary photo
+      // plus one added photo must not skip the added photo.
+      for (final photo in photos) {
+        try {
+          final uploaded = await _repository.uploadImages(created.id, [photo]);
+          if (uploaded.isEmpty) {
+            failedUploads++;
+          } else {
+            created = created.copyWith(
+              itemImages: [...?created.itemImages, ...uploaded],
             );
-
-      // Upload additional images if any (excluding the one already used)
-      if (additionalImages.length > 1) {
-        final imagesToUpload = widget.imageFile == null
-            ? additionalImages.skip(1).toList()
-            : additionalImages.toList();
-
-        for (final img in imagesToUpload) {
-          try {
-            await ItemRepository().uploadImages(created.id, [img]);
-          } catch (e) {
-            // Continue uploading other images even if one fails
           }
+        } catch (e, stackTrace) {
+          failedUploads++;
+          ErrorHandler.reportError(
+            e,
+            'Manual item photo upload failed',
+            stackTrace: stackTrace,
+          );
         }
       }
 
@@ -139,23 +152,53 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
           : WardrobeSyncService();
       sync.addItem(created);
 
-      Get.back(); // Close form
-      Get.back(); // Close item add page
-      ErrorHandler.showSuccess('"${created.name}" added to your closet', title: 'Success');
+      if (!mounted) return;
+      if (widget.onSaved != null) {
+        widget.onSaved!(created);
+      } else {
+        Navigator.of(context).pop(created);
+      }
+      // Present the save result after the navigation frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (failedUploads > 0) {
+          ErrorHandler.showWarning(
+            'Item saved. $failedUploads ${failedUploads == 1 ? 'photo' : 'photos'} could not upload. '
+            'Open Edit Item to add them again.',
+            title: 'Some Photos Need Attention',
+          );
+        } else {
+          ErrorHandler.showSuccess(
+            '"${created.name}" added to your closet',
+            title: 'Success',
+          );
+        }
+      });
     } catch (e) {
-      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
+      if (mounted) {
+        ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
+      }
     } finally {
-      isSaving.value = false;
+      if (mounted) isSaving.value = false;
     }
   }
 
   Future<void> _pickAdditionalImage() async {
+    if (isSaving.value) return;
     // Use pickMultipleMedia to select multiple images at once
-    final List<XFile> images = await _imagePicker.pickMultipleMedia(
-      imageQuality: 85,
-    );
+    List<XFile> images;
+    try {
+      images = await _imagePicker.pickMultipleMedia(imageQuality: 85);
+    } catch (error) {
+      if (mounted) {
+        await PermissionHelper.handleImagePickerError(
+          error,
+          permissionName: 'Photos',
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
 
-    var addedCount = 0;
     for (final image in images) {
       // Only add image files (case-insensitive check)
       final path = image.path.toLowerCase();
@@ -169,12 +212,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
           path.endsWith('.tif') ||
           path.endsWith('.tiff')) {
         additionalImages.add(File(image.path));
-        addedCount++;
       }
-    }
-
-    if (addedCount > 0 && mounted) {
-      ErrorHandler.showSuccess('$addedCount additional image(s) added', title: 'Images Added');
     }
   }
 
@@ -443,12 +481,15 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                 Positioned(
                   top: AppConstants.spacing8,
                   right: AppConstants.spacing8,
-                  child: CircleAvatar(
-                    backgroundColor: tokens.cardColor,
-                    child: IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => additionalImages.clear(),
+                  child: IconButton.filled(
+                    tooltip: 'Remove all photos',
+                    onPressed: () => additionalImages.clear(),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      backgroundColor: tokens.cardColor,
+                      foregroundColor: tokens.textPrimary,
                     ),
+                    icon: const Icon(Icons.close),
                   ),
                 ),
             ],
@@ -482,21 +523,17 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                         Positioned(
                           top: 4,
                           right: 4,
-                          child: GestureDetector(
-                            onTap: () => _removeAdditionalImage(index),
-                            child: Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: tokens.cardColor.withValues(alpha: 0.8),
-                                shape: BoxShape.circle,
+                          child: IconButton.filled(
+                            tooltip: 'Remove photo ${index + 1}',
+                            onPressed: () => _removeAdditionalImage(index),
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              backgroundColor: tokens.cardColor.withValues(
+                                alpha: 0.8,
                               ),
-                              child: Icon(
-                                Icons.close,
-                                size: 16,
-                                color: tokens.textPrimary,
-                              ),
+                              foregroundColor: tokens.textPrimary,
                             ),
+                            icon: const Icon(Icons.close, size: 16),
                           ),
                         ),
                       ],
@@ -526,7 +563,8 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
       borderRadius: BorderRadius.circular(AppConstants.radius12),
       child: Container(
         width: double.infinity,
-        height: 200,
+        constraints: const BoxConstraints(minHeight: 200),
+        padding: const EdgeInsets.all(AppConstants.spacing24),
         decoration: BoxDecoration(
           border: Border.all(
             color: tokens.brandColor.withValues(alpha: 0.5),
@@ -536,12 +574,14 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
           borderRadius: BorderRadius.circular(AppConstants.radius12),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.add_photo_alternate, size: 48, color: tokens.brandColor),
             const SizedBox(height: AppConstants.spacing8),
             Text(
               'Add Photo (Multiple)',
+              textAlign: TextAlign.center,
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(color: tokens.brandColor),
@@ -567,6 +607,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
 
   Widget _buildCategoryDropdown(AppUiTokens tokens) {
     return DropdownButtonFormField<Category>(
+      isExpanded: true,
       initialValue: selectedCategory.value,
       decoration: const InputDecoration(
         labelText: 'Category *',
@@ -586,6 +627,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
 
   Widget _buildConditionDropdown(AppUiTokens tokens) {
     return DropdownButtonFormField<domain.Condition>(
+      isExpanded: true,
       initialValue: selectedCondition.value,
       decoration: const InputDecoration(
         labelText: 'Condition *',

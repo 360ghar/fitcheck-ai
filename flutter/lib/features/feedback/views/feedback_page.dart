@@ -55,14 +55,14 @@ class FeedbackPage extends GetView<FeedbackController> {
                                   'Thank you for your feedback!',
                                   style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(
-                                        color: Colors.green.shade700,
+                                        color: tokens.textPrimary,
                                         fontWeight: FontWeight.w600,
                                       ),
                                 ),
                                 Text(
                                   "We'll review it and get back to you if needed.",
                                   style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: Colors.green.shade600),
+                                      ?.copyWith(color: tokens.textMuted),
                                 ),
                               ],
                             ),
@@ -72,34 +72,20 @@ class FeedbackPage extends GetView<FeedbackController> {
                     );
                   }),
 
+                  const AppEditorialHeader(
+                    title: 'Your feedback',
+                    subtitle:
+                        'Report a problem, request a feature, or get support.',
+                    color: AppCoreColors.editorialSlate,
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+
                   // Form card
                   AppGlassCard(
                     padding: const EdgeInsets.all(AppConstants.spacing16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.feedback_outlined,
-                              color: tokens.brandColor,
-                            ),
-                            const SizedBox(width: AppConstants.spacing12),
-                            Text(
-                              'Submit Feedback',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppConstants.spacing8),
-                        Text(
-                          'We value your input and read every submission',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: tokens.textMuted),
-                        ),
-                        const SizedBox(height: AppConstants.spacing24),
-
                         // Category dropdown
                         Text(
                           'Category *',
@@ -109,7 +95,10 @@ class FeedbackPage extends GetView<FeedbackController> {
                         const SizedBox(height: AppConstants.spacing8),
                         Obx(
                           () => DropdownButtonFormField<TicketCategory>(
+                            key: ValueKey(controller.category.value),
                             initialValue: controller.category.value,
+                            isExpanded: true,
+                            itemHeight: null,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -122,59 +111,19 @@ class FeedbackPage extends GetView<FeedbackController> {
                             items: const [
                               DropdownMenuItem(
                                 value: TicketCategory.bugReport,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.bug_report,
-                                      color: Colors.red,
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text('Bug Report'),
-                                  ],
-                                ),
+                                child: Text('Bug report'),
                               ),
                               DropdownMenuItem(
                                 value: TicketCategory.featureRequest,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.lightbulb_outline,
-                                      color: Colors.amber,
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text('Feature Request'),
-                                  ],
-                                ),
+                                child: Text('Feature request'),
                               ),
                               DropdownMenuItem(
                                 value: TicketCategory.generalFeedback,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.chat_bubble_outline,
-                                      color: Colors.blue,
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text('General Feedback'),
-                                  ],
-                                ),
+                                child: Text('General feedback'),
                               ),
                               DropdownMenuItem(
                                 value: TicketCategory.supportRequest,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.help_outline,
-                                      color: Colors.green,
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text('Support Request'),
-                                  ],
-                                ),
+                                child: Text('Support request'),
                               ),
                             ],
                             onChanged: (value) {
@@ -305,26 +254,21 @@ class FeedbackPage extends GetView<FeedbackController> {
                                     Positioned(
                                       top: 0,
                                       right: 0,
-                                      child: GestureDetector(
-                                        onTap: () =>
+                                      child: IconButton.filled(
+                                        onPressed: () =>
                                             controller.removeAttachment(index),
-                                        child: Semantics(
-                                          button: true,
-                                          label:
-                                              'Remove attachment ${index + 1}',
-                                          child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(
-                                              color: Colors.red,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Icon(
-                                              Icons.close,
-                                              color: Colors.white,
-                                              size: 14,
-                                            ),
-                                          ),
+                                        tooltip:
+                                            'Remove attachment ${index + 1}',
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
+                                          foregroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.onError,
+                                          minimumSize: const Size(48, 48),
                                         ),
+                                        icon: const Icon(Icons.close, size: 18),
                                       ),
                                     ),
                                   ],
@@ -424,10 +368,14 @@ class FeedbackPage extends GetView<FeedbackController> {
                               children: [
                                 Icon(Icons.history, color: tokens.brandColor),
                                 const SizedBox(width: AppConstants.spacing12),
-                                Text(
-                                  'Your Submissions',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                Expanded(
+                                  child: Text(
+                                    'Your Submissions',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
                                 ),
                               ],
                             ),
@@ -479,10 +427,12 @@ class FeedbackPage extends GetView<FeedbackController> {
                             children: [
                               Icon(Icons.history, color: tokens.brandColor),
                               const SizedBox(width: AppConstants.spacing12),
-                              Text(
-                                'Your Submissions',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              Expanded(
+                                child: Text(
+                                  'Your Submissions',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
                               ),
                             ],
                           ),
@@ -539,23 +489,18 @@ class FeedbackPage extends GetView<FeedbackController> {
     AppUiTokens tokens,
   ) {
     IconData icon;
-    Color color;
     switch (ticket.category) {
       case TicketCategory.bugReport:
         icon = Icons.bug_report;
-        color = Colors.red;
         break;
       case TicketCategory.featureRequest:
         icon = Icons.lightbulb_outline;
-        color = Colors.amber;
         break;
       case TicketCategory.generalFeedback:
         icon = Icons.chat_bubble_outline;
-        color = Colors.blue;
         break;
       case TicketCategory.supportRequest:
         icon = Icons.help_outline;
-        color = Colors.green;
         break;
     }
 
@@ -589,7 +534,7 @@ class FeedbackPage extends GetView<FeedbackController> {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 20),
+          Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
           const SizedBox(width: AppConstants.spacing12),
           Expanded(
             child: Column(
@@ -621,7 +566,7 @@ class FeedbackPage extends GetView<FeedbackController> {
             child: Text(
               statusLabel,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: statusColor,
+                color: tokens.textPrimary,
                 fontWeight: FontWeight.w500,
               ),
             ),
