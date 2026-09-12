@@ -4,20 +4,8 @@ import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-/// Registrable domain whose hosts may receive the session bearer token.
-///
-/// Only our own image-serving hosts are allowed (`images.fitcheckaiapp.com`,
-/// `api.fitcheckaiapp.com`). Gating on "is not presigned" instead would attach
-/// the user's live access token to ANY url rendered through these widgets — an
-/// Instagram/Pinterest thumbnail from social import, an OAuth provider avatar —
-/// which hands a third-party CDN a working session credential.
-const String _authTokenDomain = 'fitcheckaiapp.com';
-
-bool _isOurHost(Uri uri) {
-  final host = uri.host.toLowerCase();
-  return host == _authTokenDomain || host.endsWith('.$_authTokenDomain');
-}
+import '../network/auth_url_policy.dart';
+export '../network/auth_url_policy.dart' show urlAcceptsAuthToken;
 
 /// Authorization headers for authenticated image fetches.
 ///
@@ -44,22 +32,6 @@ Map<String, String>? authHeadersForUrl(String url) {
   } catch (_) {
     return null; // uninitialized client (widget tests)
   }
-}
-
-/// Whether [url] may carry the session bearer token — the URL-only half of
-/// [authHeadersForUrl].
-///
-/// Split out because it is PURE (it depends on nothing but the URL) and so can be
-/// computed once per URL, whereas the token read in [authHeadersForUrl]
-/// deliberately cannot be cached: the Supabase session rotates, and a widget that
-/// memoized its headers would keep presenting an expired token and start 401ing.
-bool urlAcceptsAuthToken(String url) {
-  if (url.contains('X-Amz-')) {
-    return false; // presigned URL: a bearer header would break the signature
-  }
-  final uri = Uri.tryParse(url);
-  // Never leak the session token to a third-party host.
-  return uri != null && uri.hasScheme && _isOurHost(uri);
 }
 
 /// A disk-cache key that survives presigned-URL rotation.
@@ -120,7 +92,15 @@ String? resolveFallbackUrl(String url, String? fallbackUrl) {
 /// time — the exact client-side waste the egress work exists to remove. Neither
 /// failure is visible in `presigned` mode, which is how the flag ships today, so
 /// a half-applied call site would go unnoticed until the cutover.
-CachedNetworkImageProvider appImageProvider(String url) {
+ImageProvider appImageProvider(String url) {
+  if (url.startsWith('data:image')) {
+    try {
+      return MemoryImage(UriData.parse(url).contentAsBytes());
+    } on FormatException {
+      // Let the image's normal errorBuilder handle an invalid preview.
+      return MemoryImage(Uint8List(0));
+    }
+  }
   return CachedNetworkImageProvider(
     url,
     cacheKey: stableCacheKey(url),
@@ -225,6 +205,8 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
   String? _fallback;
   String? _cacheKey;
   bool _authEligible = false;
+  Uint8List? _dataBytes;
+  int _sourceRevision = 0;
 
   @override
   void initState() {
@@ -246,10 +228,14 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
   }
 
   void _resolveActiveUrl() {
+    _sourceRevision++;
     _fallback = resolveFallbackUrl(widget.url, widget.fallbackUrl);
     _activeUrl = _usingFallback && _fallback != null ? _fallback! : widget.url;
     _cacheKey = stableCacheKey(_activeUrl);
     _authEligible = urlAcceptsAuthToken(_activeUrl);
+    _dataBytes = _activeUrl.startsWith('data:image')
+        ? _tryDecodeDataUri(_activeUrl)
+        : null;
   }
 
   @override
@@ -258,6 +244,7 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
       return _buildDataUriImage(context);
     }
     final fallback = _fallback;
+    final revision = _sourceRevision;
 
     return CachedNetworkImage(
       imageUrl: _activeUrl,
@@ -285,7 +272,7 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
             widget.storagePath != null &&
             widget.remintUrl != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _remintAndRetry();
+            if (mounted && revision == _sourceRevision) _remintAndRetry();
           });
           return SizedBox(width: widget.width, height: widget.height);
         }
@@ -301,14 +288,18 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
   /// so route them through [Image.memory] — no network, no cache involved.
   Widget _buildDataUriImage(BuildContext context) {
     final fallback = _fallback;
-    final bytes = _tryDecodeDataUri(_activeUrl);
+    final bytes = _dataBytes;
     if (bytes == null) {
       // Malformed payload — treat like any other decode failure.
       if (!_usingFallback && fallback != null) {
         _scheduleFallbackSwap();
         return SizedBox(width: widget.width, height: widget.height);
       }
-      return _buildError(context, _activeUrl, const FormatException('Invalid data URI'));
+      return _buildError(
+        context,
+        _activeUrl,
+        const FormatException('Invalid data URI'),
+      );
     }
     return Image.memory(
       bytes,
@@ -347,11 +338,12 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
 
   void _scheduleFallbackSwap() {
     final fallback = _fallback;
+    final revision = _sourceRevision;
     if (!_usingFallback && fallback != null) {
       // The rebuild is scheduled rather than applied inline because error
       // widgets run during build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_usingFallback) {
+        if (mounted && !_usingFallback && revision == _sourceRevision) {
           setState(() {
             _usingFallback = true;
             _resolveActiveUrl();
@@ -368,9 +360,15 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
       return;
     }
     _reminted = true;
+    final revision = _sourceRevision;
     try {
       final freshUrl = await widget.remintUrl!(widget.storagePath!);
-      if (freshUrl == null || freshUrl.isEmpty || !mounted) return;
+      if (!mounted ||
+          revision != _sourceRevision ||
+          freshUrl == null ||
+          freshUrl.isEmpty) {
+        return;
+      }
       setState(() {
         // A re-minted URL supersedes any prior fallback: it is the durable
         // object's fresh short-lived URL, not a retry of the same bytes.
@@ -379,6 +377,9 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
         _usingFallback = false;
         _fallback = null;
         _activeUrl = freshUrl;
+        _dataBytes = freshUrl.startsWith('data:image')
+            ? _tryDecodeDataUri(freshUrl)
+            : null;
         _cacheKey = stableCacheKey(freshUrl);
         _authEligible = urlAcceptsAuthToken(freshUrl);
       });

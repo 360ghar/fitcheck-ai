@@ -22,6 +22,7 @@ class FakeOutfitNetworkService extends NetworkService {
 
 class FakeOutfitListRepository extends OutfitRepository {
   int getOutfitsCalls = 0;
+  final List<int> requestedPages = [];
   Future<OutfitsListResponse> Function()? onGetOutfits;
 
   @override
@@ -35,6 +36,7 @@ class FakeOutfitListRepository extends OutfitRepository {
     bool? draftsOnly,
   }) {
     getOutfitsCalls++;
+    requestedPages.add(page);
     return onGetOutfits?.call() ??
         Future.value(
           const OutfitsListResponse(
@@ -146,6 +148,7 @@ void main() {
     controller.onInit();
     await tester.pump();
     expect(controller.outfits.length, 2);
+    expect(controller.currentPage.value, 2);
 
     // Pull-to-refresh fails. Regression: the list used to be cleared BEFORE
     // the fetch resolved, so a transient failure left a fake "no outfits"
@@ -159,11 +162,138 @@ void main() {
       ['o1', 'o2'],
       reason: 'a failed refresh must not wipe the loaded outfits',
     );
+    expect(controller.currentPage.value, 2);
+    expect(controller.hasMore.value, isFalse);
     // Flush the error snackbar so no ticker outlives the test.
     await tester.pump(const Duration(seconds: 5));
     await tester.pump(const Duration(milliseconds: 500));
     controller.onClose();
   });
+
+  testWidgets('overlapping failed refreshes preserve the next page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+    final first = Completer<OutfitsListResponse>();
+    final second = Completer<OutfitsListResponse>();
+    final repository = FakeOutfitListRepository();
+    repository.onGetOutfits = () =>
+        repository.getOutfitsCalls == 1 ? first.future : second.future;
+    final controller = OutfitListController(
+      networkService: FakeOutfitNetworkService(),
+      repository: repository,
+    );
+    controller.outfits.add(outfit('existing'));
+    controller.currentPage.value = 3;
+    controller.hasMore.value = true;
+    final firstRequest = controller.fetchOutfits(refresh: true);
+    await tester.pump();
+    final secondRequest = controller.fetchOutfits(refresh: true);
+    await tester.pump();
+    second.completeError(AuthException.unauthorized());
+    await secondRequest;
+    first.completeError(AuthException.unauthorized());
+    await firstRequest;
+
+    expect(controller.currentPage.value, 3);
+    expect(controller.hasMore.value, isTrue);
+    repository.onGetOutfits = () async => OutfitsListResponse(
+      outfits: [outfit('next')],
+      total: 2,
+      page: 3,
+      limit: 20,
+      hasMore: false,
+    );
+    await controller.fetchOutfits();
+    expect(repository.requestedPages, [1, 1, 3]);
+    expect(controller.outfits.map((item) => item.id), ['existing', 'next']);
+    controller.onClose();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(milliseconds: 500));
+  });
+
+  testWidgets(
+    'scrolling after a failed filter refresh retries its first page',
+    (tester) async {
+      await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+      final repository = FakeOutfitListRepository();
+      var fail = true;
+      repository.onGetOutfits = () async {
+        if (fail) throw AuthException.unauthorized();
+        return OutfitsListResponse(
+          outfits: [outfit('matching')],
+          total: 1,
+          page: 1,
+          limit: 20,
+          hasMore: false,
+        );
+      };
+      final controller = OutfitListController(
+        networkService: FakeOutfitNetworkService(),
+        repository: repository,
+      );
+      controller.outfits.add(outfit('previous-filter'));
+      controller.currentPage.value = 3;
+      controller.hasMore.value = true;
+      controller.searchQuery.value = 'matching';
+      await controller.fetchOutfits(refresh: true);
+      expect(controller.outfits.single.id, 'previous-filter');
+      expect(controller.currentPage.value, 3);
+      fail = false;
+      await controller.fetchOutfits();
+      expect(repository.requestedPages, [1, 1]);
+      expect(controller.outfits.map((item) => item.id), ['matching']);
+      expect(controller.currentPage.value, 2);
+      controller.onClose();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 500));
+    },
+  );
+
+  testWidgets(
+    'failed filter change on an exhausted list re-arms scroll retry',
+    (tester) async {
+      await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+      final repository = FakeOutfitListRepository();
+      var fail = true;
+      repository.onGetOutfits = () async {
+        if (fail) throw AuthException.unauthorized();
+        return OutfitsListResponse(
+          outfits: [outfit('matching')],
+          total: 1,
+          page: 1,
+          limit: 20,
+          hasMore: false,
+        );
+      };
+      final controller = OutfitListController(
+        networkService: FakeOutfitNetworkService(),
+        repository: repository,
+      );
+      // Fully scrolled list under the old (empty) filters.
+      controller.outfits.add(outfit('old'));
+      controller.currentPage.value = 3;
+      controller.hasMore.value = false;
+      // Filter change fails.
+      controller.searchQuery.value = 'matching';
+      await controller.fetchOutfits();
+      expect(repository.requestedPages, [1]);
+      expect(
+        controller.hasMore.value,
+        isTrue,
+        reason:
+            'InfiniteScrollWrapper gates onLoadMore on hasMore, so a '
+            'failed filter fetch must re-arm it or scroll retry is dead',
+      );
+      fail = false;
+      await controller.fetchOutfits();
+      expect(repository.requestedPages, [1, 1]);
+      expect(controller.outfits.map((item) => item.id), ['matching']);
+      controller.onClose();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 500));
+    },
+  );
 
   testWidgets('load-more appends instead of replacing', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
@@ -256,7 +386,8 @@ void main() {
         expect(
           repository.getOutfitCalls,
           1,
-          reason: 'opening a detail page must re-mint fresh presigned image '
+          reason:
+              'opening a detail page must re-mint fresh presigned image '
               'URLs (refreshOutfitById) instead of rendering the cached model '
               'blind — an expired URL otherwise leaves a permanently broken '
               'image tile',
@@ -298,7 +429,8 @@ void main() {
       expect(
         find.text('outfit-1'),
         findsOneWidget,
-        reason: 'a failed refresh must not blank the page — the cached '
+        reason:
+            'a failed refresh must not blank the page — the cached '
             'model is shown',
       );
 
@@ -310,5 +442,44 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       controller.onClose();
     });
+
+    testWidgets(
+      'renders an outfit fetched while a server filter hides it from the list',
+      (tester) async {
+        final network = FakeOutfitNetworkService();
+        Get.put<NetworkService>(network);
+        final repository = FakeOutfitDetailRepository()
+          ..onGetOutfit = (_) async => outfit('fetched-under-filter');
+        final controller = OutfitListController(
+          networkService: network,
+          repository: repository,
+        );
+        // A server-side filter (favorites here) is active, so
+        // fetchOutfitById deliberately keeps the fetched model out of the
+        // paged list — the page must still render it via selectedOutfit.
+        controller.favoritesOnly.value = true;
+        Get.put(controller);
+
+        await tester.pumpWidget(
+          const GetMaterialApp(
+            home: OutfitDetailPage(outfitId: 'fetched-under-filter'),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(
+          find.text('fetched-under-filter'),
+          findsOneWidget,
+          reason:
+              'the fetched model must reach the page — the list stays '
+              'untouched while a filter is active, so without the '
+              'selectedOutfit fallback this renders "Outfit not found"',
+        );
+        expect(find.text('Outfit not found'), findsNothing);
+        controller.onClose();
+      },
+    );
   });
 }

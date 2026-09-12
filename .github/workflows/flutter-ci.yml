@@ -55,11 +55,7 @@ jobs:
           fi
 
       - name: Analyze
-        # Only true analyzer errors fail the build for now - the repo has ~546
-        # pre-existing info/warning-level issues (mostly `withOpacity`
-        # deprecation notices) that are tracked separately as tech debt rather
-        # than gating every PR on a pre-existing backlog unrelated to the change.
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze
 
       - name: Test
         run: flutter test

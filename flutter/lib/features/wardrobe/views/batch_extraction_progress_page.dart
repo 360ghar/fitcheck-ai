@@ -27,6 +27,7 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.close),
+            tooltip: 'Cancel extraction',
             onPressed: () => _showCancelConfirmation(context, tokens),
           ),
         ),
@@ -47,9 +48,7 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
                   _buildProgressHeader(context, tokens),
 
                   // Image list
-                  Expanded(
-                    child: _buildImageList(context, tokens),
-                  ),
+                  Expanded(child: _buildImageList(context, tokens)),
 
                   // Bottom status bar
                   _buildBottomBar(context, tokens),
@@ -73,21 +72,21 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Phase indicator
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _buildPhaseChip(
                   context,
                   tokens,
                   label: 'Extract',
                   isActive: isExtracting,
-                  isComplete: !isExtracting && (isGenerating || controller.isComplete),
+                  isComplete:
+                      !isExtracting && (isGenerating || controller.isComplete),
                 ),
                 const SizedBox(width: AppConstants.spacing8),
-                Icon(
-                  Icons.arrow_forward,
-                  size: 16,
-                  color: tokens.textMuted,
-                ),
+                Icon(Icons.arrow_forward, size: 16, color: tokens.textMuted),
                 const SizedBox(width: AppConstants.spacing8),
                 _buildPhaseChip(
                   context,
@@ -109,9 +108,9 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
             // Status text
             Text(
               _getStatusText(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
 
             // Batch indicator for generation phase
@@ -120,9 +119,9 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
               Text(
                 'Batch ${controller.currentBatch.value}/${controller.totalBatches.value}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.brandColor,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  color: tokens.brandColor,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ],
@@ -244,10 +243,7 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
     return Obx(() {
       if (controller.selectedImages.isEmpty) {
         return Center(
-          child: Text(
-            'No images',
-            style: TextStyle(color: tokens.textMuted),
-          ),
+          child: Text('No images', style: TextStyle(color: tokens.textMuted)),
         );
       }
 
@@ -261,9 +257,7 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
             const SizedBox(height: AppConstants.spacing8),
         itemBuilder: (context, index) {
           final image = controller.selectedImages[index];
-          return ExtractionProgressCard(
-            image: image,
-          );
+          return ExtractionProgressCard(image: image);
         },
       );
     });
@@ -274,9 +268,7 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
       padding: const EdgeInsets.all(AppConstants.spacing16),
       decoration: BoxDecoration(
         color: tokens.navBackground,
-        border: Border(
-          top: BorderSide(color: tokens.navBorder),
-        ),
+        border: Border(top: BorderSide(color: tokens.navBorder)),
       ),
       child: Obx(() {
         // Show error message if any
@@ -292,7 +284,11 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 20,
+                    ),
                     const SizedBox(width: AppConstants.spacing8),
                     Expanded(
                       child: Text(
@@ -407,15 +403,15 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
         Text(
           value,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: color ?? tokens.textPrimary,
-                fontWeight: FontWeight.bold,
-              ),
+            color: color ?? tokens.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: tokens.textMuted,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
         ),
       ],
     );
@@ -442,10 +438,7 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Continue',
-              style: TextStyle(color: tokens.textMuted),
-            ),
+            child: Text('Continue', style: TextStyle(color: tokens.textMuted)),
           ),
           TextButton(
             onPressed: () {

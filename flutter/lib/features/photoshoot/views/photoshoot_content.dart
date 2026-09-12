@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/photoshoot_controller.dart';
 import 'photoshoot_upload_step.dart';
@@ -8,141 +7,91 @@ import 'photoshoot_configure_step.dart';
 import 'photoshoot_generating_step.dart';
 import 'photoshoot_results_step.dart';
 
-/// Main content for Photoshoot tab (without Scaffold wrapper for IndexedStack)
+/// Photoshoot is a retained tool inside Studio; its current step owns scrolling.
 class PhotoshootContent extends GetView<PhotoshootController> {
   const PhotoshootContent({super.key});
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
-
     return AppPageBackground(
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
             Padding(
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Obx(() {
+                final index = controller.currentStep.value.index;
+                const labels = [
+                  'Add photos',
+                  'Choose a style',
+                  'Generate photos',
+                  'Your results',
+                ];
+                return Semantics(
+                  liveRegion: true,
+                  label: 'Step ${index + 1} of 4 · ${labels[index]}',
+                  excludeSemantics: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'AI Photoshoot',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: tokens.textPrimary,
+                      // Leave room for the active form when the keyboard or
+                      // landscape orientation reduces the tool viewport.
+                      if (constraints.maxHeight >= 260) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                labels[index],
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
                             ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '${index + 1} / 4',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(color: tokens.textSecondary),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      ExcludeSemantics(
+                        child: Row(
+                          children: List.generate(
+                            4,
+                            (step) => Expanded(
+                              child: Container(
+                                height: 3,
+                                margin: EdgeInsets.only(
+                                  right: step == 3 ? 0 : 4,
+                                ),
+                                color: step <= index
+                                    ? AppCoreColors.editorialSage
+                                    : tokens.cardBorderColor,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      const Text('📸', style: TextStyle(fontSize: 24)),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Obx(
-                    () => Text(
-                      _getSubtitle(),
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Step indicator
-            Obx(() => _buildStepIndicator(context, tokens)),
-
-            // Content based on current step
-            Expanded(
-              child: Obx(() {
-                switch (controller.currentStep.value) {
-                  case PhotoshootStep.upload:
-                    return const PhotoshootUploadStep();
-                  case PhotoshootStep.configure:
-                    return const PhotoshootConfigureStep();
-                  case PhotoshootStep.generating:
-                    return const PhotoshootGeneratingStep();
-                  case PhotoshootStep.results:
-                    return const PhotoshootResultsStep();
-                }
+                );
               }),
+            ),
+            Expanded(
+              child: Obx(
+                () => switch (controller.currentStep.value) {
+                  PhotoshootStep.upload => const PhotoshootUploadStep(),
+                  PhotoshootStep.configure => const PhotoshootConfigureStep(),
+                  PhotoshootStep.generating => const PhotoshootGeneratingStep(),
+                  PhotoshootStep.results => const PhotoshootResultsStep(),
+                },
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  String _getSubtitle() {
-    switch (controller.currentStep.value) {
-      case PhotoshootStep.upload:
-        return 'Upload 1-4 photos of yourself';
-      case PhotoshootStep.configure:
-        return 'Choose your photoshoot style';
-      case PhotoshootStep.generating:
-        return 'Creating your images...';
-      case PhotoshootStep.results:
-        if (controller.partialSuccess.value &&
-            controller.failedCount.value > 0) {
-          return '${controller.generatedImages.length} ready, ${controller.failedCount.value} failed';
-        }
-        return '${controller.generatedImages.length} images ready!';
-    }
-  }
-
-  Widget _buildStepIndicator(BuildContext context, AppUiTokens tokens) {
-    final step = controller.currentStep.value;
-    final steps = ['Upload', 'Configure', 'Generate', 'Results'];
-    final currentIndex = PhotoshootStep.values.indexOf(step);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-      child: Row(
-        children: List.generate(steps.length, (index) {
-          final isActive = index <= currentIndex;
-          final isCurrent = index == currentIndex;
-
-          return Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? tokens.brandColor
-                              : tokens.cardBorderColor,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        steps[index],
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: isCurrent
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: isActive
-                              ? tokens.brandColor
-                              : tokens.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (index < steps.length - 1) const SizedBox(width: 4),
-              ],
-            ),
-          );
-        }),
       ),
     );
   }

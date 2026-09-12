@@ -295,7 +295,7 @@ class BatchExtractionController extends GetxController {
         imageQuality: 85,
       );
 
-      if (images.isEmpty) return;
+      if (images.isEmpty || isClosed) return;
 
       // Limit to remaining slots
       final toAdd = images.take(remainingSlots.value).toList();
@@ -319,7 +319,12 @@ class BatchExtractionController extends GetxController {
 
       _updateRemainingSlots();
     } catch (e) {
-      await PermissionHelper.showDeniedRecovery(permissionName: 'Photos');
+      if (!isClosed) {
+        await PermissionHelper.handleImagePickerError(
+          e,
+          permissionName: 'Photos',
+        );
+      }
     }
   }
 
@@ -340,7 +345,7 @@ class BatchExtractionController extends GetxController {
         imageQuality: 85,
       );
 
-      if (image == null) return;
+      if (image == null || isClosed) return;
 
       final file = File(image.path);
       final validationError = await ImageUtils.validateImage(file);
@@ -356,7 +361,12 @@ class BatchExtractionController extends GetxController {
       selectedImages.add(batchImage);
       _updateRemainingSlots();
     } catch (e) {
-      await PermissionHelper.showDeniedRecovery(permissionName: 'Camera');
+      if (!isClosed) {
+        await PermissionHelper.handleImagePickerError(
+          e,
+          permissionName: 'Camera',
+        );
+      }
     }
   }
 
@@ -1484,10 +1494,7 @@ class BatchExtractionController extends GetxController {
             rawImageUrl.isNotEmpty &&
             !rawImageUrl.startsWith('data:')) {
           imageUploaded =
-              (await _itemRepo.uploadImageFromUrl(
-                created.id,
-                rawImageUrl,
-              )) !=
+              (await _itemRepo.uploadImageFromUrl(created.id, rawImageUrl)) !=
               null;
         }
 

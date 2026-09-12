@@ -4,8 +4,10 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/permission_helper.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/item_add_controller.dart';
+import '../models/item_model.dart';
 import '../widgets/ai_extraction_widget.dart';
 import '../widgets/manual_entry_form.dart';
 
@@ -29,12 +31,23 @@ class _ItemAddPageState extends State<ItemAddPage> {
   }
 
   Future<void> _pickFromGallery() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
+    XFile? image;
+    try {
+      image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+    } catch (error) {
+      if (mounted) {
+        await PermissionHelper.handleImagePickerError(
+          error,
+          permissionName: 'Photos',
+        );
+      }
+      return;
+    }
 
     if (image != null && mounted) {
       controller.processImage(File(image.path));
@@ -42,73 +55,86 @@ class _ItemAddPageState extends State<ItemAddPage> {
   }
 
   Future<void> _pickFromCamera() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
+    XFile? image;
+    try {
+      image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+    } catch (error) {
+      if (mounted) {
+        await PermissionHelper.handleImagePickerError(
+          error,
+          permissionName: 'Camera',
+        );
+      }
+      return;
+    }
 
     if (image != null && mounted) {
       controller.processImage(File(image.path));
     }
   }
 
-  void _showManualEntry() {
-    Get.to(() => const ManualEntryForm());
+  Future<void> _showManualEntry() async {
+    final item = await Get.to<ItemModel>(() => const ManualEntryForm());
+    if (item != null && mounted) Navigator.of(context).pop(item);
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Item'), elevation: 0),
-      body: AppPageBackground(
-        child: SafeArea(
-          child: Obx(() {
-            // "Enter Manually" takes precedence: the user explicitly chose to
-            // skip AI, so the manual form must appear even while a photo is
-            // selected. (Previously the AI branch below required
-            // selectedImage == null, so the manual form never showed when a
-            // photo was picked — a dead-end loop on the AI screen.)
-            if (controller.showManualEntry.value) {
-              return ManualEntryForm(
-                imageFile: controller.selectedImage.value,
-              );
-            }
+    return Obx(() {
+      if (controller.showManualEntry.value) {
+        return ManualEntryForm(
+          imageFile: controller.selectedImage.value,
+          onSaved: (item) => Navigator.of(context).pop(item),
+        );
+      }
+      return Scaffold(
+        appBar: AppBar(title: const Text('Add Item'), elevation: 0),
+        body: AppPageBackground(
+          child: SafeArea(
+            child: Obx(() {
+              // Show AI extraction when processing or when we have results to display
+              if (controller.selectedImage.value != null &&
+                  (controller.isProcessing.value ||
+                      controller.isSaving.value ||
+                      controller.isGeneratingImages.value ||
+                      (controller.extractionResult.value != null &&
+                          controller
+                              .extractionResult
+                              .value!
+                              .items
+                              .isNotEmpty) ||
+                      controller.generatedItems.isNotEmpty)) {
+                return AIExtractionWidget(
+                  imageFile: controller.selectedImage.value!,
+                  extractionResult: controller.extractionResult.value,
+                  isProcessing: controller.isProcessing.value,
+                  isSaving: controller.isSaving.value,
+                  isGeneratingImages: controller.isGeneratingImages.value,
+                  generationProgress: controller.generationProgress.value,
+                  currentGenerationStatus:
+                      controller.currentGenerationStatus.value,
+                  onRetake: () => controller.reset(),
+                  onSaveExtracted: (items) =>
+                      controller.saveExtractedItems(items),
+                  onSaveGenerated: () => controller.saveGeneratedItems(),
+                  onManualEntry: () => controller.proceedToManualEntry(),
+                );
+              }
 
-            // Show AI extraction when processing or when we have results to display
-            if (controller.selectedImage.value != null &&
-                (controller.isProcessing.value ||
-                    controller.isSaving.value ||
-                    controller.isGeneratingImages.value ||
-                    (controller.extractionResult.value != null &&
-                        controller.extractionResult.value!.items.isNotEmpty) ||
-                    controller.generatedItems.isNotEmpty)) {
-              return AIExtractionWidget(
-                imageFile: controller.selectedImage.value!,
-                extractionResult: controller.extractionResult.value,
-                isProcessing: controller.isProcessing.value,
-                isSaving: controller.isSaving.value,
-                isGeneratingImages: controller.isGeneratingImages.value,
-                generationProgress: controller.generationProgress.value,
-                currentGenerationStatus:
-                    controller.currentGenerationStatus.value,
-                onRetake: () => controller.reset(),
-                onSaveExtracted: (items) =>
-                    controller.saveExtractedItems(items),
-                onSaveGenerated: () => controller.saveGeneratedItems(),
-                onManualEntry: () => controller.proceedToManualEntry(),
-              );
-            }
-
-            // Show initial options
-            return _buildInitialOptions(tokens);
-          }),
+              // Show initial options
+              return _buildInitialOptions(tokens);
+            }),
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   Widget _buildInitialOptions(AppUiTokens tokens) {

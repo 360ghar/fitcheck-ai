@@ -7,6 +7,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/env_config.dart';
 import '../constants/api_constants.dart';
+import '../network/auth_refresh_http_client.dart';
 import 'analytics_service.dart';
 import 'secure_local_storage.dart';
 
@@ -60,7 +61,8 @@ class SupabaseService extends GetxService {
 
     await Supabase.initialize(
       url: supabaseUrl,
-      anonKey: resolvedAnonKey,
+      publishableKey: resolvedAnonKey,
+      httpClient: AuthRefreshHttpClient(supabaseUrl: supabaseUrl),
       debug: kDebugMode,
       // Keychain/Keystore-backed session storage instead of the package
       // default (plaintext SharedPreferences/NSUserDefaults) - a device
@@ -77,29 +79,38 @@ class SupabaseService extends GetxService {
     _client = Supabase.instance.client;
 
     // Set up auth state listener
-    _client.auth.onAuthStateChange.listen((data) {
-      final AuthChangeEvent event = data.event;
-      final Session? session = data.session;
+    _client.auth.onAuthStateChange.listen(
+      (data) {
+        final AuthChangeEvent event = data.event;
+        final Session? session = data.session;
 
-      if (event == AuthChangeEvent.signedIn && session != null) {
-        currentUser.value = session.user;
-        isAuthenticated.value = true;
-      } else if (event == AuthChangeEvent.signedOut) {
-        currentUser.value = null;
-        isAuthenticated.value = false;
-        AnalyticsService.instance.reset();
-      } else if (event == AuthChangeEvent.tokenRefreshed && session != null) {
-        currentUser.value = session.user;
-      } else if (event == AuthChangeEvent.initialSession) {
-        if (session != null) {
+        if (event == AuthChangeEvent.signedIn && session != null) {
           currentUser.value = session.user;
           isAuthenticated.value = true;
-        } else {
+        } else if (event == AuthChangeEvent.signedOut) {
           currentUser.value = null;
           isAuthenticated.value = false;
+          AnalyticsService.instance.reset();
+        } else if (event == AuthChangeEvent.tokenRefreshed && session != null) {
+          currentUser.value = session.user;
+        } else if (event == AuthChangeEvent.initialSession) {
+          if (session != null) {
+            currentUser.value = session.user;
+            isAuthenticated.value = true;
+          } else {
+            currentUser.value = null;
+            isAuthenticated.value = false;
+          }
         }
-      }
-    });
+      },
+      onError: (Object error, StackTrace stack) {
+        // Recoverable refresh failures are also emitted on this stream. Keep
+        // the current user while the SDK retries, without an unhandled error.
+        if (kDebugMode) {
+          debugPrint('Auth state stream reported a refresh error.');
+        }
+      },
+    );
 
     isInitialized.value = true;
     return this;

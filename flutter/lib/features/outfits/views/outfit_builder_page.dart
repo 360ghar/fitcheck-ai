@@ -176,6 +176,7 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
               Expanded(
                 child: Obx(
                   () => DropdownButtonFormField<Style>(
+                    isExpanded: true,
                     initialValue: controller.selectedStyle.value,
                     decoration: InputDecoration(
                       labelText: 'Style',
@@ -208,6 +209,7 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
               Expanded(
                 child: Obx(
                   () => DropdownButtonFormField<Season>(
+                    isExpanded: true,
                     initialValue: controller.selectedSeason.value,
                     decoration: InputDecoration(
                       labelText: 'Season',
@@ -252,8 +254,10 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
   ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
             'Add items to your outfit',
@@ -382,8 +386,8 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                       errorIcon: _getCategoryIcon(outfitItem.item.category),
                       // Presigned URLs expire after 1h; on a failed load
                       // re-mint a fresh URL from the durable storage key.
-                      storagePath: outfitItem.item.itemImages!.first
-                          .storagePath,
+                      storagePath:
+                          outfitItem.item.itemImages!.first.storagePath,
                       remintUrl: _itemRepository.remintImageUrl,
                     )
                   : Icon(
@@ -396,20 +400,16 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
 
           // Remove button
           Positioned(
-            top: -4,
-            right: -4,
-            child: GestureDetector(
-              onTap: () => controller.removeItem(outfitItem.id),
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: tokens.cardColor, width: 2),
-                ),
-                child: const Icon(Icons.close, color: Colors.white, size: 12),
+            top: 0,
+            right: 0,
+            child: IconButton.filled(
+              tooltip: 'Remove ${outfitItem.item.name}',
+              onPressed: () => controller.removeItem(outfitItem.id),
+              style: IconButton.styleFrom(
+                backgroundColor: tokens.cardColor,
+                foregroundColor: tokens.textPrimary,
               ),
+              icon: const Icon(Icons.close, size: 18),
             ),
           ),
         ],
@@ -454,6 +454,7 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
           Expanded(
             child: Obx(
               () => DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: controller.categoryFilter.value,
                 decoration: InputDecoration(
                   filled: true,
@@ -467,7 +468,6 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                     vertical: AppConstants.spacing8,
                   ),
                 ),
-                isExpanded: true,
                 items: [
                   const DropdownMenuItem(value: 'all', child: Text('All')),
                   ...Category.values.map((cat) {
@@ -678,9 +678,9 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                       color: tokens.brandColor,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.check,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                       size: 16,
                     ),
                   ),
@@ -708,17 +708,15 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
           right: AppConstants.spacing16,
           top: AppConstants.spacing12,
           bottom:
-              AppConstants.spacing12 +
-              MediaQuery.of(context).padding.bottom +
-              // Keep the sticky bar clear of the keyboard while a field is
-              // focused (padding.bottom alone is consumed by the keyboard).
-              MediaQuery.of(context).viewInsets.bottom,
+              AppConstants.spacing12 + MediaQuery.of(context).padding.bottom,
         ),
         decoration: BoxDecoration(
           color: tokens.cardColor,
           border: Border(top: BorderSide(color: tokens.cardBorderColor)),
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Selected count
             Container(
@@ -739,10 +737,11 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
               ),
             ),
 
-            const SizedBox(width: AppConstants.spacing12),
+            const SizedBox(height: AppConstants.spacing8),
 
             // Generate AI Preview button
-            Expanded(
+            SizedBox(
+              width: double.infinity,
               child: controller.isGenerating.value
                   ? ElevatedButton(
                       onPressed: null,

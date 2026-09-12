@@ -113,6 +113,8 @@ class AstrologyTab extends StatelessWidget {
               Expanded(
                 child: Obx(
                   () => DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    itemHeight: null,
                     initialValue: controller.astrologyMode.value,
                     decoration: const InputDecoration(
                       labelText: 'Recommendation Type',
@@ -440,7 +442,9 @@ class AstrologyTab extends StatelessWidget {
                                         storagePath: image.storagePath,
                                         remintUrl:
                                             _itemRepository.remintImageUrl,
-                                        errorWidget: (_, _, _) => const Icon(Icons.broken_image_outlined),
+                                        errorWidget: (_, _, _) => const Icon(
+                                          Icons.broken_image_outlined,
+                                        ),
                                       )
                                     : Container(
                                         color: tokens.cardColor.withValues(

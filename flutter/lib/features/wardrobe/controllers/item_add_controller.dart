@@ -27,8 +27,8 @@ class ItemAddController extends GetxController {
 
   WardrobeSyncService get _wardrobeSync =>
       Get.isRegistered<WardrobeSyncService>()
-          ? Get.find<WardrobeSyncService>()
-          : WardrobeSyncService();
+      ? Get.find<WardrobeSyncService>()
+      : WardrobeSyncService();
 
   // Reactive state
   final Rx<File?> selectedImage = Rx<File?>(null);
@@ -49,6 +49,9 @@ class ItemAddController extends GetxController {
   // Async extraction state (Phase 2)
   StreamSubscription<SSEEvent>? _sseSubscription;
   String? _currentJobId;
+  int _extractionRun = 0;
+
+  bool _isCurrentRun(int run) => !isClosed && run == _extractionRun;
   final RxString currentPhase =
       ''.obs; // upload, analyzing, extracting, generating
   final RxDouble phaseProgress = 0.0.obs; // 0-100%
@@ -78,15 +81,20 @@ class ItemAddController extends GetxController {
   /// Uses new /api/v1/ai/single-extract endpoint with real-time streaming
   /// Supports intelligent caching - detects and displays cached results (Phase 3)
   Future<void> processImage(File image) async {
+    if (isClosed) return;
+    _cleanupSSE();
+    final run = _extractionRun;
     // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — must run
     // before any image bytes are compressed/encoded or uploaded.
     if (!await Get.find<AiConsentService>().ensureConsent(
-      featureLabel: 'AI Wardrobe Extraction',
-    )) {
+          featureLabel: 'AI Wardrobe Extraction',
+        ) ||
+        !_isCurrentRun(run)) {
       return;
     }
     selectedImage.value = image;
     isProcessing.value = true;
+    isGeneratingImages.value = false;
     error.value = '';
     generatedItems.clear();
     generationProgress.value = 0;
@@ -107,6 +115,10 @@ class ItemAddController extends GetxController {
     try {
       // Start async extraction job
       final job = await _itemRepository.extractItemsFromImageAsync(image);
+      if (!_isCurrentRun(run)) {
+        await _cancelJob(job.jobId);
+        return;
+      }
       _currentJobId = job.jobId;
 
       // Check if result is cached (indicated by message)
@@ -124,8 +136,12 @@ class ItemAddController extends GetxController {
       _sseSubscription = _itemRepository
           .subscribeSingleExtractionEvents(job.jobId)
           .listen(
-            _handleSSEEvent,
-            onError: _handleSSEError,
+            (event) {
+              if (_isCurrentRun(run)) _handleSSEEvent(event);
+            },
+            onError: (Object error) {
+              if (_isCurrentRun(run)) _handleSSEError(error);
+            },
             onDone: () {
               // Stream closed. If we never reached a terminal state, the
               // connection dropped mid-job - reconcile by polling /status
@@ -133,7 +149,7 @@ class ItemAddController extends GetxController {
               // stranded forever. Gate on job incompleteness, not the
               // spinner: isProcessing is cleared when review is shown.
               debugPrint('SSE stream closed');
-              if (_shouldReconcileOnStreamLoss) {
+              if (_isCurrentRun(run) && _shouldReconcileOnStreamLoss) {
                 _reconcileViaPolling();
               }
             },
@@ -143,6 +159,8 @@ class ItemAddController extends GetxController {
       // Arm the silence watchdog (reset on every event in _handleSSEEvent).
       _armWatchdog();
     } catch (e) {
+      if (!_isCurrentRun(run)) return;
+      _cleanupSSE();
       isProcessing.value = false;
       _handleExtractionError(e);
     }
@@ -269,16 +287,14 @@ class ItemAddController extends GetxController {
           final existingByTempId = {
             for (final existing in generatedItems) existing.tempId: existing,
           };
-          final merged = parsedItems
-              .map((parsed) {
-                final existing = existingByTempId[parsed.tempId];
-                if (existing == null) return parsed;
-                return parsed.copyWith(
-                  includeInWardrobe: existing.includeInWardrobe,
-                  name: existing.name ?? parsed.name,
-                );
-              })
-              .toList();
+          final merged = parsedItems.map((parsed) {
+            final existing = existingByTempId[parsed.tempId];
+            if (existing == null) return parsed;
+            return parsed.copyWith(
+              includeInWardrobe: existing.includeInWardrobe,
+              name: existing.name ?? parsed.name,
+            );
+          }).toList();
           generatedItems.assignAll(merged);
           itemGenerationStatus.clear();
           for (final item in parsedItems) {
@@ -303,9 +319,15 @@ class ItemAddController extends GetxController {
             .where((item) => item.generatedImageUrl != null)
             .length;
         if (successfulItems > 0) {
-          ErrorHandler.showSuccess('$successfulItems item${successfulItems > 1 ? 's' : ''} ready to add', title: 'Success');
+          ErrorHandler.showSuccess(
+            '$successfulItems item${successfulItems > 1 ? 's' : ''} ready to add',
+            title: 'Success',
+          );
         } else if (generatedItems.isEmpty) {
-          ErrorHandler.showValidation('Try a clearer photo or enter details manually', title: 'No Items Detected');
+          ErrorHandler.showValidation(
+            'Try a clearer photo or enter details manually',
+            title: 'No Items Detected',
+          );
         }
 
         _cleanupSSE();
@@ -462,6 +484,7 @@ class ItemAddController extends GetxController {
   /// [isProcessing]: that flag is pure spinner UI and is cleared as soon as
   /// review is seeded, while studio generation may still be streaming.
   bool get _shouldReconcileOnStreamLoss =>
+      !isClosed &&
       _currentJobId != null &&
       currentPhase.value != 'complete' &&
       !_reconciling;
@@ -470,8 +493,9 @@ class ItemAddController extends GetxController {
   /// so 45s with no event means a dead or hung connection: reconcile.
   void _armWatchdog() {
     _watchdog?.cancel();
+    final run = _extractionRun;
     _watchdog = Timer(const Duration(seconds: 45), () {
-      if (_shouldReconcileOnStreamLoss) {
+      if (_isCurrentRun(run) && _shouldReconcileOnStreamLoss) {
         _reconcileViaPolling();
       }
     });
@@ -481,16 +505,18 @@ class ItemAddController extends GetxController {
   /// job is lost (OOM/redeploy). Bounded by a deadline and a failure counter.
   Future<void> _reconcileViaPolling() async {
     final jobId = _currentJobId;
-    if (jobId == null || _reconciling) return;
+    final run = _extractionRun;
+    if (jobId == null || _reconciling || !_isCurrentRun(run)) return;
     _reconciling = true;
     _reconcileFailures = 0;
     _watchdog?.cancel();
 
     final deadline = DateTime.now().add(const Duration(minutes: 2));
 
-    while (_reconciling) {
+    while (_reconciling && _isCurrentRun(run)) {
       try {
         final status = await _itemRepository.getSingleJobStatus(jobId);
+        if (!_isCurrentRun(run)) return;
         _reconcileFailures = 0;
 
         // Merge server items over what's on screen (keeps user toggles), using
@@ -534,6 +560,7 @@ class ItemAddController extends GetxController {
             }
         }
       } catch (e) {
+        if (!_isCurrentRun(run)) return;
         _reconcileFailures++;
         debugPrint('Reconcile poll error ($_reconcileFailures): $e');
         // Job likely gone (OOM/redeploy -> 404) or network flaky. If we have
@@ -542,8 +569,9 @@ class ItemAddController extends GetxController {
         if (generatedItems.isNotEmpty || _reconcileFailures >= 3) {
           _finishReconcile(
             success: generatedItems.isNotEmpty,
-            errorMessage:
-                generatedItems.isEmpty ? 'Connection was lost. Try again.' : null,
+            errorMessage: generatedItems.isEmpty
+                ? 'Connection was lost. Try again.'
+                : null,
           );
           return;
         }
@@ -592,7 +620,8 @@ class ItemAddController extends GetxController {
     // SSE/stream failures arrive as a plain Exception wrapping the message, so
     // keep the message fallbacks for those paths.
     final String? code = e is AppException ? e.errorCode : null;
-    final bool isRateLimit = code == 'RATE_LIMIT_EXCEEDED' ||
+    final bool isRateLimit =
+        code == 'RATE_LIMIT_EXCEEDED' ||
         errorMsg.contains('rate limit') ||
         errorMsg.contains('limit exceeded');
     // Upstream AI capacity/provider exhaustion is the SERVER's problem ("on us"):
@@ -604,7 +633,8 @@ class ItemAddController extends GetxController {
     // NB: deliberately NOT matching generic "try again" text — validation and
     // detection failures ("No items detected. Please try again.") must keep
     // their dedicated dialogs below, not be routed to the capacity dialog.
-    final bool isCapacity = code == 'SERVER_BUSY' ||
+    final bool isCapacity =
+        code == 'SERVER_BUSY' ||
         lower.contains('capacity') ||
         lower.contains('unavailable') ||
         lower.contains('quota') ||
@@ -700,20 +730,26 @@ class ItemAddController extends GetxController {
       );
     } else {
       // Generic error
-      ErrorHandler.showError('Failed to analyze image. Please try again.', title: 'Error');
+      ErrorHandler.showError(
+        'Failed to analyze image. Please try again.',
+        title: 'Error',
+      );
     }
   }
 
   /// Cancel the current extraction job
   Future<void> cancelExtraction() async {
-    if (_currentJobId == null) return;
+    final id = _currentJobId;
+    _cleanupSSE();
+    isProcessing.value = false;
+    isGeneratingImages.value = false;
+    currentGenerationStatus.value = 'Cancelled';
+    if (id != null) await _cancelJob(id);
+  }
 
+  Future<void> _cancelJob(String id) async {
     try {
-      await _itemRepository.cancelSingleExtraction(_currentJobId!);
-      isProcessing.value = false;
-      isGeneratingImages.value = false;
-      currentGenerationStatus.value = 'Cancelled';
-      _cleanupSSE();
+      await _itemRepository.cancelSingleExtraction(id);
     } catch (e) {
       debugPrint('Failed to cancel extraction: $e');
     }
@@ -721,6 +757,9 @@ class ItemAddController extends GetxController {
 
   /// Cleanup SSE subscription
   void _cleanupSSE() {
+    // Invalidate pending starts, polls and callbacks before cancelling streams.
+    _extractionRun++;
+    _reconciling = false;
     _watchdog?.cancel();
     _watchdog = null;
     _sseSubscription?.cancel();
@@ -731,7 +770,7 @@ class ItemAddController extends GetxController {
   /// Save extracted items to wardrobe
   /// Uses generated product images if available, otherwise uses original image
   Future<void> saveExtractedItems(List<DetectedItemData> items) async {
-    if (selectedImage.value == null) return;
+    if (isSaving.value || selectedImage.value == null) return;
 
     final includedItems = items
         .where((item) => item.includeInWardrobe)
@@ -746,9 +785,11 @@ class ItemAddController extends GetxController {
     // Fallback to original behavior if no generated images
     isSaving.value = true;
     error.value = '';
+    createdItems.clear();
 
     try {
       int savedCount = 0;
+      int missingPhotos = 0;
       for (final item in includedItems) {
         try {
           // Map DetectedItemData to CreateItemRequest
@@ -771,6 +812,7 @@ class ItemAddController extends GetxController {
           );
 
           createdItems.add(created);
+          if (created.itemImages?.isNotEmpty != true) missingPhotos++;
           savedCount++;
         } catch (e) {
           // Log error but continue with next item
@@ -782,10 +824,23 @@ class ItemAddController extends GetxController {
 
       if (savedCount > 0) {
         _wardrobeSync.addItems(createdItems.toList());
-        Get.back(); // Close item add page
-        ErrorHandler.showSuccess('$savedCount of ${includedItems.length} item(s) added to your closet', title: 'Success');
+        await Get.key.currentState?.maybePop();
+        if (missingPhotos > 0) {
+          ErrorHandler.showWarning(
+            '$savedCount items saved. $missingPhotos need a photo. Add photos in Edit Item.',
+            title: 'Some Photos Need Attention',
+          );
+        } else {
+          ErrorHandler.showSuccess(
+            '$savedCount of ${includedItems.length} item(s) added to your closet',
+            title: 'Success',
+          );
+        }
       } else {
-        ErrorHandler.showError('Could not save items. Please try again.', title: 'Failed');
+        ErrorHandler.showError(
+          'Could not save items. Please try again.',
+          title: 'Failed',
+        );
       }
     } catch (e) {
       isSaving.value = false;
@@ -796,8 +851,10 @@ class ItemAddController extends GetxController {
   /// Save items with their generated product images
   /// Uses generated product images if available, otherwise uses original image
   Future<void> saveGeneratedItems() async {
+    if (isSaving.value) return;
     isSaving.value = true;
     error.value = '';
+    createdItems.clear();
 
     try {
       final itemsToSave = generatedItems
@@ -805,6 +862,7 @@ class ItemAddController extends GetxController {
           .toList();
 
       int savedCount = 0;
+      int missingPhotos = 0;
       for (final itemWithImage in itemsToSave) {
         try {
           // Map DetectedItemDataWithImage to CreateItemRequest
@@ -826,67 +884,47 @@ class ItemAddController extends GetxController {
 
           final ItemModel finalItem;
           if (itemWithImage.generatedImageUrl != null) {
-            // Studio photo ready: create the item, then upload the generated
-            // image. Strategy, in priority order — mirrors the batch
-            // saveSelectedItems chain:
-            //  1. Data-URI generated image (base64 embedded in
-            //     generatedImageUrl) — strip the prefix, upload the bytes.
-            //  2. Real storage URL — the post-job_complete state: the backend
-            //     ships generated_image_base64: null for URL-backed items, so
-            //     only the presigned URL remains. Download and re-upload.
-            //  3. Source photo — last resort, so an item is never saved
-            //     image-less when the generated image is unreachable.
-            final rawImageUrl = itemWithImage.generatedImageUrl!;
-            final isDataUri = rawImageUrl.startsWith('data:image');
-            var imageUploaded = false;
-
             final created = await _itemRepository.createItem(request);
-            if (isDataUri) {
-              final base64Data = rawImageUrl.replaceFirst(
-                RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
-                '',
-              );
-              if (base64Data.isNotEmpty) {
-                imageUploaded =
-                    (await _itemRepository.uploadImageFromBase64(
-                      created.id,
-                      base64Data,
-                    )) !=
-                    null;
-              }
-            }
-
-            if (!imageUploaded && !rawImageUrl.startsWith('data:')) {
-              imageUploaded =
-                  (await _itemRepository.uploadImageFromUrl(
+            final uploaded = <ItemImage>[];
+            final rawImageUrl = itemWithImage.generatedImageUrl!;
+            try {
+              ItemImage? generatedPhoto;
+              if (rawImageUrl.startsWith('data:image')) {
+                final base64Data = rawImageUrl.replaceFirst(
+                  RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
+                  '',
+                );
+                if (base64Data.isNotEmpty) {
+                  generatedPhoto = await _itemRepository.uploadImageFromBase64(
                     created.id,
-                    rawImageUrl,
-                  )) !=
-                  null;
-            }
-
-            if (!imageUploaded && selectedImage.value != null) {
-              final uploaded = await _itemRepository.uploadImages(
-                created.id,
-                [selectedImage.value!],
-              );
-              imageUploaded = uploaded.isNotEmpty;
-            }
-
-            finalItem = await _itemRepository.getItem(created.id);
-            if (!imageUploaded &&
-                (finalItem.itemImages == null ||
-                    finalItem.itemImages!.isEmpty)) {
-              // The item row exists but no image made it to storage. Surface
-              // the failure so the user isn't silently left with a text-only
-              // item.
+                    base64Data,
+                  );
+                }
+              } else if (!rawImageUrl.startsWith('data:')) {
+                generatedPhoto = await _itemRepository.uploadImageFromUrl(
+                  created.id,
+                  rawImageUrl,
+                );
+              }
+              if (generatedPhoto != null) {
+                uploaded.add(generatedPhoto);
+              } else if (selectedImage.value != null) {
+                uploaded.addAll(
+                  await _itemRepository.uploadImages(created.id, [
+                    selectedImage.value!,
+                  ]),
+                );
+              }
+            } catch (error, stackTrace) {
               ErrorHandler.reportError(
-                StateError('Item image upload failed'),
-                'saveGeneratedItems: created item ${created.id} '
-                '("${itemWithImage.name ?? itemWithImage.subCategory ?? itemWithImage.category}") '
-                'has no images after all upload strategies',
+                error,
+                'Photo upload failed for saved item ${created.id}',
+                stackTrace: stackTrace,
               );
             }
+            finalItem = created.copyWith(
+              itemImages: [...?created.itemImages, ...uploaded],
+            );
           } else if (selectedImage.value != null) {
             // Studio photo not ready yet (decoupled save) - save with the
             // original uploaded photo instead of skipping the item.
@@ -899,6 +937,7 @@ class ItemAddController extends GetxController {
           }
 
           createdItems.add(finalItem);
+          if (finalItem.itemImages?.isNotEmpty != true) missingPhotos++;
           savedCount++;
         } catch (e) {
           // Log error but continue with next item
@@ -912,10 +951,23 @@ class ItemAddController extends GetxController {
 
       if (savedCount > 0) {
         _wardrobeSync.addItems(createdItems.toList());
-        Get.back(); // Close item add page
-        ErrorHandler.showSuccess('$savedCount of ${itemsToSave.length} item(s) added to your closet', title: 'Success');
+        await Get.key.currentState?.maybePop();
+        if (missingPhotos > 0) {
+          ErrorHandler.showWarning(
+            '$savedCount items saved. $missingPhotos need a photo. Add photos in Edit Item.',
+            title: 'Some Photos Need Attention',
+          );
+        } else {
+          ErrorHandler.showSuccess(
+            '$savedCount of ${itemsToSave.length} item(s) added to your closet',
+            title: 'Success',
+          );
+        }
       } else {
-        ErrorHandler.showError('Could not save items. Please try again.', title: 'Failed');
+        ErrorHandler.showError(
+          'Could not save items. Please try again.',
+          title: 'Failed',
+        );
       }
     } catch (e) {
       isSaving.value = false;
@@ -968,6 +1020,9 @@ class ItemAddController extends GetxController {
 
   /// Proceed to manual entry (user skipped AI or extraction had no results)
   void proceedToManualEntry() {
+    _cleanupSSE();
+    isProcessing.value = false;
+    isGeneratingImages.value = false;
     showManualEntry.value = true;
   }
 

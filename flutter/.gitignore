@@ -50,3 +50,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Golden-failure artifacts written by failing `flutter test` runs
+# (isolatedDiff/maskedDiff/masterImage/testImage PNGs). Never commit these.
+test/visual/failures/

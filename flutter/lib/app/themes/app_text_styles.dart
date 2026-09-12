@@ -6,20 +6,23 @@ class AppTextStyles {
 
   // Display Styles
   static const TextStyle displayLarge = TextStyle(
-    fontSize: 57,
-    fontWeight: FontWeight.w400,
-    letterSpacing: -0.25,
+    fontFamily: 'BodoniModa',
+    fontSize: 44,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.5,
     height: 1.12,
   );
 
   static const TextStyle displayMedium = TextStyle(
-    fontSize: 45,
+    fontFamily: 'BodoniModa',
+    fontSize: 40,
     fontWeight: FontWeight.w400,
     letterSpacing: 0,
     height: 1.16,
   );
 
   static const TextStyle displaySmall = TextStyle(
+    fontFamily: 'BodoniModa',
     fontSize: 36,
     fontWeight: FontWeight.w400,
     letterSpacing: 0,
@@ -28,6 +31,7 @@ class AppTextStyles {
 
   // Headline Styles
   static const TextStyle headlineLarge = TextStyle(
+    fontFamily: 'BodoniModa',
     fontSize: 32,
     fontWeight: FontWeight.w600,
     letterSpacing: 0,
@@ -35,6 +39,7 @@ class AppTextStyles {
   );
 
   static const TextStyle headlineMedium = TextStyle(
+    fontFamily: 'BodoniModa',
     fontSize: 28,
     fontWeight: FontWeight.w600,
     letterSpacing: 0,
@@ -42,6 +47,7 @@ class AppTextStyles {
   );
 
   static const TextStyle headlineSmall = TextStyle(
+    fontFamily: 'BodoniModa',
     fontSize: 24,
     fontWeight: FontWeight.w600,
     letterSpacing: 0,
@@ -108,10 +114,28 @@ class AppTextStyles {
   );
 
   static const TextStyle labelSmall = TextStyle(
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: FontWeight.w500,
     letterSpacing: 0.5,
     height: 1.45,
+  );
+
+  static const TextTheme textTheme = TextTheme(
+    displayLarge: displayLarge,
+    displayMedium: displayMedium,
+    displaySmall: displaySmall,
+    headlineLarge: headlineLarge,
+    headlineMedium: headlineMedium,
+    headlineSmall: headlineSmall,
+    titleLarge: titleLarge,
+    titleMedium: titleMedium,
+    titleSmall: titleSmall,
+    bodyLarge: bodyLarge,
+    bodyMedium: bodyMedium,
+    bodySmall: bodySmall,
+    labelLarge: labelLarge,
+    labelMedium: labelMedium,
+    labelSmall: labelSmall,
   );
 
   // Custom Styles
@@ -130,7 +154,7 @@ class AppTextStyles {
   );
 
   static const TextStyle overline = TextStyle(
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: FontWeight.w500,
     letterSpacing: 1.5,
     height: 1.6,

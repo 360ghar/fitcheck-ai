@@ -89,7 +89,6 @@ class _LoginPageState extends State<LoginPage> {
     final authController = Get.find<AuthController>();
     final tokens = AuthUiTokens.of(context);
     final screenSize = MediaQuery.of(context).size;
-    final titleSize = (screenSize.width * 0.09).clamp(26.0, 40.0);
     final bodySize = (screenSize.width * 0.04).clamp(14.0, 16.0);
 
     return AuthScaffold(
@@ -101,17 +100,13 @@ class _LoginPageState extends State<LoginPage> {
             textColor: tokens.textColor,
             brandColor: tokens.brandColor,
           ),
+          const SizedBox(height: AppConstants.spacing32),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Welcome Back',
-                style: TextStyle(
-                  fontSize: titleSize,
-                  fontWeight: FontWeight.w800,
-                  color: tokens.textColor,
-                  height: 1.1,
-                ),
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
@@ -135,16 +130,14 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: AppConstants.spacing8),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: Semantics(
-                          label: 'Forgot Password',
-                          button: true,
-                          child: TextButton(
-                            onPressed: () => Get.toNamed(Routes.forgotPassword),
-                            style: TextButton.styleFrom(
-                              foregroundColor: tokens.textColor.withValues(alpha: 0.85),
+                        child: TextButton(
+                          onPressed: () => Get.toNamed(Routes.forgotPassword),
+                          style: TextButton.styleFrom(
+                            foregroundColor: tokens.textColor.withValues(
+                              alpha: 0.85,
                             ),
-                            child: const Text('Forgot Password?'),
                           ),
+                          child: const Text('Forgot Password?'),
                         ),
                       ),
                       const SizedBox(height: AppConstants.spacing8),
@@ -171,6 +164,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ],
           ),
+          const SizedBox(height: AppConstants.spacing24),
           _buildBottomLinks(tokens),
         ],
       ),
@@ -178,13 +172,10 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildEmailField(AuthUiTokens tokens) {
-    return Semantics(
-      label: 'Email',
-      textField: true,
-      child: TextFormField(
-        controller: _emailController,
-        keyboardType: TextInputType.emailAddress,
-        textInputAction: TextInputAction.next,
+    return TextFormField(
+      controller: _emailController,
+      keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.next,
       style: TextStyle(color: tokens.textColor),
       cursorColor: tokens.brandColor,
       decoration: AuthFormStyles.inputDecoration(
@@ -202,17 +193,13 @@ class _LoginPageState extends State<LoginPage> {
         }
         return null;
       },
-    ),
     );
   }
 
   Widget _buildPasswordField(AuthUiTokens tokens) {
     return Obx(
-      () => Semantics(
-        label: 'Password',
-        textField: true,
-        child: TextFormField(
-          controller: _passwordController,
+      () => TextFormField(
+        controller: _passwordController,
         obscureText: !_isPasswordVisible.value,
         textInputAction: TextInputAction.done,
         onFieldSubmitted: (_) => _handleLogin(),
@@ -224,7 +211,9 @@ class _LoginPageState extends State<LoginPage> {
           hint: 'Enter your password',
           icon: Icons.lock,
           suffixIcon: IconButton(
-            tooltip: _isPasswordVisible.value ? 'Hide password' : 'Show password',
+            tooltip: _isPasswordVisible.value
+                ? 'Hide password'
+                : 'Show password',
             icon: Icon(
               _isPasswordVisible.value
                   ? Icons.visibility
@@ -246,20 +235,15 @@ class _LoginPageState extends State<LoginPage> {
           return null;
         },
       ),
-      ),
     );
   }
 
   Widget _buildLoginButton(AuthController authController, AuthUiTokens tokens) {
-    return Semantics(
-      label: 'Sign In',
-      button: true,
-      enabled: !authController.isLoading.value,
-      child: ElevatedButton(
-        onPressed: authController.isLoading.value ? null : _handleLogin,
+    return ElevatedButton(
+      onPressed: authController.isLoading.value ? null : _handleLogin,
       style: ElevatedButton.styleFrom(
         backgroundColor: tokens.brandColor,
-        foregroundColor: Colors.white,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
@@ -274,10 +258,12 @@ class _LoginPageState extends State<LoginPage> {
           ? const SizedBox(
               height: 20,
               width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                semanticsLabel: 'Signing in',
+              ),
             )
           : const Text('Sign In'),
-    ),
     );
   }
 
@@ -289,15 +275,16 @@ class _LoginPageState extends State<LoginPage> {
       return const SizedBox.shrink();
     }
 
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         const SizedBox(height: AppConstants.spacing16),
         Container(
           padding: const EdgeInsets.all(AppConstants.spacing12),
           decoration: BoxDecoration(
-            color: Colors.orange.shade50,
+            color: scheme.errorContainer,
             borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: Colors.orange.shade200),
+            border: Border.all(color: scheme.outlineVariant),
           ),
           child: Column(
             children: [
@@ -305,7 +292,7 @@ class _LoginPageState extends State<LoginPage> {
                 children: [
                   Icon(
                     Icons.warning_amber_rounded,
-                    color: Colors.orange.shade700,
+                    color: scheme.onErrorContainer,
                     size: 20,
                   ),
                   const SizedBox(width: AppConstants.spacing8),
@@ -313,7 +300,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: Text(
                       'Please verify your email address before you log in.',
                       style: TextStyle(
-                        color: Colors.orange.shade900,
+                        color: scheme.onErrorContainer,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -336,7 +323,7 @@ class _LoginPageState extends State<LoginPage> {
                         )
                       : Icon(
                           Icons.email_outlined,
-                          color: Colors.orange.shade700,
+                          color: scheme.onErrorContainer,
                         ),
                   label: Text(
                     authController.isResendingVerification.value
@@ -344,8 +331,8 @@ class _LoginPageState extends State<LoginPage> {
                         : 'Resend Verification Email',
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.orange.shade700,
-                    side: BorderSide(color: Colors.orange.shade300),
+                    foregroundColor: scheme.onErrorContainer,
+                    side: BorderSide(color: scheme.onErrorContainer),
                     padding: const EdgeInsets.symmetric(
                       vertical: AppConstants.spacing12,
                     ),
@@ -362,7 +349,9 @@ class _LoginPageState extends State<LoginPage> {
   Widget _buildDivider(AuthUiTokens tokens) {
     return Row(
       children: [
-        Expanded(child: Divider(color: tokens.textColor.withValues(alpha: 0.2))),
+        Expanded(
+          child: Divider(color: tokens.textColor.withValues(alpha: 0.2)),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppConstants.spacing16,
@@ -377,7 +366,9 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         ),
-        Expanded(child: Divider(color: tokens.textColor.withValues(alpha: 0.2))),
+        Expanded(
+          child: Divider(color: tokens.textColor.withValues(alpha: 0.2)),
+        ),
       ],
     );
   }
@@ -395,12 +386,8 @@ class _LoginPageState extends State<LoginPage> {
     AuthUiTokens tokens,
   ) {
     final isLoading = authController.isGoogleSigningIn.value;
-    return Semantics(
-      label: 'Continue with Google',
-      button: true,
-      enabled: !isLoading,
-      child: OutlinedButton.icon(
-        onPressed: isLoading ? null : _handleGoogleSignIn,
+    return OutlinedButton.icon(
+      onPressed: isLoading ? null : _handleGoogleSignIn,
       icon: isLoading
           ? const SizedBox(
               height: 18,
@@ -422,7 +409,6 @@ class _LoginPageState extends State<LoginPage> {
           letterSpacing: 0.3,
         ),
       ),
-    ),
     );
   }
 
@@ -437,14 +423,10 @@ class _LoginPageState extends State<LoginPage> {
               "Don't have an account? ",
               style: TextStyle(color: tokens.secondaryTextColor, fontSize: 14),
             ),
-            Semantics(
-              label: 'Sign Up',
-              button: true,
-              child: TextButton(
-                onPressed: () => Get.toNamed(Routes.register),
-                style: TextButton.styleFrom(foregroundColor: tokens.textColor),
-                child: const Text('Sign Up'),
-              ),
+            TextButton(
+              onPressed: () => Get.toNamed(Routes.register),
+              style: TextButton.styleFrom(foregroundColor: tokens.textColor),
+              child: const Text('Sign Up'),
             ),
           ],
         ),

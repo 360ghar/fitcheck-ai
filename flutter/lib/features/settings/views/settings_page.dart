@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/app_version_label.dart';
 import '../../../app/routes/app_routes.dart';
@@ -30,10 +29,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
-      Get.currentRoute,
-    );
-
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
@@ -48,7 +43,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
       ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
     );
   }
 
@@ -89,6 +83,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return SliverList(
       delegate: SliverChildListDelegate([
+        if (controller.hasError) ...[
+          AppErrorBanner(message: controller.error.value),
+          TextButton(
+            onPressed: controller.fetchPreferences,
+            child: const Text('Retry'),
+          ),
+          const SizedBox(height: 16),
+        ],
         _buildAppearanceSection(prefs),
         const SizedBox(height: AppConstants.spacing24),
         _buildNotificationsSection(prefs),
@@ -233,10 +235,13 @@ class _SettingsPageState extends State<SettingsPage> {
           onTap: () => _showExportDataDialog(),
         ),
         ListTile(
-          leading: const Icon(Icons.delete_forever, color: Colors.red),
-          title: const Text(
+          leading: Icon(
+            Icons.delete_forever,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          title: Text(
             'Delete Account',
-            style: TextStyle(color: Colors.red),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
           subtitle: const Text('Permanently delete your account'),
           trailing: const Icon(Icons.chevron_right),
@@ -346,6 +351,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showThemeModeDialog(UserPreferencesModel prefs) {
     Get.dialog(
       AlertDialog(
+        scrollable: true,
         title: const Text('Select Theme'),
         content: RadioGroup<AppThemeMode>(
           groupValue: prefs.themeMode ?? AppThemeMode.system,
@@ -385,56 +391,68 @@ class _SettingsPageState extends State<SettingsPage> {
     // never be visually reverted by an in-flight save.
     final selected = (prefs.preferredStyles ?? <String>[]).obs;
 
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Preferred Styles',
-                style: Theme.of(context).textTheme.titleLarge,
+        child: Container(
+          padding: const EdgeInsets.all(AppConstants.spacing24),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppConstants.radius24),
+            ),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Preferred Styles',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+                  Obx(
+                    () => Wrap(
+                      spacing: AppConstants.spacing8,
+                      runSpacing: AppConstants.spacing8,
+                      children: styles.map((style) {
+                        final isSelected = selected.contains(style);
+                        return FilterChip(
+                          label: Text(style),
+                          selected: isSelected,
+                          // `value` (not `selected`) avoids shadowing the local
+                          // RxList above.
+                          onSelected: (value) {
+                            value
+                                ? selected.add(style)
+                                : selected.remove(style);
+                            if (value) {
+                              controller.addPreferredStyle(style);
+                            } else {
+                              controller.removePreferredStyle(style);
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => Get.back(),
+                      child: const Text('Done'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppConstants.spacing16),
-              Obx(
-                () => Wrap(
-                  spacing: AppConstants.spacing8,
-                  runSpacing: AppConstants.spacing8,
-                  children: styles.map((style) {
-                    final isSelected = selected.contains(style);
-                    return FilterChip(
-                      label: Text(style),
-                      selected: isSelected,
-                      // `value` (not `selected`) avoids shadowing the local
-                      // RxList above.
-                      onSelected: (value) {
-                        value ? selected.add(style) : selected.remove(style);
-                        if (value) {
-                          controller.addPreferredStyle(style);
-                        } else {
-                          controller.removePreferredStyle(style);
-                        }
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing16),
-              Center(
-                child: TextButton(
-                  onPressed: () => Get.back(),
-                  child: const Text('Done'),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -461,56 +479,68 @@ class _SettingsPageState extends State<SettingsPage> {
     // never be visually reverted by an in-flight save.
     final selected = (prefs.preferredColors ?? <String>[]).obs;
 
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Preferred Colors',
-                style: Theme.of(context).textTheme.titleLarge,
+        child: Container(
+          padding: const EdgeInsets.all(AppConstants.spacing24),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppConstants.radius24),
+            ),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Preferred Colors',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+                  Obx(
+                    () => Wrap(
+                      spacing: AppConstants.spacing8,
+                      runSpacing: AppConstants.spacing8,
+                      children: colors.map((color) {
+                        final isSelected = selected.contains(color);
+                        return FilterChip(
+                          label: Text(color),
+                          selected: isSelected,
+                          // `value` (not `selected`) avoids shadowing the local
+                          // RxList above.
+                          onSelected: (value) {
+                            value
+                                ? selected.add(color)
+                                : selected.remove(color);
+                            if (value) {
+                              controller.addPreferredColor(color);
+                            } else {
+                              controller.removePreferredColor(color);
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => Get.back(),
+                      child: const Text('Done'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppConstants.spacing16),
-              Obx(
-                () => Wrap(
-                  spacing: AppConstants.spacing8,
-                  runSpacing: AppConstants.spacing8,
-                  children: colors.map((color) {
-                    final isSelected = selected.contains(color);
-                    return FilterChip(
-                      label: Text(color),
-                      selected: isSelected,
-                      // `value` (not `selected`) avoids shadowing the local
-                      // RxList above.
-                      onSelected: (value) {
-                        value ? selected.add(color) : selected.remove(color);
-                        if (value) {
-                          controller.addPreferredColor(color);
-                        } else {
-                          controller.removePreferredColor(color);
-                        }
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing16),
-              Center(
-                child: TextButton(
-                  onPressed: () => Get.back(),
-                  child: const Text('Done'),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -537,6 +567,7 @@ class _SettingsPageState extends State<SettingsPage> {
         },
         child: Obx(
           () => AlertDialog(
+            scrollable: true,
             title: const Text('Change Password'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -584,34 +615,55 @@ class _SettingsPageState extends State<SettingsPage> {
                     ? null
                     : () async {
                         if (currentPasswordController.text.isEmpty) {
-                          ErrorHandler.showValidation('Please enter your current password', title: 'Error');
+                          ErrorHandler.showValidation(
+                            'Please enter your current password',
+                            title: 'Error',
+                          );
                           return;
                         }
                         if (newPasswordController.text.isEmpty) {
-                          ErrorHandler.showValidation('Please enter a new password', title: 'Error');
+                          ErrorHandler.showValidation(
+                            'Please enter a new password',
+                            title: 'Error',
+                          );
                           return;
                         }
                         // Password strength validation
                         final password = newPasswordController.text;
                         if (password.length < 8) {
-                          ErrorHandler.showValidation('Password must be at least 8 characters', title: 'Weak Password');
+                          ErrorHandler.showValidation(
+                            'Password must be at least 8 characters',
+                            title: 'Weak Password',
+                          );
                           return;
                         }
                         if (!password.contains(RegExp(r'[A-Z]'))) {
-                          ErrorHandler.showError('Password must contain at least one uppercase letter', title: 'Weak Password');
+                          ErrorHandler.showError(
+                            'Password must contain at least one uppercase letter',
+                            title: 'Weak Password',
+                          );
                           return;
                         }
                         if (!password.contains(RegExp(r'[a-z]'))) {
-                          ErrorHandler.showError('Password must contain at least one lowercase letter', title: 'Weak Password');
+                          ErrorHandler.showError(
+                            'Password must contain at least one lowercase letter',
+                            title: 'Weak Password',
+                          );
                           return;
                         }
                         if (!password.contains(RegExp(r'[0-9]'))) {
-                          ErrorHandler.showError('Password must contain at least one number', title: 'Weak Password');
+                          ErrorHandler.showError(
+                            'Password must contain at least one number',
+                            title: 'Weak Password',
+                          );
                           return;
                         }
                         if (newPasswordController.text !=
                             confirmPasswordController.text) {
-                          ErrorHandler.showValidation('Passwords do not match', title: 'Error');
+                          ErrorHandler.showValidation(
+                            'Passwords do not match',
+                            title: 'Error',
+                          );
                           return;
                         }
                         try {
@@ -643,6 +695,7 @@ class _SettingsPageState extends State<SettingsPage> {
     Get.dialog(
       Obx(
         () => AlertDialog(
+          scrollable: true,
           title: const Text('Export Data'),
           content: const Text(
             'We\'ll prepare a download of all your data and open it when ready.',
@@ -680,6 +733,7 @@ class _SettingsPageState extends State<SettingsPage> {
     Get.dialog(
       Obx(
         () => AlertDialog(
+          scrollable: true,
           title: const Text('Delete Account?'),
           content: const Text(
             'This action cannot be undone. All your data will be permanently deleted.',

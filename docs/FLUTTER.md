@@ -1,6 +1,6 @@
 # Flutter
 
-Last updated: 2026-08-30
+Last updated: 2026-09-05
 
 Mobile client under `flutter/` using GetX feature modules.
 
@@ -35,6 +35,77 @@ lib/
 - Shared infra only under `core/`
 - Talk to the same FastAPI backend as web (`API_BASE_URL`)
 
+## Mobile design and navigation
+
+`flutter/DESIGN.md` is the mobile design source of truth. The magazine theme uses
+Bodoni Moda headings, system body text, deep moss controls, and muted rose, linen,
+sage and slate section fields. The bundled font and its OFL licence are under
+`flutter/assets/fonts/`. Use the existing theme and shared widgets for controls,
+opaque text colours, loading, and natural-height product grids.
+
+Closet grid and list tiles show contained garment images only, without opaque
+cards or visible item metadata. Names remain in screen-reader labels and details.
+Use the primary image, then the first image as fallback. Keep loading/error and
+selection states visible. Generated product images already support alpha, which
+the tiles preserve. Manual and older photos can contain embedded backgrounds;
+transparent tiles do not remove those pixels. Do not infer cutout quality from
+filenames or silently process stored user images.
+
+`MainShellPage` owns Home → Closet → Outfits → Studio → Profile. It creates tab
+bodies on first use and retains their state. At 840 logical pixels it uses a
+navigation rail. Hidden tabs and hidden Studio tools disable their tickers;
+controllers continue tracking active backend jobs. Photoshoot and Try-on share
+Studio. Try-on accepts one garment, as required by the existing API.
+
+Settings → Theme offers Light, Dark and System. The choice is stored on this
+device, applies immediately while offline, and is loaded before the first frame.
+System follows OS appearance changes. The preferences endpoint does not accept
+this three-state field, so fetching or saving other preferences must preserve the
+local theme. Platform system bars use the active app theme; the dark image viewer
+temporarily uses light icons and restores the underlying route style on close.
+
+| Existing link | Destination |
+|---|---|
+| `/photoshoot` | Studio → Photoshoot |
+| `/try-on` | Studio → Try-on |
+| `/more`, `/profile` | Profile |
+| Item, outfit, auth and public share routes | Existing destinations retained |
+
+Push task screens onto the native route stack with a visible Back button. Do not
+add another global navigation bar to those pages or clear history for tab changes.
+Use the shell controller when linking to another main tab from inside the shell.
+
+## Verification
+
+`flutter analyze` treats warnings and notices as failures in Flutter CI. Run the
+full `flutter test` suite for shared changes. `test/visual/` contains fixed-image
+goldens for all five tabs and the welcome screen in both themes, plus Home at
+320px and 1024px. The visual tests load pinned SDK fonts and Bodoni Moda, settle
+lazy tab selection, and await decoded image pixels before capture. They make no
+live API requests. Review the rendered images before accepting a changed golden:
+
+```bash
+flutter test test/visual/magazine_screens_test.dart
+# After an intentional visual change and image review:
+flutter test test/visual/magazine_screens_test.dart --update-goldens
+```
+
+Open `test/visual/preview.html` to compare the real widget renders. For a local
+browser review, run this from `flutter/` and open `/preview.html` on port 8765:
+
+```bash
+python3 -m http.server 8765 --bind 127.0.0.1 --directory test/visual
+```
+
+The gallery labels fixture data and switches between light and dark snapshots.
+Closet renders use four synthetic RGBA garment cutouts documented in
+`test/fixtures/garment-fixtures.md`; these are test assets, not user wardrobe data.
+
+Layout suites cover 320px phones, tablet widths, 200% text, keyboard insets and
+reduced motion. These checks do not replace native screen-reader, camera, billing,
+or physical-device frame-time checks. Coverage and release gates are in
+`docs/exec-plans/active/flutter-premium-refresh.md`.
+
 ## Batch / AI
 
 Prefer backend batch extract JSON base64 start endpoint from Flutter; SSE for progress. Align with `docs/BACKEND.md` batch section.
@@ -43,6 +114,27 @@ Prefer backend batch extract JSON base64 start endpoint from Flutter; SSE for pr
 
 - `.github/workflows/flutter-ci.yml`
 - Mobile build workflows for APK/iOS under `.github/workflows/`
+
+Authentication is attached only to the configured API origin and the trusted
+HTTPS API/image hosts in `core/network/auth_url_policy.dart`. External and
+presigned requests do not carry session credentials or trigger token refresh.
+Concurrent 401 responses share a refresh. Temporary refresh failures keep the
+session; a confirmed rejected session signs out. Optional analytics setup starts
+after the first frame and cannot stop app startup.
+
+`supabase_flutter` is pinned to 2.15.1 (GoTrue 2.23.0) for protection against a
+stale refresh replacing a newer login. The API interceptor also preserves that
+new session when the old refresh is rejected. `AuthRefreshHttpClient`, passed
+through `Supabase.initialize`, makes HTTP 429 retryable only on the configured
+refresh-token endpoint. It uses the SDK's bounded backoff; the SDK does not
+support `Retry-After`. Invalid credentials still sign out. Auth stream errors
+are handled without changing the user state outside auth events.
+
+Picker callbacks use `PermissionHelper` to distinguish denial, device restrictions,
+and temporary picker failures. Android opens application settings through the
+small `fitcheck/permissions` channel in `MainActivity`; iOS uses `app-settings:`.
+A failed handoff shows manual recovery guidance. Process-death image recovery
+remains tracked as TD-106.
 
 ## Code push (Shorebird)
 
@@ -175,8 +267,9 @@ Image URLs are served from the private S3-compatible bucket (R2 since the 2026-0
 
 Use `AppNetworkImage` (`core/widgets/app_network_image.dart`) instead of raw
 `Image.network` — it is a `CachedNetworkImage` drop-in with `authHeadersForUrl()`,
-which attaches the bearer token ONLY to non-presigned URLs (S3 presigned
-requests reject any other auth mechanism). Grid/list tiles should use
+which attaches the bearer token only to trusted, non-presigned destinations.
+`AppImage` and `AppNetworkImage` also render generated data-URI previews and ignore
+late URL refreshes after a tile changes items. Grid/list tiles should use
 `thumbnail_url` when returned (`THUMBNAIL_SERVING=true` serves `_thumb`
 siblings). The DB stores a bucket key, not a URL, so the backend materializes
 a fresh URL at read time.

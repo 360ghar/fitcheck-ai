@@ -6,13 +6,13 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/app_version_label.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../shell/controllers/main_shell_controller.dart';
 import '../../auth/models/user_model.dart';
 import '../../dashboard/controllers/dashboard_controller.dart';
 import '../../settings/controllers/settings_controller.dart';
 import '../../settings/models/user_preferences_model.dart';
 
-/// Profile hub without Scaffold wrapper. Serves both the "More" tab in
-/// MainShellPage and the pushed `/profile` route (via ProfilePage).
+/// Profile destination in the shared shell, also used by legacy profile routes.
 class ProfileContent extends StatelessWidget {
   const ProfileContent({super.key});
 
@@ -25,7 +25,8 @@ class ProfileContent extends StatelessWidget {
     return AppPageBackground(
       child: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () => dashboardController.fetchDashboard(showLoader: false),
+          onRefresh: () =>
+              dashboardController.fetchDashboard(showLoader: false),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -40,6 +41,19 @@ class ProfileContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        'Your space.',
+                        style: Theme.of(context).textTheme.displayMedium
+                            ?.copyWith(letterSpacing: -1.2),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'A style that is entirely yours.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                       _buildIdentityCard(context, authController),
                       const SizedBox(height: AppConstants.spacing12),
                       _buildStatsStrip(context, dashboardController),
@@ -64,8 +78,7 @@ class ProfileContent extends StatelessWidget {
                       ),
                       const SizedBox(height: AppConstants.spacing12),
                       _buildSupportCard(context, authController),
-                      // Clears the floating bottom navigation bar.
-                      const SizedBox(height: 96),
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -79,11 +92,14 @@ class ProfileContent extends StatelessWidget {
 
   /// Avatar + name + email. The whole card taps through to Edit Profile,
   /// so there is no separate edit button or "Edit Profile" menu row.
-  Widget _buildIdentityCard(BuildContext context, AuthController authController) {
-    final tokens = AppUiTokens.of(context);
-
-    return AppGlassCard(
-      padding: const EdgeInsets.all(0),
+  Widget _buildIdentityCard(
+    BuildContext context,
+    AuthController authController,
+  ) {
+    return Material(
+      color: AppCoreColors.editorialRose,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         borderRadius: BorderRadius.circular(AppConstants.radius16),
         onTap: () => Get.toNamed(Routes.profileEdit),
@@ -98,12 +114,7 @@ class ProfileContent extends StatelessWidget {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        tokens.brandColor,
-                        tokens.brandColor.withValues(alpha: 0.6),
-                      ],
-                    ),
+                    color: Theme.of(context).colorScheme.primary,
                     shape: BoxShape.circle,
                   ),
                   child: user?.avatarUrl != null
@@ -126,21 +137,21 @@ class ProfileContent extends StatelessWidget {
                       Text(
                         user?.fullName ?? 'Guest',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: tokens.textPrimary,
-                            ),
+                          fontWeight: FontWeight.w700,
+                          color: AppCoreColors.editorialInk,
+                        ),
                       ),
                       const SizedBox(height: AppConstants.spacing4),
                       Text(
                         user?.email ?? '',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                          color: AppCoreColors.editorialInk,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: tokens.textSecondary),
+                Icon(Icons.chevron_right, color: AppCoreColors.editorialInk),
               ],
             );
           }),
@@ -150,7 +161,8 @@ class ProfileContent extends StatelessWidget {
   }
 
   Widget _buildAvatarInitials(BuildContext context, UserModel? user) {
-    final initials = user?.fullName
+    final initials =
+        user?.fullName
             ?.split(' ')
             .where((e) => e.isNotEmpty)
             .map((e) => e[0])
@@ -165,8 +177,8 @@ class ProfileContent extends StatelessWidget {
     return Center(
       child: Text(
         initials,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onPrimary,
           fontSize: 22,
           fontWeight: FontWeight.bold,
         ),
@@ -174,8 +186,7 @@ class ProfileContent extends StatelessWidget {
     );
   }
 
-  /// Three tappable stats on one row. Vertical tiles so they fit 3-across
-  /// on a 360px phone without wrapping.
+  /// Stats stack at large text sizes so counts remain readable.
   Widget _buildStatsStrip(
     BuildContext context,
     DashboardController dashboardController,
@@ -190,36 +201,42 @@ class ProfileContent extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing12),
         child: Column(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatTile(
-                    context,
-                    label: 'Items',
-                    value: _formatCount(stats?.totalItems),
-                    accent: const Color(0xFF3B82F6),
-                    route: Routes.wardrobeStats,
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatTile(
-                    context,
-                    label: 'Outfits',
-                    value: _formatCount(stats?.totalOutfits),
-                    accent: const Color(0xFFEC4899),
-                    route: Routes.outfitCollections,
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatTile(
-                    context,
-                    label: 'Streak',
-                    value: _formatCount(streak?.currentStreak),
-                    accent: const Color(0xFFF59E0B),
-                    route: Routes.gamification,
-                  ),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = MediaQuery.textScalerOf(context).scale(14) > 20
+                    ? 1
+                    : 3;
+                return Wrap(
+                  children: [
+                    for (final stat in [
+                      (
+                        label: 'Items',
+                        value: stats?.totalItems,
+                        route: Routes.wardrobeStats,
+                      ),
+                      (
+                        label: 'Outfits',
+                        value: stats?.totalOutfits,
+                        route: Routes.outfitCollections,
+                      ),
+                      (
+                        label: 'Streak',
+                        value: streak?.currentStreak,
+                        route: Routes.gamification,
+                      ),
+                    ])
+                      SizedBox(
+                        width: constraints.maxWidth / columns,
+                        child: _buildStatTile(
+                          context,
+                          label: stat.label,
+                          value: _formatCount(stat.value),
+                          route: stat.route,
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
             if (stats?.mostWornItem != null) ...[
               const SizedBox(height: AppConstants.spacing12),
@@ -229,9 +246,9 @@ class ProfileContent extends StatelessWidget {
                 ),
                 child: Text(
                   'Most worn: ${stats!.mostWornItem!.name} - ${stats.mostWornItem!.timesWorn} wears',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -246,7 +263,6 @@ class ProfileContent extends StatelessWidget {
     BuildContext context, {
     required String label,
     required String value,
-    required Color accent,
     required String route,
   }) {
     final tokens = AppUiTokens.of(context);
@@ -266,17 +282,17 @@ class ProfileContent extends StatelessWidget {
                 value,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: accent,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: tokens.brandColor,
+                ),
               ),
               const SizedBox(height: AppConstants.spacing4),
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ],
           ),
@@ -294,7 +310,11 @@ class ProfileContent extends StatelessWidget {
             context,
             icon: Icons.accessibility_new,
             title: 'Try-On',
-            onTap: () => Get.toNamed(Routes.tryOn),
+            onTap: () {
+              final shell = Get.find<MainShellController>();
+              shell.changeStudioTool(1);
+              shell.changeTab(3);
+            },
           ),
           _buildDivider(context),
           _buildMenuItem(
@@ -360,8 +380,8 @@ class ProfileContent extends StatelessWidget {
               final isDark = mode == AppThemeMode.dark
                   ? true
                   : mode == AppThemeMode.light
-                      ? false
-                      : Theme.of(context).brightness == Brightness.dark;
+                  ? false
+                  : Theme.of(context).brightness == Brightness.dark;
 
               return Switch(
                 value: isDark,
@@ -385,7 +405,10 @@ class ProfileContent extends StatelessWidget {
     );
   }
 
-  Widget _buildSupportCard(BuildContext context, AuthController authController) {
+  Widget _buildSupportCard(
+    BuildContext context,
+    AuthController authController,
+  ) {
     final tokens = AppUiTokens.of(context);
 
     return AppGlassCard(
@@ -427,10 +450,7 @@ class ProfileContent extends StatelessWidget {
             titleColor: Theme.of(context).colorScheme.error,
             iconColor: Theme.of(context).colorScheme.error,
             onTap: () => _showLogoutDialog(context, authController),
-            trailing: Icon(
-              Icons.chevron_right,
-              color: tokens.textSecondary,
-            ),
+            trailing: Icon(Icons.chevron_right, color: tokens.textSecondary),
           ),
         ],
       ),
@@ -457,25 +477,19 @@ class ProfileContent extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: iconColor ?? tokens.textSecondary,
-            ),
+            Icon(icon, color: iconColor ?? tokens.textSecondary),
             const SizedBox(width: AppConstants.spacing16),
             Expanded(
               child: Text(
                 title,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: titleColor ?? tokens.textPrimary,
-                    ),
+                  color: titleColor ?? tokens.textPrimary,
+                ),
               ),
             ),
             if (trailing != null) trailing,
             if (trailing == null)
-              Icon(
-                Icons.chevron_right,
-                color: tokens.textSecondary,
-              ),
+              Icon(Icons.chevron_right, color: tokens.textSecondary),
           ],
         ),
       ),
@@ -485,31 +499,26 @@ class ProfileContent extends StatelessWidget {
   Widget _buildDivider(BuildContext context) {
     final tokens = AppUiTokens.of(context);
 
-    return Divider(
-      height: 1,
-      color: tokens.cardBorderColor,
-    );
+    return Divider(height: 1, color: tokens.cardBorderColor);
   }
 
   void _showAboutDialog(BuildContext context) {
     Get.dialog(
       AlertDialog(
+        scrollable: true,
         title: const Text('About Fit Check AI'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.checkroom_outlined,
               size: 64,
-              color: Color(0xFF6366F1),
+              color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(height: AppConstants.spacing16),
             const Text(
               'Fit Check AI',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: AppConstants.spacing8),
             AppVersionLabel(
@@ -519,20 +528,17 @@ class ProfileContent extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppConstants.spacing24),
-            const Text(
+            Text(
               'AI-Powered Wardrobe & Outfit Manager',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.grey,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Close'),
-          ),
+          TextButton(onPressed: () => Get.back(), child: const Text('Close')),
         ],
       ),
     );
@@ -540,32 +546,39 @@ class ProfileContent extends StatelessWidget {
 
   void _showLogoutDialog(BuildContext context, AuthController authController) {
     Get.dialog(
-      Obx(() => AlertDialog(
-        title: const Text('Logout?'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: authController.isLoggingOut.value ? null : () => Get.back(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: authController.isLoggingOut.value
-                ? null
-                : () => authController.logout(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
+      Obx(
+        () => AlertDialog(
+          title: const Text('Logout?'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: authController.isLoggingOut.value
+                  ? null
+                  : () => Get.back(),
+              child: const Text('Cancel'),
             ),
-            child: authController.isLoggingOut.value
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Logout'),
-          ),
-        ],
-      )),
+            ElevatedButton(
+              onPressed: authController.isLoggingOut.value
+                  ? null
+                  : () => authController.logout(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              child: authController.isLoggingOut.value
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Logout'),
+            ),
+          ],
+        ),
+      ),
       barrierDismissible: false,
     );
   }

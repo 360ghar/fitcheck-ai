@@ -9,16 +9,6 @@ import '../../../core/services/theme_service.dart';
 import '../../../core/utils/frame_safe.dart';
 import '../../../core/utils/error_handler.dart';
 
-class _PreferenceSaveOutcome {
-  const _PreferenceSaveOutcome({
-    required this.revision,
-    required this.succeeded,
-  });
-
-  final int revision;
-  final bool succeeded;
-}
-
 /// Settings controller - manages settings and preferences state
 class SettingsController extends GetxController {
   final SettingsRepository _repository;
@@ -77,10 +67,7 @@ class SettingsController extends GetxController {
         return;
       }
       _lastConfirmedPreferences = fetched;
-      preferences.value = fetched;
-
-      // Sync theme from backend to ThemeService
-      _themeService.syncFromBackend(fetched.themeMode);
+      preferences.value = _withLocalTheme(fetched);
     } catch (e) {
       if (isClosed ||
           fetchGeneration != _preferenceFetchGeneration ||
@@ -90,7 +77,7 @@ class SettingsController extends GetxController {
       error.value = ErrorHandler.extractMessage(e);
       // If preferences don't exist yet, use defaults
       if (preferences.value == null) {
-        final defaults = UserPreferencesModel();
+        final defaults = _withLocalTheme(UserPreferencesModel());
         preferences.value = defaults;
         _lastConfirmedPreferences ??= defaults;
       }
@@ -101,36 +88,15 @@ class SettingsController extends GetxController {
     }
   }
 
-  /// Update theme mode
-  ///
-  /// Applies optimistically (snappy UI), then persists. If the backend save
-  /// fails, both the controller state AND the ThemeService persistence are
-  /// restored from the latest confirmed preference — otherwise rapid changes
-  /// can restore an older, already superseded mode.
+  /// Theme is a device preference. The API has no three-state theme field.
   Future<void> updateThemeMode(AppThemeMode mode) async {
     final current = preferences.value ?? UserPreferencesModel();
-    final updated = current.copyWith(themeMode: mode);
-    // Queue the backend write synchronously so a following preference change
-    // builds on this optimistic mode rather than the pre-change model.
-    final outcomeFuture = _queuePreferences(
-      updated,
-      fallbackPreferences: current,
-    );
-    // Update ThemeService (handles local storage and applies theme).
+    preferences.value = current.copyWith(themeMode: mode);
     await _themeService.setThemeMode(mode);
-
-    // A latest failure rolls back to the most recent successful queued write,
-    // not to the mode captured before an overlapping user choice.
-    final outcome = await outcomeFuture;
-    if (!outcome.succeeded &&
-        outcome.revision == _preferenceRevision &&
-        !isClosed) {
-      final confirmed = _lastConfirmedPreferences ?? current;
-      await _themeService.setThemeMode(
-        confirmed.themeMode ?? AppThemeMode.system,
-      );
-    }
   }
+
+  UserPreferencesModel _withLocalTheme(UserPreferencesModel value) =>
+      value.copyWith(themeMode: _themeService.appThemeMode);
 
   /// Update temperature unit
   Future<void> updateTemperatureUnit(TemperatureUnit unit) async {
@@ -227,13 +193,10 @@ class SettingsController extends GetxController {
   /// on screen.
   Future<bool> savePreferences(UserPreferencesModel newPreferences) async {
     final current = preferences.value ?? UserPreferencesModel();
-    return (await _queuePreferences(
-      newPreferences,
-      fallbackPreferences: current,
-    )).succeeded;
+    return _queuePreferences(newPreferences, fallbackPreferences: current);
   }
 
-  Future<_PreferenceSaveOutcome> _queuePreferences(
+  Future<bool> _queuePreferences(
     UserPreferencesModel newPreferences, {
     required UserPreferencesModel fallbackPreferences,
   }) {
@@ -243,7 +206,7 @@ class SettingsController extends GetxController {
     _preferenceFetchGeneration++;
     isLoading.value = false;
     _lastConfirmedPreferences ??= fallbackPreferences;
-    preferences.value = newPreferences;
+    preferences.value = _withLocalTheme(newPreferences);
     isSaving.value = true;
     error.value = '';
 
@@ -252,20 +215,22 @@ class SettingsController extends GetxController {
         final saved = await _repository.updatePreferences(newPreferences);
         _lastConfirmedPreferences = saved;
         if (!isClosed && revision == _preferenceRevision) {
-          preferences.value = saved;
+          preferences.value = _withLocalTheme(saved);
           ErrorHandler.showSuccess(
             'Your preferences have been updated',
             title: 'Saved',
           );
         }
-        return _PreferenceSaveOutcome(revision: revision, succeeded: true);
+        return true;
       } catch (e) {
         if (!isClosed && revision == _preferenceRevision) {
-          preferences.value = _lastConfirmedPreferences ?? fallbackPreferences;
+          preferences.value = _withLocalTheme(
+            _lastConfirmedPreferences ?? fallbackPreferences,
+          );
           error.value = ErrorHandler.extractMessage(e);
           ErrorHandler.showError(error.value, title: 'Error');
         }
-        return _PreferenceSaveOutcome(revision: revision, succeeded: false);
+        return false;
       } finally {
         if (!isClosed && revision == _preferenceRevision) {
           isSaving.value = false;

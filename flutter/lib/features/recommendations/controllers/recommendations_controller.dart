@@ -158,7 +158,7 @@ class RecommendationsController extends GetxController
   RxList<Map<String, dynamic>> get matchingItems =>
       findMatchesController.matchingItems;
   RxList<Map<String, dynamic>> get completeLooks =>
-      findMatchesController.completeLooks;
+      completeLookController.completeLooks;
   RxString get matchesSearchQuery => findMatchesController.searchQuery;
   RxString get matchesCategoryFilter => findMatchesController.categoryFilter;
   RxBool get isLoadingMatches => findMatchesController.isLoading;

@@ -20,7 +20,9 @@ class UsageProgress extends StatelessWidget {
     final theme = Theme.of(context);
     final percentage = max > 0 ? (current / max).clamp(0.0, 1.0) : 0.0;
     final isNearLimit = percentage > 0.8;
-    final color = isNearLimit ? Colors.orange : theme.colorScheme.primary;
+    final color = isNearLimit
+        ? theme.colorScheme.error
+        : theme.colorScheme.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,10 +39,12 @@ class UsageProgress extends StatelessWidget {
                 ),
               ),
             ),
-            Text(
-              '$current / $max',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withAlpha(153),
+            Flexible(
+              child: Text(
+                '$current / $max',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
@@ -49,6 +53,7 @@ class UsageProgress extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
+            semanticsLabel: '$label: $current of $max used',
             value: percentage,
             backgroundColor: color.withAlpha(51),
             valueColor: AlwaysStoppedAnimation<Color>(color),

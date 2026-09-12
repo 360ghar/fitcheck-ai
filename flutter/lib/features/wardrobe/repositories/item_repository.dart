@@ -86,17 +86,23 @@ class ItemRepository {
     }
   }
 
-  /// Create item with image
+  /// Save the item even if its optional photo cannot upload. The caller can
+  /// inspect itemImages and offer photo recovery without creating a duplicate.
   Future<ItemModel> createItemWithImage({
     required File image,
     required CreateItemRequest request,
   }) async {
+    final created = await createItem(request);
     try {
-      final created = await createItem(request);
-      await uploadImages(created.id, [image]);
-      return getItem(created.id);
-    } on DioException catch (e) {
-      throw handleDioException(e);
+      final images = await uploadImages(created.id, [image]);
+      return created.copyWith(itemImages: [...?created.itemImages, ...images]);
+    } catch (error, stackTrace) {
+      ErrorHandler.reportError(
+        error,
+        'Photo upload failed for saved item ${created.id}',
+        stackTrace: stackTrace,
+      );
+      return created;
     }
   }
 
@@ -130,48 +136,6 @@ class ItemRepository {
         '${ApiConstants.items}/batch-delete',
         data: {'item_ids': itemIds},
       );
-    } on DioException catch (e) {
-      throw handleDioException(e);
-    }
-  }
-
-  /// Batch create items with optional images
-  /// Creates multiple items in parallel for efficiency
-  Future<List<ItemModel>> batchCreateItems(
-    List<CreateItemRequest> requests, {
-    Map<String, String>? itemImageBase64s,
-  }) async {
-    try {
-      final results = await Future.wait(
-        requests.asMap().entries.map((entry) async {
-          final index = entry.key;
-          final request = entry.value;
-
-          // Create the item first
-          final item = await createItem(request);
-
-          // If there's a corresponding base64 image, upload it
-          if (itemImageBase64s != null &&
-              itemImageBase64s.containsKey('$index')) {
-            try {
-              await _apiClient.post(
-                '${ApiConstants.items}/${item.id}/images',
-                data: {'image': itemImageBase64s['$index']},
-              );
-              // Return refreshed item with image
-              return getItem(item.id);
-            } catch (e) {
-              // Return item even if image upload failed
-              return item;
-            }
-          }
-
-          return item;
-        }),
-        eagerError: false,
-      );
-
-      return results.whereType<ItemModel>().toList();
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -257,10 +221,7 @@ class ItemRepository {
   /// saved by URL after a job completes). Downloads the bytes, then reuses
   /// the same multipart upload as [uploadImageFromBase64]. Best-effort:
   /// returns null on any download/upload failure so callers can fall back.
-  Future<ItemImage?> uploadImageFromUrl(
-    String itemId,
-    String imageUrl,
-  ) async {
+  Future<ItemImage?> uploadImageFromUrl(String itemId, String imageUrl) async {
     try {
       final response = await _apiClient.get(
         imageUrl,
@@ -470,10 +431,7 @@ class ItemRepository {
 
       final response = await _apiClient.post(
         ApiConstants.aiSingleExtract,
-        data: {
-          'image': imageBase64,
-          'auto_generate': true,
-        },
+        data: {'image': imageBase64, 'auto_generate': true},
       );
 
       final data = _extractDataMap(response.data);

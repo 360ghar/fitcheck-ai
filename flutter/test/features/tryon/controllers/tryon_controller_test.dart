@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:fitcheck_ai/core/services/ai_consent_service.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -45,13 +47,17 @@ ItemModel _wardrobeItem(String id, {String name = 'Test Item'}) => ItemModel(
   ],
 );
 
-/// Simulates a camera/gallery photo. The real picker is a platform channel,
-/// so tests seed the public [TryOnController.clothingImages] list directly;
-/// camera files are deliberately NOT tracked for cleanup, like real picks.
-File _cameraFile(String suffix) {
-  final file = File('${Directory.systemTemp.path}/camera_$suffix.png');
-  file.writeAsBytesSync([1, 2, 3, 4]);
-  return file;
+class _PendingConsent extends AiConsentService {
+  final completion = Completer<bool>();
+  int calls = 0;
+  @override
+  // ignore: must_call_super
+  void onInit() {}
+  @override
+  Future<bool> ensureConsent({required String featureLabel}) {
+    calls++;
+    return completion.future;
+  }
 }
 
 void main() {
@@ -86,7 +92,10 @@ void main() {
     test('unwraps an array-of-envelope (observed production shape)', () {
       expect(
         TryOnController.extractDataMap([
-          {'data': {'image_url': 'https://cdn.test/x.webp'}, 'message': 'OK'},
+          {
+            'data': {'image_url': 'https://cdn.test/x.webp'},
+            'message': 'OK',
+          },
         ]),
         {'image_url': 'https://cdn.test/x.webp'},
       );
@@ -103,7 +112,9 @@ void main() {
 
     test('passes a bare result object through', () {
       expect(
-        TryOnController.extractDataMap({'image_url': 'https://cdn.test/x.webp'}),
+        TryOnController.extractDataMap({
+          'image_url': 'https://cdn.test/x.webp',
+        }),
         {'image_url': 'https://cdn.test/x.webp'},
       );
     });
@@ -139,180 +150,90 @@ void main() {
     controller.onClose();
   });
 
-  group('wardrobe item list desync fixes', () {
-    late TryOnController controller;
+  test('repeated Generate taps share one pending consent attempt', () async {
+    Get.reset();
+    final consent = _PendingConsent();
+    Get.put<AiConsentService>(consent);
+    final controller = TryOnController();
+    controller.clothingImage.value = File('/not-read-before-consent.png');
+    controller.userAvatarUrl.value = 'https://cdn.test/avatar.png';
+    controller.isAvatarReady.value = true;
+    final first = controller.generateTryOn();
+    await controller.generateTryOn();
+    expect(consent.calls, 1);
+    expect(controller.isGenerating.value, isTrue);
+    consent.completion.complete(false);
+    await first;
+    expect(controller.isGenerating.value, isFalse);
+    controller.onClose();
+    Get.reset();
+  });
 
+  group('single garment selection', () {
+    late TryOnController controller;
     setUp(() {
       Get.reset();
-      // Route all ApiClient traffic (the wardrobe temp-image download) through
-      // a fake adapter; no real network or Supabase is available in tests.
       final dio = ApiClient.instance.dio;
       dio.interceptors.clear();
       dio.httpClientAdapter = _FakeDownloadAdapter();
       controller = TryOnController();
     });
-
     tearDown(() {
-      // Cleans up any temp files still tracked by the controller.
       controller.onClose();
       Get.reset();
     });
 
-    /// Pumps a minimal [GetMaterialApp] so the controller's `Get.snackbar`
-    /// success/info messages have an overlay to attach to.
-    Future<void> pumpApp(WidgetTester tester) async {
-      await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
-      await tester.pump();
-    }
-
-    /// Adds a wardrobe item. The temp-file download does real `dart:io` work,
-    /// which cannot complete under the test's fake clock, so it runs inside
-    /// [WidgetTester.runAsync]; snackbars are closed right after.
-    Future<void> addWardrobeItem(
-      WidgetTester tester,
-      ItemModel item,
-    ) async {
-      await tester.runAsync(() => controller.pickClothingFromWardrobe(item));
-      Get.closeAllSnackbars();
-      await tester.pump(const Duration(seconds: 1));
-    }
-
     testWidgets(
-      'removing a wardrobe item removes its own image, keeps camera photos, '
-      'and never crashes',
+      'replacing a garment cleans owned files and clears stale results',
       (tester) async {
-        await pumpApp(tester);
-
-        // Camera photo first, then two wardrobe items: indices are now offset
-        // between clothingImages and selectedWardrobeItems (the pre-fix
-        // index-based removal would delete the camera photo instead).
-        final camera = _cameraFile('mixed');
-        controller.clothingImages.add(camera);
-        controller.clothingImage.value = camera;
-        controller.currentImageIndex.value = 0;
-
-        final itemA = _wardrobeItem('item-a', name: 'Jacket');
-        final itemB = _wardrobeItem('item-b', name: 'Jeans');
-        await addWardrobeItem(tester, itemA);
-        await addWardrobeItem(tester, itemB);
-
-        expect(controller.clothingImages, hasLength(3));
-        expect(controller.selectedWardrobeItems, hasLength(2));
-        final aFile = controller.clothingImages[1];
-        final bFile = controller.clothingImages[2];
-
-        // Removing wardrobe item A must remove A's image (not the camera at
-        // index 0) and must not throw a RangeError.
-        controller.removeWardrobeItem('item-a');
-
-        expect(controller.clothingImages, hasLength(2));
-        expect(controller.clothingImages.first.path, camera.path);
-        expect(controller.clothingImages[1].path, bFile.path);
+        await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+        final camera = File(
+          '${Directory.systemTemp.path}/tryon_camera_test.png',
+        )..writeAsBytesSync([1, 2, 3]);
+        addTearDown(() {
+          if (camera.existsSync()) camera.deleteSync();
+        });
+        controller.setClothingImage(camera);
+        controller.generatedImageUrl.value = 'https://cdn.test/old.png';
+        await tester.runAsync(
+          () => controller.pickClothingFromWardrobe(_wardrobeItem('a')),
+        );
+        final first = controller.clothingImage.value!;
         expect(
           camera.existsSync(),
           isTrue,
-          reason: 'the camera photo must survive a wardrobe-item removal',
+          reason: 'The user photo is not an owned temp download.',
         );
-        expect(
-          aFile.existsSync(),
-          isFalse,
-          reason: 'the removed item temp file must be deleted',
+        expect(controller.selectedWardrobeItem.value?.id, 'a');
+        expect(controller.generatedImageUrl.value, isEmpty);
+        await tester.runAsync(
+          () => controller.pickClothingFromWardrobe(_wardrobeItem('b')),
         );
-        expect(controller.selectedWardrobeItems.map((i) => i.id), ['item-b']);
-        expect(controller.isWardrobeItemSelected('item-a'), isFalse);
-        expect(controller.clothingImage.value?.path, camera.path);
-        expect(
-          controller.selectedWardrobeItem.value,
-          isNull,
-          reason: 'the current image is a camera photo, not a wardrobe item',
-        );
-
-        // Removing the last wardrobe item must not crash either: the pre-fix
-        // code indexed the now-empty selectedWardrobeItems with index 0.
-        controller.removeWardrobeItem('item-b');
-
-        expect(controller.clothingImages, hasLength(1));
-        expect(controller.clothingImages.first.path, camera.path);
-        expect(controller.selectedWardrobeItems, isEmpty);
-        expect(controller.selectedWardrobeItem.value, isNull);
-        expect(controller.clothingImage.value?.path, camera.path);
-        expect(bFile.existsSync(), isFalse);
-      },
-    );
-
-    testWidgets(
-      'removing the current wardrobe image clears the selection so the item '
-      'can be re-added',
-      (tester) async {
-        await pumpApp(tester);
-
-        final itemA = _wardrobeItem('item-a', name: 'Jacket');
-        final itemB = _wardrobeItem('item-b', name: 'Jeans');
-        await addWardrobeItem(tester, itemA);
-        await addWardrobeItem(tester, itemB);
-
-        final aFile = controller.clothingImages[0];
-        expect(controller.clothingImage.value?.path, aFile.path);
-        expect(controller.selectedWardrobeItem.value?.id, 'item-a');
-
-        // Remove the currently displayed image (item A).
+        expect(controller.selectedWardrobeItem.value?.id, 'b');
+        expect(first.existsSync(), isFalse);
+        expect(controller.tempFiles, hasLength(1));
         controller.removeCurrentImage();
-
-        expect(controller.clothingImages, hasLength(1));
-        expect(controller.selectedWardrobeItems.map((i) => i.id), ['item-b']);
-        expect(controller.isWardrobeItemSelected('item-a'), isFalse);
-        expect(controller.selectedWardrobeItem.value?.id, 'item-b');
-        expect(controller.clothingImage.value?.path, isNot(aFile.path));
-        expect(
-          aFile.existsSync(),
-          isFalse,
-          reason: 'the removed wardrobe temp file must be deleted',
-        );
-
-        // Item A can be selected again (pre-fix it stayed "already selected").
-        await addWardrobeItem(tester, itemA);
-        expect(
-          controller.selectedWardrobeItems.map((i) => i.id),
-          ['item-b', 'item-a'],
-        );
-        expect(controller.clothingImages, hasLength(2));
-        expect(controller.clothingImages[1].existsSync(), isTrue);
+        expect(controller.clothingImage.value, isNull);
+        expect(controller.selectedWardrobeItem.value, isNull);
+        expect(controller.tempFiles, isEmpty);
       },
     );
 
-    testWidgets('nextImage/previousImage keep selectedWardrobeItem in sync', (
+    testWidgets('an invalid replacement keeps the current garment and result', (
       tester,
     ) async {
-      await pumpApp(tester);
-
-      final itemA = _wardrobeItem('item-a', name: 'Jacket');
-      final itemB = _wardrobeItem('item-b', name: 'Jeans');
-      await addWardrobeItem(tester, itemA);
-      await addWardrobeItem(tester, itemB);
-
-      final camera = _cameraFile('cycle');
-      controller.clothingImages.add(camera);
-
-      // Order: [A, B, camera]; current index 0 -> A.
-      expect(controller.clothingImages.first.path, isNot(camera.path));
-      expect(controller.selectedWardrobeItem.value?.id, 'item-a');
-
-      controller.nextImage(); // index 1 -> B
-      expect(controller.clothingImage.value?.path, controller.clothingImages[1].path);
-      expect(controller.selectedWardrobeItem.value?.id, 'item-b');
-
-      controller.nextImage(); // index 2 -> camera photo
-      expect(controller.clothingImage.value?.path, camera.path);
-      expect(controller.selectedWardrobeItem.value, isNull);
-
-      controller.nextImage(); // wraps to index 0 -> A
-      expect(controller.selectedWardrobeItem.value?.id, 'item-a');
-
-      controller.previousImage(); // index 2 -> camera photo
-      expect(controller.selectedWardrobeItem.value, isNull);
-
-      controller.previousImage(); // index 1 -> B
-      expect(controller.selectedWardrobeItem.value?.id, 'item-b');
+      await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+      await tester.runAsync(
+        () => controller.pickClothingFromWardrobe(_wardrobeItem('a')),
+      );
+      final previous = controller.clothingImage.value;
+      controller.generatedImageUrl.value = 'https://cdn.test/good.png';
+      final invalid = _wardrobeItem('b').copyWith(itemImages: []);
+      final selected = await controller.pickClothingFromWardrobe(invalid);
+      expect(selected, isFalse);
+      expect(controller.clothingImage.value, same(previous));
+      expect(controller.generatedImageUrl.value, 'https://cdn.test/good.png');
+      expect(controller.error.value, contains('no photo'));
     });
   });
 }

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'error_handler.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,6 +10,26 @@ import 'package:url_launcher/url_launcher.dart';
 /// the picker/camera experience per Apple's Human Interface Guidelines.
 class PermissionHelper {
   PermissionHelper._();
+
+  static Future<void> openAppSettings() async {
+    try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        await const MethodChannel(
+          'fitcheck/permissions',
+        ).invokeMethod<void>('openAppSettings');
+      } else if (!await launchUrl(
+        Uri.parse('app-settings:'),
+        mode: LaunchMode.externalApplication,
+      )) {
+        throw StateError('Settings unavailable');
+      }
+    } catch (_) {
+      ErrorHandler.showInfo(
+        'Open your device Settings, select FitCheck AI, and enable the required permission.',
+        title: 'Open Device Settings',
+      );
+    }
+  }
 
   /// Shows a camera-usage rationale before the OS permission prompt.
   /// Returns true if the user taps Continue.
@@ -32,13 +55,39 @@ class PermissionHelper {
     );
   }
 
+  /// image_picker also throws for unavailable cameras, busy pickers and file
+  /// errors. Only actual permission denials should send people to Settings.
+  static Future<void> handleImagePickerError(
+    Object error, {
+    required String permissionName,
+  }) async {
+    final code = error is PlatformException ? error.code : null;
+    if (code == 'camera_access_denied' || code == 'photo_access_denied') {
+      await showDeniedRecovery(permissionName: permissionName);
+    } else if (code == 'camera_access_restricted' ||
+        code == 'photo_access_restricted') {
+      ErrorHandler.showInfo(
+        '$permissionName access is restricted on this device. Check your device restrictions.',
+        title: 'Access Restricted',
+      );
+    } else {
+      ErrorHandler.showInfo(
+        code == 'already_active'
+            ? 'Finish the open photo picker, then try again.'
+            : 'Could not open ${permissionName == 'Camera' ? 'the camera' : 'the photo picker'}. Please try again.',
+        title: 'Photo Picker Unavailable',
+      );
+    }
+  }
+
   /// Shown when a permission was denied: offers to open the system Settings
-  /// app so the user can grant access (iOS deep-link `app-settings:`).
+  /// app so the user can grant access on either mobile platform.
   static Future<void> showDeniedRecovery({
     required String permissionName,
   }) async {
     await Get.dialog<void>(
       AlertDialog(
+        scrollable: true,
         title: Text('$permissionName Access Needed'),
         content: Text(
           'Access to $permissionName is currently denied. Open Settings to '
@@ -49,10 +98,7 @@ class PermissionHelper {
           ElevatedButton(
             onPressed: () async {
               Get.back();
-              final uri = Uri.parse('app-settings:');
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri);
-              }
+              await openAppSettings();
             },
             child: const Text('Open Settings'),
           ),
@@ -69,6 +115,7 @@ class PermissionHelper {
   }) async {
     final result = await Get.dialog<bool>(
       AlertDialog(
+        scrollable: true,
         title: Row(
           children: [
             Icon(icon),

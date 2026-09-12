@@ -57,6 +57,7 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
   }
 
   Future<void> _submit() async {
+    if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
     final details = _detailsController.text.trim();
@@ -67,16 +68,22 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
         description:
             '$_selectedReason\n\n$details\n\nReported via in-app report.',
       );
-
+      if (!mounted) return;
       if (Get.isBottomSheetOpen ?? false) {
         Get.back();
       }
-      ErrorHandler.showInfo('Thank you. Our team will review this content.', title: 'Report Submitted');
+      ErrorHandler.showInfo(
+        'Thank you. Our team will review this content.',
+        title: 'Report Submitted',
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
-      ErrorHandler.showError('Failed to submit report. Please try again.', title: 'Error');
+      ErrorHandler.showError(
+        'Failed to submit report. Please try again.',
+        title: 'Error',
+      );
     }
   }
 
@@ -84,24 +91,16 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppConstants.radius24),
-        ),
+    return Material(
+      color: tokens.cardColor,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(AppConstants.radius24),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsets.only(
-            left: AppConstants.spacing24,
-            right: AppConstants.spacing24,
-            top: AppConstants.spacing24,
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                AppConstants.spacing24,
-          ),
+          // GetX already applies the keyboard inset around the route.
+          padding: const EdgeInsets.all(AppConstants.spacing24),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -119,6 +118,11 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
                           color: tokens.textPrimary,
                         ),
                       ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close report',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
                     ),
                   ],
                 ),
@@ -160,7 +164,7 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
                   enabled: !_isSubmitting,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    labelText: 'Additional details (optional)',
+                    labelText: 'Details (optional)',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(
                         AppConstants.radius12,

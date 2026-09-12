@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/ai_settings_controller.dart';
 
@@ -23,8 +22,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(Get.currentRoute);
-
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
@@ -39,7 +36,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
           ),
         ),
       ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
     );
   }
 
@@ -52,9 +48,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       title: Text(
         'AI Settings',
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
+          fontWeight: FontWeight.w700,
+          color: tokens.textPrimary,
+        ),
       ),
     );
   }
@@ -68,6 +64,14 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
     return SliverList(
       delegate: SliverChildListDelegate([
+        if (controller.error.isNotEmpty) ...[
+          AppErrorBanner(message: controller.error.value),
+          TextButton(
+            onPressed: controller.fetchSettings,
+            child: const Text('Retry'),
+          ),
+          const SizedBox(height: 16),
+        ],
         _buildProviderSection(context),
         const SizedBox(height: AppConstants.spacing24),
         _buildConfigSection(context),
@@ -84,6 +88,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: controller.selectedProvider.value,
             decoration: const InputDecoration(
               labelText: 'Default Provider',
@@ -103,8 +108,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
           Text(
             'Use a public URL reachable from the backend. Localhost URLs will not work for deployed servers.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppUiTokens.of(context).textMuted,
-                ),
+              color: AppUiTokens.of(context).textMuted,
+            ),
           ),
         ],
       ),
@@ -166,9 +171,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
           const SizedBox(height: AppConstants.spacing8),
           Text(
             'For image generation, your provider must support OpenAI-compatible chat completions with response_modalities.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
         ],
       ),
@@ -220,10 +225,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     );
   }
 
-  Widget _buildSection({
-    required String title,
-    required Widget child,
-  }) {
+  Widget _buildSection({required String title, required Widget child}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
