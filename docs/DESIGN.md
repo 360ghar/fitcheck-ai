@@ -1,7 +1,7 @@
 # Design
 
 Status: draft  
-Last updated: 2026-09-05
+Last updated: 2026-09-13
 
 Visual and interaction direction for FitCheck web (and guidance for mobile parity).
 

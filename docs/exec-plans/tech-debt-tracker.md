@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-09-05 (TD-030–TD-103)
+Last updated: 2026-09-13 (TD-030–TD-103)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
