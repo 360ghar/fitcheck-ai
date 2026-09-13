@@ -1,12 +1,10 @@
 /**
  * useColumnCount — viewport → masonry column count.
  *
- * Mirrors the two breakpoint tables the old CSS-columns `PinGrid` used, so the
- * JS masonry lands on the exact same geometry at every breakpoint and in both
- * modes:
+ * Dense tables so 3-4+ cards fit per row on real widths:
  *
- *   full  (no detail pane): columns-2 sm:3 md:4 lg:5 xl:6 2xl:7
- *   split (detail open):                  lg:2 xl:3 2xl:4
+ *   full  (no detail pane): base:3 sm:4 md:5 lg:6 xl:7 2xl:8
+ *   split (detail open):                  lg:3 xl:4 2xl:4
  *
  * Tailwind breakpoints: sm=640, md=768, lg=1024, xl=1280, 2xl=1536.
  *
@@ -32,14 +30,14 @@ export function useColumnCount({ isDetailOpen = false }: UseColumnCountOptions =
 
   if (isDetailOpen && isLg) {
     if (is2xl) return 4
-    if (isXl) return 3
-    return 2
+    if (isXl) return 4
+    return 3
   }
 
-  if (is2xl) return 7
-  if (isXl) return 6
-  if (isLg) return 5
-  if (isMd) return 4
-  if (isSm) return 3
-  return 2
+  if (is2xl) return 8
+  if (isXl) return 7
+  if (isLg) return 6
+  if (isMd) return 5
+  if (isSm) return 4
+  return 3
 }

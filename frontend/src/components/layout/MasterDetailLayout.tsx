@@ -158,14 +158,14 @@ export function MasterDetailLayout({
               // flash if the media query resolves a frame late.
               'hidden md:flex md:shrink-0 md:flex-col',
               'md:sticky md:top-4 md:h-[var(--pane-h)]',
-              'md:w-[44%] lg:w-[360px] xl:w-[400px] 2xl:w-[440px]',
-              'border-l border-border md:pl-lg',
+              'md:w-[38%] lg:w-[340px] xl:w-[360px] 2xl:w-[400px]',
+              'border-l border-border md:pl-md',
             ].join(' ')}
           >
-            <div className="flex shrink-0 items-start justify-between gap-md pb-md">
+            <div className="flex shrink-0 items-start justify-between gap-sm pb-sm">
               <h2
                 id={`${headingId}-pane`}
-                className="type-heading-lg min-w-0 break-words text-foreground"
+                className="type-heading-md min-w-0 break-words text-foreground"
               >
                 {detailTitle}
               </h2>

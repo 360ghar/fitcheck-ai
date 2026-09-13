@@ -148,7 +148,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
               placeholder tint. `bg-card` (byte-identical to `--muted` today, so
               a no-op swap) plus `object-contain` and a hair of padding keeps a
               portrait silhouette whole instead of cropping its hem. */}
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-card p-0.5">
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-card p-0.5">
             {imageSrc ? (
               <img
                 src={imageSrc}
@@ -168,10 +168,10 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-sm text-foreground truncate">{item.name}</h3>
-            <p className="text-xs text-muted-foreground capitalize">{item.category}</p>
+            <h3 className="font-medium text-xs text-foreground truncate">{item.name}</h3>
+            <p className="text-[11px] text-muted-foreground capitalize">{item.category}</p>
             {item.brand && (
-              <p className="text-xs text-muted-foreground/70 truncate">{item.brand}</p>
+              <p className="text-[11px] text-muted-foreground/70 truncate">{item.brand}</p>
             )}
           </div>
 
@@ -283,7 +283,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           <button
             type="button"
             className={cn(
-              'absolute top-2.5 left-2.5 z-10',
+              'absolute top-2 left-2 z-10',
               // NOT the theme-invariant `on-image` pair. That token assumes an
               // opaque photo filling the tile, which stopped being true when
               // item images became transparent cutouts: most of the tile is now
@@ -291,7 +291,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
               // on a near-black tile in dark mode. An opaque SURFACE chip reads
               // correctly over both a cutout on the card and an un-matted photo
               // (G1 skips those), which is the whole range this has to cover.
-              'h-11 w-11 rounded-full',
+              'h-8 w-8 rounded-full',
               'flex items-center justify-center',
               'transition-colors duration-200',
               'touch-target',
@@ -314,8 +314,8 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           <button
             type="button"
             className={cn(
-              'absolute top-2.5 right-2.5 z-10',
-              'h-11 w-11 rounded-full',
+              'absolute top-2 right-2 z-10',
+              'h-8 w-8 rounded-full',
               'flex items-center justify-center',
               'transition-colors duration-200',
               'touch-target',
@@ -347,11 +347,11 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           {item.condition && item.condition !== 'clean' && (
             <span
               className={cn(
-                'mb-1.5 ml-2.5 self-start',
+                'mb-1 ml-2 self-start',
                 // Same opaque surface chip as the corner controls: legible over
                 // a cutout on the card AND over an un-matted photo.
                 'flex items-center gap-1.5 rounded-full border border-border bg-background/90',
-                'px-2.5 py-1 text-[11px] font-medium text-foreground'
+                'px-2 py-0.5 text-[10px] font-medium text-foreground'
               )}
             >
               <span
@@ -375,23 +375,11 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
               )}
             </div>
           ) : (
-            <div className="p-3">
-              <h3 className="text-sm font-semibold text-white truncate">
+            <div className="p-2">
+              <h3 className="text-xs font-semibold text-white truncate">
                 {item.name}
               </h3>
-              <p className="text-xs text-white/80 capitalize">{item.category}</p>
-
-              {/* Additional info - shown on hover on desktop */}
-              <div className="hidden md:flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                {item.brand && (
-                  <span className="text-[10px] text-white/70 truncate">{item.brand}</span>
-                )}
-                {item.usage_times_worn > 0 && (
-                  <span className="text-[10px] text-white/70">
-                    Worn {item.usage_times_worn}x
-                  </span>
-                )}
-              </div>
+              <p className="text-[11px] text-white/80 capitalize">{item.category}</p>
             </div>
           )}
         </div>

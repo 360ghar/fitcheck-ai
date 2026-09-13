@@ -424,7 +424,7 @@ export default function OutfitsPage() {
         </Button>
       </PageHeader>
 
-      <div className="md:hidden mb-4">
+      <div className="md:hidden mb-2">
         <Button onClick={() => navigate('/outfits/new')} className="w-full">
           <Plus className="h-4 w-4 mr-2" />
           Create Outfit
@@ -433,7 +433,7 @@ export default function OutfitsPage() {
 
       {/* Search + filters stay full width ABOVE the split — the list shrinks, the
           page does not change. */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+      <div className="flex flex-col sm:flex-row gap-2 mb-2">
         <div className="flex-1">
           <SearchBar
             value={searchQuery}
