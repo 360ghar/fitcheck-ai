@@ -924,7 +924,7 @@ export function CalendarView({
                           />
                         ))}
                         {day.events.length > 3 && (
-                          <span className="hidden sm:inline text-[10px] text-muted-foreground">+{day.events.length - 3}</span>
+                          <span className="text-[10px] text-muted-foreground">+{day.events.length - 3}</span>
                         )}
                       </div>
 

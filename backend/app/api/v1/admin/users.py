@@ -5,7 +5,6 @@ Admin users: list/search, detail, role/suspend edits, activity.
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel, Field
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db, require_permission
@@ -16,6 +15,7 @@ from app.models.admin import (
     AdminUserDetail,
     AdminUserListItem,
     AdminUserPatch,
+    ExtendTrialRequest,
     PageResponse,
 )
 from app.services.admin_service import (
@@ -27,12 +27,6 @@ from app.services.admin_service import (
     user_activity,
 )
 from app.services.audit_service import record_audit
-
-
-class ExtendTrialRequest(BaseModel):
-    """POST /admin/users/{id}/subscription/extend-trial body."""
-
-    days: int = Field(..., ge=1, le=90, description="Days to extend trial (1..90)")
 
 
 def _require_either(*permissions: str):

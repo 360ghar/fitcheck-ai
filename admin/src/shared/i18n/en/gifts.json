@@ -135,6 +135,10 @@
     "anniversary": "Anniversary",
     "other": "Other"
   },
+  "fixedGreetings": {
+    "birthday": "Happy Birthday",
+    "anniversary": "Happy Anniversary"
+  },
   "create": {
     "title": "Issue an admin gift",
     "description": "Create premium gift value without a payment. The action is audited.",

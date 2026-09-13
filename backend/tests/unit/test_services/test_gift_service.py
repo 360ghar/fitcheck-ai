@@ -353,6 +353,48 @@ def test_optional_occasion_migration_keeps_legacy_gifts_blank_and_replaces_the_r
     assert "GRANT EXECUTE ON FUNCTION public.issue_complimentary_gift_for_recipient" in migration
 
 
+def test_occasion_and_trial_guards_migration_restores_idempotency_recheck():
+    migration = (
+        Path(__file__).resolve().parents[3]
+        / "db"
+        / "supabase"
+        / "migrations"
+        / "063_gift_occasion_and_trial_guards.sql"
+    ).read_text(encoding="utf-8")
+
+    # Three-valued logic hole: a NULL occasion with a greeting made every
+    # branch of the 062 CHECK UNKNOWN, so invalid rows slipped through.
+    assert "occasion IS NOT NULL" in migration
+    assert "IF v_occasion IS NULL AND v_occasion_greeting IS NOT NULL THEN" in migration
+
+    # 062's re-emit dropped 061's post-lock replay recheck; 063 restores it
+    # so concurrent duplicate client_request_ids cannot double-spend an
+    # allowance.
+    key_lookup = "purchaser_user_id = p_user_id AND client_request_id = p_client_request_id"
+    assert migration.count(key_lookup) >= 2
+    assert migration.index("FOR UPDATE") < migration.rindex(key_lookup)
+    assert migration.rindex("IF FOUND THEN") < migration.rindex("used_count = used_count + 1")
+
+    # Trial extension is limited to paid plans currently in trial.
+    assert "v_subscription.status <> 'trial'" in migration
+    assert "v_subscription.plan_type NOT IN" in migration
+
+
+def test_occasion_greeting_newlines_are_flattened_for_single_line_artwork():
+    """Artwork renders greetings as one line — newlines would 500 the render."""
+    request = ComplimentaryGiftCreate(
+        from_name="Alex Morgan",
+        to_name="Taylor Reed",
+        recipient_email="taylor@example.com",
+        duration_months=3,
+        client_request_id="request-occasion-1",
+        occasion=GiftOccasion.OTHER,
+        occasion_greeting="Happy\n\nBirthday,\nTaylor!",
+    )
+
+    assert request.occasion_greeting == "Happy Birthday, Taylor!"
+
+
 def test_issuance_replay_matches_legacy_null_recipient_vouchers():
     """Pre-061 vouchers have a NULL recipient; retries must replay them."""
     request = ComplimentaryGiftCreate(

@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import ClassVar, List, Optional
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     # entirely (init_sentry() in app/core/sentry_config.py becomes a no-op).
     # The traces rate matches the web app's 0.1. See backend/.env.example.
     SENTRY_DSN: str = ""
-    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    # Bounded 0..1: a typo'd env value must not silently sample everything
+    # (or disable tracing) instead of failing validation at startup.
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, ge=0.0, le=1.0)
 
     # CORS
     # First-party origins that are ALWAYS allowed. BACKEND_CORS_ORIGINS is the

@@ -347,7 +347,7 @@ export function UserDetailPage() {
       {!detailQuery.isPending && !detailQuery.isError ? (
         <nav
           aria-label={t('detail.sectionsNavLabel')}
-          className="sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-border bg-background/80 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+          className="sticky top-14 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-border bg-background/80 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60"
         >
           {[
             { id: 'section-identity', label: t('detail.navIdentity') },

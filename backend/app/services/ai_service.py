@@ -11,6 +11,8 @@ Following the server-side architecture:
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Any, Dict, List
 
 from google import genai
@@ -39,6 +41,14 @@ def _create_genai_client() -> genai.Client | None:
 
 
 _client = _create_genai_client()
+
+# Embeddings run on a dedicated, bounded executor instead of the default
+# one shared with every other asyncio.to_thread call. The sync Gemini SDK
+# cannot be cancelled once running, so a stalled provider call keeps its
+# worker busy until it returns; isolating them here means worst case the
+# embedding lane backs up (and wait_for surfaces AIServiceError) without
+# starving database/storage to_thread work on the shared pool.
+_EMBEDDING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gemini-embedding")
 
 
 # ============================================================================
@@ -79,20 +89,26 @@ class EmbeddingService:
             # The google-genai module-level client is the SYNC client; the
             # blocking embed_content call must never run on the event loop
             # (it would stall every other coroutine for the request duration).
-            # asyncio.wait_for bounds the call: the SDK retries 429/5xx with
-            # internal backoff, so a stalled provider call can hold a worker
-            # thread for minutes — well past every client's request timeout.
-            # TimeoutError is re-raised as AIServiceError below, which callers
-            # already degrade on (e.g. /items/check-duplicates falls back to
-            # text matching) — bounded failure instead of a hung request.
+            # asyncio.wait_for bounds the awaited call: the SDK retries
+            # 429/5xx with internal backoff, so a stalled provider call can
+            # hold its worker thread for minutes — well past every client's
+            # request timeout. TimeoutError is re-raised as AIServiceError
+            # below, which callers already degrade on (e.g.
+            # /items/check-duplicates falls back to text matching) — bounded
+            # failure instead of a hung request. The dedicated executor keeps
+            # those stalled workers away from unrelated to_thread work.
+            loop = asyncio.get_running_loop()
             result = await asyncio.wait_for(
-                asyncio.to_thread(
-                    _client.models.embed_content,
-                    model=settings.AI_GEMINI_EMBEDDING_MODEL,
-                    contents=text,
-                    config=types.EmbedContentConfig(
-                        task_type="RETRIEVAL_DOCUMENT",
-                        output_dimensionality=settings.PINECONE_DIMENSION,
+                loop.run_in_executor(
+                    _EMBEDDING_EXECUTOR,
+                    partial(
+                        _client.models.embed_content,
+                        model=settings.AI_GEMINI_EMBEDDING_MODEL,
+                        contents=text,
+                        config=types.EmbedContentConfig(
+                            task_type="RETRIEVAL_DOCUMENT",
+                            output_dimensionality=settings.PINECONE_DIMENSION,
+                        ),
                     ),
                 ),
                 timeout=settings.AI_EMBEDDING_TIMEOUT_S,

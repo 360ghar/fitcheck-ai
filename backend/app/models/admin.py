@@ -43,6 +43,12 @@ class AdminMeResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class ExtendTrialRequest(BaseModel):
+    """POST /admin/users/{id}/subscription/extend-trial body."""
+
+    days: int = Field(..., ge=1, le=90, description="Days to extend trial (1..90)")
+
+
 # =============================================================================
 # Users
 # =============================================================================

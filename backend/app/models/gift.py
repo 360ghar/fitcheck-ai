@@ -90,6 +90,19 @@ def _trim_optional_string(value: Any) -> Any:
     return value
 
 
+def _normalize_occasion_greeting(value: Any) -> Any:
+    """Trim and collapse internal newlines before the length constraint.
+
+    Greetings render as a single line on the voucher artwork (Pillow
+    ``textlength``), so embedded newlines would 500 the render — flatten
+    them to spaces at the model boundary.
+    """
+    trimmed = _trim_optional_string(value)
+    if isinstance(trimmed, str):
+        return " ".join(trimmed.split()) or None
+    return trimmed
+
+
 class GiftPersonalization(BaseModel):
     from_name: str = Field(min_length=1, max_length=80)
     to_name: str = Field(min_length=1, max_length=80)
@@ -117,7 +130,7 @@ class GiftPersonalization(BaseModel):
     @field_validator("occasion_greeting", mode="before")
     @classmethod
     def strip_occasion_greeting(cls, value: Any) -> Any:
-        return _trim_optional_string(value)
+        return _normalize_occasion_greeting(value)
 
     @field_validator("recipient_email")
     @classmethod
@@ -174,7 +187,7 @@ class GiftUpdate(BaseModel):
     @field_validator("occasion_greeting", mode="before")
     @classmethod
     def strip_optional_occasion_greeting(cls, value: Any) -> Any:
-        return _trim_optional_string(value)
+        return _normalize_occasion_greeting(value)
 
     @model_validator(mode="after")
     def require_change(self):

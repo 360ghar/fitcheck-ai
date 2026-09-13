@@ -507,7 +507,18 @@ function GiftDetailDialog({
               <DetailField label={t('detail.to')} value={detail.to_name} />
               <DetailField label={t('detail.recipientEmail')} value={detailValue(detail.recipient_email, fallback)} wide />
               <DetailField label={t('detail.occasion')} value={detail.occasion ? t(`occasions.${detail.occasion}`) : t('occasions.none')} />
-              <DetailField label={t('detail.occasionGreeting')} value={detailValue(detail.occasion_greeting, fallback)} />
+              {/* Fixed occasions have no stored greeting — the artwork bakes in
+                  the built-in wording, so show it instead of "Not available". */}
+              <DetailField
+                label={t('detail.occasionGreeting')}
+                value={detailValue(
+                  detail.occasion_greeting ??
+                    (detail.occasion === 'birthday' || detail.occasion === 'anniversary'
+                      ? t(`fixedGreetings.${detail.occasion}`)
+                      : null),
+                  fallback,
+                )}
+              />
               <DetailField label={t('detail.message')} value={detailValue(detail.message, fallback)} wide />
               <DetailField label={t('detail.publicId')} value={detail.public_id} mono />
               <DetailField label={t('detail.claimCode')} value={detailValue(detail.claim_code, fallback)} mono />

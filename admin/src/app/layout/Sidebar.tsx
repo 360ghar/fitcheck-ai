@@ -93,7 +93,7 @@ function SidebarItem({
         cn(
           'group relative flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
           isActive
-            ? 'border-l-[2px] border-brand bg-brand/10 pl-[6px] font-semibold text-brand'
+            ? 'border-l-[2px] border-primary bg-primary/10 pl-[6px] font-semibold text-primary'
             : 'border-l-[2px] border-transparent text-muted-foreground hover:bg-surface-card hover:text-foreground',
           collapsed && 'justify-center border-l-0 px-0 pl-0',
         )
@@ -103,7 +103,7 @@ function SidebarItem({
         <>
           {icon}
           {!collapsed ? <span className="flex-1 truncate">{t(item.titleKey)}</span> : null}
-          {!collapsed && isActive ? <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" /> : null}
+          {!collapsed && isActive ? <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" /> : null}
           <span className={cn('sr-only', !collapsed && 'hidden')}>{t(item.titleKey)}</span>
         </>
       )}

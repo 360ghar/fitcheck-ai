@@ -80,7 +80,17 @@ describe('QuotasPage', () => {
       expect(state.lastPatchBody).toEqual({ daily_limit: null })
     })
     expect(await screen.findByText('Override cleared for Alice Example')).toBeInTheDocument()
-    expect((await screen.findAllByText('Embed 500')).length).toBeGreaterThanOrEqual(1)
+    // The cleared row (Alice's, the first row) must show the restored
+    // configured limit's error — assert inside her row, not anywhere on the
+    // page, so a vacuous match in another user's row cannot pass.
+    // The name renders in more than one node (e.g. responsive card list),
+    // so resolve the one sitting inside the table row before asserting.
+    const aliceRow = screen
+      .getAllByText('Alice Example')
+      .map((node) => node.closest('tr'))
+      .find((row): row is HTMLTableRowElement => row !== null)
+    expect(aliceRow).toBeDefined()
+    expect(await within(aliceRow as HTMLElement).findByText('Embed 500')).toBeInTheDocument()
   })
 
   it('validates the daily limit inline (empty and below 1)', async () => {

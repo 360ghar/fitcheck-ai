@@ -67,7 +67,7 @@ export default function CTASection() {
                       background-image gradient. */}
                   <Button
                     size="lg"
-                    className="group h-12 bg-gradient-primary px-6 transition-[filter] duration-150 hover:brightness-110"
+                    className="group h-12 bg-gradient-primary px-6 text-white transition-[filter] duration-150 hover:brightness-110"
                     asChild
                   >
                     <Link

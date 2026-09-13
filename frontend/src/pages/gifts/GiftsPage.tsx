@@ -236,6 +236,7 @@ export default function GiftsPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const requestIdRef = useRef<string | null>(null)
+  const fulfilledSessionRef = useRef<string | null>(null)
   const formRef = useRef<HTMLDivElement | null>(null)
   const incomingRef = useRef<HTMLElement | null>(null)
 
@@ -300,17 +301,24 @@ export default function GiftsPage() {
     }
     if (checkout !== 'success' || !sessionId) return
 
-    // Consume the params before the async fulfill so StrictMode's second
-    // effect pass (or a fast re-render) cannot fulfill the checkout twice.
-    setSearchParams({}, { replace: true })
+    // Track the in-flight session so StrictMode's second effect pass (or a
+    // fast re-render) cannot fulfill the checkout twice. The params stay in
+    // the URL until fulfillment actually succeeds: clearing them first made
+    // a transient failure unretryable because the session_id was gone.
+    if (fulfilledSessionRef.current === sessionId) return
+    fulfilledSessionRef.current = sessionId
     setIsSubmitting(true)
     fulfillGiftCheckout(sessionId)
       .then((voucher) => {
+        setSearchParams({}, { replace: true })
         setCreated(voucher)
         setNotice('Payment confirmed. Your private gift is ready to share.')
         return loadData()
       })
       .catch((checkoutError) => {
+        // Release the guard so a refresh (session_id is still in the URL)
+        // can retry the confirmation.
+        fulfilledSessionRef.current = null
         setError(giftErrorMessage(checkoutError, 'Payment confirmation is still pending. Refresh this page shortly.'))
       })
       .finally(() => setIsSubmitting(false))
@@ -470,7 +478,9 @@ export default function GiftsPage() {
           ? 'Your FitCheck Pro gift is active.'
           : 'Your FitCheck Pro gift is queued after your current entitlement.',
       )
-      await loadData()
+      // The claim succeeded server-side. Refresh without awaiting inside
+      // this try so a failed reload can never surface as a claim error.
+      void loadData()
     } catch (claimError) {
       setError(giftErrorMessage(claimError, 'The gift could not be claimed. Try again.'))
     } finally {

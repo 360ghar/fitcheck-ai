@@ -54,6 +54,13 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
     ]) {
       textController.addListener(_handleFormInputChanged);
     }
+    // The controller only fetches once at registration; deep links and
+    // re-entry after claiming/creating elsewhere would show stale lists.
+    // load() coalesces concurrent calls, so this is safe alongside onInit.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _controller.load(showLoader: false);
+    });
   }
 
   void _handleFormInputChanged() {

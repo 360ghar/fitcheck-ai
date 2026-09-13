@@ -170,6 +170,10 @@ class GiftArtworkService:
                 voucher.get("occasion"),
                 voucher.get("occasion_greeting"),
             )
+            if greeting:
+                # Legacy rows may still hold embedded newlines; artwork is
+                # single-line and Pillow's textlength would raise on them.
+                greeting = " ".join(greeting.split())
             content_y = 548
             if greeting:
                 draw.text(
@@ -248,6 +252,9 @@ class GiftArtworkService:
                 voucher.get("occasion"),
                 voucher.get("occasion_greeting"),
             )
+            if greeting:
+                # Mirror the portrait branch: legacy rows may hold newlines.
+                greeting = " ".join(greeting.split())
             title_y = 165
             recipient_y = 250
             from_y = 322

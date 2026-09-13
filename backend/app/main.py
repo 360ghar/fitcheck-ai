@@ -866,7 +866,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     # a server error carrying the correlation ID. Echo the same allow-rules
     # as the middleware (list or regex origin match) so real 500s surface as
     # real 500s.
-    headers = {}
+    headers = {
+        # This handler runs outside the correlation middleware's response
+        # path, so the header must be re-attached here — the failures where
+        # clients most need it are exactly the ones that would otherwise
+        # omit it. Expose it for browser readers alongside the CORS headers.
+        "X-Correlation-ID": correlation_id,
+        "Access-Control-Expose-Headers": "X-Correlation-ID",
+    }
     origin = request.headers.get("origin")
     if origin and (
         origin in settings.BACKEND_CORS_ORIGINS

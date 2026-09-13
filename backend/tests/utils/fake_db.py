@@ -572,6 +572,10 @@ class FakeDB:
         )
         if not record:
             return FakeResult(data=[])
+        # Mirror migration 063's paid-trial guard: only paid plans in trial
+        # are extendable, everything else returns no row.
+        if str(record.get("status") or "") != "trial" or str(record.get("plan_type") or "") == "free":
+            return FakeResult(data=[])
         before = record.get("trial_end")
         before_dt: Optional[datetime] = None
         if before:

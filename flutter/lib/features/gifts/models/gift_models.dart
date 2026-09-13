@@ -16,7 +16,9 @@ String? giftOccasionGreeting(GiftOccasion? occasion, String? customGreeting) {
   return switch (occasion) {
     GiftOccasion.birthday => 'Happy Birthday',
     GiftOccasion.anniversary => 'Happy Anniversary',
-    GiftOccasion.other => _nullableString(customGreeting),
+    // Trim so whitespace-only or padded input cannot leak into the stored
+    // greeting (the backend flattens/validates the same field).
+    GiftOccasion.other => _nullableString(customGreeting?.trim()),
     null => null,
   };
 }
