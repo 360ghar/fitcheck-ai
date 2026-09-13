@@ -31,7 +31,14 @@
     "empty": "No quota data to show burn histogram.",
     "subtitle": "highest operation use per user today",
     "aria": "Quota burn distribution",
-    "caption": "Current page only — 20 users per page. Search or filter to narrow results."
+    "caption": "Current page only — 20 users per page. Search or filter to narrow results.",
+    "users_one": "{{count}} user",
+    "users_other": "{{count}} users",
+    "bucket0": "0-25%",
+    "bucket1": "25-50%",
+    "bucket2": "50-75%",
+    "bucket3": "75-100%",
+    "bucket4": "100%+"
   },
   "topBurners": {
     "title": "Top burners",

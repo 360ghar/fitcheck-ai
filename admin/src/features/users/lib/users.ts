@@ -87,11 +87,14 @@ export function arrayValue(
   return pickArray(record as unknown as SharedJsonRecord | null | undefined, key)
 }
 
-/** True when trial_end is within next N days (default 7). */
+/** True when an active trial ends within next N days (default 7). */
 export function isTrialEndingSoon(
   subscription: JsonRecord | null | undefined,
   days = 7,
 ): boolean {
+  // A paid subscription can carry a stale future trial_end; only flag
+  // subscriptions that are actually in trial status.
+  if (subscriptionStatus(subscription) !== 'trial') return false
   const date = toDate(subscription?.['trial_end'])
   if (!date) return false
   const diff = date.getTime() - Date.now()
@@ -108,7 +111,8 @@ export function failedJobsLastDays(
   let count = 0
   for (const job of jobs) {
     if (stringValue(job, 'status') !== 'failed') continue
-    const date = toDate(job['created_at'] ?? job['completed_at'])
+    // Completion time first: a job can fail long after it started.
+    const date = toDate(job['completed_at'] ?? job['created_at'])
     const time = date?.getTime() ?? null
     // If no timestamp, count it conservatively as recent
     if (time === null || time >= cutoff) count += 1

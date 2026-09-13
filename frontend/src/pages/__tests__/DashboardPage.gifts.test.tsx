@@ -115,7 +115,10 @@ describe('DashboardPage gift priority', () => {
       </TestRouter>,
     )
 
+    // Initial markup: neither the referral fallback nor a resolved gift CTA.
     expect(markup).not.toContain('referral-banner')
+    expect(markup).not.toContain('gifts?claim=')
+    expect(markup).not.toContain('gifts?mode=complimentary')
   })
 
   it('falls back to referral when the gift summary request fails', async () => {

@@ -2188,12 +2188,15 @@ async def dashboard_funnel(db: Any, days: int = 30) -> Dict[str, Any]:
         for idx in range(0, len(window_ids), chunk_size):
             chunk = window_ids[idx : idx + chunk_size]
 
-            # Items: fetch user_id + created_at for strict 24h check.
+            # Items: fetch user_id + created_at for strict 24h check. Bounded
+            # by the window start: an item created before the window cannot
+            # fall inside [user_created, user_created+24h].
             items_rows = await _fetch_all_pages(
                 db,
-                lambda d, c=chunk: d.table("items")
+                lambda d, c=chunk, s=window_start_iso: d.table("items")
                 .select("user_id,created_at")
                 .in_("user_id", c)
+                .gte("created_at", s)
                 .order("id"),
                 operation="admin.dashboard_funnel.items",
                 extra={"days": days},
@@ -2211,12 +2214,14 @@ async def dashboard_funnel(db: Any, days: int = 30) -> Dict[str, Any]:
                     # Timestamp missing — existential fallback per spec's pragmatic v1.
                     with_items_set.add(uid)
 
-            # Outfits: strict 7-day window.
+            # Outfits: strict 7-day window, bounded by the window start for
+            # the same reason as the items fetch.
             outfits_rows = await _fetch_all_pages(
                 db,
-                lambda d, c=chunk: d.table("outfits")
+                lambda d, c=chunk, s=window_start_iso: d.table("outfits")
                 .select("user_id,created_at")
                 .in_("user_id", c)
+                .gte("created_at", s)
                 .order("id"),
                 operation="admin.dashboard_funnel.outfits",
                 extra={"days": days},

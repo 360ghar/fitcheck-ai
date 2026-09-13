@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { JsonRecord } from '@/features/users/lib/users'
 import { stringValue } from '@/features/users/lib/users'
-import { formatDateTimeValue } from '@/shared/lib/formatters'
+import { formatDateTimeValue, toDate } from '@/shared/lib/formatters'
 import { Badge } from '@/shared/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs'
@@ -34,19 +34,23 @@ export function Timeline({
     ...withKind(recentJobs, 'jobs'),
     ...withKind(socialImportJobs, 'imports'),
     ...withKind(supportTickets, 'tickets'),
-  ].sort((a, b) =>
-    String(stringValue(b, 'created_at') ?? '').localeCompare(String(stringValue(a, 'created_at') ?? '')),
-  )
+  ].sort((a, b) => {
+    // Parse the raw values (created_at can be a string OR a number) and sort
+    // newest-first; rows without a parseable date sort last.
+    const aTime = toDate(a['created_at'])?.getTime() ?? Number.NEGATIVE_INFINITY
+    const bTime = toDate(b['created_at'])?.getTime() ?? Number.NEGATIVE_INFINITY
+    return bTime - aTime
+  })
 
   const filtered =
     (tab === 'all' ? merged : merged.filter((row) => row._kind === tab)).slice(0, 60)
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between py-2">
+      <CardHeader className="flex-wrap items-center justify-between gap-2 py-2">
         <CardTitle className="text-sm">{t('detail.timeline')}</CardTitle>
         <Tabs value={tab} onValueChange={(v) => setTab(v as TimelineTab)}>
-          <TabsList className="h-7">
+          <TabsList className="h-7 max-w-full flex-wrap">
             <TabsTrigger value="all" className="px-2.5 py-0.5 text-xs">
               {t('detail.timelineFiltersAll')}
             </TabsTrigger>
@@ -86,7 +90,7 @@ export function Timeline({
                     '—'}
                 </span>
                 <time className="whitespace-nowrap text-xs text-muted-foreground">
-                  {formatDateTimeValue(stringValue(row, 'created_at'))}
+                  {formatDateTimeValue(row['created_at'])}
                 </time>
               </li>
             ))}

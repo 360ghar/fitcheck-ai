@@ -50,8 +50,14 @@ def main() -> int:
         return 2
 
     _load_env_file(BACKEND_ENV)
-    sys.path.insert(0, str(Path(__file__).parent))
-    from publish import _build_posts  # noqa: E402
+    script_dir = str(Path(__file__).parent)
+    sys.path.insert(0, script_dir)
+    try:
+        from publish import _build_posts  # noqa: E402
+    finally:
+        # Isolate the sys.path mutation to the import itself.
+        if script_dir in sys.path:
+            sys.path.remove(script_dir)
 
     posts = _build_posts()
     slugs = [p["slug"] for p in posts]

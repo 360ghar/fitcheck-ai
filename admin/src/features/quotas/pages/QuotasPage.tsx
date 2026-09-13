@@ -105,7 +105,9 @@ function usedCount(row: AdminQuotaUsageItem): number {
 
 function quotaPct(row: AdminQuotaUsageItem): number {
   return Math.max(
-    ...operationUsage(row).map(({ used, limit }) => (limit > 0 ? used / limit : 0)),
+    // A 0 effective limit means the operation is disabled: any use is over
+    // quota (100%+ bucket), not 0%.
+    ...operationUsage(row).map(({ used, limit }) => (limit > 0 ? used / limit : used > 0 ? 1 : 0)),
   )
 }
 
@@ -118,7 +120,8 @@ function rowName(row: AdminQuotaUsageItem): string {
   return row.full_name ?? row.email ?? row.user_id
 }
 
-const BUCKET_LABELS = ['0-25%', '25-50%', '50-75%', '75-100%', '100%+'] as const
+/** Histogram bucket i18n keys, ordered lowest → highest burn. */
+const BUCKET_KEYS = ['bucket0', 'bucket1', 'bucket2', 'bucket3', 'bucket4'] as const
 
 function bucketIndex(pct: number): number {
   if (pct < 0.25) return 0
@@ -356,6 +359,14 @@ export function QuotasPage() {
     }
   }
 
+  if (!canRead) {
+    return (
+      <div className="space-y-3">
+        <ErrorState message={t('permissionDenied')} />
+      </div>
+    )
+  }
+
   if (table.query.isError) {
     return (
       <div className="space-y-3">
@@ -370,10 +381,7 @@ export function QuotasPage() {
   return (
     <div className="space-y-3">
 
-      {!canRead ? (
-        <ErrorState message={t('permissionDenied')} />
-      ) : (
-        <>
+      <>
           {/* Burn histogram + top burners — client-side from table.data */}
           {table.query.isPending ? (
             <Card>
@@ -416,13 +424,13 @@ export function QuotasPage() {
                 <CardContent dense>
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
-                      {BUCKET_LABELS.map((label, idx) => (
+                      {BUCKET_KEYS.map((key, idx) => (
                         <Badge
-                          key={label}
+                          key={key}
                           variant={idx === 4 ? 'danger' : idx >= 3 ? 'warning' : 'secondary'}
-                          aria-label={`${label}: ${histogram[idx]} users`}
+                          aria-label={`${t(`histogram.${key}`)}: ${t('histogram.users', { count: histogram[idx] ?? 0 })}`}
                         >
-                          {label}: {formatNumber(histogram[idx] ?? 0)}
+                          {t(`histogram.${key}`)}: {formatNumber(histogram[idx] ?? 0)}
                         </Badge>
                       ))}
                     </div>
@@ -438,7 +446,7 @@ export function QuotasPage() {
                               style={{ height }}
                               aria-hidden="true"
                             />
-                            <span className="text-[10px] font-medium text-muted-foreground">{BUCKET_LABELS[idx]}</span>
+                            <span className="text-[10px] font-medium text-muted-foreground">{t(`histogram.${BUCKET_KEYS[idx]}`)}</span>
                           </div>
                         )
                       })}
@@ -539,8 +547,7 @@ export function QuotasPage() {
             }
             {...table.props}
           />
-        </>
-      )}
+      </>
 
       <Dialog
         open={selectedRow !== null}

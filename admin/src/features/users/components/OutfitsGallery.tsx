@@ -20,10 +20,13 @@ export function OutfitsGallery({
   onTabChange: (tab: string) => void
 }) {
   const { t } = useTranslation('users')
-  const [tab, setTab] = useState(defaultTab || 'outfits')
+  // Normalize URL-provided tabs: anything but 'photoshoot' falls back to the
+  // outfits tab so a trigger is always active and the rendered branch matches.
+  const normalizedTab = defaultTab === 'photoshoot' ? 'photoshoot' : 'outfits'
+  const [tab, setTab] = useState(normalizedTab)
   useEffect(() => {
-    setTab(defaultTab || 'outfits')
-  }, [defaultTab])
+    setTab(normalizedTab)
+  }, [normalizedTab])
   const handle = (value: string) => {
     setTab(value)
     onTabChange(value)
