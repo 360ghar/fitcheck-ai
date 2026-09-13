@@ -42,10 +42,10 @@ import { useToast } from '@/components/ui/use-toast'
 import { submitFeedback, getMyTickets, type TicketCategory, type TicketListItem } from '@/api/feedback'
 
 const CATEGORIES = [
-  { value: 'bug_report', label: 'Bug Report', icon: Bug, color: 'text-red-500' },
-  { value: 'feature_request', label: 'Feature Request', icon: Lightbulb, color: 'text-amber-500' },
-  { value: 'general_feedback', label: 'General Feedback', icon: MessageSquare, color: 'text-blue-500' },
-  { value: 'support_request', label: 'Support Request', icon: HelpCircle, color: 'text-green-500' },
+  { value: 'bug_report', label: 'Bug Report', icon: Bug, color: 'text-tint-coral' },
+  { value: 'feature_request', label: 'Feature Request', icon: Lightbulb, color: 'text-tint-amber' },
+  { value: 'general_feedback', label: 'General Feedback', icon: MessageSquare, color: 'text-tint-blue' },
+  { value: 'support_request', label: 'Support Request', icon: HelpCircle, color: 'text-tint-teal' },
 ] as const
 
 const STATUS_BADGES: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
@@ -155,11 +155,11 @@ export function SupportPanel() {
 
       {/* Success Message */}
       {showSuccess && (
-        <div className="p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3">
-          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+        <div className="p-4 bg-success-pale border border-success/30 rounded-lg flex items-center gap-3">
+          <CheckCircle className="h-5 w-5 text-success" />
           <div>
-            <p className="text-green-800 dark:text-green-200 font-medium">Thank you for your feedback!</p>
-            <p className="text-green-600 dark:text-green-300 text-sm">We'll review it and get back to you if needed.</p>
+            <p className="text-success font-medium">Thank you for your feedback!</p>
+            <p className="text-success text-sm">We'll review it and get back to you if needed.</p>
           </div>
         </div>
       )}

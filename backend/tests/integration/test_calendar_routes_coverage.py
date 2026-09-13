@@ -140,6 +140,7 @@ async def test_connect_creates_a_new_connection():
     assert result["data"]["provider"] == "google"
     assert result["data"]["email"] == "wardrobe@example.com"
     assert result["data"]["id"]
+    assert result["data"]["is_active"] is True
     ops = db.ops_on("calendar_connections")
     assert [op for op, _ in ops] == ["insert"]
     payload = ops[0][1]
@@ -160,6 +161,7 @@ async def test_connect_updates_an_existing_connection():
     )
 
     assert result["data"]["id"] == "conn-1"
+    assert result["data"]["is_active"] is True
     ops = db.ops_on("calendar_connections")
     assert [op for op, _ in ops] == ["update"]
     payload = ops[0][1]
@@ -232,7 +234,34 @@ async def test_list_connections_returns_every_connection():
 
     providers = [c["provider"] for c in result["data"]["connections"]]
     assert providers == ["google", "outlook"]
+    assert all(c["is_active"] is True for c in result["data"]["connections"])
     assert result["message"] == "OK"
+
+
+@pytest.mark.asyncio
+async def test_list_connections_reports_soft_disabled_connection():
+    """A soft-disabled (is_active=False) row must serialize the flag — the
+    Flutter client defaults to connected=True when 'is_active' is absent,
+    which hid the connect affordance for disconnected providers."""
+    db = FakeDB(
+        rows={"calendar_connections": [_connection("conn-1", is_active=False)]}
+    )
+
+    result = await calendar_module.list_calendar_connections(user_id=USER_ID, db=db)
+
+    assert result["data"]["connections"][0]["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_list_connections_defaults_is_active_for_legacy_rows():
+    """Rows predating the is_active column serialize as connected (True)."""
+    legacy_row = _connection("conn-legacy")
+    legacy_row.pop("is_active")
+    db = FakeDB(rows={"calendar_connections": [legacy_row]})
+
+    result = await calendar_module.list_calendar_connections(user_id=USER_ID, db=db)
+
+    assert result["data"]["connections"][0]["is_active"] is True
 
 
 @pytest.mark.asyncio

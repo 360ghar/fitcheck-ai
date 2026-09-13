@@ -148,38 +148,48 @@ class OutfitRepository {
   }
 
   /// Upload outfit images
+  ///
+  /// The backend endpoint (POST /outfits/{outfit_id}/images) accepts exactly
+  /// one file per request under the multipart field `file` — a list under
+  /// any other name is rejected with 422 — so issue one POST per image,
+  /// mirroring the request shape of [uploadOutfitImageFromBase64]. Images
+  /// upload in chunks of 3 concurrent requests; results are collected in
+  /// input order. A failed chunk aborts before later chunks start, but
+  /// requests already in flight within the failed chunk run to completion.
   Future<List<OutfitImage>> uploadImages(
     String outfitId,
     List<File> images,
   ) async {
+    final uploaded = <OutfitImage>[];
     try {
-      final formData = FormData.fromMap({
-        'images': await Future.wait(
-          images.map((image) => MultipartFile.fromFile(image.path)),
-        ),
-      });
-
-      final response = await _apiClient.post(
-        '${ApiConstants.outfits}/$outfitId/images',
-        data: formData,
-      );
-
-      final dataList = _extractDataList(response.data);
-      if (dataList.isNotEmpty) {
-        return dataList
-            .whereType<Map<String, dynamic>>()
-            .map(_normalizeOutfitImageJson)
-            .map(OutfitImage.fromJson)
-            .toList();
+      for (var i = 0; i < images.length; i += 3) {
+        final end = i + 3 > images.length ? images.length : i + 3;
+        final results = await Future.wait(
+          images.sublist(i, end).map((image) => _uploadOneImage(outfitId, image)),
+        );
+        for (final result in results) {
+          if (result != null) uploaded.add(result);
+        }
       }
-      final dataMap = _extractDataMap(response.data);
-      if (dataMap.isNotEmpty) {
-        return [OutfitImage.fromJson(_normalizeOutfitImageJson(dataMap))];
-      }
-      return [];
+      return uploaded;
     } on DioException catch (e) {
       throw handleDioException(e);
     }
+  }
+
+  /// Upload a single outfit image; null when the response carries no data.
+  Future<OutfitImage?> _uploadOneImage(String outfitId, File image) async {
+    final file = await MultipartFile.fromFile(image.path);
+    final formData = FormData.fromMap({'file': file});
+
+    final response = await _apiClient.post(
+      '${ApiConstants.outfits}/$outfitId/images',
+      data: formData,
+    );
+
+    final dataMap = _extractDataMap(response.data);
+    if (dataMap.isEmpty) return null;
+    return OutfitImage.fromJson(_normalizeOutfitImageJson(dataMap));
   }
 
   /// Upload outfit image from base64 (for AI-generated images)
@@ -706,7 +716,13 @@ class OutfitRepository {
   }
 
   String _normalizeSeasonValue(String value) {
-    if (value == 'all-season' || value == 'all_season') {
+    // Accept every stored spelling of all-season — web 'all-season' /
+    // 'all_season' and the legacy mobile 'allseason' rows written before
+    // seasonApiValue — and hand the decoder the enum-name key. Final
+    // tolerance (unknown → null) lives in SeasonApiConverter.
+    if (value == 'all-season' ||
+        value == 'all_season' ||
+        value == 'allseason') {
       return 'allSeason';
     }
     return value;

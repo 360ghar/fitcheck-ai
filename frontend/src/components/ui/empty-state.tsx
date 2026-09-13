@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { GeneratedImage } from '@/components/ui/generated-image'
 
 export type EmptyStateTone = 'coral' | 'amber' | 'teal' | 'violet' | 'blue' | 'neutral'
 
@@ -16,6 +17,13 @@ export interface EmptyStateProps {
   children?: React.ReactNode
   /** Editorial tint for the mark. `neutral` keeps the old muted look. */
   tone?: EmptyStateTone
+  /**
+   * Optional clay illustration (Agent G's generated set, e.g.
+   * `/generated/empty-closet-640.webp`) rendered above the mark as a rounded,
+   * pressed tile. Purely decorative (`alt=""`); when the source fails to load
+   * the image hides itself and the state falls back to icon + copy.
+   */
+  illustration?: string
 }
 
 // Literal class map: Tailwind's JIT needs complete class names at scan time.
@@ -50,6 +58,7 @@ export function EmptyState({
   className,
   children,
   tone = 'teal',
+  illustration,
 }: EmptyStateProps) {
   return (
     <div
@@ -59,6 +68,21 @@ export function EmptyState({
         className
       )}
     >
+      {/* Clay illustration slot: an empty state is a brand moment, so the
+          hand-made set gets first billing when supplied. Decorative (the
+          title carries the meaning), rounded to the feature-card radius and
+          stamped with the resting pressed shadow; a failed source hides
+          itself rather than leaving a broken-image glyph. */}
+      {illustration && (
+        <GeneratedImage
+          src={illustration}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+          className="mx-auto mb-5 h-40 w-40 rounded-2xl object-cover shadow-pressed"
+        />
+      )}
       {/* Bare mark, no tile behind it. A filled circle around an icon is the
           component-kit default; the icon carries itself at this size. The
           editorial tint gives the mark warmth without adding a chip. */}

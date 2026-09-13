@@ -10,12 +10,16 @@ import { PhotoshootDemo } from './PhotoshootDemo'
 
 export default function DemoSection() {
   return (
-    <section id="demo" className="scroll-mt-16 bg-surface-soft py-20 md:py-28">
+    <section id="demo" aria-labelledby="demo-heading" className="scroll-mt-16 bg-surface-soft py-20 md:py-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <AnimatedSection className="reveal">
           <div className="mb-12 max-w-2xl md:mb-16">
             <SectionKicker tone="coral">Live demo</SectionKicker>
-            <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
+            <h2
+              id="demo-heading"
+              tabIndex={-1}
+              className="landing-display text-3xl font-semibold leading-tight text-foreground outline-none sm:text-4xl md:text-[2.75rem]"
+            >
               Product proof you can run yourself
             </h2>
             <p className="mt-4 text-base leading-relaxed text-body md:text-lg">

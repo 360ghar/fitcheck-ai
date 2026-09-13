@@ -203,8 +203,24 @@ cd flutter && flutter test
 
 - `schema_ready: false` on `/ready`:
   - Re-run missing Supabase migrations in numeric order (001..059).
+  - If the log says `failed for a non-schema reason (code=504)`, it is a
+    Supabase Gateway Timeout, not a missing table. Retry `/ready`; do not
+    re-apply `001_full_schema.sql`.
+- `Config issue at startup` on Railway (2026-09-13 RCA):
+  - `AI_ENCRYPTION_KEY` empty: `openssl rand -hex 32`, set in Railway env.
+  - `STRIPE_SECRET_KEY` + 4 `STRIPE_*_PRICE_ID` missing: create prices in
+    Stripe Dashboard, set all five or web checkout 503s.
+  - `ENABLE_GIFT_VOUCHER_CREATION` incomplete: set `GIFT_TOKEN_SECRET` plus
+    3 `STRIPE_GIFT_PRO_*_PRICE_ID`, or set the flag to `false`.
+  - Verify: redeploy, startup log shows zero `Config issue` lines.
 - `401` from API with valid login:
   - Check frontend token storage and refresh flow (`frontend/src/api/client.ts`).
+  - `POST /auth/refresh` 401 with `AUTH_REFRESH_FAILED` means the refresh
+    token is expired or already rotated. Sign in again; do not retry the
+    same refresh token in a loop.
+  - `GET /photoshoot/demo/{id}/status` 404 means the job expired or the
+    poll came from a different egress IP (demo ownership is IP-hashed).
+    Restart the demo from the same network.
 - CORS issues:
   - Confirm `BACKEND_CORS_ORIGINS` and `FRONTEND_URL` in backend env.
 - Social import routes missing:

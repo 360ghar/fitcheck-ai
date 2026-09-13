@@ -26,6 +26,7 @@ export type AdminUserActivity = components['schemas']['AdminUserActivity']
 export type AdminUserDetail = components['schemas']['AdminUserDetail']
 export type AdminUserListItem = components['schemas']['AdminUserListItem']
 export type AdminUserPatch = components['schemas']['AdminUserPatch']
+export type ExtendTrialRequest = components['schemas']['ExtendTrialRequest']
 export type PageResponse_AdminAuditEventItem_ =
   components['schemas']['PageResponse_AdminAuditEventItem_']
 export type PageResponse_AdminFeedbackListItem_ =

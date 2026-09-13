@@ -117,7 +117,7 @@ export function ExtractedItemsGrid({
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
           <h3 className="text-lg font-semibold text-foreground">Review Extracted Items</h3>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+            <Badge variant="secondary" className="bg-success-pale text-success">
               <Check className="h-3 w-3 mr-1" />
               {successCount} studio ready
             </Badge>
@@ -127,7 +127,7 @@ export function ExtractedItemsGrid({
               </Badge>
             )}
             {lowConfidenceCount > 0 && (
-              <Badge variant="secondary" className="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+              <Badge variant="secondary" className="bg-tint-amber-pale text-tint-amber">
                 <AlertTriangle className="h-3 w-3 mr-1" />
                 {lowConfidenceCount} needs review
               </Badge>
@@ -313,7 +313,7 @@ export function ExtractedItemsGrid({
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           {failedCount > 0 && (
-            <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center">
+            <p className="text-sm text-tint-amber flex items-center">
               <AlertTriangle className="h-4 w-4 mr-1" />
               {failedCount} studio photo{failedCount !== 1 ? 's' : ''} failed — originals
               will be saved if available

@@ -4,6 +4,7 @@ Handles user registration, login, logout, token refresh, and password reset.
 """
 
 import asyncio
+import hashlib
 import random
 from typing import Optional, Dict, Any
 
@@ -737,7 +738,21 @@ async def refresh_token(
     except FitCheckException:
         raise
     except Exception as e:
-        logger.error("Token refresh error", error=str(e))
+        raw = request.refresh_token or ""
+        token_hash = hashlib.sha256(raw.encode()).hexdigest()[:16] if raw else "empty"
+        lowered = str(e).lower()
+        if "expired" in lowered:
+            reason = "expired"
+        elif "already used" in lowered or "rotated" in lowered:
+            reason = "reused"
+        else:
+            reason = "supabase_down"
+        logger.error(
+            "Token refresh failed",
+            token_hash=token_hash,
+            reason=reason,
+            error=str(e)[:300],
+        )
         raise AuthenticationError("Failed to refresh token", error_code="AUTH_REFRESH_FAILED")
 
 

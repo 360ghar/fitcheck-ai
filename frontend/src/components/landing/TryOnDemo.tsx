@@ -19,7 +19,9 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { GeneratedImage } from '@/components/ui/generated-image'
 import { cn } from '@/lib/utils'
+import { trackLandingCta } from '@/lib/analytics'
 import { EditorialPanel } from './EditorialPanel'
 import { LoginPromptModal } from './LoginPromptModal'
 import { demoTryOn, DemoTryOnResult, DemoApiError } from '@/api/demo'
@@ -66,6 +68,7 @@ export function TryOnDemo() {
       setOutfitPreview(URL.createObjectURL(file))
       setState('processing')
       setError(null)
+      trackLandingCta('demo-play', { demo: 'try-on' })
 
       try {
         const tryOnResult = await demoTryOn(personFile, file)
@@ -110,7 +113,7 @@ export function TryOnDemo() {
   return (
     <EditorialPanel className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
           <Wand2 className="h-5 w-5 text-primary" />
         </div>
         <div>
@@ -126,24 +129,40 @@ export function TryOnDemo() {
       <div className="flex-1 min-h-[300px]">
         {/* Step 1: Upload Person Photo */}
         {state === 'person' && (
-          <div
-            {...personDropzone.getRootProps()}
-            className={cn(
-              'h-full rounded-xl border border-dashed bg-surface-card p-8 text-center cursor-pointer flex flex-col items-center justify-center',
-              'transition-[border-color,background-color] duration-200 hover:border-ash',
-              personDropzone.isDragActive ? 'border-primary bg-secondary' : 'border-ash'
-            )}
-          >
-            <input {...personDropzone.getInputProps({ 'aria-label': 'Upload your photo' })} />
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
-              <User className={cn('h-5 w-5 text-primary transition-transform duration-200', personDropzone.isDragActive && 'scale-110')} />
+          <div className="flex h-full flex-col gap-3">
+            <div
+              {...personDropzone.getRootProps()}
+              className={cn(
+                'flex min-h-0 flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center',
+                'transition-[border-color,background-color] duration-200 hover:border-primary/50 hover:bg-secondary/70',
+                personDropzone.isDragActive && 'border-primary bg-secondary/70'
+              )}
+            >
+              <input {...personDropzone.getInputProps({ 'aria-label': 'Upload your photo' })} />
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-pressed">
+                <User className={cn('h-5 w-5 text-primary transition-transform duration-200', personDropzone.isDragActive && 'scale-110')} />
+              </div>
+              <p className="text-body font-medium mb-1">
+                Step 1: Upload your photo
+              </p>
+              <p className="text-sm text-muted-foreground">
+                A clear full-body or half-body photo works best
+              </p>
             </div>
-            <p className="text-body font-medium mb-1">
-              Step 1: Upload your photo
-            </p>
-            <p className="text-sm text-muted-foreground">
-              A clear full-body or half-body photo works best
-            </p>
+            <figure className="flex shrink-0 items-center gap-3 rounded-xl border border-border bg-secondary/40 p-3">
+              <GeneratedImage
+                src="/generated/demo-beforeafter-base-4x3-640.webp"
+                alt=""
+                aria-hidden="true"
+                className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                loading="lazy"
+                fallback="hide-figure"
+              />
+              <figcaption className="text-xs leading-relaxed text-muted-foreground">
+                <span className="font-medium text-foreground">Demo input photo.</span>{' '}
+                Example of a photo you can upload — your result is generated, never claimed here.
+              </figcaption>
+            </figure>
           </div>
         )}
 
@@ -175,13 +194,13 @@ export function TryOnDemo() {
             <div
               {...outfitDropzone.getRootProps()}
               className={cn(
-                'flex-1 rounded-xl border border-dashed bg-surface-card p-8 text-center cursor-pointer flex flex-col items-center justify-center',
-                'transition-[border-color,background-color] duration-200 hover:border-ash',
-                outfitDropzone.isDragActive ? 'border-primary bg-secondary' : 'border-ash'
+                'flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center',
+                'transition-[border-color,background-color] duration-200 hover:border-primary/50 hover:bg-secondary/70',
+                outfitDropzone.isDragActive && 'border-primary bg-secondary/70'
               )}
             >
               <input {...outfitDropzone.getInputProps({ 'aria-label': 'Upload an outfit to try on' })} />
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-pressed">
                 <Shirt className={cn('h-5 w-5 text-primary transition-transform duration-200', outfitDropzone.isDragActive && 'scale-110')} />
               </div>
               <p className="text-body font-medium mb-1">
@@ -197,20 +216,20 @@ export function TryOnDemo() {
         {/* Processing State */}
         {state === 'processing' && (
           <div className="h-full flex flex-col items-center justify-center">
-            <div className="flex gap-4 mb-6">
+            <div className="mb-6 flex gap-4">
               {personPreview && (
                 <img
                   src={personPreview}
                   alt="You"
-                  className="w-20 h-20 rounded-lg object-cover"
+                  className="h-20 w-20 rounded-lg object-cover shadow-pressed"
                 />
               )}
-              <span className="text-2xl text-ash self-center">+</span>
+              <span className="self-center text-2xl text-muted-foreground">+</span>
               {outfitPreview && (
                 <img
                   src={outfitPreview}
                   alt="Outfit"
-                  className="w-20 h-20 rounded-lg object-cover"
+                  className="h-20 w-20 rounded-lg object-cover shadow-pressed"
                 />
               )}
             </div>
@@ -231,7 +250,7 @@ export function TryOnDemo() {
               <img
                 src={`data:image/png;base64,${result.image_base64}`}
                 alt="Try-on result"
-                className="max-h-64 rounded-xl object-contain"
+                className="max-h-64 rounded-xl object-contain shadow-pressed"
               />
             </div>
 
@@ -241,7 +260,7 @@ export function TryOnDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-primary text-primary-foreground hover:bg-primary-pressed"
+                className="flex-1"
                 onClick={() => setShowLoginModal(true)}
               >
                 Save & continue free

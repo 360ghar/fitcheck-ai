@@ -235,7 +235,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
           ? 'border-destructive/40 bg-destructive/5'
           : isLowConfidence
           ? 'border-border bg-secondary/40'
-          : 'border-gray-200 dark:border-gray-700'
+          : 'border-border'
       } ${!isIncluded ? 'opacity-70' : ''}`}
     >
       <CardContent className="p-0">
@@ -257,12 +257,12 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
               }
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground/70">
               {hasFailed ? (
-                <AlertTriangle className="h-8 w-8 text-red-400" />
+                <AlertTriangle className="h-8 w-8 text-error" />
               ) : (
                 <div className="text-center">
-                  <div className="h-8 w-8 mx-auto mb-2 border-2 border-gray-300 dark:border-gray-500 border-dashed rounded" />
+                  <div className="h-8 w-8 mx-auto mb-2 border-2 border-border border-dashed rounded-md" />
                   <span className="text-xs">No image</span>
                 </div>
               )}
@@ -369,7 +369,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
               onClick={() => setShowConfirmDelete(true)}
               aria-label="Delete item"
             >
-              <Trash2 className="h-3.5 w-3.5 text-red-500" />
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
             </Button>
           </div>
 
@@ -390,8 +390,8 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
         {/* Delete confirmation overlay */}
         {showConfirmDelete && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mx-4 text-center space-y-3">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Delete this item?</p>
+            <div className="bg-card rounded-lg p-4 mx-4 text-center space-y-3 shadow-pressed">
+              <p className="text-sm font-medium text-foreground">Delete this item?</p>
               <div className="flex gap-2">
                 <Button
                   variant="outline"

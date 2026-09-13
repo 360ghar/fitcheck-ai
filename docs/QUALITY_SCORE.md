@@ -1,6 +1,6 @@
 # Quality score
 
-Last updated: 2026-09-05
+Last updated: 2026-09-13
 
 Grades are honest snapshots for agents: where to be careful, where tests are strong, where docs lag. Update when a domain materially improves or regresses.
 

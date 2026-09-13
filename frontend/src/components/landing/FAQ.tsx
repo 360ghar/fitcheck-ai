@@ -45,11 +45,11 @@ export const LANDING_FAQS = [
   {
     question: 'Does virtual try-on use my real clothes?',
     answer:
-      'Yes. Try-on is built around pieces in your wardrobe or photos you provide, so you visualize combinations of clothes you actually own — not only brand catalog garments. Limits apply on Free and Pro based on monthly AI generations.',
+      `Yes. Try-on is built around pieces in your wardrobe or photos you provide, so you visualize combinations of clothes you actually own — not only brand catalog garments. Monthly generation limits apply per plan: ${PLAN_LIMITS.free.monthlyGenerations} on Free, ${PLAN_LIMITS.plus.monthlyGenerations} on Plus, ${PLAN_LIMITS.pro.monthlyGenerations.toLocaleString()} on Pro.`,
   },
   {
     question: 'What can I use the AI photoshoot for?',
-    answer: `Create professional-looking images from selfies for LinkedIn, dating apps, Instagram, portfolios, or a custom prompt. Free includes ${PLAN_LIMITS.free.dailyPhotoshootImages} photoshoot images per day; Pro raises that to ${PLAN_LIMITS.pro.dailyPhotoshootImages}. A short unauthenticated demo is available on the homepage.`,
+    answer: `Create professional-looking images from selfies for LinkedIn, dating apps, Instagram, portfolios, or a custom prompt. Daily limits: ${PLAN_LIMITS.free.dailyPhotoshootImages} photoshoot images on Free, ${PLAN_LIMITS.plus.dailyPhotoshootImages} on Plus, ${PLAN_LIMITS.pro.dailyPhotoshootImages} on Pro. A short unauthenticated demo is available on the homepage.`,
   },
   {
     question: 'Who is FitCheck for?',
@@ -84,8 +84,12 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="border-b border-border">
-        <CollapsibleTrigger className="group flex min-h-14 w-full items-center justify-between py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+      {/* Clay accordion item: a pressed card rather than a hairline row.
+          `.card-interactive` rests shadow-pressed and rises into the offset
+          shadow on hover AND on focus-within, so keyboard users get the same
+          physical feedback as pointer users. */}
+      <div className="card-interactive rounded-2xl border border-border bg-card">
+        <CollapsibleTrigger className="group flex min-h-14 w-full items-center justify-between rounded-2xl px-5 py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <span className="pr-4 text-[15px] font-medium text-foreground md:text-base">
             {question}
           </span>
@@ -99,7 +103,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         {/* Height animation rides on Radix's --radix-collapsible-content-height
             var via the accordion-down/up keyframes in tailwind.config.ts. */}
         <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-          <div className="space-y-2 pb-5 pr-8 leading-relaxed text-body [overflow-wrap:anywhere]">
+          <div className="space-y-2 px-5 pb-5 pr-8 leading-relaxed text-body [overflow-wrap:anywhere]">
             <p>{answer}</p>
             {question.includes('Acloset') && (
               <p className="text-sm">
@@ -168,12 +172,12 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 export default function FAQ() {
   return (
-    <section id="faq" className="scroll-mt-16 bg-background py-20 md:py-28">
+    <section id="faq" aria-labelledby="faq-heading" className="scroll-mt-16 bg-background py-20 md:py-28">
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8">
         <AnimatedSection className="reveal min-w-0 lg:col-span-4">
           <div className="lg:sticky lg:top-24">
             <SectionKicker tone="amber">FAQ</SectionKicker>
-            <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
+            <h2 id="faq-heading" className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
               Clear answers before you upload
             </h2>
             <p className="mt-4 text-body">
@@ -188,7 +192,7 @@ export default function FAQ() {
           </div>
         </AnimatedSection>
 
-        <div className="min-w-0 border-t border-border lg:col-span-8">
+        <div className="min-w-0 space-y-3 lg:col-span-8">
           {faqs.map((faq, index) => (
             <AnimatedSection key={faq.question} delay={index * 40}>
               <FAQItem {...faq} />

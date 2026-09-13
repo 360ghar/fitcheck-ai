@@ -51,6 +51,13 @@ class AuthController extends GetxController {
   // Getters
   bool get isAuthenticated =>
       _supabase.isAuthenticated.value && user.value != null;
+
+  /// True when a Supabase session exists, even if the backend profile has
+  /// not loaded (`user.value == null` after a transient /users/me failure —
+  /// offline start, 5xx). Splash routes on this so a valid session is not
+  /// ejected to onboarding by a network blip; the shell tolerates a late
+  /// profile refresh.
+  bool get hasSession => _supabase.currentSession != null;
   bool get hasError => error.value.isNotEmpty;
 
   @override
@@ -180,8 +187,13 @@ class AuthController extends GetxController {
 
         // Navigate first so snackbar isn't dismissed by stack replacement
         Get.offAllNamed(Routes.home);
+        // The profile load may have failed (transient /users/me error) while
+        // the session itself is valid; say so instead of "logged in as null".
+        final displayName = user.value?.fullName ?? user.value?.email;
         ErrorHandler.showInfo(
-          'Successfully logged in as ${user.value?.fullName ?? user.value?.email}',
+          displayName != null
+              ? 'Successfully logged in as $displayName'
+              : 'Successfully logged in',
           title: 'Welcome back!',
         );
       } else {

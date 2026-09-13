@@ -111,10 +111,13 @@ export const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
         ref={ref}
         className={cn(
           'relative bg-card rounded-xl overflow-hidden',
-          // No hover lift. `hover:-translate-y-0.5` moved the card against
-          // nothing (every boxShadow token resolves to `none`), so it read as a
-          // bare jump. A tonal edge shift is grounded and legible in both themes.
-          'border border-transparent transition-colors duration-200 hover:border-border',
+          // Clay depth: the card rests pressed into the page and rises into
+          // the hard offset shadow on hover. No translate lift — the recorded
+          // lesson below still holds (a bare jump against the grid reads as
+          // noise); the shadow swap is the grounded hover signal now that the
+          // shadows are real. The tonal edge shift stays as the quiet tier.
+          'shadow-pressed hover:shadow-offset',
+          'border border-transparent transition-[box-shadow,border-color] duration-200 hover:border-border',
           'group',
           className
         )}

@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-09-05 (mobile refresh and release gates)
+Last updated: 2026-09-13 (TD-030–TD-109)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
@@ -123,6 +123,9 @@ Last updated: 2026-09-05 (mobile refresh and release gates)
 | TD-106 | Android photo picker process-death recovery | medium | mobile | No startup consumer calls `image_picker.retrieveLostData`. Normal cancellation/denial/retry is tested, but a process killed while the OS picker is open can lose the selection. Persist the originating capture flow and recover its files once after startup; verify with Android activity destruction before release. Found 2026-09-05 during the mobile permission review. |
 
 | TD-107 | Opaque backgrounds in manual and legacy closet photos | medium | mobile / images | Tiles preserve real alpha and show images only, but existing opaque source pixels remain opaque. Plan a derivative cutout processing path that preserves originals, with explicit handling for stored-photo backfill. The synthetic listing fixtures demonstrate transparent rendering, not completed backfill. See [review and store plan](completed/2026-09-05-flutter-review-store-assets.md). Found 2026-09-05. |
+
+| TD-108 | Four orphaned clay illustrations in `frontend/public/generated/` | low | web | `hero-wardrobe-16x9`, `avatar-wardrobe-1`, `demo-strip-bg`, `doodle-star` (+640 variants) are unreferenced after the clay-rebuild (hero switched to `hero-machine`; mascot/backdrop/doodle accents never wired). ~110KB ships in every deploy via `public/`. Wire them into a section or delete before the next image-budget pass. Found 2026-09-13 (clay-rebuild audit) |
+| TD-109 | Logged-in webapp has no rendered visual QA | low | web | The clay-rebuild visually judged the landing (11/11 slices via playwright + judge) but authenticated pages were only verified via harness + token reasoning — no test credentials exist for hosted Supabase auth (seed script requires a password chosen at seed time). Seed a known test account and judge dashboard/wardrobe/outfits next time webapp UI work happens. Found 2026-09-13 (clay-rebuild) |
 
 ## Process
 

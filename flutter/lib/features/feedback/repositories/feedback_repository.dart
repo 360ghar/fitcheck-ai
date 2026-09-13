@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
@@ -29,7 +30,10 @@ class FeedbackRepository {
         'subject': subject,
         'description': description,
         if (contactEmail != null) 'contact_email': contactEmail,
-        'device_info': deviceInfo.toJson().toString(),
+        // jsonEncode, not Dart map toString(): the backend does json.loads
+        // on this field, and Dart's map repr ("{platform: ios, ...}") is not
+        // JSON, so every payload failed to parse silently.
+        'device_info': jsonEncode(deviceInfo.toJson()),
         'app_version': packageInfo.version,
         'app_platform': Platform.isIOS ? 'ios' : 'android',
       });

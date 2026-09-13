@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { trackLandingCta } from '@/lib/analytics'
 import { EditorialPanel } from './EditorialPanel'
 import { LoginPromptModal } from './LoginPromptModal'
 import {
@@ -54,6 +55,7 @@ export function ExtractionDemo() {
     setPreviewUrl(url)
     setState('processing')
     setError(null)
+    trackLandingCta('demo-play', { demo: 'extraction' })
 
     try {
       const result = await demoExtractItems(file)
@@ -92,7 +94,7 @@ export function ExtractionDemo() {
   return (
     <EditorialPanel className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
           <Camera className="h-5 w-5 text-primary" />
         </div>
         <div>
@@ -107,13 +109,13 @@ export function ExtractionDemo() {
           <div
             {...getRootProps()}
             className={cn(
-              'h-full rounded-xl border border-dashed bg-surface-card p-8 text-center cursor-pointer flex flex-col items-center justify-center',
-              'transition-[border-color,background-color] duration-200 hover:border-ash',
-              isDragActive ? 'border-primary bg-secondary' : 'border-ash'
+              'flex h-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center',
+              'transition-[border-color,background-color] duration-200 hover:border-primary/50 hover:bg-secondary/70',
+              isDragActive && 'border-primary bg-secondary/70'
             )}
           >
             <input {...getInputProps({ 'aria-label': 'Upload a clothing photo' })} />
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-pressed">
               <Upload className={cn('h-5 w-5 text-primary transition-transform duration-200', isDragActive && 'scale-110')} />
             </div>
             <p className="text-body font-medium mb-1">
@@ -156,7 +158,7 @@ export function ExtractionDemo() {
                   Found {results.item_count} item
                   {results.item_count !== 1 ? 's' : ''}
                 </p>
-                <p className="text-xs text-ash">
+                <p className="text-xs text-muted-foreground">
                   {Math.round(results.overall_confidence * 100)}% confidence
                 </p>
               </div>
@@ -174,7 +176,7 @@ export function ExtractionDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-primary hover:bg-primary-pressed text-white"
+                className="flex-1"
                 onClick={handleSaveToWardrobe}
               >
                 Save to Closet
@@ -186,7 +188,7 @@ export function ExtractionDemo() {
 
         {/* Error State */}
         {state === 'error' && (
-          <div className="h-full flex flex-col items-center justify-center text-center rounded-xl bg-error-pale p-6">
+          <div className="flex h-full flex-col items-center justify-center rounded-xl bg-error-pale p-6 text-center">
             <AlertCircle className="w-10 h-10 text-error mb-4" />
             <p className="text-error mb-4">{error}</p>
             <Button variant="outline" onClick={handleReset}>
@@ -207,8 +209,8 @@ export function ExtractionDemo() {
 
 function ExtractedItemCard({ item }: { item: DemoDetectedItem }) {
   return (
-    <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
-      <div className="w-8 h-8 rounded bg-surface-card flex items-center justify-center shrink-0">
+    <div className="flex items-center gap-3 rounded-lg bg-secondary p-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-card shadow-pressed">
         <Shirt className="h-4 w-4 text-primary" />
       </div>
       <div className="flex-1 min-w-0">
@@ -222,7 +224,7 @@ function ExtractedItemCard({ item }: { item: DemoDetectedItem }) {
           {item.material && <span>{item.material}</span>}
         </div>
       </div>
-      <span className="text-xs text-ash">
+      <span className="text-xs text-muted-foreground">
         {Math.round(item.confidence * 100)}%
       </span>
     </div>

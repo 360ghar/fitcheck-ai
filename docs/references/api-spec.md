@@ -4334,6 +4334,8 @@ Referral totals: codes issued, redemptions, credits granted/pending.
 | `codes_issued` | integer | no |  |
 | `credits_granted` | integer | no |  |
 | `credits_pending` | integer | no |  |
+| `gifts_issued` | integer | no |  |
+| `promo_active` | integer | no |  |
 | `redemptions` | integer | no |  |
 
 
@@ -5525,6 +5527,8 @@ GET /admin/dashboards/referrals.
 | `codes_issued` | integer | no |  |
 | `credits_granted` | integer | no |  |
 | `credits_pending` | integer | no |  |
+| `gifts_issued` | integer | no |  |
+| `promo_active` | integer | no |  |
 | `redemptions` | integer | no |  |
 
 ### `AdminRefundResponse`

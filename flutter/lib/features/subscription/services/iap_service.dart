@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:in_app_purchase/in_app_purchase.dart';
@@ -137,12 +139,19 @@ class IapService {
   /// Returns true when the flow was launched; the actual result (purchased /
   /// pending / canceled / error) arrives on [purchaseStream].
   ///
-  /// [appAccountToken] is the FitCheck user ID. On iOS the plugin forwards it
-  /// as StoreKit's `appAccountToken`, which Apple echoes back on every server
-  /// notification for the subscription. That is the backend's only way to
-  /// resolve the owning user when the in-app register call never landed (first
-  /// purchase + dropped network), so a purchase can no longer be stranded with
-  /// no entitlement. Apple requires a UUID; Supabase user IDs already are one.
+  /// [appAccountToken] is the FitCheck user ID, routed per store:
+  /// - iOS: passed raw as StoreKit's `appAccountToken`, which Apple echoes
+  ///   back on every server notification for the subscription. Apple
+  ///   requires a UUID there; Supabase user IDs already are one, and hashing
+  ///   it would make StoreKit reject it.
+  /// - Android: passed as SHA-256 hex. The installed in_app_purchase_android
+  ///   (0.5.2) forwards `applicationUserName` as BillingFlowParams'
+  ///   `accountId` (obfuscatedAccountId) and Google echoes it in RTDN as
+  ///   `obfuscatedExternalAccountId` — the backend's only linkage for a
+  ///   purchase whose in-app register call never landed (Android has no
+  ///   fallback otherwise). Play policy REQUIRES this id to be obfuscated /
+  ///   one-way hashed, so the raw user ID must never go there; the backend
+  ///   matches RTDN deliveries against the same sha256(user id).
   Future<bool> startPurchase(
     ProductDetails product, {
     String? appAccountToken,
@@ -152,11 +161,16 @@ class IapService {
         message: 'Store purchases are not available on this device.',
       );
     }
+    final String? storeAccountId = appAccountToken == null
+        ? null
+        : isApple
+        ? appAccountToken
+        : sha256.convert(utf8.encode(appAccountToken)).toString();
     try {
       return await _purchase.buyNonConsumable(
         purchaseParam: PurchaseParam(
           productDetails: product,
-          applicationUserName: appAccountToken,
+          applicationUserName: storeAccountId,
         ),
       );
     } on PlatformException catch (e) {

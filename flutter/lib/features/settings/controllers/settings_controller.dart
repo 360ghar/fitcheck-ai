@@ -206,16 +206,37 @@ class SettingsController extends GetxController {
     _preferenceFetchGeneration++;
     isLoading.value = false;
     _lastConfirmedPreferences ??= fallbackPreferences;
-    preferences.value = _withLocalTheme(newPreferences);
+    // Assign the caller's value verbatim: the theme service is not the
+    // source of truth here (updateThemeMode writes preferences directly),
+    // so _withLocalTheme would clobber a just-set theme with a stale one.
+    preferences.value = newPreferences;
     isSaving.value = true;
     error.value = '';
 
     final operation = _preferenceWriteQueue.then((_) async {
       try {
         final saved = await _repository.updatePreferences(newPreferences);
-        _lastConfirmedPreferences = saved;
+        // The backend's UserPreferencesUpdate persists only the fields it
+        // knows (of this client model exactly one: preferred_styles — see
+        // backend/app/models/user.py); every other key this model sends
+        // (theme_mode, temperature_unit, the notification booleans,
+        // preferred_colors, disliked_colors, default_outfit_id) is dropped
+        // server-side, so the raw response row comes back with them null.
+        // Storing that row as-is made every just-saved setting silently
+        // revert one round-trip later. Merge instead: the server wins only
+        // on the fields it actually persists (copyWith keeps the client's
+        // value when the echo is null), the client keeps the rest.
+        // Merge the echo into the latest local value, not the queued
+        // snapshot: theme/unit toggles made while the save was in flight
+        // live only in preferences.value, so newPreferences is stale here.
+        // Theme is device-local (updateThemeMode never hits the repo), so
+        // the local value always wins for it, like the fetch path.
+        final confirmed = (preferences.value ?? newPreferences).copyWith(
+          preferredStyles: saved.preferredStyles,
+        );
+        _lastConfirmedPreferences = confirmed;
         if (!isClosed && revision == _preferenceRevision) {
-          preferences.value = _withLocalTheme(saved);
+          preferences.value = confirmed;
           ErrorHandler.showSuccess(
             'Your preferences have been updated',
             title: 'Saved',

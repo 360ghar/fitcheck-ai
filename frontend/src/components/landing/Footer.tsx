@@ -1,6 +1,8 @@
-import { Link } from 'react-router-dom'
-import type { LucideIcon } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Shirt, Mail, Phone } from 'lucide-react'
+
+import { trackLandingCta } from '@/lib/analytics'
+import { scrollToSectionId } from '@/lib/scroll'
 
 const footerLinks = {
   Product: [
@@ -41,80 +43,92 @@ const footerLinks = {
   ],
 }
 
-// Only list real profiles — omit placeholders that link to "#"
-const socialLinks: { name: string; href: string; icon: LucideIcon }[] = []
-
+/**
+ * Page close — warm cream, per the clay rebuild's revocation of the dark
+ * stone-950 footer. The tinted room (`bg-surface-room`, the deeper cream)
+ * layers a rounded top over the canvas so the page ends like a stamped
+ * clay slab, not a dark slab. Every href, the router-aware hash navigation,
+ * and the trackLandingCta calls are unchanged from the previous footer.
+ */
 export default function Footer() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  const handleHashClick = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    // Router-safe section links: same-page scroll + focus on home, client-side
+    // navigation (no full reload) from anywhere else.
+    event.preventDefault()
+    const id = href.replace('/#', '')
+    trackLandingCta(id === 'demo' ? 'footer-demo' : 'footer-pricing')
+    if (location.pathname !== '/') {
+      navigate(href)
+      window.setTimeout(() => scrollToSectionId(id), 150)
+    } else {
+      scrollToSectionId(id)
+    }
+  }
+
+  const linkClass =
+    'inline-flex min-h-[36px] items-center py-1.5 text-muted-foreground transition-colors hover:text-primary'
+
   return (
-    <footer className="border-t border-stone-900 bg-stone-950 pb-7 pt-12 text-stone-400">
+    <footer className="rounded-t-[2.5rem] bg-surface-room pb-8 pt-14 text-body shadow-pressed">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-6">
+        <div className="mb-10 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-6">
           <div className="col-span-2 lg:col-span-2">
-            <Link to="/" className="flex items-center gap-2.5 mb-4">
-              <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-primary">
-                <Shirt className="w-4 h-4 text-white" />
+            <Link to="/" className="mb-4 flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary shadow-pressed">
+                <Shirt className="h-4 w-4 text-primary-foreground" aria-hidden="true" />
               </div>
-              <span className="text-lg font-semibold tracking-tight text-stone-50">
-                FitCheck<span className="font-normal text-stone-400"> AI</span>
+              <span className="text-lg font-semibold tracking-tight text-foreground">
+                FitCheck<span className="font-normal text-muted-foreground"> AI</span>
               </span>
             </Link>
             <p className="max-w-xs text-sm leading-relaxed">
               Photograph your clothes. Get outfits that fit the day. A quieter way to use what you own.
             </p>
-            {socialLinks.length > 0 && (
-              <div className="flex gap-4 mt-5">
-                {socialLinks.map((social) => (
-                  <a
-                    key={social.name}
-                    href={social.href}
-                    className="inline-flex min-h-[36px] items-center py-1.5 hover:text-stone-100 transition-colors"
-                    aria-label={social.name}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <social.icon className="w-5 h-5" />
-                  </a>
-                ))}
-              </div>
-            )}
             <div className="mt-6 space-y-2 text-sm">
               <a
                 href="mailto:info@fitcheckaiapp.com"
-                className="flex min-h-[36px] items-center gap-2 py-1.5 hover:text-stone-100 transition-colors"
+                className="flex min-h-[36px] items-center gap-2 py-1.5 transition-colors hover:text-primary"
               >
-                <Mail className="w-4 h-4" aria-hidden="true" />
+                <Mail className="h-4 w-4" aria-hidden="true" />
                 <span>info@fitcheckaiapp.com</span>
               </a>
               <a
                 href="https://wa.me/919310833204"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex min-h-[36px] items-center gap-2 py-1.5 hover:text-stone-100 transition-colors"
+                className="flex min-h-[36px] items-center gap-2 py-1.5 transition-colors hover:text-primary"
               >
-                <Phone className="w-4 h-4" aria-hidden="true" />
+                <Phone className="h-4 w-4" aria-hidden="true" />
                 <span>+91 9310833204</span>
               </a>
             </div>
           </div>
 
           {Object.entries(footerLinks).map(([category, links]) => (
-            <div key={category}>
-              <h3 className="font-medium text-stone-100 text-sm mb-4">{category}</h3>
+            <div key={category} className="border-t border-border pt-5">
+              <h3 className="mb-4 text-sm font-semibold text-foreground">{category}</h3>
               <ul className="space-y-2.5 text-sm">
                 {links.map((link) => (
                   <li key={link.name}>
                     {link.href.startsWith('/#') ? (
-                      <a href={link.href} className="inline-flex min-h-[36px] items-center py-1.5 hover:text-stone-100 transition-colors">
+                      <a
+                        href={link.href}
+                        onClick={(event) => handleHashClick(event, link.href)}
+                        className={linkClass}
+                      >
                         {link.name}
                       </a>
                     ) : link.href.startsWith('/') ? (
-                      <Link to={link.href} className="inline-flex min-h-[36px] items-center py-1.5 hover:text-stone-100 transition-colors">
+                      <Link to={link.href} className={linkClass}>
                         {link.name}
                       </Link>
                     ) : (
                       <a
                         href={link.href}
-                        className="inline-flex min-h-[36px] items-center py-1.5 hover:text-stone-100 transition-colors"
+                        className={linkClass}
                         {...(link.href.startsWith('http')
                           ? { target: '_blank', rel: 'noopener noreferrer' }
                           : {})}
@@ -129,8 +143,8 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="flex flex-col items-start justify-between gap-3 border-t border-stone-900 pt-6 md:flex-row md:items-center">
-          <p className="text-xs text-stone-400">
+        <div className="flex flex-col items-start justify-between gap-3 border-t border-border pt-6 md:flex-row md:items-center">
+          <p className="text-xs text-muted-foreground">
             &copy; {new Date().getFullYear()} FitCheck AI. All rights reserved.
           </p>
         </div>

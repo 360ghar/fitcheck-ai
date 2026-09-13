@@ -162,8 +162,16 @@ class FeedbackPage extends GetView<FeedbackController> {
                                 ),
                                 maxLength: 200,
                                 validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
+                                  final text = value?.trim() ?? '';
+                                  if (text.isEmpty) {
                                     return 'Subject is required';
+                                  }
+                                  // Mirrors the backend's
+                                  // Form(min_length=3) so a too-short
+                                  // subject fails locally instead of
+                                  // looping as a generic 422 submit error.
+                                  if (text.length < 3) {
+                                    return 'Subject must be at least 3 characters';
                                   }
                                   return null;
                                 },
@@ -208,8 +216,14 @@ class FeedbackPage extends GetView<FeedbackController> {
                                   maxLines: 5,
                                   maxLength: 5000,
                                   validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
+                                    final text = value?.trim() ?? '';
+                                    if (text.isEmpty) {
                                       return 'Description is required';
+                                    }
+                                    // Mirrors the backend's
+                                    // Form(min_length=10).
+                                    if (text.length < 10) {
+                                      return 'Description must be at least 10 characters';
                                     }
                                     return null;
                                   },

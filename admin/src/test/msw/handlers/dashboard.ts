@@ -82,6 +82,8 @@ export const adminReferralsFixture: AdminReferralsResponse = {
   redemptions: 61,
   credits_granted: 112,
   credits_pending: 10,
+  promo_active: 6,
+  gifts_issued: 23,
 }
 
 export const adminFunnelFixture: AdminFunnelResponse = {

@@ -1046,7 +1046,10 @@ void main() {
     ) async {
       // Without it, a first purchase whose register call is lost leaves the
       // webhook with no way to resolve the owning user, so the entitlement is
-      // never granted.
+      // never granted. (IapService hashes it for Google and passes the raw
+      // UUID for Apple — covered in iap_service_test.dart; the fake here
+      // replaces startPurchase, so this asserts the controller's contract:
+      // hand the raw user id to the store layer.)
       await pumpApp(tester);
       iapService.productsToReturn = [_product('plus_monthly')];
       final controller = SubscriptionController(

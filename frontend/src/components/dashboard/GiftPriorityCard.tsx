@@ -73,7 +73,7 @@ export function GiftPriorityCard({
         'transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'sm:flex-row sm:items-center',
       )}
-      aria-label={`${title}. ${action}`}
+      aria-label={`${title}. ${description} ${action}`}
     >
       <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
         <div className="shrink-0 rounded-lg bg-primary p-2 text-primary-foreground">

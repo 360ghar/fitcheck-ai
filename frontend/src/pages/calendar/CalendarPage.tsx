@@ -12,8 +12,10 @@ import { LocationInput } from '@/components/settings/LocationInput'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PageHeader } from '@/components/ui/page-header'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -417,48 +419,11 @@ export default function CalendarPage() {
 
   return (
     <div className="app-page max-w-7xl space-y-4 md:space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-            Calendar
-          </h1>
-          <p className="text-sm text-muted-foreground">Plan outfits against your schedule.</p>
-          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-            <MapPin className="h-4 w-4" />
-            {userLocation ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingLocation(userLocation)
-                  setShowLocationDialog(true)
-                }}
-                className="hover:text-primary transition-colors underline-offset-2 hover:underline touch-target"
-              >
-                {userLocation}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={async () => {
-                  const coords = await requestLocation()
-                  if (coords) {
-                    const locationString = `${coords.lat},${coords.lon}`
-                    setUserLocation(locationString)
-                    await updateUserSettings({ default_location: locationString })
-                  } else {
-                    setEditingLocation('')
-                    setShowLocationDialog(true)
-                  }
-                }}
-                disabled={geoState.isLoading}
-                className="text-primary hover:text-primary/80 touch-target"
-              >
-                {geoState.isLoading ? 'Detecting...' : 'Set location for weather'}
-              </button>
-            )}
-          </div>
-        </div>
+      <PageHeader
+        title="Calendar"
+        description="Plan outfits against your schedule."
+        leading={<CalendarIcon className="h-5 w-5 md:h-6 md:w-6 text-primary" />}
+      >
         <Button
           onClick={handleConnect}
           variant="outline"
@@ -476,6 +441,42 @@ export default function CalendarPage() {
             'Enable local calendar'
           )}
         </Button>
+      </PageHeader>
+      {/* Location row: interactive sub-line of the header (toggles the weather
+          location dialog), kept outside PageHeader's action slot on purpose. */}
+      <div className="flex items-center gap-2 -mt-2 md:mt-0 text-sm text-muted-foreground">
+        <MapPin className="h-4 w-4" />
+        {userLocation ? (
+          <button
+            type="button"
+            onClick={() => {
+              setEditingLocation(userLocation)
+              setShowLocationDialog(true)
+            }}
+            className="hover:text-primary transition-colors underline-offset-2 hover:underline touch-target"
+          >
+            {userLocation}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={async () => {
+              const coords = await requestLocation()
+              if (coords) {
+                const locationString = `${coords.lat},${coords.lon}`
+                setUserLocation(locationString)
+                await updateUserSettings({ default_location: locationString })
+              } else {
+                setEditingLocation('')
+                setShowLocationDialog(true)
+              }
+            }}
+            disabled={geoState.isLoading}
+            className="text-primary hover:text-primary/80 touch-target"
+          >
+            {geoState.isLoading ? 'Detecting...' : 'Set location for weather'}
+          </button>
+        )}
       </div>
 
       <Card>
@@ -500,17 +501,22 @@ export default function CalendarPage() {
             />
           )}
           {!isLoadingEvents && !loadError && events.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-              No events yet. Tap a day to plan your first outfit, or use{' '}
-              <button
-                type="button"
-                className="text-primary font-medium underline-offset-2 hover:underline"
-                onClick={() => openCreate(new Date())}
-              >
-                create event
-              </button>
-              . Weather chips show <span className="font-medium text-foreground">current conditions</span> for your location (not a multi-day forecast).
-            </div>
+            <EmptyState
+              icon={CalendarIcon}
+              tone="blue"
+              title="No events yet"
+              description="Tap a day to plan your first outfit, or create one now."
+              actionLabel="Create event"
+              onAction={() => openCreate(new Date())}
+            >
+              {/* Honest weather caveat stays attached to the empty state:
+                  chips show current conditions, not a multi-day forecast. */}
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Weather chips show{' '}
+                <span className="font-medium text-foreground">current conditions</span> for your
+                location (not a multi-day forecast).
+              </p>
+            </EmptyState>
           )}
           <CalendarView
             events={decoratedEvents}

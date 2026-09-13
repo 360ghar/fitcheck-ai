@@ -116,7 +116,6 @@ export function UserDetailPage() {
   const [clearOpen, setClearOpen] = useState(false)
 
   const outfitsTab = searchParams.get('outfits_tab') ?? 'outfits'
-  const itemsPage = Math.max(1, Number(searchParams.get('items_page') ?? '1') || 1)
 
   const detail = detailQuery.data as (typeof detailQuery.data & JsonRecord) | undefined
   const userRecord = detail?.user as JsonRecord | undefined
@@ -138,11 +137,8 @@ export function UserDetailPage() {
 
   // Extended keys — degrade gracefully when backend hasn't yet shipped them
   const extended = detail as JsonRecord | undefined
-  const items: JsonRecord[] = useMemo(() => {
-    const all = arrayValue(extended, 'items')
-    const start = (itemsPage - 1) * 12
-    return all.slice(start, start + 12)
-  }, [extended, itemsPage])
+  // Backend already caps the embedded items list (12); slice defensively only.
+  const items: JsonRecord[] = useMemo(() => arrayValue(extended, 'items').slice(0, 12), [extended])
   const outfits: JsonRecord[] = useMemo(
     () => arrayValue(extended, 'outfits').slice(0, 12),
     [extended],
@@ -351,7 +347,7 @@ export function UserDetailPage() {
       {!detailQuery.isPending && !detailQuery.isError ? (
         <nav
           aria-label={t('detail.sectionsNavLabel')}
-          className="sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-border bg-background/80 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+          className="sticky top-14 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-border bg-background/80 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60"
         >
           {[
             { id: 'section-identity', label: t('detail.navIdentity') },
@@ -407,7 +403,7 @@ export function UserDetailPage() {
       ) : (
         <>
           {/* Section 1: Identity + risk header */}
-          <Card id="section-identity" className="scroll-mt-16">
+          <Card id="section-identity" className="scroll-mt-28">
             <CardHeader>
               <div className="flex items-center gap-4">
                 <Avatar className="size-14">
@@ -679,7 +675,7 @@ export function UserDetailPage() {
                   {countRows.map((row) => (
                     <Field
                       key={row.key}
-                      label={t(`detail.${row.key}`)}
+                      label={t(`detail.${row.key}`, { defaultValue: row.key.replaceAll('_', ' ') })}
                       value={formatNumber(row.value)}
                     />
                   ))}
@@ -694,7 +690,7 @@ export function UserDetailPage() {
           </div>
 
           {/* Section 4: Uploads — Items grid (lazy) */}
-          <div id="section-uploads" className="scroll-mt-16">
+          <div id="section-uploads" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
               <ItemsGrid items={items} />
             </Suspense>
@@ -704,7 +700,7 @@ export function UserDetailPage() {
           <div className="grid gap-4 lg:grid-cols-12">
             <div className="lg:col-span-7">
           {/* Section 5: Generations — Outfits + Photoshoot (lazy) */}
-          <div id="section-generations" className="scroll-mt-16">
+          <div id="section-generations" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
               <OutfitsGallery
                 outfits={outfits}
@@ -721,7 +717,7 @@ export function UserDetailPage() {
             </div>
             <div className="lg:col-span-5">
           {/* Section 6: Collections/Trips/Streaks (lazy) */}
-          <div id="section-collections" className="scroll-mt-16">
+          <div id="section-collections" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
               <CollectionsTripsStreaks
                 collections={collections}
@@ -735,14 +731,14 @@ export function UserDetailPage() {
           </div>
 
           {/* Section 7: Counts strip (lazy) — badge strip across full width */}
-          <div id="section-counts" className="scroll-mt-16">
+          <div id="section-counts" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
               <CountsStrip counts={counts ?? {}} />
             </Suspense>
           </div>
 
           {/* Section 8: Activity timeline (lazy) */}
-          <div id="section-timeline" className="scroll-mt-16">
+          <div id="section-timeline" className="scroll-mt-28">
             {activityQuery.isError ? (
               <ErrorState
                 message={normalizeError(activityQuery.error).message}

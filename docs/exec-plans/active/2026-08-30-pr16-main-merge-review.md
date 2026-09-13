@@ -89,6 +89,7 @@ Recharts sizing warnings. They do not fail a test or production build.
 | 2026-08-30 | Merged `origin/main` into the working tree and resolved all seven conflicts. |
 | 2026-08-30 | Added atomic admin operations, review fixes, generated artifacts, focused regression coverage, and stable admin test execution. |
 | 2026-08-30 | Completed full backend, admin, frontend, architecture, docs, and E2E verification. |
+| 2026-09-13 | Review-thread sweep: revalidated all open findings at the PR head. Fixed the Flutter gift idempotency-key window, legacy NULL-recipient replay, the migration-061 idempotency recheck under the allowance lock, funnel/retention error states, the `/iap` provider default, ops anchor, trends deep link, and blog rollback guardrails. Verification table below reflects the pre-sweep merge commit; the sweep re-ran the verification commands listed above. |
 
 ## Deferred debt
 

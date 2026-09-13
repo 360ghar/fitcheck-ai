@@ -4,7 +4,9 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold leading-none transition-colors",
+  // Clay system: badges are stamped, not floating — the 1px `shadow-pressed`
+  // cast + inset edge gives even a small pill physical weight on cream.
+  "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold leading-none shadow-pressed transition-colors",
   {
     variants: {
       variant: {
@@ -30,12 +32,15 @@ const badgeVariants = cva(
 )
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {}
 
+// A <span>, not a <div>: buttons only permit phrasing content, and Badge
+// renders inside TouchBadge buttons (div children there are invalid HTML
+// and trip flex/alignment quirks in some engines).
 function Badge({ className, variant, ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <span className={cn(badgeVariants({ variant }), className)} {...props} />
   )
 }
 

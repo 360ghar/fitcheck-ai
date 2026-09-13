@@ -191,11 +191,10 @@ class FeedbackController extends GetxController {
       );
     } catch (e) {
       if (isClosed) return;
+      // Surface the server's actual reason (e.g. a 422 message) instead of a
+      // fixed string that hid why submission failed.
       error.value = ErrorHandler.extractMessage(e);
-      ErrorHandler.showError(
-        'Failed to submit feedback. Please try again.',
-        title: 'Error',
-      );
+      ErrorHandler.showError(error.value, title: 'Error');
     } finally {
       if (!isClosed) isSubmitting.value = false;
     }

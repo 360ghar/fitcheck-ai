@@ -9,7 +9,9 @@ app/api/v1/admin/ops.py (full-suite coverage report).
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from contextlib import asynccontextmanager
 
+from app.api.v1 import referral as referral_module
 from app.api.v1.admin import ops as ops_module
 from app.api.v1.referral import (
     get_referral_code,
@@ -32,6 +34,14 @@ from app.utils import crypto
 
 def _db():
     return Mock()
+
+
+def _noop_rate_limit():
+    @asynccontextmanager
+    async def _cm(request, operation_type):
+        yield
+
+    return _cm
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +75,7 @@ async def test_referral_routes_wrap_services(monkeypatch):
     monkeypatch.setattr(ReferralService, "get_referral_stats", _stats)
     monkeypatch.setattr(ReferralService, "validate_referral_code", _validate)
     monkeypatch.setattr(ReferralService, "redeem_referral", _redeem)
+    monkeypatch.setattr(referral_module, "auth_rate_limited_operation", _noop_rate_limit())
 
     user = {"id": "u1", "full_name": "Alice"}
     code = await get_referral_code(user=user, db=_db())
@@ -74,7 +85,7 @@ async def test_referral_routes_wrap_services(monkeypatch):
     assert stats["data"]["uses"] == 3
 
     validated = await validate_referral_code(
-        request=Mock(code="ABC123"), db=_db()
+        request=Mock(code="ABC123"), http_request=Mock(), db=_db()
     )
     assert validated["data"]["url"].endswith("ABC123")
 

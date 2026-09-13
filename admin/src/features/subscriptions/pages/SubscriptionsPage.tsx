@@ -33,6 +33,7 @@ import {
 } from '@/shared/ui/dialog'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { ErrorState } from '@/shared/ui/ErrorState'
+import { PageHeader } from '@/shared/ui/PageHeader'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { TableToolbar } from '@/shared/ui/TableToolbar'
@@ -106,6 +107,9 @@ export function SubscriptionsPage() {
     queryKey: subscriptionKeys.all,
     queryFn: listSubscriptions,
     filterKeys: ['plan', 'status', 'provider'],
+    // Email search filters the current page client-side (backend has no q
+    // param yet) — keep q out of the server query so typing never refetches.
+    localSearch: true,
   })
 
   // Provider filter is SERVER-side (backend billing_provider param) — totals
@@ -388,6 +392,7 @@ export function SubscriptionsPage() {
   if (table.query.isError) {
     return (
       <div className="space-y-3">
+        <PageHeader dense title={t('title')} description={t('description')} />
         <ErrorState
           title={t('loadError.title')}
           message={t('loadError.message')}
@@ -404,6 +409,7 @@ export function SubscriptionsPage() {
 
   return (
     <div className="space-y-3">
+      <PageHeader dense title={t('title')} description={t('description')} />
 
       {showFailedBanner ? (
         <div

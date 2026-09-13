@@ -324,11 +324,11 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
     <div className="space-y-4 md:space-y-6">
       {/* Error Display */}
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+        <div className="p-4 bg-error-pale border border-destructive/30 rounded-lg flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-error shrink-0 mt-0.5" />
           <div>
-            <p className="text-red-800 dark:text-red-200 font-medium">Error</p>
-            <p className="text-red-600 dark:text-red-300 text-sm">{error}</p>
+            <p className="text-error font-medium">Error</p>
+            <p className="text-error text-sm">{error}</p>
           </div>
         </div>
       )}
@@ -338,7 +338,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <Crown
-              className={`h-5 w-5 ${isPro ? "text-amber-500" : "text-gray-400"}`}
+              className={`h-5 w-5 ${isPro ? "text-tint-amber" : "text-muted-foreground/70"}`}
             />
             Current Plan
           </CardTitle>
@@ -350,15 +350,15 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                <span className="text-2xl font-bold text-foreground">
                   {planName}
                 </span>
                 {isProTier && (
-                  <Badge className="bg-amber-500 text-white">PRO</Badge>
+                  <Badge className="bg-tint-amber-pale text-tint-amber">PRO</Badge>
                 )}
               </div>
               {subscription?.cancel_at_period_end && (
-                <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
+                <p className="text-sm text-tint-amber mt-1">
                   Cancels at end of period (
                   {new Date(
                     subscription.current_period_end!,
@@ -368,7 +368,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               )}
               {subscription?.referral_credit_months &&
                 subscription.referral_credit_months > 0 && (
-                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                  <p className="text-sm text-success mt-1">
                     {subscription.referral_credit_months} referral credit month
                     {subscription.referral_credit_months > 1 ? "s" : ""} active
                   </p>
@@ -413,7 +413,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                       <AlertDialogTrigger asChild>
                         <Button
                           variant="ghost"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           Cancel Subscription
                         </Button>
@@ -435,7 +435,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                           </AlertDialogCancel>
                           <AlertDialogAction
                             onClick={handleCancel}
-                            className="bg-red-600 hover:bg-red-700"
+                            className="bg-destructive hover:bg-destructive/90"
                           >
                             Cancel Subscription
                           </AlertDialogAction>
@@ -498,14 +498,14 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                 has no code to redeem. */}
             {promoValidation?.valid && promoInput.trim() ? (
               <>
-                <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="rounded-lg border border-success/30 bg-success-pale/60 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-3">
-                    <Gift className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                    <Gift className="h-5 w-5 text-success shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-medium text-green-800 dark:text-green-200">
+                      <p className="font-medium text-success">
                         {promoValidation.message}
                       </p>
-                      <p className="text-sm text-green-700 dark:text-green-300">
+                      <p className="text-sm text-success">
                         Code{" "}
                         <code className="font-mono">{promoInput.trim()}</code> —
                         apply it and skip the checkout.
@@ -515,7 +515,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                   <Button
                     onClick={handleRedeemPromo}
                     disabled={isRedeemingPromo}
-                    className="bg-green-600 hover:bg-green-700 shrink-0"
+                    className="bg-success hover:bg-success/90 shrink-0"
                   >
                     {isRedeemingPromo ? (
                       <>
@@ -643,7 +643,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                       className={
                         recommended
                           ? "relative flex h-full flex-col rounded-lg border-2 border-primary p-4"
-                          : "relative flex h-full flex-col rounded-lg border p-4 transition-colors hover:border-primary/40 dark:hover:border-primary/50"
+                          : "relative flex h-full flex-col rounded-lg border p-4 transition-colors hover:border-primary/40"
                       }
                     >
                       {recommended && (
@@ -663,23 +663,23 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                           or ${prices.yearly}/yr — saves ${savings}
                         </p>
                       </div>
-                      <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4 flex-1">
+                      <ul className="space-y-2 text-sm text-muted-foreground mb-4 flex-1">
                         <li className="flex items-center gap-2">
-                          <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          <Check className="h-4 w-4 text-success shrink-0" />
                           {limits.monthlyExtractions} item extractions/month
                         </li>
                         <li className="flex items-center gap-2">
-                          <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          <Check className="h-4 w-4 text-success shrink-0" />
                           {limits.monthlyGenerations.toLocaleString()} outfit
                           visualizations/month
                         </li>
                         <li className="flex items-center gap-2">
-                          <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          <Check className="h-4 w-4 text-success shrink-0" />
                           {limits.dailyPhotoshootImages} AI photoshoot
                           images/day
                         </li>
                         <li className="flex items-center gap-2">
-                          <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          <Check className="h-4 w-4 text-success shrink-0" />
                           Virtual try-on, analytics &amp; priority support
                         </li>
                       </ul>
@@ -735,7 +735,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-medium">Item Extractions</span>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-muted-foreground">
                   {usage.monthly_extractions} /{" "}
                   {usage.monthly_extractions_limit}
                 </span>
@@ -746,12 +746,12 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                     usage.monthly_extractions_limit) *
                   100
                 }
-                className={`h-2 ${nearLimit.extractions ? "[&>div]:bg-amber-500" : ""}`}
+                className={`h-2 ${nearLimit.extractions ? "[&>div]:bg-tint-amber" : ""}`}
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 {usage.monthly_extractions_remaining} remaining this month
                 {nearLimit.extractions && canUpgrade && (
-                  <span className="text-amber-600 dark:text-amber-400 ml-2">
+                  <span className="text-tint-amber ml-2">
                     - Consider upgrading!
                   </span>
                 )}
@@ -762,7 +762,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-medium">Outfit Visualizations</span>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-muted-foreground">
                   {usage.monthly_generations} /{" "}
                   {usage.monthly_generations_limit}
                 </span>
@@ -773,12 +773,12 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                     usage.monthly_generations_limit) *
                   100
                 }
-                className={`h-2 ${nearLimit.generations ? "[&>div]:bg-amber-500" : ""}`}
+                className={`h-2 ${nearLimit.generations ? "[&>div]:bg-tint-amber" : ""}`}
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 {usage.monthly_generations_remaining} remaining this month
                 {nearLimit.generations && canUpgrade && (
-                  <span className="text-amber-600 dark:text-amber-400 ml-2">
+                  <span className="text-tint-amber ml-2">
                     - Consider upgrading!
                   </span>
                 )}
@@ -790,7 +790,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Similarity Searches</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-sm text-muted-foreground">
                     {usage.monthly_embeddings} /{" "}
                     {usage.monthly_embeddings_limit}
                   </span>
@@ -803,7 +803,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                   }
                   className="h-2"
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   {usage.monthly_embeddings_remaining} remaining this month
                 </p>
               </div>
@@ -858,7 +858,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
             <div className="space-y-4">
               {/* Referral Link */}
               <div className="flex flex-col gap-2 sm:flex-row">
-                <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3 font-mono text-sm truncate">
+                <div className="flex-1 bg-muted rounded-lg px-4 py-3 font-mono text-sm truncate">
                   {referralCode.share_url}
                 </div>
                 <Button
@@ -868,7 +868,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                 >
                   {copied ? (
                     <>
-                      <Check className="h-4 w-4 mr-2 text-green-500" />
+                      <Check className="h-4 w-4 mr-2 text-success" />
                       Copied!
                     </>
                   ) : (
@@ -881,9 +881,9 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               </div>
 
               {/* Referral Code Display */}
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>Your code:</span>
-                <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded font-mono">
+                <code className="bg-muted px-2 py-1 rounded-md font-mono">
                   {referralCode.code}
                 </code>
               </div>
@@ -934,10 +934,10 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
 
               {/* Referral Stats */}
               {referralStats && (
-                <div className="pt-4 border-t dark:border-gray-700">
+                <div className="pt-4 border-t border-border">
                   <div className="flex items-center gap-4 text-sm">
                     <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-gray-400" />
+                      <Users className="h-4 w-4 text-muted-foreground/70" />
                       <span>
                         <span className="font-semibold">
                           {referralStats.times_used}
@@ -947,7 +947,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Gift className="h-4 w-4 text-gray-400" />
+                      <Gift className="h-4 w-4 text-muted-foreground/70" />
                       <span>
                         <span className="font-semibold">
                           {referralStats.credits_earned}

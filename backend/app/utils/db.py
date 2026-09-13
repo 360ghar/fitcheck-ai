@@ -133,7 +133,11 @@ _DB_CONNECTION_TEXT_MARKERS = (
 # (22P02, PGRST202, 42703, ...) can never collide with these: they are
 # 5-character codes, not 3-digit HTTP statuses, and PostgREST always answers
 # with a JSON error body (SQLSTATE-coded) rather than a bare status.
-_API_ERROR_RETRYABLE_HTTP_STATUSES = {"429", "500", "502", "503", "504", "520", "521", "522", "524"}
+# 408 (request timeout) and 525/526 (Cloudflare SSL-handshake failures) are
+# the same family of transient gateway blips: the gateway answered in a bad
+# state, not a deterministic query error (startup schema probes rely on this
+# to report degraded instead of missing).
+_API_ERROR_RETRYABLE_HTTP_STATUSES = {"408", "429", "500", "502", "503", "504", "520", "521", "522", "524", "525", "526"}
 
 
 def is_db_connection_error(exc: Exception) -> bool:

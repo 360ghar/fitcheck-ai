@@ -67,6 +67,7 @@ Apple, Google, promo, and referral entitlements.
 | 2026-08-30 | Final local verification passed: backend 4,165 passed/4 skipped at 95.44% coverage; admin 230 tests; Flutter 271 tests; web lint, tests, and build passed; the flag-enabled admin build, migration, architecture, docs, and diff checks passed. Hosted launch work remains gated below. |
 | 2026-08-30 | Enabled gift voucher issuance and web, admin, and Flutter visibility by default. An explicit `false` remains an emergency rollback. |
 | 2026-08-30 | Added migration 062 and nullable gift occasions across API, web, admin, Flutter, and cache-versioned artwork. Generic gifts remain blank by default. |
+| 2026-09-13 | PR 16 review sweep verified at branch head (`895fc3a`): backend ruff clean, 4,167 passed/4 skipped; admin lint/typecheck, 230 tests, 14 e2e journeys; web lint + 314 tests; Flutter analyze clean + 272 tests; architecture, docs, and schema checks passed. The known `test_get_subscription_retries_on_dead_connection` failure is environment-dependent and pre-existing (reproduced on a clean tree). |
 
 ## Decision log
 
@@ -85,7 +86,7 @@ Apple, Google, promo, and referral entitlements.
 cd backend && source .venv/bin/activate && ruff check . && pytest
 cd frontend && npm run lint && npm test && npm run build
 cd admin && npm run lint && npm run typecheck && npm test && npm run check:schema
-cd flutter && flutter test
+cd flutter && flutter analyze --no-fatal-infos --no-fatal-warnings && flutter test
 python scripts/check_architecture.py && python scripts/check_docs_structure.py
 ```
 

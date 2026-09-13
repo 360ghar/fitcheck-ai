@@ -11,6 +11,7 @@
 
 import { useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import { usePhotoshoot } from '@/stores/photoshootStore';
 import { PhotoshootUploadStep } from './components/PhotoshootUploadStep';
 import { PhotoshootConfigureStep } from './components/PhotoshootConfigureStep';
@@ -34,17 +35,18 @@ export default function PhotoshootPage() {
 
   return (
     <div className="app-page max-w-4xl">
-      <div className="mb-4">
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">AI Photoshoot</h1>
-        {/* This line already changes with the step, so making it the live
-            region announces wizard progress without adding hidden markup. */}
-        <p className="text-sm text-muted-foreground mt-1" aria-live="polite">
-          {currentStep === 'upload' && 'Upload 1–4 photos of yourself'}
-          {currentStep === 'configure' && 'Choose your photoshoot style'}
-          {currentStep === 'generating' && 'Creating your images…'}
-          {currentStep === 'results' && 'Your images are ready!'}
-        </p>
-      </div>
+      {/* PageHeader owns the h1 (type-heading-xl convention); the step line
+          stays a sibling because it must keep its aria-live region — it is
+          the wizard's progress announcement, not static header copy. */}
+      <PageHeader title="AI Photoshoot" className="mb-0" />
+      {/* This line already changes with the step, so making it the live
+          region announces wizard progress without adding hidden markup. */}
+      <p className="text-sm text-muted-foreground mt-1 mb-4" aria-live="polite">
+        {currentStep === 'upload' && 'Upload 1–4 photos of yourself'}
+        {currentStep === 'configure' && 'Choose your photoshoot style'}
+        {currentStep === 'generating' && 'Creating your images…'}
+        {currentStep === 'results' && 'Your images are ready!'}
+      </p>
 
       <WizardSteps
         className="mb-4"

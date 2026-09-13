@@ -23,11 +23,11 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize controller after the widget is fully created
+    // Initialize controller after the widget is fully created. The controller
+    // fetches the focused month in its own onInit; fetching here as well only
+    // duplicated the request (the first response was discarded by the
+    // generation guard).
     controller = Get.find<CalendarController>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.fetchEventsForMonth(controller.focusedDate.value);
-    });
   }
 
   @override
@@ -334,23 +334,27 @@ class _CalendarPageState extends State<CalendarPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Obx(
-                () => Text(
+        // Obx so the header tracks day selection — it reads
+        // controller.selectedDate.value, which only Obx can observe.
+        Obx(
+          () => Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
                   'Events for ${AppDateUtils.formatDate(controller.selectedDate.value)}',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
-            ),
-            TextButton.icon(
-              onPressed: () => _showAddEventDialog(),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add'),
-            ),
-          ],
+              TextButton.icon(
+                onPressed: () => _showAddEventDialog(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add'),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
         Obx(() {
@@ -775,165 +779,173 @@ class _CalendarPageState extends State<CalendarPage> {
         child: StatefulBuilder(
           builder: (context, setDialogState) {
             // Lift the dialog above the keyboard (same fix as the Add dialog).
-            return AlertDialog(
-              title: const Text('Edit Event'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Title',
-                        border: OutlineInputBorder(),
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: AlertDialog(
+                title: const Text('Edit Event'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Title',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing12),
-                    ListTile(
-                      title: const Text('All Day'),
-                      trailing: Switch(
-                        value: isAllDay,
-                        onChanged: (value) =>
-                            setDialogState(() => isAllDay = value),
-                      ),
-                    ),
-                    if (!isAllDay) ...[
+                      const SizedBox(height: AppConstants.spacing12),
                       ListTile(
-                        title: const Text('Start Time'),
-                        trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
-                        onTap: () async {
-                          // A10b-05: date + time, mirroring the Add dialog —
-                          // the old edit dialog only offered a time picker, so
-                          // an event's date could never be changed.
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: startTime,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2030),
-                          );
-                          if (picked != null) {
-                            if (!context.mounted) return;
-                            final time = await showTimePicker(
-                              context: context,
-                              initialTime: TimeOfDay.fromDateTime(startTime),
-                            );
-                            if (time != null) {
-                              setDialogState(() {
-                                startTime = DateTime(
-                                  picked.year,
-                                  picked.month,
-                                  picked.day,
-                                  time.hour,
-                                  time.minute,
-                                );
-                              });
-                            }
-                          }
-                        },
+                        title: const Text('All Day'),
+                        trailing: Switch(
+                          value: isAllDay,
+                          onChanged: (value) =>
+                              setDialogState(() => isAllDay = value),
+                        ),
                       ),
-                      ListTile(
-                        title: const Text('End Time'),
-                        trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: endTime,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2030),
-                          );
-                          if (picked != null) {
-                            if (!context.mounted) return;
-                            final time = await showTimePicker(
+                      if (!isAllDay) ...[
+                        ListTile(
+                          title: const Text('Start Time'),
+                          trailing: Text(
+                            AppDateUtils.formatTimeOnly(startTime),
+                          ),
+                          onTap: () async {
+                            // A10b-05: date + time, mirroring the Add dialog —
+                            // the old edit dialog only offered a time picker, so
+                            // an event's date could never be changed.
+                            final picked = await showDatePicker(
                               context: context,
-                              initialTime: TimeOfDay.fromDateTime(endTime),
+                              initialDate: startTime,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2030),
                             );
-                            if (time != null) {
-                              setDialogState(() {
-                                endTime = DateTime(
-                                  picked.year,
-                                  picked.month,
-                                  picked.day,
-                                  time.hour,
-                                  time.minute,
-                                );
-                              });
+                            if (picked != null) {
+                              if (!context.mounted) return;
+                              final time = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.fromDateTime(startTime),
+                              );
+                              if (time != null) {
+                                setDialogState(() {
+                                  startTime = DateTime(
+                                    picked.year,
+                                    picked.month,
+                                    picked.day,
+                                    time.hour,
+                                    time.minute,
+                                  );
+                                });
+                              }
                             }
-                          }
-                        },
+                          },
+                        ),
+                        ListTile(
+                          title: const Text('End Time'),
+                          trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: endTime,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2030),
+                            );
+                            if (picked != null) {
+                              if (!context.mounted) return;
+                              final time = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.fromDateTime(endTime),
+                              );
+                              if (time != null) {
+                                setDialogState(() {
+                                  endTime = DateTime(
+                                    picked.year,
+                                    picked.month,
+                                    picked.day,
+                                    time.hour,
+                                    time.minute,
+                                  );
+                                });
+                              }
+                            }
+                          },
+                        ),
+                      ],
+                      TextField(
+                        controller: locationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Location (optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.spacing12),
+                      TextField(
+                        controller: descriptionController,
+                        decoration: const InputDecoration(
+                          labelText: 'Description (optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
                       ),
                     ],
-                    TextField(
-                      controller: locationController,
-                      decoration: const InputDecoration(
-                        labelText: 'Location (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing12),
-                    TextField(
-                      controller: descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                    ),
-                  ],
+                  ),
                 ),
+                actions: [
+                  Obx(
+                    () => TextButton(
+                      onPressed: controller.isUpdatingEvent.value
+                          ? null
+                          : () => Get.back(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  Obx(
+                    () => ElevatedButton(
+                      onPressed: controller.isUpdatingEvent.value
+                          ? null
+                          : () {
+                              if (titleController.text.isEmpty) {
+                                ErrorHandler.showValidation(
+                                  'Please enter a title',
+                                  title: 'Error',
+                                );
+                                return;
+                              }
+                              if (!isAllDay && !endTime.isAfter(startTime)) {
+                                ErrorHandler.showValidation(
+                                  'End time must be after start time',
+                                  title: 'Error',
+                                );
+                                return;
+                              }
+                              controller.updateEvent(
+                                event.id,
+                                title: titleController.text,
+                                startTime: startTime,
+                                endTime: endTime,
+                                // Pass '' (not null) when cleared: null means
+                                // "not provided" in the update payload, so a
+                                // cleared location/description could never
+                                // overwrite the old value. The backend stores
+                                // '' for present keys.
+                                location: locationController.text,
+                                description: descriptionController.text,
+                                isAllDay: isAllDay,
+                              );
+                            },
+                      child: controller.isUpdatingEvent.value
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
+                  ),
+                ],
               ),
-              actions: [
-                Obx(
-                  () => TextButton(
-                    onPressed: controller.isUpdatingEvent.value
-                        ? null
-                        : () => Get.back(),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                Obx(
-                  () => ElevatedButton(
-                    onPressed: controller.isUpdatingEvent.value
-                        ? null
-                        : () {
-                            if (titleController.text.isEmpty) {
-                              ErrorHandler.showValidation(
-                                'Please enter a title',
-                                title: 'Error',
-                              );
-                              return;
-                            }
-                            if (!isAllDay && !endTime.isAfter(startTime)) {
-                              ErrorHandler.showValidation(
-                                'End time must be after start time',
-                                title: 'Error',
-                              );
-                              return;
-                            }
-                            controller.updateEvent(
-                              event.id,
-                              title: titleController.text,
-                              startTime: startTime,
-                              endTime: endTime,
-                              location: locationController.text.isEmpty
-                                  ? null
-                                  : locationController.text,
-                              description: descriptionController.text.isEmpty
-                                  ? null
-                                  : descriptionController.text,
-                              isAllDay: isAllDay,
-                            );
-                          },
-                    child: controller.isUpdatingEvent.value
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Save'),
-                  ),
-                ),
-              ],
             );
           },
         ),

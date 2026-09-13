@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
 import type { RouteObject } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
@@ -57,6 +57,9 @@ describe('TrendsPage (redirect to single-page dashboard)', () => {
     })
     expect(await screen.findByText('dashboard-marker')).toBeInTheDocument()
     expect(router7.state.location.search).toContain('days=7')
+
+    // Unmount the first tree so the two renders cannot interfere.
+    cleanup()
 
     // Invalid days should be stripped, only section remains
     const routes2: RouteObject[] = [

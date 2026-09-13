@@ -210,6 +210,7 @@ export function AuditPage() {
   if (table.query.isError) {
     return (
       <div className="space-y-3">
+        <PageHeader dense title={t('title')} description={t('description')} />
         <ErrorState
           message={normalizeError(table.query.error).message}
           onRetry={() => void table.query.refetch()}

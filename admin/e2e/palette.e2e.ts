@@ -13,6 +13,9 @@ test.describe('command palette', () => {
     await authedPage(page)
     await page.goto('/dashboard')
 
+    // Wait for the dashboard to be interactive before the hotkey.
+    await expect(page.getByText('Signups (7 days)')).toBeVisible()
+
     // Control+K: Linux CI has no Meta. The palette listens for ctrl OR meta.
     await page.keyboard.press('Control+K')
     const dialog = page.getByRole('dialog')
@@ -33,8 +36,13 @@ test.describe('command palette', () => {
     await authedPage(page)
     await page.goto('/dashboard')
 
+    // Wait for the dashboard to be interactive before the hotkey, or the
+    // keypress can land before the palette's listener mounts (flaky on CI).
+    await expect(page.getByText('Signups (7 days)')).toBeVisible()
+
     await page.keyboard.press('Control+K')
     const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
     await dialog.getByRole('combobox').fill('zz')
     await expect(dialog.getByText('No results found for “zz”.')).toBeVisible()
   })

@@ -109,13 +109,25 @@ def _wear_lock(outfit_id: str):
 
 
 def _normalize_item_images(item: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalize Supabase nested relation naming to API contract."""
+    """Normalize Supabase nested relation naming to the API contract.
+
+    Emits BOTH keys on nested outfit items: ``item_images`` (the key the
+    Flutter ItemModel parses via @JsonKey(name: 'item_images')) and
+    ``images`` (consumed by materialize_parent_images, which walks
+    ``nested.get("images")`` to re-mint presigned URLs in place). Both keys
+    reference the SAME list object, so the in-place URL materialization is
+    visible under either name. Renaming alone (the old behavior) made GET
+    /outfits/{id} yield null itemImages in the app — detail tiles rendered
+    as placeholders while the list endpoint (which kept ``item_images``)
+    worked.
+    """
     if not isinstance(item, dict):
         return item
     images = item.pop("item_images", None)
     if images is None:
         images = item.get("images")
     item["images"] = images or []
+    item["item_images"] = item["images"]
     return item
 
 
@@ -309,6 +321,13 @@ async def _fetch_outfit(
                 .eq("user_id", user_id)
                 .execute
             )
+            for i in items_res.data or []:
+                # Flutter ItemImage requires non-null `url`: synthesize it
+                # here like the list path does. materialize_image_urls only
+                # syncs `url` when present, so without this the detail
+                # response crashes mobile parsing.
+                for img in i.get("item_images") or []:
+                    img["url"] = img.get("image_url") or img.get("thumbnail_url") or ""
             outfit["items"] = [_normalize_item_images(i) for i in (items_res.data or [])]
         else:
             outfit["items"] = []
@@ -491,7 +510,12 @@ async def list_outfits(
                     item_images = item.get("item_images") or []
                     for img in item_images:
                         img["url"] = img.get("image_url") or img.get("thumbnail_url") or ""
-                    items_map[str(item["id"])] = item
+                    # Normalize AFTER the url pass: emits both `images` and
+                    # `item_images` (same list), so every outfit response
+                    # carries item_images on nested items and the
+                    # materialize_parent_images call below (which walks
+                    # `images`) re-mints the nested item images too.
+                    items_map[str(item["id"])] = _normalize_item_images(item)
 
             return outfits, total, items_map
 

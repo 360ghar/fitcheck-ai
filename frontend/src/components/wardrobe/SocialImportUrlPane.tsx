@@ -20,9 +20,9 @@ export function SocialImportUrlPane({ isLoading = false, error, onStart }: Socia
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-dashed border-indigo-300 bg-indigo-50/40 p-4 dark:border-indigo-700 dark:bg-indigo-950/30">
+      <div className="rounded-lg border border-dashed border-tint-violet/40 bg-tint-violet-pale/30 p-4">
         <div className="flex items-start gap-3">
-          <div className="rounded-md bg-indigo-500/10 p-2 text-indigo-600 dark:text-indigo-300">
+          <div className="rounded-md bg-tint-violet-pale p-2 text-tint-violet">
             <Link2 className="h-4 w-4" />
           </div>
           <div className="space-y-1">
@@ -49,7 +49,7 @@ export function SocialImportUrlPane({ isLoading = false, error, onStart }: Socia
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300">
+        <div className="rounded-md border border-destructive/30 bg-error-pale px-3 py-2 text-sm text-error">
           {error}
         </div>
       )}

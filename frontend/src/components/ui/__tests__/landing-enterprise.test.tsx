@@ -57,7 +57,7 @@ describe('enterprise landing navigation', () => {
 })
 
 describe('enterprise landing structure', () => {
-  it('retains required anchors, one H1, and the flat-lay LCP hint', () => {
+  it('retains required anchors, one H1, and the hero-machine LCP hint', () => {
     const { container } = render(
       <MemoryRouter>
         <LandingPage />
@@ -82,14 +82,16 @@ describe('enterprise landing structure', () => {
       expect(document.getElementById(id), `missing #${id}`).not.toBeNull()
     }
 
+    // The clay rebuild made the hero illustration-led: the wardrobe machine
+    // is the LCP, not the flat-lay proof photo.
     const lcpImage = screen.getByAltText(
-      'Workday outfit flat lay with a white shirt, navy trousers, brown shoes, and a watch'
+      'Claymation wardrobe machine on rolling green hills, holding a rail of tiny sweaters under a paper-cloud sky'
     )
-    expect(lcpImage).toHaveAttribute('src', '/landing/flatlay-640.webp')
+    expect(lcpImage).toHaveAttribute('src', '/generated/hero-machine-640.webp')
     expect(lcpImage).toHaveAttribute('fetchpriority', 'high')
     expect(lcpImage).toHaveAttribute(
       'sizes',
-      '(min-width: 1024px) 42vw, calc(100vw - 32px)'
+      '(min-width: 1280px) 1216px, calc(100vw - 32px)'
     )
   })
 })

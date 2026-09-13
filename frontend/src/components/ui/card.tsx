@@ -4,7 +4,10 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const cardVariants = cva(
-  "rounded-2xl text-card-foreground transition-colors",
+  // Clay system (clay-rebuild brief): every card rests pressed into the page
+  // (the 3-layer `shadow-pressed` stack — stamped, not floating). The old
+  // "flat, hairline only" rule is revoked; the hairline border stays for edges.
+  "rounded-2xl text-card-foreground shadow-pressed transition-colors",
   {
     variants: {
       variant: {
@@ -13,11 +16,13 @@ const cardVariants = cva(
         glass: "border border-border bg-surface-soft",
         gradient: "relative overflow-hidden border border-border bg-card",
         image: "relative overflow-hidden border border-border bg-card",
-        // Grounded lift: the translate is paired with a border tone shift.
-        // A bare -translate-y over a shadowless flat surface reads as a jump
-        // (the lesson recorded on StatCard); the hairline grounds the motion.
+        // Clay signature interaction: pressed at rest, rises into the hard
+        // no-blur offset shadow on hover/focus with a small diagonal shift
+        // (~150ms ease-out, motion-safe gated — the shadow swap still fires
+        // under reduced motion). Replaces the old "grounded lift": the offset
+        // shadow grounds the motion instead of a bare translate.
         interactive:
-          "cursor-pointer border border-transparent bg-card transition-[border-color,transform] duration-200 ease-out hover:border-border focus-within:border-border motion-safe:hover:-translate-y-0.5",
+          "cursor-pointer border border-transparent bg-card shadow-pressed transition-[border-color,box-shadow,transform] duration-150 ease-out hover:border-border hover:shadow-offset focus-within:border-border focus-within:shadow-offset motion-safe:hover:-translate-x-px motion-safe:hover:-translate-y-px",
       },
     },
     defaultVariants: {

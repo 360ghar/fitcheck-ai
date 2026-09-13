@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
 import '../../wardrobe/models/item_model.dart';
+import 'tolerant_enum_converter.dart';
 
 // ignore_for_file: invalid_annotation_target
 // `@JsonKey` on freezed constructor params is the idiomatic, supported usage
@@ -18,8 +19,11 @@ abstract class OutfitModel with _$OutfitModel {
     required String name,
     String? description,
     @JsonKey(name: 'item_ids') required List<String> itemIds,
-    Style? style,
-    Season? season,
+    // Tolerant decode: unknown/null → null. One legacy row (e.g.
+    // style='Old Money') must not fail the whole list (see
+    // tolerant_enum_converter.dart).
+    @TolerantStyleConverter() Style? style,
+    @SeasonApiConverter() Season? season,
     String? occasion,
     List<String>? tags,
     @JsonKey(name: 'is_favorite') @Default(false) bool isFavorite,
@@ -64,14 +68,20 @@ abstract class OutfitImage with _$OutfitImage {
 }
 
 /// Create outfit request model
+///
+/// Key names must match the backend OutfitCreate schema
+/// (backend/app/models/outfit.py): the API expects snake_case and silently
+/// drops unknown keys, so a camelCase `itemIds` would persist an outfit
+/// with empty item_ids.
 @freezed
 abstract class CreateOutfitRequest with _$CreateOutfitRequest {
   const factory CreateOutfitRequest({
     required String name,
     String? description,
-    required List<String> itemIds,
-    Style? style,
-    Season? season,
+    @JsonKey(name: 'item_ids') required List<String> itemIds,
+    // toJson emits the backend-canonical 'all-season' spelling.
+    @TolerantStyleConverter() Style? style,
+    @SeasonApiConverter() Season? season,
     String? occasion,
     List<String>? tags,
   }) = _CreateOutfitRequest;
@@ -92,19 +102,25 @@ extension CreateOutfitRequestExtension on CreateOutfitRequest {
 }
 
 /// Update outfit request model
+///
+/// Key names must match the backend OutfitUpdate schema
+/// (backend/app/models/outfit.py): the API expects snake_case and ignores
+/// unknown keys, so camelCase flags silently no-op while the UI reports
+/// success.
 @freezed
 abstract class UpdateOutfitRequest with _$UpdateOutfitRequest {
   const factory UpdateOutfitRequest({
     String? name,
     String? description,
-    List<String>? itemIds,
-    Style? style,
-    Season? season,
+    @JsonKey(name: 'item_ids') List<String>? itemIds,
+    // toJson emits the backend-canonical 'all-season' spelling.
+    @TolerantStyleConverter() Style? style,
+    @SeasonApiConverter() Season? season,
     String? occasion,
     List<String>? tags,
-    bool? isFavorite,
-    bool? isDraft,
-    bool? isPublic,
+    @JsonKey(name: 'is_favorite') bool? isFavorite,
+    @JsonKey(name: 'is_draft') bool? isDraft,
+    @JsonKey(name: 'is_public') bool? isPublic,
   }) = _UpdateOutfitRequest;
 
   factory UpdateOutfitRequest.fromJson(Map<String, dynamic> json) =>
@@ -165,11 +181,12 @@ abstract class SharedOutfitModel with _$SharedOutfitModel {
     required String id,
     required String name,
     String? description,
-    // Nullable: the DB columns are nullable and the public endpoint passes
-    // raw values through — a web-created outfit (or one with no style/season)
-    // must still render instead of failing the parse (A10b-10 review).
-    Style? style,
-    Season? season,
+    // Nullable + tolerant decode: the DB columns are nullable, the public
+    // endpoint passes raw values through, and rows may carry values outside
+    // the Flutter enums — all decode to null instead of failing the parse
+    // (A10b-10 review).
+    @TolerantStyleConverter() Style? style,
+    @SeasonApiConverter() Season? season,
     @JsonKey(name: 'item_images') required List<String> itemImages,
     @JsonKey(name: 'outfit_images') List<String>? outfitImages,
     /// Durable bucket key of the primary outfit image (A10b-10): the share

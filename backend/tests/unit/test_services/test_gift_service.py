@@ -12,7 +12,7 @@ from PIL import Image
 from pydantic import ValidationError as PydanticValidationError
 
 from app.core.config import settings
-from app.core.exceptions import PermissionDeniedError, ServiceError, ValidationError
+from app.core.exceptions import DatabaseError, PermissionDeniedError, ServiceError, ValidationError
 from app.models.gift import (
     AdminGiftCreate,
     ComplimentaryGiftCreate,
@@ -327,6 +327,13 @@ def test_recipient_matching_migration_keeps_legacy_links_and_secures_new_claims(
     assert "v_voucher.status <> 'issued'" in migration
     assert "INSERT INTO public.gift_entitlement_grants" in migration
 
+    # Idempotency is rechecked after the allowance row lock so concurrent
+    # requests with the same client_request_id replay the winner's voucher
+    # instead of consuming a second allowance.
+    key_lookup = "purchaser_user_id = p_user_id AND client_request_id = p_client_request_id"
+    assert migration.count(key_lookup) >= 2
+    assert migration.index("FOR UPDATE") < migration.rindex(key_lookup)
+    assert migration.rindex("IF FOUND THEN") < migration.rindex("used_count = used_count + 1")
 
 def test_optional_occasion_migration_keeps_legacy_gifts_blank_and_replaces_the_rpc():
     migration = (
@@ -343,6 +350,81 @@ def test_optional_occasion_migration_keeps_legacy_gifts_blank_and_replaces_the_r
     assert "DROP FUNCTION IF EXISTS public.issue_complimentary_gift_for_recipient" in migration
     assert "p_occasion_greeting VARCHAR" in migration
     assert "GRANT EXECUTE ON FUNCTION public.issue_complimentary_gift_for_recipient" in migration
+
+
+def test_occasion_and_trial_guards_migration_restores_idempotency_recheck():
+    migration = (
+        Path(__file__).resolve().parents[3]
+        / "db"
+        / "supabase"
+        / "migrations"
+        / "063_gift_occasion_and_trial_guards.sql"
+    ).read_text(encoding="utf-8")
+
+    # Three-valued logic hole: a NULL occasion with a greeting made every
+    # branch of the 062 CHECK UNKNOWN, so invalid rows slipped through.
+    # Both non-NULL occasion branches must guard explicitly.
+    assert migration.count("occasion IS NOT NULL") >= 2
+    assert "IF v_occasion IS NULL AND v_occasion_greeting IS NOT NULL THEN" in migration
+
+    # 062's re-emit dropped 061's post-lock replay recheck; 063 restores it
+    # so concurrent duplicate client_request_ids cannot double-spend an
+    # allowance.
+    key_lookup = "purchaser_user_id = p_user_id AND client_request_id = p_client_request_id"
+    assert migration.count(key_lookup) >= 2
+    assert migration.index("FOR UPDATE") < migration.rindex(key_lookup)
+    assert migration.rindex("IF FOUND THEN") < migration.rindex("used_count = used_count + 1")
+
+    # The allowance guard must not test FOUND: after the post-lock recheck,
+    # FOUND belongs to the voucher SELECT (FALSE on the normal new-issue
+    # path), so gating on it made issuance return before the INSERT.
+    assert "IF v_allowance IS NULL OR v_allowance.used_count >= v_allowance.granted_count THEN" in migration
+
+    # Trial extension is limited to paid plans currently in trial.
+    assert "v_subscription.status <> 'trial'" in migration
+    assert "v_subscription.plan_type NOT IN" in migration
+
+
+def test_occasion_greeting_newlines_are_flattened_for_single_line_artwork():
+    """Artwork renders greetings as one line — newlines would 500 the render."""
+    request = ComplimentaryGiftCreate(
+        from_name="Alex Morgan",
+        to_name="Taylor Reed",
+        recipient_email="taylor@example.com",
+        duration_months=3,
+        client_request_id="request-occasion-1",
+        occasion=GiftOccasion.OTHER,
+        occasion_greeting="Happy\n\nBirthday,\nTaylor!",
+    )
+
+    assert request.occasion_greeting == "Happy Birthday, Taylor!"
+
+
+def test_issuance_replay_matches_legacy_null_recipient_vouchers():
+    """Pre-061 vouchers have a NULL recipient; retries must replay them."""
+    request = ComplimentaryGiftCreate(
+        from_name="Alex Morgan",
+        to_name="Taylor Reed",
+        recipient_email="taylor@example.com",
+        duration_months=3,
+        client_request_id="request-legacy-1",
+    )
+    legacy = voucher(recipient_email=None, message=None)
+
+    assert GiftService._matches_issuance_request(legacy, request, source="complimentary")
+
+
+def test_issuance_replay_still_rejects_different_recipient():
+    request = ComplimentaryGiftCreate(
+        from_name="Alex Morgan",
+        to_name="Taylor Reed",
+        recipient_email="taylor@example.com",
+        duration_months=3,
+        client_request_id="request-legacy-1",
+    )
+    bound = voucher(recipient_email="someone-else@example.com", message=None)
+
+    assert not GiftService._matches_issuance_request(bound, request, source="complimentary")
 
 
 @pytest.mark.asyncio
@@ -1110,3 +1192,55 @@ async def test_admin_void_rejects_a_voucher_claimed_after_the_initial_read():
         await AdminGiftService.void_or_revoke(VOUCHER_ID, "manual void", db)
 
     assert db.rpc_calls[0][1]["p_expected_status"] == "issued"
+
+
+class _RpcError(Exception):
+    def __init__(self, code=None, message="", hint="", details=""):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.hint = hint
+        self.details = details
+
+
+def _complimentary_request(**overrides):
+    kwargs = {
+        "duration_months": 1,
+        "from_name": "Alex Morgan",
+        "to_name": "Taylor Reed",
+        "recipient_email": "taylor@example.com",
+        "message": None,
+        "client_request_id": "request-123",
+    }
+    kwargs.update(overrides)
+    return ComplimentaryGiftCreate(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_complimentary_rpc_occasion_error_maps_to_422(monkeypatch):
+    monkeypatch.setattr(settings, "ENABLE_GIFT_VOUCHER_CREATION", True)
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = _RpcError(
+        code="P0001", message="Gift occasion data is invalid"
+    )
+    with pytest.raises(ValidationError, match="Gift request is invalid"):
+        await GiftService.create_complimentary(
+            {"id": USER_ID, "email_verified": True},
+            _complimentary_request(),
+            db,
+        )
+
+
+@pytest.mark.asyncio
+async def test_complimentary_missing_rpc_maps_to_migration_hint(monkeypatch):
+    monkeypatch.setattr(settings, "ENABLE_GIFT_VOUCHER_CREATION", True)
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = _RpcError(
+        code="PGRST205", message="Could not find the function issue_complimentary_gift_for_recipient"
+    )
+    with pytest.raises(DatabaseError, match="migration 063"):
+        await GiftService.create_complimentary(
+            {"id": USER_ID, "email_verified": True},
+            _complimentary_request(),
+            db,
+        )

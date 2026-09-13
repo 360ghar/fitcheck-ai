@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Outlet, useMatches } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 
 import { Sidebar } from '@/app/layout/Sidebar'
 import { Topbar } from '@/app/layout/Topbar'
+import { usePageTitleKey } from '@/app/layout/usePageTitle'
 import { SessionTimeoutProvider } from '@/features/auth/components/SessionTimeoutProvider'
 import { CommandPalette } from '@/features/search/components/CommandPalette'
 import { cn } from '@/shared/lib/cn'
@@ -19,25 +20,12 @@ export function RootLayout() {
   const { t } = useTranslation('layout')
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const matches = useMatches()
+  const titleKey = usePageTitleKey()
 
   // Document title from the deepest matched route's handle.titleKey.
   useEffect(() => {
-    let titleKey: string | null = null
-    for (const match of [...matches].reverse()) {
-      const handle = match.handle
-      if (
-        handle &&
-        typeof handle === 'object' &&
-        'titleKey' in handle &&
-        typeof (handle).titleKey === 'string'
-      ) {
-        titleKey = (handle as { titleKey: string }).titleKey
-        break
-      }
-    }
     document.title = titleKey ? `${t(titleKey)} · ${t('brand')}` : t('brand')
-  }, [matches, t])
+  }, [titleKey, t])
 
   return (
     <div className="min-h-dvh bg-background">

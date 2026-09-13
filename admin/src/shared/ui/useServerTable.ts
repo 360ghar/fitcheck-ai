@@ -29,6 +29,12 @@ export interface UseServerTableOptions<TData> {
   pageSizeOptions?: readonly number[]
   /** Extra filter keys synced to/from the URL */
   filterKeys?: readonly string[]
+  /**
+   * Search stays client-side: `q` stays in the URL/table state so the
+   * toolbar keeps working, but it is stripped from the server query key
+   * and fetch — typing then never refetches an identical server page.
+   */
+  localSearch?: boolean
 }
 
 export interface ServerTableResult<TData> {
@@ -58,12 +64,19 @@ export function useServerTable<TData>({
   pageSize = DEFAULT_PAGE_SIZE,
   pageSizeOptions,
   filterKeys = [],
+  localSearch = false,
 }: UseServerTableOptions<TData>): ServerTableResult<TData> {
   const tableState = useTableState({ pageSize, filterKeys })
 
+  // Client-only search: drop `q` from the SERVER params (the type allows
+  // undefined; TanStack's hashKey omits it, so the query key stays stable).
+  const serverParams: TableStateParams = localSearch
+    ? { ...tableState.params, q: undefined }
+    : tableState.params
+
   const query = useQuery({
-    queryKey: [...queryKey, tableState.params],
-    queryFn: () => queryFn(tableState.params),
+    queryKey: [...queryKey, serverParams],
+    queryFn: () => queryFn(serverParams),
     placeholderData: keepPreviousData,
     staleTime: QUERY_STALE_TIMES.lists,
   })

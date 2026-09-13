@@ -832,8 +832,8 @@ export function BatchExtractionFlow({
             <Sparkles className="h-5 w-5 text-primary" />
             {getStepTitle()}
             {(isConnected || socialImport.state.isConnected) && (
-              <span className="inline-flex items-center gap-1 text-xs font-normal text-green-600 dark:text-green-400 ml-2">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="inline-flex items-center gap-1 text-xs font-normal text-success ml-2">
+                <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
                 Live
               </span>
             )}
@@ -969,14 +969,14 @@ export function BatchExtractionFlow({
           {state.step === 'uploading' && (
             <div className="flex flex-col items-center justify-center py-16 space-y-6">
               <div className="relative">
-                <Upload className="h-16 w-16 text-indigo-500" />
-                <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-indigo-400 animate-spin" />
+                <Upload className="h-16 w-16 text-accent-purple" />
+                <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-accent-purple/70 animate-spin" />
               </div>
               <div className="text-center space-y-2">
-                <p className="text-lg font-medium text-gray-900 dark:text-white">
+                <p className="text-lg font-medium text-foreground">
                   Preparing {state.images.length} images...
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {state.uploadProgress > 0
                     ? `Uploading… ${Math.round(state.uploadProgress)}%`
                     : 'Compressing images for AI processing'}
@@ -1133,19 +1133,19 @@ export function BatchExtractionFlow({
           {state.step === 'saving' && (
             <div className="flex flex-col items-center justify-center py-16 space-y-6">
               <div className="relative">
-                <CheckCircle2 className="h-16 w-16 text-green-500" />
-                <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-green-400 animate-spin" />
+                <CheckCircle2 className="h-16 w-16 text-success" />
+                <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-success/70 animate-spin" />
               </div>
               <div className="text-center space-y-2">
-                <p className="text-lg font-medium text-gray-900 dark:text-white">
+                <p className="text-lg font-medium text-foreground">
                   Saving items to closet...
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {Math.round(savingProgress)}% complete
                 </p>
               </div>
               <Progress value={savingProgress} className="w-64 h-2" />
-              <p className="text-xs text-gray-400 dark:text-gray-500">
+              <p className="text-xs text-muted-foreground/70">
                 Uploading items to your closet…
               </p>
             </div>
@@ -1154,7 +1154,7 @@ export function BatchExtractionFlow({
 
         {/* Footer actions for select step */}
         {state.step === 'select' && state.images.length === 0 && (
-          <div className="flex justify-end pt-4 border-t dark:border-gray-700">
+          <div className="flex justify-end pt-4 border-t border-border">
             <Button variant="outline" onClick={handleClose}>
               Cancel
             </Button>

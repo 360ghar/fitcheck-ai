@@ -308,7 +308,11 @@ class AdminGiftService:
         rows = _rows(result)
         if not rows:
             raise ValidationError("The gift changed before the edit completed")
-        return GiftService.serialize(rows[0], audience="admin").model_dump(mode="json")
+        response = GiftService.serialize(rows[0], audience="admin").model_dump(mode="json")
+        # Mirror create(): serialize() drops recipient_email (private, and
+        # excluded from the public voucher shape), but admins need it back.
+        response["recipient_email"] = rows[0].get("recipient_email")
+        return response
 
     @classmethod
     async def rotate(cls, voucher_id: str, db: Client) -> dict[str, Any]:

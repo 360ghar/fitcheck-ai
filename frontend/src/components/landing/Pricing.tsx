@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { trialPlanHref, TRIAL_PROMO_CODE } from '@/lib/trial-offer'
 import { AnimatedSection } from './AnimatedSection'
 import { SectionKicker } from './SectionKicker'
+import { scrollToSectionId } from '@/lib/scroll'
 
 type PlanKey = keyof typeof PLAN_PRICES
 
@@ -108,9 +109,11 @@ function PricingCard({
   const saving = yearlySavings(tier.key)
 
   return (
+    // Pressed resting card; the Plus tier is the one brand-red moment — the
+    // conversion color rides the tier we want chosen (DESIGN.md 01).
     <article
       className={cn(
-        'flex h-full flex-col overflow-hidden rounded-[2rem] border bg-card',
+        'flex h-full flex-col overflow-hidden rounded-[2rem] border bg-card shadow-pressed',
         highlighted ? 'border-primary' : 'border-border'
       )}
     >
@@ -185,13 +188,13 @@ export default function Pricing() {
   const [isYearly, setIsYearly] = useState(false)
 
   return (
-    <section id="pricing" className="scroll-mt-16 bg-surface-soft py-20 md:py-28">
+    <section id="pricing" aria-labelledby="pricing-heading" className="scroll-mt-16 bg-background py-20 md:py-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <AnimatedSection className="reveal">
           <div className="grid gap-8 lg:grid-cols-12 lg:items-end">
             <div className="max-w-2xl lg:col-span-7">
               <SectionKicker>Pricing matrix</SectionKicker>
-              <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
+              <h2 id="pricing-heading" className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
                 Compare limits without decoding the fine print
               </h2>
               <p className="mt-4 text-base leading-relaxed text-body md:text-lg">
@@ -216,7 +219,7 @@ export default function Pricing() {
           </div>
         </AnimatedSection>
 
-        <div className="mt-12 hidden overflow-hidden rounded-[2rem] border border-border bg-card lg:block">
+        <div className="mt-12 hidden overflow-hidden rounded-[2rem] border border-border bg-card shadow-pressed lg:block">
           <table className="w-full table-fixed border-collapse text-left">
             <caption className="sr-only">FitCheck plan and usage limit comparison</caption>
             <thead>
@@ -233,7 +236,14 @@ export default function Pricing() {
                       tier.key === 'plus' && 'bg-primary/5'
                     )}
                   >
-                    <p className="text-lg font-semibold text-foreground">{tier.name}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-lg font-semibold text-foreground">{tier.name}</p>
+                      {tier.key === 'plus' && (
+                        <span className="rounded-full border border-primary/30 px-2.5 py-1 text-xs font-semibold text-primary">
+                          Everyday
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 min-h-10 text-sm font-normal leading-relaxed text-muted-foreground">
                       {tier.description}
                     </p>
@@ -251,7 +261,7 @@ export default function Pricing() {
             </thead>
             <tbody>
               {comparisonRows.map((row) => (
-                <tr key={row.label} className="border-b border-border last:border-b-0">
+                <tr key={row.label} className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/40">
                   <th scope="row" className="px-7 py-5 text-sm font-medium text-foreground">
                     {row.label}
                   </th>
@@ -322,7 +332,14 @@ export default function Pricing() {
 
         <p className="mt-6 text-sm text-muted-foreground">
           No credit card is required for the free month. Cancel paid plans at any time.{' '}
-          <a href="#faq" className="text-primary hover:text-primary-pressed">
+          <a
+            href="#faq"
+            onClick={(event) => {
+              event.preventDefault()
+              scrollToSectionId('faq')
+            }}
+            className="text-primary hover:text-primary-pressed"
+          >
             Read billing answers
           </a>
         </p>

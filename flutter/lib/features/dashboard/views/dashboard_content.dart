@@ -177,11 +177,38 @@ class _DashboardContentState extends State<DashboardContent> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'FitCheck',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineSmall?.copyWith(letterSpacing: -0.8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FitCheck',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineSmall?.copyWith(letterSpacing: -0.8),
+                    ),
+                    const SizedBox(height: AppConstants.spacing4),
+                    // User info wrapped in single Obx for efficiency
+                    Obx(() {
+                      final user = authController.user.value;
+                      return Text(
+                        user?.fullName ??
+                            user?.email.split('@')[0] ??
+                            'Welcome',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: tokens.textPrimary,
+                            ),
+                      );
+                    }),
+                    const SizedBox(height: AppConstants.spacing4),
+                    Text(
+                      'Your AI wardrobe, tuned for today.',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
+                  ],
                 ),
               ),
               Semantics(

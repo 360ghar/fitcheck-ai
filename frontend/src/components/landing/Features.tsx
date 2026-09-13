@@ -13,6 +13,7 @@ import {
 import { AnimatedSection } from './AnimatedSection'
 import { SectionKicker } from './SectionKicker'
 import { cn } from '@/lib/utils'
+import { GeneratedImage } from '@/components/ui/generated-image'
 
 type VerbTone = 'coral' | 'amber' | 'teal' | 'violet' | 'blue'
 
@@ -33,6 +34,7 @@ const capabilities: Array<{
   href: string
   icon: typeof Tags
   tone: VerbTone
+  illustration: { src: string; alt: string }
 }> = [
   {
     number: '01',
@@ -43,6 +45,10 @@ const capabilities: Array<{
     href: '/features/ai-wardrobe-extraction',
     icon: Tags,
     tone: 'teal',
+    illustration: {
+      src: '/generated/primitive-catalog-640.webp',
+      alt: 'Clay illustration of garments being catalogued into an ordered grid',
+    },
   },
   {
     number: '02',
@@ -53,6 +59,10 @@ const capabilities: Array<{
     href: '/features/outfit-recommendations',
     icon: CloudSun,
     tone: 'blue',
+    illustration: {
+      src: '/generated/primitive-plan-640.webp',
+      alt: 'Clay illustration of pastel outfit capsules laid out for the week ahead',
+    },
   },
   {
     number: '03',
@@ -63,6 +73,10 @@ const capabilities: Array<{
     href: '/features/virtual-try-on',
     icon: Eye,
     tone: 'violet',
+    illustration: {
+      src: '/generated/primitive-preview-640.webp',
+      alt: 'Clay illustration of an outfit previewed in a standing mirror',
+    },
   },
   {
     number: '04',
@@ -73,6 +87,10 @@ const capabilities: Array<{
     href: '/features/ai-photoshoot-generator',
     icon: Camera,
     tone: 'coral',
+    illustration: {
+      src: '/generated/primitive-create-640.webp',
+      alt: 'Clay illustration of gripper arms assembling a studio photoshoot set',
+    },
   },
   {
     number: '05',
@@ -83,6 +101,10 @@ const capabilities: Array<{
     href: '/features/wardrobe-analytics',
     icon: BarChart3,
     tone: 'amber',
+    illustration: {
+      src: '/generated/primitive-understand-640.webp',
+      alt: 'Clay illustration of a wardrobe report with rising bar charts',
+    },
   },
 ]
 
@@ -149,23 +171,42 @@ export default function Features() {
               <AnimatedSection key={capability.verb} delay={index * 60}>
                 <Link
                   to={capability.href}
-                  className="group grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 border-b border-border py-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:grid-cols-[3rem_8rem_minmax(0,1fr)_1.5rem] sm:items-start sm:gap-x-5 sm:py-8"
+                  className="group grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 border-b border-border py-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:grid-cols-[3rem_minmax(0,1fr)_1.5rem] sm:items-start sm:gap-x-6 sm:py-8"
                 >
                   <span className="text-xs font-semibold text-muted-foreground">{capability.number}</span>
-                  <span className={cn('flex items-center gap-2 text-sm font-semibold', VERB_TONE[capability.tone])}>
-                    <capability.icon className="h-4 w-4" aria-hidden="true" />
-                    {capability.verb}
-                  </span>
-                  <span className="col-start-2 min-w-0 sm:col-start-3">
-                    <span className="block text-lg font-semibold leading-snug text-foreground group-hover:text-primary sm:text-xl">
-                      {capability.title}
+                  {/* Clay hover lives on the illustration tile: it rests pressed
+                      and rises into the hard offset shadow when the row is
+                      hovered/focused — the ledger keeps its hairline character. */}
+                  <span className="col-start-2 flex min-w-0 items-start gap-4 sm:col-start-2 sm:gap-6">
+                    <span
+                      className="mt-0.5 block shrink-0 overflow-hidden rounded-2xl border border-border bg-surface-soft shadow-pressed transition-[box-shadow,transform] duration-150 ease-out group-hover:shadow-offset motion-safe:group-hover:-translate-x-px motion-safe:group-hover:-translate-y-px"
+                    >
+                      <GeneratedImage
+                        src={capability.illustration.src}
+                        alt={capability.illustration.alt}
+                        className="h-20 w-20 object-cover sm:h-24 sm:w-24"
+                        loading="lazy"
+                        decoding="async"
+                        width={640}
+                        height={640}
+                        fallback="hide-parent"
+                      />
                     </span>
-                    <span className="mt-2 block text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
-                      {capability.description}
+                    <span className="min-w-0 flex-1">
+                      <span className={cn('flex items-center gap-2 text-sm font-semibold', VERB_TONE[capability.tone])}>
+                        <capability.icon className="h-4 w-4" aria-hidden="true" />
+                        {capability.verb}
+                      </span>
+                      <span className="mt-1.5 block text-lg font-semibold leading-snug text-foreground group-hover:text-primary sm:text-xl">
+                        {capability.title}
+                      </span>
+                      <span className="mt-2 block text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
+                        {capability.description}
+                      </span>
                     </span>
                   </span>
                   <ArrowUpRight
-                    className="col-start-2 h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary sm:col-start-4 sm:row-start-1"
+                    className="col-start-2 h-4 w-4 self-center text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary sm:col-start-3 sm:row-start-1 sm:self-start"
                     aria-hidden="true"
                   />
                 </Link>

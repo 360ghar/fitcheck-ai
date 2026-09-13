@@ -54,12 +54,24 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
     ]) {
       textController.addListener(_handleFormInputChanged);
     }
+    // The controller only fetches once at registration; deep links and
+    // re-entry after claiming/creating elsewhere would show stale lists.
+    // load() coalesces concurrent calls, so this is safe alongside onInit.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Match onInit: the disabled scaffold in build() must still mean no
+      // network fetch fires for the gifts endpoint.
+      if (!EnvConfig.giftVouchersEnabled) return;
+      _controller.load(showLoader: false);
+    });
   }
 
   void _handleFormInputChanged() {
     // Only invalidate the dedupe key here. The live preview rebuilds itself
     // via ListenableBuilder, so typing must not rebuild the whole page.
-    _clientRequestId = null;
+    // During creation the fields are disabled, so the key survives for a
+    // retry if the response is lost.
+    if (!_controller.isCreating.value) _clientRequestId = null;
   }
 
   @override
@@ -163,6 +175,9 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
         )
         ? _durationMonths
         : available.first.durationMonths;
+    // Freeze the form while the creation request is in flight so the
+    // idempotency key cannot be invalidated mid-request.
+    final creating = _controller.isCreating.value;
 
     return Form(
       key: _formKey,
@@ -190,9 +205,11 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
                         '${_term(allowance.durationMonths)} · ${allowance.remainingCount} left',
                       ),
                       selected: selectedDuration == allowance.durationMonths,
-                      onSelected: (_) => setState(
-                        () => _durationMonths = allowance.durationMonths,
-                      ),
+                      onSelected: creating
+                          ? null
+                          : (_) => setState(
+                              () => _durationMonths = allowance.durationMonths,
+                            ),
                     ),
                   )
                   .toList(growable: false),
@@ -203,6 +220,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               decoration: const InputDecoration(labelText: 'From'),
               textInputAction: TextInputAction.next,
               maxLength: 80,
+              enabled: !creating,
               validator: _requiredName,
             ),
             TextFormField(
@@ -210,6 +228,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               decoration: const InputDecoration(labelText: 'Recipient name'),
               textInputAction: TextInputAction.next,
               maxLength: 80,
+              enabled: !creating,
               validator: _requiredName,
             ),
             TextFormField(
@@ -218,6 +237,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               maxLength: 320,
+              enabled: !creating,
               validator: _email,
             ),
             DropdownButtonFormField<String>(
@@ -237,15 +257,17 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
                 ),
                 DropdownMenuItem(value: 'other', child: Text('Other')),
               ],
-              onChanged: (value) {
-                setState(() {
-                  _occasion = giftOccasionFromApi(value);
-                  if (_occasion != GiftOccasion.other) {
-                    _occasionGreetingController.clear();
-                  }
-                  _clientRequestId = null;
-                });
-              },
+              onChanged: creating
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _occasion = giftOccasionFromApi(value);
+                        if (_occasion != GiftOccasion.other) {
+                          _occasionGreetingController.clear();
+                        }
+                        _clientRequestId = null;
+                      });
+                    },
             ),
             if (_occasion == GiftOccasion.other)
               TextFormField(
@@ -257,6 +279,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
                 ),
                 textInputAction: TextInputAction.next,
                 maxLength: 80,
+                enabled: !creating,
                 validator: _occasionGreeting,
               ),
             TextFormField(
@@ -267,6 +290,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               maxLength: 240,
               minLines: 2,
               maxLines: 4,
+              enabled: !creating,
             ),
             ListenableBuilder(
               listenable: Listenable.merge([
@@ -351,8 +375,20 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
   Future<void> _share(GiftVoucher voucher) async {
     final link = voucher.shareUrl;
     if (link == null || link.isEmpty) return;
+    // iPad requires a sharePositionOrigin to present the native popover;
+    // without it share_plus falls back to the clipboard. Anchor the popover
+    // to the creation form.
+    RenderBox? box;
+    final formContext = _formKey.currentContext;
+    if (formContext != null) {
+      final renderObject = formContext.findRenderObject();
+      if (renderObject is RenderBox &&
+          renderObject.attached &&
+          renderObject.hasSize) {
+        box = renderObject;
+      }
+    }
     try {
-      final box = context.findRenderObject() as RenderBox?;
       final greeting = giftOccasionGreeting(
         voucher.occasion,
         voucher.occasionGreeting,
@@ -360,7 +396,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
       await Share.share(
         '${greeting == null ? '' : '$greeting — '}${voucher.fromName} sent you ${_term(voucher.durationMonths)} of FitCheck Pro. $link',
         subject: 'A FitCheck Pro gift for ${voucher.toName}',
-        sharePositionOrigin: box != null && box.hasSize
+        sharePositionOrigin: box != null
             ? box.localToGlobal(Offset.zero) & box.size
             : null,
       );

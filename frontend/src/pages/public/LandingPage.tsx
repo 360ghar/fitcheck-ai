@@ -1,4 +1,6 @@
 import Hero from '@/components/landing/Hero'
+import ProofBar from '@/components/landing/ProofBar'
+import DemoStrip from '@/components/landing/DemoStrip'
 import TrustBar from '@/components/landing/TrustBar'
 import DemoSection from '@/components/landing/DemoSection'
 import Features from '@/components/landing/Features'
@@ -7,6 +9,7 @@ import PhotoshootShowcase from '@/components/landing/PhotoshootShowcase'
 import WhoItsFor from '@/components/landing/WhoItsFor'
 import GuidesStrip from '@/components/landing/GuidesStrip'
 import Pricing from '@/components/landing/Pricing'
+import ProofBand from '@/components/landing/ProofBand'
 import FAQ, { LANDING_FAQS } from '@/components/landing/FAQ'
 import CTASection from '@/components/landing/CTASection'
 import SEO from '@/components/seo/SEO'
@@ -87,6 +90,8 @@ export default function LandingPage() {
         jsonLd={[faqSchema, howToSchema, featureListSchema]}
       />
       <Hero />
+      <ProofBar />
+      <DemoStrip />
       <TrustBar />
       <DemoSection />
       <Features />
@@ -95,6 +100,7 @@ export default function LandingPage() {
       <WhoItsFor />
       <GuidesStrip />
       <Pricing />
+      <ProofBand />
       <FAQ />
       <CTASection />
     </>

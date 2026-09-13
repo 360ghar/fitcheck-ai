@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.exceptions import ValidationError
 from app.services import admin_service
 from app.services.admin_service import (
     clear_daily_ai_counters,
@@ -20,13 +21,37 @@ from tests.utils.fake_db import FakeDB
 @pytest.mark.asyncio
 async def test_extend_trial_is_atomic_and_revives_an_expired_trial():
     expired = (utcnow() - timedelta(days=30)).isoformat()
-    db = FakeDB(rows={"subscriptions": [{"user_id": "u1", "trial_end": expired}]})
+    db = FakeDB(
+        rows={
+            "subscriptions": [
+                {"user_id": "u1", "status": "trial", "plan_type": "pro_monthly", "trial_end": expired}
+            ]
+        }
+    )
 
     result = await extend_user_trial(db, "u1", 7)
 
     assert db.rpc_calls == [("admin_extend_user_trial", {"p_user_id": "u1", "p_days": 7})]
     assert not db.updates
     assert parse_utc_datetime(result["after"]) > utcnow() + timedelta(days=6)
+
+
+@pytest.mark.asyncio
+async def test_extend_trial_rejects_active_paid_subscriptions():
+    db = FakeDB(
+        rows={"subscriptions": [{"user_id": "u1", "status": "active", "plan_type": "pro_monthly"}]}
+    )
+
+    with pytest.raises(ValidationError):
+        await extend_user_trial(db, "u1", 7)
+
+
+@pytest.mark.asyncio
+async def test_extend_trial_rejects_free_plan():
+    db = FakeDB(rows={"subscriptions": [{"user_id": "u1", "status": "trial", "plan_type": "free"}]})
+
+    with pytest.raises(ValidationError):
+        await extend_user_trial(db, "u1", 7)
 
 
 @pytest.mark.asyncio
@@ -142,6 +167,47 @@ async def test_funnel_fetches_all_postgrest_pages_for_users_and_items():
 
 
 @pytest.mark.asyncio
+async def test_funnel_stages_are_cumulative_and_paid_counts_distinct_users():
+    created_at = (utcnow() - timedelta(days=2)).isoformat()
+    db = FakeDB(
+        rows={
+            "users": [
+                {"id": "u1", "created_at": created_at},  # outfit only, item outside 24h
+                {"id": "u2", "created_at": created_at},  # full path, two subscription rows
+                {"id": "u3", "created_at": created_at},  # signup only
+            ],
+            "items": [
+                {"id": "i1", "user_id": "u2", "created_at": created_at},
+                # u1's item exists but was added ~25h after their signup:
+                # fetched within the 30-day window, yet outside the strict
+                # 24h item window, so the items stage must not count it.
+                {
+                    "id": "i0",
+                    "user_id": "u1",
+                    "created_at": (utcnow() - timedelta(hours=23)).isoformat(),
+                },
+            ],
+            "outfits": [
+                {"id": "o1", "user_id": "u1", "created_at": created_at},
+                {"id": "o2", "user_id": "u2", "created_at": created_at},
+            ],
+            "subscriptions": [
+                {"user_id": "u2", "plan_type": "pro_monthly", "status": "active"},
+                {"user_id": "u2", "plan_type": "pro_yearly", "status": "trial"},
+            ],
+        }
+    )
+
+    result = await dashboard_funnel(db, days=30)
+
+    # u1's outfit is inside the 7-day window but their item is outside 24h —
+    # the outfit stage must be a subset of the item stage, never exceed it.
+    # u2 holds two subscription rows but must be counted once.
+    assert [step["count"] for step in result["steps"]] == [3, 1, 1, 1]
+    assert all(step["pct_of_prev"] <= 100.0 for step in result["steps"])
+
+
+@pytest.mark.asyncio
 async def test_retention_omits_the_current_immature_cohort(monkeypatch):
     now = datetime(2026, 8, 26, 12, tzinfo=timezone.utc)
     monkeypatch.setattr(admin_service, "utcnow", lambda: now)
@@ -164,8 +230,11 @@ async def test_retention_omits_the_current_immature_cohort(monkeypatch):
 
     result = await dashboard_retention(db, weeks=2)
 
+    # The current (immature) cohort is omitted, but requesting one extra
+    # Monday keeps the oldest mature cohort — weeks=2 yields exactly 2 rows.
     assert result["cohorts"] == [
-        {"week_start": "2026-08-17", "signups": 1, "retained_7d": 1, "retention_pct": 100.0}
+        {"week_start": "2026-08-10", "signups": 0, "retained_7d": 0, "retention_pct": 0.0},
+        {"week_start": "2026-08-17", "signups": 1, "retained_7d": 1, "retention_pct": 100.0},
     ]
 
 

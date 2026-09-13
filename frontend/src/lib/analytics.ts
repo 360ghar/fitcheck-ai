@@ -36,7 +36,12 @@ const eventQueue: Array<{ event: string; properties?: Props }> = []
 let queueFlushed = false
 
 const apiKey = import.meta.env.VITE_PUBLIC_POSTHOG_KEY as string | undefined
-const apiHost = import.meta.env.VITE_PUBLIC_POSTHOG_HOST as string | undefined
+// Default to the US ingest host: when the env is empty posthog-js would
+// otherwise send to a relative /api path, which the Vite proxy / backend
+// answers with 404 GET /api/session/properties (2026-09-13 RCA).
+const apiHost =
+  (import.meta.env.VITE_PUBLIC_POSTHOG_HOST as string | undefined) ||
+  'https://us.i.posthog.com'
 
 /**
  * Import and initialize PostHog. Resolves to null when the import fails —
@@ -145,6 +150,15 @@ function flushEventQueue(): void {
       // A single bad event must not abort the rest of the queue.
     }
   }
+}
+
+/**
+ * Shorthand for the landing page's primary funnel event. `location` names the
+ * CTA surface (`hero`, `pricing`, `proof`, `bottom`, `nav-demo`, ...). Extra
+ * properties (plan, promo) are merged in. Never throws.
+ */
+export function trackLandingCta(location: string, extra?: Props): void {
+  trackEvent('landing_cta_click', { location, ...extra })
 }
 
 /** Attach durable person properties (last session metadata, etc.). */

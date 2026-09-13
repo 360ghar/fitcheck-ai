@@ -285,7 +285,7 @@ export function PhotoshootDemo() {
     <EditorialPanel className="p-6 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
           <Camera className="h-5 w-5 text-primary" />
         </div>
         <div>
@@ -300,13 +300,13 @@ export function PhotoshootDemo() {
           <div
             {...getRootProps()}
             className={cn(
-              'h-full rounded-xl border border-dashed bg-surface-card p-8 text-center cursor-pointer flex flex-col items-center justify-center',
-              'transition-[border-color,background-color] duration-200 hover:border-ash',
-              isDragActive ? 'border-primary bg-secondary' : 'border-ash'
+              'flex h-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center',
+              'transition-[border-color,background-color] duration-200 hover:border-primary/50 hover:bg-secondary/70',
+              isDragActive && 'border-primary bg-secondary/70'
             )}
           >
             <input {...getInputProps({ 'aria-label': 'Upload your photo' })} />
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-pressed">
               <Camera className={cn('h-5 w-5 text-primary transition-transform duration-200', isDragActive && 'scale-110')} />
             </div>
             <p className="text-body font-medium mb-1">
@@ -322,11 +322,11 @@ export function PhotoshootDemo() {
         {state === 'idle' && photo && photoPreview && (
           <div className="h-full flex flex-col">
             {/* Success banner showing uploaded photo */}
-            <div className="flex items-center gap-3 mb-4 p-3 bg-success/10 rounded-lg">
+            <div className="mb-4 flex items-center gap-3 rounded-lg bg-success-pale p-3">
               <img
                 src={photoPreview}
                 alt=""
-                className="w-12 h-12 rounded-lg object-cover"
+                className="h-12 w-12 rounded-lg object-cover"
               />
               <div className="flex-1">
                 <p className="text-sm font-medium text-success">
@@ -347,12 +347,7 @@ export function PhotoshootDemo() {
               <p className="text-body mb-4 text-center">
                 Ready to generate 2 AI-styled photos
               </p>
-              <Button
-                onClick={handleGenerate}
-                className="bg-primary hover:bg-primary-pressed text-white"
-              >
-                Generate 2 Images
-              </Button>
+              <Button onClick={handleGenerate}>Generate 2 Images</Button>
             </div>
           </div>
         )}
@@ -382,7 +377,7 @@ export function PhotoshootDemo() {
                   key={img.id}
                   src={getImageSrc(img)}
                   alt="Generated preview"
-                  className="w-full aspect-[3/4] object-cover rounded-lg"
+                  className="aspect-[3/4] w-full rounded-lg object-cover shadow-pressed"
                 />
               ))}
             </div>
@@ -399,7 +394,7 @@ export function PhotoshootDemo() {
           </div>
 
           {result.partial_success && failedCount > 0 && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+            <div className="flex items-start gap-2 rounded-lg border border-tint-amber bg-tint-amber-pale p-3 text-tint-amber">
               <AlertTriangle className="mt-0.5 h-4 w-4" />
               <p className="text-xs">
                 {failedCount} slot{failedCount > 1 ? 's' : ''} failed. Retry each failed slot.
@@ -414,7 +409,7 @@ export function PhotoshootDemo() {
                 <img
                   src={getImageSrc(img)}
                   alt={`Generated ${idx + 1}`}
-                  className="w-full aspect-[3/4] object-cover rounded-lg"
+                  className="aspect-[3/4] w-full rounded-lg object-cover shadow-pressed"
                 />
                 <button
                   type="button"
@@ -430,18 +425,17 @@ export function PhotoshootDemo() {
             {failedIndices.map((failedIndex) => (
               <div
                 key={`demo-failed-${failedIndex}`}
-                className="aspect-[3/4] rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-3 flex flex-col justify-between"
+                className="flex aspect-[3/4] flex-col justify-between rounded-lg border border-dashed border-tint-amber bg-tint-amber-pale/60 p-3"
               >
                 <div>
-                  <div className="mb-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                  <div className="mb-2 inline-flex rounded-full border border-soft bg-card px-2 py-1 text-xs font-medium text-tint-amber">
                     Failed #{failedIndex + 1}
                   </div>
-                  <p className="text-xs text-amber-800">Retry to generate this slot.</p>
+                  <p className="text-xs text-tint-amber">Retry to generate this slot.</p>
                 </div>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-amber-300"
                   disabled={retryingFailedIndex !== null}
                   onClick={() => void retryFailedSlot(failedIndex)}
                 >
@@ -459,7 +453,7 @@ export function PhotoshootDemo() {
             </Button>
             <Button
               size="sm"
-              className="flex-1 bg-primary hover:bg-primary-pressed text-white"
+              className="flex-1"
               onClick={() => setShowLoginModal(true)}
             >
               Get More Images

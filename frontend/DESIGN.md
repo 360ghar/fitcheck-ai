@@ -6,8 +6,10 @@ Every new page should follow this visual language, not a generic AI/SaaS layout.
 
 Direction: **Wardrobe Studio** — a calm, image-forward "practical wardrobe studio."
 Photos and outfit canvases come first; chrome is quiet and recedes. Inspired by
-Pinterest (red accent, masonry grid, image-first, flat surfaces) and Airbnb
-(soft warm neutrals, rounded UI). This doc is the token source of truth;
+Pinterest (red accent, masonry grid, image-first) and Airbnb (soft warm neutrals,
+rounded UI), now re-based onto the **clay system** (`docs/exec-plans/active/clay-rebuild.md`):
+warm cream canvas, oat borders, and "pressed into clay" depth instead of the
+previous flat-editorial look. This doc is the token source of truth;
 `docs/DESIGN.md` holds the product intent and the processing-status vocabulary.
 
 > Stack note: Tailwind tokens are CSS variables in `src/index.css` (shadcn/ui
@@ -39,15 +41,25 @@ single editorial secondary (purple) for AI-pick / recommendation badges.
 
 > Migration note: this replaces the legacy indigo `--primary: 238.7 83.5% 66.7%`.
 
-### Surfaces (warm neutral, light)
+### Surfaces (clay warm neutral, light — hue 40–45, never a cool gray)
+
+The canvas carries the warmth so pure-white cards read as raised against it
+(clay.com's core depth trick). Updated 2026-09-13 by the clay rebuild.
 
 | Token | Var | Hex | HSL channels | Use |
 |-------|-----|-----|--------------|-----|
-| Canvas | `--background` | `#ffffff` | `0 0% 100%` | Page background, modals |
-| Soft Surface (`surface-soft`) | `--surface-soft` | `#fbfbf9` | `60 20% 98%` | Faintly cream-tinted page wash |
-| Surface Card (`surface-card`) | `--card` | `#f6f6f3` | `60 14% 96%` | Pin/item tile background, search-bar fill |
-| Secondary BG | `--secondary` | `#e5e5e0` | `60 9% 89%` | Secondary button fill |
-| Hairline (`hairline`) | `--border` | `#dbdbd1` | `60 12% 84%` | 1px row dividers, column rules |
+| Canvas (cream) | `--background` | `#fcfaf8` | `40 33% 98%` | Page background, inputs |
+| Surface Card (white) | `--card` | `#ffffff` | `0 0% 100%` | Raised cards, tiles, search-bar fill |
+| Soft Surface (`surface-soft`) | `--surface-soft` | `#faf8f5` | `40 33% 97%` | Faint cream page wash |
+| Deeper cream room (`surface-room`) | `--surface-room` | `#f4eedc` | `45 52% 91%` | Alternating tinted section "rooms" — max one per viewport |
+| Secondary BG | `--secondary` | `#f0ece6` | `40 25% 92%` | Secondary button fill |
+| Muted | `--muted` | `#f4f1eb` | `40 28% 94%` | Placeholder surfaces, letterboxes |
+| Hairline (oat) | `--border` | `#dad4c8` | `40 20% 82%` | 1px row dividers, column rules, card edges |
+| Light oat (`border-soft`) | `--border-soft` | `#ede8de` | `40 31% 90%` | Inner edges, soft fill tiers |
+| Warm silver (`silver`) | `--silver` | `#9f9b93` | `40 6% 60%` | Decorative large labels/kickers ONLY — never running copy (fails 4.5:1); use `mute`/`body` there |
+
+Borders are always oat (hue 40); a neutral `#ccc/#ddd` gray border is a slop
+tell and a token regression.
 
 There is no dark-CTA-strip surface token. A rare dark strip uses `bg-ink`, whose
 label is `text-on-dark` — and both invert, so the strip stays a strip in dark.
@@ -63,24 +75,21 @@ script in `index.html`, `ThemeProvider`'s `defaultTheme`, and its call sites
 
 | Token | Var | HSL channels | Hex | vs `--background` | vs `--card` | Use |
 |-------|-----|--------------|-----|---|---|-----|
-| Ink (`ink`) | `--foreground` | `0 0% 0%` | `#000000` | 21.00 | 19.44 | Headlines, primary nav links |
-| Body (`body`) | `--body` | `60 6% 19%` | `#33332e` | 12.64 | 11.70 | Default paragraph text |
-| Mute (`mute`) | `--muted-foreground` | `60 3% 37%` | `#61615c` | 6.21 | 5.75 | Metadata, secondary captions, footer links |
-| Ash (`ash`) ‡ | `--ash` | `60 3% 43%` | `#71716a` | 4.92 | 4.55 | Disabled text, placeholders |
-| Stone | *(hex, light-locked)* | — | `#c8c8c1` | 1.68 | 1.56 | Least-emphasis utility text, disabled borders (never text) |
+| Ink (`ink`) | `--foreground` | `40 12% 9%` | `#1a1814` | 17.09 | 17.75 | Headlines, primary nav links — warm near-black |
+| Body (`body`) | `--body` | `40 5% 23%` | `#3e3c38` | 10.65 | 11.07 | Default paragraph text — warm gray |
+| Mute (`mute`) | `--muted-foreground` | `40 4% 38%` | `#65625d` | 5.84 | 6.06 | Metadata, secondary captions, footer links |
+| Ash (`ash`) ‡ | `--ash` | `40 3% 43%` | `#716f6a` | 4.84 | 5.03 | Disabled text, placeholders |
+| Warm silver (`silver`) | `--silver` | `40 6% 60%` | `#9f9b93` | 2.96 | 3.06 | Decorative kickers/large labels only (never content) |
+| Stone | *(hex, light-locked)* | — | `#c8c8c1` | 1.65 | 1.53 | Least-emphasis utility text, disabled borders (never text) |
 
-‡ Ash was `60 3% 56%` (`#92928b`), which measured **3.12:1** on `--background`
-and 2.89:1 on `--card` — a straight AA failure on every placeholder and every
-disabled label in light mode, and placeholder text is content. `43%` is the
-*lightest* value that clears 4.5:1 on both of ash's real backdrops (a focused
-input is `--background`; a resting search pill and a disabled button are
-`--card`), so it holds the widest Ash/Mute gap the constraint allows: 6
-lightness points, 1.26:1 between the two tiers. They are never adjacent on
-screen — ash sits inside a control, mute sits in body copy — so the step reads
-as a tier rather than a near-miss. Do not lighten past 43%: `46%` reaches only
-4.39 / 4.07. Ash on `--secondary` measures 3.91 and is out of contract; a
-secondary button's label is `text-secondary-foreground` and a disabled button
-repaints to `bg-surface-card`, so that pairing does not occur.
+‡ Ash is the placeholder / disabled tier. Placeholder text is content, so its
+4.5:1 floor is enforced by `scripts/check_theme_tokens.py`. On the clay canvas
+`43%` at hue 40 measures 4.84:1 on `--background` and 5.03:1 on `--card` (the
+focused-input and disabled-button backdrops). Do not lighten past 43%; keep
+ash inside controls and mute in body copy so the two tiers never sit adjacent.
+Ash on `--secondary` measures 4.28 and is out of contract; a secondary
+button's label is `text-secondary-foreground` and a disabled button repaints
+to `bg-surface-card`, so that pairing does not occur.
 
 ### Semantic
 
@@ -146,7 +155,13 @@ Surfaces:
 | Surface card (`surface-card`) | `--card` | `60 5% 13%` | `#23231f` |
 | Soft surface (`surface-soft`) | `--surface-soft` | `60 5% 16%` | `#2b2b27` |
 | Secondary / raised | `--secondary` | `60 5% 17%` | `#2e2e29` |
-| Hairline (`hairline`) | `--border` | `60 5% 22%` | `#3b3b35` |
+| Deeper cream room | `--surface-room` | `45 10% 14%` | `#272520` |
+| Hairline (`hairline`) | `--border` | `45 8% 24%` | `#424038` |
+| Light oat (`border-soft`) | `--border-soft` | `45 8% 20%` | `#37352f` |
+| Warm silver (`silver`) | `--silver` | `45 6% 58%` | `#9a978d` |
+
+Dark borders shift to hue 45 so the oat warmth survives the inversion; the
+near-black base stays at hue 60.
 
 Text and accent, with measured WCAG ratios against `--background` / `--card` /
 `--secondary`:
@@ -204,9 +219,9 @@ display tiers, loaded in `src/main.tsx`. No serif. Steep hierarchy: display drop
 
 | Role | Size / Weight / lh | Tracking | Use |
 |------|---------------------|----------|-----|
-| `display-xl` | 70px / 600 / 1.1 | -1.2px | Landing hero, marketing display |
-| `display-lg` | 44px / 700 / 1.15 | -1.2px | Section headlines |
-| `heading-xl` | 28px / 700 / 1.2 | -1.2px | Page headers |
+| `display-xl` | clamp(56–80px) / 600 / 1.05 | -0.03em | Landing hero (`clamp(3.5rem, 8vw, 5rem)`), marketing display |
+| `display-lg` | 44px / 600 / 1.12 | -0.03em | Section headlines |
+| `heading-xl` | 28px / 600 / 1.2 | -0.02em | Page headers |
 | `heading-lg` | 22px / 600 / 1.25 | 0 | Section titles |
 | `heading-md` | 18px / 600 / 1.3 | 0 | Card title, in-grid label |
 | `body-md` | 16px / 400 / 1.4 | 0 | Default body, modal copy |
@@ -217,8 +232,10 @@ display tiers, loaded in `src/main.tsx`. No serif. Steep hierarchy: display drop
 | `button-md` | 14px / 700 / 1 | 0 | Primary/secondary buttons |
 | `button-sm` | 12px / 700 / 1 | 0 | Compact pill chips |
 
-Display tiers use the `.font-display tracking-tight`
-utility (or a `landing-display` class) for the tight tracking.
+Display tiers never exceed weight 600 — never extra-bold (clay rule). Display
+tiers use the `.font-display` utility plus the baked-in negative tracking in
+`.type-display-*` / `.landing-display` (−0.03em). Marketing sections set body
+copy at 18px/1.6.
 
 ---
 
@@ -229,15 +246,21 @@ duplicate variants — edit the primitive.
 
 ### Buttons
 
+All buttons use `rounded-md` (12px). Solid variants (`default`, `primary`,
+`destructive`, `secondary`) carry the clay depth treatment: `shadow-pressed` at
+rest, `hover:shadow-offset` + a −1px,−1px diagonal shift, `active:shadow-none`
+(pressed flat into clay). Quiet variants (ghost/tertiary/outline/link/
+pill-on-image/icon-circular) stay flat.
+
 | Variant | Spec |
 |---------|------|
-| `primary` | `bg-primary` (red) + `text on-primary` (white/ink); `rounded-16px`; `h-10` (40px) |
+| `primary` | `bg-primary` (red) + `text-primary-foreground`; `rounded-md` (12px); `h-11` (44px); clay pressed/offset depth |
 | `primary-pressed` | `bg` Brand Red Pressed |
-| `secondary` | `bg secondary-bg` (#e5e5e0) + `text ink`; `rounded-16px` |
-| `tertiary` | transparent + `text ink`; `rounded-16px` |
-| `pill-on-image` | `bg canvas` + `text ink`; `rounded-full`; sits over photography |
-| `icon-circular` | `bg surface-card`; 40px circle; `rounded-full` |
-| `disabled` | `bg surface-card` + `text ash` |
+| `secondary` | `bg secondary` (oat `#f0ece6`) + `text ink`; clay depth |
+| `tertiary` | transparent + `text ink`; flat |
+| `pill-on-image` | `bg canvas` + `text ink`; `rounded-full`; sits over photography; flat |
+| `icon-circular` | `bg surface-card`; 44px circle; `rounded-full`; flat |
+| `disabled` | `bg surface-card` + `text ash`, no shadow |
 
 Button copy is sentence-case, imperative ("Save outfit", "Add to wardrobe").
 
@@ -250,17 +273,20 @@ Button copy is sentence-case, imperative ("Save outfit", "Add to wardrobe").
 
 ### Cards
 
-- **Item/Pin card:** flat, no shadow, `rounded-16px`, hairline border only on
-  focus/hover. 32px radius for large cards and modals.
-- **Feature card:** on canvas; soft variant on cream `soft-surface`.
-- **Modal card:** centered ~480px desktop, full-width sheet on mobile; the only
-  surface that receives elevation (`0 16px 32px rgba(0,0,0,0.16)` over scrim).
+- **Every card rests pressed:** the `Card` primitive applies `shadow-pressed`
+  (stamped into the page, not floating). The hairline border stays for edges.
+- **Interactive cards:** `Card variant="interactive"` (or the `.card-interactive`
+  utility) swaps the pressed stack for the hard `shadow-offset` on hover/focus
+  with a small diagonal rise — the clay signature interaction.
+- **Feature card:** white card on cream canvas; `rounded-2xl` (24px).
+- **Modal card:** centered ~480px desktop, full-width sheet on mobile.
 
 ### Forms
 
-- **Inputs:** `rounded-16px`, `h-11` (44px), canvas bg, 1px ash border.
-- **Focus signal:** double ring — `--focus-inner` inner gap + `--ring` outer
-  outline. Never a single colored outline.
+- **Inputs/Textarea/Select:** `rounded-md` (12px), `h-11` (44px), canvas bg,
+  1px ash border, `shadow-pressed` — fields are stamped into the page.
+- **Focus signal:** 2px solid `--ring` outline + `--focus-inner` gap. Never a
+  single colored outline.
 
 ### Bottom nav (mobile)
 
@@ -275,7 +301,7 @@ The defining layout. A column-based masonry that preserves each garment's
 natural aspect ratio — never crops, never forces square tiles. Drives the
 Wardrobe browse, Try-On results, Photoshoot gallery, and outfit canvases.
 
-- Tile radius 16px (32px for large/hero tiles)
+- Tile radius 16px (`rounded-lg`; 24px for large/hero tiles)
 - Gutters 8px (6px on mobile) so imagery effectively touches across columns
 - Columns: 5–6 ultrawide → 4 desktop → 3 → 2 tablet → 1 mobile
 - Flat tiles; on hover/focus a hairline + subtle `Save` pill-on-image appears
@@ -312,25 +338,43 @@ not the page width.
 
 ## 06 — Shapes (Radius)
 
-Three values do all the work. No mid-radius value between md and lg.
+Clay radius scale (clay-rebuild brief). `tailwind.config.ts` remaps the
+Tailwind steps so existing class names land on the clay geometry:
 
 | Token | Value | Use |
 |-------|-------|-----|
-| none | 0 | Footer, primary nav, page sections |
-| sm | 8 | Rare editorial tooltip |
-| md | 16 | Buttons, inputs, pin/item cards, feature cards |
-| lg | 32 | Large pin cards, modals |
-| full | 9999 | Search bar, filter chips, overlay pills, avatars |
+| none | 0 | Full-bleed page sections |
+| `rounded-sm` / DEFAULT | 8 | Small inline elements |
+| `rounded-md`, `--radius` | 12 | Buttons, inputs, selects, standard controls |
+| `rounded-lg` | 16 | Medium groupings |
+| `rounded-xl` / `2xl` / `3xl` | 24 | Feature cards, panels, landing panels |
+| `rounded-[2rem]` | 32 | Section containers |
+| `rounded-[2.5rem]` | 40 | Page-width containers (footer, final CTA wrapper) |
+| `rounded-full` | 9999 | Search bar, filter chips, overlay pills, avatars |
 
-Set `--radius: 1rem` (16px) in `:root`.
+Set `--radius: 0.75rem` (12px) in `:root`.
 
 ---
 
-## 07 — Depth & Elevation
+## 07 — Depth & Elevation (the "pressed into clay" signature)
 
-Content surfaces are **flat**. There is no drop-shadow elevation on cards, grids,
-or tiles. The only shadow lives on the modal layer (`0 16px 32px rgba(0,0,0,0.16)`
-over a scrim). Hairline borders (1px Hairline token) define edges, not shadows.
+The old flat rule ("all box-shadows are none") is **revoked** by the clay
+rebuild. Two var-backed shadows (re-tuned in `.dark`) do all the work —
+`shadow-sm..2xl` remain `none` so stray legacy classes stay flat:
+
+- **`shadow-pressed`** (resting) — 3-layer stack:
+  `0 1px 1px rgba(0,0,0,0.10), inset 0 -1px 1px rgba(0,0,0,0.04),
+  0 -0.5px 1px rgba(0,0,0,0.05)`. Cards feel stamped in, not floating. Applied
+  by default to `Card`, badges, inputs; use on primary cards (pricing, demo
+  panels, hero canvas, highlight tiles) — NOT on every div.
+- **`shadow-offset`** (hover) — hard no-blur offset `rgb(0,0,0) -7px 7px` plus a
+  small `translate(-1px,-1px)` rise at ~150ms ease-out. The signature
+  interaction; visible, not subtle.
+- **Ready-made patterns** in `src/index.css`: `.card-interactive` (resting
+  pressed + hover/focus-within offset, reduced-motion aware) and `.lift` (same
+  treatment for buttons/links outside the Button primitive).
+- Dark mode re-tunes the pressed alphas heavier (0.55/0.35) so the cast edge
+  still reads on near-black; the hard offset stays pure black.
 
 ---
 
@@ -350,10 +394,12 @@ safe. These live in the primitives, not per call site:
 - **Press scale** — every Button gets `motion-safe:active:scale-[0.97]`; the
   FAB and icon-circular variants scale slightly more. Press feedback should
   feel mechanical, not like a repaint.
-- **Grounded lift** — `Card variant="interactive"` pairs
-  `motion-safe:hover:-translate-y-0.5` with a border tone shift. A bare
-  translate over a shadowless flat surface reads as a jump (see StatCard
-  history); the hairline grounds the motion. Shadows stay banned (§07).
+- **Clay offset hover** — `Card variant="interactive"` (and solid Button
+  variants) rest pressed (`shadow-pressed`) and rise into the hard
+  `shadow-offset` with a small `translate(-1px,-1px)` at ~150ms ease-out on
+  hover/focus. The offset shadow grounds the motion, replacing the old bare
+  "grounded lift" translate. Shadow swaps still fire under reduced motion;
+  only the translate is motion-safe gated.
 - **Shimmer** — the `.skeleton` class sweeps a transform-only highlight over
   the resting tone (replaces flat `animate-pulse`); direction communicates
   "loading", which a pulse never did.
@@ -380,14 +426,19 @@ system above:
 - **Information uses ledgers, sequences, and matrices.** Prefer ruled rows and
   exact grid alignment over bento-card collections. Use a comparison table on
   desktop and locally scrolling snap cards or demos on narrow screens.
-- **Landing surfaces stay flat.** No glass, glow, decorative blur, card
-  shadows, or ambient infinite motion. Use Canvas, Soft Surface, Card, Ink,
-  Hairline, and Brand Red with 16px or 32px radii. Exactly two gradient
-  exceptions are sanctioned (2026-09-01): one warm var-backed radial wash
-  behind the hero canvas (`--primary` at 7% alpha, fades by mid-page), and the
-  hex-locked `gradient-primary` on the final CTA button — brand red does not
-  invert, and that CTA rides the ink strip, not a theme surface. Section
-  kicker dots and small icon tiles may use the editorial tints (§01).
+- **Landing surfaces are clay surfaces** (updated 2026-09-13; supersedes the
+  2026-09-01 flat rule). Cards and panels use Canvas, Cream Room
+  (`bg-surface-room`, max one tinted room per viewport), Card, Ink, oat
+  Hairline, and Brand Red with 12px/24px/32px/40px radii from §06. Depth comes
+  from `shadow-pressed` at rest and `shadow-offset` on interactive hover — no
+  glass, glow, decorative blur, or ambient infinite motion. Exactly two
+  gradient exceptions remain sanctioned (2026-09-01): one warm var-backed
+  radial wash behind the hero canvas (`--primary` at 7% alpha, fades by
+  mid-page), and the hex-locked `gradient-primary` on the final CTA button —
+  brand red does not invert, and that CTA rides the final pressed white card
+  (the clay-rebuild page close; the old dark ink strip was revoked), never a
+  tinted theme surface, so it reads identically in both themes. Section kicker
+  dots and small icon tiles may use the editorial tints (§01).
 
 Rules for landing motion:
 

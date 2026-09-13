@@ -51,7 +51,7 @@ class MainShellBinding extends Bindings {
       fenix: true,
     );
 
-    // Studio tools initialize only when first opened.
+    // Photoshoot tab (replacing Try-On in bottom nav)
     Get.lazyPut<PhotoshootController>(
       () => PhotoshootController(),
       fenix: true,

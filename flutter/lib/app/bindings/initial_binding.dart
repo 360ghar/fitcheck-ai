@@ -11,6 +11,7 @@ import '../../features/auth/controllers/auth_controller.dart';
 import '../../features/auth/services/auth_service.dart';
 import '../../features/auth/services/referral_service.dart';
 import '../../features/subscription/repositories/subscription_repository.dart';
+import '../../features/subscription/services/purchase_recovery_service.dart';
 
 /// Initial binding - sets up global services and singletons
 class InitialBinding extends Bindings {
@@ -45,6 +46,17 @@ class InitialBinding extends Bindings {
     // Register subscription repository and user initialization service
     Get.put(SubscriptionRepository());
     Get.put(UserInitializationService(subscriptionRepo: Get.find<SubscriptionRepository>()));
+
+    // App-lifetime purchase recovery: owns the in_app_purchase stream so a
+    // purchase whose backend verification failed (e.g. a network drop right
+    // after the store charged the user) is verified + completed even when
+    // the subscription page never opens — Android has no webhook account
+    // linkage without it. Permanent by design: Get.put inside InitialBinding
+    // survives route disposal, like SupabaseService above. Must come after
+    // SupabaseService (auth flag) and SubscriptionRepository.
+    Get.put(
+      PurchaseRecoveryService(repository: Get.find<SubscriptionRepository>()),
+    );
 
     // Register wardrobe sync service
     Get.put(WardrobeSyncService());

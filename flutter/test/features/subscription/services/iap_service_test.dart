@@ -22,8 +22,18 @@ class FakeInAppPurchasePlatform extends InAppPurchasePlatform {
   /// Number of times [queryProductDetails] was invoked (retry accounting).
   int queryCalls = 0;
 
+  /// The purchase param passed to the last [buyNonConsumable] call, so tests
+  /// can assert the store account id (applicationUserName) contract.
+  PurchaseParam? lastPurchaseParam;
+
   @override
   Future<bool> isAvailable() async => true;
+
+  @override
+  Future<bool> buyNonConsumable({required PurchaseParam purchaseParam}) async {
+    lastPurchaseParam = purchaseParam;
+    return true;
+  }
 
   @override
   Future<ProductDetailsResponse> queryProductDetails(Set<String> identifiers) {
@@ -244,6 +254,89 @@ void main() {
       // Even with an erroring stub, an empty set short-circuits to [].
       expect((await iap.fetchProducts({})).products, isEmpty);
       expect(platform.queryCalls, 0);
+    });
+  });
+
+  group('IapService.startPurchase account id', () {
+    final product = ProductDetails(
+      id: 'plus_monthly',
+      title: 'Plus Monthly',
+      description: 'Monthly plan',
+      price: r'$9.99',
+      rawPrice: 9.99,
+      currencyCode: 'USD',
+    );
+
+    test('Google: the user id is sent obfuscated (sha256), never raw', () async {
+      // Play policy requires the BillingFlow accountId to be one-way
+      // hashed; Google echoes it back in RTDN as
+      // obfuscatedExternalAccountId for backend attribution.
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      try {
+        InAppPurchase.instance;
+        final androidPlatform = FakeInAppPurchasePlatform(
+          response: ProductDetailsResponse(
+            productDetails: const [],
+            notFoundIDs: const [],
+          ),
+        );
+        InAppPurchasePlatform.instance = androidPlatform;
+
+        final iap = IapService();
+        await iap.startPurchase(product, appAccountToken: 'user-uuid-1');
+
+        expect(
+          androidPlatform.lastPurchaseParam?.applicationUserName,
+          // sha256('user-uuid-1'), hex.
+          '9d08cd99bb60b16d703c96880ac77e1939d744edddb8afe4afed105d8e149a51',
+        );
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    test('Apple: the raw UUID goes into appAccountToken', () async {
+      // StoreKit REQUIRES a UUID in appAccountToken; hashing it would make
+      // the purchase sheet reject it. Supabase user IDs already are UUIDs.
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        InAppPurchase.instance;
+        final iosPlatform = FakeInAppPurchasePlatform(
+          response: ProductDetailsResponse(
+            productDetails: const [],
+            notFoundIDs: const [],
+          ),
+        );
+        InAppPurchasePlatform.instance = iosPlatform;
+
+        final iap = IapService();
+        await iap.startPurchase(product, appAccountToken: 'user-uuid-1');
+
+        expect(iosPlatform.lastPurchaseParam?.applicationUserName, 'user-uuid-1');
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    test('a missing user id sends no account id at all', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      try {
+        InAppPurchase.instance;
+        final androidPlatform = FakeInAppPurchasePlatform(
+          response: ProductDetailsResponse(
+            productDetails: const [],
+            notFoundIDs: const [],
+          ),
+        );
+        InAppPurchasePlatform.instance = androidPlatform;
+
+        final iap = IapService();
+        await iap.startPurchase(product);
+
+        expect(androidPlatform.lastPurchaseParam?.applicationUserName, isNull);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
     });
   });
 }

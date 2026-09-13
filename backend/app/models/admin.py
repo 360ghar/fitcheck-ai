@@ -43,6 +43,12 @@ class AdminMeResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class ExtendTrialRequest(BaseModel):
+    """POST /admin/users/{id}/subscription/extend-trial body."""
+
+    days: int = Field(..., ge=1, le=90, description="Days to extend trial (1..90)")
+
+
 # =============================================================================
 # Users
 # =============================================================================
@@ -363,6 +369,9 @@ class AdminReferralsResponse(BaseModel):
 
     codes_issued: int = 0
     redemptions: int = 0
+    # Extras rendered by the admin dashboard referrals pulse.
+    promo_active: int = 0
+    gifts_issued: int = 0
     credits_granted: int = 0
     credits_pending: int = 0
 

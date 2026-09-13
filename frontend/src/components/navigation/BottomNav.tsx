@@ -93,6 +93,10 @@ export function BottomNav() {
               'flex items-center justify-center',
               // Offset to float above nav bar
               '-mt-6',
+              // Clay depth: pressed at rest, hard offset shadow on hover
+              // (`.lift` = the press-then-offset pattern outside the Button
+              // primitive; the translate is reduced-motion gated there).
+              'lift',
               // Hover effects
               'hover:bg-primary/90 active:bg-primary-pressed',
               // Press feedback: mechanical dip, not a repaint alone

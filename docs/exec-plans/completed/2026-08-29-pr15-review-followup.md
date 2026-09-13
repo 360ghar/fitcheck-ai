@@ -26,7 +26,7 @@ active checkout.
 
 ## Context / links
 
-- Related PR: https://github.com/360ghar/fitcheck-ai/pull/15
+- Related PR: <https://github.com/360ghar/fitcheck-ai/pull/15>
 - Related code: backend MCP and OAuth, web OAuth and gift flows, Flutter
   client reliability, widgets, and architecture checks.
 

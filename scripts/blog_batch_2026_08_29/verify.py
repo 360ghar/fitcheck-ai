@@ -7,8 +7,8 @@ the Supabase REST API via the `supabase` Python SDK. Use after running
 `scripts/blog_batch_2026_08_29/publish.py --commit`.
 
 Usage (from repo root):
-    python scripts/blog_batch_2026_08_29/verify.py                       # default: count + schema + 3 samples
-    python scripts/blog_batch_2026_08_29/verify.py --count              # print count of posts dated 2026-08-29
+    python scripts/blog_batch_2026_08_29/verify.py                       # default: manifest check + schema + 3 samples
+    python scripts/blog_batch_2026_08_29/verify.py --count              # compare the date's slugs against publish.py's manifest
     python scripts/blog_batch_2026_08_29/verify.py --sample 5           # print 5 titles + slugs + first 100 chars of excerpt
     python scripts/blog_batch_2026_08_29/verify.py --check-schema       # verify required fields are populated on every post
     python scripts/blog_batch_2026_08_29/verify.py --slugs              # print all 52 slugs as a list
@@ -98,6 +98,23 @@ def _connect():
 # --------------------------------------------------------------------------- #
 # fetch
 # --------------------------------------------------------------------------- #
+def _expected_posts() -> list[dict[str, Any]]:
+    """Import the batch manifest from publish.py — the single source of truth.
+
+    Comparing slug SETS (not just a count) catches the silent failure mode
+    where an unrelated post dated 2026-08-29 offsets a missing batch post.
+    """
+    script_dir = str(Path(__file__).resolve().parent)
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    try:
+        from publish import _build_posts  # type: ignore[import-not-found]
+    except ImportError as exc:
+        print(f"ERROR: cannot import publish._build_posts: {exc}", file=sys.stderr)
+        sys.exit(3)
+    return _build_posts()
+
+
 def _fetch_batch(client) -> list[dict[str, Any]]:
     """Fetch every blog_posts row dated 2026-08-29 (no pagination tricks; 52 rows)."""
     try:
@@ -117,15 +134,39 @@ def _fetch_batch(client) -> list[dict[str, Any]]:
 # commands
 # --------------------------------------------------------------------------- #
 def cmd_count(client, posts: list[dict[str, Any]]) -> int:
-    n = len(posts)
-    suffix = " (matches expected)" if n == EXPECTED_TOTAL else f" (expected {EXPECTED_TOTAL})"
-    print(f"{n}{suffix}")
-    if n == 0:
+    """Verify every manifest slug exists, nothing extra, and all published."""
+    expected = {post["slug"] for post in _expected_posts()}
+    fetched = {row.get("slug", ""): row for row in posts}
+    print(f"{len(posts)} rows dated {BATCH_DATE} (manifest has {len(expected)})")
+    if not posts:
         return 2
-    return 0 if n == EXPECTED_TOTAL else 1
+
+    errors: list[str] = []
+    missing = sorted(expected - set(fetched))
+    unexpected = sorted(set(fetched) - expected)
+    if missing:
+        errors.append(f"missing slugs ({len(missing)}): {', '.join(missing)}")
+    if unexpected:
+        errors.append(f"unexpected slugs ({len(unexpected)}): {', '.join(unexpected)}")
+    # A row can exist with the right slug yet be flipped back to draft.
+    unpublished = sorted(
+        slug for slug, row in fetched.items() if slug in expected and not row.get("is_published")
+    )
+    if unpublished:
+        errors.append(f"not published ({len(unpublished)}): {', '.join(unpublished)}")
+    if errors:
+        print("MANIFEST MISMATCH:", file=sys.stderr)
+        for err in errors:
+            print(f"  - {err}", file=sys.stderr)
+        return 1
+    print(f"OK: all {len(expected)} expected slugs present and published")
+    return 0
 
 
 def cmd_sample(client, posts: list[dict[str, Any]], n: int) -> int:
+    if n < 0:
+        print("ERROR: --sample N must be >= 0", file=sys.stderr)
+        return 2
     if not posts:
         print("(no posts to sample)")
         return 2

@@ -1,7 +1,7 @@
 # Design
 
 Status: draft  
-Last updated: 2026-09-05
+Last updated: 2026-09-13
 
 Visual and interaction direction for FitCheck web. Native Flutter uses the
 approved colourful magazine system in [`flutter/DESIGN.md`](../flutter/DESIGN.md),
@@ -11,6 +11,26 @@ to the web client.
 ## Intent
 
 FitCheck should feel like a **practical wardrobe studio**: calm, image-forward, fast to scan a closet and commit an outfit. Not a generic SaaS marketing template and not a noisy social feed.
+
+## Visual direction: the clay system (2026-09-13)
+
+The web app and landing page share a clay.com-grade "tactile" language, specced
+in `docs/exec-plans/active/clay-rebuild.md` and tokenized in
+`frontend/src/index.css` + `frontend/tailwind.config.ts`:
+
+- **Color:** warm cream canvas (`40 33% 98%`), pure-white raised cards, a
+  deeper-cream section tint (`bg-surface-room`, max one tinted room per
+  viewport), oat borders (`#dad4c8` / `#ede8de`) — never a cool gray. Dark mode
+  stays warm hue-60 near-black.
+- **Depth:** resting `shadow-pressed` (stamped into clay) and the signature
+  hard `shadow-offset` hover; ready-made patterns `.card-interactive` / `.lift`.
+- **Radii:** 12px controls (`rounded-md`), 24px feature cards
+  (`rounded-2xl`/`3xl`), 32px sections (`rounded-[2rem]`), 40px page containers
+  (`rounded-[2.5rem]`).
+- **Type:** Inter + Manrope; display up to `clamp(3.5rem, 8vw, 5rem)`,
+  tracking −0.03em, weight ≤600.
+
+Token details and contrast tables live in `frontend/DESIGN.md`.
 
 ## Foundations
 

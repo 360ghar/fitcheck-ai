@@ -200,7 +200,20 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
         progress = controller.uploadProgress.value;
       } else if (controller.isExtracting) {
         final total = controller.selectedImages.length;
-        progress = total > 0 ? controller.extractedCount.value / total : 0;
+        final failed = controller.failedCount.value;
+        // Failed images never become "extracted", so raw extracted/total
+        // could never reach 1.0 when any image fails and the bar read as
+        // stuck. Subtract failures from the denominator and clamp once
+        // every image has finished (extracted + failed >= total).
+        final expected = total - failed;
+        if (total <= 0) {
+          progress = 0;
+        } else if (expected <= 0 ||
+            controller.extractedCount.value >= expected) {
+          progress = 1.0;
+        } else {
+          progress = controller.extractedCount.value / expected;
+        }
       } else if (controller.isGenerating) {
         final total = controller.totalItems.value;
         progress = total > 0 ? controller.generatedCount.value / total : 0;

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { CreditCard, LockKeyhole, ShieldCheck, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { GeneratedImage } from '@/components/ui/generated-image'
 
 type FactTone = 'coral' | 'amber' | 'teal' | 'blue'
 
@@ -49,17 +50,22 @@ const trustFacts: Array<{
   },
 ]
 
+/**
+ * Trust facts as pressed clay tiles on the section's cream room (the one
+ * tinted room in this viewport). `.card-interactive` gives the resting
+ * pressed shadow plus the offset hover/focus signature.
+ */
 export default function TrustBar() {
   return (
-    <section aria-label="Verified privacy and billing facts" className="border-y border-border bg-surface-soft">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <ul className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:gap-x-8 sm:divide-y-0 lg:grid-cols-4 lg:gap-x-0 lg:divide-x">
+    <section aria-label="Verified privacy and billing facts" className="border-y border-border bg-surface-room">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {trustFacts.map((fact) => {
             const content = (
               <>
                 <span
                   className={cn(
-                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border',
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-soft',
                     FACT_TILE[fact.tone]
                   )}
                 >
@@ -76,10 +82,10 @@ export default function TrustBar() {
               </>
             )
             const className =
-              'group flex min-h-32 items-start gap-4 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+              'card-interactive group flex min-h-32 items-start gap-4 rounded-3xl border border-border bg-card p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
 
             return (
-              <li key={fact.title} className="min-w-0 lg:px-6 lg:first:pl-0 lg:last:pr-0">
+              <li key={fact.title} className="min-w-0">
                 {fact.href.startsWith('#') ? (
                   <a href={fact.href} className={className}>
                     {content}
@@ -93,6 +99,32 @@ export default function TrustBar() {
             )
           })}
         </ul>
+        {/* Avatar honesty pill: a finished, contained close to the trust
+            section — illustration only, never a testimonial (no names,
+            quotes, or claims). */}
+        <div className="mt-8 flex justify-center">
+          <div className="flex items-center gap-4 rounded-full border border-border bg-card py-2 pl-2 pr-6 shadow-pressed">
+            <GeneratedImage
+              src="/generated/avatar-diverse-1x1-640.webp"
+              srcSet="/generated/avatar-diverse-1x1-640.webp 640w, /generated/avatar-diverse-1x1.webp 1080w"
+              sizes="48px"
+              alt=""
+              width={96}
+              height={96}
+              loading="lazy"
+              decoding="async"
+              className="h-12 w-12 shrink-0 rounded-full border border-border object-cover"
+            />
+            <p className="min-w-0 text-sm leading-snug">
+              <span className="block font-semibold text-foreground">
+                Avatars are AI-generated examples
+              </span>
+              <span className="block text-muted-foreground">
+                Real member photos are never shown without consent.
+              </span>
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   )

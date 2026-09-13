@@ -23,9 +23,17 @@ class _SplashPageState extends State<SplashPage> {
     final authController = Get.find<AuthController>();
     await authController.initializeAuth();
     if (!mounted) return;
-    Get.offAllNamed(
-      authController.isAuthenticated ? Routes.home : Routes.onboarding,
-    );
+    // `isAuthenticated` additionally requires the backend profile
+    // (`user.value`) to have loaded. `_initializeAuth` swallows /users/me
+    // errors, so an offline or 5xx start left a valid session with a null
+    // profile — and routing that to onboarding signed the user out. A
+    // restored Supabase session is enough to enter the shell, which
+    // tolerates a late profile refresh.
+    if (authController.isAuthenticated || authController.hasSession) {
+      Get.offAllNamed(Routes.home);
+    } else {
+      Get.offAllNamed(Routes.onboarding);
+    }
   }
 
   @override
