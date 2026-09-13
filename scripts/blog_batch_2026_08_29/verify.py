@@ -126,6 +126,9 @@ def cmd_count(client, posts: list[dict[str, Any]]) -> int:
 
 
 def cmd_sample(client, posts: list[dict[str, Any]], n: int) -> int:
+    if n < 0:
+        print("ERROR: --sample N must be >= 0", file=sys.stderr)
+        return 2
     if not posts:
         print("(no posts to sample)")
         return 2

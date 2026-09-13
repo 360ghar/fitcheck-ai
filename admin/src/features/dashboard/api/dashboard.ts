@@ -13,6 +13,7 @@ import type {
   AdminTrendsResponse,
   PageResponse_AdminAuditEventItem_,
 } from '@/shared/api/schemaTypes'
+import { usePermission } from '@/shared/hooks/usePermission'
 import { QUERY_RETRY, QUERY_STALE_TIMES } from '@/shared/lib/constants'
 
 /**
@@ -25,7 +26,7 @@ import { QUERY_RETRY, QUERY_STALE_TIMES } from '@/shared/lib/constants'
  *   GET /api/v1/admin/dashboards/trends     → AdminTrendsResponse
  *   GET /api/v1/admin/dashboards/funnel     → JsonRecord (optional, graceful fallback)
  *   GET /api/v1/admin/dashboards/retention  → JsonRecord (optional, graceful fallback)
- *   GET /api/v1/admin/ops/health            → AdminOpsHealthResponse (dashboard-local copy)
+ *   GET /api/v1/admin/ops/health            → AdminOpsHealthResponse (shared with ops feature)
  *
  * Overview payload keys (from the backend service): signups/active_users are
  * `{ "7d": n, "30d": n }` maps, ai_jobs_7d is `{ total, succeeded, failed }`.
@@ -56,7 +57,9 @@ export const dashboardKeys = {
   recentAudit: [...dashboardBase, 'recent-audit'] as const,
   funnel: (days: number) => [...dashboardBase, 'funnel', days] as const,
   retention: (weeks: number) => [...dashboardBase, 'retention', weeks] as const,
-  opsHealth: [...dashboardBase, 'ops-health'] as const,
+  // Shares the ops feature's query key ('ops', 'health') so the dashboard and
+  // the Topbar deployment pill hit the cache once, not the network twice.
+  opsHealth: ['ops', 'health'] as const,
 }
 
 export type AdminOpsHealthResponse = components['schemas']['AdminOpsHealthResponse']
@@ -192,10 +195,14 @@ export function getOpsHealth(): Promise<AdminOpsHealthResponse | null> {
 }
 
 export function useOpsHealthQuery() {
+  // GET /admin/ops/health requires ops.read — don't request it (or 403) for
+  // roles without the permission; the shared key reuses the Topbar's cache.
+  const { can } = usePermission()
   return useQuery({
     queryKey: dashboardKeys.opsHealth,
     queryFn: getOpsHealth,
     staleTime: QUERY_STALE_TIMES.lists,
     retry: false,
+    enabled: can('ops.read'),
   })
 }
