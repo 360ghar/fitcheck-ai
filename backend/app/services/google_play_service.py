@@ -337,11 +337,17 @@ class GooglePlayService:
         cancel_reason = purchase.get("cancelReason")
         auto_renewing = bool(purchase.get("autoRenewing"))
 
-        if expired or cancel_reason in (0, 1, 3):
+        if expired:
             # 0 = user canceled, 1 = system, 3 = developer; 2 = replaced
             # (a new purchase token supersedes it, entitlement handled by the
             # newer token's sync).
-            status = "free" if expired else "past_due"
+            status = "free"
+        elif cancel_reason in (0, 1, 3):
+            # Canceled but still inside the paid period: Play keeps serving
+            # the subscription until expiryTimeMillis, so entitlement stays
+            # active with cancel_at_period_end set (mirrors the Apple path,
+            # which returns active + auto-renew disabled for the same state).
+            status = "active"
         elif purchase.get("paymentState") == 0:
             status = "past_due"  # payment declined / pending
         else:

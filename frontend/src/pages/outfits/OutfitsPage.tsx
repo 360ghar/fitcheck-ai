@@ -336,6 +336,9 @@ export default function OutfitsPage() {
     <>
       <EmptyState
         icon={Layers}
+        illustration={
+          searchQuery || favoritesOnly ? undefined : '/generated/empty-outfit-640.webp'
+        }
         title={searchQuery || favoritesOnly ? 'No matching outfits' : 'No outfits yet'}
         description={
           searchQuery || favoritesOnly

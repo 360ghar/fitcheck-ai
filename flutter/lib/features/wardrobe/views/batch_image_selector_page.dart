@@ -4,6 +4,7 @@ import '../../../core/widgets/app_network_image.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/batch_extraction_controller.dart';
 import '../models/social_import_models.dart';
@@ -178,8 +179,158 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
       return _buildSocialDiscoveringState(context, tokens, job);
     }
 
+    // Terminal states need closure UI. They used to fall through to the
+    // processing view, leaving the user stuck on 'Processing Photos' with a
+    // 'Cancel Import' button that errors because the job already ended.
+    if (job.isTerminal) {
+      return _buildSocialTerminalState(context, tokens, job);
+    }
+
     // Processing/Review state or other states
     return _buildSocialProcessingState(context, tokens, job);
+  }
+
+  Widget _buildSocialTerminalState(
+    BuildContext context,
+    AppUiTokens tokens,
+    SocialImportJobData job,
+  ) {
+    return job.status == SocialImportJobStatus.completed
+        ? _buildSocialCompletedState(context, tokens, job)
+        : _buildSocialEndedState(context, tokens, job);
+  }
+
+  Widget _buildSocialCompletedState(
+    BuildContext context,
+    AppUiTokens tokens,
+    SocialImportJobData job,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppConstants.spacing16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppGlassCard(
+            padding: const EdgeInsets.all(AppConstants.spacing24),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 48,
+                  color: Colors.green,
+                ),
+                const SizedBox(height: AppConstants.spacing16),
+                Text(
+                  'Import Complete',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing8),
+                Text(
+                  '${job.approvedPhotos} photo${job.approvedPhotos == 1 ? '' : 's'} '
+                  'added to your wardrobe',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: tokens.textSecondary, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppConstants.spacing24),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                // Same destination as a deep link to the wardrobe tab.
+                Get.offNamed(Routes.wardrobe);
+                controller.resetSocialImportState();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: tokens.brandColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppConstants.radius12),
+                ),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.checkroom_outlined),
+              label: const Text(
+                'View Wardrobe',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSocialEndedState(
+    BuildContext context,
+    AppUiTokens tokens,
+    SocialImportJobData job,
+  ) {
+    final failed = job.status == SocialImportJobStatus.failed;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppConstants.spacing16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppGlassCard(
+            padding: const EdgeInsets.all(AppConstants.spacing24),
+            child: Column(
+              children: [
+                Icon(
+                  failed ? Icons.error_outline : Icons.cancel_outlined,
+                  size: 48,
+                  color: failed ? Colors.red : tokens.textMuted,
+                ),
+                const SizedBox(height: AppConstants.spacing16),
+                Text(
+                  failed ? 'Import Failed' : 'Import Cancelled',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (failed) ...[
+                  const SizedBox(height: AppConstants.spacing12),
+                  _buildErrorCard(
+                    tokens,
+                    (job.errorMessage ?? '').trim().isNotEmpty
+                        ? job.errorMessage!.trim()
+                        : 'Something went wrong while importing.',
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: AppConstants.spacing24),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: controller.resetSocialImportState,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: tokens.brandColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppConstants.radius12),
+                ),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.refresh),
+              label: const Text(
+                'Start Over',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // New UI Components for improved UX
@@ -1907,8 +2058,22 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
     );
   }
 
-  void _startExtraction() {
-    controller.startExtraction();
+  Future<void> _startExtraction() async {
+    await controller.startExtraction();
+    // startExtraction aborts without starting a job when the AI-consent gate
+    // is declined (status stays idle, no error), when every image fails
+    // compression (status failed + error), or when the selection is empty.
+    // Navigating anyway stranded the user on an idle progress page with no
+    // feedback and no exit - surface the failure here instead.
+    if (controller.isIdle || controller.isFailed) {
+      ErrorHandler.showError(
+        controller.hasError
+            ? controller.error.value
+            : 'Could not start extraction. Please try again.',
+        title: 'Error',
+      );
+      return;
+    }
     Get.toNamed(Routes.wardrobeBatchProgress);
   }
 }

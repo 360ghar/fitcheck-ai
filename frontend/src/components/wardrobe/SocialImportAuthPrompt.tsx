@@ -29,19 +29,19 @@ export function SocialImportAuthPrompt({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+      <div className="rounded-lg border border-tint-amber-pale bg-tint-amber-pale/40 p-3 text-sm text-tint-amber">
         This profile requires login. Connect your {platformLabel} account to continue automatically.
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300">
+        <div className="rounded-md border border-destructive/30 bg-error-pale px-3 py-2 text-sm text-error">
           {error}
         </div>
       )}
 
       <div className="grid gap-3 rounded-lg border border-border p-4">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-indigo-500" />
+          <ShieldCheck className="h-4 w-4 text-accent-purple" />
           <p className="text-sm font-semibold text-foreground">Direct Meta OAuth (Recommended)</p>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -58,7 +58,7 @@ export function SocialImportAuthPrompt({
       {allowScraperFallback && (
         <div className="grid gap-3 rounded-lg border border-border p-4">
           <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-indigo-500" />
+            <KeyRound className="h-4 w-4 text-accent-purple" />
             <p className="text-sm font-semibold text-foreground">Manual Login Fallback</p>
           </div>
           <p className="text-xs text-muted-foreground">

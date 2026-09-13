@@ -15,9 +15,6 @@ class CalendarController extends GetxController {
   CalendarController({CalendarRepository? repository})
       : _repository = repository ?? CalendarRepository();
 
-  // Workers for cleanup
-  final List<Worker> _workers = [];
-
   // State
   final RxList<CalendarConnectionModel> connections = <CalendarConnectionModel>[].obs;
   final RxList<CalendarEventModel> events = <CalendarEventModel>[].obs;
@@ -71,21 +68,6 @@ class CalendarController extends GetxController {
     super.onInit();
     fetchConnections();
     fetchEventsForMonth(focusedDate.value);
-
-    // Refresh events when focused date changes - store worker for cleanup
-    _workers.add(
-      ever(focusedDate, (date) => fetchEventsForMonth(date)),
-    );
-  }
-
-  @override
-  void onClose() {
-    // Clean up all workers to prevent memory leaks
-    for (final worker in _workers) {
-      worker.dispose();
-    }
-    _workers.clear();
-    super.onClose();
   }
 
   /// Fetch calendar connections
@@ -155,9 +137,25 @@ class CalendarController extends GetxController {
     selectedDate.value = date;
   }
 
-  /// Change focused date (for month navigation)
+  /// Change focused date (for month navigation).
+  ///
+  /// Fetches directly instead of relying on an `ever(focusedDate, ...)`
+  /// worker: GetX Rx skips notification when the new value equals the old
+  /// one, and month navigation always builds `DateTime(y, m)`, so revisiting
+  /// a month (May→June→May) never refetched and the grid kept stale events.
+  /// [changeFocusedDate] is the only writer of [focusedDate] after onInit's
+  /// initial fetch, so this covers all paths. Same-month calls (e.g. "Go to
+  /// Today" passing `DateTime.now()`) still update the focused day but skip
+  /// the refetch — chevron navigation always changes the month, so
+  /// May→June→May still refetches.
   void changeFocusedDate(DateTime date) {
+    if (date.year == focusedDate.value.year &&
+        date.month == focusedDate.value.month) {
+      focusedDate.value = date;
+      return;
+    }
     focusedDate.value = date;
+    fetchEventsForMonth(date);
   }
 
   /// Change calendar format (month, week, day)
@@ -211,7 +209,10 @@ class CalendarController extends GetxController {
       _groupEventsByDate();
 
       ErrorHandler.showSuccess('Your event has been added', title: 'Event Created');
-      Get.back();
+      // The dialog is barrier-dismissible: if it was closed while the request
+      // was in flight, popping unconditionally would remove the Calendar page
+      // itself.
+      if (Get.isDialogOpen == true) Get.back();
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
@@ -247,7 +248,9 @@ class CalendarController extends GetxController {
         events[index] = updatedEvent;
         _groupEventsByDate();
       }
-      Get.back();
+      // Same guard as createEvent: don't pop the Calendar page if the
+      // barrier-dismissible dialog was already closed mid-request.
+      if (Get.isDialogOpen == true) Get.back();
       ErrorHandler.showSuccess('Event updated successfully', title: 'Updated');
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');

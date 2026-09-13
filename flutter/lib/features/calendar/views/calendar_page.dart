@@ -24,11 +24,11 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize controller after the widget is fully created
+    // Initialize controller after the widget is fully created. The controller
+    // fetches the focused month in its own onInit; fetching here as well only
+    // duplicated the request (the first response was discarded by the
+    // generation guard).
     controller = Get.find<CalendarController>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.fetchEventsForMonth(controller.focusedDate.value);
-    });
   }
 
   @override
@@ -274,21 +274,25 @@ class _CalendarPageState extends State<CalendarPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Events for ${AppDateUtils.formatDate(controller.selectedDate.value)}',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            TextButton.icon(
-              onPressed: () => _showAddEventDialog(),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add'),
-            ),
-          ],
+        // Obx so the header tracks day selection — it reads
+        // controller.selectedDate.value, which only Obx can observe.
+        Obx(
+          () => Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Events for ${AppDateUtils.formatDate(controller.selectedDate.value)}',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              TextButton.icon(
+                onPressed: () => _showAddEventDialog(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add'),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
         Obx(() {
@@ -790,8 +794,12 @@ class _CalendarPageState extends State<CalendarPage> {
                     title: titleController.text,
                     startTime: startTime,
                     endTime: endTime,
-                    location: locationController.text.isEmpty ? null : locationController.text,
-                    description: descriptionController.text.isEmpty ? null : descriptionController.text,
+                    // Pass '' (not null) when cleared: null means "not
+                    // provided" in the update payload, so a cleared
+                    // location/description could never overwrite the old
+                    // value. The backend stores '' for present keys.
+                    location: locationController.text,
+                    description: descriptionController.text,
                     isAllDay: isAllDay,
                   );
                 },

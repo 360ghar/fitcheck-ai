@@ -117,8 +117,11 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
               request: request,
             );
 
-      // Upload additional images if any (excluding the one already used)
-      if (additionalImages.length > 1) {
+      // Upload additional images if any (excluding the one already used).
+      // The old `length > 1` guard silently dropped a main image + exactly
+      // ONE extra photo: the UI showed the '+1 more' badge but only the main
+      // image ever uploaded.
+      if (additionalImages.isNotEmpty) {
         final imagesToUpload = widget.imageFile == null
             ? additionalImages.skip(1).toList()
             : additionalImages.toList();

@@ -453,8 +453,11 @@ export default function DashboardPage() {
               key={tool.name}
               to={tool.link}
               className={cn(
+                // Clay treatment: pressed at rest, hard offset shadow on
+                // hover/focus (`.card-interactive`), tinted icon tile from the
+                // literal class map below — no interpolated class names.
                 'flex flex-col gap-2 rounded-xl border border-border bg-card p-3 md:p-4',
-                'hover:bg-accent/50 hover:border-primary/20 transition-colors',
+                'card-interactive',
                 'touch-target'
               )}
             >
@@ -485,7 +488,7 @@ export default function DashboardPage() {
           {quickActions.map((action) => {
             const commonClassName = cn(
               'group relative rounded-xl border border-border bg-card p-3 md:p-4 text-left w-full',
-              'transition-colors hover:bg-accent/40 hover:border-primary/20',
+              'card-interactive',
               'touch-target'
             )
 
@@ -534,7 +537,7 @@ export default function DashboardPage() {
 
       {/* Recent activity — only when there is something to show */}
       {totalItems > 0 && (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-pressed">
           <div className="px-4 py-3 md:px-6 border-b border-border">
             <div className="flex items-center justify-between">
               <h3 className="text-base md:text-lg font-semibold text-foreground">Recent items</h3>

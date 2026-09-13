@@ -277,6 +277,16 @@ class Settings(BaseSettings):
     AI_IMAGE_FALLBACK_API_URL: Optional[str] = None
     AI_IMAGE_FALLBACK_API_KEY: Optional[str] = None
     AI_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.1-flash"
+    # Agnes marketing-media generation (landing/webapp visuals, NOT wardrobe
+    # extraction). Dedicated key so media spend is separable from chat/vision
+    # legs above; falls back to AI_IMAGE_API_KEY then AI_CHAT_API_KEY when
+    # blank. Never expose to the frontend — backend proxy only.
+    AGNES_AI_API_KEY: Optional[str] = None
+    AGNES_IMAGE_MODEL: str = "agnes-image-2.5-flash"
+    AGNES_VIDEO_MODEL: str = "agnes-video-v2.0"
+    # Per-user daily caps for the /media proxy (promo $0 can end unannounced).
+    AGNES_DAILY_IMAGE_LIMIT: int = 20
+    AGNES_DAILY_VIDEO_LIMIT: int = 5
 
     # Max output tokens per AI call. Both current providers comfortably exceed
     # this: gemini-3.6-flash caps at 64K output, the Agnes gateway (agnes-2.5-

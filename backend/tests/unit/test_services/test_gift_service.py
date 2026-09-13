@@ -12,7 +12,7 @@ from PIL import Image
 from pydantic import ValidationError as PydanticValidationError
 
 from app.core.config import settings
-from app.core.exceptions import PermissionDeniedError, ServiceError, ValidationError
+from app.core.exceptions import DatabaseError, PermissionDeniedError, ServiceError, ValidationError
 from app.models.gift import (
     AdminGiftCreate,
     ComplimentaryGiftCreate,
@@ -1193,3 +1193,55 @@ async def test_admin_void_rejects_a_voucher_claimed_after_the_initial_read():
         await AdminGiftService.void_or_revoke(VOUCHER_ID, "manual void", db)
 
     assert db.rpc_calls[0][1]["p_expected_status"] == "issued"
+
+
+class _RpcError(Exception):
+    def __init__(self, code=None, message="", hint="", details=""):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.hint = hint
+        self.details = details
+
+
+def _complimentary_request(**overrides):
+    kwargs = {
+        "duration_months": 1,
+        "from_name": "Alex Morgan",
+        "to_name": "Taylor Reed",
+        "recipient_email": "taylor@example.com",
+        "message": None,
+        "client_request_id": "request-123",
+    }
+    kwargs.update(overrides)
+    return ComplimentaryGiftCreate(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_complimentary_rpc_occasion_error_maps_to_422(monkeypatch):
+    monkeypatch.setattr(settings, "ENABLE_GIFT_VOUCHER_CREATION", True)
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = _RpcError(
+        code="P0001", message="Gift occasion data is invalid"
+    )
+    with pytest.raises(ValidationError, match="Gift request is invalid"):
+        await GiftService.create_complimentary(
+            {"id": USER_ID, "email_verified": True},
+            _complimentary_request(),
+            db,
+        )
+
+
+@pytest.mark.asyncio
+async def test_complimentary_missing_rpc_maps_to_migration_hint(monkeypatch):
+    monkeypatch.setattr(settings, "ENABLE_GIFT_VOUCHER_CREATION", True)
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = _RpcError(
+        code="PGRST205", message="Could not find the function issue_complimentary_gift_for_recipient"
+    )
+    with pytest.raises(DatabaseError, match="migration 063"):
+        await GiftService.create_complimentary(
+            {"id": USER_ID, "email_verified": True},
+            _complimentary_request(),
+            db,
+        )

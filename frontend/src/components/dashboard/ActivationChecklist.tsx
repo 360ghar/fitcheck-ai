@@ -57,7 +57,8 @@ export function ActivationChecklist({
   return (
     <section
       className={cn(
-        'rounded-xl border border-border bg-card overflow-hidden',
+        // Clay: the primary activation surface rests pressed like every card.
+        'rounded-xl border border-border bg-card overflow-hidden shadow-pressed',
         className
       )}
       aria-label="Getting started"

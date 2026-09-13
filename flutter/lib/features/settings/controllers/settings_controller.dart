@@ -250,9 +250,22 @@ class SettingsController extends GetxController {
     final operation = _preferenceWriteQueue.then((_) async {
       try {
         final saved = await _repository.updatePreferences(newPreferences);
-        _lastConfirmedPreferences = saved;
+        // The backend's UserPreferencesUpdate persists only the fields it
+        // knows (of this client model exactly one: preferred_styles — see
+        // backend/app/models/user.py); every other key this model sends
+        // (theme_mode, temperature_unit, the notification booleans,
+        // preferred_colors, disliked_colors, default_outfit_id) is dropped
+        // server-side, so the raw response row comes back with them null.
+        // Storing that row as-is made every just-saved setting silently
+        // revert one round-trip later. Merge instead: the server wins only
+        // on the fields it actually persists (copyWith keeps the client's
+        // value when the echo is null), the client keeps the rest.
+        final confirmed = newPreferences.copyWith(
+          preferredStyles: saved.preferredStyles,
+        );
+        _lastConfirmedPreferences = confirmed;
         if (!isClosed && revision == _preferenceRevision) {
-          preferences.value = saved;
+          preferences.value = confirmed;
           ErrorHandler.showSuccess(
             'Your preferences have been updated',
             title: 'Saved',

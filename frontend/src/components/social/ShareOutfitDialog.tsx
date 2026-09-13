@@ -249,8 +249,8 @@ export function ShareOutfitDialog({
         <div className="space-y-6">
           {/* Outfit preview */}
           {outfit && (
-            <div className="flex flex-col xs:flex-row gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="w-24 h-24 xs:w-32 xs:h-32 rounded-lg overflow-hidden bg-white dark:bg-gray-700 flex-shrink-0">
+            <div className="flex flex-col xs:flex-row gap-4 p-4 bg-muted rounded-lg">
+              <div className="w-24 h-24 xs:w-32 xs:h-32 rounded-lg overflow-hidden bg-card flex-shrink-0">
                 {outfit.images?.length ? (
                   <ZoomableImage
                     src={(outfit.images.find((img) => img.is_primary) || outfit.images[0]).image_url}
@@ -258,15 +258,15 @@ export function ShareOutfitDialog({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground/70">
                     No image
                   </div>
                 )}
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-lg text-gray-900 dark:text-white">{outfit.name}</h3>
+                <h3 className="font-semibold text-lg text-foreground">{outfit.name}</h3>
                 {outfit.description && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {outfit.description}
                   </p>
                 )}
@@ -310,7 +310,7 @@ export function ShareOutfitDialog({
                   onClick={() => handleShare('twitter')}
                   disabled={isSharing}
                 >
-                  <Twitter className="h-6 w-6 text-blue-400" />
+                  <Twitter className="h-6 w-6 text-tint-blue" />
                   <span>Twitter</span>
                 </Button>
                 <Button
@@ -319,7 +319,7 @@ export function ShareOutfitDialog({
                   onClick={() => handleShare('facebook')}
                   disabled={isSharing}
                 >
-                  <Facebook className="h-6 w-6 text-blue-600" />
+                  <Facebook className="h-6 w-6 text-tint-blue" />
                   <span>Facebook</span>
                 </Button>
                 <Button
@@ -337,7 +337,7 @@ export function ShareOutfitDialog({
                   onClick={() => handleShare('whatsapp')}
                   disabled={isSharing}
                 >
-                  <MessageCircle className="h-6 w-6 text-green-500" />
+                  <MessageCircle className="h-6 w-6 text-tint-teal" />
                   <span>WhatsApp</span>
                 </Button>
                 <Button
@@ -346,7 +346,7 @@ export function ShareOutfitDialog({
                   onClick={() => handleShare('email')}
                   disabled={isSharing}
                 >
-                  <Mail className="h-6 w-6 text-gray-600 dark:text-gray-400" />
+                  <Mail className="h-6 w-6 text-muted-foreground" />
                   <span>Email</span>
                 </Button>
                 <Button
@@ -354,7 +354,7 @@ export function ShareOutfitDialog({
                   className="h-20 flex-col gap-2"
                   onClick={handleDownloadImage}
                 >
-                  <Download className="h-6 w-6 text-gray-600 dark:text-gray-400" />
+                  <Download className="h-6 w-6 text-muted-foreground" />
                   <span>Download</span>
                 </Button>
               </div>
@@ -387,7 +387,7 @@ export function ShareOutfitDialog({
                       )}
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  <p className="text-xs text-muted-foreground mt-2">
                     Anyone with this link can view your outfit
                   </p>
                 </CardContent>
@@ -400,8 +400,8 @@ export function ShareOutfitDialog({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label className="text-gray-900 dark:text-white">Public Outfit</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <Label className="text-foreground">Public Outfit</Label>
+                    <p className="text-sm text-muted-foreground">
                       Allow anyone to find and view this outfit
                     </p>
                   </div>
@@ -427,8 +427,8 @@ export function ShareOutfitDialog({
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label className="text-gray-900 dark:text-white">Allow Feedback</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <Label className="text-foreground">Allow Feedback</Label>
+                    <p className="text-sm text-muted-foreground">
                       Let others rate and comment on your outfit
                     </p>
                   </div>

@@ -551,9 +551,15 @@ def test_every_outfit_route_requires_authentication(handler_name):
 
 def test_normalize_item_images_handles_all_shapes():
     assert outfits_module._normalize_item_images("not-a-dict") == "not-a-dict"
-    assert outfits_module._normalize_item_images({"id": "i", "item_images": [1]})["images"] == [1]
-    assert outfits_module._normalize_item_images({"id": "i", "item_images": None, "images": [2]})["images"] == [2]
-    assert outfits_module._normalize_item_images({"id": "i"})["images"] == []
+    normalized = outfits_module._normalize_item_images({"id": "i", "item_images": [1]})
+    assert normalized["images"] == [1]
+    # Flutter's ItemModel parses @JsonKey(name: 'item_images') — the key must
+    # survive normalization, and alias the same list so in-place presign
+    # re-mints under `images` are visible under `item_images` too.
+    assert normalized["item_images"] == [1]
+    assert normalized["item_images"] is normalized["images"]
+    assert outfits_module._normalize_item_images({"id": "i", "item_images": None, "images": [2]})["item_images"] == [2]
+    assert outfits_module._normalize_item_images({"id": "i"})["item_images"] == []
 
 
 def test_normalize_outfit_images_handles_all_shapes():
@@ -701,6 +707,8 @@ async def test_list_outfits_applies_filters_and_attaches_items():
     outfit = result["data"]["outfits"][0]
     assert outfit["items"][0]["id"] == ITEM_ID
     assert outfit["items"][0]["item_images"][0]["url"] == "https://cdn/1.jpg"
+    # List responses carry both keys too (same list), matching the detail shape.
+    assert outfit["items"][0]["images"] is outfit["items"][0]["item_images"]
     assert result["data"]["page"] == 1
     assert result["data"]["total_pages"] == 1
     assert result["data"]["has_next"] is False
@@ -930,7 +938,9 @@ async def test_get_outfit_returns_outfit_with_items():
     db = _OutfitsFakeDB(
         {
             "outfits": [_outfit_row()],
-            "items": [_item_row()],
+            "items": [
+                _item_row(item_images=[{"image_url": "https://cdn/1.jpg", "thumbnail_url": "https://cdn/1-t.jpg"}])
+            ],
         }
     )
 
@@ -938,7 +948,13 @@ async def test_get_outfit_returns_outfit_with_items():
 
     assert result["message"] == "OK"
     assert result["data"]["id"] == OUTFIT_ID
-    assert result["data"]["items"][0]["id"] == ITEM_ID
+    item = result["data"]["items"][0]
+    assert item["id"] == ITEM_ID
+    # Regression (Flutter detail tiles): GET /outfits/{id} must carry
+    # `item_images` on nested items — ItemModel only parses that key, so the
+    # old rename-to-`images`-only rendered placeholder tiles on open.
+    assert item["item_images"][0]["image_url"] == "https://cdn/1.jpg"
+    assert item["images"] is item["item_images"]
 
 
 @pytest.mark.asyncio

@@ -192,9 +192,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
         description: _descriptionController.text.trim().isEmpty
             ? null
             : _descriptionController.text.trim(),
-        // Always send the category: `_normalizeUpdateItemPayload` strips
-        // null values, so gating this on the name having changed silently
-        // dropped a category-only edit.
+        // Always send the category: the backend updates with exclude_unset,
+        // so gating this on another field having changed silently dropped a
+        // category-only edit.
         category: selectedCategory.value,
         colors: selectedColors.isEmpty ? null : selectedColors.toList(),
         brand: _brandController.text.trim().isEmpty
@@ -511,6 +511,10 @@ class _ItemEditPageState extends State<ItemEditPage> {
   }
 
   Widget _buildImagesSection(AppUiTokens tokens) {
+    // Null-safe: a photo-less item has null itemImages, and the previous
+    // `a && b || c` precedence let this spread run on a null list as soon as
+    // a new photo was picked.
+    final existingImages = _item?.itemImages ?? const <ItemImage>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -541,15 +545,14 @@ class _ItemEditPageState extends State<ItemEditPage> {
           ],
         ),
 
-        if (_item!.itemImages != null && _item!.itemImages!.isNotEmpty ||
-            newImages.isNotEmpty)
+        if (existingImages.isNotEmpty || newImages.isNotEmpty)
           SizedBox(
             height: 120,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
                 // Existing images
-                ..._item!.itemImages!.map((image) {
+                ...existingImages.map((image) {
                   final isDeleting = imagesToDelete.contains(image.id);
                   return Padding(
                     padding: const EdgeInsets.only(

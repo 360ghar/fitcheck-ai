@@ -181,7 +181,10 @@ class OutfitListController extends GetxController {
         : selectedStyles.map((s) => s.name.toLowerCase()).toList();
     final requestSeasons = selectedSeasons.isEmpty
         ? null
-        : selectedSeasons.map((s) => s.name.toLowerCase()).toList();
+        // seasonApiValue: backend stores the web's 'all-season' spelling
+        // (VALID_SEASONS) and list-filters by exact match, so the enum-name
+        // 'allseason' silently hid web-created all-season outfits.
+        : selectedSeasons.map((s) => s.seasonApiValue).toList();
     final requestFavoritesOnly = favoritesOnly.value ? true : null;
     final requestDraftsOnly = draftsOnly.value ? true : null;
 

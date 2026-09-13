@@ -19,7 +19,7 @@ from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
 from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images, gifts, admin, health, oauth
 from app.db.connection import SupabaseDB
-from app.utils.db import missing_quota_rpcs, missing_referral_rpcs, probe_valid_batch_size_bound
+from app.utils.db import is_db_connection_error, missing_quota_rpcs, missing_referral_rpcs, probe_valid_batch_size_bound
 from app.mcp.curated import build_curated_registry
 from app.mcp.executor import set_asgi_app
 from app.mcp.generate import build_tool_registry
@@ -146,21 +146,49 @@ REQUIRED_COLUMN_ALTERNATIVES = {
 # wearing a schema failure's clothes.
 _SCHEMA_ABSENT_CODES = {"PGRST205", "PGRST204", "42703"}
 
+# Probes that fail here are degraded, not missing (2026-09-13 RCA: Supabase
+# 504 Gateway Timeout on users was reported as "Missing: users" with a
+# "Run 001_full_schema.sql" hint). Degraded probes set a sentinel instead
+# of per-table names so on-call chases the network, not a migration.
+_SCHEMA_DEGRADED_SENTINEL = "schema_probe_degraded"
+
+
+def _classify_probe_error(exc: Exception) -> str:
+    """Classify a schema-probe failure as 'absent', 'degraded', or 'other'.
+
+    'absent' means PostgREST reports the table/column as not in the schema.
+    'degraded' means a transient gateway/connectivity error (see
+    is_db_connection_error) — the probe says nothing about the schema.
+    'other' means the probe failed for a non-schema reason.
+    """
+    if isinstance(exc, PostgrestAPIError) and getattr(exc, "code", None) in _SCHEMA_ABSENT_CODES:
+        return "absent"
+    if is_db_connection_error(exc):
+        return "degraded"
+    return "other"
+
 
 def _column_exists(db, table: str, column: str) -> bool:
     """Report whether a column is present, logging *why* when it is not.
 
-    Both failure paths still return False - readiness stays fail-closed - but
-    a permissions or connectivity failure used to be reported to /ready as
-    "column missing", which sends whoever is on call after the wrong problem.
+    Degraded probes (timeout/gateway) also return False here to stay
+    fail-closed for direct callers, but _schema_missing re-probes with
+    transient detection so they surface as schema_probe_degraded instead
+    of a false "missing column".
     """
     log = logging.getLogger(__name__)
     try:
         db.table(table).select(column).limit(1).execute()
         return True
     except PostgrestAPIError as e:
-        if getattr(e, "code", None) in _SCHEMA_ABSENT_CODES:
+        outcome = _classify_probe_error(e)
+        if outcome == "absent":
             log.info("Schema check: %s.%s is absent from the schema", table, column)
+        elif outcome == "degraded":
+            log.warning(
+                "schema_probe_degraded for %s.%s (code=%s): %s. Not a missing column.",
+                table, column, getattr(e, "code", None), e,
+            )
         else:
             log.warning(
                 "Schema check for %s.%s failed for a non-schema reason "
@@ -170,11 +198,18 @@ def _column_exists(db, table: str, column: str) -> bool:
             )
         return False
     except Exception as e:
-        log.warning(
-            "Schema check for %s.%s failed before reaching PostgREST: %s. "
-            "Reporting as missing, but the cause is not a missing column.",
-            table, column, e,
-        )
+        if _classify_probe_error(e) == "degraded":
+            log.warning(
+                "schema_probe_degraded for %s.%s before reaching PostgREST: %s. "
+                "Not a missing column.",
+                table, column, e,
+            )
+        else:
+            log.warning(
+                "Schema check for %s.%s failed before reaching PostgREST: %s. "
+                "Reporting as missing, but the cause is not a missing column.",
+                table, column, e,
+            )
         return False
 
 
@@ -188,12 +223,22 @@ def _schema_missing(db) -> list[str]:
 
     # Required tables
     log = logging.getLogger(__name__)
+    degraded = False
     for table in required_tables:
         try:
             db.table(table).select("*").limit(1).execute()
         except PostgrestAPIError as e:
-            if getattr(e, "code", None) in _SCHEMA_ABSENT_CODES:
+            outcome = _classify_probe_error(e)
+            if outcome == "absent":
                 log.info("Schema check: table %s is absent from the schema", table)
+                missing.append(table)
+            elif outcome == "degraded":
+                log.warning(
+                    "schema_probe_degraded for table %s (code=%s): %s. "
+                    "Not a missing table; retry the probe.",
+                    table, getattr(e, "code", None), e,
+                )
+                degraded = True
             else:
                 log.warning(
                     "Schema check for table %s failed for a non-schema reason "
@@ -201,26 +246,70 @@ def _schema_missing(db) -> list[str]:
                     "a missing table.",
                     table, getattr(e, "code", None), e,
                 )
-            missing.append(table)
+                missing.append(table)
         except Exception as e:
-            log.warning(
-                "Schema check for table %s failed before reaching PostgREST: "
-                "%s. Reporting as missing, but the cause is not a missing table.",
-                table, e,
-            )
-            missing.append(table)
+            if _classify_probe_error(e) == "degraded":
+                log.warning(
+                    "schema_probe_degraded for table %s before reaching PostgREST: "
+                    "%s. Not a missing table.",
+                    table, e,
+                )
+                degraded = True
+            else:
+                log.warning(
+                    "Schema check for table %s failed before reaching PostgREST: "
+                    "%s. Reporting as missing, but the cause is not a missing table.",
+                    table, e,
+                )
+                missing.append(table)
 
     # Required columns (guarding against partial migrations)
     for table, column in REQUIRED_COLUMNS:
-        if _column_exists(db, table, column):
+        try:
+            db.table(table).select(column).limit(1).execute()
             continue
+        except PostgrestAPIError as e:
+            outcome = _classify_probe_error(e)
+            if outcome == "absent":
+                log.info("Schema check: %s.%s is absent from the schema", table, column)
+            elif outcome == "degraded":
+                log.warning(
+                    "schema_probe_degraded for %s.%s (code=%s). Not a missing column.",
+                    table, column, getattr(e, "code", None),
+                )
+                degraded = True
+                continue
+            else:
+                log.warning(
+                    "Schema check for %s.%s failed for a non-schema reason (code=%s).",
+                    table, column, getattr(e, "code", None),
+                )
+        except Exception as e:
+            if _classify_probe_error(e) == "degraded":
+                log.warning(
+                    "schema_probe_degraded for %s.%s before reaching PostgREST. "
+                    "Not a missing column.",
+                    table, column,
+                )
+                degraded = True
+                continue
+            log.warning(
+                "Schema check for %s.%s failed before reaching PostgREST: %s.",
+                table, column, e,
+            )
 
         alternatives = REQUIRED_COLUMN_ALTERNATIVES.get((table, column), ())
         has_alternative = any(_column_exists(db, alt_table, alt_column) for alt_table, alt_column in alternatives)
         if has_alternative:
             continue
 
+        # The direct probe above already determined absent vs non-transient
+        # failure; append once without re-probing (a second _column_exists
+        # call would double the queries and log lines).
         missing.append(f"{table}.{column}")
+
+    if degraded and not missing:
+        missing.append(_SCHEMA_DEGRADED_SENTINEL)
 
     # De-dupe while preserving order
     seen = set()
@@ -329,13 +418,19 @@ async def _seed_schema_status_in_thread() -> None:
         else:
             log.info(f"AI job persistence bound check: {bound_message}")
         if missing:
-            log.warning(
-                "Supabase schema not initialized/complete. Run "
-                "`backend/db/supabase/migrations/001_full_schema.sql` in Supabase SQL Editor."
-            )
-            log.warning(
-                f"Missing: {', '.join(missing[:8])}{'…' if len(missing) > 8 else ''}"
-            )
+            if missing == [_SCHEMA_DEGRADED_SENTINEL]:
+                log.warning(
+                    "schema_probe_degraded: Supabase timed out during schema check. "
+                    "Not a missing migration; retry /ready."
+                )
+            else:
+                log.warning(
+                    "Supabase schema not initialized/complete. Run "
+                    "`backend/db/supabase/migrations/001_full_schema.sql` in Supabase SQL Editor."
+                )
+                log.warning(
+                    f"Missing: {', '.join(missing[:8])}{'…' if len(missing) > 8 else ''}"
+                )
         else:
             log.info("Schema readiness check complete (ready)")
     except Exception as e:
@@ -692,6 +787,18 @@ async def robots_txt():
     (RCA 2026-08-05: GET /robots.txt 404.)
     """
     return "User-agent: *\nDisallow: /\n"
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Silence browser favicon probes (2026-09-13 RCA: GET /favicon.ico 404).
+
+    The API has no branded icon; return 204 so logs stay focused on real
+    routes. Frontend serves its own icon.
+    """
+    from fastapi.responses import Response
+
+    return Response(status_code=204)
 
 
 @app.get("/ready")

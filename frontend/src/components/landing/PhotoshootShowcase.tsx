@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, Camera, Check } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { GeneratedImage } from '@/components/ui/generated-image'
 import { PLAN_LIMITS } from '@/lib/plan-limits'
 
 const facts = [
@@ -12,6 +13,8 @@ const facts = [
 
 export default function PhotoshootShowcase() {
   return (
+    // The page's one sanctioned dark break: stone-950 is warm and keeps the
+    // drama of the photoshoot moment (clay.com keeps dark sections rare).
     <section
       id="photoshoot-showcase"
       aria-labelledby="photoshoot-showcase-heading"
@@ -40,7 +43,13 @@ export default function PhotoshootShowcase() {
               </li>
             ))}
           </ul>
-          <Button size="lg" className="mt-8 h-12 px-6" asChild>
+          <Button
+            size="lg"
+            // The black `shadow-offset` hover is invisible on the dark break;
+            // this section is the sanctioned home of the white offset variant.
+            className="mt-8 h-12 px-6 hover:shadow-[7px_7px_0_0_rgba(255,255,255,0.9)]"
+            asChild
+          >
             <Link to="/features/ai-photoshoot-generator">
               Explore Photoshoot Studio
               <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
@@ -48,24 +57,46 @@ export default function PhotoshootShowcase() {
           </Button>
         </div>
 
-        <figure className="min-w-0 lg:col-span-6 lg:justify-self-end">
-          <div className="overflow-hidden rounded-[2rem] border border-stone-800 bg-stone-900">
-            <img
-              src="/landing/outfit.webp"
-              srcSet="/landing/outfit-640.webp 640w, /landing/outfit.webp 864w"
-              sizes="(min-width: 1024px) 42vw, calc(100vw - 32px)"
-              alt="Studio-style full-length portrait in a green shirt and brown trousers"
-              className="aspect-[4/5] h-full w-full object-cover object-top"
-              loading="lazy"
-              width={864}
-              height={1152}
-            />
-          </div>
-          <figcaption className="mt-4 flex items-center justify-between gap-4 border-t border-stone-800 pt-4 text-xs uppercase tracking-[0.14em] text-stone-400">
-            <span>Example result</span>
-            <span>Studio-style portrait</span>
-          </figcaption>
-        </figure>
+        <div className="grid min-w-0 gap-6 sm:grid-cols-2 lg:col-span-6">
+          <figure className="group min-w-0">
+            <div className="overflow-hidden rounded-[2rem] border border-stone-800 bg-stone-900 transition-[box-shadow,transform] duration-150 ease-out group-hover:shadow-[7px_7px_0_0_rgba(255,255,255,0.9)] motion-safe:group-hover:-translate-x-0.5 motion-safe:group-hover:-translate-y-0.5">
+              <img
+                src="/generated/lifestyle-jaipur-3x4-640.webp"
+                srcSet="/generated/lifestyle-jaipur-3x4-640.webp 640w, /generated/lifestyle-jaipur-3x4.webp 900w"
+                sizes="(min-width: 1024px) 21vw, (min-width: 640px) calc(50vw - 32px), calc(100vw - 32px)"
+                alt="Golden-hour portrait example in a rust slip dress"
+                className="aspect-[4/5] h-full w-full object-cover object-top"
+                loading="lazy"
+                width={900}
+                height={1200}
+              />
+            </div>
+            <figcaption className="mt-4 flex items-center justify-between gap-4 border-t border-stone-800 pt-4 text-xs uppercase tracking-[0.14em] text-stone-400">
+              <span>Example result</span>
+              <span>AI-generated example</span>
+            </figcaption>
+          </figure>
+
+          <figure className="group min-w-0">
+            <div className="overflow-hidden rounded-[2rem] border border-stone-800 bg-stone-900 transition-[box-shadow,transform] duration-150 ease-out group-hover:shadow-[7px_7px_0_0_rgba(255,255,255,0.9)] motion-safe:group-hover:-translate-x-0.5 motion-safe:group-hover:-translate-y-0.5">
+              <GeneratedImage
+                src="/generated/photoshoot-studio-3x4-640.webp"
+                srcSet="/generated/photoshoot-studio-3x4-640.webp 640w, /generated/photoshoot-studio-3x4.webp 1728w"
+                sizes="(min-width: 1024px) 21vw, (min-width: 640px) calc(50vw - 32px), calc(100vw - 32px)"
+                alt="Studio-style portrait example generated from a phone selfie"
+                className="aspect-[3/4] h-full w-full object-cover object-top"
+                loading="lazy"
+                width={1728}
+                height={2304}
+                fallback="hide-figure"
+              />
+            </div>
+            <figcaption className="mt-4 flex items-center justify-between gap-4 border-t border-stone-800 pt-4 text-xs uppercase tracking-[0.14em] text-stone-400">
+              <span>Example result, not before/after</span>
+              <span>AI-generated example</span>
+            </figcaption>
+          </figure>
+        </div>
       </div>
     </section>
   )

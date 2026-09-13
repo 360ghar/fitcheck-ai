@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../models/item_model.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
+import '../../../domain/enums/condition.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/exceptions/app_exceptions.dart';
@@ -712,7 +713,12 @@ class ItemRepository {
     final normalized = Map<String, dynamic>.from(json);
     final category = normalized['category'];
     if (category is String) {
-      normalized['category'] = category.toLowerCase();
+      // Tolerant mapping: an unknown category string falls back to `other`
+      // instead of throwing in ItemModel.fromJson and killing the whole
+      // /items list parse.
+      normalized['category'] = Category.fromString(
+        category.trim().toLowerCase(),
+      ).value;
     }
     if (normalized['description'] == null && normalized['notes'] != null) {
       normalized['description'] = normalized['notes'];
@@ -728,6 +734,14 @@ class ItemRepository {
     if (normalized['last_worn_at'] == null &&
         normalized['usage_last_worn'] != null) {
       normalized['last_worn_at'] = normalized['usage_last_worn'];
+    }
+    final condition = normalized['condition'];
+    if (condition is String) {
+      // Tolerant mapping: an unknown condition string falls back to `clean`
+      // instead of throwing in ItemModel.fromJson.
+      normalized['condition'] = Condition.fromString(
+        condition.trim().toLowerCase(),
+      ).value;
     }
     if (normalized['condition'] == null) {
       normalized['condition'] = 'clean';
@@ -784,6 +798,23 @@ class ItemRepository {
     return normalized;
   }
 
+  /// Optional fields the edit form manages; an explicit null means the user
+  /// cleared the field and must reach the backend so the column is nulled
+  /// (the update endpoint uses exclude_unset, so an absent key would keep
+  /// the old value).
+  static const _clearableOptionalKeys = <String>{
+    'notes',
+    'brand',
+    'size',
+    'material',
+    'pattern',
+    'price',
+    'purchase_location',
+    'colors',
+    'tags',
+    'occasion_tags',
+  };
+
   Map<String, dynamic> _normalizeUpdateItemPayload(
     Map<String, dynamic> payload,
   ) {
@@ -793,16 +824,22 @@ class ItemRepository {
     }
     _remapKey(normalized, 'location', 'purchase_location');
     _remapKey(normalized, 'description', 'notes');
-    normalized.removeWhere((key, value) => value == null);
+    // Forward explicit nulls only for optional fields the edit form manages,
+    // so clearing a field clears the column. Required fields (name, category,
+    // condition) and fields the form never sends (purchase_date) keep the
+    // old null-stripping so they can never be wiped incidentally.
+    normalized.removeWhere(
+      (key, value) => value == null && !_clearableOptionalKeys.contains(key),
+    );
     return normalized;
   }
 
   void _remapKey(Map<String, dynamic> payload, String from, String to) {
     if (!payload.containsKey(from)) return;
-    final value = payload.remove(from);
-    if (value != null) {
-      payload[to] = value;
-    }
+    // Transfer null values too: the update path forwards explicit nulls for
+    // clearable optional fields. The create path strips them afterwards, so
+    // create behavior is unchanged.
+    payload[to] = payload.remove(from);
   }
 
   ExtractionResponse _parseExtractionResponse(Map<String, dynamic> data) {

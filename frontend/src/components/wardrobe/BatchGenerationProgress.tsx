@@ -75,19 +75,22 @@ function getStatusIndicator(item: DetectedItem) {
  * Get border style based on status
  */
 function getBorderStyle(item: DetectedItem, isInCurrentBatch: boolean) {
+  // Clay tokens (clay-rebuild): AI/processing accent is accent-purple, status
+  // rings use the var-backed success/destructive pairs, and the ring offset
+  // rides --background so it inverts with the theme instead of hard gray-900.
   if (item.status === 'generating') {
-    return 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-gray-900';
+    return 'ring-2 ring-accent-purple ring-offset-2 ring-offset-background';
   }
   if (item.status === 'generated') {
-    return 'ring-2 ring-green-500 ring-offset-1 dark:ring-offset-gray-900';
+    return 'ring-2 ring-success ring-offset-1 ring-offset-background';
   }
   if (item.status === 'failed') {
-    return 'ring-2 ring-red-500 ring-offset-1 dark:ring-offset-gray-900';
+    return 'ring-2 ring-destructive ring-offset-1 ring-offset-background';
   }
   if (isInCurrentBatch) {
-    return 'ring-2 ring-purple-300 dark:ring-purple-700 ring-offset-1 dark:ring-offset-gray-900';
+    return 'ring-2 ring-accent-purple/60 ring-offset-1 ring-offset-background';
   }
-  return 'ring-1 ring-gray-200 dark:ring-gray-700';
+  return 'ring-1 ring-border';
 }
 
 /**
@@ -95,9 +98,9 @@ function getBorderStyle(item: DetectedItem, isInCurrentBatch: boolean) {
  */
 function getItemPlaceholder(item: DetectedItem) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 p-2">
-      <Sparkles className="h-6 w-6 text-gray-400 dark:text-gray-500 mb-1" />
-      <span className="text-xs text-gray-500 dark:text-gray-400 text-center truncate w-full px-1">
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-muted to-secondary p-2">
+      <Sparkles className="h-6 w-6 text-muted-foreground/70 mb-1" />
+      <span className="text-xs text-muted-foreground text-center truncate w-full px-1">
         {item.name || item.category}
       </span>
     </div>
@@ -134,25 +137,25 @@ export function BatchGenerationProgress({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 className="text-lg font-semibold text-foreground">
               Generating Product Images
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-muted-foreground">
               Creating clean product photos for your wardrobe...
             </p>
           </div>
           {isProcessing && (
-            <Sparkles className="h-5 w-5 text-purple-500 animate-pulse" />
+            <Sparkles className="h-5 w-5 text-accent-purple animate-pulse" />
           )}
         </div>
 
         {/* Batch indicator */}
         {totalBatches > 0 && (
           <div className="flex items-center gap-2 text-sm">
-            <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded font-medium">
+            <span className="px-2 py-1 bg-tint-violet-pale text-tint-violet rounded-md font-medium">
               Batch {activeBatch} of {totalBatches}
             </span>
-            <span className="text-gray-500 dark:text-gray-400">
+            <span className="text-muted-foreground">
               (items {currentBatchStart + 1}-{currentBatchEnd})
             </span>
           </div>
@@ -161,15 +164,15 @@ export function BatchGenerationProgress({
         {/* Progress bar */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600 dark:text-gray-400">
+            <span className="text-muted-foreground">
               {processedCount} of {totalItems} items generated
               {itemsFailed > 0 && (
-                <span className="text-red-500 ml-1">
+                <span className="text-error ml-1">
                   ({itemsFailed} failed)
                 </span>
               )}
             </span>
-            <span className="font-medium text-gray-900 dark:text-white">
+            <span className="font-medium text-foreground">
               {Math.round(progress)}%
             </span>
           </div>
@@ -178,22 +181,22 @@ export function BatchGenerationProgress({
       </div>
 
       {/* Honest time expectation so users know it isn't stuck */}
-      <div className="flex items-center gap-2 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 px-3 py-2">
-        <Sparkles className="h-4 w-4 text-purple-500 flex-shrink-0" />
-        <p className="text-sm text-purple-800 dark:text-purple-200">
+      <div className="flex items-center gap-2 rounded-lg border border-tint-violet-pale bg-tint-violet-pale/40 px-3 py-2">
+        <Sparkles className="h-4 w-4 text-accent-purple flex-shrink-0" />
+        <p className="text-sm text-tint-violet">
           Studio photos take a few minutes to generate. Items appear here as they're ready.
         </p>
       </div>
 
       {/* Error message */}
       {error && (
-        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-4 bg-error-pale border border-destructive/30 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-error flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-red-800 dark:text-red-300">
+            <p className="text-sm font-medium text-error">
               Error during generation
             </p>
-            <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+            <p className="text-sm text-error mt-1">
               {error}
             </p>
           </div>
@@ -207,7 +210,7 @@ export function BatchGenerationProgress({
             <div
               key={item.tempId}
               className={cn(
-                'group relative aspect-square overflow-hidden rounded-lg bg-gray-100 transition-colors duration-300 dark:bg-gray-800',
+                'group relative aspect-square overflow-hidden rounded-lg bg-muted transition-colors duration-300',
                 getBorderStyle(item, isInCurrentBatch(index))
               )}
             >
@@ -238,14 +241,14 @@ export function BatchGenerationProgress({
 
               {/* Error tooltip on hover for failed items */}
               {item.status === 'failed' && item.generationError && (
-                <div className="absolute inset-x-0 bottom-0 bg-red-500 text-white text-xs p-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
+                <div className="absolute inset-x-0 bottom-0 bg-destructive text-destructive-foreground text-xs p-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
                   <p className="truncate">{item.generationError}</p>
                 </div>
               )}
 
               {/* Batch number badge for current batch items */}
               {isInCurrentBatch(index) && item.status !== 'generated' && item.status !== 'failed' && (
-                <div className="absolute top-1.5 left-1.5 bg-purple-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">
+                <div className="absolute top-1.5 left-1.5 bg-accent-purple text-white text-xs font-bold px-1.5 py-0.5 rounded-md">
                   #{index - currentBatchStart + 1}
                 </div>
               )}
@@ -255,34 +258,34 @@ export function BatchGenerationProgress({
       </div>
 
       {/* Status summary */}
-      <div className="grid grid-cols-3 gap-4 py-3 border-t dark:border-gray-700">
+      <div className="grid grid-cols-3 gap-4 py-3 border-t border-border">
         <div className="text-center">
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-2xl font-bold text-foreground">
             {items.filter((i) => i.status === 'detected' || i.status === 'generating').length}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Pending</p>
+          <p className="text-xs text-muted-foreground">Pending</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+          <p className="text-2xl font-bold text-success">
             {itemsGenerated}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Generated</p>
+          <p className="text-xs text-muted-foreground">Generated</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+          <p className="text-2xl font-bold text-error">
             {itemsFailed}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Failed</p>
+          <p className="text-xs text-muted-foreground">Failed</p>
         </div>
       </div>
 
       {/* Cancel button */}
       {isProcessing && onCancel && (
-        <div className="flex justify-center pt-2 border-t dark:border-gray-700">
+        <div className="flex justify-center pt-2 border-t border-border">
           <Button
             variant="outline"
             onClick={onCancel}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
           >
             Cancel Generation
           </Button>

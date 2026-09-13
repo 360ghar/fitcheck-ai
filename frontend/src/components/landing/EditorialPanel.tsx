@@ -5,10 +5,12 @@ interface EditorialPanelProps {
   className?: string
 }
 
-/** Flat, token-backed panel for interactive landing demos. */
+/** Pressed-clay panel for interactive landing demos (clay-rebuild "Depth"):
+ *  `landing-panel` supplies the 24px card radius + oat hairline; the resting
+ *  `shadow-pressed` stack stamps the demo card into the page. */
 export function EditorialPanel({ children, className }: EditorialPanelProps) {
   return (
-    <div className={cn('landing-panel', className)}>
+    <div className={cn('landing-panel shadow-pressed', className)}>
       {children}
     </div>
   )

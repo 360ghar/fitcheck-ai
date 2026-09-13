@@ -12,8 +12,8 @@ _OutfitModel _$OutfitModelFromJson(Map<String, dynamic> json) => _OutfitModel(
   name: json['name'] as String,
   description: json['description'] as String?,
   itemIds: (json['item_ids'] as List<dynamic>).map((e) => e as String).toList(),
-  style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
-  season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
+  style: const TolerantStyleConverter().fromJson(json['style'] as String?),
+  season: const SeasonApiConverter().fromJson(json['season'] as String?),
   occasion: json['occasion'] as String?,
   tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
   isFavorite: json['is_favorite'] as bool? ?? false,
@@ -44,8 +44,8 @@ Map<String, dynamic> _$OutfitModelToJson(_OutfitModel instance) =>
       'name': instance.name,
       'description': instance.description,
       'item_ids': instance.itemIds,
-      'style': _$StyleEnumMap[instance.style],
-      'season': _$SeasonEnumMap[instance.season],
+      'style': const TolerantStyleConverter().toJson(instance.style),
+      'season': const SeasonApiConverter().toJson(instance.season),
       'occasion': instance.occasion,
       'tags': instance.tags,
       'is_favorite': instance.isFavorite,
@@ -58,30 +58,6 @@ Map<String, dynamic> _$OutfitModelToJson(_OutfitModel instance) =>
       'created_at': instance.createdAt?.toIso8601String(),
       'updated_at': instance.updatedAt?.toIso8601String(),
     };
-
-const _$StyleEnumMap = {
-  Style.casual: 'casual',
-  Style.formal: 'formal',
-  Style.business: 'business',
-  Style.sporty: 'sporty',
-  Style.bohemian: 'bohemian',
-  Style.streetwear: 'streetwear',
-  Style.vintage: 'vintage',
-  Style.minimalist: 'minimalist',
-  Style.romantic: 'romantic',
-  Style.edgy: 'edgy',
-  Style.preppy: 'preppy',
-  Style.artsy: 'artsy',
-  Style.other: 'other',
-};
-
-const _$SeasonEnumMap = {
-  Season.spring: 'spring',
-  Season.summer: 'summer',
-  Season.fall: 'fall',
-  Season.winter: 'winter',
-  Season.allSeason: 'allSeason',
-};
 
 _OutfitImage _$OutfitImageFromJson(Map<String, dynamic> json) => _OutfitImage(
   id: json['id'] as String,
@@ -116,11 +92,11 @@ _CreateOutfitRequest _$CreateOutfitRequestFromJson(Map<String, dynamic> json) =>
     _CreateOutfitRequest(
       name: json['name'] as String,
       description: json['description'] as String?,
-      itemIds: (json['itemIds'] as List<dynamic>)
+      itemIds: (json['item_ids'] as List<dynamic>)
           .map((e) => e as String)
           .toList(),
-      style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
-      season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
+      style: const TolerantStyleConverter().fromJson(json['style'] as String?),
+      season: const SeasonApiConverter().fromJson(json['season'] as String?),
       occasion: json['occasion'] as String?,
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
     );
@@ -130,9 +106,9 @@ Map<String, dynamic> _$CreateOutfitRequestToJson(
 ) => <String, dynamic>{
   'name': instance.name,
   'description': instance.description,
-  'itemIds': instance.itemIds,
-  'style': _$StyleEnumMap[instance.style],
-  'season': _$SeasonEnumMap[instance.season],
+  'item_ids': instance.itemIds,
+  'style': const TolerantStyleConverter().toJson(instance.style),
+  'season': const SeasonApiConverter().toJson(instance.season),
   'occasion': instance.occasion,
   'tags': instance.tags,
 };
@@ -141,16 +117,16 @@ _UpdateOutfitRequest _$UpdateOutfitRequestFromJson(Map<String, dynamic> json) =>
     _UpdateOutfitRequest(
       name: json['name'] as String?,
       description: json['description'] as String?,
-      itemIds: (json['itemIds'] as List<dynamic>?)
+      itemIds: (json['item_ids'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
-      style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
-      season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
+      style: const TolerantStyleConverter().fromJson(json['style'] as String?),
+      season: const SeasonApiConverter().fromJson(json['season'] as String?),
       occasion: json['occasion'] as String?,
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      isFavorite: json['isFavorite'] as bool?,
-      isDraft: json['isDraft'] as bool?,
-      isPublic: json['isPublic'] as bool?,
+      isFavorite: json['is_favorite'] as bool?,
+      isDraft: json['is_draft'] as bool?,
+      isPublic: json['is_public'] as bool?,
     );
 
 Map<String, dynamic> _$UpdateOutfitRequestToJson(
@@ -158,14 +134,14 @@ Map<String, dynamic> _$UpdateOutfitRequestToJson(
 ) => <String, dynamic>{
   'name': instance.name,
   'description': instance.description,
-  'itemIds': instance.itemIds,
-  'style': _$StyleEnumMap[instance.style],
-  'season': _$SeasonEnumMap[instance.season],
+  'item_ids': instance.itemIds,
+  'style': const TolerantStyleConverter().toJson(instance.style),
+  'season': const SeasonApiConverter().toJson(instance.season),
   'occasion': instance.occasion,
   'tags': instance.tags,
-  'isFavorite': instance.isFavorite,
-  'isDraft': instance.isDraft,
-  'isPublic': instance.isPublic,
+  'is_favorite': instance.isFavorite,
+  'is_draft': instance.isDraft,
+  'is_public': instance.isPublic,
 };
 
 _OutfitsListResponse _$OutfitsListResponseFromJson(Map<String, dynamic> json) =>
@@ -239,8 +215,8 @@ _SharedOutfitModel _$SharedOutfitModelFromJson(Map<String, dynamic> json) =>
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
-      style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
-      season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
+      style: const TolerantStyleConverter().fromJson(json['style'] as String?),
+      season: const SeasonApiConverter().fromJson(json['season'] as String?),
       itemImages: (json['item_images'] as List<dynamic>)
           .map((e) => e as String)
           .toList(),
@@ -258,8 +234,8 @@ Map<String, dynamic> _$SharedOutfitModelToJson(_SharedOutfitModel instance) =>
       'id': instance.id,
       'name': instance.name,
       'description': instance.description,
-      'style': _$StyleEnumMap[instance.style],
-      'season': _$SeasonEnumMap[instance.season],
+      'style': const TolerantStyleConverter().toJson(instance.style),
+      'season': const SeasonApiConverter().toJson(instance.season),
       'item_images': instance.itemImages,
       'outfit_images': instance.outfitImages,
       'outfit_storage_path': instance.outfitStoragePath,

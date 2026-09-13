@@ -330,6 +330,14 @@ class SubscriptionPage extends GetView<SubscriptionController> {
     // exists", so both together identify the middle tier.
     final onPlus = controller.isPro && controller.canUpgrade;
 
+    // Web with Stripe unconfigured (backend `billing_configured: false`):
+    // /checkout and /portal fail closed by design, so every Upgrade tap
+    // only produced an error toast. Hide the plan cards entirely and point
+    // at the path that does work instead of rendering dead CTAs.
+    if (controller.webBillingUnavailable) {
+      return _buildBillingNotConfiguredSection(context, theme, onPlus: onPlus);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -398,6 +406,37 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                 : 'Plus and Pro are auto-renewing subscriptions',
           ),
         ],
+      ],
+    );
+  }
+
+  /// Web + Stripe unconfigured: the upgrade section with dead CTAs replaced
+  /// by the promo/referral path. Plans cannot be bought online in this state
+  /// (backend fails checkout closed by design), but referral and gift credit
+  /// still grant Plus/Pro.
+  Widget _buildBillingNotConfiguredSection(
+    BuildContext context,
+    ThemeData theme, {
+    required bool onPlus,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          onPlus ? 'Upgrade your plan' : 'Choose a plan',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Online upgrades aren\'t available yet. You can still unlock Plus '
+          'or Pro with a promo or referral code — invite friends from the '
+          'referral section below to earn free months.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurface.withAlpha(153),
+          ),
+        ),
       ],
     );
   }

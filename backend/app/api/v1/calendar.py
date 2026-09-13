@@ -52,6 +52,13 @@ class CalendarConnectionData(BaseModel):
     provider: str
     email: Optional[str] = None
     connected_at: str
+    # Soft-disable state (calendar_connections.is_active, migration 001).
+    # The Flutter client reads 'is_active' and defaults to connected=True
+    # when absent, so omitting it made a disconnected provider still report
+    # hasConnectedCalendar=true and hid the connect affordance. Defaults to
+    # True for legacy rows predating the column. The table has no
+    # is_connected column — is_active is the only source of truth.
+    is_active: bool = True
 
 
 class CalendarEventData(BaseModel):
@@ -199,6 +206,7 @@ async def connect_calendar(
             provider=row["provider"],
             email=row.get("email"),
             connected_at=row.get("connected_at") or now,
+            is_active=(row.get("is_active", True) is not False),
         )
         return {"data": data.model_dump(), "message": "Connected"}
 
@@ -239,6 +247,7 @@ async def list_calendar_connections(
                     provider=row.get("provider") or "",
                     email=row.get("email"),
                     connected_at=row.get("connected_at") or row.get("created_at") or utcnow_iso(),
+                    is_active=(row.get("is_active", True) is not False),
                 )
             )
         logger.debug(

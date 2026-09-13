@@ -106,8 +106,16 @@ class SupabaseService extends GetxService {
   }
 
   /// Get current session
+  ///
+  /// Returns null (instead of throwing) when the client was never
+  /// initialized — e.g. widget tests that pump the app without Supabase.
+  /// Same contract as the guarded reads in sse_service/app_network_image.
   Session? get currentSession {
-    return _client.auth.currentSession;
+    try {
+      return _client.auth.currentSession;
+    } catch (_) {
+      return null; // uninitialized client (widget tests)
+    }
   }
 
   /// Get current access token

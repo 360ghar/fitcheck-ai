@@ -527,5 +527,55 @@ void main() {
         await tester.pumpAndSettle();
       },
     );
+
+    testWidgets('keeps client-only settings the server echo drops', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: SizedBox())),
+      );
+      // The backend's UserPreferencesUpdate persists only preferred_styles
+      // of this client model; its response row comes back with every other
+      // key absent (null after decoding). Storing that row verbatim used to
+      // revert the just-saved settings one round-trip later.
+      final repository = _FakeSettingsRepository()
+        ..onUpdatePreferences = (_) async => UserPreferencesModel(
+              preferredStyles: const ['casual'],
+            );
+      final controller = SettingsController(
+        repository: repository,
+        authController: _FakeAuthController(),
+      );
+      controller.preferences.value = UserPreferencesModel(
+        themeMode: AppThemeMode.dark,
+        temperatureUnit: TemperatureUnit.celsius,
+        notificationsEnabled: false,
+        preferredStyles: const [],
+      );
+
+      final saved = await controller.savePreferences(
+        controller.preferences.value!.copyWith(
+          preferredStyles: const ['casual'],
+        ),
+      );
+
+      expect(saved, isTrue);
+      expect(
+        controller.preferences.value?.themeMode,
+        AppThemeMode.dark,
+        reason: 'theme_mode is dropped server-side; the client value must stay',
+      );
+      expect(
+        controller.preferences.value?.temperatureUnit,
+        TemperatureUnit.celsius,
+      );
+      expect(controller.preferences.value?.notificationsEnabled, isFalse);
+      expect(
+        controller.preferences.value?.preferredStyles,
+        const ['casual'],
+        reason: 'preferred_styles is what the server persists; its echo wins',
+      );
+      await tester.pumpAndSettle();
+    });
   });
 }

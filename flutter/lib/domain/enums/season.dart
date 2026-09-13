@@ -32,3 +32,16 @@ enum Season {
 
   static List<String> get allNames => Season.values.map((e) => e.displayName).toList();
 }
+
+/// API-facing value for outbound filter payloads and writes.
+///
+/// backend/app/models/outfit.py VALID_SEASONS spells the all-season value
+/// 'all-season' (the web app's spelling); the enum name is allSeason. Every
+/// outbound season value must go through [seasonApiValue]: the backend list
+/// filter is an exact string match (`q.in_("season", ...)`,
+/// backend/app/api/v1/outfits.py), so emitting 'allseason' silently hid
+/// web-created all-season outfits.
+extension SeasonApiValue on Season {
+  String get seasonApiValue =>
+      this == Season.allSeason ? 'all-season' : name.toLowerCase();
+}

@@ -12,6 +12,7 @@ import '../../../core/utils/error_handler.dart';
 import '../models/subscription_model.dart';
 import '../repositories/subscription_repository.dart';
 import '../services/iap_service.dart';
+import '../services/purchase_recovery_service.dart';
 import '../../../core/utils/frame_safe.dart';
 
 /// Whether the store rail is serving products right now.
@@ -44,17 +45,49 @@ class SubscriptionController extends GetxController {
   SubscriptionController({
     IapService? iapService,
     SubscriptionRepository? repository,
+    PurchaseRecoveryService? recoveryService,
     String? Function()? currentUserId,
   }) : iapService = iapService ?? IapService(),
        _repository = repository ?? SubscriptionRepository(),
-       _currentUserId = currentUserId ?? _defaultCurrentUserId;
+       _currentUserId = currentUserId ?? _defaultCurrentUserId,
+       recoveryService = recoveryService ??
+           _defaultRecoveryService(
+             iapService: iapService,
+             repository: repository,
+             currentUserId: currentUserId,
+           );
 
   final SubscriptionRepository _repository;
   final IapService iapService;
 
+  /// App-lifetime purchase verification service (see
+  /// [PurchaseRecoveryService]). Owns the plugin stream and the app-wide
+  /// transaction dedupe; while this page is open it forwards raw updates
+  /// here and this controller routes verification back through it.
+  final PurchaseRecoveryService recoveryService;
+
   /// The signed-in user's ID, attached to store purchases as Apple's
   /// appAccountToken. Injectable so tests need no Supabase session.
   final String? Function() _currentUserId;
+
+  /// Production default: the binding-registered app-lifetime service, so the
+  /// page shares one dedupe set (and one stream) with the background drain.
+  /// Widget tests construct this controller with no app bindings at all, so
+  /// a private instance is built around the same injected fakes instead.
+  static PurchaseRecoveryService _defaultRecoveryService({
+    IapService? iapService,
+    SubscriptionRepository? repository,
+    String? Function()? currentUserId,
+  }) {
+    if (Get.isRegistered<PurchaseRecoveryService>()) {
+      return Get.find<PurchaseRecoveryService>();
+    }
+    return PurchaseRecoveryService(
+      iapService: iapService ?? IapService(),
+      repository: repository ?? SubscriptionRepository(),
+      currentUserId: currentUserId ?? _defaultCurrentUserId,
+    );
+  }
 
   /// Resolves the user ID without assuming SupabaseService is registered —
   /// widget tests build this controller with no app bindings at all, and a
@@ -119,16 +152,12 @@ class SubscriptionController extends GetxController {
   /// In-flight [refreshStoreProducts] query, when one is running.
   Future<void>? _storeQueryFuture;
 
-  StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
-
-  /// Transaction IDs already handed to the backend for verification (or
-  /// currently in flight). The store legitimately redelivers updates —
-  /// unfinished transactions after a failed verify, restore overlapping an
-  /// active entitlement, iOS upgrade/crossgrade emitting several updates for
-  /// one product — and each duplicate would otherwise fire another verify +
-  /// complete + success toast. Bounded: entries are removed when verification
-  /// fails so the redelivery can retry.
-  final Set<String> _handledTransactionIds = <String>{};
+  /// True when the backend reports web (Stripe) billing fully configured
+  /// (`billing_configured` from /plans). Mobile store billing is unaffected;
+  /// on web a false value means /checkout and /portal fail closed, so the
+  /// paywall must not render upgrade CTAs that can only error (see
+  /// [webBillingUnavailable]).
+  final RxBool billingConfigured = false.obs;
 
   // Computed properties
   bool get isPro {
@@ -165,6 +194,13 @@ class SubscriptionController extends GetxController {
   /// OFF only when the build is compiled with PAYWALL_ENABLED=false
   /// (e.g. App Review builds that must not surface monetization).
   bool get showPaywall => EnvConfig.paywallEnabled;
+
+  /// True on Flutter web when the backend reports Stripe billing
+  /// unconfigured (`billing_configured: false` from /plans): /checkout and
+  /// /portal fail closed by design, so every Upgrade tap would only produce
+  /// an error toast. The paywall hides the plan cards in this state and
+  /// points at the promo/referral path instead.
+  bool get webBillingUnavailable => kIsWeb && !billingConfigured.value;
 
   String get planName {
     switch (subscription.value?.planType) {
@@ -217,54 +253,53 @@ class SubscriptionController extends GetxController {
     fetchPlans();
   }
 
-  /// Start listening for store-purchase results.
+  /// Start handling store-purchase results for this page.
   ///
-  /// Idempotent and public so tests can attach the listener without running
-  /// the full onInit data fetch.
+  /// The plugin stream itself is owned app-lifetime by
+  /// [PurchaseRecoveryService] (attached at bootstrap, alive long after this
+  /// page closes). While the page is open the service forwards every raw
+  /// update batch here — so pending/error toasts and the restore spinner
+  /// stay page-driven — and verification still routes through the service's
+  /// single [PurchaseRecoveryService.verifyAndComplete] path, whose claim
+  /// set prevents any transaction from being processed twice. Closing the
+  /// page hands the stream back to the service's background drain.
+  ///
+  /// Idempotent and public so tests can attach without running the full
+  /// onInit data fetch.
   void attachPurchaseListener() {
-    if (_purchaseSubscription != null) return;
-    // Store-purchase results (purchased / pending / restored / error) arrive
-    // on this stream after buyNonConsumable / restorePurchases. The handler
-    // is wrapped in try/catch and the subscription carries an onError: a
-    // throw (or a plugin-emitted stream error) must never cancel this
-    // listener, or an unfinished transaction would never be verified nor
-    // completed until a full app restart while the store keeps redelivering
-    // it to a dead stream.
-    _purchaseSubscription = iapService.purchaseStream.listen(
-      (updates) {
-        for (final details in updates) {
-          try {
-            final result = _handlePurchaseUpdate(details);
-            unawaited(
-              result.catchError((Object e, StackTrace s) {
-                // _handlePurchaseUpdate's own paths are caught internally; a
-                // rejection here means something escaped — keep the listener
-                // alive and let telemetry see it.
-                ErrorHandler.reportError(e, 'Purchase update handler failed');
-              }),
-            );
-          } catch (e, stackTrace) {
-            // Synchronous throw from the switch itself: log, keep going with
-            // the remaining updates in this batch, and keep the subscription.
-            ErrorHandler.reportError(
-              e,
-              'Purchase update handler threw',
-              stackTrace: stackTrace,
-            );
-          }
-        }
-      },
-      onError: (Object e) {
-        // Stream-level errors (StoreKit2 Transaction.updates can emit them):
-        // report and stay subscribed; the plugin redelivers unfinished work.
-        ErrorHandler.reportError(e, 'Store purchase stream error');
-      },
-    );
+    recoveryService.activatePageHandler(_onStoreUpdates);
+  }
+
+  void _onStoreUpdates(List<PurchaseDetails> updates) {
+    for (final details in updates) {
+      try {
+        final result = _handlePurchaseUpdate(details);
+        unawaited(
+          result.catchError((Object e, StackTrace s) {
+            // _handlePurchaseUpdate's own paths are caught internally; a
+            // rejection here means something escaped — keep the handler
+            // alive and let telemetry see it.
+            ErrorHandler.reportError(e, 'Purchase update handler failed');
+          }),
+        );
+      } catch (e, stackTrace) {
+        // Synchronous throw from the switch itself: log, keep going with
+        // the remaining updates in this batch, and keep the page handler
+        // registered (a throw must never orphan a charged user's update).
+        ErrorHandler.reportError(
+          e,
+          'Purchase update handler threw',
+          stackTrace: stackTrace,
+        );
+      }
+    }
   }
 
   @override
   void onClose() {
-    _purchaseSubscription?.cancel();
+    // Hand the stream back to the recovery service's background drain; the
+    // stream itself stays attached for the app lifetime.
+    recoveryService.deactivatePageHandler();
     _restoreTimeoutTimer?.cancel();
     super.onClose();
   }
@@ -303,6 +338,7 @@ class SubscriptionController extends GetxController {
       final result = await _repository.getPlans();
       plans.assignAll(result.plans);
       storeProducts.value = result.storeProducts;
+      billingConfigured.value = result.billingConfigured;
       // Kick off the store product query for localized prices (mobile only).
       unawaited(refreshStoreProducts());
     } catch (e, stackTrace) {
@@ -633,50 +669,67 @@ class SubscriptionController extends GetxController {
     }
   }
 
+  /// Verify + complete one purchased/restored transaction via the app-wide
+  /// recovery service, then map the outcome onto page state.
+  ///
+  /// All verification logic (backend register, dedupe, store completion)
+  /// lives in [PurchaseRecoveryService.verifyAndComplete] so the background
+  /// drain and this page share exactly one code path and one dedupe set.
   Future<void> _registerStorePurchase(
     PurchaseDetails details, {
     required bool restored,
   }) async {
-    final transactionId = iapService.transactionIdFor(details);
-    if (transactionId == null || transactionId.isEmpty) {
-      error.value = 'The purchase did not include a verifiable transaction ID.';
-      ErrorHandler.showError(error.value, title: 'Purchase error');
-      return;
-    }
-    // Dedupe store redeliveries: the same transaction must not be verified,
-    // completed, or celebrated twice (duplicate success toasts read as
-    // double-charging to users). On verification failure the ID is released
-    // so the store's automatic redelivery can retry.
-    if (!_handledTransactionIds.add(transactionId)) return;
-    try {
-      final sub = await _repository.registerIapTransaction(
-        store: iapService.storeName,
-        transactionId: transactionId,
-        productId: details.productID,
-      );
-      subscription.value = sub;
-      // Only complete (deliver) the purchase after the backend verified it;
-      // otherwise the store would consider it delivered despite no
-      // entitlement.
-      await iapService.complete(details);
-      await fetchUsage();
-      ErrorHandler.showSuccess(
-        restored
-            ? 'Your purchases have been restored.'
-            : 'Your subscription is active. Welcome!',
-        title: restored ? 'Restored' : 'Subscription active',
-      );
-    } catch (e, stackTrace) {
-      _handledTransactionIds.remove(transactionId);
-      error.value = ErrorHandler.extractMessage(e);
-      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
-      // Do NOT complete the purchase: the store keeps it pending and
-      // redelivers it (or the backend webhook reconciles it server-side).
-      ErrorHandler.showError(
-        'We couldn\'t verify your purchase with the store right now. '
-        'It will be picked up automatically; you won\'t be charged twice.',
-        title: 'Verification pending',
-      );
+    final result = await recoveryService.verifyAndComplete(
+      details,
+      restored: restored,
+      interactive: true,
+    );
+    switch (result.outcome) {
+      case PurchaseVerificationOutcome.verified:
+        subscription.value = result.subscription;
+        await fetchUsage();
+        ErrorHandler.showSuccess(
+          restored
+              ? 'Your purchases have been restored.'
+              : 'Your subscription is active. Welcome!',
+          title: restored ? 'Restored' : 'Subscription active',
+        );
+      case PurchaseVerificationOutcome.duplicate:
+        // Already verified (background drain, an earlier delivery, or an
+        // in-flight pass). Never celebrate twice: duplicate success toasts
+        // read as double-charging.
+        break;
+      case PurchaseVerificationOutcome.noSession:
+        error.value = 'Please sign in to finish your purchase.';
+        ErrorHandler.showValidation(error.value, title: 'Sign in required');
+      case PurchaseVerificationOutcome.invalidTransaction:
+        error.value = result.message ??
+            'The purchase did not include a verifiable transaction ID.';
+        ErrorHandler.showError(error.value, title: 'Purchase error');
+      case PurchaseVerificationOutcome.transientFailure:
+        // The backend could not be reached (network drop / 5xx / token
+        // race). The purchase is deliberately NOT completed, and the claim
+        // was released so redelivery retries. Unlike before, the promise
+        // below is real: PurchaseRecoveryService stays attached after this
+        // page closes and drains the redelivery automatically.
+        error.value = result.message ?? 'Verification failed.';
+        ErrorHandler.showValidation(
+          'We couldn\'t verify your purchase with the store right now. '
+          'It will be picked up automatically; you won\'t be charged twice.',
+          title: 'Verification pending',
+        );
+      case PurchaseVerificationOutcome.terminalFailure:
+        // The backend PERMANENTLY rejected the transaction (unknown product,
+        // already linked to another account, unconfigured store
+        // credentials). Redelivery can never fix it, so stop re-promising
+        // automatic pickup: the user is charged, not entitled, and the only
+        // real path is support. Telemetry was already reported by the
+        // service; this surfaces the accurate state once.
+        error.value = result.message ?? kPurchaseNotAppliedMessage;
+        ErrorHandler.showValidation(
+          kPurchaseNotAppliedMessage,
+          title: 'Purchase not applied',
+        );
     }
   }
 

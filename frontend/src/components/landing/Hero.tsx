@@ -1,23 +1,23 @@
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Check, Sun } from 'lucide-react'
+import { ArrowRight, Check } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { GeneratedImage } from '@/components/ui/generated-image'
 import { trackEvent } from '@/lib/analytics'
 import { trialRegisterHref, TRIAL_PROMO_CODE } from '@/lib/trial-offer'
 
 const heroDelay = (ms: number) => ({ '--hero-delay': `${ms}ms` }) as CSSProperties
 
-const closetCrops = [
-  'object-[center_24%]',
-  'object-[center_52%]',
-  'object-[center_78%]',
-]
+/** Shared clay frame for the calm supporting-UI cards under the machine. */
+const supportCard =
+  'min-w-0 rounded-3xl border border-border bg-card p-5 shadow-pressed'
 
 /**
- * The landing signature is a factual decision canvas, not a device mockup.
- * It combines existing wardrobe photography, one selected flat lay, and the
- * inputs FitCheck can use to explain an outfit recommendation.
+ * Illustration-led clay hero: a thesis headline, dual CTAs, the claymation
+ * wardrobe-machine as the emotional centerpiece, then calm, credible product
+ * UI beneath it (weather input, one reasoned outfit, saved-wardrobe proof).
+ * Photography stays in proof slots only; the brand moment is the machine.
  */
 export default function Hero() {
   return (
@@ -34,7 +34,7 @@ export default function Hero() {
       />
       <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:px-8 lg:pb-20 lg:pt-20">
         <div className="grid grid-cols-1 items-end gap-8 lg:grid-cols-12 lg:gap-12">
-          <div className="min-w-0 lg:col-span-8">
+          <div className="min-w-0 lg:col-span-7">
             <p
               className="hero-in flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground"
               style={heroDelay(0)}
@@ -44,25 +44,26 @@ export default function Hero() {
             </p>
             <h1
               id="landing-hero-heading"
-              className="hero-in landing-display mt-6 max-w-4xl text-4xl font-semibold leading-[1.04] text-foreground sm:text-5xl lg:text-6xl xl:text-[4.25rem]"
+              className="hero-in landing-display type-display-xl mt-6 max-w-3xl text-foreground"
               style={heroDelay(60)}
             >
-              AI virtual closet for better outfits every day
+              Put your wardrobe to work every morning
             </h1>
             <p
               className="hero-in mt-6 max-w-2xl text-base leading-relaxed text-body sm:text-lg"
               style={heroDelay(120)}
             >
-              Turn clothing photos into a private digital wardrobe. Plan weather-aware outfits,
-              preview combinations, and create studio-style images from what you already own.
+              FitCheck turns clothing photos into a private digital wardrobe. Plan weather-aware
+              outfits, preview combinations, and create studio-style images from what you already
+              own.
             </p>
           </div>
 
-          <div className="hero-in min-w-0 lg:col-span-4" style={heroDelay(180)}>
+          <div className="hero-in min-w-0 lg:col-span-5" style={heroDelay(180)}>
             <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
               <Button
                 size="lg"
-                className="group h-12 px-6 text-base font-medium transition-[color,background-color,border-color,transform] active:scale-[0.98]"
+                className="group h-12 rounded-full px-6 text-base font-medium"
                 asChild
               >
                 <Link
@@ -81,7 +82,7 @@ export default function Hero() {
               <Button
                 size="lg"
                 variant="outline"
-                className="h-12 px-6 text-base font-medium text-ink transition-[color,background-color,border-color,transform] active:scale-[0.98]"
+                className="h-12 rounded-full px-6 text-base font-medium"
                 asChild
               >
                 <a href="#demo">Try the live demo</a>
@@ -94,102 +95,144 @@ export default function Hero() {
           </div>
         </div>
 
+        {/* The centerpiece: the clay wardrobe-machine on its rolling hills.
+            It is the LCP — the only fetchpriority=high image on the page. */}
         <figure
-          className="hero-in-frame mt-12 overflow-hidden rounded-[2rem] border border-border bg-card lg:mt-16"
+          className="hero-in-frame mt-12 overflow-hidden rounded-[2rem] border border-border bg-card shadow-pressed lg:mt-16"
           style={heroDelay(240)}
-          aria-labelledby="decision-canvas-title"
+          aria-labelledby="wardrobe-machine-title"
         >
           <div className="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <figcaption
-              id="decision-canvas-title"
+              id="wardrobe-machine-title"
               className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground"
             >
-              Outfit decision canvas
+              The wardrobe machine
             </figcaption>
-            <span className="text-xs text-muted-foreground">From your saved wardrobe</span>
+            <span className="text-xs text-muted-foreground">
+              Weather-aware outfits · From your saved wardrobe
+            </span>
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12">
-            <div className="order-2 min-w-0 border-t border-border p-4 sm:p-5 lg:order-1 lg:col-span-3 lg:border-r lg:border-t-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Closet rail
-              </p>
-              <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-1">
-                {closetCrops.map((position, index) => (
-                  <div
-                    key={position}
-                    className="min-w-0 overflow-hidden rounded-2xl border border-border bg-surface-soft lg:aspect-[16/7]"
-                  >
-                    <img
-                      src="/landing/wardrobe-640.webp"
-                      alt={index === 0 ? 'Neutral clothes arranged on a wardrobe rail' : ''}
-                      className={`aspect-square h-full w-full object-cover lg:aspect-auto ${position}`}
-                      width={640}
-                      height={480}
-                      loading="lazy"
-                      aria-hidden={index > 0 ? true : undefined}
-                    />
-                  </div>
-                ))}
-              </div>
-              <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                Clothing references stay connected to the outfit decision.
-              </p>
-            </div>
-
-            <div className="order-1 min-w-0 bg-surface-soft p-3 sm:p-5 lg:order-2 lg:col-span-5">
-              <div className="overflow-hidden rounded-2xl border border-border bg-card">
-                <img
-                  src="/landing/flatlay-640.webp"
-                  srcSet="/landing/flatlay-640.webp 640w, /landing/flatlay.webp 1024w"
-                  sizes="(min-width: 1024px) 42vw, calc(100vw - 32px)"
-                  alt="Workday outfit flat lay with a white shirt, navy trousers, brown shoes, and a watch"
-                  className="aspect-square h-full w-full object-cover"
-                  width={1024}
-                  height={1024}
-                  decoding="async"
-                  {...{ fetchpriority: 'high' }}
-                />
-              </div>
-            </div>
-
-            <div className="order-3 min-w-0 border-t border-border p-6 sm:p-8 lg:col-span-4 lg:border-l lg:border-t-0 lg:p-10">
-              <div className="flex items-center justify-between gap-4 border-b border-border pb-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    Weather input
-                  </p>
-                  <p className="mt-2 text-xl font-semibold text-foreground">24° Clear</p>
-                </div>
-                <Sun className="h-6 w-6 text-primary" aria-hidden="true" />
-              </div>
-
-              <div className="py-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-                  Selected workday outfit
-                </p>
-                <h2 className="landing-display mt-3 text-2xl font-semibold leading-tight text-foreground">
-                  Clear-day structure without the guesswork
-                </h2>
-                <p className="mt-4 text-sm leading-relaxed text-body sm:text-base">
-                  A white shirt, navy trousers, and brown shoes form a focused workday option.
-                  The reason stays visible beside the clothes that support it.
-                </p>
-              </div>
-
-              <dl className="border-t border-border pt-5 text-sm">
-                <div className="flex items-center justify-between gap-4 py-2">
-                  <dt className="text-muted-foreground">Context</dt>
-                  <dd className="font-medium text-foreground">Workday</dd>
-                </div>
-                <div className="flex items-center justify-between gap-4 py-2">
-                  <dt className="text-muted-foreground">Source</dt>
-                  <dd className="font-medium text-foreground">Saved wardrobe</dd>
-                </div>
-              </dl>
-            </div>
-          </div>
+          <GeneratedImage
+            src="/generated/hero-machine-640.webp"
+            srcSet="/generated/hero-machine-640.webp 640w, /generated/hero-machine.webp 2624w"
+            sizes="(min-width: 1280px) 1216px, calc(100vw - 32px)"
+            alt="Claymation wardrobe machine on rolling green hills, holding a rail of tiny sweaters under a paper-cloud sky"
+            className="aspect-[16/9] h-full w-full object-cover"
+            width={2624}
+            height={1472}
+            decoding="async"
+            fallback="hide-parent"
+            {...{ fetchpriority: 'high' }}
+          />
         </figure>
+
+        {/* Calm supporting UI under the whimsy — the clay.com pairing: the
+            illustration carries the brand moment, these cards carry credibility. */}
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className={`hero-in flex flex-col justify-center ${supportCard}`} style={heroDelay(300)}>
+            <div className="flex items-center gap-4">
+              <GeneratedImage
+                src="/generated/weather-sun-cloud-640.webp"
+                srcSet="/generated/weather-sun-cloud-640.webp 640w, /generated/weather-sun-cloud.webp 1024w"
+                sizes="56px"
+                alt=""
+                width={1024}
+                height={1024}
+                loading="lazy"
+                decoding="async"
+                className="h-14 w-14 shrink-0 rounded-2xl border border-soft object-cover"
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Weather input
+                </p>
+                <p className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+                  24° Clear
+                </p>
+              </div>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+              Today's forecast shapes every outfit plan before you ask for one.
+            </p>
+          </div>
+
+          <div className={`hero-in ${supportCard}`} style={heroDelay(340)}>
+            <div className="overflow-hidden rounded-2xl border border-border">
+              <GeneratedImage
+                src="/generated/outfit-flatlay-4x3-640.webp"
+                srcSet="/generated/outfit-flatlay-4x3-640.webp 640w, /generated/outfit-flatlay-4x3.webp 1200w"
+                sizes="(min-width: 768px) 30vw, calc(100vw - 32px)"
+                alt="Curated outfit flat lay with a cream knit, indigo jeans, white sneakers, and gold hoops"
+                className="aspect-[16/7] h-full w-full object-cover"
+                width={1200}
+                height={900}
+                loading="lazy"
+                decoding="async"
+                fallback="hide-parent"
+              />
+            </div>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+              Selected workday outfit
+            </p>
+            <p className="mt-2 text-sm font-semibold leading-snug text-foreground">
+              Clear-day structure without the guesswork
+            </p>
+            <dl className="mt-3 border-t border-soft pt-3 text-sm">
+              <div className="flex items-center justify-between gap-4 py-1">
+                <dt className="text-muted-foreground">Context</dt>
+                <dd className="font-medium text-foreground">Workday</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-1">
+                <dt className="text-muted-foreground">Source</dt>
+                <dd className="font-medium text-foreground">Saved wardrobe</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className={`hero-in flex flex-col justify-center ${supportCard}`} style={heroDelay(380)}>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                {
+                  file: 'office',
+                  alt: 'Office outfit example from saved wardrobe pieces',
+                },
+                {
+                  file: 'evening',
+                  alt: 'Evening outfit example from saved wardrobe pieces',
+                },
+                {
+                  file: 'festive',
+                  alt: 'Festive outfit example from saved wardrobe pieces',
+                },
+              ].map((frame) => (
+                <div
+                  key={frame.file}
+                  className="min-w-0 overflow-hidden rounded-2xl border border-border"
+                >
+                  <GeneratedImage
+                    src={`/generated/outfit-carousel-${frame.file}-4x3-640.webp`}
+                    srcSet={`/generated/outfit-carousel-${frame.file}-4x3-640.webp 640w, /generated/outfit-carousel-${frame.file}-4x3.webp 1600w`}
+                    sizes="(min-width: 768px) 12vw, 30vw"
+                    alt={frame.alt}
+                    className="aspect-[4/3] h-full w-full object-cover"
+                    width={1600}
+                    height={1200}
+                    loading="lazy"
+                    decoding="async"
+                    fallback="hide-parent"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Saved wardrobe
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Workday, evening, and festive options, built only from clothes you already own.
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   )

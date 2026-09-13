@@ -4,22 +4,33 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/* Clay depth treatment (clay-rebuild brief "Depth") for solid-fill buttons:
+ * they rest pressed into the page (`shadow-pressed`, the 3-layer stamped
+ * stack), rise into the hard no-blur offset shadow on hover with a small
+ * diagonal shift, and flatten completely under the finger (`active:shadow-none`
+ * — pressed INTO clay, not floating). Applied only to solid variants; ghost /
+ * outline / link / pill-on-image stay flat so quiet affordances don't shout.
+ * The hover translate is motion-safe gated; the shadow swap is non-motion
+ * state and still fires under prefers-reduced-motion. */
+const CLAY_PRESS =
+  "shadow-pressed hover:shadow-offset motion-safe:hover:-translate-x-px motion-safe:hover:-translate-y-px active:shadow-none motion-safe:active:translate-x-0 motion-safe:active:translate-y-0 disabled:shadow-none"
+
 const buttonVariants = cva(
   // Motion: press feedback is a transform scale (motion-safe gated), not a
   // color swap alone — the press should feel mechanical, not like a repaint.
-  "relative inline-flex min-w-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-bold leading-none text-ink transition-[color,background-color,border-color,transform] duration-150 ease-out motion-safe:active:scale-[0.97] before:absolute before:-inset-y-0.5 before:left-0 before:right-0 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-surface-card disabled:text-ash disabled:opacity-100 disabled:motion-safe:scale-100 cursor-pointer [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "relative inline-flex min-w-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-bold leading-none text-ink transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out motion-safe:active:scale-[0.97] before:absolute before:-inset-y-0.5 before:left-0 before:right-0 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-surface-card disabled:text-ash disabled:opacity-100 disabled:motion-safe:scale-100 cursor-pointer [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary-pressed",
-        primary: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary-pressed",
+        default: `bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary-pressed ${CLAY_PRESS}`,
+        primary: `bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary-pressed ${CLAY_PRESS}`,
         "primary-pressed": "bg-primary-pressed text-primary-foreground",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+          `bg-destructive text-destructive-foreground hover:bg-destructive/90 ${CLAY_PRESS}`,
         outline:
           "border border-border bg-transparent text-foreground hover:bg-secondary",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          `bg-secondary text-secondary-foreground hover:bg-secondary/80 ${CLAY_PRESS}`,
         tertiary: "bg-transparent hover:bg-surface-card",
         ghost: "bg-transparent hover:bg-surface-card",
         link: "text-primary underline-offset-4 hover:underline",

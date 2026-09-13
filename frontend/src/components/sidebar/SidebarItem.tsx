@@ -43,7 +43,9 @@ export function SidebarItem({
         'group flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors',
         'hover:bg-accent hover:text-accent-foreground',
         isActive
-          ? 'bg-primary text-primary-foreground'
+          // Clay: the solid active tab rests pressed (same depth chain as the
+          // Button primitive's solid variants).
+          ? 'bg-primary text-primary-foreground shadow-pressed'
           : 'text-muted-foreground',
         isCollapsed && 'justify-center px-2'
       )}

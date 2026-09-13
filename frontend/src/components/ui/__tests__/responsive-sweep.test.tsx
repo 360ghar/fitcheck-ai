@@ -95,15 +95,20 @@ describe('responsive sweep regression guards', () => {
     )
   })
 
-  it('shows one honest photoshoot result instead of a before-and-after claim', () => {
+  it('shows example photoshoot results without a before-and-after claim', () => {
     render(
       <MemoryRouter>
         <PhotoshootShowcase />
       </MemoryRouter>
     )
     const section = document.getElementById('photoshoot-showcase')
-    expect(section?.querySelectorAll('figure')).toHaveLength(1)
+    expect(section?.querySelectorAll('figure')).toHaveLength(2)
     expect(section?.querySelector('figure img')).toHaveClass('aspect-[4/5]')
+    // Both figures are labeled examples; neither may claim a before/after.
+    for (const figure of section?.querySelectorAll('figure') ?? []) {
+      expect(figure.textContent).toMatch(/example result/i)
+    }
+    expect(section?.textContent).not.toMatch(/before(?!\s*(\/after|-and-after))/i)
   })
 
   it('keeps all three demos mounted in a local mobile snap rail', () => {

@@ -17,19 +17,30 @@ const config: Config = {
       xl: 'none',
       '2xl': 'none',
       inner: 'none',
+      // Clay depth (clay-rebuild brief). Var-backed so .dark re-tunes the
+      // alphas; values live in src/index.css :root / .dark.
+      //  - `shadow-pressed`: resting "stamped into clay" 3-layer stack.
+      //  - `shadow-offset`: the hard no-blur hover offset (pairs with a
+      //    translate(-1px,-1px) rise; use `.card-interactive`/`.lift` for the
+      //    full pattern).
+      pressed: 'var(--shadow-pressed)',
+      offset: 'var(--shadow-offset)',
     },
     borderRadius: {
+      // Clay radius scale (clay-rebuild brief): 12px standard controls (md /
+      // DEFAULT consumers like buttons+inputs), 24px feature cards (3xl remap,
+      // also xl/2xl), 32px section containers via the kept `rounded-[2rem]`
+      // arbitrary, 40px page-width containers via `rounded-[2.5rem]`.
       // DEFAULT is required for the bare `rounded` utility: without it the
       // class resolves to nothing and 15+ call sites silently lose radius.
-      DEFAULT: '4px',
+      DEFAULT: '8px',
       none: '0px',
       sm: '8px',
-      md: '16px',
-      lg: '32px',
-      // Compatibility aliases collapse legacy shapes into the documented large radius.
-      xl: '32px',
-      '2xl': '32px',
-      '3xl': '32px',
+      md: '12px',
+      lg: '16px',
+      xl: '24px',
+      '2xl': '24px',
+      '3xl': '24px',
       full: '9999px',
     },
     screens: {
@@ -81,6 +92,15 @@ const config: Config = {
         stone: { ...colors.stone, DEFAULT: '#c8c8c1' },
         hairline: 'hsl(var(--border))',
         'surface-soft': 'hsl(var(--surface-soft))',
+        // Deeper cream "room" wash for alternating landing/web sections
+        // (max one tinted room per viewport). Dark counterpart in index.css.
+        'surface-room': 'hsl(var(--surface-room))',
+        // Oat border tiers: `border-border` is the oat hairline, `border-soft`
+        // the light-oat inner edge/fill tier.
+        'border-soft': 'hsl(var(--border-soft))',
+        // Decorative warm-silver tier for large labels/kickers only — not for
+        // running copy (that stays on `mute`/`body` which clear 4.5:1).
+        silver: 'hsl(var(--silver))',
         'surface-card': 'hsl(var(--card))',
         'surface-elevated': 'hsl(var(--surface-elevated))',
         'on-dark': 'hsl(var(--on-dark))',

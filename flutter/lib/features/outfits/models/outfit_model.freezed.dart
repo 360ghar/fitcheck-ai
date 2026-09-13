@@ -15,7 +15,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$OutfitModel {
 
- String get id;@JsonKey(name: 'user_id') String get userId; String get name; String? get description;@JsonKey(name: 'item_ids') List<String> get itemIds; Style? get style; Season? get season; String? get occasion; List<String>? get tags;@JsonKey(name: 'is_favorite') bool get isFavorite;@JsonKey(name: 'is_draft') bool get isDraft;@JsonKey(name: 'is_public') bool get isPublic;@JsonKey(name: 'worn_count') int get wornCount;@JsonKey(name: 'last_worn_at') DateTime? get lastWornAt;@JsonKey(name: 'outfit_images') List<OutfitImage>? get outfitImages; List<ItemModel>? get items;@JsonKey(name: 'created_at') DateTime? get createdAt;@JsonKey(name: 'updated_at') DateTime? get updatedAt;
+ String get id;@JsonKey(name: 'user_id') String get userId; String get name; String? get description;@JsonKey(name: 'item_ids') List<String> get itemIds;// Tolerant decode: unknown/null → null. One legacy row (e.g.
+// style='Old Money') must not fail the whole list (see
+// tolerant_enum_converter.dart).
+@TolerantStyleConverter() Style? get style;@SeasonApiConverter() Season? get season; String? get occasion; List<String>? get tags;@JsonKey(name: 'is_favorite') bool get isFavorite;@JsonKey(name: 'is_draft') bool get isDraft;@JsonKey(name: 'is_public') bool get isPublic;@JsonKey(name: 'worn_count') int get wornCount;@JsonKey(name: 'last_worn_at') DateTime? get lastWornAt;@JsonKey(name: 'outfit_images') List<OutfitImage>? get outfitImages; List<ItemModel>? get items;@JsonKey(name: 'created_at') DateTime? get createdAt;@JsonKey(name: 'updated_at') DateTime? get updatedAt;
 /// Create a copy of OutfitModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +51,7 @@ abstract mixin class $OutfitModelCopyWith<$Res>  {
   factory $OutfitModelCopyWith(OutfitModel value, $Res Function(OutfitModel) _then) = _$OutfitModelCopyWithImpl;
 @useResult
 $Res call({
- String id,@JsonKey(name: 'user_id') String userId, String name, String? description,@JsonKey(name: 'item_ids') List<String> itemIds, Style? style, Season? season, String? occasion, List<String>? tags,@JsonKey(name: 'is_favorite') bool isFavorite,@JsonKey(name: 'is_draft') bool isDraft,@JsonKey(name: 'is_public') bool isPublic,@JsonKey(name: 'worn_count') int wornCount,@JsonKey(name: 'last_worn_at') DateTime? lastWornAt,@JsonKey(name: 'outfit_images') List<OutfitImage>? outfitImages, List<ItemModel>? items,@JsonKey(name: 'created_at') DateTime? createdAt,@JsonKey(name: 'updated_at') DateTime? updatedAt
+ String id,@JsonKey(name: 'user_id') String userId, String name, String? description,@JsonKey(name: 'item_ids') List<String> itemIds,@TolerantStyleConverter() Style? style,@SeasonApiConverter() Season? season, String? occasion, List<String>? tags,@JsonKey(name: 'is_favorite') bool isFavorite,@JsonKey(name: 'is_draft') bool isDraft,@JsonKey(name: 'is_public') bool isPublic,@JsonKey(name: 'worn_count') int wornCount,@JsonKey(name: 'last_worn_at') DateTime? lastWornAt,@JsonKey(name: 'outfit_images') List<OutfitImage>? outfitImages, List<ItemModel>? items,@JsonKey(name: 'created_at') DateTime? createdAt,@JsonKey(name: 'updated_at') DateTime? updatedAt
 });
 
 
@@ -170,7 +173,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId,  String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool isFavorite, @JsonKey(name: 'is_draft')  bool isDraft, @JsonKey(name: 'is_public')  bool isPublic, @JsonKey(name: 'worn_count')  int wornCount, @JsonKey(name: 'last_worn_at')  DateTime? lastWornAt, @JsonKey(name: 'outfit_images')  List<OutfitImage>? outfitImages,  List<ItemModel>? items, @JsonKey(name: 'created_at')  DateTime? createdAt, @JsonKey(name: 'updated_at')  DateTime? updatedAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId,  String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool isFavorite, @JsonKey(name: 'is_draft')  bool isDraft, @JsonKey(name: 'is_public')  bool isPublic, @JsonKey(name: 'worn_count')  int wornCount, @JsonKey(name: 'last_worn_at')  DateTime? lastWornAt, @JsonKey(name: 'outfit_images')  List<OutfitImage>? outfitImages,  List<ItemModel>? items, @JsonKey(name: 'created_at')  DateTime? createdAt, @JsonKey(name: 'updated_at')  DateTime? updatedAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _OutfitModel() when $default != null:
 return $default(_that.id,_that.userId,_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags,_that.isFavorite,_that.isDraft,_that.isPublic,_that.wornCount,_that.lastWornAt,_that.outfitImages,_that.items,_that.createdAt,_that.updatedAt);case _:
@@ -191,7 +194,7 @@ return $default(_that.id,_that.userId,_that.name,_that.description,_that.itemIds
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId,  String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool isFavorite, @JsonKey(name: 'is_draft')  bool isDraft, @JsonKey(name: 'is_public')  bool isPublic, @JsonKey(name: 'worn_count')  int wornCount, @JsonKey(name: 'last_worn_at')  DateTime? lastWornAt, @JsonKey(name: 'outfit_images')  List<OutfitImage>? outfitImages,  List<ItemModel>? items, @JsonKey(name: 'created_at')  DateTime? createdAt, @JsonKey(name: 'updated_at')  DateTime? updatedAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId,  String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool isFavorite, @JsonKey(name: 'is_draft')  bool isDraft, @JsonKey(name: 'is_public')  bool isPublic, @JsonKey(name: 'worn_count')  int wornCount, @JsonKey(name: 'last_worn_at')  DateTime? lastWornAt, @JsonKey(name: 'outfit_images')  List<OutfitImage>? outfitImages,  List<ItemModel>? items, @JsonKey(name: 'created_at')  DateTime? createdAt, @JsonKey(name: 'updated_at')  DateTime? updatedAt)  $default,) {final _that = this;
 switch (_that) {
 case _OutfitModel():
 return $default(_that.id,_that.userId,_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags,_that.isFavorite,_that.isDraft,_that.isPublic,_that.wornCount,_that.lastWornAt,_that.outfitImages,_that.items,_that.createdAt,_that.updatedAt);case _:
@@ -211,7 +214,7 @@ return $default(_that.id,_that.userId,_that.name,_that.description,_that.itemIds
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'user_id')  String userId,  String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool isFavorite, @JsonKey(name: 'is_draft')  bool isDraft, @JsonKey(name: 'is_public')  bool isPublic, @JsonKey(name: 'worn_count')  int wornCount, @JsonKey(name: 'last_worn_at')  DateTime? lastWornAt, @JsonKey(name: 'outfit_images')  List<OutfitImage>? outfitImages,  List<ItemModel>? items, @JsonKey(name: 'created_at')  DateTime? createdAt, @JsonKey(name: 'updated_at')  DateTime? updatedAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'user_id')  String userId,  String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool isFavorite, @JsonKey(name: 'is_draft')  bool isDraft, @JsonKey(name: 'is_public')  bool isPublic, @JsonKey(name: 'worn_count')  int wornCount, @JsonKey(name: 'last_worn_at')  DateTime? lastWornAt, @JsonKey(name: 'outfit_images')  List<OutfitImage>? outfitImages,  List<ItemModel>? items, @JsonKey(name: 'created_at')  DateTime? createdAt, @JsonKey(name: 'updated_at')  DateTime? updatedAt)?  $default,) {final _that = this;
 switch (_that) {
 case _OutfitModel() when $default != null:
 return $default(_that.id,_that.userId,_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags,_that.isFavorite,_that.isDraft,_that.isPublic,_that.wornCount,_that.lastWornAt,_that.outfitImages,_that.items,_that.createdAt,_that.updatedAt);case _:
@@ -226,7 +229,7 @@ return $default(_that.id,_that.userId,_that.name,_that.description,_that.itemIds
 @JsonSerializable()
 
 class _OutfitModel implements OutfitModel {
-  const _OutfitModel({required this.id, @JsonKey(name: 'user_id') required this.userId, required this.name, this.description, @JsonKey(name: 'item_ids') required final  List<String> itemIds, this.style, this.season, this.occasion, final  List<String>? tags, @JsonKey(name: 'is_favorite') this.isFavorite = false, @JsonKey(name: 'is_draft') this.isDraft = false, @JsonKey(name: 'is_public') this.isPublic = false, @JsonKey(name: 'worn_count') this.wornCount = 0, @JsonKey(name: 'last_worn_at') this.lastWornAt, @JsonKey(name: 'outfit_images') final  List<OutfitImage>? outfitImages, final  List<ItemModel>? items, @JsonKey(name: 'created_at') this.createdAt, @JsonKey(name: 'updated_at') this.updatedAt}): _itemIds = itemIds,_tags = tags,_outfitImages = outfitImages,_items = items;
+  const _OutfitModel({required this.id, @JsonKey(name: 'user_id') required this.userId, required this.name, this.description, @JsonKey(name: 'item_ids') required final  List<String> itemIds, @TolerantStyleConverter() this.style, @SeasonApiConverter() this.season, this.occasion, final  List<String>? tags, @JsonKey(name: 'is_favorite') this.isFavorite = false, @JsonKey(name: 'is_draft') this.isDraft = false, @JsonKey(name: 'is_public') this.isPublic = false, @JsonKey(name: 'worn_count') this.wornCount = 0, @JsonKey(name: 'last_worn_at') this.lastWornAt, @JsonKey(name: 'outfit_images') final  List<OutfitImage>? outfitImages, final  List<ItemModel>? items, @JsonKey(name: 'created_at') this.createdAt, @JsonKey(name: 'updated_at') this.updatedAt}): _itemIds = itemIds,_tags = tags,_outfitImages = outfitImages,_items = items;
   factory _OutfitModel.fromJson(Map<String, dynamic> json) => _$OutfitModelFromJson(json);
 
 @override final  String id;
@@ -240,8 +243,11 @@ class _OutfitModel implements OutfitModel {
   return EqualUnmodifiableListView(_itemIds);
 }
 
-@override final  Style? style;
-@override final  Season? season;
+// Tolerant decode: unknown/null → null. One legacy row (e.g.
+// style='Old Money') must not fail the whole list (see
+// tolerant_enum_converter.dart).
+@override@TolerantStyleConverter() final  Style? style;
+@override@SeasonApiConverter() final  Season? season;
 @override final  String? occasion;
  final  List<String>? _tags;
 @override List<String>? get tags {
@@ -311,7 +317,7 @@ abstract mixin class _$OutfitModelCopyWith<$Res> implements $OutfitModelCopyWith
   factory _$OutfitModelCopyWith(_OutfitModel value, $Res Function(_OutfitModel) _then) = __$OutfitModelCopyWithImpl;
 @override @useResult
 $Res call({
- String id,@JsonKey(name: 'user_id') String userId, String name, String? description,@JsonKey(name: 'item_ids') List<String> itemIds, Style? style, Season? season, String? occasion, List<String>? tags,@JsonKey(name: 'is_favorite') bool isFavorite,@JsonKey(name: 'is_draft') bool isDraft,@JsonKey(name: 'is_public') bool isPublic,@JsonKey(name: 'worn_count') int wornCount,@JsonKey(name: 'last_worn_at') DateTime? lastWornAt,@JsonKey(name: 'outfit_images') List<OutfitImage>? outfitImages, List<ItemModel>? items,@JsonKey(name: 'created_at') DateTime? createdAt,@JsonKey(name: 'updated_at') DateTime? updatedAt
+ String id,@JsonKey(name: 'user_id') String userId, String name, String? description,@JsonKey(name: 'item_ids') List<String> itemIds,@TolerantStyleConverter() Style? style,@SeasonApiConverter() Season? season, String? occasion, List<String>? tags,@JsonKey(name: 'is_favorite') bool isFavorite,@JsonKey(name: 'is_draft') bool isDraft,@JsonKey(name: 'is_public') bool isPublic,@JsonKey(name: 'worn_count') int wornCount,@JsonKey(name: 'last_worn_at') DateTime? lastWornAt,@JsonKey(name: 'outfit_images') List<OutfitImage>? outfitImages, List<ItemModel>? items,@JsonKey(name: 'created_at') DateTime? createdAt,@JsonKey(name: 'updated_at') DateTime? updatedAt
 });
 
 
@@ -660,7 +666,8 @@ as String?,
 /// @nodoc
 mixin _$CreateOutfitRequest {
 
- String get name; String? get description; List<String> get itemIds; Style? get style; Season? get season; String? get occasion; List<String>? get tags;
+ String get name; String? get description;@JsonKey(name: 'item_ids') List<String> get itemIds;// toJson emits the backend-canonical 'all-season' spelling.
+@TolerantStyleConverter() Style? get style;@SeasonApiConverter() Season? get season; String? get occasion; List<String>? get tags;
 /// Create a copy of CreateOutfitRequest
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -693,7 +700,7 @@ abstract mixin class $CreateOutfitRequestCopyWith<$Res>  {
   factory $CreateOutfitRequestCopyWith(CreateOutfitRequest value, $Res Function(CreateOutfitRequest) _then) = _$CreateOutfitRequestCopyWithImpl;
 @useResult
 $Res call({
- String name, String? description, List<String> itemIds, Style? style, Season? season, String? occasion, List<String>? tags
+ String name, String? description,@JsonKey(name: 'item_ids') List<String> itemIds,@TolerantStyleConverter() Style? style,@SeasonApiConverter() Season? season, String? occasion, List<String>? tags
 });
 
 
@@ -804,7 +811,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String? description,  List<String> itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CreateOutfitRequest() when $default != null:
 return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags);case _:
@@ -825,7 +832,7 @@ return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.sea
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String? description,  List<String> itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags)  $default,) {final _that = this;
 switch (_that) {
 case _CreateOutfitRequest():
 return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags);case _:
@@ -845,7 +852,7 @@ return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.sea
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String? description,  List<String> itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String? description, @JsonKey(name: 'item_ids')  List<String> itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags)?  $default,) {final _that = this;
 switch (_that) {
 case _CreateOutfitRequest() when $default != null:
 return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags);case _:
@@ -860,20 +867,21 @@ return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.sea
 @JsonSerializable()
 
 class _CreateOutfitRequest implements CreateOutfitRequest {
-  const _CreateOutfitRequest({required this.name, this.description, required final  List<String> itemIds, this.style, this.season, this.occasion, final  List<String>? tags}): _itemIds = itemIds,_tags = tags;
+  const _CreateOutfitRequest({required this.name, this.description, @JsonKey(name: 'item_ids') required final  List<String> itemIds, @TolerantStyleConverter() this.style, @SeasonApiConverter() this.season, this.occasion, final  List<String>? tags}): _itemIds = itemIds,_tags = tags;
   factory _CreateOutfitRequest.fromJson(Map<String, dynamic> json) => _$CreateOutfitRequestFromJson(json);
 
 @override final  String name;
 @override final  String? description;
  final  List<String> _itemIds;
-@override List<String> get itemIds {
+@override@JsonKey(name: 'item_ids') List<String> get itemIds {
   if (_itemIds is EqualUnmodifiableListView) return _itemIds;
   // ignore: implicit_dynamic_type
   return EqualUnmodifiableListView(_itemIds);
 }
 
-@override final  Style? style;
-@override final  Season? season;
+// toJson emits the backend-canonical 'all-season' spelling.
+@override@TolerantStyleConverter() final  Style? style;
+@override@SeasonApiConverter() final  Season? season;
 @override final  String? occasion;
  final  List<String>? _tags;
 @override List<String>? get tags {
@@ -918,7 +926,7 @@ abstract mixin class _$CreateOutfitRequestCopyWith<$Res> implements $CreateOutfi
   factory _$CreateOutfitRequestCopyWith(_CreateOutfitRequest value, $Res Function(_CreateOutfitRequest) _then) = __$CreateOutfitRequestCopyWithImpl;
 @override @useResult
 $Res call({
- String name, String? description, List<String> itemIds, Style? style, Season? season, String? occasion, List<String>? tags
+ String name, String? description,@JsonKey(name: 'item_ids') List<String> itemIds,@TolerantStyleConverter() Style? style,@SeasonApiConverter() Season? season, String? occasion, List<String>? tags
 });
 
 
@@ -955,7 +963,8 @@ as List<String>?,
 /// @nodoc
 mixin _$UpdateOutfitRequest {
 
- String? get name; String? get description; List<String>? get itemIds; Style? get style; Season? get season; String? get occasion; List<String>? get tags; bool? get isFavorite; bool? get isDraft; bool? get isPublic;
+ String? get name; String? get description;@JsonKey(name: 'item_ids') List<String>? get itemIds;// toJson emits the backend-canonical 'all-season' spelling.
+@TolerantStyleConverter() Style? get style;@SeasonApiConverter() Season? get season; String? get occasion; List<String>? get tags;@JsonKey(name: 'is_favorite') bool? get isFavorite;@JsonKey(name: 'is_draft') bool? get isDraft;@JsonKey(name: 'is_public') bool? get isPublic;
 /// Create a copy of UpdateOutfitRequest
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -988,7 +997,7 @@ abstract mixin class $UpdateOutfitRequestCopyWith<$Res>  {
   factory $UpdateOutfitRequestCopyWith(UpdateOutfitRequest value, $Res Function(UpdateOutfitRequest) _then) = _$UpdateOutfitRequestCopyWithImpl;
 @useResult
 $Res call({
- String? name, String? description, List<String>? itemIds, Style? style, Season? season, String? occasion, List<String>? tags, bool? isFavorite, bool? isDraft, bool? isPublic
+ String? name, String? description,@JsonKey(name: 'item_ids') List<String>? itemIds,@TolerantStyleConverter() Style? style,@SeasonApiConverter() Season? season, String? occasion, List<String>? tags,@JsonKey(name: 'is_favorite') bool? isFavorite,@JsonKey(name: 'is_draft') bool? isDraft,@JsonKey(name: 'is_public') bool? isPublic
 });
 
 
@@ -1102,7 +1111,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? name,  String? description,  List<String>? itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags,  bool? isFavorite,  bool? isDraft,  bool? isPublic)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? name,  String? description, @JsonKey(name: 'item_ids')  List<String>? itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool? isFavorite, @JsonKey(name: 'is_draft')  bool? isDraft, @JsonKey(name: 'is_public')  bool? isPublic)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UpdateOutfitRequest() when $default != null:
 return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags,_that.isFavorite,_that.isDraft,_that.isPublic);case _:
@@ -1123,7 +1132,7 @@ return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.sea
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? name,  String? description,  List<String>? itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags,  bool? isFavorite,  bool? isDraft,  bool? isPublic)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? name,  String? description, @JsonKey(name: 'item_ids')  List<String>? itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool? isFavorite, @JsonKey(name: 'is_draft')  bool? isDraft, @JsonKey(name: 'is_public')  bool? isPublic)  $default,) {final _that = this;
 switch (_that) {
 case _UpdateOutfitRequest():
 return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags,_that.isFavorite,_that.isDraft,_that.isPublic);case _:
@@ -1143,7 +1152,7 @@ return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.sea
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? name,  String? description,  List<String>? itemIds,  Style? style,  Season? season,  String? occasion,  List<String>? tags,  bool? isFavorite,  bool? isDraft,  bool? isPublic)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? name,  String? description, @JsonKey(name: 'item_ids')  List<String>? itemIds, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season,  String? occasion,  List<String>? tags, @JsonKey(name: 'is_favorite')  bool? isFavorite, @JsonKey(name: 'is_draft')  bool? isDraft, @JsonKey(name: 'is_public')  bool? isPublic)?  $default,) {final _that = this;
 switch (_that) {
 case _UpdateOutfitRequest() when $default != null:
 return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.season,_that.occasion,_that.tags,_that.isFavorite,_that.isDraft,_that.isPublic);case _:
@@ -1158,13 +1167,13 @@ return $default(_that.name,_that.description,_that.itemIds,_that.style,_that.sea
 @JsonSerializable()
 
 class _UpdateOutfitRequest implements UpdateOutfitRequest {
-  const _UpdateOutfitRequest({this.name, this.description, final  List<String>? itemIds, this.style, this.season, this.occasion, final  List<String>? tags, this.isFavorite, this.isDraft, this.isPublic}): _itemIds = itemIds,_tags = tags;
+  const _UpdateOutfitRequest({this.name, this.description, @JsonKey(name: 'item_ids') final  List<String>? itemIds, @TolerantStyleConverter() this.style, @SeasonApiConverter() this.season, this.occasion, final  List<String>? tags, @JsonKey(name: 'is_favorite') this.isFavorite, @JsonKey(name: 'is_draft') this.isDraft, @JsonKey(name: 'is_public') this.isPublic}): _itemIds = itemIds,_tags = tags;
   factory _UpdateOutfitRequest.fromJson(Map<String, dynamic> json) => _$UpdateOutfitRequestFromJson(json);
 
 @override final  String? name;
 @override final  String? description;
  final  List<String>? _itemIds;
-@override List<String>? get itemIds {
+@override@JsonKey(name: 'item_ids') List<String>? get itemIds {
   final value = _itemIds;
   if (value == null) return null;
   if (_itemIds is EqualUnmodifiableListView) return _itemIds;
@@ -1172,8 +1181,9 @@ class _UpdateOutfitRequest implements UpdateOutfitRequest {
   return EqualUnmodifiableListView(value);
 }
 
-@override final  Style? style;
-@override final  Season? season;
+// toJson emits the backend-canonical 'all-season' spelling.
+@override@TolerantStyleConverter() final  Style? style;
+@override@SeasonApiConverter() final  Season? season;
 @override final  String? occasion;
  final  List<String>? _tags;
 @override List<String>? get tags {
@@ -1184,9 +1194,9 @@ class _UpdateOutfitRequest implements UpdateOutfitRequest {
   return EqualUnmodifiableListView(value);
 }
 
-@override final  bool? isFavorite;
-@override final  bool? isDraft;
-@override final  bool? isPublic;
+@override@JsonKey(name: 'is_favorite') final  bool? isFavorite;
+@override@JsonKey(name: 'is_draft') final  bool? isDraft;
+@override@JsonKey(name: 'is_public') final  bool? isPublic;
 
 /// Create a copy of UpdateOutfitRequest
 /// with the given fields replaced by the non-null parameter values.
@@ -1221,7 +1231,7 @@ abstract mixin class _$UpdateOutfitRequestCopyWith<$Res> implements $UpdateOutfi
   factory _$UpdateOutfitRequestCopyWith(_UpdateOutfitRequest value, $Res Function(_UpdateOutfitRequest) _then) = __$UpdateOutfitRequestCopyWithImpl;
 @override @useResult
 $Res call({
- String? name, String? description, List<String>? itemIds, Style? style, Season? season, String? occasion, List<String>? tags, bool? isFavorite, bool? isDraft, bool? isPublic
+ String? name, String? description,@JsonKey(name: 'item_ids') List<String>? itemIds,@TolerantStyleConverter() Style? style,@SeasonApiConverter() Season? season, String? occasion, List<String>? tags,@JsonKey(name: 'is_favorite') bool? isFavorite,@JsonKey(name: 'is_draft') bool? isDraft,@JsonKey(name: 'is_public') bool? isPublic
 });
 
 
@@ -2098,10 +2108,11 @@ as DateTime?,
 /// @nodoc
 mixin _$SharedOutfitModel {
 
- String get id; String get name; String? get description;// Nullable: the DB columns are nullable and the public endpoint passes
-// raw values through — a web-created outfit (or one with no style/season)
-// must still render instead of failing the parse (A10b-10 review).
- Style? get style; Season? get season;@JsonKey(name: 'item_images') List<String> get itemImages;@JsonKey(name: 'outfit_images') List<String>? get outfitImages;/// Durable bucket key of the primary outfit image (A10b-10): the share
+ String get id; String get name; String? get description;// Nullable + tolerant decode: the DB columns are nullable, the public
+// endpoint passes raw values through, and rows may carry values outside
+// the Flutter enums — all decode to null instead of failing the parse
+// (A10b-10 review).
+@TolerantStyleConverter() Style? get style;@SeasonApiConverter() Season? get season;@JsonKey(name: 'item_images') List<String> get itemImages;@JsonKey(name: 'outfit_images') List<String>? get outfitImages;/// Durable bucket key of the primary outfit image (A10b-10): the share
 /// endpoint serves short-lived presigned URLs, so the key lets the page
 /// re-mint a fresh URL when a long-open share's cached one expires.
 @JsonKey(name: 'outfit_storage_path') String? get outfitStoragePath;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'share_count') int get shareCount;@JsonKey(name: 'view_count') int get viewCount;
@@ -2137,7 +2148,7 @@ abstract mixin class $SharedOutfitModelCopyWith<$Res>  {
   factory $SharedOutfitModelCopyWith(SharedOutfitModel value, $Res Function(SharedOutfitModel) _then) = _$SharedOutfitModelCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String? description, Style? style, Season? season,@JsonKey(name: 'item_images') List<String> itemImages,@JsonKey(name: 'outfit_images') List<String>? outfitImages,@JsonKey(name: 'outfit_storage_path') String? outfitStoragePath,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'share_count') int shareCount,@JsonKey(name: 'view_count') int viewCount
+ String id, String name, String? description,@TolerantStyleConverter() Style? style,@SeasonApiConverter() Season? season,@JsonKey(name: 'item_images') List<String> itemImages,@JsonKey(name: 'outfit_images') List<String>? outfitImages,@JsonKey(name: 'outfit_storage_path') String? outfitStoragePath,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'share_count') int shareCount,@JsonKey(name: 'view_count') int viewCount
 });
 
 
@@ -2252,7 +2263,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  Style? style,  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String? description, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SharedOutfitModel() when $default != null:
 return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.outfitStoragePath,_that.createdAt,_that.shareCount,_that.viewCount);case _:
@@ -2273,7 +2284,7 @@ return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description,  Style? style,  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String? description, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)  $default,) {final _that = this;
 switch (_that) {
 case _SharedOutfitModel():
 return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.outfitStoragePath,_that.createdAt,_that.shareCount,_that.viewCount);case _:
@@ -2293,7 +2304,7 @@ return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description,  Style? style,  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String? description, @TolerantStyleConverter()  Style? style, @SeasonApiConverter()  Season? season, @JsonKey(name: 'item_images')  List<String> itemImages, @JsonKey(name: 'outfit_images')  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path')  String? outfitStoragePath, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'share_count')  int shareCount, @JsonKey(name: 'view_count')  int viewCount)?  $default,) {final _that = this;
 switch (_that) {
 case _SharedOutfitModel() when $default != null:
 return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_that.itemImages,_that.outfitImages,_that.outfitStoragePath,_that.createdAt,_that.shareCount,_that.viewCount);case _:
@@ -2308,17 +2319,18 @@ return $default(_that.id,_that.name,_that.description,_that.style,_that.season,_
 @JsonSerializable()
 
 class _SharedOutfitModel implements SharedOutfitModel {
-  const _SharedOutfitModel({required this.id, required this.name, this.description, this.style, this.season, @JsonKey(name: 'item_images') required final  List<String> itemImages, @JsonKey(name: 'outfit_images') final  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path') this.outfitStoragePath, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'share_count') this.shareCount = 0, @JsonKey(name: 'view_count') this.viewCount = 0}): _itemImages = itemImages,_outfitImages = outfitImages;
+  const _SharedOutfitModel({required this.id, required this.name, this.description, @TolerantStyleConverter() this.style, @SeasonApiConverter() this.season, @JsonKey(name: 'item_images') required final  List<String> itemImages, @JsonKey(name: 'outfit_images') final  List<String>? outfitImages, @JsonKey(name: 'outfit_storage_path') this.outfitStoragePath, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'share_count') this.shareCount = 0, @JsonKey(name: 'view_count') this.viewCount = 0}): _itemImages = itemImages,_outfitImages = outfitImages;
   factory _SharedOutfitModel.fromJson(Map<String, dynamic> json) => _$SharedOutfitModelFromJson(json);
 
 @override final  String id;
 @override final  String name;
 @override final  String? description;
-// Nullable: the DB columns are nullable and the public endpoint passes
-// raw values through — a web-created outfit (or one with no style/season)
-// must still render instead of failing the parse (A10b-10 review).
-@override final  Style? style;
-@override final  Season? season;
+// Nullable + tolerant decode: the DB columns are nullable, the public
+// endpoint passes raw values through, and rows may carry values outside
+// the Flutter enums — all decode to null instead of failing the parse
+// (A10b-10 review).
+@override@TolerantStyleConverter() final  Style? style;
+@override@SeasonApiConverter() final  Season? season;
  final  List<String> _itemImages;
 @override@JsonKey(name: 'item_images') List<String> get itemImages {
   if (_itemImages is EqualUnmodifiableListView) return _itemImages;
@@ -2376,7 +2388,7 @@ abstract mixin class _$SharedOutfitModelCopyWith<$Res> implements $SharedOutfitM
   factory _$SharedOutfitModelCopyWith(_SharedOutfitModel value, $Res Function(_SharedOutfitModel) _then) = __$SharedOutfitModelCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String? description, Style? style, Season? season,@JsonKey(name: 'item_images') List<String> itemImages,@JsonKey(name: 'outfit_images') List<String>? outfitImages,@JsonKey(name: 'outfit_storage_path') String? outfitStoragePath,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'share_count') int shareCount,@JsonKey(name: 'view_count') int viewCount
+ String id, String name, String? description,@TolerantStyleConverter() Style? style,@SeasonApiConverter() Season? season,@JsonKey(name: 'item_images') List<String> itemImages,@JsonKey(name: 'outfit_images') List<String>? outfitImages,@JsonKey(name: 'outfit_storage_path') String? outfitStoragePath,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'share_count') int shareCount,@JsonKey(name: 'view_count') int viewCount
 });
 
 

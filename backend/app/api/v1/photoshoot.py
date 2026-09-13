@@ -159,7 +159,12 @@ async def demo_photoshoot(
     except FitCheckException:
         raise
     except Exception as e:
-        logger.exception(f"Demo photoshoot failed: {e}")
+        logger.exception(
+            "Demo photoshoot failed",
+            demo_user_suffix=_demo_user_id(request)[-8:],
+            use_case=str(getattr(body, "use_case", "?")),
+            error=str(e)[:500],
+        )
         raise AIServiceError(f"Failed to start demo photoshoot: {str(e)}")
 
 
@@ -173,15 +178,28 @@ async def demo_photoshoot_status(
 
     Ownership is validated by re-deriving the demo pseudo-user from the
     request IP, so one visitor cannot read another visitor's demo job.
+    Poll from the same network that started the demo; a different egress
+    IP or an expired job returns 404.
     """
     demo_user_id = _demo_user_id(request)
     job = await PhotoshootJobService.get_job(job_id, demo_user_id, db=None)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        logger.info(
+            "Demo photoshoot status miss",
+            job_id=job_id,
+            demo_user_suffix=demo_user_id[-8:],
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="Demo job not found. It expired or was started from a different network; restart the demo from the same network.",
+        )
 
     status_data = await PhotoshootJobService.get_job_status(job_id)
     if not status_data:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Demo job not found. It expired or was started from a different network; restart the demo from the same network.",
+        )
 
     # Demo response shape: job status + images, no usage.
     status_data.pop("usage", None)

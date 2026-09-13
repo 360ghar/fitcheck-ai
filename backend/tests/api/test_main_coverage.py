@@ -76,10 +76,21 @@ def test_schema_missing_dedupes_overlapping_table_lists(monkeypatch):
 
 def test_schema_missing_non_schema_code_is_reported_missing():
     db = Mock()
-    db.table.return_value.select.return_value.limit.return_value.execute.side_effect = _api_error("500")
+    # 42501 (permission denied) is deterministic: neither a schema-absent
+    # code nor a transient gateway blip (bare 500/502/503/504 statuses are
+    # degraded, not missing — see test_schema_missing_transient_504...).
+    db.table.return_value.select.return_value.limit.return_value.execute.side_effect = _api_error("42501")
     missing = main_module._schema_missing(db)
     # Every table is flagged (columns whose checks also fail add more).
     assert len(missing) >= len(main_module.REQUIRED_TABLES)
+
+
+def test_schema_missing_transient_504_is_degraded_not_missing():
+    db = Mock()
+    db.table.return_value.select.return_value.limit.return_value.execute.side_effect = _api_error("504")
+    missing = main_module._schema_missing(db)
+    assert missing == [main_module._SCHEMA_DEGRADED_SENTINEL]
+    assert "users" not in missing
 
 
 def test_schema_missing_generic_exception_is_reported_missing():

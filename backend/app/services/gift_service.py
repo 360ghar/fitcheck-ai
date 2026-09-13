@@ -41,6 +41,7 @@ from app.models.gift import (
 from app.models.subscription import PlanType, SubscriptionResponse, SubscriptionStatus
 from app.services.gift_artwork_service import GiftArtworkService
 from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
+from app.utils.db import is_missing_table_or_column, is_pgrst202_missing_rpc
 
 logger = get_context_logger(__name__)
 
@@ -306,6 +307,34 @@ class GiftService:
         try:
             result = await asyncio.to_thread(db.rpc("issue_complimentary_gift_for_recipient", params).execute)
         except Exception as exc:
+            code = getattr(exc, "code", None)
+            rpc_message = str(getattr(exc, "message", exc) or exc)[:500]
+            rpc_hint = str(getattr(exc, "hint", "") or "")[:300]
+            rpc_details = str(getattr(exc, "details", "") or "")[:300]
+            logger.warning(
+                "Complimentary gift RPC failed",
+                user_id=str(user.get("id")),
+                duration_months=request.duration_months,
+                rpc_code=code,
+                rpc_message=rpc_message,
+                rpc_hint=rpc_hint,
+                error=str(exc)[:500],
+            )
+            lowered = f"{code} {rpc_message} {rpc_hint} {rpc_details}".lower()
+            # Schema/migration gaps first: a missing-column error names the
+            # column (e.g. `column "occasion" does not exist`), which would
+            # otherwise match the validation substrings below and mask an
+            # ops problem as a user error.
+            if (
+                code in {"PGRST205", "42883", "PGRST202"}
+                or is_pgrst202_missing_rpc(exc)
+                or is_missing_table_or_column(exc)
+            ):
+                raise DatabaseError(
+                    "Gift issuance is unavailable. Apply migration 063_gift_occasion_and_trial_guards.sql"
+                ) from exc
+            if "occasion" in lowered or "recipient email" in lowered or "normalized" in lowered:
+                raise ValidationError(f"Gift request is invalid: {rpc_message}") from exc
             raise DatabaseError("Failed to create the complimentary gift") from exc
         rows = _rows(result)
         if not rows:

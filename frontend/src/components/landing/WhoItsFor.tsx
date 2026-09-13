@@ -76,7 +76,9 @@ export default function WhoItsFor() {
               <div key={fact.title} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-4 border-b border-border py-5">
                 <span
                   className={cn(
-                    'flex h-10 w-10 items-center justify-center rounded-2xl border border-border',
+                    // Clay icon tile (matches TrustBar): light-oat inner edge,
+                    // literal tint-pale fill + tint text per tone.
+                    'flex h-10 w-10 items-center justify-center rounded-xl border border-soft',
                     FACT_TILE[fact.tone]
                   )}
                 >
@@ -128,6 +130,27 @@ export default function WhoItsFor() {
               </AnimatedSection>
             ))}
           </div>
+          <AnimatedSection delay={120}>
+            {/* Single full-width Mumbai tile: the Jaipur frame belongs to the
+                Photoshoot showcase above, so it is not repeated here. */}
+            <figure className="mt-8">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-pressed">
+                <img
+                  src="/generated/lifestyle-mumbai-3x4-640.webp"
+                  srcSet="/generated/lifestyle-mumbai-3x4-640.webp 640w, /generated/lifestyle-mumbai-3x4.webp 900w"
+                  sizes="(min-width: 1024px) 50vw, calc(100vw - 32px)"
+                  alt="Workday look example in a navy blazer, street style"
+                  className="aspect-[16/10] h-full w-full object-cover"
+                  loading="lazy"
+                  width={900}
+                  height={1200}
+                />
+              </div>
+              <figcaption className="mt-3 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Example look · AI-generated
+              </figcaption>
+            </figure>
+          </AnimatedSection>
         </div>
       </div>
     </section>

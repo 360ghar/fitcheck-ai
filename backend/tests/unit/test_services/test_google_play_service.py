@@ -210,13 +210,28 @@ def test_subscription_to_entitlement_payment_pending_is_past_due(rsa_pem):
 
 
 def test_subscription_to_entitlement_user_cancelled_without_expiry(rsa_pem):
+    """User-cancel keeps paid access until expiryTimeMillis (like Apple)."""
     purchase = _purchase(cancelReason=0, autoRenewing=False)
     with patch.multiple(settings, **_google_settings(rsa_pem)):
         entitlement = GooglePlayService.subscription_to_entitlement(
             purchase, "com.fitcheck.plus.monthly"
         )
-    assert entitlement["status"] == "past_due"
+    assert entitlement["status"] == "active"
     assert entitlement["cancel_at_period_end"] is True
+
+
+def test_subscription_to_entitlement_user_cancelled_past_expiry_is_free(rsa_pem):
+    purchase = _purchase(
+        cancelReason=0,
+        autoRenewing=False,
+        expiryTimeMillis=str(1_600_000_000_000),  # in the past
+    )
+    with patch.multiple(settings, **_google_settings(rsa_pem)):
+        entitlement = GooglePlayService.subscription_to_entitlement(
+            purchase, "com.fitcheck.plus.monthly"
+        )
+    assert entitlement["status"] == "free"
+    assert entitlement["cancel_at_period_end"] is False
 
 
 # ---------------------------------------------------------------------------

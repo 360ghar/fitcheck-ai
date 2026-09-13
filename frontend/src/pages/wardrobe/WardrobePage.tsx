@@ -599,6 +599,7 @@ export default function WardrobePage() {
         description="Upload photos and AI finds each item, so you can build outfits the same day."
         actionLabel="Upload photos"
         onAction={() => setIsUploadModalOpen(true)}
+        illustration="/generated/empty-closet-640.webp"
       />
     )
   ) : (

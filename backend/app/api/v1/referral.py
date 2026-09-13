@@ -3,10 +3,11 @@ Referral API endpoints for managing referral codes and redemptions.
 """
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
+from app.core.ip_rate_limit import auth_rate_limited_operation
 from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     ValidateReferralRequest,
@@ -66,6 +67,7 @@ async def get_referral_stats(
 @router.post("/validate", response_model=Dict[str, Any])
 async def validate_referral_code(
     request: ValidateReferralRequest,
+    http_request: Request,
     db: Client = Depends(get_db),
 ):
     """
@@ -74,10 +76,15 @@ async def validate_referral_code(
     This endpoint is public and can be used during signup
     to verify a referral code before registration.
     """
-    # neutral=True: this is the unauthenticated endpoint - the response must
-    # use "A friend" so the public surface cannot harvest account full_names
-    # by probing codes (A1-06/A1-18).
-    result = await ReferralService.validate_referral_code(request.code, db, neutral=True)
+    # Public + unauthenticated, so it gets the same IP-based limiter the gift
+    # claim endpoints use. "auth" here is IP-keyed (see ip_rate_limit), not
+    # user-keyed; no dedicated AUTH_RATE_LIMITS key exists, so the default
+    # 10/hour per IP applies. Loopback is exempt for local dev.
+    async with auth_rate_limited_operation(http_request, "referral validation"):
+        # neutral=True: this is the unauthenticated endpoint - the response must
+        # use "A friend" so the public surface cannot harvest account full_names
+        # by probing codes (A1-06/A1-18).
+        result = await ReferralService.validate_referral_code(request.code, db, neutral=True)
     return {"data": result.model_dump(mode="json"), "message": "OK"}
 
 

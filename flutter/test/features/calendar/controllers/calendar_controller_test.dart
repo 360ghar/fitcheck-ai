@@ -68,6 +68,45 @@ void main() {
     controller.dispose();
   });
 
+  test('revisiting a month refetches even though the Rx value repeats', () async {
+    final repo = FakeCalendarRepository();
+    final controller = CalendarController(repository: repo);
+
+    final may = Completer<List<CalendarEventModel>>();
+    final june = Completer<List<CalendarEventModel>>();
+    final mayAgain = Completer<List<CalendarEventModel>>();
+    repo.queueEvents(may.future);
+    repo.queueEvents(june.future);
+    repo.queueEvents(mayAgain.future);
+
+    // May → June → May: month navigation always builds DateTime(y, m), so
+    // the second May write equals the first and GetX Rx skips notification.
+    // The old `ever(focusedDate, ...)` worker therefore never fired on the
+    // revisit and the grid kept stale events; changeFocusedDate must fetch
+    // directly.
+    controller.changeFocusedDate(DateTime(2026, 5));
+    controller.changeFocusedDate(DateTime(2026, 6));
+    controller.changeFocusedDate(DateTime(2026, 5));
+
+    // Drain microtasks so each fetch passes settleBuildPhase and reaches the
+    // repository.
+    await Future<void>.delayed(Duration.zero);
+
+    expect(repo.getEventsCalls, 3,
+        reason: 'an equal-valued month revisit must still refetch');
+
+    // Only the latest generation (May again) may land; the earlier in-flight
+    // May/June responses are stale.
+    may.complete([_event('may-stale', DateTime(2026, 5, 2))]);
+    june.complete([_event('june-stale', DateTime(2026, 6, 2))]);
+    mayAgain.complete([_event('may-again', DateTime(2026, 5, 9))]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.events.map((e) => e.id), ['may-again']);
+
+    controller.dispose();
+  });
+
   testWidgets('generation is reserved before settleBuildPhase defers the call',
       (tester) async {
     // A10b-08 pin: the token must bump SYNCHRONOUSLY at the call, before

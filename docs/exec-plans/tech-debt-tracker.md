@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-09-13 (TD-030–TD-104)
+Last updated: 2026-09-13 (TD-030–TD-106)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
@@ -117,6 +117,8 @@ Last updated: 2026-09-13 (TD-030–TD-104)
 | TD-102 | GiftCardPreview unverified at 320px | low | web | The gift card preview component was not render-checked at 320px (smallest supported viewport) in the 2026-08-31 sweep; verify no overflow/clipping and fix if needed when gift work resumes. Found 2026-08-31 (mobile responsive round 2) |
 | TD-103 | ProfilePage desktop tabs use a suspicious `min-w` (verified desktop-only, no action) | low | web | Flagged during the 2026-08-31 sweep, then verified the tabs are reachable only at ≥md breakpoints, where the `min-w` is intentional. No action needed — recorded so the next sweep does not re-flag it. Found 2026-08-31 (mobile responsive round 2) |
 | TD-104 | Safe-area offset class recipes repeated across ~10 components | low | web | The hit-area half of this debt is RESOLVED: the 2026-08-31 simplify pass added the `.hit-expand` utility (CSS-var inset, `--hit`/`--hit-x`/`--hit-y`) next to `.touch-target` in `index.css` and replaced the hand-rolled `after:absolute after:inset-[-Npx]` recipe in 8 call sites across 7 files. Remaining: `calc(1rem+var(--safe-area-top))`-style offsets repeat in ~10 more places (dialog, sheet, lightbox, layouts, toast) — one safe-offset CSS var would dedupe them. Found 2026-08-31 (simplify review); hit-area half resolved 2026-08-31 (simplify pass) |
+| TD-105 | Four orphaned clay illustrations in `frontend/public/generated/` | low | web | `hero-wardrobe-16x9`, `avatar-wardrobe-1`, `demo-strip-bg`, `doodle-star` (+640 variants) are unreferenced after the clay-rebuild (hero switched to `hero-machine`; mascot/backdrop/doodle accents never wired). ~110KB ships in every deploy via `public/`. Wire them into a section or delete before the next image-budget pass. Found 2026-09-13 (clay-rebuild audit) |
+| TD-106 | Logged-in webapp has no rendered visual QA | low | web | The clay-rebuild visually judged the landing (11/11 slices via playwright + judge) but authenticated pages were only verified via harness + token reasoning — no test credentials exist for hosted Supabase auth (seed script requires a password chosen at seed time). Seed a known test account and judge dashboard/wardrobe/outfits next time webapp UI work happens. Found 2026-09-13 (clay-rebuild) |
 
 ## Process
 

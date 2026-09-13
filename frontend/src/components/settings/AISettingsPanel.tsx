@@ -404,7 +404,7 @@ export function AISettingsPanel() {
                 value={provider.id}
                 className="space-y-4 pt-4"
               >
-                <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <div className="text-sm text-muted-foreground mb-4">
                   {provider.description}
                 </div>
 
@@ -461,7 +461,7 @@ export function AISettingsPanel() {
                       <button
                         type="button"
                         aria-label={showApiKeys[provider.id] ? "Hide API key" : "Show API key"}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 touch-target text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 touch-target text-muted-foreground hover:text-foreground"
                         onClick={() =>
                           setShowApiKeys((prev) => ({
                             ...prev,
@@ -584,7 +584,7 @@ export function AISettingsPanel() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                        <p className="text-xs text-muted-foreground">
                           Used for duplicate detection and similarity search
                         </p>
                       </div>
@@ -597,8 +597,8 @@ export function AISettingsPanel() {
                   <div
                     className={`p-3 rounded-lg flex items-start gap-2 ${
                       testResults[provider.id].success
-                        ? "bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-300"
-                        : "bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300"
+                        ? "bg-success-pale text-success"
+                        : "bg-error-pale text-error"
                     }`}
                   >
                     {testResults[provider.id].success ? (
@@ -620,7 +620,7 @@ export function AISettingsPanel() {
                 )}
 
                 {/* Actions */}
-                <div className="flex flex-col gap-2 pt-4 border-t dark:border-gray-700 sm:flex-row">
+                <div className="flex flex-col gap-2 pt-4 border-t border-border sm:flex-row">
                   <Button
                     variant="outline"
                     onClick={() => handleTestProvider(provider.id)}
@@ -664,7 +664,7 @@ export function AISettingsPanel() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Item Extractions (Today)</Label>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-muted-foreground">
                   {usage.daily.extractions} / {usage.limits.daily_extractions}
                 </span>
               </div>
@@ -675,7 +675,7 @@ export function AISettingsPanel() {
                 }
                 className="h-2"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 {usage.remaining.extractions} remaining today
               </p>
             </div>
@@ -684,7 +684,7 @@ export function AISettingsPanel() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Image Generations (Today)</Label>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-muted-foreground">
                   {usage.daily.generations} / {usage.limits.daily_generations}
                 </span>
               </div>
@@ -695,7 +695,7 @@ export function AISettingsPanel() {
                 }
                 className="h-2"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 {usage.remaining.generations} remaining today
               </p>
             </div>
@@ -705,7 +705,7 @@ export function AISettingsPanel() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Embeddings (Today)</Label>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-sm text-muted-foreground">
                     {usage.daily.embeddings} / {usage.limits.daily_embeddings}
                   </span>
                 </div>
@@ -716,16 +716,16 @@ export function AISettingsPanel() {
                   }
                   className="h-2"
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   {usage.remaining.embeddings} remaining today
                 </p>
               </div>
             )}
 
             {/* Total Usage */}
-            <div className="pt-4 border-t dark:border-gray-700">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-medium text-gray-900 dark:text-white">Total Usage:</span>{" "}
+            <div className="pt-4 border-t border-border">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">Total Usage:</span>{" "}
                 {usage.total.extractions} extractions, {usage.total.generations}{" "}
                 generations{usage.total.embeddings > 0 && `, ${usage.total.embeddings} embeddings`}
               </p>

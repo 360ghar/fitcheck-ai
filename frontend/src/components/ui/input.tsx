@@ -11,7 +11,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          "flex h-11 w-full rounded-md border border-input bg-background px-4 py-2 type-body-md file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-ash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-surface-card disabled:text-ash",
+          // Clay system: form fields are stamped into the page — the pressed
+          // 3-layer stack reads as a groove under the 1px ash border.
+          "flex h-11 w-full rounded-md border border-input bg-background px-4 py-2 type-body-md shadow-pressed file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-ash focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-surface-card disabled:text-ash",
           className
         )}
         ref={ref}
