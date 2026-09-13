@@ -59,6 +59,9 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
     // load() coalesces concurrent calls, so this is safe alongside onInit.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Match onInit: the disabled scaffold in build() must still mean no
+      // network fetch fires for the gifts endpoint.
+      if (!EnvConfig.giftVouchersEnabled) return;
       _controller.load(showLoader: false);
     });
   }

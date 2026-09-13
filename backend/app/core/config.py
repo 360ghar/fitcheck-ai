@@ -216,6 +216,10 @@ class Settings(BaseSettings):
     # client's request timeout. Failing bounded lets callers degrade (e.g.
     # /items/check-duplicates falls back to text matching) instead of hanging.
     AI_EMBEDDING_TIMEOUT_S: float = 10.0
+    # Worker threads for the dedicated Gemini-embedding executor (see
+    # EmbeddingService). Bounded so stalled sync SDK calls cannot starve the
+    # shared default executor; admission is gated at 2x this value.
+    AI_EMBEDDING_MAX_WORKERS: int = 4
     AI_GEMINI_CHAT_MODEL: str = "gemini-3.6-flash"
     AI_GEMINI_VISION_MODEL: Optional[str] = None            # inherits AI_GEMINI_CHAT_MODEL when blank
     AI_GEMINI_VISION_FALLBACK_MODEL: Optional[str] = None

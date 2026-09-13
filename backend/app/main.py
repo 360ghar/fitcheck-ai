@@ -498,6 +498,14 @@ async def lifespan(app: FastAPI):
     except Exception:  # pragma: no cover - defensive teardown
         pass
 
+    # Stop the Gemini-embedding executor (see ai_service.py) so a stalled
+    # sync SDK call cannot delay deploy termination past SIGTERM.
+    try:
+        from app.services.ai_service import shutdown_embedding_executor
+        shutdown_embedding_executor()
+    except Exception:  # pragma: no cover - defensive teardown
+        pass
+
     # Release the pooled storage download client (see storage_service.py).
     try:
         from app.services.storage_service import close_download_client

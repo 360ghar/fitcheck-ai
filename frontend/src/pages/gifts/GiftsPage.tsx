@@ -478,9 +478,12 @@ export default function GiftsPage() {
           ? 'Your FitCheck Pro gift is active.'
           : 'Your FitCheck Pro gift is queued after your current entitlement.',
       )
-      // The claim succeeded server-side. Refresh without awaiting inside
-      // this try so a failed reload can never surface as a claim error.
-      void loadData()
+      // The claim succeeded server-side. Await the refresh so the claimed
+      // voucher leaves the list before busy clears — otherwise a second
+      // click re-submits the claim and surfaces a misleading "already
+      // claimed" error. loadData catches internally, so awaiting here can
+      // never surface a reload failure as a claim error.
+      await loadData()
     } catch (claimError) {
       setError(giftErrorMessage(claimError, 'The gift could not be claimed. Try again.'))
     } finally {

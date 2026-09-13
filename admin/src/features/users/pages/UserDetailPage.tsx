@@ -403,7 +403,7 @@ export function UserDetailPage() {
       ) : (
         <>
           {/* Section 1: Identity + risk header */}
-          <Card id="section-identity" className="scroll-mt-16">
+          <Card id="section-identity" className="scroll-mt-28">
             <CardHeader>
               <div className="flex items-center gap-4">
                 <Avatar className="size-14">
@@ -690,7 +690,7 @@ export function UserDetailPage() {
           </div>
 
           {/* Section 4: Uploads — Items grid (lazy) */}
-          <div id="section-uploads" className="scroll-mt-16">
+          <div id="section-uploads" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
               <ItemsGrid items={items} />
             </Suspense>
@@ -700,7 +700,7 @@ export function UserDetailPage() {
           <div className="grid gap-4 lg:grid-cols-12">
             <div className="lg:col-span-7">
           {/* Section 5: Generations — Outfits + Photoshoot (lazy) */}
-          <div id="section-generations" className="scroll-mt-16">
+          <div id="section-generations" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
               <OutfitsGallery
                 outfits={outfits}
@@ -717,7 +717,7 @@ export function UserDetailPage() {
             </div>
             <div className="lg:col-span-5">
           {/* Section 6: Collections/Trips/Streaks (lazy) */}
-          <div id="section-collections" className="scroll-mt-16">
+          <div id="section-collections" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
               <CollectionsTripsStreaks
                 collections={collections}
@@ -731,14 +731,14 @@ export function UserDetailPage() {
           </div>
 
           {/* Section 7: Counts strip (lazy) — badge strip across full width */}
-          <div id="section-counts" className="scroll-mt-16">
+          <div id="section-counts" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
               <CountsStrip counts={counts ?? {}} />
             </Suspense>
           </div>
 
           {/* Section 8: Activity timeline (lazy) */}
-          <div id="section-timeline" className="scroll-mt-16">
+          <div id="section-timeline" className="scroll-mt-28">
             {activityQuery.isError ? (
               <ErrorState
                 message={normalizeError(activityQuery.error).message}

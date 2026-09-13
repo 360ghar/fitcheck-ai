@@ -23,7 +23,8 @@ ALTER TABLE public.gift_vouchers
             AND occasion_greeting IS NULL
         )
         OR (
-            occasion = 'other'
+            occasion IS NOT NULL
+            AND occasion = 'other'
             AND occasion_greeting IS NOT NULL
             AND occasion_greeting = btrim(occasion_greeting)
             AND char_length(occasion_greeting) BETWEEN 1 AND 80
@@ -123,7 +124,11 @@ BEGIN
         RETURN;
     END IF;
 
-    IF NOT FOUND OR v_allowance.used_count >= v_allowance.granted_count THEN
+    -- FOUND belongs to the voucher recheck above (FALSE on the normal
+    -- new-issue path), never to the allowance lock: gate on the allowance
+    -- row itself. A NULL row means this duration was never initialized, so
+    -- there is no allowance to spend.
+    IF v_allowance IS NULL OR v_allowance.used_count >= v_allowance.granted_count THEN
         RETURN;
     END IF;
 

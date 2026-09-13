@@ -78,3 +78,14 @@ async def test_request_without_origin_gets_no_cors_headers_on_500(probe_route):
 
     assert response.status_code == 500
     assert "access-control-allow-origin" not in response.headers
+
+
+async def test_500_response_carries_and_exposes_correlation_id(probe_route):
+    response = await _get_500(probe_route)
+
+    assert response.status_code == 500
+    # The Exception handler runs outside the middleware chain, so it must
+    # re-attach the correlation header itself.
+    assert response.headers["x-correlation-id"] == response.json()["correlation_id"]
+    # ... and expose it to browser readers even without an origin echo.
+    assert response.headers["access-control-expose-headers"] == "X-Correlation-ID"

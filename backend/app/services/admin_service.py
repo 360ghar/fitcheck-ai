@@ -1914,7 +1914,7 @@ async def dashboard_referrals(db: Any) -> Dict[str, Any]:
         _count(lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referrer_credit_applied", True)),
         _count(lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referred_credit_applied", True)),
         # Extras for the dashboard referrals pulse (rendered as "—" before).
-        _count(lambda d: d.table("promo_codes").select("id", count="exact").eq("is_active", True)),
+        _count(lambda d: d.table("promo_codes").select("id", count="exact").eq("active", True)),
         _count(lambda d: d.table("gift_vouchers").select("id", count="exact")),
     )
     credits_granted = referrer_credits + referred_credits

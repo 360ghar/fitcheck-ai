@@ -176,7 +176,17 @@ async def test_funnel_stages_are_cumulative_and_paid_counts_distinct_users():
                 {"id": "u2", "created_at": created_at},  # full path, two subscription rows
                 {"id": "u3", "created_at": created_at},  # signup only
             ],
-            "items": [{"id": "i1", "user_id": "u2", "created_at": created_at}],
+            "items": [
+                {"id": "i1", "user_id": "u2", "created_at": created_at},
+                # u1's item exists but was added ~25h after their signup:
+                # fetched within the 30-day window, yet outside the strict
+                # 24h item window, so the items stage must not count it.
+                {
+                    "id": "i0",
+                    "user_id": "u1",
+                    "created_at": (utcnow() - timedelta(hours=23)).isoformat(),
+                },
+            ],
             "outfits": [
                 {"id": "o1", "user_id": "u1", "created_at": created_at},
                 {"id": "o2", "user_id": "u2", "created_at": created_at},

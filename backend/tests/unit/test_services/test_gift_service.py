@@ -364,7 +364,8 @@ def test_occasion_and_trial_guards_migration_restores_idempotency_recheck():
 
     # Three-valued logic hole: a NULL occasion with a greeting made every
     # branch of the 062 CHECK UNKNOWN, so invalid rows slipped through.
-    assert "occasion IS NOT NULL" in migration
+    # Both non-NULL occasion branches must guard explicitly.
+    assert migration.count("occasion IS NOT NULL") >= 2
     assert "IF v_occasion IS NULL AND v_occasion_greeting IS NOT NULL THEN" in migration
 
     # 062's re-emit dropped 061's post-lock replay recheck; 063 restores it
@@ -374,6 +375,11 @@ def test_occasion_and_trial_guards_migration_restores_idempotency_recheck():
     assert migration.count(key_lookup) >= 2
     assert migration.index("FOR UPDATE") < migration.rindex(key_lookup)
     assert migration.rindex("IF FOUND THEN") < migration.rindex("used_count = used_count + 1")
+
+    # The allowance guard must not test FOUND: after the post-lock recheck,
+    # FOUND belongs to the voucher SELECT (FALSE on the normal new-issue
+    # path), so gating on it made issuance return before the INSERT.
+    assert "IF v_allowance IS NULL OR v_allowance.used_count >= v_allowance.granted_count THEN" in migration
 
     # Trial extension is limited to paid plans currently in trial.
     assert "v_subscription.status <> 'trial'" in migration
