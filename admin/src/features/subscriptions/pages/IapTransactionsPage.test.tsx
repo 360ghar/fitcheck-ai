@@ -12,7 +12,7 @@ function authedAs(permissions: string[]): void {
 }
 
 describe('IapTransactionsPage (redirect to Subscriptions)', () => {
-  it('redirects /iap to /subscriptions?provider=apple by default', async () => {
+  it('redirects /iap to the unfiltered subscriptions view by default', async () => {
     authedAs(['*'])
     const routes: RouteObject[] = [
       { path: '/iap', element: <IapTransactionsPage /> },
@@ -25,7 +25,8 @@ describe('IapTransactionsPage (redirect to Subscriptions)', () => {
 
     expect(await screen.findByText('subscriptions-marker')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/subscriptions')
-    expect(router.state.location.search).toContain('provider=apple')
+    // No platform requested → no provider filter, so every provider stays visible.
+    expect(router.state.location.search).not.toContain('provider=')
   })
 
   it('maps platform=apple to provider=apple and platform=google to provider=google', async () => {
@@ -69,7 +70,7 @@ describe('IapTransactionsPage (redirect to Subscriptions)', () => {
     expect(router.state.location.search).toContain('status=failed')
   })
 
-  it('defaults unknown platform to apple', async () => {
+  it('ignores unknown platform values instead of forcing a provider filter', async () => {
     authedAs(['*'])
     const routes: RouteObject[] = [
       { path: '/iap', element: <IapTransactionsPage /> },
@@ -81,6 +82,6 @@ describe('IapTransactionsPage (redirect to Subscriptions)', () => {
     })
 
     expect(await screen.findByText('subscriptions-marker')).toBeInTheDocument()
-    expect(router.state.location.search).toContain('provider=apple')
+    expect(router.state.location.search).not.toContain('provider=')
   })
 })

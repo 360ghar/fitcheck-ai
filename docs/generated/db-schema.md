@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-30
+Generated: 2026-09-13
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.

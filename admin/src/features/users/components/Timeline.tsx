@@ -73,7 +73,9 @@ export function Timeline({
             {filtered.map((row, index) => (
               <li key={stringValue(row, 'id') ?? `tl-${index}`} className="flex items-center gap-3 py-1.5">
                 <Badge variant="secondary" className="shrink-0 text-[10px]">
-                  {row._kind}
+                  {t(`detail.timelineFilters${row._kind.charAt(0).toUpperCase()}${row._kind.slice(1)}`, {
+                    defaultValue: row._kind,
+                  })}
                 </Badge>
                 <span className="min-w-0 flex-1 truncate text-sm text-ink">
                   {stringValue(row, 'job_type') ??

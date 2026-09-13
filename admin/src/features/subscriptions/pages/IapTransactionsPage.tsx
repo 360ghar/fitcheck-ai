@@ -7,15 +7,16 @@ import { Navigate, useSearchParams } from 'react-router-dom'
  */
 export function IapTransactionsPage() {
   const [searchParams] = useSearchParams()
-  // Map legacy `platform` query param to the new `provider` param.
-  // Default to apple so the redirect lands on a store view.
+  // Map legacy `platform` query param to the new `provider` param. When no
+  // recognized platform is requested, keep the unfiltered view (all
+  // providers) instead of hiding every non-Apple transaction.
   const platform = searchParams.get('platform')
-  const provider =
-    platform === 'google' ? 'google' : platform === 'apple' ? 'apple' : 'apple'
 
   const params = new URLSearchParams(searchParams)
   params.delete('platform')
-  params.set('provider', provider)
+  if (platform === 'apple' || platform === 'google') {
+    params.set('provider', platform)
+  }
 
   return <Navigate to={`/subscriptions?${params.toString()}`} replace />
 }

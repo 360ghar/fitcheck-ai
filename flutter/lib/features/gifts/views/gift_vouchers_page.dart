@@ -49,7 +49,12 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
       _recipientEmailController,
       _messageController,
     ]) {
-      textController.addListener(() => _clientRequestId = null);
+      textController.addListener(() {
+        // Edits invalidate the idempotency key only while the form is not
+        // mid-flight. During creation the fields are disabled, so the key
+        // survives for a retry if the response is lost.
+        if (!_controller.isCreating.value) _clientRequestId = null;
+      });
     }
   }
 
@@ -146,6 +151,9 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
         )
         ? _durationMonths
         : available.first.durationMonths;
+    // Freeze the form while the creation request is in flight so the
+    // idempotency key cannot be invalidated mid-request.
+    final creating = _controller.isCreating.value;
 
     return Form(
       key: _formKey,
@@ -173,9 +181,11 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
                         '${_term(allowance.durationMonths)} · ${allowance.remainingCount} left',
                       ),
                       selected: selectedDuration == allowance.durationMonths,
-                      onSelected: (_) => setState(
-                        () => _durationMonths = allowance.durationMonths,
-                      ),
+                      onSelected: creating
+                          ? null
+                          : (_) => setState(
+                              () => _durationMonths = allowance.durationMonths,
+                            ),
                     ),
                   )
                   .toList(growable: false),
@@ -186,6 +196,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               decoration: const InputDecoration(labelText: 'From'),
               textInputAction: TextInputAction.next,
               maxLength: 80,
+              enabled: !creating,
               validator: _requiredName,
             ),
             TextFormField(
@@ -193,6 +204,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               decoration: const InputDecoration(labelText: 'Recipient name'),
               textInputAction: TextInputAction.next,
               maxLength: 80,
+              enabled: !creating,
               validator: _requiredName,
             ),
             TextFormField(
@@ -201,6 +213,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               maxLength: 320,
+              enabled: !creating,
               validator: _email,
             ),
             TextFormField(
@@ -211,6 +224,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               maxLength: 240,
               minLines: 2,
               maxLines: 4,
+              enabled: !creating,
             ),
             const SizedBox(height: AppConstants.spacing8),
             SizedBox(
@@ -272,10 +286,23 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
   Future<void> _share(GiftVoucher voucher) async {
     final link = voucher.shareUrl;
     if (link == null || link.isEmpty) return;
+    // iPad requires a sharePositionOrigin to present the native popover;
+    // without it share_plus falls back to the clipboard. Anchor the popover
+    // to the creation form.
+    RenderBox? box;
+    final formContext = _formKey.currentContext;
+    if (formContext != null) {
+      final renderObject = formContext.findRenderObject();
+      if (renderObject is RenderBox && renderObject.attached && renderObject.hasSize) {
+        box = renderObject;
+      }
+    }
     try {
       await Share.share(
         '${voucher.fromName} sent you ${_term(voucher.durationMonths)} of FitCheck Pro. $link',
         subject: 'A FitCheck Pro gift for ${voucher.toName}',
+        sharePositionOrigin:
+            box != null ? box.localToGlobal(Offset.zero) & box.size : null,
       );
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: link));

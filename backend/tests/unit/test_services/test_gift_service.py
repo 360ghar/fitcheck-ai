@@ -225,6 +225,41 @@ def test_recipient_matching_migration_keeps_legacy_links_and_secures_new_claims(
     assert "v_voucher.status <> 'issued'" in migration
     assert "INSERT INTO public.gift_entitlement_grants" in migration
 
+    # Idempotency is rechecked after the allowance row lock so concurrent
+    # requests with the same client_request_id replay the winner's voucher
+    # instead of consuming a second allowance.
+    key_lookup = "purchaser_user_id = p_user_id AND client_request_id = p_client_request_id"
+    assert migration.count(key_lookup) >= 2
+    assert migration.index("FOR UPDATE") < migration.rindex(key_lookup)
+    assert migration.rindex("IF FOUND THEN") < migration.rindex("used_count = used_count + 1")
+
+
+def test_issuance_replay_matches_legacy_null_recipient_vouchers():
+    """Pre-061 vouchers have a NULL recipient; retries must replay them."""
+    request = ComplimentaryGiftCreate(
+        from_name="Alex Morgan",
+        to_name="Taylor Reed",
+        recipient_email="taylor@example.com",
+        duration_months=3,
+        client_request_id="request-legacy-1",
+    )
+    legacy = voucher(recipient_email=None, message=None)
+
+    assert GiftService._matches_issuance_request(legacy, request, source="complimentary")
+
+
+def test_issuance_replay_still_rejects_different_recipient():
+    request = ComplimentaryGiftCreate(
+        from_name="Alex Morgan",
+        to_name="Taylor Reed",
+        recipient_email="taylor@example.com",
+        duration_months=3,
+        client_request_id="request-legacy-1",
+    )
+    bound = voucher(recipient_email="someone-else@example.com", message=None)
+
+    assert not GiftService._matches_issuance_request(bound, request, source="complimentary")
+
 
 @pytest.mark.asyncio
 async def test_dashboard_summary_selects_only_email_matched_claimable_gifts():

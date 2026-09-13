@@ -82,7 +82,7 @@ Apple, Google, promo, and referral entitlements.
 cd backend && source .venv/bin/activate && ruff check . && pytest
 cd frontend && npm run lint && npm test && npm run build
 cd admin && npm run lint && npm run typecheck && npm test && npm run check:schema
-cd flutter && flutter test
+cd flutter && flutter analyze --no-fatal-infos --no-fatal-warnings && flutter test
 python scripts/check_architecture.py && python scripts/check_docs_structure.py
 ```
 

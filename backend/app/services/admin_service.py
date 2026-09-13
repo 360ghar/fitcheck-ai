@@ -372,15 +372,19 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
     # ------------------------------------------------------------------
 
     async def _fetch_items() -> List[Dict[str, Any]]:
-        # items has no image_url column (image is in item_images); the spec
-        # names image_url for convenience -- try it, fall back to without it.
-        for cols in (
-            "id,name,category,image_url,created_at",
-            "id,name,category,created_at",
-        ):
+        # items has no image_url column (images live in item_images); embed
+        # the relation and normalize a cover image_url for the admin grid.
+        # Fall back to the bare column set when the embed fails (relation
+        # missing on an older deployment).
+        for with_embed in (True, False):
+            columns = (
+                "id,name,category,created_at,item_images(image_url,is_primary)"
+                if with_embed
+                else "id,name,category,created_at"
+            )
             try:
                 res = await execute_with_reconnect(
-                    lambda d, c=cols: d.table("items")
+                    lambda d, c=columns: d.table("items")
                     .select(c)
                     .eq("user_id", user_id)
                     .order("created_at", desc=True)
@@ -389,13 +393,24 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                     db,
                     extra={"operation": "admin.get_user.detail.items", "user_id": user_id},
                 )
-                return [dict(r) for r in (res.data or [])]
             except Exception:
-                # First columns variant was absent on this DB (42703 / PGRST204);
-                # try the fallback. If both fail, the outer except returns [].
-                if cols == "id,name,category,created_at":
+                if not with_embed:
                     return []
                 continue
+            rows: List[Dict[str, Any]] = []
+            for row in res.data or []:
+                r = dict(row)
+                images = r.pop("item_images", None)
+                cover = None
+                if isinstance(images, list) and images:
+                    primary = next((i for i in images if i.get("is_primary")), None)
+                    cover = (primary or images[0]).get("image_url")
+                elif isinstance(images, dict):
+                    cover = images.get("image_url")
+                if cover:
+                    r["image_url"] = cover
+                rows.append(r)
+            return rows
         return []
 
     async def _fetch_outfits() -> List[Dict[str, Any]]:
@@ -1715,6 +1730,18 @@ async def dashboard_overview(db: Any) -> Dict[str, Any]:
         )
         return getattr(res, "count", 0) or 0
 
+    async def _count_optional(builder: Any) -> int:
+        """Zero-filled count for the optional extended metrics.
+
+        ``trials_ending_7d`` / ``tickets_open_48h`` are best-effort extras:
+        a missing table or transient read error must not abort the whole
+        overview (matches the docstring's zero-filled fallback promise).
+        """
+        try:
+            return await _count(builder)
+        except Exception:
+            return 0
+
     (
         signups_7d,
         signups_30d,
@@ -1747,7 +1774,7 @@ async def dashboard_overview(db: Any) -> Dict[str, Any]:
         _count(lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7).in_("status", ["complete"])),
         _count(lambda d: d.table("photoshoot_jobs").select("id", count="exact").gte("created_at", d7).eq("status", "failed")),
         # trials_ending_7d: status=trial and trial_end between now and now+7d
-        _count(
+        _count_optional(
             lambda d: d.table("subscriptions")
             .select("id", count="exact")
             .eq("status", "trial")
@@ -1755,7 +1782,7 @@ async def dashboard_overview(db: Any) -> Dict[str, Any]:
             .lte("trial_end", now_plus_7d)
         ),
         # tickets_open_48h: status=open and created_at <= now-48h (overdue)
-        _count(
+        _count_optional(
             lambda d: d.table("support_tickets")
             .select("id", count="exact")
             .eq("status", "open")

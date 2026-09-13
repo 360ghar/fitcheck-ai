@@ -84,6 +84,18 @@ BEGIN
     WHERE user_id = p_user_id AND duration_months = p_duration_months
     FOR UPDATE;
 
+    -- Concurrent requests with the same client_request_id can both pass the
+    -- lookup above. Serializing on the allowance row and rechecking the key
+    -- guarantees the loser replays the winner's voucher instead of consuming
+    -- a second allowance (or colliding with the unique request-key index).
+    SELECT * INTO v_existing
+    FROM public.gift_vouchers
+    WHERE purchaser_user_id = p_user_id AND client_request_id = p_client_request_id;
+    IF FOUND THEN
+        RETURN NEXT v_existing;
+        RETURN;
+    END IF;
+
     IF NOT FOUND OR v_allowance.used_count >= v_allowance.granted_count THEN
         RETURN;
     END IF;

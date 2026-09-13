@@ -64,6 +64,10 @@ class GiftController extends GetxController {
     }
   }
 
+  /// Fresh fetch that never joins an in-flight load. Mutations use this so
+  /// the summary cannot stay stale when a load started before the write.
+  Future<void> refreshAfterMutation() => _load(showLoader: false);
+
   Future<void> _load({required bool showLoader}) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     if (showLoader) isLoading.value = true;
@@ -101,7 +105,7 @@ class GiftController extends GetxController {
         clientRequestId: clientRequestId,
         message: message,
       );
-      await load(showLoader: false);
+      await refreshAfterMutation();
       return voucher;
     } catch (exception) {
       error.value = ErrorHandler.extractMessage(exception);
@@ -116,13 +120,17 @@ class GiftController extends GetxController {
     error.value = '';
     try {
       final result = await _repository.claimAssigned(voucherId);
-      await load(showLoader: false);
+      await refreshAfterMutation();
       return result;
     } catch (exception) {
       error.value = ErrorHandler.extractMessage(exception);
       return null;
     } finally {
-      claimingVoucherId.value = '';
+      // Clear only this claim's marker so a concurrent second claim is not
+      // left with its button re-enabled mid-request.
+      if (claimingVoucherId.value == voucherId) {
+        claimingVoucherId.value = '';
+      }
     }
   }
 }

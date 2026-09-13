@@ -43,12 +43,13 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--commit", action="store_true")
     args = parser.parse_args()
+    if args.dry_run and args.commit:
+        parser.error("--dry-run and --commit are mutually exclusive")
     if not (args.dry_run or args.commit):
         print("Pass --dry-run or --commit", file=sys.stderr)
         return 2
 
     _load_env_file(BACKEND_ENV)
-    from supabase import create_client
     sys.path.insert(0, str(Path(__file__).parent))
     from publish import _build_posts  # noqa: E402
 
@@ -60,6 +61,9 @@ def main() -> int:
         for s in slugs:
             print(f"  {s}")
         return 0
+
+    # Imported only on the commit path so --dry-run works without the SDK.
+    from supabase import create_client  # noqa: E402
 
     client = create_client(_require_env("SUPABASE_URL"), _require_env("SUPABASE_SECRET_KEY"))
 

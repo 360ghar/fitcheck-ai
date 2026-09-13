@@ -221,12 +221,18 @@ class GiftService:
         source: str,
     ) -> bool:
         stored_message = str(voucher.get("message") or "").strip() or None
+        # Vouchers created before migration 061 have a NULL recipient_email.
+        # Treat that as an unbound legacy recipient so a lost-response retry
+        # still replays the original voucher instead of failing as an
+        # already-used request key.
+        stored_recipient = str(voucher.get("recipient_email") or "").strip().lower()
+        recipient_matches = not stored_recipient or stored_recipient == request.recipient_email
         return (
             voucher.get("source") == source
             and int(voucher.get("duration_months") or 0) == request.duration_months
             and str(voucher.get("from_name") or "").strip() == request.from_name
             and str(voucher.get("to_name") or "").strip() == request.to_name
-            and str(voucher.get("recipient_email") or "").strip().lower() == request.recipient_email
+            and recipient_matches
             and stored_message == request.message
         )
 

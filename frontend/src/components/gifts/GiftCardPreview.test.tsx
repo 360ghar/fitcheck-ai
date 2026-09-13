@@ -32,6 +32,9 @@ describe('GiftCardPreview', () => {
       />,
     )
 
-    expect(screen.getByText(/Promotional gift · claim by Jan 15, 2030/i)).toBeVisible()
+    // The component formats the date in the runtime locale, so compute the
+    // expected label the same way instead of hardcoding one locale's output.
+    const expected = `Promotional gift · claim by ${new Date('2030-01-15T20:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    expect(screen.getByText((_, el) => el?.textContent === expected)).toBeVisible()
   })
 })
