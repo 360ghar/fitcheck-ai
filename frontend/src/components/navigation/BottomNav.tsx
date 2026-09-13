@@ -63,7 +63,7 @@ export function BottomNav() {
       aria-label="Primary navigation"
       className={cn(
         // Fixed to bottom with safe area padding
-        'fixed bottom-0 left-0 right-0 z-[100] w-screen max-w-[100vw]',
+        'fixed bottom-0 left-0 right-0 z-30 max-w-[100vw]',
         'bg-background',
         // Border
         'border-t border-border/50',
@@ -95,8 +95,9 @@ export function BottomNav() {
               '-mt-6',
               // Hover effects
               'hover:bg-primary/90 active:bg-primary-pressed',
-              // Transition
-              'transition-colors duration-200'
+              // Press feedback: mechanical dip, not a repaint alone
+              'transition-[background-color,transform] duration-150 ease-out',
+              'motion-safe:active:scale-90'
             )}
             aria-label={fabAction.label}
           >
@@ -143,12 +144,16 @@ function NavItem({ item, location }: NavItemProps) {
       )}
     >
       <div
+        // Keyed by active state so re-mounting the pill replays the scale-in
+        // every time the tab becomes active (CSS animations don't restart on
+        // a class-only swap). Reduced-motion users get the plain color swap.
+        key={isActive ? 'active' : 'inactive'}
         className={cn(
           'flex items-center justify-center',
           'w-10 h-7 rounded-full mb-0.5',
           'transition-colors duration-200',
           isActive
-            ? 'bg-primary/15 text-primary'
+            ? 'bg-primary/15 text-primary motion-safe:animate-scale-in'
             : 'text-muted-foreground'
         )}
       >

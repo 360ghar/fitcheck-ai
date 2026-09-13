@@ -56,4 +56,17 @@ describe('gift dashboard priority', () => {
       '/gifts?claim=gift-1',
     )
   })
+
+  it('includes an incoming occasion greeting', () => {
+    render(
+      <MemoryRouter>
+        <GiftPriorityCard
+          incoming={{ ...incoming, occasion: 'birthday' }}
+          incomingCount={1}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText(/Happy Birthday/)).toBeVisible()
+  })
 })

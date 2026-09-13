@@ -13,7 +13,11 @@ const cardVariants = cva(
         glass: "border border-border bg-surface-soft",
         gradient: "relative overflow-hidden border border-border bg-card",
         image: "relative overflow-hidden border border-border bg-card",
-        interactive: "cursor-pointer border border-transparent bg-card hover:border-border focus-within:border-border",
+        // Grounded lift: the translate is paired with a border tone shift.
+        // A bare -translate-y over a shadowless flat surface reads as a jump
+        // (the lesson recorded on StatCard); the hairline grounds the motion.
+        interactive:
+          "cursor-pointer border border-transparent bg-card transition-[border-color,transform] duration-200 ease-out hover:border-border focus-within:border-border motion-safe:hover:-translate-y-0.5",
       },
     },
     defaultVariants: {

@@ -93,6 +93,8 @@ class GiftController extends GetxController {
     required String recipientEmail,
     required String clientRequestId,
     String? message,
+    GiftOccasion? occasion,
+    String? occasionGreeting,
   }) async {
     isCreating.value = true;
     error.value = '';
@@ -104,6 +106,8 @@ class GiftController extends GetxController {
         recipientEmail: recipientEmail,
         clientRequestId: clientRequestId,
         message: message,
+        occasion: occasion,
+        occasionGreeting: occasionGreeting,
       );
       await refreshAfterMutation();
       return voucher;

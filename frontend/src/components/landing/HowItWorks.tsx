@@ -44,7 +44,7 @@ export default function HowItWorks() {
         <AnimatedSection className="reveal">
           <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
             <div className="lg:col-span-7">
-              <SectionKicker>Photograph → Catalog → Wear</SectionKicker>
+              <SectionKicker tone="teal">Photograph → Catalog → Wear</SectionKicker>
               <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
                 One sequence from camera roll to morning plan
               </h2>

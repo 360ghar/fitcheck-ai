@@ -44,8 +44,10 @@ export function showSuccess(message: string, title?: string) {
     return toast({
         title: title || 'Success',
         description: message,
-        variant: 'default',
-        className: 'bg-green-50 border-green-200 text-green-900',
+        // Token-backed success pair (bg-success-pale / text-success); replaces
+        // the hardcoded green literals, which rendered as a light slab in
+        // dark mode.
+        variant: 'success',
     });
 }
 

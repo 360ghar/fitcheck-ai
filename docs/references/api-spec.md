@@ -3751,6 +3751,8 @@ Create Paid Gift Checkout
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `recipient_email` | string (email) | yes |  |
 | `success_url` | string | no |  |
 | `to_name` | string | yes |  |
@@ -3809,6 +3811,8 @@ Create Complimentary Gift
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
@@ -3932,6 +3936,8 @@ Update Owned Gift
 |---|---|---|---|
 | `from_name` | string (nullable) | no |  |
 | `message` | string (nullable) | no |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `to_name` | string (nullable) | no |  |
 
 **Responses:**
@@ -4328,6 +4334,8 @@ Referral totals: codes issued, redemptions, credits granted/pending.
 | `codes_issued` | integer | no |  |
 | `credits_granted` | integer | no |  |
 | `credits_pending` | integer | no |  |
+| `gifts_issued` | integer | no |  |
+| `promo_active` | integer | no |  |
 | `redemptions` | integer | no |  |
 
 
@@ -4518,6 +4526,8 @@ Create Gift
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
 | `note` | string | yes |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
@@ -4618,6 +4628,8 @@ Update Gift
 |---|---|---|---|
 | `from_name` | string (nullable) | no |  |
 | `message` | string (nullable) | no |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `to_name` | string (nullable) | no |  |
 
 **Responses:**
@@ -5395,6 +5407,8 @@ One funnel step: label, count, pct_of_prev (100.0 for first).
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
 | `note` | string | yes |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
@@ -5513,6 +5527,8 @@ GET /admin/dashboards/referrals.
 | `codes_issued` | integer | no |  |
 | `credits_granted` | integer | no |  |
 | `credits_pending` | integer | no |  |
+| `gifts_issued` | integer | no |  |
+| `promo_active` | integer | no |  |
 | `redemptions` | integer | no |  |
 
 ### `AdminRefundResponse`
@@ -5985,6 +6001,8 @@ Model for updating body profile (all fields optional).
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
@@ -6177,12 +6195,16 @@ Request model for AI outfit image generation.
 | `public_id` | string (uuid) | yes |  |
 | `secret` | string | yes |  |
 
+### `GiftOccasion`
+
 ### `GiftUpdate`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `from_name` | string (nullable) | no |  |
 | `message` | string (nullable) | no |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `to_name` | string (nullable) | no |  |
 
 ### `HTTPValidationError`
@@ -6497,6 +6519,8 @@ Model for updating an outfit (all fields optional).
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `occasion` | `GiftOccasion` (nullable) | no |  |
+| `occasion_greeting` | string (nullable) | no |  |
 | `recipient_email` | string (email) | yes |  |
 | `success_url` | string | no |  |
 | `to_name` | string | yes |  |

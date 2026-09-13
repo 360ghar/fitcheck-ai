@@ -1,3 +1,28 @@
+enum GiftOccasion { birthday, anniversary, other }
+
+GiftOccasion? giftOccasionFromApi(dynamic value) {
+  return switch (value?.toString()) {
+    'birthday' => GiftOccasion.birthday,
+    'anniversary' => GiftOccasion.anniversary,
+    'other' => GiftOccasion.other,
+    _ => null,
+  };
+}
+
+/// Mobile copy of the backend's fixed greetings (backend/app/models/gift.py
+/// renders the authoritative artwork). Keep all three copies in sync,
+/// including frontend/src/api/gifts.ts.
+String? giftOccasionGreeting(GiftOccasion? occasion, String? customGreeting) {
+  return switch (occasion) {
+    GiftOccasion.birthday => 'Happy Birthday',
+    GiftOccasion.anniversary => 'Happy Anniversary',
+    // Trim so whitespace-only or padded input cannot leak into the stored
+    // greeting (the backend flattens/validates the same field).
+    GiftOccasion.other => _nullableString(customGreeting?.trim()),
+    null => null,
+  };
+}
+
 class GiftAllowance {
   const GiftAllowance({
     required this.durationMonths,
@@ -44,6 +69,8 @@ class GiftVoucher {
     required this.artworkVersion,
     required this.ogImageUrl,
     this.message,
+    this.occasion,
+    this.occasionGreeting,
     this.expiresAt,
     this.shareUrl,
     this.entitlementStatus,
@@ -57,6 +84,8 @@ class GiftVoucher {
   final String fromName;
   final String toName;
   final String? message;
+  final GiftOccasion? occasion;
+  final String? occasionGreeting;
   final String status;
   final String createdAt;
   final int artworkVersion;
@@ -75,6 +104,8 @@ class GiftVoucher {
       fromName: _asString(json['from_name']),
       toName: _asString(json['to_name']),
       message: _nullableString(json['message']),
+      occasion: giftOccasionFromApi(json['occasion']),
+      occasionGreeting: _nullableString(json['occasion_greeting']),
       status: _asString(json['status']),
       createdAt: _asString(json['created_at']),
       artworkVersion: _asInt(json['artwork_version'], fallback: 1),

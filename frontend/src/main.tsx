@@ -81,11 +81,12 @@ const tree = (
   <StrictMode>
     <HelmetProvider>
       <ErrorBoundary>
-        {/* Must match the pre-hydration script in index.html, which resolves
-            `system`. A `light` default here repainted over the script's dark
-            class on mount — the dark→light flash, and the reason a
-            system-dark user never got dark mode. */}
-        <ThemeProvider defaultTheme="system">
+        {/* Must match the pre-hydration script in index.html and the
+            ThemeProvider default — all three say `light`. Out of step, the
+            default repaints over the script's class on mount: first-paint
+            flash. Light is the product default; `system` is an explicit
+            user choice from the toggle. */}
+        <ThemeProvider defaultTheme="light">
           <QueryClientProvider client={queryClient}>
             <BrowserRouter>
               <TooltipProvider delayDuration={0}>

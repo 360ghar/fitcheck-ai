@@ -160,7 +160,7 @@ export function BatchImageSelector({
                 <button
                   type="button"
                   onClick={() => onImageRemove(image.imageId)}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                  className="absolute top-2 right-2 touch-target p-2 rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/70"
                   disabled={disabled}
                   aria-label={`Remove ${image.file.name}`}
                 >

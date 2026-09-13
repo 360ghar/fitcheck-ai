@@ -826,7 +826,7 @@ export function BatchExtractionFlow({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-[95vw] lg:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[95vw] lg:max-w-6xl max-h-full sm:max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -852,7 +852,7 @@ export function BatchExtractionFlow({
           />
         ) : null}
 
-        <div className="flex-1 overflow-y-auto min-h-[min(400px,60svh)] min-w-0">
+        <div className="flex-1 min-h-0 overflow-y-auto min-w-0">
           {/* Step 1: Select Images */}
           {state.step === 'select' && (
             <div className="space-y-4">

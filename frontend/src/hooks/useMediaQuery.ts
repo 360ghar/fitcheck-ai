@@ -40,6 +40,17 @@ export const SPLIT_VIEWPORT_QUERY = '(min-width: 768px)'
 /** `lg` — the breakpoint where the shrunken list can hold masonry again. */
 export const WIDE_VIEWPORT_QUERY = '(min-width: 1024px)'
 
+/** `sm` */
+export const SM_QUERY = '(min-width: 640px)'
+/** `md` — alias of SPLIT_VIEWPORT_QUERY. */
+export const MD_QUERY = SPLIT_VIEWPORT_QUERY
+/** `lg` — alias of WIDE_VIEWPORT_QUERY. */
+export const LG_QUERY = WIDE_VIEWPORT_QUERY
+/** `xl` */
+export const XL_QUERY = '(min-width: 1280px)'
+/** `2xl` */
+export const TWO_XL_QUERY = '(min-width: 1536px)'
+
 export function useIsSplitViewport(): boolean {
   return useMediaQuery(SPLIT_VIEWPORT_QUERY)
 }

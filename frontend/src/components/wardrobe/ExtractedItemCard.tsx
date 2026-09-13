@@ -6,7 +6,8 @@
  * Includes duplicate detection to warn users about similar items.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, forwardRef, memo } from 'react'
+import type { ComponentProps } from 'react'
 import {
   Trash2,
   RefreshCw,
@@ -45,6 +46,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { checkDuplicatesQueued, type DuplicateItem } from '@/api/items'
+import { useImageWithFallback } from '@/hooks/useImageWithFallback'
 import { DEFAULT_USE_CASES, formatUseCaseLabel, normalizeUseCase, normalizeUseCases } from '@/lib/use-cases'
 import type { DetectedItem, Category } from '@/types'
 
@@ -59,6 +61,39 @@ interface ExtractedItemCardProps {
   onRegenerate: (tempId: string) => void
   /** Whether regeneration is in progress */
   isRegenerating?: boolean
+}
+
+interface TouchBadgeProps extends Omit<ComponentProps<'button'>, 'className'> {
+  badgeVariant?: ComponentProps<typeof Badge>['variant']
+  badgeClassName?: string
+}
+
+/** Badge wrapped in a button with an expanded touch hit-area. */
+const TouchBadge = forwardRef<HTMLButtonElement, TouchBadgeProps>(function TouchBadge(
+  { badgeVariant, badgeClassName, children, ...buttonProps }: TouchBadgeProps,
+  ref,
+) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className="hit-expand inline-flex [--hit:-10px]"
+      {...buttonProps}
+    >
+      <Badge variant={badgeVariant} className={badgeClassName}>
+        {children}
+      </Badge>
+    </button>
+  )
+})
+
+/** One "Name (NN% match)" row shared by the tooltip list and the inline list. */
+function DuplicateLabel({ duplicate }: { duplicate: DuplicateItem }) {
+  return (
+    <>
+      {duplicate.name} ({Math.round(duplicate.similarity_score * 100)}% match)
+    </>
+  )
 }
 
 const CATEGORIES: { value: Category; label: string }[] = [
@@ -77,7 +112,7 @@ const COMMON_COLORS = [
   'red', 'blue', 'green', 'yellow', 'pink', 'purple',
 ]
 
-export function ExtractedItemCard({
+export const ExtractedItemCard = memo(function ExtractedItemCard({
   item,
   onUpdate,
   onDelete,
@@ -86,6 +121,7 @@ export function ExtractedItemCard({
 }: ExtractedItemCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [showDuplicates, setShowDuplicates] = useState(false)
   const [duplicates, setDuplicates] = useState<DuplicateItem[]>([])
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
   // One-shot guard keyed on the check inputs (content, not object identity):
@@ -102,7 +138,13 @@ export function ExtractedItemCard({
   const isIncluded = item.includeInWardrobe !== false
   const occasionTags = item.occasion_tags || []
   // Studio photo first; fall back to crop / uploaded photo while it polishes.
-  const imageSrc = item.generatedImageUrl || item.sourcePreviewUrl
+  // A missing/404ing source silently degrades to the fallback, then to the
+  // "No image" placeholder once both are spent (same contract as ItemCard).
+  const {
+    src: imageSrc,
+    onError: handleImageError,
+  } = useImageWithFallback(item.generatedImageUrl, item.sourcePreviewUrl)
+  const topDuplicates = duplicates.slice(0, 3)
 
   // Check for duplicates when item has name and category
   useEffect(() => {
@@ -210,6 +252,9 @@ export function ExtractedItemCard({
               src={imageSrc}
               alt={item.sub_category || item.category}
               className="w-full h-full object-contain p-2"
+              onError={(event) =>
+                handleImageError(event.currentTarget.currentSrc || event.currentTarget.src)
+              }
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
@@ -248,23 +293,38 @@ export function ExtractedItemCard({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge variant="outline" className="border-border bg-background/90 text-foreground cursor-help">
+                    <TouchBadge
+                      onClick={() => setShowDuplicates((v) => !v)}
+                      aria-expanded={showDuplicates}
+                      aria-label={showDuplicates ? 'Hide similar items' : `Show ${duplicates.length} similar items`}
+                      badgeVariant="outline"
+                      badgeClassName="border-border bg-background/90 text-foreground cursor-help"
+                    >
                       <Copy className="h-3 w-3 mr-1" />
                       {duplicates.length} similar
-                    </Badge>
+                    </TouchBadge>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="max-w-xs">
                     <p className="font-medium mb-1">Similar items found:</p>
                     <ul className="text-xs space-y-1">
-                      {duplicates.slice(0, 3).map((dup) => (
+                      {topDuplicates.map((dup) => (
                         <li key={dup.id}>
-                          {dup.name} ({Math.round(dup.similarity_score * 100)}% match)
+                          <DuplicateLabel duplicate={dup} />
                         </li>
                       ))}
                     </ul>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+            )}
+            {showDuplicates && hasDuplicates && (
+              <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                {topDuplicates.map((dup) => (
+                  <div key={dup.id}>
+                    <DuplicateLabel duplicate={dup} />
+                  </div>
+                ))}
+              </div>
             )}
             {isCheckingDuplicates && (
               <Badge variant="outline" className="border-border bg-background/90 text-foreground">
@@ -295,7 +355,7 @@ export function ExtractedItemCard({
             <Button
               variant="secondary"
               size="icon"
-              className="h-7 w-7 border border-border bg-background/90 hover:bg-accent"
+              className="border border-border bg-background/90 hover:bg-accent"
               onClick={() => onRegenerate(item.tempId)}
               disabled={isRegenerating}
               aria-label="Regenerate item"
@@ -305,7 +365,7 @@ export function ExtractedItemCard({
             <Button
               variant="secondary"
               size="icon"
-              className="h-7 w-7 border border-border bg-background/90 text-muted-foreground hover:bg-accent hover:text-destructive"
+              className="border border-border bg-background/90 text-muted-foreground hover:bg-accent hover:text-destructive"
               onClick={() => setShowConfirmDelete(true)}
               aria-label="Delete item"
             >
@@ -363,8 +423,9 @@ export function ExtractedItemCard({
               <span />
             )}
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground">Include</Label>
+              <Label htmlFor={`include-${item.tempId}`} className="text-xs text-muted-foreground">Include</Label>
               <Switch
+                id={`include-${item.tempId}`}
                 checked={isIncluded}
                 onCheckedChange={(checked) => onUpdate(item.tempId, { includeInWardrobe: checked })}
               />
@@ -376,7 +437,7 @@ export function ExtractedItemCard({
             value={item.name || ''}
             onChange={(e) => onUpdate(item.tempId, { name: e.target.value })}
             placeholder={generateDefaultName()}
-            className="font-medium h-8 text-sm"
+            className="font-medium"
           />
 
           {/* Category and sub-category */}
@@ -385,7 +446,7 @@ export function ExtractedItemCard({
               value={item.category}
               onValueChange={(value) => onUpdate(item.tempId, { category: value as Category })}
             >
-              <SelectTrigger className="h-8 text-xs flex-1">
+              <SelectTrigger className="flex-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -415,7 +476,7 @@ export function ExtractedItemCard({
           {/* Expandable details */}
           <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-full h-7 text-xs">
+              <Button variant="ghost" size="sm" className="w-full text-xs">
                 <Edit2 className="h-3 w-3 mr-1" />
                 {isExpanded ? 'Less details' : 'More details'}
                 {isExpanded ? (
@@ -433,19 +494,17 @@ export function ExtractedItemCard({
                   value={item.sub_category || ''}
                   onChange={(e) => onUpdate(item.tempId, { sub_category: e.target.value })}
                   placeholder="e.g., T-Shirt, Jeans"
-                  className="h-8 text-xs"
                 />
               </div>
 
               {/* Brand & Material */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Brand</Label>
                   <Input
                     value={item.brand || ''}
                     onChange={(e) => onUpdate(item.tempId, { brand: e.target.value })}
                     placeholder="Brand"
-                    className="h-8 text-xs"
                   />
                 </div>
                 <div>
@@ -454,7 +513,6 @@ export function ExtractedItemCard({
                     value={item.material || ''}
                     onChange={(e) => onUpdate(item.tempId, { material: e.target.value })}
                     placeholder="Material"
-                    className="h-8 text-xs"
                   />
                 </div>
               </div>
@@ -466,39 +524,38 @@ export function ExtractedItemCard({
                   value={item.pattern || ''}
                   onChange={(e) => onUpdate(item.tempId, { pattern: e.target.value })}
                   placeholder="e.g., solid, striped"
-                  className="h-8 text-xs"
                 />
               </div>
 
               {/* Color picker */}
               <div>
                 <Label className="text-xs">Colors</Label>
-                <div className="flex flex-wrap gap-1 mt-1">
+                <div className="flex flex-wrap gap-2 mt-1">
                   {COMMON_COLORS.map((color) => (
-                    <Badge
+                    <TouchBadge
                       key={color}
-                      variant={item.colors.includes(color) ? 'default' : 'outline'}
-                      className="cursor-pointer text-xs px-1.5 py-0"
                       onClick={() => toggleColor(color)}
+                      badgeVariant={item.colors.includes(color) ? 'default' : 'outline'}
+                      badgeClassName="cursor-pointer text-xs px-1.5 py-0"
                     >
                       {color}
-                    </Badge>
+                    </TouchBadge>
                   ))}
                 </div>
               </div>
 
               <div>
                 <Label className="text-xs">Use cases</Label>
-                <div className="flex flex-wrap gap-1 mt-1">
+                <div className="flex flex-wrap gap-2 mt-1">
                   {DEFAULT_USE_CASES.map((useCase) => (
-                    <Badge
+                    <TouchBadge
                       key={useCase}
-                      variant={occasionTags.includes(useCase) ? 'default' : 'outline'}
-                      className="cursor-pointer text-xs px-1.5 py-0"
                       onClick={() => toggleUseCase(useCase)}
+                      badgeVariant={occasionTags.includes(useCase) ? 'default' : 'outline'}
+                      badgeClassName="cursor-pointer text-xs px-1.5 py-0"
                     >
                       {formatUseCaseLabel(useCase)}
-                    </Badge>
+                    </TouchBadge>
                   ))}
                 </div>
                 <div className="flex gap-2 mt-2">
@@ -512,14 +569,14 @@ export function ExtractedItemCard({
                       }
                     }}
                     placeholder="Add custom use case"
-                    className="h-8 text-xs"
                   />
                   <Button
                     type="button"
                     size="icon"
                     variant="outline"
-                    className="h-8 w-8"
+                    className="h-11 w-11"
                     onClick={addCustomUseCase}
+                    aria-label="Add custom use case"
                   >
                     <Plus className="h-3 w-3" />
                   </Button>
@@ -531,7 +588,7 @@ export function ExtractedItemCard({
                         {formatUseCaseLabel(tag)}
                         <button
                           type="button"
-                          className="hover:text-foreground"
+                          className="hit-expand hover:text-foreground"
                           onClick={() => toggleUseCase(tag)}
                           aria-label={`Remove ${formatUseCaseLabel(tag)} tag`}
                         >
@@ -548,6 +605,6 @@ export function ExtractedItemCard({
       </CardContent>
     </Card>
   )
-}
+})
 
 export default ExtractedItemCard

@@ -177,13 +177,13 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                   section.body.map((p) => (
                     <p
                       key={p.slice(0, 40)}
-                      className="text-stone-600 dark:text-stone-400 leading-relaxed mb-3"
+                      className="text-stone-600 dark:text-stone-400 leading-relaxed mb-3 [overflow-wrap:anywhere]"
                     >
                       {p}
                     </p>
                   ))
                 ) : (
-                  <p className="text-stone-600 dark:text-stone-400 leading-relaxed mb-3">
+                  <p className="text-stone-600 dark:text-stone-400 leading-relaxed mb-3 [overflow-wrap:anywhere]">
                     {section.body}
                   </p>
                 )}
@@ -214,7 +214,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                       <h3 className="font-medium text-stone-900 dark:text-stone-50 mb-2">
                         {faq.question}
                       </h3>
-                      <p className="text-stone-600 dark:text-stone-400 leading-relaxed">
+                      <p className="text-stone-600 dark:text-stone-400 leading-relaxed [overflow-wrap:anywhere]">
                         {faq.answer}
                       </p>
                     </div>
@@ -256,7 +256,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                       <Link
                         to={link.href}
                         className={cn(
-                          'inline-flex text-sm font-medium px-3 py-1.5 rounded-full',
+                          'inline-flex min-h-11 items-center text-sm font-medium px-3 py-1.5 rounded-full',
                           'bg-stone-100 dark:bg-stone-900 text-indigo-700 dark:text-indigo-300',
                           'hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors'
                         )}

@@ -27,6 +27,8 @@ class GiftRepository {
     required String recipientEmail,
     required String clientRequestId,
     String? message,
+    GiftOccasion? occasion,
+    String? occasionGreeting,
   }) async {
     try {
       final response = await _apiClient.post(
@@ -38,6 +40,9 @@ class GiftRepository {
           'recipient_email': recipientEmail,
           'client_request_id': clientRequestId,
           if (message != null && message.isNotEmpty) 'message': message,
+          if (occasion != null) 'occasion': occasion.name,
+          if (occasionGreeting != null && occasionGreeting.isNotEmpty)
+            'occasion_greeting': occasionGreeting,
         },
       );
       return GiftVoucher.fromJson(_dataMap(response.data));

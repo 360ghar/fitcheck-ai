@@ -3,6 +3,7 @@ FitCheck AI - Main Application Entry Point
 """
 
 import logging
+import re
 from datetime import timedelta
 from app.utils.datetime_util import utcnow
 from fastapi import FastAPI, Request
@@ -26,6 +27,16 @@ from app.mcp.http import ManagedMCPASGIApp
 from app.mcp.server import build_mcp_server
 from app.mcp.widgets import WidgetProvider
 from postgrest.exceptions import APIError as PostgrestAPIError
+
+import sentry_sdk
+
+from app.core.sentry_config import init_sentry
+
+# Error tracking (Sentry). Initialized at module scope — not inside the
+# lifespan — so a crash while the module body below builds the app is
+# captured too. No-op without SENTRY_DSN, and never raises: telemetry must
+# not be able to block startup. See app/core/sentry_config.py.
+init_sentry()
 
 REQUIRED_TABLES = (
     # Core user + wardrobe/outfits
@@ -487,6 +498,14 @@ async def lifespan(app: FastAPI):
     except Exception:  # pragma: no cover - defensive teardown
         pass
 
+    # Stop the Gemini-embedding executor (see ai_service.py) so a stalled
+    # sync SDK call cannot delay deploy termination past SIGTERM.
+    try:
+        from app.services.ai_service import shutdown_embedding_executor
+        shutdown_embedding_executor()
+    except Exception:  # pragma: no cover - defensive teardown
+        pass
+
     # Release the pooled storage download client (see storage_service.py).
     try:
         from app.services.storage_service import close_download_client
@@ -833,8 +852,47 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         f"Unhandled exception: {type(exc).__name__}: {str(exc)}",
         exc_info=True,
     )
+
+    # Report to Sentry. This explicit call is what makes 500s visible there:
+    # a handler registered for Exception intercepts the error before Sentry's
+    # ServerErrorMiddleware integration sees it, so the integration alone
+    # never would. The correlation-ID tag joins the event with the request's
+    # structured log lines. No-op when Sentry is disabled (no DSN).
+    try:
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("correlation_id", correlation_id)
+            scope.capture_exception(exc)
+    except Exception:  # pragma: no cover - reporting must never re-raise
+        pass
     
-    # Return a generic error response (don't leak internal details)
+    # Return a generic error response (don't leak internal details).
+    #
+    # CORS: a handler registered for Exception runs on ServerErrorMiddleware,
+    # which sits OUTSIDE CORSMiddleware — this 500 would otherwise reach the
+    # browser without CORS headers, get blocked by the browser itself, and be
+    # reported by axios as a network failure ("Connection Error") instead of
+    # a server error carrying the correlation ID. Echo the same allow-rules
+    # as the middleware (list or regex origin match) so real 500s surface as
+    # real 500s.
+    headers = {
+        # This handler runs outside the correlation middleware's response
+        # path, so the header must be re-attached here — the failures where
+        # clients most need it are exactly the ones that would otherwise
+        # omit it. Expose it for browser readers alongside the CORS headers.
+        "X-Correlation-ID": correlation_id,
+        "Access-Control-Expose-Headers": "X-Correlation-ID",
+    }
+    origin = request.headers.get("origin")
+    if origin and (
+        origin in settings.BACKEND_CORS_ORIGINS
+        or (
+            settings.BACKEND_CORS_ORIGIN_REGEX
+            and re.fullmatch(settings.BACKEND_CORS_ORIGIN_REGEX, origin)
+        )
+    ):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
     return JSONResponse(
         status_code=500,
         content={
@@ -843,6 +901,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             "details": {},
             "correlation_id": correlation_id,
         },
+        headers=headers,
     )
 
 

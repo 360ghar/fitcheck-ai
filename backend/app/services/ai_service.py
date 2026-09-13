@@ -11,6 +11,8 @@ Following the server-side architecture:
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Any, Dict, List
 
 from google import genai
@@ -39,6 +41,56 @@ def _create_genai_client() -> genai.Client | None:
 
 
 _client = _create_genai_client()
+
+# Embeddings run on a dedicated, bounded executor instead of the default
+# one shared with every other asyncio.to_thread call. The sync Gemini SDK
+# cannot be cancelled once running, so a stalled provider call keeps its
+# worker busy until it returns; isolating them here means worst case the
+# embedding lane backs up (and wait_for surfaces AIServiceError) without
+# starving database/storage to_thread work on the shared pool.
+#
+# The executor is created lazily and torn down in main.lifespan, so a
+# stalled call cannot delay deploy termination past SIGTERM and an
+# in-process reload simply recreates it. An admission gate sized 2x the
+# workers bounds how many calls sit in the executor queue; the gate is
+# awaited OUTSIDE the per-call timeout so queue-wait never consumes the
+# deadline (only actual Gemini execution does).
+_EMBEDDING_EXECUTOR: ThreadPoolExecutor | None = None
+
+# Loop-keyed so tests (and reloads) that run fresh event loops get their own
+# gate instead of sharing a semaphore bound to a dead loop.
+_embedding_gate: tuple[asyncio.AbstractEventLoop, asyncio.Semaphore] | None = None
+
+
+def _get_embedding_executor() -> ThreadPoolExecutor:
+    global _EMBEDDING_EXECUTOR
+    if _EMBEDDING_EXECUTOR is None:
+        _EMBEDDING_EXECUTOR = ThreadPoolExecutor(
+            max_workers=settings.AI_EMBEDDING_MAX_WORKERS,
+            thread_name_prefix="gemini-embedding",
+        )
+    return _EMBEDDING_EXECUTOR
+
+
+def shutdown_embedding_executor() -> None:
+    """Tear down the embedding executor (registered in main.lifespan).
+
+    cancel_futures drops queued-but-unstarted calls; a call already inside
+    the sync SDK cannot be cancelled, so wait=False lets shutdown proceed
+    while that thread finishes in the background.
+    """
+    global _EMBEDDING_EXECUTOR
+    if _EMBEDDING_EXECUTOR is not None:
+        _EMBEDDING_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+        _EMBEDDING_EXECUTOR = None
+
+
+def _get_admission_gate() -> asyncio.Semaphore:
+    global _embedding_gate
+    loop = asyncio.get_running_loop()
+    if _embedding_gate is None or _embedding_gate[0] is not loop:
+        _embedding_gate = (loop, asyncio.Semaphore(settings.AI_EMBEDDING_MAX_WORKERS * 2))
+    return _embedding_gate[1]
 
 
 # ============================================================================
@@ -79,15 +131,34 @@ class EmbeddingService:
             # The google-genai module-level client is the SYNC client; the
             # blocking embed_content call must never run on the event loop
             # (it would stall every other coroutine for the request duration).
-            result = await asyncio.to_thread(
-                _client.models.embed_content,
-                model=settings.AI_GEMINI_EMBEDDING_MODEL,
-                contents=text,
-                config=types.EmbedContentConfig(
-                    task_type="RETRIEVAL_DOCUMENT",
-                    output_dimensionality=settings.PINECONE_DIMENSION,
-                ),
-            )
+            # asyncio.wait_for bounds the awaited call: the SDK retries
+            # 429/5xx with internal backoff, so a stalled provider call can
+            # hold its worker thread for minutes — well past every client's
+            # request timeout. TimeoutError is re-raised as AIServiceError
+            # below, which callers already degrade on (e.g.
+            # /items/check-duplicates falls back to text matching) — bounded
+            # failure instead of a hung request. The dedicated executor keeps
+            # those stalled workers away from unrelated to_thread work.
+            loop = asyncio.get_running_loop()
+            # Admission gate first: excess submissions wait here without
+            # occupying worker threads or consuming the timeout budget, so
+            # the deadline below covers actual Gemini execution only.
+            async with _get_admission_gate():
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        _get_embedding_executor(),
+                        partial(
+                            _client.models.embed_content,
+                            model=settings.AI_GEMINI_EMBEDDING_MODEL,
+                            contents=text,
+                            config=types.EmbedContentConfig(
+                                task_type="RETRIEVAL_DOCUMENT",
+                                output_dimensionality=settings.PINECONE_DIMENSION,
+                            ),
+                        ),
+                    ),
+                    timeout=settings.AI_EMBEDDING_TIMEOUT_S,
+                )
 
             embeddings = getattr(result, "embeddings", None) or []
             if embeddings and getattr(embeddings[0], "values", None) is not None:

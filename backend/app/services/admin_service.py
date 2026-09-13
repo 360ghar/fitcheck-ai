@@ -156,6 +156,19 @@ def _first_row(result: Any) -> Optional[Dict[str, Any]]:
     return data[0] if data else None
 
 
+def _log_swallowed(operation: str, exc: BaseException) -> None:
+    """Best-effort user-detail sections degrade instead of failing the whole
+    read — but never silently: a genuine DB failure (timeout, connection
+    loss, permission regression) must show up in the logs."""
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        "admin user-detail section query failed; returning empty",
+        extra={"operation": operation},
+        exc_info=exc,
+    )
+
+
 def _billing_configured() -> bool:
     """Web (Stripe) billing is fully configured when the secret key is set."""
     return bool(settings.STRIPE_SECRET_KEY)
@@ -330,6 +343,15 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
             )
             return getattr(res, "count", 0) or 0
         except Exception:
+            # A failed count must not silently read as a legitimate zero —
+            # log loudly so ops can tell "no rows" from "query broke".
+            import logging as _logging
+
+            _logging.getLogger(__name__).warning(
+                "admin user-detail count failed; reporting 0",
+                extra={"operation": operation, "user_id": user_id},
+                exc_info=True,
+            )
             return 0
 
     counts_outfits, counts_items, counts_ref = await asyncio.gather(
@@ -393,7 +415,8 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                     db,
                     extra={"operation": "admin.get_user.detail.items", "user_id": user_id},
                 )
-            except Exception:
+            except Exception as exc:
+                _log_swallowed("admin.get_user.detail.items", exc)
                 if not with_embed:
                     return []
                 continue
@@ -477,7 +500,8 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                     if "name" not in r and "title" in r:
                         r["name"] = r.get("title")
                 return rows
-            except Exception:
+            except Exception as exc:
+                _log_swallowed("admin.get_user.detail.outfits", exc)
                 continue
         return []
 
@@ -494,8 +518,9 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 extra={"operation": "admin.get_user.detail.photoshoot_jobs", "user_id": user_id},
             )
             return [dict(r) for r in (res.data or [])]
-        except Exception:
+        except Exception as exc:
             # image_failures column from 035 may be absent; fall back without it.
+            _log_swallowed("admin.get_user.detail.photoshoot_jobs", exc)
             try:
                 res2 = await execute_with_reconnect(
                     lambda d: d.table("photoshoot_jobs")
@@ -508,7 +533,8 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                     extra={"operation": "admin.get_user.detail.photoshoot_jobs.fallback", "user_id": user_id},
                 )
                 return [dict(r) for r in (res2.data or [])]
-            except Exception:
+            except Exception as exc:
+                _log_swallowed("admin.get_user.detail.photoshoot_jobs.fallback", exc)
                 return []
 
     async def _fetch_collections() -> List[Dict[str, Any]]:
@@ -524,7 +550,8 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 extra={"operation": "admin.get_user.detail.collections", "user_id": user_id},
             )
             return [dict(r) for r in (res.data or [])]
-        except Exception:
+        except Exception as exc:
+            _log_swallowed("admin.get_user.detail.collections", exc)
             return []
 
     async def _fetch_trips() -> List[Dict[str, Any]]:
@@ -564,7 +591,8 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                     if tid in id_to_count:
                         row["capsule_count"] = id_to_count[tid]
             return rows
-        except Exception:
+        except Exception as exc:
+            _log_swallowed("admin.get_user.detail.trips", exc)
             return []
 
     async def _fetch_achievements() -> Dict[str, Any]:
@@ -603,7 +631,8 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 achievements_count = getattr(c_res, "count", 0) or achievements_count
             except Exception:
                 pass
-        except Exception:
+        except Exception as exc:
+            _log_swallowed("admin.get_user.detail.achievements", exc)
             achievements = []
             achievements_count = 0
         try:
@@ -617,7 +646,8 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 extra={"operation": "admin.get_user.detail.streak", "user_id": user_id},
             )
             streak = maybe_single_data(s_res)
-        except Exception:
+        except Exception as exc:
+            _log_swallowed("admin.get_user.detail.streak", exc)
             streak = None
         return {
             "achievements": achievements,
@@ -639,7 +669,8 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 extra={"operation": "admin.get_user.detail.social_import_jobs", "user_id": user_id},
             )
             return [dict(r) for r in (res.data or [])]
-        except Exception:
+        except Exception as exc:
+            _log_swallowed("admin.get_user.detail.social_import_jobs", exc)
             return []
 
     async def _fetch_support_tickets() -> List[Dict[str, Any]]:
@@ -656,9 +687,10 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 extra={"operation": "admin.get_user.detail.support_tickets", "user_id": user_id},
             )
             return [dict(row) for row in (res.data or [])]
-        except Exception:
+        except Exception as exc:
             # Support tickets are optional for deployments that have not
             # applied the admin-support migration yet.
+            _log_swallowed("admin.get_user.detail.support_tickets", exc)
             return []
 
     # Concurrent fetch. return_exceptions=False would fail the whole detail
@@ -792,10 +824,27 @@ async def extend_user_trial(db: Any, user_id: str, days: int) -> Dict[str, Any]:
     )
     row = _first_row(result)
     if not row:
-        raise NotFoundError(
-            message=f"No subscription found for user {user_id}",
-            resource_type="subscription",
-            resource_id=user_id,
+        # The RPC returns no row both when the user has no subscription and
+        # (since migration 063) when one exists but is not a paid plan
+        # currently in trial. Distinguish so support sees the real problem.
+        probe = await execute_with_reconnect(
+            lambda d: d.table("subscriptions")
+            .select("id,plan_type,status")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute(),
+            db,
+            extra={"operation": "admin.extend_trial.probe", "user_id": user_id, "days": days},
+        )
+        if not _first_row(probe):
+            raise NotFoundError(
+                message=f"No subscription found for user {user_id}",
+                resource_type="subscription",
+                resource_id=user_id,
+            )
+        raise ValidationError(
+            message="Trial extension requires a paid subscription currently in trial",
+            details={"field": "subscription", "user_id": user_id},
         )
     subscription = row.get("subscription") if isinstance(row.get("subscription"), dict) else {}
     _invalidate_user_profile_cache(user_id)
@@ -1859,11 +1908,14 @@ async def dashboard_referrals(db: Any) -> Dict[str, Any]:
         )
         return getattr(res, "count", 0) or 0
 
-    codes_issued, redemptions, referrer_credits, referred_credits = await asyncio.gather(
+    codes_issued, redemptions, referrer_credits, referred_credits, promo_active, gifts_issued = await asyncio.gather(
         _count(lambda d: d.table("referral_codes").select("id", count="exact")),
         _count(lambda d: d.table("referral_redemptions").select("id", count="exact")),
         _count(lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referrer_credit_applied", True)),
         _count(lambda d: d.table("referral_redemptions").select("id", count="exact").eq("referred_credit_applied", True)),
+        # Extras for the dashboard referrals pulse (rendered as "—" before).
+        _count(lambda d: d.table("promo_codes").select("id", count="exact").eq("active", True)),
+        _count(lambda d: d.table("gift_vouchers").select("id", count="exact")),
     )
     credits_granted = referrer_credits + referred_credits
     return {
@@ -1871,6 +1923,8 @@ async def dashboard_referrals(db: Any) -> Dict[str, Any]:
         "redemptions": redemptions,
         "credits_granted": credits_granted,
         "credits_pending": max(0, redemptions * 2 - credits_granted),
+        "promo_active": promo_active,
+        "gifts_issued": gifts_issued,
     }
 
 
@@ -2238,21 +2292,39 @@ async def dashboard_funnel(db: Any, days: int = 30) -> Dict[str, Any]:
                 else:
                     with_outfits_set.add(uid)
 
+        # Stages are cumulative: an outfit implies the item stage, and a paid
+        # subscription implies both. Without this, "Created outfit (7d)"
+        # could exceed "Added item (24h)" (outfit within 7d but item older
+        # than 24h) and pct_of_prev would read >100%.
+        with_outfits_set &= with_items_set
+
         with_items_24h = len(with_items_set)
         with_outfits_7d = len(with_outfits_set)
 
-        # Paid subs: subscriptions where user_id in window and paid+active/trial.
-        paid_subs = 0
+        # Paid subs: distinct USERS in the window with a paid+active/trial
+        # subscription. Counting subscription rows would inflate the stage
+        # when a user holds more than one row (plan changes), so collect
+        # user_ids and intersect with the previous (cumulative) stage.
+        paid_set: set = set()
         for idx in range(0, len(window_ids), chunk_size):
             chunk = window_ids[idx : idx + chunk_size]
-            cnt = await _count(
+            sub_rows = await _fetch_all_pages(
+                db,
                 lambda d, c=chunk: d.table("subscriptions")
-                .select("user_id", count="exact")
+                .select("user_id")
                 .in_("user_id", c)
                 .neq("plan_type", "free")
                 .in_("status", ["active", "trial"])
+                .order("user_id"),
+                operation="admin.dashboard_funnel.paid_subs",
+                extra={"days": days},
             )
-            paid_subs += cnt
+            for row in sub_rows:
+                uid = str(row.get("user_id") or "")
+                if uid:
+                    paid_set.add(uid)
+        paid_set &= with_outfits_set
+        paid_subs = len(paid_set)
 
     # Build steps with drop-off pct.
     counts = [users_created, with_items_24h, with_outfits_7d, paid_subs]
@@ -2274,7 +2346,8 @@ async def dashboard_retention(db: Any, weeks: int = 4) -> Dict[str, Any]:
 
     For each cohort week (Monday 00:00 UTC to next Monday), count signups
     that week and of those how many have ``last_login_at >= cohort_start+7d``
-    as a proxy for retained. 8 ``_count`` queries total for weeks=4.
+    as a proxy for retained. Up to ``2*(weeks+1)`` ``_count`` queries — the
+    current, immature week is generated then skipped by the guard below.
 
     v1 proxy: uses ``last_login_at`` only; items/outfits activity is not
     counted. Documented as tech debt — a richer "any activity" check would
@@ -2304,9 +2377,12 @@ async def dashboard_retention(db: Any, weeks: int = 4) -> Dict[str, Any]:
     today = now.date()
     days_since_monday = today.weekday()  # Monday is 0
     most_recent_monday = today - timedelta(days=days_since_monday)
-    # Oldest first: most_recent - (weeks-1) weeks .. most_recent
+    # Oldest first: request one extra (current, immature) cohort so exactly
+    # `weeks` mature cohorts survive the seven-day guard below. Generating
+    # only `weeks` Mondays would silently drop the oldest mature cohort
+    # whenever today is mid-week.
     cohort_mondays = [
-        most_recent_monday - timedelta(weeks=weeks - 1 - i) for i in range(weeks)
+        most_recent_monday - timedelta(weeks=weeks - i) for i in range(weeks + 1)
     ]
 
     cohorts: List[Dict[str, Any]] = []

@@ -24,6 +24,9 @@ class GiftPriorityBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
     final hasIncoming = priority == GiftDashboardPriority.incoming;
+    final incomingGreeting = hasIncoming
+        ? giftOccasionGreeting(incoming!.occasion, incoming!.occasionGreeting)
+        : null;
     final title = hasIncoming
         ? incomingCount > 1
               ? '$incomingCount gifts are waiting for you'
@@ -32,7 +35,7 @@ class GiftPriorityBanner extends StatelessWidget {
     final body = hasIncoming
         ? incomingCount > 1
               ? 'Open your gift inbox to review and claim them with your verified email.'
-              : '${incoming!.fromName} sent you ${_term(incoming!.durationMonths)} of FitCheck Pro.'
+              : '${incomingGreeting == null ? '' : '$incomingGreeting · '}${incoming!.fromName} sent you ${_term(incoming!.durationMonths)} of FitCheck Pro.'
         : '${allowance!.remainingCount} free ${_term(allowance!.durationMonths)} invitation${allowance!.remainingCount == 1 ? '' : 's'} available.';
 
     return AppGlassCard(

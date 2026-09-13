@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from 'react'
 import { imageFetchOptions } from '@/lib/sessionCookie'
+import { downloadBlob } from '@/lib/utils'
 import {
   Share2,
   Link as LinkIcon,
@@ -215,14 +216,7 @@ export function ShareOutfitDialog({
       const resp = await fetch(primary.image_url, imageFetchOptions(primary.image_url))
       if (!resp.ok) throw new Error('Image fetch failed')
       const blob = await resp.blob()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `outfit-${outfit.name.toLowerCase().replace(/\s+/g, '-')}.png`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
+      downloadBlob(blob, `outfit-${outfit.name.toLowerCase().replace(/\s+/g, '-')}.png`)
 
       toast({
         title: 'Image downloaded',
@@ -377,7 +371,7 @@ export function ShareOutfitDialog({
                       name="shareable_link"
                       value={shareUrl}
                       readOnly
-                      className="flex-1 font-mono text-sm"
+                      className="flex-1 font-mono text-base"
                     />
                     <Button onClick={handleCopyLink} variant="outline">
                       {copiedLink ? (

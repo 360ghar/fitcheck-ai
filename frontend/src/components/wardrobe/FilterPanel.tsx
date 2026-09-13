@@ -225,7 +225,7 @@ export function FilterPanel({
                         key={c.value}
                         onClick={() => onFilterChange('color', c.value === 'all' ? '' : c.value)}
                         className={cn(
-                          'flex items-center gap-2 px-3 py-2 rounded-full text-sm',
+                          'flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-full text-sm',
                           'border transition-colors duration-200',
                           (filters.color === c.value || (c.value === 'all' && filters.color === ''))
                             ? 'border-primary bg-primary/10 text-primary'
@@ -272,7 +272,7 @@ export function FilterPanel({
                       type="button"
                       onClick={() => setOccasionFilter('')}
                       className={cn(
-                        'px-3 py-2 rounded-full text-sm border transition-colors duration-200',
+                        'inline-flex min-h-[44px] items-center px-3 py-2 rounded-full text-sm border transition-colors duration-200',
                         filters.occasion === ''
                           ? 'border-primary bg-primary/10 text-primary'
                           : 'border-border hover:border-primary/50'
@@ -286,7 +286,7 @@ export function FilterPanel({
                         key={useCase}
                         onClick={() => setOccasionFilter(useCase)}
                         className={cn(
-                          'px-3 py-2 rounded-full text-sm border transition-colors duration-200',
+                          'inline-flex min-h-[44px] items-center px-3 py-2 rounded-full text-sm border transition-colors duration-200',
                           filters.occasion === useCase
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-border hover:border-primary/50'

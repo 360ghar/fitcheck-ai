@@ -4785,6 +4785,9 @@ export interface components {
             message?: string | null;
             /** Note */
             note: string;
+            occasion?: components["schemas"]["GiftOccasion"] | null;
+            /** Occasion Greeting */
+            occasion_greeting?: string | null;
             /**
              * Recipient Email
              * Format: email
@@ -5000,6 +5003,16 @@ export interface components {
              * @default 0
              */
             credits_pending: number;
+            /**
+             * Gifts Issued
+             * @default 0
+             */
+            gifts_issued: number;
+            /**
+             * Promo Active
+             * @default 0
+             */
+            promo_active: number;
             /**
              * Redemptions
              * @default 0
@@ -5905,6 +5918,9 @@ export interface components {
             from_name: string;
             /** Message */
             message?: string | null;
+            occasion?: components["schemas"]["GiftOccasion"] | null;
+            /** Occasion Greeting */
+            occasion_greeting?: string | null;
             /**
              * Recipient Email
              * Format: email
@@ -6273,12 +6289,20 @@ export interface components {
             /** Secret */
             secret: string;
         };
+        /**
+         * GiftOccasion
+         * @enum {string}
+         */
+        GiftOccasion: "birthday" | "anniversary" | "other";
         /** GiftUpdate */
         GiftUpdate: {
             /** From Name */
             from_name?: string | null;
             /** Message */
             message?: string | null;
+            occasion?: components["schemas"]["GiftOccasion"] | null;
+            /** Occasion Greeting */
+            occasion_greeting?: string | null;
             /** To Name */
             to_name?: string | null;
         };
@@ -6836,6 +6860,9 @@ export interface components {
             from_name: string;
             /** Message */
             message?: string | null;
+            occasion?: components["schemas"]["GiftOccasion"] | null;
+            /** Occasion Greeting */
+            occasion_greeting?: string | null;
             /**
              * Recipient Email
              * Format: email

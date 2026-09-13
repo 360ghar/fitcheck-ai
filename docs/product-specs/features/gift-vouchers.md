@@ -35,6 +35,16 @@ purchased.
 - Paid value cannot be voided in the app. A confirmed external refund, lost
   dispute, or chargeback makes the voucher ineligible.
 
+## Occasion presentation
+
+- No occasion is the default and is stored as NULL. It has no automatic
+  greeting and does not require a private note.
+- Birthday and Anniversary use the fixed card headings “Happy Birthday” and
+  “Happy Anniversary”.
+- Other requires a sender-written, trimmed 1–80 character card greeting.
+- The private note is optional and independent of the occasion. Unclaimed
+  gifts can add, change, or remove occasion data.
+
 ## Entitlement behavior
 
 Gift time is stored in `gift_entitlement_grants`; it does not replace the
@@ -63,8 +73,10 @@ existing gift permission.
 
 Portrait artwork is 1080 by 1350 pixels and contains no claim credential.
 Social artwork is 1200 by 630 pixels and also contains no claim credential.
-Both show the sender, recipient, term, and retail value. The secure link is
-shared separately. Public gift pages use `noindex, nofollow`.
+Both show the sender, recipient, term, and retail value. Artwork layout 3 also
+shows an occasion greeting only when one exists; generic gifts have no fallback
+greeting or note. The secure link is shared separately. Public gift pages use
+`noindex, nofollow`.
 
 ## Surfaces
 
@@ -85,10 +97,11 @@ shared separately. Public gift pages use `noindex, nofollow`.
 
 ## Launch gates
 
-1. Apply migrations 056 and 061 to hosted Supabase. Verify the gift tables,
-   RPCs, incoming-recipient index, and RLS before enabling traffic. If
-   migration 056 portrait objects were ever served, remove those old cache
-   objects after deploying the credential-free artwork layout.
+1. Apply migrations 056, 061, and 062 to hosted Supabase. Verify the gift
+   tables, RPCs, incoming-recipient index, occasion constraint, and RLS before
+   enabling traffic. If migration 056 portrait objects were ever served,
+   remove those old cache objects after deploying the credential-free artwork
+   layout.
 2. Create the three one-time Stripe Prices and configure Checkout,
    asynchronous payment, refund, and dispute webhook events.
 3. Set the three STRIPE_GIFT_PRO_*_PRICE_ID values and a dedicated

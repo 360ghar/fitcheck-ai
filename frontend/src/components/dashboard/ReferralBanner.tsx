@@ -183,7 +183,7 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
             type="button"
             onClick={handleCopy}
             className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
+              'inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg',
               'text-xs font-medium',
               isUrgent
                 ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20'
@@ -210,7 +210,7 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
             onClick={handleShare}
             disabled={isSharing}
             className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
+              'inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg',
               'text-xs font-medium',
               isUrgent
                 ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20'
@@ -229,7 +229,7 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
               type="button"
               onClick={onDismiss}
               className={cn(
-                'p-1.5 rounded-lg',
+                'p-2 rounded-lg hit-expand',
                 isUrgent ? 'hover:bg-primary-foreground/10' : 'hover:bg-secondary',
                 'transition-colors duration-200'
               )}

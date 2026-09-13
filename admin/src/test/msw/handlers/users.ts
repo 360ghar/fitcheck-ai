@@ -6,6 +6,7 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   AdminUserPatch,
+  ExtendTrialRequest,
   PageResponse_AdminUserListItem_,
 } from '@/shared/api/schemaTypes'
 
@@ -481,7 +482,7 @@ export function createUsersHandlers(initial?: Partial<UsersHandlersState>) {
 
     http.post('*/api/v1/admin/users/:userId/subscription/extend-trial', async ({ request, params }) => {
       const userId = params.userId as string
-      const body = (await request.json()) as { days?: number }
+      const body = (await request.json()) as ExtendTrialRequest
       const row = users.find((user) => user.id === userId)
       if (!row) {
         return HttpResponse.json(

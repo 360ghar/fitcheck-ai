@@ -24,10 +24,12 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
   final _toNameController = TextEditingController();
   final _recipientEmailController = TextEditingController();
   final _messageController = TextEditingController();
+  final _occasionGreetingController = TextEditingController();
   final _random = Random.secure();
 
   late final GiftController _controller;
   int _durationMonths = 1;
+  GiftOccasion? _occasion;
   String? _selectedIncomingId;
   String? _clientRequestId;
 
@@ -48,14 +50,28 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
       _toNameController,
       _recipientEmailController,
       _messageController,
+      _occasionGreetingController,
     ]) {
-      textController.addListener(() {
-        // Edits invalidate the idempotency key only while the form is not
-        // mid-flight. During creation the fields are disabled, so the key
-        // survives for a retry if the response is lost.
-        if (!_controller.isCreating.value) _clientRequestId = null;
-      });
+      textController.addListener(_handleFormInputChanged);
     }
+    // The controller only fetches once at registration; deep links and
+    // re-entry after claiming/creating elsewhere would show stale lists.
+    // load() coalesces concurrent calls, so this is safe alongside onInit.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Match onInit: the disabled scaffold in build() must still mean no
+      // network fetch fires for the gifts endpoint.
+      if (!EnvConfig.giftVouchersEnabled) return;
+      _controller.load(showLoader: false);
+    });
+  }
+
+  void _handleFormInputChanged() {
+    // Only invalidate the dedupe key here. The live preview rebuilds itself
+    // via ListenableBuilder, so typing must not rebuild the whole page.
+    // During creation the fields are disabled, so the key survives for a
+    // retry if the response is lost.
+    if (!_controller.isCreating.value) _clientRequestId = null;
   }
 
   @override
@@ -64,6 +80,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
     _toNameController.dispose();
     _recipientEmailController.dispose();
     _messageController.dispose();
+    _occasionGreetingController.dispose();
     super.dispose();
   }
 
@@ -216,6 +233,44 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               enabled: !creating,
               validator: _email,
             ),
+            DropdownButtonFormField<String>(
+              value: _occasion?.name ?? 'none',
+              decoration: const InputDecoration(
+                labelText: 'Occasion (optional)',
+              ),
+              items: const [
+                DropdownMenuItem(value: 'none', child: Text('No occasion')),
+                DropdownMenuItem(value: 'birthday', child: Text('Birthday')),
+                DropdownMenuItem(
+                  value: 'anniversary',
+                  child: Text('Anniversary'),
+                ),
+                DropdownMenuItem(value: 'other', child: Text('Other')),
+              ],
+              onChanged: creating
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _occasion = giftOccasionFromApi(value);
+                        if (_occasion != GiftOccasion.other) {
+                          _occasionGreetingController.clear();
+                        }
+                        _clientRequestId = null;
+                      });
+                    },
+            ),
+            if (_occasion == GiftOccasion.other)
+              TextFormField(
+                controller: _occasionGreetingController,
+                decoration: const InputDecoration(
+                  labelText: 'Card greeting',
+                  helperText: 'This appears on the card exactly as written.',
+                ),
+                textInputAction: TextInputAction.next,
+                maxLength: 80,
+                enabled: !creating,
+                validator: _occasionGreeting,
+              ),
             TextFormField(
               controller: _messageController,
               decoration: const InputDecoration(
@@ -225,6 +280,23 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               minLines: 2,
               maxLines: 4,
               enabled: !creating,
+            ),
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                _fromNameController,
+                _toNameController,
+                _messageController,
+                _occasionGreetingController,
+              ]),
+              builder: (context, _) => _GiftPreview(
+                fromName: _fromNameController.text,
+                toName: _toNameController.text,
+                greeting: giftOccasionGreeting(
+                  _occasion,
+                  _occasionGreetingController.text,
+                ),
+                message: _messageController.text,
+              ),
             ),
             const SizedBox(height: AppConstants.spacing8),
             SizedBox(
@@ -259,6 +331,10 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
       message: _messageController.text.trim().isEmpty
           ? null
           : _messageController.text.trim(),
+      occasion: _occasion,
+      occasionGreeting: _occasion == GiftOccasion.other
+          ? _occasionGreetingController.text.trim()
+          : null,
       clientRequestId: _clientRequestId ??= _newRequestId(),
     );
     if (!mounted || voucher == null) return;
@@ -266,6 +342,8 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
     _toNameController.clear();
     _recipientEmailController.clear();
     _messageController.clear();
+    _occasionGreetingController.clear();
+    setState(() => _occasion = null);
     await _share(voucher);
   }
 
@@ -298,8 +376,12 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
       }
     }
     try {
+      final greeting = giftOccasionGreeting(
+        voucher.occasion,
+        voucher.occasionGreeting,
+      );
       await Share.share(
-        '${voucher.fromName} sent you ${_term(voucher.durationMonths)} of FitCheck Pro. $link',
+        '${greeting == null ? '' : '$greeting — '}${voucher.fromName} sent you ${_term(voucher.durationMonths)} of FitCheck Pro. $link',
         subject: 'A FitCheck Pro gift for ${voucher.toName}',
         sharePositionOrigin:
             box != null ? box.localToGlobal(Offset.zero) & box.size : null,
@@ -327,6 +409,14 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
         : 'Enter a valid email address.';
   }
 
+  String? _occasionGreeting(String? value) {
+    if (_occasion != GiftOccasion.other) return null;
+    final greeting = value?.trim() ?? '';
+    if (greeting.isEmpty) return 'Enter the card greeting.';
+    if (greeting.length > 80) return 'Use no more than 80 characters.';
+    return null;
+  }
+
   String _term(int months) {
     if (months == 1) return '1 month';
     if (months == 12) return '1 year';
@@ -350,6 +440,10 @@ class _IncomingGiftTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
+    final greeting = giftOccasionGreeting(
+      voucher.occasion,
+      voucher.occasionGreeting,
+    );
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacing12),
       decoration: BoxDecoration(
@@ -368,6 +462,16 @@ class _IncomingGiftTile extends StatelessWidget {
           ),
           const SizedBox(height: AppConstants.spacing4),
           Text('${_term(voucher.durationMonths)} of FitCheck Pro'),
+          if (greeting != null) ...[
+            const SizedBox(height: AppConstants.spacing4),
+            Text(
+              greeting,
+              style: TextStyle(
+                color: tokens.brandColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: AppConstants.spacing12),
           FilledButton.icon(
             onPressed: isClaiming ? null : onClaim,
@@ -389,6 +493,62 @@ class _IncomingGiftTile extends StatelessWidget {
     if (months == 1) return '1 month';
     if (months == 12) return '1 year';
     return '$months months';
+  }
+}
+
+class _GiftPreview extends StatelessWidget {
+  const _GiftPreview({
+    required this.fromName,
+    required this.toName,
+    required this.greeting,
+    required this.message,
+  });
+
+  final String fromName;
+  final String toName;
+  final String? greeting;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppUiTokens.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppConstants.spacing12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppConstants.radius12),
+        border: Border.all(color: tokens.cardBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Card preview',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          if (greeting != null) ...[
+            const SizedBox(height: AppConstants.spacing8),
+            Text(
+              greeting!,
+              style: TextStyle(
+                color: tokens.brandColor,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: AppConstants.spacing8),
+          Text(
+            'For ${toName.trim().isEmpty ? 'your recipient' : toName.trim()}',
+          ),
+          Text('From ${fromName.trim().isEmpty ? 'you' : fromName.trim()}'),
+          if (message.trim().isNotEmpty) ...[
+            const SizedBox(height: AppConstants.spacing8),
+            Text('“${message.trim()}”'),
+          ],
+        ],
+      ),
+    );
   }
 }
 

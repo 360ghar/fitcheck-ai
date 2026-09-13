@@ -119,6 +119,10 @@ export function useExtendTrial() {
     onSettled: (_data, _error, { userId }) => {
       void queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) })
       void queryClient.invalidateQueries({ queryKey: userKeys.activity(userId) })
+      // Trial length feeds the subscriptions feature's cached lists/detail.
+      // Feature isolation forbids importing its key factory, so invalidate
+      // by the documented root (features/subscriptions/api/subscriptions.ts).
+      void queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
     },
     retry: QUERY_RETRY.mutations,
   })
@@ -131,6 +135,10 @@ export function useClearDailyCounters() {
     onSettled: (_data, _error, { userId }) => {
       void queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) })
       void queryClient.invalidateQueries({ queryKey: userKeys.activity(userId) })
+      // Daily counters feed the quotas feature's cached pages. Feature
+      // isolation forbids importing its key factory, so invalidate by the
+      // documented root (features/quotas/api/quotas.ts).
+      void queryClient.invalidateQueries({ queryKey: ['quotas'] })
     },
     retry: QUERY_RETRY.mutations,
   })

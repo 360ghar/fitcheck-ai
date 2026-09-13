@@ -33,7 +33,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { ZoomableImage } from '@/components/ui/zoomable-image';
 import { WizardSteps } from '@/components/ui/wizard-steps';
 import { GeneratingSurface } from '@/components/jobs';
-import { cn } from '@/lib/utils';
+import { cn, downloadBlob } from '@/lib/utils';
 import { imageFetchOptions } from '@/lib/sessionCookie';
 
 type TryOnStep = 'upload' | 'options' | 'generating' | 'result';
@@ -363,14 +363,7 @@ export default function TryOnPage() {
       // CDN URLs need the auth cookie; presigned URLs must stay credential-free.
       const response = await fetch(src, imageFetchOptions(src));
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `try-on-${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `try-on-${Date.now()}.png`);
     } catch {
       toast({
         title: 'Download failed',
@@ -684,7 +677,7 @@ export default function TryOnPage() {
                 <ZoomableImage
                   src={resultImageSrc ?? resolveResultSrc(result) ?? undefined}
                   alt="Try-on result"
-                  className="w-full max-h-[50vh] md:max-h-[600px] object-contain rounded-lg bg-muted"
+                  className="w-full max-h-[50dvh] md:max-h-[600px] object-contain rounded-lg bg-muted"
                   onError={handleResultImageError}
                 />
               )}

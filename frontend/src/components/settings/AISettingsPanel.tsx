@@ -461,7 +461,7 @@ export function AISettingsPanel() {
                       <button
                         type="button"
                         aria-label={showApiKeys[provider.id] ? "Hide API key" : "Show API key"}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 touch-target text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                         onClick={() =>
                           setShowApiKeys((prev) => ({
                             ...prev,

@@ -48,7 +48,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-stone-900 bg-stone-950 pb-7 pt-12 text-stone-400">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 grid grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-6">
+        <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-6">
           <div className="col-span-2 lg:col-span-2">
             <Link to="/" className="flex items-center gap-2.5 mb-4">
               <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-primary">
@@ -67,7 +67,7 @@ export default function Footer() {
                   <a
                     key={social.name}
                     href={social.href}
-                    className="hover:text-stone-100 transition-colors"
+                    className="inline-flex min-h-[36px] items-center py-1.5 hover:text-stone-100 transition-colors"
                     aria-label={social.name}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -80,7 +80,7 @@ export default function Footer() {
             <div className="mt-6 space-y-2 text-sm">
               <a
                 href="mailto:info@fitcheckaiapp.com"
-                className="flex items-center gap-2 hover:text-stone-100 transition-colors"
+                className="flex min-h-[36px] items-center gap-2 py-1.5 hover:text-stone-100 transition-colors"
               >
                 <Mail className="w-4 h-4" aria-hidden="true" />
                 <span>info@fitcheckaiapp.com</span>
@@ -89,7 +89,7 @@ export default function Footer() {
                 href="https://wa.me/919310833204"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:text-stone-100 transition-colors"
+                className="flex min-h-[36px] items-center gap-2 py-1.5 hover:text-stone-100 transition-colors"
               >
                 <Phone className="w-4 h-4" aria-hidden="true" />
                 <span>+91 9310833204</span>
@@ -104,17 +104,17 @@ export default function Footer() {
                 {links.map((link) => (
                   <li key={link.name}>
                     {link.href.startsWith('/#') ? (
-                      <a href={link.href} className="hover:text-stone-100 transition-colors">
+                      <a href={link.href} className="inline-flex min-h-[36px] items-center py-1.5 hover:text-stone-100 transition-colors">
                         {link.name}
                       </a>
                     ) : link.href.startsWith('/') ? (
-                      <Link to={link.href} className="hover:text-stone-100 transition-colors">
+                      <Link to={link.href} className="inline-flex min-h-[36px] items-center py-1.5 hover:text-stone-100 transition-colors">
                         {link.name}
                       </Link>
                     ) : (
                       <a
                         href={link.href}
-                        className="hover:text-stone-100 transition-colors"
+                        className="inline-flex min-h-[36px] items-center py-1.5 hover:text-stone-100 transition-colors"
                         {...(link.href.startsWith('http')
                           ? { target: '_blank', rel: 'noopener noreferrer' }
                           : {})}

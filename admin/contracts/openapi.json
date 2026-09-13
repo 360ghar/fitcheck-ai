@@ -506,6 +506,28 @@
             "title": "Note",
             "type": "string"
           },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
+          },
           "recipient_email": {
             "format": "email",
             "title": "Recipient Email",
@@ -1053,6 +1075,16 @@
           "credits_pending": {
             "default": 0,
             "title": "Credits Pending",
+            "type": "integer"
+          },
+          "gifts_issued": {
+            "default": 0,
+            "title": "Gifts Issued",
+            "type": "integer"
+          },
+          "promo_active": {
+            "default": 0,
+            "title": "Promo Active",
             "type": "integer"
           },
           "redemptions": {
@@ -3166,6 +3198,28 @@
             ],
             "title": "Message"
           },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
+          },
           "recipient_email": {
             "format": "email",
             "title": "Recipient Email",
@@ -3909,6 +3963,15 @@
         "title": "GiftClaimRequest",
         "type": "object"
       },
+      "GiftOccasion": {
+        "enum": [
+          "birthday",
+          "anniversary",
+          "other"
+        ],
+        "title": "GiftOccasion",
+        "type": "string"
+      },
       "GiftUpdate": {
         "properties": {
           "from_name": {
@@ -3935,6 +3998,28 @@
               }
             ],
             "title": "Message"
+          },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
           },
           "to_name": {
             "anyOf": [
@@ -5643,6 +5728,28 @@
               }
             ],
             "title": "Message"
+          },
+          "occasion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiftOccasion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occasion_greeting": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion Greeting"
           },
           "recipient_email": {
             "format": "email",

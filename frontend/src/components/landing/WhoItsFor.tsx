@@ -1,24 +1,42 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, ArrowUpRight, LockKeyhole, ShieldCheck, Trash2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 import { AnimatedSection } from './AnimatedSection'
 import { SectionKicker } from './SectionKicker'
 
-const privacyFacts = [
+type FactTone = 'coral' | 'teal' | 'blue'
+
+// Literal class map: Tailwind's JIT needs complete class names at scan time.
+const FACT_TILE: Record<FactTone, string> = {
+  coral: 'bg-tint-coral-pale text-tint-coral',
+  teal: 'bg-tint-teal-pale text-tint-teal',
+  blue: 'bg-tint-blue-pale text-tint-blue',
+}
+
+const privacyFacts: Array<{
+  icon: typeof ShieldCheck
+  title: string
+  body: string
+  tone: FactTone
+}> = [
   {
     icon: ShieldCheck,
     title: 'Private image storage',
     body: 'Wardrobe images use private storage with account ownership checks for reads and writes.',
+    tone: 'teal',
   },
   {
     icon: LockKeyhole,
     title: 'Protected transfer and storage',
     body: 'Photos and wardrobe data are encrypted in transit and at rest.',
+    tone: 'blue',
   },
   {
     icon: Trash2,
     title: 'Account data deletion',
     body: 'Account deletion removes profile, wardrobe, and stored image data tied to the account.',
+    tone: 'coral',
   },
 ]
 
@@ -45,7 +63,7 @@ export default function WhoItsFor() {
     <section id="who-its-for" className="bg-background py-20 md:py-28">
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-14 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8">
         <AnimatedSection className="reveal min-w-0 lg:col-span-5">
-          <SectionKicker>Privacy + use cases</SectionKicker>
+          <SectionKicker tone="blue">Privacy + use cases</SectionKicker>
           <h2 className="landing-display max-w-xl text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
             Personal photos need clear boundaries
           </h2>
@@ -56,7 +74,12 @@ export default function WhoItsFor() {
           <dl className="mt-8 border-t border-border">
             {privacyFacts.map((fact) => (
               <div key={fact.title} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-4 border-b border-border py-5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-card text-primary">
+                <span
+                  className={cn(
+                    'flex h-10 w-10 items-center justify-center rounded-2xl border border-border',
+                    FACT_TILE[fact.tone]
+                  )}
+                >
                   <fact.icon className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <div>

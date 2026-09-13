@@ -107,6 +107,9 @@ export function SubscriptionsPage() {
     queryKey: subscriptionKeys.all,
     queryFn: listSubscriptions,
     filterKeys: ['plan', 'status', 'provider'],
+    // Email search filters the current page client-side (backend has no q
+    // param yet) — keep q out of the server query so typing never refetches.
+    localSearch: true,
   })
 
   // Provider filter is SERVER-side (backend billing_provider param) — totals

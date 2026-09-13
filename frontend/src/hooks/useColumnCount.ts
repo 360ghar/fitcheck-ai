@@ -15,7 +15,7 @@
  * rendered in the cramped `md` band — `useColumnCount` never needs to answer
  * for it.
  */
-import { useMediaQuery } from './useMediaQuery'
+import { useMediaQuery, SM_QUERY, MD_QUERY, LG_QUERY, XL_QUERY, TWO_XL_QUERY } from './useMediaQuery'
 
 export interface UseColumnCountOptions {
   /** True when the detail pane is open, selecting the (fewer-column) split table. */
@@ -24,11 +24,11 @@ export interface UseColumnCountOptions {
 
 export function useColumnCount({ isDetailOpen = false }: UseColumnCountOptions = {}): number {
   // Order matters: check widest first so the first match wins.
-  const is2xl = useMediaQuery('(min-width: 1536px)')
-  const isXl = useMediaQuery('(min-width: 1280px)')
-  const isLg = useMediaQuery('(min-width: 1024px)')
-  const isMd = useMediaQuery('(min-width: 768px)')
-  const isSm = useMediaQuery('(min-width: 640px)')
+  const is2xl = useMediaQuery(TWO_XL_QUERY)
+  const isXl = useMediaQuery(XL_QUERY)
+  const isLg = useMediaQuery(LG_QUERY)
+  const isMd = useMediaQuery(MD_QUERY)
+  const isSm = useMediaQuery(SM_QUERY)
 
   if (isDetailOpen && isLg) {
     if (is2xl) return 4

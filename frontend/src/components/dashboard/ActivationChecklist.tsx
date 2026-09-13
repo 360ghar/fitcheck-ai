@@ -79,7 +79,7 @@ export function ActivationChecklist({
             type="button"
             variant="ghost"
             size="icon"
-            className="shrink-0 h-8 w-8"
+            className="shrink-0"
             onClick={onDismiss}
             aria-label="Dismiss setup checklist"
           >

@@ -68,7 +68,7 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background" role="alert">
+      <div className="flex min-h-svh items-center justify-center bg-background" role="alert">
         <div className="text-center">
           <p className="text-red-500 mb-2">Authentication failed</p>
           <p className="text-sm text-muted-foreground">{error}</p>
@@ -79,7 +79,7 @@ export default function AuthCallbackPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background" role="status" aria-live="polite">
+    <div className="flex min-h-svh items-center justify-center bg-background" role="status" aria-live="polite">
       <div className="text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
         <p className="text-muted-foreground">Completing sign in…</p>

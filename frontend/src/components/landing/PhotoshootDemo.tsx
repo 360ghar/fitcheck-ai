@@ -13,7 +13,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Camera, Loader2, Download, AlertCircle, CheckCircle2, ArrowRight, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, downloadBlob } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { EditorialPanel } from './EditorialPanel';
 import { LoginPromptModal } from './LoginPromptModal';
@@ -48,15 +48,7 @@ function isDemoApiError(err: unknown): err is DemoApiError {
 async function handleDownload(imageData: string, index: number) {
   try {
     const response = await fetch(imageData);
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `photoshoot_demo_${index + 1}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlob(await response.blob(), `photoshoot_demo_${index + 1}.png`);
   } catch (e) {
     logger.error('Download failed:', e);
   }
@@ -428,7 +420,7 @@ export function PhotoshootDemo() {
                   type="button"
                   onClick={() => handleDownload(getImageSrc(img), idx)}
                   aria-label={`Download image ${idx + 1}`}
-                  className="absolute bottom-2 right-2 p-2 bg-on-image/90 rounded-full opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  className="absolute bottom-2 right-2 p-2 bg-on-image/90 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
                 >
                   <Download className="w-4 h-4 text-on-image-foreground" />
                 </button>
@@ -461,7 +453,7 @@ export function PhotoshootDemo() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={handleReset}>
               Try Another
             </Button>

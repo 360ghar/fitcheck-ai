@@ -23,9 +23,16 @@ export default function Hero() {
   return (
     <section
       aria-labelledby="landing-hero-heading"
-      className="overflow-x-clip bg-background pt-16"
+      className="relative overflow-x-clip bg-background pt-16"
     >
-      <div className="mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:px-8 lg:pb-20 lg:pt-20">
+      {/* The one sanctioned warm wash (DESIGN.md §08): a flat var-backed radial
+          that fades before mid-page. No blur, no glass, always painted — the
+          prerendered hero never depends on it for visibility. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(60%_100%_at_50%_0%,hsl(var(--primary)/0.07),transparent_70%)]"
+      />
+      <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:px-8 lg:pb-20 lg:pt-20">
         <div className="grid grid-cols-1 items-end gap-8 lg:grid-cols-12 lg:gap-12">
           <div className="min-w-0 lg:col-span-8">
             <p

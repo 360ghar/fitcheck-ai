@@ -35,8 +35,8 @@ BottomSheetOverlay.displayName = 'BottomSheetOverlay'
 
 interface BottomSheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content> {
-  /** Height of the sheet - use a named size or a valid CSS percentage/vh value. */
-  height?: 'auto' | 'half' | 'large' | 'full' | `${number}%` | `${number}vh`
+  /** Height of the sheet - use a named size or a valid CSS percentage/dvh value. */
+  height?: 'auto' | 'half' | 'large' | 'full' | `${number}%` | `${number}vh` | `${number}dvh`
   /** Whether to show the drag indicator handle */
   showDragIndicator?: boolean
 }
@@ -44,17 +44,17 @@ interface BottomSheetContentProps
 const BottomSheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   BottomSheetContentProps
->(({ className, children, height = '85%', showDragIndicator = true, ...props }, ref) => {
+>(({ className, children, height = '85dvh', showDragIndicator = true, ...props }, ref) => {
   const getHeightClass = () => {
     switch (height) {
       case 'auto':
-        return 'max-h-[90vh]'
+        return 'max-h-[90dvh]'
       case 'half':
-        return 'h-[50vh]'
+        return 'h-[50dvh]'
       case 'large':
-        return 'h-[85vh]'
+        return 'h-[85dvh]'
       case 'full':
-        return 'h-[95vh]'
+        return 'h-[95dvh]'
       default:
         return ''
     }

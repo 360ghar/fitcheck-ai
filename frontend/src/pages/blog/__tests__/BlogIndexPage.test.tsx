@@ -74,9 +74,9 @@ describe('BlogIndexPage responsive layout', () => {
     expect(categoryRow).toHaveClass(
       'flex',
       'flex-wrap',
-      'min-h-[8.5rem]',
-      'xs:min-h-[7rem]',
-      'sm:min-h-[5.5rem]',
+      'min-h-[9.75rem]',
+      'xs:min-h-[8rem]',
+      'sm:min-h-[6.5rem]',
       'md:min-h-11'
     )
     expect(categoryRow).not.toHaveClass('h-[256px]', 'md:h-[44px]')
@@ -101,9 +101,9 @@ describe('BlogIndexPage responsive layout', () => {
       expect(categoryRow).toHaveClass(
         'flex',
         'flex-wrap',
-        'min-h-[8.5rem]',
-        'xs:min-h-[7rem]',
-        'sm:min-h-[5.5rem]',
+        'min-h-[9.75rem]',
+        'xs:min-h-[8rem]',
+        'sm:min-h-[6.5rem]',
         'md:min-h-11'
       )
       expect(categoryRow).toContainElement(screen.getByRole('link', { name: 'All' }))
@@ -129,7 +129,7 @@ describe('BlogIndexPage responsive layout', () => {
 
     const search = screen.getByRole('search')
     const categoryRow = search.nextElementSibling as HTMLElement
-    expect(categoryRow).not.toHaveClass('min-h-[8.5rem]', 'xs:min-h-[7rem]', 'sm:min-h-[5.5rem]', 'md:min-h-11')
+    expect(categoryRow).not.toHaveClass('min-h-[9.75rem]', 'xs:min-h-[8rem]', 'sm:min-h-[6.5rem]', 'md:min-h-11')
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load blog categories.')
   })
 })

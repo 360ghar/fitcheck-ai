@@ -107,6 +107,15 @@ const config: Config = {
         // color is the red `--ring` var (focus-visible ring on buttons/links).
         'focus-inner': 'hsl(var(--focus-inner))',
         'accent-purple': 'hsl(var(--accent-purple))',
+        // Editorial tint palette (DESIGN.md 01). DEFAULT is the text/icon
+        // role, `pale` its fill; both are var-backed so they invert in dark.
+        tint: {
+          coral: { DEFAULT: 'hsl(var(--tint-coral))', pale: 'hsl(var(--tint-coral-pale))' },
+          amber: { DEFAULT: 'hsl(var(--tint-amber))', pale: 'hsl(var(--tint-amber-pale))' },
+          teal: { DEFAULT: 'hsl(var(--tint-teal))', pale: 'hsl(var(--tint-teal-pale))' },
+          violet: { DEFAULT: 'hsl(var(--tint-violet))', pale: 'hsl(var(--tint-violet-pale))' },
+          blue: { DEFAULT: 'hsl(var(--tint-blue))', pale: 'hsl(var(--tint-blue-pale))' },
+        },
         // `DEFAULT` was missing, so `bg-success`, `text-success` and
         // `bg-success/10` were never emitted and 11 call sites silently
         // rendered nothing. `deep` and `pale` are aliases of the same pair.
@@ -193,8 +202,20 @@ const config: Config = {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         'lift': 'lift 0.2s ease-out forwards',
+        // Toast entrance with a spring overshoot (replaces the linear
+        // tailwindcss-animate `animate-in` slide for data-[state=open]).
+        // Fill mode MUST be `backwards`, not `both`: a filling animation's
+        // final transform outranks class declarations in the cascade, which
+        // would permanently lock the toast against Radix's swipe transforms
+        // (`data-[swipe=move]:translate-x-…`) and break swipe-to-dismiss.
+        'toast-in': 'toastIn 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
       },
       keyframes: {
+        toastIn: {
+          '0%': { opacity: '0', transform: 'translateY(16px) scale(0.98)' },
+          '60%': { opacity: '1', transform: 'translateY(-2px) scale(1.005)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
         float: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' },
