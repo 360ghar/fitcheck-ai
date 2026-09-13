@@ -1,6 +1,6 @@
 # MCP server & ChatGPT app (agent surface)
 
-Last updated: 2026-08-29
+Last updated: 2026-09-13
 
 FitCheck exposes its API to AI agents through **MCP** (Model Context
 Protocol, streamable HTTP). One codebase in `backend/app/mcp/`, two mounts:
