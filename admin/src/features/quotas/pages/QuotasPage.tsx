@@ -39,6 +39,7 @@ import {
   FormMessage,
 } from '@/shared/ui/form'
 import { Input } from '@/shared/ui/input'
+import { PageHeader } from '@/shared/ui/PageHeader'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { TableToolbar } from '@/shared/ui/TableToolbar'
 import { useServerTable } from '@/shared/ui/useServerTable'
@@ -370,6 +371,7 @@ export function QuotasPage() {
   if (table.query.isError) {
     return (
       <div className="space-y-3">
+        <PageHeader dense title={t('title')} description={t('description')} />
         <ErrorState
           message={normalizeError(table.query.error).message}
           onRetry={() => void table.query.refetch()}
@@ -380,6 +382,7 @@ export function QuotasPage() {
 
   return (
     <div className="space-y-3">
+      <PageHeader dense title={t('title')} description={t('description')} />
 
       <>
           {/* Burn histogram + top burners — client-side from table.data */}

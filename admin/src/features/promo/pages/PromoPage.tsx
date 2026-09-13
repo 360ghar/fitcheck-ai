@@ -46,6 +46,7 @@ import {
   FormMessage,
 } from '@/shared/ui/form'
 import { Input } from '@/shared/ui/input'
+import { PageHeader } from '@/shared/ui/PageHeader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
@@ -291,14 +292,19 @@ export function PromoPage() {
 
   return (
     <div className="space-y-3">
-      {canManage ? (
-        <div className="flex justify-end">
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus aria-hidden="true" />
-            {t('create.title')}
-          </Button>
-        </div>
-      ) : null}
+      <PageHeader
+        dense
+        title={t('title')}
+        description={t('description')}
+        actions={
+          canManage ? (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus aria-hidden="true" />
+              {t('create.title')}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* ROI strip — one line, client-side, permission-gated */}
       {canRead ? (
