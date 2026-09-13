@@ -187,8 +187,10 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                     slivers: [
                       SliverAppBar(
                         automaticallyImplyLeading: false,
-                        expandedHeight: 400,
-                        pinned: true,
+                        // Compact hero on phones; tablets keep the taller hero.
+                        expandedHeight:
+                            MediaQuery.sizeOf(context).width >= 600 ? 350 : 220,
+                        pinned: false,
                         backgroundColor: Colors.transparent,
                         flexibleSpace: FlexibleSpaceBar(
                           background: images.isNotEmpty
@@ -225,7 +227,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                       ),
                       SliverToBoxAdapter(
                         child: Container(
-                          padding: const EdgeInsets.all(AppConstants.spacing24),
+                          padding: const EdgeInsets.all(AppConstants.spacing16),
                           decoration: BoxDecoration(
                             color: tokens.cardColor,
                             borderRadius: const BorderRadius.vertical(
@@ -239,7 +241,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                                 name,
                                 style: Theme.of(context)
                                     .textTheme
-                                    .headlineMedium
+                                    .titleLarge
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                               if (description != null &&
@@ -247,11 +249,13 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                                 const SizedBox(height: AppConstants.spacing8),
                                 Text(
                                   description,
-                                  style: Theme.of(context).textTheme.bodyLarge
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(color: tokens.textMuted),
                                 ),
                               ],
-                              const SizedBox(height: AppConstants.spacing24),
+                              const SizedBox(height: AppConstants.spacing16),
                               AppGlassCard(
                                 padding: const EdgeInsets.all(
                                   AppConstants.spacing16,
@@ -281,7 +285,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: AppConstants.spacing48),
+                              const SizedBox(height: AppConstants.spacing16),
                             ],
                           ),
                         ),

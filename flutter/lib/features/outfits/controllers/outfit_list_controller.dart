@@ -90,6 +90,11 @@ class OutfitListController extends GetxController {
   bool get isSelectionActive => selectedIds.isNotEmpty;
   int get selectedCount => selectedIds.length;
 
+  /// True while a filter/search refetch runs against a populated list.
+  /// Drives chip busy dots + search-field spinners; the stale list stays
+  /// visible underneath so a tap never looks dead.
+  bool get isFiltering => isLoading.value && outfits.isNotEmpty;
+
   /// The list shown to the user. Filtering is server-side, so this is the
   /// single outfit list — kept as a named getter for view compatibility.
   List<OutfitModel> get filteredOutfits => outfits;
@@ -124,7 +129,7 @@ class OutfitListController extends GetxController {
       debounce(
         searchQuery,
         (_) => fetchOutfits(refresh: true),
-        time: const Duration(milliseconds: 500),
+        time: const Duration(milliseconds: 300),
       ),
       debounce(
         selectedStyles,

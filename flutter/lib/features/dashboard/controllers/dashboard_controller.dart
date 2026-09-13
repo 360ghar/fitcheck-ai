@@ -2,12 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../models/dashboard_models.dart';
 import '../repositories/dashboard_repository.dart';
+import '../../outfits/models/outfit_model.dart';
+import '../../outfits/repositories/outfit_repository.dart';
 import '../../../core/services/persistence_service.dart';
 import '../../../core/utils/frame_safe.dart';
 import '../../../core/utils/error_handler.dart';
 
 class DashboardController extends GetxController {
   final DashboardRepository _repository;
+  final OutfitRepository _outfitRepository;
   PersistenceService get _persistence => Get.isRegistered<PersistenceService>()
       ? Get.find<PersistenceService>()
       : PersistenceService();
@@ -18,6 +21,14 @@ class DashboardController extends GetxController {
 
   final Rxn<DashboardData> dashboard = Rxn<DashboardData>();
   final Rxn<StreakData> streak = Rxn<StreakData>();
+
+  /// Full outfit behind the "Your next look" suggestion, fetched once per
+  /// outfit id so Home can stack its item cutouts instead of one flat
+  /// photo. Null while loading or when the fetch failed — callers fall
+  /// back to the suggestion image, never blank.
+  final Rxn<OutfitModel> outfitOfTheDayDetail = Rxn<OutfitModel>();
+  String? _ootdDetailId;
+  Future<void>? _ootdFetchFuture;
   final RxBool isLoading = false.obs;
   final RxString error = ''.obs;
   final RxBool referralBannerDismissed = false.obs;
@@ -27,8 +38,9 @@ class DashboardController extends GetxController {
   /// newer one and overwrite fresh data with stale data.
   Future<void>? _fetchFuture;
 
-  DashboardController({DashboardRepository? repository})
-    : _repository = repository ?? DashboardRepository();
+  DashboardController({DashboardRepository? repository, OutfitRepository? outfitRepository})
+    : _repository = repository ?? DashboardRepository(),
+      _outfitRepository = outfitRepository ?? OutfitRepository();
 
   @override
   void onInit() {
@@ -111,11 +123,52 @@ class DashboardController extends GetxController {
       }
 
       streak.value = await streakFuture;
+      // Kick off the suggestion-detail fetch (single-flight per id, silent
+      // fallback — it only enriches the Home visual).
+      fetchOutfitOfTheDay();
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  /// Fetches the full "outfit of the day" (with item photos) exactly once
+  /// per suggestion id. Failures stay silent — the Home visual falls back
+  /// to the suggestion image, so this enrichment can never break the page.
+  Future<void> fetchOutfitOfTheDay() async {
+    // Join an in-flight fetch, then re-evaluate: the suggestion id may
+    // have changed while awaiting. The join needs its own guard — an
+    // errored future rethrows at every await, not just the first.
+    final pending = _ootdFetchFuture;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {
+        // Handled below via re-evaluation; the detail simply stays empty.
+      }
+      return fetchOutfitOfTheDay();
+    }
+    final id = dashboard.value?.suggestions.outfitOfTheDay?.id;
+    if (id == null || id.isEmpty || id == _ootdDetailId) return;
+    // New suggestion: drop the previous outfit's cutouts now so the old
+    // look never poses as the new one; the image covers the gap.
+    outfitOfTheDayDetail.value = null;
+    try {
+      final future = _outfitRepository.getOutfit(id);
+      _ootdFetchFuture = future;
+      final detail = await future;
+      // Only apply when still current — a newer suggestion wins.
+      if (!isClosed &&
+          dashboard.value?.suggestions.outfitOfTheDay?.id == id) {
+        _ootdDetailId = id;
+        outfitOfTheDayDetail.value = detail;
+      }
+    } catch (e) {
+      debugPrint('Outfit-of-the-day detail unavailable, using image: $e');
+    } finally {
+      _ootdFetchFuture = null;
     }
   }
 }

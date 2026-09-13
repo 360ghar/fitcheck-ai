@@ -74,7 +74,7 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
     final task = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Start with you.', style: theme.textTheme.headlineMedium),
+        Text('Start with you.', style: theme.textTheme.titleLarge),
         const SizedBox(height: 8),
         Text(
           'Add 1–4 photos. Choose a style. Create your next shoot.',
@@ -145,7 +145,16 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
         if (stack) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [example, const SizedBox(height: 20), task],
+            children: [
+              // Capped example thumb on narrow screens so the upload task
+              // reaches the first viewport.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 140),
+                child: example,
+              ),
+              const SizedBox(height: 12),
+              task,
+            ],
           );
         }
         return Row(

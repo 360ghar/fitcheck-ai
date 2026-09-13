@@ -84,7 +84,7 @@ tab scroll/input state and active jobs. Tablets use a navigation rail.
 Home: editorial title, real photographic feature, muted task sections. At
 640px content width the feature and tools sit side by side; large text stacks
 them. The content remains capped at the existing 720px reading width.
-Closet: two phone columns of contained garment images, without visible item
+Closet: three phone columns of contained garment images, without visible item
 metadata or card backgrounds. Keep accessible item names and native detail/selection
 actions. Grid and list presentations both show images only. Increase columns for
 tablets; text scaling applies to the surrounding controls. Outfits: composition

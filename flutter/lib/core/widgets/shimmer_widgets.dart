@@ -402,10 +402,10 @@ class ShimmerDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image placeholder
+            // Image placeholder (matches the 220px compact hero)
             Container(
               width: double.infinity,
-              height: 300,
+              height: 220,
               color: tokens.cardBorderColor,
             ),
             Padding(

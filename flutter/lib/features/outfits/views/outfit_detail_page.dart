@@ -193,7 +193,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                       outfit.name,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .headlineMedium
+                                          .titleLarge
                                           ?.copyWith(
                                             fontWeight: FontWeight.w700,
                                             color: tokens.textPrimary,
@@ -226,7 +226,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                               color: outfit.isFavorite
                                                   ? Colors.red
                                                   : null,
-                                              size: 28,
+                                              size: 24,
                                             ),
                                           ),
                                   ),
@@ -354,28 +354,28 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                 ],
                               ),
 
-                              const SizedBox(height: AppConstants.spacing24),
+                              const SizedBox(height: AppConstants.spacing16),
 
                               // Items section
                               _buildItemsSection(context, outfit, tokens),
 
-                              const SizedBox(height: AppConstants.spacing24),
+                              const SizedBox(height: AppConstants.spacing16),
 
                               // Stats section
                               _buildStatsSection(context, outfit, tokens),
 
-                              const SizedBox(height: AppConstants.spacing24),
+                              const SizedBox(height: AppConstants.spacing16),
 
                               // Wear history section
                               _buildWearHistorySection(context, outfit, tokens),
 
-                              const SizedBox(height: AppConstants.spacing24),
+                              const SizedBox(height: AppConstants.spacing16),
 
                               // Information section
                               _buildInformationSection(context, outfit, tokens),
 
                               const SizedBox(
-                                height: 100,
+                                height: 48,
                               ), // Space for bottom action bar
                             ],
                           ),
@@ -417,7 +417,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     final hasMultipleImages = imageUrls.length > 1;
 
     return SliverAppBar(
-      expandedHeight: 350,
+      // Compact hero on phones so title + items reach the first viewport;
+      // tablets keep the taller editorial hero.
+      expandedHeight: MediaQuery.sizeOf(context).width >= 600 ? 350 : 220,
       pinned: false,
       backgroundColor: Colors.transparent,
       automaticallyImplyLeading: false,
@@ -512,72 +514,74 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
           ),
         ),
         const SizedBox(height: AppConstants.spacing12),
-        AppGlassCard(
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 90,
-              mainAxisSpacing: AppConstants.spacing8,
-              crossAxisSpacing: AppConstants.spacing8,
-              childAspectRatio: 0.75,
-            ),
+        // Horizontal rail (one 96px row) instead of a grid-in-card: the
+        // items stay visible without pushing stats off the fold.
+        SizedBox(
+          height: 96,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
             itemCount: itemCount,
-            itemBuilder: (context, index) {
-              // Use actual item data if available
-              if (index < items.length) {
-                final item = items[index];
-                final hasImage =
-                    item.itemImages != null && item.itemImages!.isNotEmpty;
-                final imageUrl = hasImage ? item.itemImages!.first.url : null;
-
-                return GestureDetector(
-                  onTap: () => Get.toNamed(
-                    Routes.wardrobeItemDetail.replaceFirst(':id', item.id),
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: tokens.cardColor.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(AppConstants.radius8),
-                      border: Border.all(color: tokens.cardBorderColor),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: hasImage && imageUrl != null
-                        ? AppImage(
-                            imageUrl: imageUrl,
-                            fit: BoxFit.cover,
-                            enableZoom: false,
-                            // Presigned URLs expire after 1h; on a failed
-                            // load re-mint a fresh URL from the durable
-                            // storage key.
-                            storagePath: item.itemImages?.first.storagePath,
-                            remintUrl: _outfitRepository.remintImageUrl,
-                          )
-                        : Center(
-                            child: Icon(
-                              Icons.checkroom,
-                              color: tokens.textMuted,
-                            ),
-                          ),
-                  ),
-                );
-              }
-
-              // Fallback placeholder for items without data
-              return Container(
-                decoration: BoxDecoration(
-                  color: tokens.cardColor.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(AppConstants.radius8),
-                  border: Border.all(color: tokens.cardBorderColor),
-                ),
-                child: Center(
-                  child: Icon(Icons.image, color: tokens.textMuted),
-                ),
-              );
-            },
+            separatorBuilder: (_, _) =>
+                const SizedBox(width: AppConstants.spacing8),
+            itemBuilder: (context, index) => SizedBox(
+              width: 72,
+              child: _buildOutfitItemCell(context, items, index, tokens),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildOutfitItemCell(
+    BuildContext context,
+    List<dynamic> items,
+    int index,
+    AppUiTokens tokens,
+  ) {
+    // Use actual item data if available
+    if (index < items.length) {
+      final item = items[index];
+      final hasImage =
+          item.itemImages != null && item.itemImages!.isNotEmpty;
+      final imageUrl = hasImage ? item.itemImages!.first.url : null;
+
+      return GestureDetector(
+        onTap: () => Get.toNamed(
+          Routes.wardrobeItemDetail.replaceFirst(':id', item.id),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: tokens.cardColor.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(AppConstants.radius8),
+            border: Border.all(color: tokens.cardBorderColor),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: hasImage && imageUrl != null
+              ? AppImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  enableZoom: false,
+                  // Presigned URLs expire after 1h; on a failed load
+                  // re-mint a fresh URL from the durable storage key.
+                  storagePath: item.itemImages?.first.storagePath,
+                  remintUrl: _outfitRepository.remintImageUrl,
+                )
+              : Center(
+                  child: Icon(Icons.checkroom, color: tokens.textMuted),
+                ),
+        ),
+      );
+    }
+
+    // Fallback placeholder for items without data
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.cardColor.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(AppConstants.radius8),
+        border: Border.all(color: tokens.cardBorderColor),
+      ),
+      child: Center(child: Icon(Icons.image, color: tokens.textMuted)),
     );
   }
 
@@ -664,32 +668,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     OutfitModel outfit,
     AppUiTokens tokens,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 4,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Wear History',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-            ),
-            if (outfit.wornCount > 0)
-              Text(
-                '${outfit.wornCount} times',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-              ),
-          ],
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        Obx(() {
+    // The title lives inside each branch (tile or zero-state card) so the
+    // collapsed tile is a single row.
+    return Obx(() {
           final history = _controller.wearHistoryCache[outfit.id] ?? [];
           final isLoading = _controller.isLoadingWearHistory.value;
 
@@ -697,17 +678,29 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
             return AppGlassCard(
               child: Padding(
                 padding: const EdgeInsets.all(AppConstants.spacing16),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.history, color: tokens.textMuted),
-                    const SizedBox(width: AppConstants.spacing12),
-                    Expanded(
-                      child: Text(
-                        'No wear history yet',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: tokens.textMuted,
-                        ),
+                    Text(
+                      'Wear History',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
                       ),
+                    ),
+                    const SizedBox(height: AppConstants.spacing8),
+                    Row(
+                      children: [
+                        Icon(Icons.history, color: tokens.textMuted),
+                        const SizedBox(width: AppConstants.spacing12),
+                        Expanded(
+                          child: Text(
+                            'No wear history yet',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: tokens.textMuted),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -754,31 +747,65 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
             return const SizedBox.shrink();
           }
 
-          return AppGlassCard(
-            child: Column(
-              children: [
-                for (int i = 0; i < history.length && i < 5; i++)
-                  _buildWearHistoryItem(
-                    context,
-                    history[i],
-                    tokens,
-                    isLast: i == history.length - 1 || i == 4,
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppGlassCard(
+                // Collapsed to the title row; expanding reveals the 5 most
+                // recent rows. ExpansionTile owns the expanded state so
+                // parent rebuilds never snap it shut mid-scroll.
+                child: ExpansionTile(
+                  tilePadding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing16,
+                    vertical: AppConstants.spacing4,
                   ),
-                if (history.length > 5)
-                  Padding(
-                    padding: const EdgeInsets.all(AppConstants.spacing12),
-                    child: TextButton(
-                      onPressed: () =>
-                          _showFullWearHistory(context, history, tokens),
-                      child: Text('View all ${history.length} entries'),
-                    ),
+                  childrenPadding: EdgeInsets.zero,
+                  shape: const Border(),
+                  title: Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        'Wear History',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        '${outfit.wornCount} times',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: tokens.textMuted,
+                        ),
+                      ),
+                    ],
                   ),
-              ],
-            ),
+                  children: [
+                    for (int i = 0; i < history.length && i < 5; i++)
+                      _buildWearHistoryItem(
+                        context,
+                        history[i],
+                        tokens,
+                        isLast: i == history.length - 1 || i == 4,
+                      ),
+                  ],
+                ),
+              ),
+              // Full history stays one tap away without expanding first.
+              if (history.length > 5)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () =>
+                        _showFullWearHistory(context, history, tokens),
+                    child: Text('View all ${history.length} entries'),
+                  ),
+                ),
+            ],
           );
-        }),
-      ],
-    );
+        });
   }
 
   Widget _buildWearHistoryItem(

@@ -107,8 +107,8 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
 
   Widget _buildLoadingGrid() {
     return ShimmerGridLoader(
-      crossAxisCount: 2,
-      itemCount: 4,
+      crossAxisCount: 3,
+      itemCount: 6,
       childAspectRatio: 1.0,
     );
   }

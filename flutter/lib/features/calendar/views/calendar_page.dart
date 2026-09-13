@@ -358,7 +358,10 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
         const SizedBox(height: AppConstants.spacing12),
         Obx(() {
-          if (controller.isLoadingEvents.value) {
+          // Hold the stale event list during month reloads; full shimmer
+          // only for the initial load when nothing is cached yet.
+          if (controller.isLoadingEvents.value &&
+              controller.selectedDateEvents.isEmpty) {
             return Column(
               children: const [
                 ShimmerListTile(hasLeading: true, hasSubtitle: true),
@@ -379,9 +382,16 @@ class _CalendarPageState extends State<CalendarPage> {
           }
 
           return Column(
-            children: controller.selectedDateEvents
-                .map((event) => _buildEventCard(event))
-                .toList(),
+            children: [
+              if (controller.isLoadingEvents.value)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: AppConstants.spacing8),
+                  child: LinearProgressIndicator(),
+                ),
+              ...controller.selectedDateEvents.map(
+                (event) => _buildEventCard(event),
+              ),
+            ],
           );
         }),
       ],

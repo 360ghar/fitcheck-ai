@@ -326,6 +326,7 @@ void main() {
     'full wear history has an accessible close action at 200 percent',
     (tester) async {
       await pump(tester, const OutfitDetailPage(outfitId: 'outfit'));
+      // Full history is one tap away without expanding the collapsed tile.
       await tester.ensureVisible(find.text('View all 6 entries'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('View all 6 entries'));

@@ -84,7 +84,10 @@ class _OutfitsContentState extends State<OutfitsContent> {
                       return const SliverToBoxAdapter(child: SizedBox.shrink());
                     }
                     return SliverToBoxAdapter(
-                      child: AppErrorBanner(message: controller.error.value),
+                      child: AppErrorBanner(
+                        message: controller.error.value,
+                        onRetry: () => controller.fetchOutfits(refresh: true),
+                      ),
                     );
                   }),
                   // Extra bottom inset so extended FAB + bottom nav don't cover last row
@@ -99,9 +102,9 @@ class _OutfitsContentState extends State<OutfitsContent> {
                       if (controller.isLoading.value &&
                           controller.outfits.isEmpty) {
                         return const ShimmerGridLoader(
-                          crossAxisCount: 2,
-                          itemCount: 6,
-                          childAspectRatio: 0.85,
+                          crossAxisCount: 3,
+                          itemCount: 9,
+                          childAspectRatio: 0.75,
                         );
                       }
 
@@ -141,21 +144,16 @@ class _OutfitsContentState extends State<OutfitsContent> {
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 12,
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AppCoreColors.editorialSlate,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 2,
-                    ),
-                    child: Text(
-                      'Lookbook',
-                      style: theme.textTheme.displaySmall?.copyWith(
-                        color: AppCoreColors.editorialInk,
-                      ),
+                Obx(
+                  () => Text(
+                    'Lookbook · ${controller.totalOutfits.value} '
+                    '${controller.totalOutfits.value == 1 ? 'look' : 'looks'}'
+                    '${_hasFilters ? ' found' : ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -185,17 +183,6 @@ class _OutfitsContentState extends State<OutfitsContent> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          Obx(
-            () => Text(
-              '${controller.totalOutfits.value} '
-              '${_hasFilters ? 'matching' : 'saved'} '
-              '${controller.totalOutfits.value == 1 ? 'look' : 'looks'}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -216,7 +203,16 @@ class _OutfitsContentState extends State<OutfitsContent> {
                 decoration: InputDecoration(
                   hintText: 'Find a look',
                   prefixIcon: const Icon(Icons.search, size: 22),
-                  suffixIcon: controller.searchQuery.value.isEmpty
+                  suffixIcon: controller.isFiltering
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : controller.searchQuery.value.isEmpty
                       ? null
                       : IconButton(
                           tooltip: 'Clear search',
@@ -286,6 +282,8 @@ class _OutfitsContentState extends State<OutfitsContent> {
         backgroundColor: theme.colorScheme.surface,
         showCheckmark: false,
         side: BorderSide.none,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         labelStyle: theme.textTheme.labelLarge?.copyWith(
           color: selected
               ? AppCoreColors.editorialInk
@@ -337,8 +335,8 @@ class _OutfitsContentState extends State<OutfitsContent> {
                               enableZoom: false,
                               backgroundColor:
                                   theme.colorScheme.surfaceContainerHighest,
-                              memCacheWidth: 500,
-                              memCacheHeight: 650,
+                              memCacheWidth: 350,
+                              memCacheHeight: 470,
                               storagePath: photo.storagePath,
                               remintUrl: _outfitRepository.remintImageUrl,
                             ),
@@ -348,11 +346,11 @@ class _OutfitsContentState extends State<OutfitsContent> {
                         top: 8,
                         right: 8,
                         child: CircleAvatar(
-                          radius: 18,
+                          radius: 14,
                           backgroundColor: theme.colorScheme.surface,
                           child: Icon(
                             Icons.favorite,
-                            size: 18,
+                            size: 14,
                             color: theme.colorScheme.primary,
                           ),
                         ),
@@ -361,23 +359,25 @@ class _OutfitsContentState extends State<OutfitsContent> {
                 ),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               outfit.name,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontSize: 20,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               [
                 '${outfit.itemIds.length} ${outfit.itemIds.length == 1 ? 'piece' : 'pieces'}',
                 if (outfit.isDraft) 'Draft',
                 if (outfit.style != null) outfit.style!.displayName,
               ].join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -393,53 +393,17 @@ class _OutfitsContentState extends State<OutfitsContent> {
     // assets when a saved combination has no generated outfit image.
     final photos = (outfit.items ?? [])
         .where((item) => item.itemImages?.isNotEmpty == true)
-        .map((item) => item.itemImages!.first)
-        .take(4)
+        .map(
+          (item) => CollagePhoto(
+            url: item.itemImages!.first.url,
+            storagePath: item.itemImages!.first.storagePath,
+          ),
+        )
         .toList();
-    if (photos.isEmpty) {
-      return Center(
-        child: Icon(
-          Icons.checkroom_outlined,
-          size: 48,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-    final columns = photos.length > 2 ? 2 : 1;
-    final rows = (photos.length / columns).ceil();
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          for (var row = 0; row < rows; row++)
-            Expanded(
-              child: Row(
-                children: [
-                  for (var column = 0; column < columns; column++)
-                    Expanded(
-                      child: row * columns + column >= photos.length
-                          ? const SizedBox.shrink()
-                          : Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: AppImage(
-                                imageUrl: photos[row * columns + column].url,
-                                storagePath:
-                                    photos[row * columns + column].storagePath,
-                                remintUrl: _outfitRepository.remintImageUrl,
-                                fit: BoxFit.contain,
-                                enableZoom: false,
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                memCacheWidth: 350,
-                              ),
-                            ),
-                    ),
-                ],
-              ),
-            ),
-        ],
-      ),
+    return OutfitStackCollage(
+      photos: photos,
+      remintUrl: _outfitRepository.remintImageUrl,
+      semanticLabel: 'Outfit: ${outfit.name}',
     );
   }
 

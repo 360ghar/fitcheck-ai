@@ -95,6 +95,10 @@ class _DashboardContentState extends State<DashboardContent> {
                               .value
                               ?.suggestions
                               .outfitOfTheDay,
+                          // Stacked cutouts when the fetched detail matches
+                          // the current suggestion; otherwise the outfit
+                          // image covers (loading, error, or stale detail).
+                          itemPhotos: _suggestionItemPhotos(),
                           onOpen: () {
                             final outfit = dashboardController
                                 .dashboard
@@ -135,8 +139,29 @@ class _DashboardContentState extends State<DashboardContent> {
     );
   }
 
-  Widget _buildCover(Widget feature, Widget promotion) {
-    return LayoutBuilder(
+  /// Cutouts for the stacked Home visual. Only when the fetched detail
+  /// matches the live suggestion id — otherwise empty so the outfit image
+  /// covers (loading, error, or a stale detail from a previous suggestion).
+  List<CollagePhoto> _suggestionItemPhotos() {
+    final suggestion =
+        dashboardController.dashboard.value?.suggestions.outfitOfTheDay;
+    final detail = dashboardController.outfitOfTheDayDetail.value;
+    if (suggestion == null || detail == null || detail.id != suggestion.id) {
+      return const [];
+    }
+    return (detail.items ?? [])
+        .where((item) => item.itemImages?.isNotEmpty == true)
+        .map(
+          (item) => CollagePhoto(
+            url: item.itemImages!.first.url,
+            storagePath: item.itemImages!.first.storagePath,
+          ),
+        )
+        .take(4)
+        .toList();
+  }
+
+  Widget _buildCover(Widget feature, Widget promotion) {    return LayoutBuilder(
       builder: (context, constraints) {
         final tools = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -155,7 +180,7 @@ class _DashboardContentState extends State<DashboardContent> {
         }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [feature, const SizedBox(height: 24), tools],
+          children: [feature, const SizedBox(height: 16), tools],
         );
       },
     );
@@ -180,23 +205,22 @@ class _DashboardContentState extends State<DashboardContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'FitCheck',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.headlineSmall?.copyWith(letterSpacing: -0.8),
-                    ),
                     const SizedBox(height: AppConstants.spacing4),
-                    // User info wrapped in single Obx for efficiency
+                    // Single masthead line: the feature title carries the
+                    // greeting, with the user name inline when known.
                     Obx(() {
                       final user = authController.user.value;
+                      final name =
+                          user?.fullName?.trim().split(' ').first ??
+                          user?.email.split('@')[0];
                       return Text(
-                        user?.fullName ??
-                            user?.email.split('@')[0] ??
-                            'Welcome',
+                        name == null || name.isEmpty
+                            ? 'The daily edit.'
+                            : 'The daily edit, $name.',
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
                               fontWeight: FontWeight.w700,
+                              letterSpacing: -0.8,
                               color: tokens.textPrimary,
                             ),
                       );
@@ -231,7 +255,7 @@ class _DashboardContentState extends State<DashboardContent> {
                         'U';
                     final avatarUrl = user?.avatarUrl;
                     return CircleAvatar(
-                      radius: 24,
+                      radius: 20,
                       backgroundColor: tokens.brandColor.withValues(
                         alpha: 0.15,
                       ),
@@ -239,8 +263,8 @@ class _DashboardContentState extends State<DashboardContent> {
                           ? ClipOval(
                               child: AppNetworkImage(
                                 avatarUrl,
-                                width: 44,
-                                height: 44,
+                                width: 40,
+                                height: 40,
                                 fit: BoxFit.cover,
                                 errorWidget: (_, _, _) => Text(
                                   initial,
@@ -264,27 +288,7 @@ class _DashboardContentState extends State<DashboardContent> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          Obx(() {
-            final user = authController.user.value;
-            final name = user?.fullName?.trim().split(' ').first;
-            return Text(
-              name == null || name.isEmpty
-                  ? 'A little inspiration, every day.'
-                  : 'A little inspiration for you, $name.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-            );
-          }),
-          const SizedBox(height: 6),
-          Text(
-            'The daily edit.',
-            style: Theme.of(context).textTheme.displayMedium?.copyWith(
-              height: 1.12,
-              letterSpacing: -1.2,
-            ),
-          ),
+          const SizedBox(height: AppConstants.spacing12),
         ],
       ),
     );

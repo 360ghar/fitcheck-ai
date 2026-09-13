@@ -5,6 +5,7 @@ import '../constants/app_constants.dart';
 // Export image widgets for convenience
 export 'app_image.dart';
 export 'sliver_product_grid.dart';
+export 'outfit_stack_collage.dart';
 export '../constants/app_core_colors.dart';
 export 'app_image_viewer.dart';
 

@@ -19,28 +19,26 @@ class StudioContent extends GetView<MainShellController> {
           builder: (context, constraints) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Scaffold consumes keyboard insets before this subtree. Use the
-              // remaining height to keep the active form usable as well.
-              if (constraints.maxHeight >= 440 &&
+              // Masthead only on tall screens: on phones the tool selector
+              // docks directly under the safe area to keep the task above
+              // the fold.
+              if (constraints.maxHeight >= 600 &&
                   MediaQuery.viewInsetsOf(context).bottom == 0)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (constraints.maxHeight >= 600)
-                        Text(
-                          'FITCHECK AI',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            letterSpacing: 1.4,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                      Text(
+                        'FITCHECK AI',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          letterSpacing: 1.4,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
+                      ),
                       Text(
                         'Studio',
-                        style: constraints.maxHeight < 600
-                            ? theme.textTheme.headlineSmall
-                            : theme.textTheme.displayLarge,
+                        style: theme.textTheme.displayLarge,
                       ),
                     ],
                   ),

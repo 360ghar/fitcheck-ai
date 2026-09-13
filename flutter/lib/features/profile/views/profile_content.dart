@@ -41,37 +41,24 @@ class ProfileContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Your space.',
-                        style: Theme.of(context).textTheme.displayMedium
-                            ?.copyWith(letterSpacing: -1.2),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'A style that is entirely yours.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
                       _buildIdentityCard(context, authController),
                       const SizedBox(height: AppConstants.spacing12),
                       _buildStatsStrip(context, dashboardController),
-                      const SizedBox(height: AppConstants.spacing20),
+                      const SizedBox(height: AppConstants.spacing12),
                       AppSectionHeader(
                         title: 'Explore',
                         subtitle: 'Try things on, plan, and get rewarded',
                       ),
                       const SizedBox(height: AppConstants.spacing12),
                       _buildExploreCard(context),
-                      const SizedBox(height: AppConstants.spacing20),
+                      const SizedBox(height: AppConstants.spacing12),
                       AppSectionHeader(
                         title: 'Account',
                         subtitle: 'Your body profiles, plan, and preferences',
                       ),
                       const SizedBox(height: AppConstants.spacing12),
                       _buildAccountCard(context, settingsController),
-                      const SizedBox(height: AppConstants.spacing20),
+                      const SizedBox(height: AppConstants.spacing12),
                       AppSectionHeader(
                         title: 'Support',
                         subtitle: 'Help, feedback, and sign out',
@@ -104,15 +91,15 @@ class ProfileContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.radius16),
         onTap: () => Get.toNamed(Routes.profileEdit),
         child: Padding(
-          padding: const EdgeInsets.all(AppConstants.spacing16),
+          padding: const EdgeInsets.all(AppConstants.spacing12),
           child: Obx(() {
             final user = authController.user.value;
 
             return Row(
               children: [
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.primary,
                     shape: BoxShape.circle,
@@ -191,8 +178,6 @@ class ProfileContent extends StatelessWidget {
     BuildContext context,
     DashboardController dashboardController,
   ) {
-    final tokens = AppUiTokens.of(context);
-
     return Obx(() {
       final stats = dashboardController.dashboard.value?.statistics;
       final streak = dashboardController.streak.value;
@@ -238,21 +223,6 @@ class ProfileContent extends StatelessWidget {
                 );
               },
             ),
-            if (stats?.mostWornItem != null) ...[
-              const SizedBox(height: AppConstants.spacing12),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing16,
-                ),
-                child: Text(
-                  'Most worn: ${stats!.mostWornItem!.name} - ${stats.mostWornItem!.timesWorn} wears',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
           ],
         ),
       );

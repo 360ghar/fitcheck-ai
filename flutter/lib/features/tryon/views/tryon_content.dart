@@ -33,7 +33,7 @@ class TryOnContent extends GetView<TryOnController> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Make it a look.', style: theme.textTheme.headlineMedium),
+            Text('Make it a look.', style: theme.textTheme.titleLarge),
             const SizedBox(height: 4),
             Text(
               'Your photo. One garment. A fresh combination.',
@@ -43,7 +43,22 @@ class TryOnContent extends GetView<TryOnController> {
             ),
             const SizedBox(height: 16),
             if (controller.error.isNotEmpty) ...[
-              AppErrorBanner(message: controller.error.value),
+              AppErrorBanner(
+                message: controller.error.value,
+                // Retry regenerates when inputs are ready; otherwise it
+                // clears the error so the user can fix inputs and use the
+                // Generate button below.
+                onRetry: () {
+                  if (!busy &&
+                      !controller.isUploadingAvatar.value &&
+                      controller.isAvatarReady.value &&
+                      controller.clothingImage.value != null) {
+                    controller.generateTryOn();
+                  } else {
+                    controller.error.value = '';
+                  }
+                },
+              ),
               const SizedBox(height: 12),
             ],
             _avatar(context, busy),
@@ -54,22 +69,22 @@ class TryOnContent extends GetView<TryOnController> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Set the scene', style: theme.textTheme.headlineSmall),
-                  const SizedBox(height: 16),
+                  Text('Set the scene', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 12),
                   _option(
                     'Style',
                     TryOnController.styles,
                     controller.selectedStyle,
                     busy,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   _option(
                     'Background',
                     TryOnController.backgrounds,
                     controller.selectedBackground,
                     busy,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   _option(
                     'Pose',
                     TryOnController.poses,
@@ -79,7 +94,7 @@ class TryOnContent extends GetView<TryOnController> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             FilledButton.icon(
               onPressed:
                   busy ||
@@ -107,24 +122,41 @@ class TryOnContent extends GetView<TryOnController> {
             ],
             if (hasResult) ...[
               const SizedBox(height: 24),
-              Text('Your new look', style: theme.textTheme.headlineMedium),
+              Text('Your new look', style: theme.textTheme.titleLarge),
               const SizedBox(height: 12),
-              _result(context),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: controller.downloadResult,
-                icon: const Icon(Icons.download_outlined),
-                label: const Text('Save to photos'),
-              ),
-              TextButton.icon(
-                onPressed: () => showReportContentSheet(
-                  contentType: 'AI try-on image',
-                  contentId: controller.generatedImageUrl.isNotEmpty
-                      ? controller.generatedImageUrl.value
-                      : 'tryon-result',
+              // Cap the result height so actions stay near the fold;
+              // tap opens the zoom viewer.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: _result(context),
                 ),
-                icon: const Icon(Icons.flag_outlined),
-                label: const Text('Report image'),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: controller.downloadResult,
+                      icon: const Icon(Icons.download_outlined),
+                      label: const Text('Save to photos'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () => showReportContentSheet(
+                        contentType: 'AI try-on image',
+                        contentId: controller.generatedImageUrl.isNotEmpty
+                            ? controller.generatedImageUrl.value
+                            : 'tryon-result',
+                      ),
+                      icon: const Icon(Icons.flag_outlined),
+                      label: const Text('Report image'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -338,6 +370,8 @@ class TryOnContent extends GetView<TryOnController> {
         fit: BoxFit.contain,
         semanticLabel: 'Your generated try-on',
         borderRadius: BorderRadius.circular(16),
+        enableZoom: true,
+        galleryUrls: [url],
       );
     }
     try {
@@ -448,13 +482,15 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
   Future<void> _loadItems({bool refresh = false}) async {
     if (!refresh && (_loading || !_hasMore)) return;
     final request = ++_request;
+    // Hold the stale list during refresh (no _items.clear here): the
+    // previous results stay visible under the progress bar instead of
+    // flashing blank on every keystroke.
     setState(() {
       _loading = true;
       _error = '';
       if (refresh) {
         _page = 1;
         _hasMore = true;
-        _items.clear();
       }
     });
     try {
@@ -465,6 +501,7 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
       );
       if (!mounted || request != _request) return;
       setState(() {
+        if (refresh) _items.clear();
         _items.addAll(response.items);
         _hasMore = response.hasMore;
         _page++;

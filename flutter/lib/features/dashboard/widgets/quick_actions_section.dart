@@ -39,8 +39,9 @@ class QuickActionsSection extends StatelessWidget {
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20,
-                    vertical: 8,
+                    vertical: 4,
                   ),
+                  minVerticalPadding: 4,
                   leading: Icon(
                     actions[i].$3,
                     size: 26,

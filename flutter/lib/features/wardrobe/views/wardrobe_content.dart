@@ -82,7 +82,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
                       return const SliverToBoxAdapter(child: SizedBox.shrink());
                     }
                     return SliverToBoxAdapter(
-                      child: AppErrorBanner(message: controller.error.value),
+                      child: AppErrorBanner(
+                        message: controller.error.value,
+                        onRetry: () => controller.fetchItems(refresh: true),
+                      ),
                     );
                   }),
 
@@ -99,9 +102,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
                       if (controller.isLoading.value &&
                           controller.items.isEmpty) {
                         return const ShimmerGridLoader(
-                          crossAxisCount: 2,
-                          itemCount: 6,
-                          childAspectRatio: 0.78,
+                          crossAxisCount: 3,
+                          itemCount: 9,
+                          childAspectRatio: 0.8,
                         );
                       }
 
@@ -142,23 +145,25 @@ class _WardrobeContentState extends State<WardrobeContent> {
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 12,
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AppCoreColors.editorialLinen,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 2,
-                    ),
-                    child: Text(
-                      'Closet',
-                      style: theme.textTheme.displaySmall?.copyWith(
-                        color: AppCoreColors.editorialInk,
-                      ),
-                    ),
-                  ),
+                Obx(
+                  () => controller.selectedIds.isNotEmpty
+                      ? TextButton(
+                          onPressed: controller.clearSelection,
+                          child: Text(
+                            '${controller.selectedCount} selected · Clear',
+                          ),
+                        )
+                      : Text(
+                          'Closet · ${controller.totalItems.value} '
+                          '${controller.totalItems.value == 1 ? 'piece' : 'pieces'}'
+                          '${_hasFilters ? ' found' : ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
                 ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -211,22 +216,6 @@ class _WardrobeContentState extends State<WardrobeContent> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          Obx(
-            () => controller.selectedIds.isNotEmpty
-                ? TextButton(
-                    onPressed: controller.clearSelection,
-                    child: Text('${controller.selectedCount} selected · Clear'),
-                  )
-                : Text(
-                    '${controller.totalItems.value} '
-                    '${controller.totalItems.value == 1 ? 'piece' : 'pieces'} '
-                    '${_hasFilters ? 'found' : 'in your collection'}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-          ),
         ],
       ),
     );
@@ -247,7 +236,16 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 decoration: InputDecoration(
                   hintText: 'Search your closet',
                   prefixIcon: const Icon(Icons.search, size: 22),
-                  suffixIcon: controller.searchQuery.value.isEmpty
+                  suffixIcon: controller.isFiltering
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : controller.searchQuery.value.isEmpty
                       ? null
                       : IconButton(
                           tooltip: 'Clear search',
@@ -341,6 +339,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
         backgroundColor: theme.colorScheme.surface,
         showCheckmark: false,
         side: BorderSide.none,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         labelStyle: theme.textTheme.labelLarge?.copyWith(
           color: selected
               ? AppCoreColors.editorialInk
@@ -372,15 +372,18 @@ class _WardrobeContentState extends State<WardrobeContent> {
 
     // Image-only tiles do not need fewer columns when text is enlarged.
     // The surrounding search and filters still follow the user's text scale.
+    // Shared productGridColumns: 3 cols on phones (incl. <360px), 4 at
+    // 600-840px, 5 past the rail.
     return SliverLayoutBuilder(
       builder: (context, constraints) => SliverGrid.builder(
         itemCount: items.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: constraints.crossAxisExtent < 600
-              ? 2
-              : (constraints.crossAxisExtent / 200).floor().clamp(2, 4),
-          mainAxisSpacing: 24,
-          crossAxisSpacing: 16,
+          crossAxisCount: productGridColumns(
+            constraints.crossAxisExtent,
+            imageOnly: true,
+          ),
+          mainAxisSpacing: AppConstants.spacing12,
+          crossAxisSpacing: AppConstants.spacing8,
           childAspectRatio: 0.8,
         ),
         itemBuilder: (context, index) => _buildItemTile(items[index]),
@@ -443,8 +446,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
                     ),
                     semanticLabel: 'Item photo',
                     errorWidget: _buildPlaceholder(item.category),
-                    memCacheWidth: 500,
-                    memCacheHeight: 650,
+                    memCacheWidth: 350,
+                    memCacheHeight: 440,
                     storagePath: photo.storagePath,
                     remintUrl: _itemRepository.remintImageUrl,
                   ),

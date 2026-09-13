@@ -119,57 +119,91 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
         children: [
           AspectRatio(
             aspectRatio: .8,
-            child: AppImage(
-              imageUrl: _imageUrl(image),
-              galleryUrls: images.map(_imageUrl).toList(),
-              initialGalleryIndex: index,
-              semanticLabel: image.label ?? 'Photoshoot photo ${index + 1}',
-              fit: BoxFit.contain,
-              backgroundColor: scheme.surfaceContainerHighest,
-              memCacheWidth: 600,
-              memCacheHeight: 750,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: Text(
-              image.label ?? 'Photo ${index + 1}',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Stack(
               children: [
-                IconButton(
-                  tooltip: 'Report photo ${index + 1}',
-                  onPressed: () => showReportContentSheet(
-                    contentType: 'AI photoshoot image',
-                    contentId: image.id,
+                Positioned.fill(
+                  child: AppImage(
+                    imageUrl: _imageUrl(image),
+                    galleryUrls: images.map(_imageUrl).toList(),
+                    initialGalleryIndex: index,
+                    semanticLabel:
+                        image.label ?? 'Photoshoot photo ${index + 1}',
+                    fit: BoxFit.contain,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                    memCacheWidth: 600,
+                    memCacheHeight: 750,
                   ),
-                  icon: const Icon(Icons.flag_outlined),
                 ),
-                Obx(
-                  () => IconButton(
-                    tooltip: 'Download photo ${index + 1}',
-                    onPressed: controller.isDownloading.value
-                        ? null
-                        : () => controller.downloadImage(index),
-                    icon:
-                        controller.isDownloading.value &&
-                            controller.downloadingIndex.value == index
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.download),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _overlayAction(
+                        context,
+                        tooltip: 'Report photo ${index + 1}',
+                        icon: Icons.flag_outlined,
+                        onPressed: () => showReportContentSheet(
+                          contentType: 'AI photoshoot image',
+                          contentId: image.id,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Obx(
+                        () => _overlayAction(
+                          context,
+                          tooltip: 'Download photo ${index + 1}',
+                          icon: Icons.download,
+                          busy:
+                              controller.isDownloading.value &&
+                              controller.downloadingIndex.value == index,
+                          onPressed: controller.isDownloading.value
+                              ? null
+                              : () => controller.downloadImage(index),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              image.label ?? 'Photo ${index + 1}',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  /// Small circular action floating over a result image.
+  Widget _overlayAction(
+    BuildContext context, {
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    bool busy = false,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface.withValues(alpha: 0.9),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: busy
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(icon, size: 20),
       ),
     );
   }

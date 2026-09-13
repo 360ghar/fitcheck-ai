@@ -9,11 +9,18 @@ class TodayEdit extends StatelessWidget {
     super.key,
     this.outfit,
     this.hasItems = false,
+    this.itemPhotos = const [],
     required this.onOpen,
   });
 
   final DashboardOutfitOfTheDay? outfit;
   final bool hasItems;
+
+  /// Suggested-item cutouts. When non-empty these replace the outfit image:
+  /// stacked garments read as "today's pieces" better than one flat photo.
+  /// Empty keeps the previous behavior (outfit image, then asset fallback).
+  final List<CollagePhoto> itemPhotos;
+
   final VoidCallback onOpen;
 
   @override
@@ -40,7 +47,18 @@ class TodayEdit extends StatelessWidget {
               builder: (context, constraints) {
                 final stacked = MediaQuery.textScalerOf(context).scale(14) > 16;
                 final compact = constraints.maxWidth < 330;
-                final image = hasPhoto
+                final image = itemPhotos.isNotEmpty
+                    ? OutfitStackCollage(
+                        photos: itemPhotos,
+                        remintUrl: ItemRepository().remintImageUrl,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        semanticLabel: outfit?.name != null
+                            ? 'Suggested pieces for ${outfit!.name}'
+                            : 'Suggested pieces for today',
+                      )
+                    : hasPhoto
                     ? AppImage(
                         imageUrl: photo,
                         storagePath: outfit?.storagePath,
@@ -59,7 +77,9 @@ class TodayEdit extends StatelessWidget {
                         semanticLabel: 'Wardrobe inspiration',
                       );
                 final headline = Padding(
-                  padding: EdgeInsets.all(compact ? 12 : 16),
+                  padding: EdgeInsets.all(
+                    stacked ? (compact ? 12 : 16) : 12,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -69,17 +89,19 @@ class TodayEdit extends StatelessWidget {
                         color: AppCoreColors.editorialInk,
                         size: 24,
                       ),
-                      SizedBox(height: compact ? 12 : 20),
+                      // Fixed-height phone row: tighter headline so the
+                      // three-line display fits the 220px cap.
+                      SizedBox(height: stacked ? (compact ? 12 : 20) : 8),
                       Text(
                         stacked ? 'Your next look.' : 'Your\nnext\nlook.',
                         style: text.displaySmall?.copyWith(
                           color: AppCoreColors.editorialInk,
-                          fontSize: compact ? 32 : 38,
+                          fontSize: stacked ? (compact ? 32 : 38) : 24,
                           height: 1.08,
                           letterSpacing: -1,
                         ),
                       ),
-                      SizedBox(height: compact ? 12 : 20),
+                      SizedBox(height: stacked ? (compact ? 12 : 20) : 8),
                       Text(
                         hasPhoto
                             ? 'From your wardrobe. For today.'
@@ -101,7 +123,9 @@ class TodayEdit extends StatelessWidget {
                   );
                 }
                 return SizedBox(
-                  height: (constraints.maxWidth * .8).clamp(230, 440),
+                  // Fixed compact height on phones so shortcuts reach the
+                  // first viewport; large-text stacks keep natural height.
+                  height: 220,
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -113,7 +137,7 @@ class TodayEdit extends StatelessWidget {
               },
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
               child: Row(
                 children: [
                   Expanded(
@@ -123,6 +147,8 @@ class TodayEdit extends StatelessWidget {
                         if (outfit?.name != null) ...[
                           Text(
                             outfit!.name!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: text.titleMedium?.copyWith(
                               color: AppCoreColors.editorialInk,
                             ),
@@ -140,7 +166,7 @@ class TodayEdit extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   const CircleAvatar(
-                    radius: 24,
+                    radius: 20,
                     backgroundColor: AppCoreColors.editorialInk,
                     child: Icon(
                       Icons.arrow_outward_rounded,
