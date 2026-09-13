@@ -1077,6 +1077,16 @@
             "title": "Credits Pending",
             "type": "integer"
           },
+          "gifts_issued": {
+            "default": 0,
+            "title": "Gifts Issued",
+            "type": "integer"
+          },
+          "promo_active": {
+            "default": 0,
+            "title": "Promo Active",
+            "type": "integer"
+          },
           "redemptions": {
             "default": 0,
             "title": "Redemptions",

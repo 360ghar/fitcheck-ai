@@ -68,7 +68,15 @@ export function GiftCardPreview({
         </div>
 
         {message && (
-          <p className="mt-[7%] line-clamp-3 text-[clamp(0.55rem,1.6vw,0.82rem)] leading-relaxed text-[#6b655d]">
+          // Mirror the authoritative artwork renderer: it drops a message
+          // line when a greeting is present so the lower metadata (retail
+          // value, claim-by) never gets pushed out of the fixed card.
+          <p
+            className={cn(
+              'mt-[7%] text-[clamp(0.55rem,1.6vw,0.82rem)] leading-relaxed text-[#6b655d]',
+              greeting ? 'line-clamp-2' : 'line-clamp-3',
+            )}
+          >
             {message}
           </p>
         )}

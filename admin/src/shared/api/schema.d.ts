@@ -5004,6 +5004,16 @@ export interface components {
              */
             credits_pending: number;
             /**
+             * Gifts Issued
+             * @default 0
+             */
+            gifts_issued: number;
+            /**
+             * Promo Active
+             * @default 0
+             */
+            promo_active: number;
+            /**
              * Redemptions
              * @default 0
              */

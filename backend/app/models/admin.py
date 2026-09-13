@@ -369,6 +369,9 @@ class AdminReferralsResponse(BaseModel):
 
     codes_issued: int = 0
     redemptions: int = 0
+    # Extras rendered by the admin dashboard referrals pulse.
+    promo_active: int = 0
+    gifts_issued: int = 0
     credits_granted: int = 0
     credits_pending: int = 0
 
