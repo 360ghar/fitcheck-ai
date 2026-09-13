@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import app
@@ -12,6 +13,7 @@ import pytest
 
 
 BACKEND_ROOT = Path(app.__file__).resolve().parents[1]
+REPO_ROOT = BACKEND_ROOT.parent
 
 
 def _load(name: str):
@@ -25,6 +27,19 @@ def _load(name: str):
 
 grant = _load("grant_free_pro_month.py")
 revert = _load("revert_expired_pro_trials.py")
+
+
+def _load_blog_script(name: str):
+    path = REPO_ROOT / "scripts" / "blog_batch_2026_08_29" / name
+    spec = importlib.util.spec_from_file_location(f"blog_batch_{path.stem}", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+blog_verify = _load_blog_script("verify.py")
+blog_rollback = _load_blog_script("rollback.py")
 
 
 class _Query:
@@ -267,3 +282,67 @@ def test_non_string_campaign_timestamp_is_skipped(monkeypatch, tmp_path, capsys)
     monkeypatch.setattr(revert, "create_client", lambda *_args: pytest.fail("unexpected database access"))
     assert revert.main() == 0
     assert "malformed trial_end" in capsys.readouterr().out
+
+
+def test_blog_verify_fails_for_a_partial_batch():
+    partial = [{}] * (blog_verify.EXPECTED_TOTAL - 1)
+
+    assert blog_verify.cmd_count(None, partial) == 1
+    assert blog_verify.cmd_count(None, []) == 2
+
+
+def test_blog_verify_rejects_nonpositive_sample_before_connecting(monkeypatch):
+    monkeypatch.setattr(blog_verify, "_connect", lambda: pytest.fail("unexpected database access"))
+
+    with pytest.raises(SystemExit) as exc:
+        blog_verify.main(["--sample", "-1"])
+
+    assert exc.value.code == 2
+
+
+class _BlogRollbackQuery:
+    def __init__(self, client, kind: str):
+        self.client = client
+        self.kind = kind
+
+    def select(self, *_args):
+        return self
+
+    def delete(self):
+        return self
+
+    def eq(self, *_args):
+        return self
+
+    def execute(self):
+        if self.kind == "delete":
+            return SimpleNamespace(data=[])
+        self.client.select_calls += 1
+        if self.client.select_calls == 1:
+            return SimpleNamespace(data=[{"slug": "expected"}, {"slug": "orphan"}])
+        return SimpleNamespace(data=[{"slug": "orphan"}])
+
+
+class _BlogRollbackClient:
+    def __init__(self):
+        self.select_calls = 0
+
+    def table(self, _name):
+        return self
+
+    def select(self, *_args):
+        return _BlogRollbackQuery(self, "select")
+
+    def delete(self):
+        return _BlogRollbackQuery(self, "delete")
+
+
+def test_blog_rollback_fails_when_rows_remain(monkeypatch):
+    client = _BlogRollbackClient()
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "service-key")
+    monkeypatch.setitem(sys.modules, "supabase", SimpleNamespace(create_client=lambda *_args: client))
+    monkeypatch.setitem(sys.modules, "publish", SimpleNamespace(_build_posts=lambda: [{"slug": "expected"}]))
+    monkeypatch.setattr(sys, "argv", ["rollback.py", "--commit"])
+
+    assert blog_rollback.main() == 1

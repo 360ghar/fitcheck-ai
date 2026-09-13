@@ -9,6 +9,7 @@ import '../../photoshoot/controllers/photoshoot_controller.dart';
 import '../../tryon/controllers/tryon_controller.dart';
 import '../../settings/controllers/settings_controller.dart';
 import '../../subscription/controllers/subscription_controller.dart';
+import '../../gifts/controllers/gift_controller.dart';
 
 /// Binding for MainShellPage - initializes shell and all tab controllers
 class MainShellBinding extends Bindings {
@@ -19,6 +20,7 @@ class MainShellBinding extends Bindings {
 
     // Dashboard tab controllers
     Get.lazyPut<DashboardController>(() => DashboardController(), fenix: true);
+    Get.lazyPut<GiftController>(() => GiftController(), fenix: true);
     Get.lazyPut<SettingsController>(() => SettingsController(), fenix: true);
     Get.put<SubscriptionController>(SubscriptionController());
 
@@ -26,12 +28,24 @@ class MainShellBinding extends Bindings {
     Get.lazyPut<WardrobeController>(() => WardrobeController(), fenix: true);
 
     // Outfits tab
-    Get.lazyPut<OutfitListController>(() => OutfitListController(), fenix: true);
-    Get.lazyPut<OutfitCreationController>(() => OutfitCreationController(), fenix: true);
-    Get.lazyPut<OutfitGenerationController>(() => OutfitGenerationController(), fenix: true);
+    Get.lazyPut<OutfitListController>(
+      () => OutfitListController(),
+      fenix: true,
+    );
+    Get.lazyPut<OutfitCreationController>(
+      () => OutfitCreationController(),
+      fenix: true,
+    );
+    Get.lazyPut<OutfitGenerationController>(
+      () => OutfitGenerationController(),
+      fenix: true,
+    );
 
     // Photoshoot tab (replacing Try-On in bottom nav)
-    Get.lazyPut<PhotoshootController>(() => PhotoshootController(), fenix: true);
+    Get.lazyPut<PhotoshootController>(
+      () => PhotoshootController(),
+      fenix: true,
+    );
 
     // Try-On (available from More menu)
     Get.lazyPut<TryOnController>(() => TryOnController(), fenix: true);

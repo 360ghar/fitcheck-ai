@@ -40,7 +40,7 @@ test.describe('mobile shell', () => {
     // Trends charts share the chart-in-grid pattern that blew out the
     // dashboard cards — the same guard must hold on the trends route.
     await page.goto('/dashboard/trends')
-    await expect(page.getByRole('img', { name: 'Signups' })).toBeVisible()
+    await expect(page.getByRole('img', { name: 'Signups', exact: true })).toBeVisible()
     await expectNoDocumentOverflow(page)
   })
 

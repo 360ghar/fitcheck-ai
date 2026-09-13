@@ -23,7 +23,7 @@ from app.models.blog import BlogPostCreate, BlogPostListParams, BlogPostUpdate
 from tests.utils.fake_db import FakeBuilder, FakeDB, FakeResult
 
 ADMIN = {"id": "admin-1", "role": "admin"}
-CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=600"
+CACHE_CONTROL = "private, max-age=300, stale-while-revalidate=600"
 
 
 def _post_row(slug="first-post", **overrides):

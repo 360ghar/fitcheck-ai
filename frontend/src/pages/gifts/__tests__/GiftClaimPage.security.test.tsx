@@ -57,8 +57,22 @@ describe('GiftClaimPage credential safety', () => {
     )
 
     expect(
-      await screen.findByRole('textbox', { name: 'Enter the code printed on the gift' }),
+      await screen.findByRole('textbox', { name: 'Enter a code from a legacy gift' }),
     ).toHaveClass('ph-no-capture')
+  })
+
+  it('explains the verified-email rule for named gifts', async () => {
+    render(
+      <MemoryRouter initialEntries={['/gift/gift-123']}>
+        <Routes>
+          <Route path="/gift/:publicId" element={<GiftClaimPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(
+      await screen.findByText(/Named gifts can only be claimed by the recipient's verified email\./),
+    ).toBeInTheDocument()
   })
 
   it('ignores a public-gift response superseded by route navigation', async () => {

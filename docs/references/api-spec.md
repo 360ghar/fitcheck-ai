@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **229** operations across **201** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **242** operations across **214** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -63,6 +63,13 @@ Public endpoints (no auth required):
 - `GET /api/v1/gifts/public/{public_id}`
 - `GET /api/v1/gifts/public/{public_id}/artwork/og.png`
 - `GET /api/v1/health`
+- `GET /api/v1/oauth/.well-known/oauth-authorization-server`
+- `GET /api/v1/oauth/.well-known/oauth-protected-resource`
+- `GET /api/v1/oauth/authorize`
+- `POST /api/v1/oauth/authorize/complete`
+- `POST /api/v1/oauth/register`
+- `POST /api/v1/oauth/revoke`
+- `POST /api/v1/oauth/token`
 - `GET /api/v1/outfits/public/{outfit_id}`
 - `POST /api/v1/photoshoot/demo`
 - `GET /api/v1/photoshoot/demo/{job_id}/status`
@@ -178,6 +185,121 @@ Root endpoint.
 **Responses:**
 
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/oauth/.well-known/oauth-authorization-server
+
+RFC 8414 authorization-server metadata (public clients, PKCE S256).
+
+**Auth:** none (public endpoint)
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/oauth/.well-known/oauth-protected-resource
+
+RFC 9728 protected-resource metadata for the /mcp resource.
+
+**Auth:** none (public endpoint)
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/oauth/authorize
+
+Validate the client's authorization request and bounce the user to the
+frontend bridge (Supabase hosted login runs there).
+
+**Auth:** none (public endpoint)
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `client_id` | query | string | yes |  |
+| `code_challenge` | query | string | yes |  |
+| `code_challenge_method` | query | string | no |  |
+| `redirect_uri` | query | string | yes |  |
+| `response_type` | query | string | yes |  |
+| `scope` | query | string | no |  |
+| `state` | query | string | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/oauth/authorize/complete
+
+Frontend bridge callback: bind the Supabase session to the pending
+authorization. Returns the redirect URL the browser must follow.
+
+**Auth:** none (public endpoint)
+
+**Request body** (`application/json`, required):
+
+_No structured fields declared._
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/oauth/register
+
+RFC 7591 dynamic registration. Public clients only (PKCE, no secret);
+redirect URIs must match MCP_REDIRECT_URI_ALLOWLIST.
+
+**Auth:** none (public endpoint)
+
+**Request body** (`application/json`, required):
+
+_No structured fields declared._
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/oauth/revoke
+
+RFC 7009 revocation (idempotent; always 200 for valid requests).
+
+**Auth:** none (public endpoint)
+
+**Request body** (`application/x-www-form-urlencoded`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `token` | string | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/oauth/token
+
+RFC 6749 token endpoint: authorization_code (PKCE) or refresh_token.
+
+**Auth:** none (public endpoint)
+
+**Request body** (`application/x-www-form-urlencoded`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `client_id` | string | yes |  |
+| `code` | string (nullable) | no |  |
+| `code_verifier` | string (nullable) | no |  |
+| `grant_type` | string | yes |  |
+| `redirect_uri` | string (nullable) | no |  |
+| `refresh_token` | string (nullable) | no |  |
+
+**Responses:**
+
+- **200** Returns object.
+- **Errors:** 422 Unprocessable Entity
 
 ### GET /robots.txt
 
@@ -3629,6 +3751,7 @@ Create Paid Gift Checkout
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `recipient_email` | string (email) | yes |  |
 | `success_url` | string | no |  |
 | `to_name` | string | yes |  |
 
@@ -3686,6 +3809,7 @@ Create Complimentary Gift
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
 **Responses:**
@@ -3763,6 +3887,16 @@ List Sent Gifts
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 - **Errors:** 422 Unprocessable Entity
 
+### GET /api/v1/gifts/summary
+
+Return dashboard priority inputs without exposing recipient data.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
 ### GET /api/v1/gifts/{voucher_id}
 
 Get Owned Gift
@@ -3820,6 +3954,23 @@ Download Owned Gift Artwork
 **Responses:**
 
 - **200** OK
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/gifts/{voucher_id}/claim-assigned
+
+Claim a dashboard-listed named gift with the verified recipient email.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `voucher_id` | path | string (uuid) | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 - **Errors:** 422 Unprocessable Entity
 
 ### POST /api/v1/gifts/{voucher_id}/rotate
@@ -4119,6 +4270,29 @@ Full audit history for one entity (e.g. a user or subscription).
 - **200** Returns array<`AdminAuditEventItem`>.
 - **Errors:** 422 Unprocessable Entity
 
+### GET /api/v1/admin/dashboards/funnel
+
+Funnel: signups -> items (24h) -> outfits (7d) -> paid (window).
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `days` | query | integer | no | Window in days (1-90, default 30) |
+
+**Responses:**
+
+**Response 200:** Returns `AdminFunnelResponse` — GET /admin/dashboards/funnel — signups -> items -> outfits -> paid.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `days` | integer | no |  |
+| `steps` | array<`AdminFunnelStep`> | no |  |
+
+- **Errors:** 422 Unprocessable Entity
+
 ### GET /api/v1/admin/dashboards/overview
 
 Signups / active users / paid subscriptions / AI jobs aggregates.
@@ -4135,6 +4309,8 @@ Signups / active users / paid subscriptions / AI jobs aggregates.
 | `ai_jobs_7d` | object | no |  |
 | `paid_subscriptions` | integer | no |  |
 | `signups` | object<integer> | no |  |
+| `tickets_open_48h` | integer | no |  |
+| `trials_ending_7d` | integer | no |  |
 
 
 ### GET /api/v1/admin/dashboards/referrals
@@ -4154,6 +4330,29 @@ Referral totals: codes issued, redemptions, credits granted/pending.
 | `credits_pending` | integer | no |  |
 | `redemptions` | integer | no |  |
 
+
+### GET /api/v1/admin/dashboards/retention
+
+Cohort retention: last N Mondays UTC × retained 7d later.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `weeks` | query | integer | no | Number of weekly cohorts (1-12, default 4) |
+
+**Responses:**
+
+**Response 200:** Returns `AdminRetentionResponse` — GET /admin/dashboards/retention — last N Mondays × retained 7d.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cohorts` | array<`AdminRetentionCohort`> | no |  |
+| `weeks` | integer | no |  |
+
+- **Errors:** 422 Unprocessable Entity
 
 ### GET /api/v1/admin/dashboards/revenue
 
@@ -4319,6 +4518,7 @@ Create Gift
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
 | `note` | string | yes |  |
+| `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
 **Responses:**
@@ -4810,12 +5010,16 @@ Return safe deployment info: version, env, feature toggles, billing flags.
 
 Paginated subscriptions with user email and display amount.
 
+``billing_provider`` filters by billing rail; ``stripe`` includes legacy
+rows whose ``billing_provider`` is NULL (see admin_service).
+
 **Auth:** required — `Authorization: Bearer <jwt>`
 
 **Parameters:**
 
 | Parameter | In | Type | Required | Description |
 |-----------|----|------|----------|-------------|
+| `billing_provider` | query | enum: stripe, apple, google (nullable) | no |  |
 | `page` | query | integer | no |  |
 | `page_size` | query | integer | no |  |
 | `plan` | query | string (nullable) | no |  |
@@ -4936,16 +5140,7 @@ Full user detail: profile + subscription + usage + counts + recent jobs.
 
 **Responses:**
 
-**Response 200:** Returns `AdminUserDetail` — GET /admin/users/{user_id} — full profile detail.
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `counts` | object | no |  |
-| `recent_jobs` | array<object> | no |  |
-| `subscription` | object (nullable) | no |  |
-| `usage` | object | no |  |
-| `user` | object | yes |  |
-
+- **200** Returns `AdminUserDetail` — see [Models](#models).
 - **Errors:** 422 Unprocessable Entity
 
 ### PATCH /api/v1/admin/users/{user_id}
@@ -4999,6 +5194,28 @@ Recent audit events + recent jobs for one user (limit 25 each).
 
 - **Errors:** 422 Unprocessable Entity
 
+### POST /api/v1/admin/users/{user_id}/ai/clear-daily
+
+Reset a user's daily AI counters (extractions/generations/embeddings + photoshoot).
+
+Sets ``user_ai_settings.daily_*_count`` to 0 and ``last_reset_date`` to
+today, plus ``subscription_usage.daily_photoshoot_images`` to 0 for the
+active monthly usage period. Writes audit ``user.ai_daily_cleared`` and invalidates
+the cached profile.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string | yes |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
 ### PATCH /api/v1/admin/users/{user_id}/quota-override
 
 Set (or clear with null) a per-user daily AI quota override.
@@ -5023,6 +5240,34 @@ must not be able to change another user's daily AI quota.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `daily_limit` | integer (nullable) | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/admin/users/{user_id}/subscription/extend-trial
+
+Extend a user's trial by ``days`` (1..90).
+
+If ``subscriptions.trial_end`` is set it is moved forward; otherwise
+``now + days`` becomes the new trial end. Writes audit
+``user.trial_extended`` with ``{days, before, after}`` and
+invalidates the cached profile (service helper).
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string | yes |  |
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `days` | integer | yes | Days to extend trial (1..90) |
 
 **Responses:**
 
@@ -5101,6 +5346,25 @@ PATCH /admin/feedback/{ticket_id} body.
 | `internal_notes` | string (nullable) | no |  |
 | `status` | enum: open, in_progress, resolved, closed (nullable) | no |  |
 
+### `AdminFunnelResponse`
+
+GET /admin/dashboards/funnel — signups -> items -> outfits -> paid.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `days` | integer | no |  |
+| `steps` | array<`AdminFunnelStep`> | no |  |
+
+### `AdminFunnelStep`
+
+One funnel step: label, count, pct_of_prev (100.0 for first).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `count` | integer | yes |  |
+| `label` | string | yes |  |
+| `pct_of_prev` | number | no |  |
+
 ### `AdminGiftAction`
 
 | Field | Type | Required | Description |
@@ -5131,6 +5395,7 @@ PATCH /admin/feedback/{ticket_id} body.
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
 | `note` | string | yes |  |
+| `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
 ### `AdminIapTransactionListItem`
@@ -5183,6 +5448,8 @@ GET /admin/dashboards/overview.
 | `ai_jobs_7d` | object | no |  |
 | `paid_subscriptions` | integer | no |  |
 | `signups` | object<integer> | no |  |
+| `tickets_open_48h` | integer | no |  |
+| `trials_ending_7d` | integer | no |  |
 
 ### `AdminPromoCodeCreate`
 
@@ -5228,6 +5495,9 @@ One row of GET /admin/quotas (today's per-user AI usage).
 | `daily_extraction_count` | integer (nullable) | no |  |
 | `daily_generation_count` | integer (nullable) | no |  |
 | `daily_photoshoot_images` | integer (nullable) | no |  |
+| `effective_embedding_limit` | integer | yes |  |
+| `effective_extraction_limit` | integer | yes |  |
+| `effective_generation_limit` | integer | yes |  |
 | `email` | string (nullable) | no |  |
 | `full_name` | string (nullable) | no |  |
 | `last_reset_date` | object (nullable) | no |  |
@@ -5257,6 +5527,26 @@ POST /admin/subscriptions/user/{user_id}/refund.
 | `payment_intent` | string (nullable) | no |  |
 | `refund_id` | string | yes |  |
 | `status` | string | yes |  |
+
+### `AdminRetentionCohort`
+
+One weekly cohort row for retention.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `retained_7d` | integer | no |  |
+| `retention_pct` | number | no |  |
+| `signups` | integer | no |  |
+| `week_start` | string | yes |  |
+
+### `AdminRetentionResponse`
+
+GET /admin/dashboards/retention — last N Mondays × retained 7d.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `cohorts` | array<`AdminRetentionCohort`> | no |  |
+| `weeks` | integer | no |  |
 
 ### `AdminRevenueResponse`
 
@@ -5398,13 +5688,24 @@ GET /admin/users/{user_id}/activity.
 
 ### `AdminUserDetail`
 
-GET /admin/users/{user_id} — full profile detail.
+GET /admin/users/{user_id} — full profile detail (360 view). Core keys (user, subscription, usage, counts, recent_jobs) are always present; 360 keys are optional and best-effort (missing table -> []). ``extra="allow"`` keeps the contract stable when the service adds a new section without a model bump (the admin console reads via schema.d.ts).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `achievements` | array<object> | no |  |
+| `achievements_meta` | object | no |  |
+| `collections` | array<object> | no |  |
 | `counts` | object | no |  |
+| `items` | array<object> | no |  |
+| `outfits` | array<object> | no |  |
+| `photoshoot_jobs` | array<object> | no |  |
 | `recent_jobs` | array<object> | no |  |
+| `social_import_jobs` | array<object> | no |  |
+| `streak` | object | no |  |
+| `streaks` | object | no |  |
 | `subscription` | object (nullable) | no |  |
+| `support_tickets` | array<object> | no |  |
+| `trips` | array<object> | no |  |
 | `usage` | object | no |  |
 | `user` | object | yes |  |
 
@@ -5582,6 +5883,23 @@ Model for updating body profile (all fields optional).
 | `skin_tone` | string (nullable) | no |  |
 | `weight_kg` | number (nullable) | no |  |
 
+### `Body_issue_token_api_v1_oauth_token_post`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `client_id` | string | yes |  |
+| `code` | string (nullable) | no |  |
+| `code_verifier` | string (nullable) | no |  |
+| `grant_type` | string | yes |  |
+| `redirect_uri` | string (nullable) | no |  |
+| `refresh_token` | string (nullable) | no |  |
+
+### `Body_revoke_token_api_v1_oauth_revoke_post`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `token` | string | yes |  |
+
 ### `Body_select_oauth_page_api_v1_ai_social_import_jobs__job_id__auth_oauth_select_page_post`
 
 | Field | Type | Required | Description |
@@ -5667,6 +5985,7 @@ Model for updating body profile (all fields optional).
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `recipient_email` | string (email) | yes |  |
 | `to_name` | string | yes |  |
 
 ### `ConfirmResetRequest`
@@ -5768,6 +6087,14 @@ Request to generate a single embedding.
 |---|---|---|---|
 | `model` | string (nullable) | no |  |
 | `text` | string | yes | Text to generate embedding for |
+
+### `ExtendTrialRequest`
+
+POST /admin/users/{id}/subscription/extend-trial body.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `days` | integer | yes | Days to extend trial (1..90) |
 
 ### `ExtractItemsRequest`
 
@@ -6170,6 +6497,7 @@ Model for updating an outfit (all fields optional).
 | `duration_months` | integer | yes |  |
 | `from_name` | string | yes |  |
 | `message` | string (nullable) | no |  |
+| `recipient_email` | string (email) | yes |  |
 | `success_url` | string | no |  |
 | `to_name` | string | yes |  |
 

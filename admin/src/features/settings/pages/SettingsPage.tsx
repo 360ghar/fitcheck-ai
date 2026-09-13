@@ -33,7 +33,6 @@ export function SettingsPage() {
   if (query.isPending) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
         <SkeletonTable rows={5} columns={3} />
       </div>
     )
@@ -42,7 +41,6 @@ export function SettingsPage() {
   if (query.isError || !query.data) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
         <ErrorState
           title={t('loadError.title')}
           message={t('loadError.message')}
@@ -63,7 +61,8 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('description')} />
+
+      <PageHeader dense title={t('title')} description={t('description')} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Application */}

@@ -10,7 +10,6 @@ import { SITE, SEO_ROUTES, urlForPath } from './seo-content.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
-const today = new Date().toISOString().slice(0, 10)
 
 
 function escapeXml(s) {
@@ -23,8 +22,12 @@ function escapeXml(s) {
 
 function urlEntry({ loc, lastmod, changefreq, priority, image }) {
   let xml = `  <url>
-    <loc>${escapeXml(loc)}</loc>
-    <lastmod>${lastmod}</lastmod>
+    <loc>${escapeXml(loc)}</loc>`
+  if (lastmod) {
+    xml += `
+    <lastmod>${lastmod}</lastmod>`
+  }
+  xml += `
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>`
   if (image) {
@@ -63,7 +66,9 @@ async function fetchBlogSlugs() {
         if (p.slug) {
           posts.push({
             slug: p.slug,
-            lastmod: (p.updated_at || p.date || today).toString().slice(0, 10),
+            // Do not fabricate a date from the build time. Missing post
+            // metadata simply omits <lastmod>, which is more accurate.
+            lastmod: p.updated_at || p.date ? (p.updated_at || p.date).toString().slice(0, 10) : undefined,
           })
         }
       }
@@ -82,7 +87,6 @@ async function main() {
   const entries = [
     urlEntry({
       loc: `${SITE}/`,
-      lastmod: today,
       changefreq: 'weekly',
       priority: '1.0',
       image: {
@@ -93,7 +97,6 @@ async function main() {
     ...SEO_ROUTES.filter((r) => r.path !== '/').map((r) =>
       urlEntry({
         loc: urlForPath(r.path),
-        lastmod: today,
         changefreq: r.changefreq,
         priority: r.priority,
       })

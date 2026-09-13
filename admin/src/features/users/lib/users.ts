@@ -1,3 +1,5 @@
+import { toDate } from '@/shared/lib/formatters'
+import { pickArray, type JsonRecord as SharedJsonRecord } from '@/shared/lib/json'
 import { ADMIN_ROLES, type AdminRole } from '@/shared/lib/permissions'
 
 /**
@@ -47,7 +49,7 @@ export function subscriptionStatus(
 /**
  * i18n key for a role label. Admin roles reuse the layout namespace
  * (`layout:roles.<role>`); `user` and unknown roles fall back to the users
- * namespace. Pages render with `t(key, { defaultValue: rawRole })`.
+ * namespace. Unknown values resolve to the users namespace fallback label.
  */
 export function roleLabelKey(role: string | null | undefined): string {
   if (!role) return 'users:roles.unknown'
@@ -73,4 +75,47 @@ export function assignableRoles(): readonly (AdminRole | 'user')[] {
 /** Human-ish name for a user dict (detail/activity rows). */
 export function displayName(record: JsonRecord | null | undefined): string {
   return stringValue(record, 'full_name') ?? stringValue(record, 'email') ?? '—'
+}
+
+/** Extract object entries from an array value, or [] when missing/not an array. */
+export function arrayValue(
+  record: JsonRecord | null | undefined,
+  key: string,
+): JsonRecord[] {
+  // Shared helper — keeps one array accessor for the whole admin app.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  return pickArray(record as unknown as SharedJsonRecord | null | undefined, key)
+}
+
+/** True when an active trial ends within next N days (default 7). */
+export function isTrialEndingSoon(
+  subscription: JsonRecord | null | undefined,
+  days = 7,
+): boolean {
+  // A paid subscription can carry a stale future trial_end; only flag
+  // subscriptions that are actually in trial status.
+  if (subscriptionStatus(subscription) !== 'trial') return false
+  const date = toDate(subscription?.['trial_end'])
+  if (!date) return false
+  const diff = date.getTime() - Date.now()
+  return diff > 0 && diff <= days * 24 * 60 * 60 * 1000
+}
+
+/** Count failed jobs in last N days (default 7). */
+export function failedJobsLastDays(
+  jobs: JsonRecord[] | null | undefined,
+  days = 7,
+): number {
+  if (!jobs?.length) return 0
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  let count = 0
+  for (const job of jobs) {
+    if (stringValue(job, 'status') !== 'failed') continue
+    // Completion time first: a job can fail long after it started.
+    const date = toDate(job['completed_at'] ?? job['created_at'])
+    const time = date?.getTime() ?? null
+    // If no timestamp, count it conservatively as recent
+    if (time === null || time >= cutoff) count += 1
+  }
+  return count
 }

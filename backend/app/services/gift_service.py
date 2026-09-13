@@ -29,6 +29,7 @@ from app.models.gift import (
     GiftAllowance,
     GiftCatalogOption,
     GiftClaimResponse,
+    GiftDashboardSummary,
     GiftListResponse,
     GiftSource,
     GiftStatus,
@@ -65,7 +66,7 @@ class GiftService:
     """Domain service for gift vouchers.
 
     Claim credentials are derived from an HMAC and are never stored. Rotating
-    ``token_version`` invalidates every old link and printed code.
+    ``token_version`` invalidates every old link and legacy printed code.
     """
 
     @staticmethod
@@ -116,15 +117,14 @@ class GiftService:
     @classmethod
     def credential_matches(cls, voucher: dict[str, Any], candidate: str) -> bool:
         normalized = candidate.strip()
+        # ``compare_digest`` rejects non-ASCII strings. Credentials are derived
+        # with URL-safe Base64 or Base32, so reject malformed Unicode input
+        # before constant-time comparisons rather than turning it into a 500.
+        if not normalized.isascii():
+            return False
         secret_match = hmac.compare_digest(normalized, cls.claim_secret(voucher))
-        normalized_code = "".join(
-            character for character in normalized.upper() if character.isalnum()
-        )
-        expected_code = "".join(
-            character
-            for character in cls.claim_code(voucher).upper()
-            if character.isalnum()
-        )
+        normalized_code = "".join(character for character in normalized.upper() if character.isalnum())
+        expected_code = "".join(character for character in cls.claim_code(voucher).upper() if character.isalnum())
         code_match = hmac.compare_digest(
             normalized_code,
             expected_code,
@@ -141,8 +141,8 @@ class GiftService:
         version = int(voucher.get("artwork_version") or 1)
         public_id = voucher["public_id"]
         return (
-            f"/api/v1/gifts/{voucher['id']}/artwork/portrait.png?v={version}",
-            f"/api/v1/gifts/public/{public_id}/artwork/og.png?v={version}",
+            f"/api/v1/gifts/{voucher['id']}/artwork/portrait.png?v={version}&layout={GiftArtworkService.ARTWORK_LAYOUT_VERSION}",
+            f"/api/v1/gifts/public/{public_id}/artwork/og.png?v={version}&layout={GiftArtworkService.ARTWORK_LAYOUT_VERSION}",
         )
 
     @classmethod
@@ -162,11 +162,7 @@ class GiftService:
         if effective_status == "issued" and expiry and expiry <= utcnow():
             effective_status = "expired"
 
-        secret = (
-            cls.claim_secret(voucher)
-            if include_owner_secrets and effective_status == "issued"
-            else None
-        )
+        secret = cls.claim_secret(voucher) if include_owner_secrets and effective_status == "issued" else None
         return GiftVoucherResponse(
             id=voucher["id"],
             public_id=voucher["public_id"],
@@ -181,9 +177,7 @@ class GiftService:
             payment_status=voucher.get("payment_status") if include_commerce else None,
             issued_at=parse_utc_datetime(voucher.get("issued_at")),
             expires_at=expiry,
-            claimed_at=(
-                parse_utc_datetime(voucher.get("claimed_at")) if include_claim_state else None
-            ),
+            claimed_at=(parse_utc_datetime(voucher.get("claimed_at")) if include_claim_state else None),
             created_at=parse_utc_datetime(voucher.get("created_at")) or utcnow(),
             artwork_version=int(voucher.get("artwork_version") or 1),
             share_url=cls._share_url(voucher, secret) if secret else None,
@@ -201,6 +195,25 @@ class GiftService:
             raise PermissionDeniedError("Verify your email before you create or claim a gift")
 
     @staticmethod
+    def _normalized_user_email(user: dict[str, Any]) -> str:
+        email = str(user.get("email") or "").strip().lower()
+        if not email:
+            raise PermissionDeniedError("A verified email is required for this gift")
+        return email
+
+    @classmethod
+    def _require_recipient_match(cls, user: dict[str, Any], voucher: dict[str, Any]) -> None:
+        """Require the named recipient while leaving legacy link gifts valid."""
+        recipient_email = str(voucher.get("recipient_email") or "").strip().lower()
+        if recipient_email:
+            user_email = cls._normalized_user_email(user)
+            if not hmac.compare_digest(
+                recipient_email.encode("utf-8"),
+                user_email.encode("utf-8"),
+            ):
+                raise ValidationError("This gift is reserved for another verified account")
+
+    @staticmethod
     def _matches_issuance_request(
         voucher: dict[str, Any],
         request: ComplimentaryGiftCreate | PaidGiftCheckoutCreate,
@@ -208,11 +221,18 @@ class GiftService:
         source: str,
     ) -> bool:
         stored_message = str(voucher.get("message") or "").strip() or None
+        # Vouchers created before migration 061 have a NULL recipient_email.
+        # Treat that as an unbound legacy recipient so a lost-response retry
+        # still replays the original voucher instead of failing as an
+        # already-used request key.
+        stored_recipient = str(voucher.get("recipient_email") or "").strip().lower()
+        recipient_matches = not stored_recipient or stored_recipient == request.recipient_email
         return (
             voucher.get("source") == source
             and int(voucher.get("duration_months") or 0) == request.duration_months
             and str(voucher.get("from_name") or "").strip() == request.from_name
             and str(voucher.get("to_name") or "").strip() == request.to_name
+            and recipient_matches
             and stored_message == request.message
         )
 
@@ -236,9 +256,7 @@ class GiftService:
     async def get_allowances(cls, user: dict[str, Any], db: Client) -> list[GiftAllowance]:
         cls._require_verified(user)
         try:
-            result = await asyncio.to_thread(
-                db.rpc("initialize_gift_allowances", {"user_uuid": user["id"]}).execute
-            )
+            result = await asyncio.to_thread(db.rpc("initialize_gift_allowances", {"user_uuid": user["id"]}).execute)
         except Exception as exc:
             raise DatabaseError("Gift voucher allowances are unavailable. Apply migration 056.") from exc
         return [
@@ -270,12 +288,13 @@ class GiftService:
             "p_retail_value_cents": CATALOG[request.duration_months],
             "p_from_name": request.from_name,
             "p_to_name": request.to_name,
+            "p_recipient_email": request.recipient_email,
             "p_message": request.message or "",
             "p_client_request_id": request.client_request_id,
             "p_expires_at": (now + relativedelta(months=6)).isoformat(),
         }
         try:
-            result = await asyncio.to_thread(db.rpc("issue_complimentary_gift", params).execute)
+            result = await asyncio.to_thread(db.rpc("issue_complimentary_gift_for_recipient", params).execute)
         except Exception as exc:
             raise DatabaseError("Failed to create the complimentary gift") from exc
         rows = _rows(result)
@@ -298,9 +317,7 @@ class GiftService:
         raise ValidationError("Checkout return URLs must use the FitCheck web app")
 
     @classmethod
-    async def _find_owner_request(
-        cls, user_id: str, client_request_id: str, db: Client
-    ) -> Optional[dict[str, Any]]:
+    async def _find_owner_request(cls, user_id: str, client_request_id: str, db: Client) -> Optional[dict[str, Any]]:
         result = await asyncio.to_thread(
             db.table("gift_vouchers")
             .select("*")
@@ -345,6 +362,7 @@ class GiftService:
                 "currency": "USD",
                 "from_name": request.from_name,
                 "to_name": request.to_name,
+                "recipient_email": request.recipient_email,
                 "message": request.message,
                 "status": "pending",
                 "payment_status": "pending",
@@ -383,11 +401,7 @@ class GiftService:
             "client_reference_id": str(voucher["id"]),
         }
         subscription = await asyncio.to_thread(
-            db.table("subscriptions")
-            .select("stripe_customer_id")
-            .eq("user_id", user["id"])
-            .maybe_single()
-            .execute
+            db.table("subscriptions").select("stripe_customer_id").eq("user_id", user["id"]).maybe_single().execute
         )
         subscription_rows = _rows(subscription)
         customer_id = subscription_rows[0].get("stripe_customer_id") if subscription_rows else None
@@ -476,8 +490,7 @@ class GiftService:
         expected_amount = CATALOG[int(voucher["duration_months"])]
         if (
             _value(session, "mode") != "payment"
-            or str(_value(metadata, "duration_months", ""))
-            != str(voucher["duration_months"])
+            or str(_value(metadata, "duration_months", "")) != str(voucher["duration_months"])
             or len(line_items) != 1
             or int(_value(first_line, "quantity", 0)) != 1
             or not expected_price
@@ -524,9 +537,7 @@ class GiftService:
         return cls.serialize(voucher, audience="owner")
 
     @classmethod
-    async def mark_checkout_failed(
-        cls, session: object, db: Client, *, reason: str
-    ) -> None:
+    async def mark_checkout_failed(cls, session: object, db: Client, *, reason: str) -> None:
         metadata = _value(session, "metadata", {}) or {}
         if _value(metadata, "purchase_kind") != "gift_voucher":
             return
@@ -568,10 +579,7 @@ class GiftService:
                     if not isinstance(payment_intent, str):
                         payment_intent = _value(payment_intent, "id")
                 charge_metadata = _value(charge_obj, "metadata", {}) or {}
-                is_gift_payment = (
-                    is_gift_payment
-                    or _value(charge_metadata, "purchase_kind") == "gift_voucher"
-                )
+                is_gift_payment = is_gift_payment or _value(charge_metadata, "purchase_kind") == "gift_voucher"
             except stripe.error.StripeError as exc:
                 if is_gift_payment:
                     raise ServiceError(
@@ -587,11 +595,7 @@ class GiftService:
                 )
             return
         lookup = await asyncio.to_thread(
-            db.table("gift_vouchers")
-            .select("*")
-            .eq("stripe_payment_intent_id", payment_intent)
-            .maybe_single()
-            .execute
+            db.table("gift_vouchers").select("*").eq("stripe_payment_intent_id", payment_intent).maybe_single().execute
         )
         rows = _rows(lookup)
         if not rows:
@@ -620,11 +624,7 @@ class GiftService:
             "warning_closed",
             "prevented",
         }:
-            restored_state = (
-                "partially_refunded"
-                if int(voucher.get("amount_refunded_cents") or 0) > 0
-                else "paid"
-            )
+            restored_state = "partially_refunded" if int(voucher.get("amount_refunded_cents") or 0) > 0 else "paid"
             await asyncio.to_thread(
                 db.table("gift_vouchers")
                 .update({"payment_status": restored_state, "updated_at": utcnow_iso()})
@@ -641,9 +641,7 @@ class GiftService:
         if is_refund:
             amount = int(_value(obj, "amount", voucher.get("amount_paid_cents") or 0) or 0)
             amount_refunded = int(_value(obj, "amount_refunded", 0) or 0)
-            fully_refunded = bool(_value(obj, "refunded", False)) or (
-                amount > 0 and amount_refunded >= amount
-            )
+            fully_refunded = bool(_value(obj, "refunded", False)) or (amount > 0 and amount_refunded >= amount)
             if not fully_refunded:
                 await asyncio.to_thread(
                     db.table("gift_vouchers")
@@ -668,15 +666,9 @@ class GiftService:
         }
         if is_refund:
             update_payload["amount_refunded_cents"] = int(
-                _value(obj, "amount_refunded", voucher.get("amount_paid_cents") or 0)
-                or 0
+                _value(obj, "amount_refunded", voucher.get("amount_paid_cents") or 0) or 0
             )
-        await asyncio.to_thread(
-            db.table("gift_vouchers")
-            .update(update_payload)
-            .eq("id", voucher["id"])
-            .execute
-        )
+        await asyncio.to_thread(db.table("gift_vouchers").update(update_payload).eq("id", voucher["id"]).execute)
         await asyncio.to_thread(
             db.table("gift_entitlement_grants")
             .update(
@@ -746,11 +738,7 @@ class GiftService:
                 .in_("voucher_id", [voucher["id"] for voucher in vouchers])
                 .execute
             )
-            entitlements = {
-                str(grant["voucher_id"]): grant
-                for grant in _rows(grant_result)
-                if grant.get("voucher_id")
-            }
+            entitlements = {str(grant["voucher_id"]): grant for grant in _rows(grant_result) if grant.get("voucher_id")}
 
         items: list[GiftVoucherResponse] = []
         for voucher in vouchers:
@@ -770,6 +758,40 @@ class GiftService:
         )
 
     @classmethod
+    async def get_dashboard_summary(
+        cls,
+        user: dict[str, Any],
+        db: Client,
+    ) -> GiftDashboardSummary:
+        """Return only private, claimable gifts assigned to the signed-in email."""
+        cls._require_verified(user)
+        recipient_email = cls._normalized_user_email(user)
+        now = utcnow()
+        allowances, incoming_result = await asyncio.gather(
+            cls.get_allowances(user, db),
+            asyncio.to_thread(
+                db.table("gift_vouchers")
+                .select("*")
+                .eq("recipient_email", recipient_email)
+                .eq("status", "issued")
+                .or_(f"expires_at.is.null,expires_at.gt.{now.isoformat()}")
+                .order("created_at", desc=True)
+                .execute
+            ),
+        )
+        incoming = [
+            cls.serialize(row, audience="recipient")
+            for row in _rows(incoming_result)
+            # `purchaser_user_id` becomes NULL if the sender account is
+            # deleted. Filtering it in SQL with `neq` would hide a gift that
+            # the claim RPC still accepts, so exclude only the current user
+            # after reading the recipient-indexed result.
+            if str(row.get("purchaser_user_id") or "") != str(user["id"])
+            and ((expires_at := parse_utc_datetime(row.get("expires_at"))) is None or expires_at > now)
+        ]
+        return GiftDashboardSummary(allowances=allowances, incoming=incoming)
+
+    @classmethod
     async def update_presentation(
         cls, voucher_id: str, user_id: str, request: GiftUpdate, db: Client
     ) -> GiftVoucherResponse:
@@ -780,11 +802,7 @@ class GiftService:
         payload["artwork_version"] = int(voucher.get("artwork_version") or 1) + 1
         payload["updated_at"] = utcnow_iso()
         result = await asyncio.to_thread(
-            db.table("gift_vouchers")
-            .update(payload)
-            .eq("id", voucher_id)
-            .eq("status", "issued")
-            .execute
+            db.table("gift_vouchers").update(payload).eq("id", voucher_id).eq("status", "issued").execute
         )
         rows = _rows(result)
         if not rows:
@@ -832,6 +850,37 @@ class GiftService:
         voucher = rows[0]
         if not cls.credential_matches(voucher, credential):
             raise ValidationError("The voucher code is invalid")
+        cls._require_recipient_match(user, voucher)
+        return await cls._claim_voucher(user, voucher, db)
+
+    @classmethod
+    async def claim_assigned(
+        cls,
+        user: dict[str, Any],
+        voucher_id: UUID,
+        db: Client,
+    ) -> GiftClaimResponse:
+        """Claim a named incoming gift without exposing its link credential."""
+        cls._require_verified(user)
+        lookup = await asyncio.to_thread(
+            db.table("gift_vouchers").select("*").eq("id", str(voucher_id)).maybe_single().execute
+        )
+        rows = _rows(lookup)
+        if not rows:
+            raise ValidationError("No claimable gift was found")
+        voucher = rows[0]
+        if not voucher.get("recipient_email"):
+            raise ValidationError("Use this gift's private link to claim it")
+        cls._require_recipient_match(user, voucher)
+        return await cls._claim_voucher(user, voucher, db)
+
+    @classmethod
+    async def _claim_voucher(
+        cls,
+        user: dict[str, Any],
+        voucher: dict[str, Any],
+        db: Client,
+    ) -> GiftClaimResponse:
         if str(voucher.get("purchaser_user_id")) == str(user["id"]):
             raise ValidationError("You cannot claim a gift that you created")
         if voucher.get("status") != "issued":
@@ -839,7 +888,11 @@ class GiftService:
         expiry = parse_utc_datetime(voucher.get("expires_at"))
         if expiry and expiry <= utcnow():
             await asyncio.to_thread(
-                db.table("gift_vouchers").update({"status": "expired"}).eq("id", voucher["id"]).eq("status", "issued").execute
+                db.table("gift_vouchers")
+                .update({"status": "expired"})
+                .eq("id", voucher["id"])
+                .eq("status", "issued")
+                .execute
             )
             raise ValidationError("This promotional gift has expired")
 
@@ -876,9 +929,7 @@ class GiftService:
         entitlement = grant_rows[0] if grant_rows else {"status": "queued"}
         status = "active" if entitlement.get("status") == "active" else "queued"
         return GiftClaimResponse(
-            voucher=cls.serialize(
-                claimed[0], audience="recipient", entitlement=entitlement
-            ),
+            voucher=cls.serialize(claimed[0], audience="recipient", entitlement=entitlement),
             entitlement_status=status,
             active_ends_at=parse_utc_datetime(entitlement.get("ends_at")),
             queued_count=int(resolved.get("queued_count") or 0),
@@ -897,9 +948,7 @@ class GiftService:
         return "This gift is not ready to claim"
 
     @classmethod
-    async def resolve_entitlements(
-        cls, user_id: str, base: SubscriptionResponse, db: Client
-    ) -> dict[str, Any]:
+    async def resolve_entitlements(cls, user_id: str, base: SubscriptionResponse, db: Client) -> dict[str, Any]:
         base_pro_active = base.plan_type in {PlanType.PRO_MONTHLY, PlanType.PRO_YEARLY}
         try:
             result = await asyncio.to_thread(
@@ -918,12 +967,14 @@ class GiftService:
             logger.warning("Gift entitlement resolver unavailable", user_id=user_id, error=str(exc))
             return {"active_grant_id": None, "active_ends_at": None, "queued_count": 0, "queued_months": 0}
         rows = _rows(result)
-        return rows[0] if rows else {"active_grant_id": None, "active_ends_at": None, "queued_count": 0, "queued_months": 0}
+        return (
+            rows[0]
+            if rows
+            else {"active_grant_id": None, "active_ends_at": None, "queued_count": 0, "queued_months": 0}
+        )
 
     @classmethod
-    async def overlay_subscription(
-        cls, user_id: str, base: SubscriptionResponse, db: Client
-    ) -> SubscriptionResponse:
+    async def overlay_subscription(cls, user_id: str, base: SubscriptionResponse, db: Client) -> SubscriptionResponse:
         resolved = await cls.resolve_entitlements(user_id, base, db)
         active_end = parse_utc_datetime(resolved.get("active_ends_at"))
         queued_count = int(resolved.get("queued_count") or 0)
@@ -949,13 +1000,7 @@ class GiftService:
     @classmethod
     async def portrait_artwork(cls, voucher_id: str, user_id: str, db: Client) -> bytes:
         voucher = await cls.get_owned(voucher_id, user_id, db)
-        secret = cls.claim_secret(voucher)
-        return await GiftArtworkService.get_or_render(
-            voucher,
-            variant="portrait",
-            claim_url=cls._share_url(voucher, secret),
-            claim_code=cls.claim_code(voucher),
-        )
+        return await GiftArtworkService.get_or_render(voucher, variant="portrait")
 
     @classmethod
     async def public_artwork(cls, public_id: str, db: Client) -> bytes:

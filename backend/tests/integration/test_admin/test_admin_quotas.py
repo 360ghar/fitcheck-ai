@@ -14,6 +14,7 @@ single-object/list-tolerant row merging.
 
 import pytest
 
+from app.core.config import settings
 from tests.utils.fake_db import FakeDB
 from app.services.admin_service import list_quota_usage
 
@@ -101,6 +102,21 @@ async def test_quota_usage_merges_nested_single_object_subscription():
     assert item["full_name"] == "Test User"
     assert item["plan_type"] == "plus_monthly"
     assert item["daily_extraction_count"] == 3
+    assert item["effective_extraction_limit"] == settings.AI_DAILY_EXTRACTION_LIMIT
+    assert item["effective_generation_limit"] == settings.AI_DAILY_GENERATION_LIMIT
+    assert item["effective_embedding_limit"] == settings.AI_DAILY_EMBEDDING_LIMIT
+
+
+@pytest.mark.asyncio
+async def test_quota_usage_exposes_per_operation_override_limits():
+    db = FakeDB(rows={"user_ai_settings": [_settings_row("u1", custom_daily_quota=125)]})
+
+    result = await list_quota_usage(db)
+
+    item = result["items"][0]
+    assert item["effective_extraction_limit"] == 125
+    assert item["effective_generation_limit"] == 125
+    assert item["effective_embedding_limit"] == 125
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,6 @@
 # MCP server & ChatGPT app (agent surface)
 
-Last updated: 2026-08-29
+Last updated: 2026-09-13
 
 FitCheck exposes its API to AI agents through **MCP** (Model Context
 Protocol, streamable HTTP). One codebase in `backend/app/mcp/`, two mounts:
@@ -26,7 +26,7 @@ per-tool maintenance.
 Tool calls execute as **in-process ASGI loopback requests** against the real
 routes (`app/mcp/executor.py`):
 
-```
+```text
 MCP client → /mcp (bearer) → tool dispatch → httpx ASGITransport loopback
            → /api/v1 route (get_current_user, validation, rate limits)
            → services → JSON result → structuredContent
@@ -50,7 +50,7 @@ Rules live in `app/mcp/denylist.py`.
 **Header-auth clients (Claude Code, Cursor, Droid, inspector):** send the
 user's Supabase access token:
 
-```
+```bash
 claude mcp add --transport http fitcheck https://api.fitcheckaiapp.com/mcp \
   --header "Authorization: Bearer <SUPABASE_JWT>"
 ```

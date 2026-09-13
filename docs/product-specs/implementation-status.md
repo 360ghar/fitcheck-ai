@@ -115,7 +115,7 @@ it is not by itself an end-to-end pass.
 |---------|--------|----------|
 | Share outfits | ✅ | `ShareOutfitDialog.tsx` |
 | Social media links | ✅ | Twitter, Facebook, WhatsApp, Instagram |
-| Shareable URLs | ✅ | With QR code generation |
+| Shareable URLs | ✅ | Secure links and native-share actions |
 | Get feedback | ✅ | `FeedbackPanel.tsx` |
 | Public outfit viewing | ✅ | `SharedOutfitPage.tsx` |
 | Privacy controls | ✅ | Public/private toggle |
@@ -126,11 +126,13 @@ it is not by itself an end-to-end pass.
 ### Pro Gift Vouchers
 | Feature | Status | Location |
 |---------|--------|----------|
-| Paid and complimentary issuance | ⚪ | Implemented behind backend and web creation flags; migration and Stripe setup are launch gates |
-| Atomic first claim and stacking | ✅ | `gift_service.py`, migration 056 RPCs |
-| Premium download and social artwork | ✅ | Pillow/QR renderer, portrait and OG endpoints |
-| Customer studio and public claim | ⚪ | `/gifts` and `/gift/:publicId`; customer creation flag defaults off |
-| Admin operations and reporting | ⚪ | `admin/src/features/gifts/`; admin flag defaults off |
+| Paid and complimentary issuance | ⚪ | Implemented behind backend and web/admin creation flags; migrations 056/061 and Stripe setup are launch gates |
+| Named recipient matching | ✅ | Normalized recipient email, indexed incoming lookup, authenticated assigned claim, and legacy-link compatibility |
+| Atomic first claim and stacking | ✅ | `gift_service.py`, migrations 056 and 061 RPC guards |
+| Premium download and social artwork | ✅ | Credential-free Pillow renderer, portrait and OG endpoints |
+| Customer studio, inbox, and dashboard priority | ⚪ | `/gifts`, `/gift/:publicId`, and dashboard card; customer flag defaults on |
+| Admin operations and reporting | ⚪ | `admin/src/features/gifts/`; VITE flag defaults on and existing RBAC remains required |
+| Native Flutter free send and incoming claim | ⚪ | `flutter/lib/features/gifts/`; release flag defaults on; no paid mobile CTA |
 
 ### Shopping Integration
 | Feature | Status | Notes |
@@ -304,6 +306,7 @@ story ledger records whether the behavior is actually verified.
 | Wardrobe | `lib/features/wardrobe/views/wardrobe_page.dart` |
 | Outfits | `lib/features/outfits/views/outfits_page.dart` |
 | Dashboard | `lib/features/dashboard/views/dashboard_page.dart` |
+| Gift vouchers | `lib/features/gifts/views/gift_vouchers_page.dart` |
 
 ---
 

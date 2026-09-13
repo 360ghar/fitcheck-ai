@@ -14,12 +14,13 @@ import {
 } from 'lucide-react'
 
 import {
+  claimAssignedGift,
   createComplimentaryGift,
   createPaidGiftCheckout,
   downloadGiftArtwork,
   fulfillGiftCheckout,
-  getGiftAllowances,
   getGiftCatalog,
+  getGiftDashboardSummary,
   getReceivedGifts,
   getSentGifts,
   giftErrorMessage,
@@ -180,10 +181,13 @@ export default function GiftsPage() {
   const [allowances, setAllowances] = useState<GiftAllowance[]>([])
   const [sent, setSent] = useState<GiftVoucher[]>([])
   const [received, setReceived] = useState<GiftVoucher[]>([])
+  const [incoming, setIncoming] = useState<GiftVoucher[]>([])
+  const [selectedIncomingId, setSelectedIncomingId] = useState<string | null>(null)
   const [duration, setDuration] = useState<GiftDuration>(1)
   const [mode, setMode] = useState<GiftMode>('complimentary')
   const [fromName, setFromName] = useState(user?.full_name || user?.email?.split('@')[0] || '')
   const [toName, setToName] = useState('')
+  const [recipientEmail, setRecipientEmail] = useState('')
   const [message, setMessage] = useState('')
   const [editing, setEditing] = useState<GiftVoucher | null>(null)
   const [created, setCreated] = useState<GiftVoucher | null>(null)
@@ -194,6 +198,7 @@ export default function GiftsPage() {
   const [error, setError] = useState<string | null>(null)
   const requestIdRef = useRef<string | null>(null)
   const formRef = useRef<HTMLDivElement | null>(null)
+  const incomingRef = useRef<HTMLElement | null>(null)
 
   const selected = catalog.find((item) => item.duration_months === duration) || FALLBACK_CATALOG[0]
   const allowance = allowances.find((item) => item.duration_months === duration)
@@ -202,6 +207,7 @@ export default function GiftsPage() {
     user?.email_verified &&
       fromName.trim() &&
       toName.trim() &&
+      (editing || recipientEmail.trim()) &&
       (editing || (mode === 'complimentary' ? freeRemaining > 0 : selected.paid_available)),
   )
 
@@ -210,14 +216,15 @@ export default function GiftsPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true)
     try {
-      const [catalogData, allowanceData, sentData, receivedData] = await Promise.all([
+      const [catalogData, summaryData, sentData, receivedData] = await Promise.all([
         getGiftCatalog(),
-        getGiftAllowances(),
+        getGiftDashboardSummary(),
         getSentGifts(),
         getReceivedGifts(),
       ])
       setCatalog(catalogData)
-      setAllowances(allowanceData)
+      setAllowances(summaryData.allowances)
+      setIncoming(summaryData.incoming)
       setSent(sentData.items)
       setReceived(receivedData.items)
     } catch (loadError) {
@@ -233,6 +240,14 @@ export default function GiftsPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    const requestedMode = params.get('mode')
+    const requestedDuration = Number(params.get('duration'))
+    const requestedClaim = params.get('claim')
+    if (requestedMode === 'complimentary') setMode('complimentary')
+    if (requestedDuration === 1 || requestedDuration === 3 || requestedDuration === 12) {
+      setDuration(requestedDuration)
+    }
+    if (requestedClaim) setSelectedIncomingId(requestedClaim)
     const checkout = params.get('checkout')
     const sessionId = params.get('session_id')
     if (checkout === 'cancelled') {
@@ -256,6 +271,11 @@ export default function GiftsPage() {
       .finally(() => setIsSubmitting(false))
   }, [loadData])
 
+  useEffect(() => {
+    if (!selectedIncomingId || !incoming.some((voucher) => voucher.id === selectedIncomingId)) return
+    incomingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [incoming, selectedIncomingId])
+
   function resetIntent(): void {
     requestIdRef.current = null
     setNotice(null)
@@ -265,6 +285,7 @@ export default function GiftsPage() {
   function resetForm(): void {
     setEditing(null)
     setToName('')
+    setRecipientEmail('')
     setMessage('')
     requestIdRef.current = null
   }
@@ -293,6 +314,7 @@ export default function GiftsPage() {
         duration_months: duration,
         from_name: fromName.trim(),
         to_name: toName.trim(),
+        recipient_email: recipientEmail.trim(),
         message: message.trim() || undefined,
         client_request_id: requestIdRef.current || newRequestId(),
       }
@@ -357,6 +379,7 @@ export default function GiftsPage() {
     setDuration(voucher.duration_months)
     setFromName(voucher.from_name)
     setToName(voucher.to_name)
+    setRecipientEmail('')
     setMessage(voucher.message || '')
     setCreated(null)
     setNotice('Editing an unclaimed gift. Its term and value cannot change.')
@@ -364,7 +387,7 @@ export default function GiftsPage() {
   }
 
   async function rotate(voucher: GiftVoucher): Promise<void> {
-    if (!window.confirm('Rotate this private link? The previous link and printed code will stop working.')) return
+    if (!window.confirm('Rotate this private link? The previous link and any legacy code will stop working.')) return
     setBusyId(voucher.id)
     try {
       const updated = await rotateGiftLink(voucher.id)
@@ -373,6 +396,25 @@ export default function GiftsPage() {
       await loadData()
     } catch (rotateError) {
       setError(giftErrorMessage(rotateError, 'The private link could not be rotated. Try again.'))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function claimIncoming(voucher: GiftVoucher): Promise<void> {
+    setBusyId(voucher.id)
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await claimAssignedGift(voucher.id)
+      setNotice(
+        result.entitlement_status === 'active'
+          ? 'Your FitCheck Pro gift is active.'
+          : 'Your FitCheck Pro gift is queued after your current entitlement.',
+      )
+      await loadData()
+    } catch (claimError) {
+      setError(giftErrorMessage(claimError, 'The gift could not be claimed. Try again.'))
     } finally {
       setBusyId(null)
     }
@@ -403,6 +445,41 @@ export default function GiftsPage() {
           <AlertTitle>{error ? 'Gift action not completed' : 'Done'}</AlertTitle>
           <AlertDescription>{error || notice}</AlertDescription>
         </Alert>
+      )}
+
+      {incoming.length > 0 && (
+        <section ref={incomingRef} className="mt-6" aria-labelledby="incoming-gifts-title">
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="p-5 sm:p-6">
+              <p className="font-display text-xs font-bold uppercase tracking-[0.24em] text-primary">Gift inbox</p>
+              <h2 id="incoming-gifts-title" className="mt-2 font-display text-2xl font-bold">
+                {incoming.length === 1 ? 'A gift is waiting for you' : `${incoming.length} gifts are waiting for you`}
+              </h2>
+              <div className="mt-4 space-y-3">
+                {incoming.map((voucher) => (
+                  <article
+                    key={voucher.id}
+                    className={cn(
+                      'flex flex-col gap-3 rounded-md border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between',
+                      selectedIncomingId === voucher.id && 'border-primary ring-1 ring-primary/30',
+                    )}
+                  >
+                    <div>
+                      <p className="font-semibold">From {voucher.from_name}</p>
+                      <p className="mt-0.5 text-sm text-muted-foreground">
+                        {termLabel(voucher.duration_months)} of FitCheck Pro · ${(voucher.retail_value_cents / 100).toFixed(0)} value
+                      </p>
+                    </div>
+                    <Button onClick={() => void claimIncoming(voucher)} disabled={busyId === voucher.id}>
+                      {busyId === voucher.id ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Gift aria-hidden="true" />}
+                      Claim gift
+                    </Button>
+                  </article>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       )}
 
       <section ref={formRef} className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.82fr)] xl:gap-12">
@@ -516,6 +593,28 @@ export default function GiftsPage() {
                   }}
                 />
               </div>
+              {!editing && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="gift-recipient-email">Recipient email</Label>
+                  <Input
+                    id="gift-recipient-email"
+                    name="recipient_email"
+                    type="email"
+                    autoComplete="email"
+                    value={recipientEmail}
+                    maxLength={320}
+                    required
+                    placeholder="name@example.com"
+                    onChange={(event) => {
+                      setRecipientEmail(event.target.value)
+                      resetIntent()
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The gift can only be claimed by this verified email. We do not send email for you.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="gift-to">To</Label>
                 <Input
@@ -594,7 +693,7 @@ export default function GiftsPage() {
             <div>
               <p className="font-display text-xl font-bold">Your private invitation is ready</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Send the secure link or download the portrait artwork. The first verified account to claim it receives the gift.
+                Send the secure link separately. You can also download the portrait artwork. The recipient must claim it with the verified email you entered.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

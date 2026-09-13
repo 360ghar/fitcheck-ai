@@ -153,6 +153,20 @@ accessibility 100, no console 404. Field CrUX improves over the next 28 days.
 | 2026-08-07 | Badge contrast via `text-secondary-foreground` on `bg-secondary` | ~12:1 light / ~11:1 dark, theme-token based (no hard-coded colors); `--primary` tokens fail in both modes (~3.9–4.2:1); applied to blog, FAQ and About pages (same pattern) |
 | 2026-08-07 | Category-pills container rendered unconditionally (reserved `min-h-[124px] md:min-h-[44px]` + skeleton pills while loading) | Reserving height only after categories load (initial approach) prevented nothing — the shift happens exactly when the container appears; the skeleton also fills the band visually |
 | 2026-08-07 | First blog card image rendered eager + `fetchpriority="high"` | On short mobile viewports the first card image is the largest first-paint element (larger than the hero H1); keeps it out of the lazy queue |
+| 2026-08-29 | Blog `Cache-Control` `public` → `private` (same TTLs) | 2026-08-29 CORS outage: Railway's hikari edge cached the blog responses (URL-keyed, `Vary: Origin` ignored) WITH their per-caller `Access-Control-Allow-Origin` — an entry populated by a no-Origin crawler/monitor served browsers a response with no ACAO ("No 'Access-Control-Allow-Origin'" + `net::ERR_FAILED 200`, intermittently, ≤300 s windows). `private` keeps the per-browser cold-load win this doc's PSI fix chased; shared caches skip. Regression guard: `test_blog_cache_control_is_not_shared_cacheable` |
+
+### 2026-08-29 addendum: the cache header caused a CORS outage
+
+The `public` cache header added on 2026-08-07 interacted badly with Railway's
+edge proxy (`server: railway-hikari`): it caches `public` responses keyed on
+URL only and ignores the `Vary: Origin` the backend sends. Because
+CORSMiddleware stamps `Access-Control-Allow-Origin` per caller, the cached
+entry carried whichever caller populated it — no-Origin clients (monitors,
+crawlers) baked in NO ACAO, apex and www baked in each other's. Browsers then
+saw intermittent CORS blocks on `/api/v1/blog/*` for up to max-age 300 s +
+SWR 600 s windows. Diagnosed by probing prod with three different `Origin`
+values and observing the same `x-correlation-id` + `x-cache: HIT` returned
+for all. Fix: `private` + regression guard test.
 
 ## Deferred debt
 

@@ -454,6 +454,11 @@ async def test_delete_current_user_heals_dead_pooled_connection(monkeypatch):
         "delete_multiple_images",
         staticmethod(fake_delete_multiple_images),
     )
+    monkeypatch.setattr(
+        StorageService,
+        "list_owned_user_storage_paths",
+        AsyncMock(return_value=[]),
+    )
 
     await users_module.delete_current_user(user_id=USER_ID, db=dead_db)
 

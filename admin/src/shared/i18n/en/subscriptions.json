@@ -6,6 +6,7 @@
     "plan": "Plan",
     "status": "Status",
     "period": "Current period",
+    "provider": "Provider",
     "cancelAtPeriodEnd": "Cancels at period end",
     "createdAt": "Created",
     "amount": "Amount"
@@ -14,7 +15,12 @@
     "plan": "Plan",
     "planPlaceholder": "All plans",
     "status": "Status",
-    "statusPlaceholder": "All statuses"
+    "statusPlaceholder": "All statuses",
+    "provider": "Provider",
+    "providerAll": "All providers",
+    "providerPlaceholder": "All providers",
+    "searchPlaceholder": "Search by email or user ID…",
+    "clientCaption": "Search filters the current page only — use the filters for full results."
   },
   "plans": {
     "free": "Free",
@@ -42,7 +48,8 @@
   },
   "rowActions": {
     "label": "Actions",
-    "refund": "Refund"
+    "refund": "Refund",
+    "viewTransaction": "View transaction"
   },
   "refund": {
     "dialogTitle": "Refund subscription",
@@ -56,7 +63,16 @@
   },
   "empty": {
     "title": "No subscriptions",
-    "message": "No subscriptions match the current filters."
+    "message": "No subscriptions match the current filters.",
+    "messageFiltered": "No subscriptions match the current filters."
+  },
+  "trial": {
+    "daysLeft": "{{count}}d left",
+    "expired": "expired"
+  },
+  "banner": {
+    "pastDue": "{{count}} past-due subscription(s) on this page",
+    "viewPastDue": "View past due"
   },
   "loadError": {
     "title": "Could not load subscriptions",

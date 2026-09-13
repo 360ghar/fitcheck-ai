@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import type { RouteObject } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -35,8 +36,8 @@ describe('SubscriptionsPage', () => {
     renderSubscriptions()
 
     expect(await screen.findByText('alice@example.com')).toBeInTheDocument()
-    // Backend list amounts are display dollars (19.99 / 8.99).
-    expect(screen.getByText('$19.99')).toBeInTheDocument()
+    // Backend list amounts are display dollars (alice $19.99, bob $8.99, dave $19.99).
+    expect(screen.getAllByText('$19.99').length).toBeGreaterThan(0)
     expect(screen.getByText('$8.99')).toBeInTheDocument()
     // Store-billed row (amount null) renders an em dash, not "$0".
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
@@ -99,5 +100,90 @@ describe('SubscriptionsPage', () => {
     expect(filename).toBe('subscriptions.csv')
     expect(content).toContain('alice@example.com')
     expect(content).toContain('pro_monthly')
+  })
+
+  it('filters provider SERVER-side via the billing_provider query param', async () => {
+    const { handlers, state } = createSubscriptionsHandlers()
+    server.use(...handlers)
+    renderSubscriptions('/subscriptions?provider=apple')
+
+    // The handler applies the billing_provider filter: only the apple row.
+    expect(await screen.findByText('carol@example.com')).toBeInTheDocument()
+    expect(screen.queryByText('alice@example.com')).not.toBeInTheDocument()
+    expect(screen.queryByText('dave@example.com')).not.toBeInTheDocument()
+    expect(
+      state.requests.some((url) => url.searchParams.get('billing_provider') === 'apple'),
+    ).toBe(true)
+  })
+
+  it('shows Refund for Stripe rows and View transaction for store rows (A8-05)', async () => {
+    const { handlers } = createSubscriptionsHandlers()
+    server.use(...handlers)
+    renderSubscriptions()
+
+    await screen.findByText('alice@example.com')
+    // alice + bob are stripe; carol + dave are apple/google.
+    expect(screen.getAllByRole('button', { name: 'Refund' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'View transaction' })).toHaveLength(2)
+  })
+
+  it('store row dialog shows receipt fields and marks refunded with iap.write', async () => {
+    const marked: string[] = []
+    server.use(
+      http.post('*/api/v1/admin/iap/transactions/:txnId/mark-refunded', ({ params }) => {
+        marked.push(String(params.txnId))
+        return HttpResponse.json({ subscription_id: 'sub_3', status: 'refunded' })
+      }),
+    )
+    const { handlers, state } = createSubscriptionsHandlers()
+    server.use(...handlers)
+    renderSubscriptions()
+
+    await screen.findByText('carol@example.com')
+    const user = userEvent.setup()
+    // First View transaction button = carol (apple row).
+    await user.click(screen.getAllByRole('button', { name: 'View transaction' })[0] as HTMLElement)
+
+    // The dialog fetched the per-user subscription detail endpoint.
+    const detail = await screen.findByRole('dialog')
+    await waitFor(() => {
+      expect(
+        state.requests.some((url) => url.pathname.endsWith('/api/v1/admin/subscriptions/user/user_3')),
+      ).toBe(true)
+    })
+    expect(within(detail).getByText('Apple original transaction ID: 1000000000000001')).toBeInTheDocument()
+    expect(within(detail).getByText('Apple App Store')).toBeInTheDocument()
+
+    await user.click(within(detail).getByRole('button', { name: 'Mark refunded' }))
+
+    // Confirm dialog stacks on top (Radix aria-hides the one below, so find
+    // it by its description text rather than by counting dialogs).
+    const confirmDescription = await screen.findByText(/as refunded\. This only updates/)
+    const confirmDialog = confirmDescription.closest('[role="dialog"]') as HTMLElement
+    expect(confirmDialog).not.toBeNull()
+    await user.click(within(confirmDialog).getByRole('button', { name: 'Mark refunded' }))
+
+    await waitFor(() => {
+      expect(marked).toEqual(['1000000000000001'])
+    })
+    expect(
+      await screen.findByText('Transaction 1000000000000001 marked refunded.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('hides Mark refunded without iap.write (A8-01)', async () => {
+    authedAs(['subscriptions.read', 'iap.read', 'subscriptions.refund'])
+    const { handlers } = createSubscriptionsHandlers()
+    server.use(...handlers)
+    renderSubscriptions()
+
+    await screen.findByText('carol@example.com')
+    const user = userEvent.setup()
+    await user.click(screen.getAllByRole('button', { name: 'View transaction' })[0] as HTMLElement)
+
+    const detail = await screen.findByRole('dialog')
+    expect(within(detail).getByText('Apple original transaction ID: 1000000000000001')).toBeInTheDocument()
+    expect(within(detail).queryByRole('button', { name: 'Mark refunded' })).not.toBeInTheDocument()
   })
 })

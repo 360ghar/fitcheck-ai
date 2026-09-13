@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-29
+Generated: 2026-09-13
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -78,6 +78,8 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `057_mcp_oauth.sql`
 - `058_mcp_oauth_atomic_token_exchange.sql`
 - `059_atomic_admin_gift_revoke.sql`
+- `060_atomic_admin_user_actions.sql`
+- `061_gift_voucher_recipient_matching.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -263,6 +265,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `057_mcp_oauth.sql` → `mcp_oauth_clients`
 - `057_mcp_oauth.sql` → `mcp_oauth_auth_codes`
 - `057_mcp_oauth.sql` → `mcp_oauth_refresh_tokens`
+- `061_gift_voucher_recipient_matching.sql` → `gift_vouchers`
 
 ## Related
 

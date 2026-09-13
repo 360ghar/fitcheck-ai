@@ -81,6 +81,7 @@
     "artwork": "Social artwork preview",
     "from": "From",
     "to": "To",
+    "recipientEmail": "Recipient email",
     "message": "Message",
     "publicId": "Public ID",
     "claimCode": "Claim code",
@@ -109,6 +110,7 @@
   "forms": {
     "fromName": "From name",
     "toName": "To name",
+    "recipientEmail": "Recipient email",
     "message": "Message",
     "duration": "Pro term",
     "expiresAt": "Claim expiry (optional)",
@@ -144,8 +146,8 @@
     "submit": "Add slots"
   },
   "rotate": {
-    "title": "Rotate private link and code?",
-    "description": "Every previous link, QR code, and printed code for this unclaimed gift will stop working.",
+    "title": "Rotate private link?",
+    "description": "Every previous private link and any legacy code for this unclaimed gift will stop working.",
     "confirm": "Rotate link"
   },
   "void": {

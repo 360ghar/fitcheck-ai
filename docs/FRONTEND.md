@@ -272,7 +272,7 @@ feature can be dropped from the bundle as well as the UI. Declare new vars in
 |-----|---------|-------|---------------------|
 | `VITE_ENABLE_SOCIAL_IMPORT` | `true` | Instagram import panes in `BatchExtractionFlow` | `ENABLE_SOCIAL_IMPORT` (router unmounted when off) |
 | `VITE_ENABLE_GAMIFICATION` | `false` | `/gamification` route, sidebar nav entry, and the lazy import of `GamificationPage` | `ENABLE_GAMIFICATION` (router stays **mounted**, handlers return zeroed 200s) |
-| `VITE_ENABLE_GIFT_VOUCHERS` | `false` | `/gifts` studio, sidebar entry, and its lazy import; the public claim page remains mounted | `ENABLE_GIFT_VOUCHER_CREATION` (new issuance only) |
+| `VITE_ENABLE_GIFT_VOUCHERS` | `true` | `/gifts` studio, dashboard gift priority, sidebar entry, and lazy import; set `false` only for a UI rollback. The public claim page remains mounted | `ENABLE_GIFT_VOUCHER_CREATION` (new issuance only) |
 
 There is no `/config` endpoint, so each pair must be kept in step by hand.
 Gamification defaults off because nothing on the backend writes `user_streaks`
@@ -284,10 +284,21 @@ page chunk. `App.tsx` does both.
 
 ### Gift voucher sharing
 
-`src/pages/gifts/GiftsPage.tsx` provides the protected studio: allowance and
-paid/free choice, personalization, live premium preview, Checkout return,
+The protected gifts studio supports paid and free issue, recipient name and
+email, live premium preview, Checkout return, incoming named claims,
 sent/received history, edit, rotation, copy, native Web Share, and portrait
-download. `src/pages/gifts/GiftClaimPage.tsx` serves the public claim flow.
+download. New vouchers require recipient email. The email is not rendered in
+the sent list, public claim page, artwork, or analytics. The secure link is
+shared separately; portrait artwork contains no claim credential.
+
+DashboardPage requests the gift summary only for a verified signed-in account.
+It shows one non-dismissible card in this order: incoming gift, free
+invitation, then the existing referral banner. A summary failure restores the
+referral banner. The card links to a selected incoming claim or the selected
+complimentary term in the gifts studio.
+
+GiftClaimPage serves public private-link claims. Named vouchers also require
+the recipient's verified email; legacy link-only vouchers continue to work.
 
 The claim credential is stored in `location.hash`, never the path or query.
 `captureCredential` removes the fragment with `history.replaceState` before

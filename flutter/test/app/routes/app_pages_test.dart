@@ -1,4 +1,5 @@
 import 'package:fitcheck_ai/app/routes/app_pages.dart';
+import 'package:fitcheck_ai/features/gifts/views/gift_vouchers_page.dart';
 import 'package:fitcheck_ai/features/outfits/views/outfit_collections_page.dart';
 import 'package:fitcheck_ai/features/wardrobe/views/wardrobe_stats_page.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,18 +22,25 @@ void main() {
   }
 
   group('route registration order', () {
-    test('/wardrobe/stats resolves to WardrobeStatsPage, not the item detail',
-        () {
-      expect(pageFor('/wardrobe/stats')?.page(), isA<WardrobeStatsPage>());
-    });
+    test(
+      '/wardrobe/stats resolves to WardrobeStatsPage, not the item detail',
+      () {
+        expect(pageFor('/wardrobe/stats')?.page(), isA<WardrobeStatsPage>());
+      },
+    );
 
     test(
-        '/outfits/collections resolves to OutfitCollectionsPage, not the outfit detail',
-        () {
-      expect(
-        pageFor('/outfits/collections')?.page(),
-        isA<OutfitCollectionsPage>(),
-      );
+      '/outfits/collections resolves to OutfitCollectionsPage, not the outfit detail',
+      () {
+        expect(
+          pageFor('/outfits/collections')?.page(),
+          isA<OutfitCollectionsPage>(),
+        );
+      },
+    );
+
+    test('/gifts resolves to the native gift vouchers page', () {
+      expect(pageFor('/gifts')?.page(), isA<GiftVouchersPage>());
     });
 
     test('no static path is shadowed by an earlier :param sibling', () {
@@ -51,7 +59,8 @@ void main() {
       expect(
         shadowed,
         isEmpty,
-        reason: 'Move each static path above its :param sibling.\n'
+        reason:
+            'Move each static path above its :param sibling.\n'
             '${shadowed.join('\n')}',
       );
     });

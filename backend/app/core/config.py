@@ -297,9 +297,10 @@ class Settings(BaseSettings):
     # secret for local/backwards-compatible environments; production should
     # set a separate random value before enabling creation.
     GIFT_TOKEN_SECRET: Optional[str] = None
-    # Safe rollout switch: blocks only NEW issuance. Existing public links,
-    # claims, artwork, and entitlement resolution continue to work.
-    ENABLE_GIFT_VOUCHER_CREATION: bool = False
+    # New issuance is enabled by default. Set this to false only for an
+    # emergency creation rollback; existing links, claims, artwork, and
+    # entitlement resolution continue to work.
+    ENABLE_GIFT_VOUCHER_CREATION: bool = True
 
     # ==========================================================================
     # Mobile In-App Purchase Configuration (Apple App Store + Google Play)

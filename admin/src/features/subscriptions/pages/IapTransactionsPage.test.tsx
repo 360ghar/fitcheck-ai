@@ -1,136 +1,87 @@
-import { screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { screen } from '@testing-library/react'
 import type { RouteObject } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { IapTransactionsPage } from './IapTransactionsPage'
 
-import * as csv from '@/shared/lib/csv'
 import { useSessionStore } from '@/shared/stores/sessionStore'
-import { createIapHandlers } from '@/test/msw/handlers/iap'
-import { server } from '@/test/msw/server'
 import { renderWithProviders } from '@/test/utils'
-
-const routes: RouteObject[] = [
-  { path: '/iap', element: <IapTransactionsPage /> },
-  { path: '/users/:id', element: <div>user-detail-marker</div> },
-]
-
-function renderIap(initialEntry = '/iap') {
-  return renderWithProviders(<IapTransactionsPage />, { routes, initialEntries: [initialEntry] })
-}
 
 function authedAs(permissions: string[]): void {
   useSessionStore.setState({ status: 'authed', role: 'super_admin', permissions })
 }
 
-describe('IapTransactionsPage', () => {
-  beforeEach(() => {
+describe('IapTransactionsPage (redirect to Subscriptions)', () => {
+  it('redirects /iap to the unfiltered subscriptions view by default', async () => {
     authedAs(['*'])
-  })
-
-  it('renders transactions and dashes for rows without a provider transaction id', async () => {
-    const { handlers } = createIapHandlers()
-    server.use(...handlers)
-    renderIap()
-
-    expect(await screen.findByText('alice@example.com')).toBeInTheDocument()
-    expect(screen.getByText('txn_apple_1001')).toBeInTheDocument()
-    expect(screen.getByText('bob@example.com')).toBeInTheDocument()
-    expect(screen.getByText('carol@example.com')).toBeInTheDocument()
-    // Store-billed row: transaction id and amount both render dashes.
-    const carolRow = screen.getByText('carol@example.com').closest('tr')
-    expect(within(carolRow as HTMLElement).getAllByText('—').length).toBeGreaterThan(0)
-  })
-
-  it('detail dialog fetches and shows receipt fields for a provider transaction id', async () => {
-    const { handlers, state } = createIapHandlers()
-    server.use(...handlers)
-    renderIap()
-
-    const row = (await screen.findByText('alice@example.com')).closest('tr')
-    expect(row).not.toBeNull()
-    const user = userEvent.setup()
-    await user.click(row as HTMLElement)
-
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Transaction detail')).toBeInTheDocument()
-    // Detail was fetched (single request to the detail endpoint).
-    await waitFor(() => {
-      expect(
-        state.requests.some((url) => url.pathname.endsWith('/api/v1/admin/iap/transactions/txn_apple_1001')),
-      ).toBe(true)
+    const routes: RouteObject[] = [
+      { path: '/iap', element: <IapTransactionsPage /> },
+      { path: '/subscriptions', element: <div>subscriptions-marker</div> },
+    ]
+    const { router } = renderWithProviders(<IapTransactionsPage />, {
+      routes,
+      initialEntries: ['/iap'],
     })
-    expect(await within(dialog).findByText('Apple App Store')).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Mark refunded' })).toBeInTheDocument()
+
+    expect(await screen.findByText('subscriptions-marker')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/subscriptions')
+    // No platform requested → no provider filter, so every provider stays visible.
+    expect(router.state.location.search).not.toContain('provider=')
   })
 
-  it('store-billed row without transaction id shows the explicit no-provider state (no infinite skeleton)', async () => {
-    const { handlers, state } = createIapHandlers()
-    server.use(...handlers)
-    renderIap()
-
-    const row = (await screen.findByText('carol@example.com')).closest('tr')
-    expect(row).not.toBeNull()
-    const user = userEvent.setup()
-    await user.click(row as HTMLElement)
-
-    const dialog = await screen.findByRole('dialog')
-    expect(
-      within(dialog).getByText(
-        'This row has no provider transaction id (store-billed). Details and refund-marking are unavailable for store-billed transactions.',
-      ),
-    ).toBeInTheDocument()
-    // No skeleton, no mark-refunded affordance, and no detail request.
-    expect(within(dialog).queryByRole('button', { name: 'Mark refunded' })).not.toBeInTheDocument()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(
-      state.requests.some((url) => url.pathname.includes('/api/v1/admin/iap/transactions/')),
-    ).toBe(false)
-  })
-
-  it('mark refunded flow: confirm dialog then toast', async () => {
-    const { handlers, state } = createIapHandlers()
-    server.use(...handlers)
-    renderIap()
-
-    const row = (await screen.findByText('alice@example.com')).closest('tr')
-    expect(row).not.toBeNull()
-    const user = userEvent.setup()
-    await user.click(row as HTMLElement)
-
-    const detailDialog = await screen.findByRole('dialog')
-    await user.click(within(detailDialog).getByRole('button', { name: 'Mark refunded' }))
-
-    const confirmDialog = await screen.findByRole('dialog')
-    expect(
-      within(confirmDialog).getByText(
-        'Mark txn_apple_1001 as refunded. This only updates the stored status — the store-side refund must already exist (webhooks record it).',
-      ),
-    ).toBeInTheDocument()
-    await user.click(within(confirmDialog).getByRole('button', { name: 'Mark refunded' }))
-
-    await waitFor(() => {
-      expect(state.markedRefunded).toContain('txn_apple_1001')
+  it('maps platform=apple to provider=apple and platform=google to provider=google', async () => {
+    authedAs(['*'])
+    const routes: RouteObject[] = [
+      { path: '/iap', element: <IapTransactionsPage /> },
+      { path: '/subscriptions', element: <div>subscriptions-marker</div> },
+    ]
+    const { router: routerApple } = renderWithProviders(<IapTransactionsPage />, {
+      routes,
+      initialEntries: ['/iap?platform=apple'],
     })
-    expect(await screen.findByText('Transaction txn_apple_1001 marked refunded.')).toBeInTheDocument()
+    expect(await screen.findByText('subscriptions-marker')).toBeInTheDocument()
+    expect(routerApple.state.location.search).toContain('provider=apple')
+
+    const routes2: RouteObject[] = [
+      { path: '/iap', element: <IapTransactionsPage /> },
+      { path: '/subscriptions', element: <div>subscriptions-marker-2</div> },
+    ]
+    const { router: routerGoogle } = renderWithProviders(<IapTransactionsPage />, {
+      routes: routes2,
+      initialEntries: ['/iap?platform=google'],
+    })
+    expect(await screen.findByText('subscriptions-marker-2')).toBeInTheDocument()
+    expect(routerGoogle.state.location.search).toContain('provider=google')
   })
 
-  it('exports the current page as CSV via shared/lib/csv', async () => {
-    const downloadSpy = vi.spyOn(csv, 'downloadCsv').mockImplementation(() => undefined)
-    const { handlers } = createIapHandlers()
-    server.use(...handlers)
-    renderIap()
-
-    await screen.findByText('alice@example.com')
-    const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Export CSV' }))
-    await waitFor(() => {
-      expect(downloadSpy).toHaveBeenCalledTimes(1)
+  it('preserves status param when redirecting', async () => {
+    authedAs(['*'])
+    const routes: RouteObject[] = [
+      { path: '/iap', element: <IapTransactionsPage /> },
+      { path: '/subscriptions', element: <div>subscriptions-marker</div> },
+    ]
+    const { router } = renderWithProviders(<IapTransactionsPage />, {
+      routes,
+      initialEntries: ['/iap?platform=apple&status=failed'],
     })
-    const [filename, content] = downloadSpy.mock.calls[0] as [string, string]
-    expect(filename).toBe('iap-transactions.csv')
-    expect(content).toContain('alice@example.com')
-    expect(content).toContain('apple')
+
+    expect(await screen.findByText('subscriptions-marker')).toBeInTheDocument()
+    expect(router.state.location.search).toContain('provider=apple')
+    expect(router.state.location.search).toContain('status=failed')
+  })
+
+  it('ignores unknown platform values instead of forcing a provider filter', async () => {
+    authedAs(['*'])
+    const routes: RouteObject[] = [
+      { path: '/iap', element: <IapTransactionsPage /> },
+      { path: '/subscriptions', element: <div>subscriptions-marker</div> },
+    ]
+    const { router } = renderWithProviders(<IapTransactionsPage />, {
+      routes,
+      initialEntries: ['/iap?platform=stripe'],
+    })
+
+    expect(await screen.findByText('subscriptions-marker')).toBeInTheDocument()
+    expect(router.state.location.search).not.toContain('provider=')
   })
 })

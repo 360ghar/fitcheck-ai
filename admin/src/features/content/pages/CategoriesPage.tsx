@@ -30,10 +30,13 @@ export function CategoriesPage() {
   const stats = deriveCategoryStats(query.data ?? [])
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t('categories.title')} description={t('categories.description')} />
+    <div className="space-y-3">
 
-      <p className="max-w-2xl text-sm text-muted-foreground">{t('categories.intro')}</p>
+      <PageHeader
+        dense
+        title={t('categories.title')}
+        description={t('categories.description')}
+      />
 
       {query.isPending ? (
         <SkeletonTable rows={6} columns={3} />

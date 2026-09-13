@@ -10,24 +10,49 @@
     "email": "User",
     "userEmail": "Email",
     "plan": "Plan",
-    "used": "Used today",
-    "limit": "Daily limit",
-    "remaining": "Remaining",
-    "override": "Override"
+    "used": "Operation use",
+    "limit": "Operation limits",
+    "remaining": "Lowest remaining",
+    "override": "Override",
+    "pct": "Max burn %"
   },
   "limit": {
-    "planDefault": "Plan default",
+    "planDefault": "Configured default",
     "none": "—"
+  },
+  "operations": {
+    "extractionShort": "Extract",
+    "generationShort": "Generate",
+    "embeddingShort": "Embed"
+  },
+  "permissionDenied": "You do not have permission to view quotas.",
+  "histogram": {
+    "title": "Burn histogram",
+    "empty": "No quota data to show burn histogram.",
+    "subtitle": "highest operation use per user today",
+    "aria": "Quota burn distribution",
+    "caption": "Current page only — 20 users per page. Search or filter to narrow results.",
+    "users_one": "{{count}} user",
+    "users_other": "{{count}} users",
+    "bucket0": "0-25%",
+    "bucket1": "25-50%",
+    "bucket2": "50-75%",
+    "bucket3": "75-100%",
+    "bucket4": "100%+"
+  },
+  "topBurners": {
+    "title": "Top burners",
+    "empty": "No data"
   },
   "override": {
     "label": "Override",
     "set": "Set override",
     "clear": "Clear override",
     "title": "Daily AI limit override",
-    "description": "Set a custom daily AI limit for {{name}}. Clearing the override restores the plan default.",
+    "description": "Set a custom daily AI limit for {{name}}. Clearing the override restores the configured limits.",
     "fieldLabel": "Daily limit",
     "placeholder": "e.g. 200",
-    "clearLabel": "Clear override (use plan default)",
+    "clearLabel": "Clear override (use configured limits)",
     "save": "Save override",
     "required": "Enter a daily limit",
     "min": "The limit must be at least 1",

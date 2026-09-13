@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-do
 import { PermissionRoute, PublicOnlyGuard, RouteGuard } from '@/app/guards'
 import { RootLayout } from '@/app/layout/RootLayout'
 import { NotFoundPage } from '@/app/pages/NotFoundPage'
+import { featureFlags } from '@/config/env'
 import { PageLoader } from '@/shared/ui/PageLoader'
 
 /**
@@ -83,7 +84,7 @@ const QuotasPage = lazyPage(() =>
 const PromoPage = lazyPage(() =>
   import('@/features/promo/pages/PromoPage').then((m) => ({ default: m.PromoPage })),
 )
-const GiftsPage = import.meta.env.VITE_ENABLE_GIFT_VOUCHERS === 'true'
+const GiftsPage = featureFlags.giftVouchers
   ? lazyPage(() =>
       import('@/features/gifts/pages/GiftsPage').then((m) => ({ default: m.GiftsPage })),
     )
@@ -173,6 +174,10 @@ export const appRouteObjects: RouteObject[] = [
         handle: { titleKey: routeManifest.dashboard.titleKey },
       },
       {
+        // Phase 1a single-page: legacy /dashboard/trends collapses to a
+        // section/anchor inside /dashboard. Keep the route object for
+        // backwards-compatible deep links, but the element redirects to
+        // /dashboard?section=trends preserving ?days (see TrendsPage).
         path: 'dashboard/trends',
         element: guardedPage(TrendsPage, 'dashboards.read'),
         handle: { titleKey: routeManifest.trends.titleKey },

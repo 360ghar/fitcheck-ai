@@ -43,6 +43,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // MSW uses one process-wide interception lifecycle. Run test files in
+    // sequence so handlers and browser storage are reset deterministically.
+    fileParallelism: false,
     restoreMocks: true,
     coverage: {
       provider: 'v8',

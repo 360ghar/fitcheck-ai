@@ -76,8 +76,7 @@ export function StoragePage() {
 
   if (storageQuery.isPending) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
+      <div className="space-y-3">
         <SkeletonTable rows={4} columns={4} />
       </div>
     )
@@ -85,8 +84,7 @@ export function StoragePage() {
 
   if (storageQuery.isError || !storageQuery.data) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
+      <div className="space-y-3">
         <ErrorState
           title={t('loadError.title')}
           message={t('loadError.message')}
@@ -102,22 +100,22 @@ export function StoragePage() {
   const items = inventory.items ?? []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
+        dense
         title={t('title')}
         description={t('description')}
-        actions={
-          canCleanup ? (
-            <Button
-              variant="destructive"
-              onClick={() => setCleanupOpen(true)}
-              disabled={inventory.count === 0}
-            >
-              <Eraser aria-hidden="true" />
-              {t('cleanup.title')}
-            </Button>
-          ) : undefined
-        }
+        actions={canCleanup ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setCleanupOpen(true)}
+            disabled={inventory.count === 0}
+          >
+            <Eraser aria-hidden="true" />
+            {t('cleanup.title')}
+          </Button>
+        ) : undefined}
       />
 
       {inventory.truncated ? (

@@ -1041,6 +1041,12 @@ async def test_delete_current_user_collects_ticket_attachments_and_avatar(monkey
         "resolve_owned_storage_paths",
         AsyncMock(return_value={"storage_paths": [f"users/{USER_ID}/items/i1.jpg"]}),
     )
+    generated_preview = f"users/{USER_ID}/generated/product/preview.png"
+    monkeypatch.setattr(
+        StorageService,
+        "list_owned_user_storage_paths",
+        AsyncMock(return_value=[generated_preview]),
+    )
 
     async def fake_delete_multiple_images(*, db, storage_paths, bucket=None):
         deleted.extend(storage_paths)
@@ -1054,6 +1060,7 @@ async def test_delete_current_user_collects_ticket_attachments_and_avatar(monkey
     assert f"users/{USER_ID}/tickets/t1.jpg" in deleted
     assert avatar_key in deleted
     assert f"users/{USER_ID}/export/data.json" in deleted
+    assert generated_preview in deleted
     assert db.auth.admin.deleted == [USER_ID]
 
 
@@ -1067,6 +1074,11 @@ async def test_delete_current_user_vector_failure_raises_database_error(monkeypa
         StorageService,
         "resolve_owned_storage_paths",
         AsyncMock(return_value={"storage_paths": []}),
+    )
+    monkeypatch.setattr(
+        StorageService,
+        "list_owned_user_storage_paths",
+        AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(StorageService, "delete_multiple_images", staticmethod(AsyncMock()))
     monkeypatch.setattr(
@@ -1090,6 +1102,11 @@ async def test_delete_current_user_raises_when_auth_deletion_unavailable(monkeyp
         StorageService,
         "resolve_owned_storage_paths",
         AsyncMock(return_value={"storage_paths": []}),
+    )
+    monkeypatch.setattr(
+        StorageService,
+        "list_owned_user_storage_paths",
+        AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(StorageService, "delete_multiple_images", staticmethod(AsyncMock()))
     monkeypatch.setattr(users_module, "get_vector_service", lambda: Mock(delete_user_items=AsyncMock()))

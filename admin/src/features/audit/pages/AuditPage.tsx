@@ -198,8 +198,7 @@ export function AuditPage() {
 
   if (!can('audit.read')) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
+      <div className="space-y-3">
         <EmptyState
           title={t('errors:forbidden.title')}
           message={t('errors:forbidden.message')}
@@ -210,8 +209,8 @@ export function AuditPage() {
 
   if (table.query.isError) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t('title')} description={t('description')} />
+      <div className="space-y-3">
+        <PageHeader dense title={t('title')} description={t('description')} />
         <ErrorState
           message={normalizeError(table.query.error).message}
           onRetry={() => void table.query.refetch()}
@@ -224,8 +223,9 @@ export function AuditPage() {
   const toValue = table.tableState.filters.to
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('description')} />
+    <div className="space-y-3">
+
+      <PageHeader dense title={t('title')} description={t('description')} />
 
       <TableToolbar
         searchValue={table.tableState.q}

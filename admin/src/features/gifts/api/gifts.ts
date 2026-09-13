@@ -64,6 +64,7 @@ export interface GiftItem {
 }
 
 export interface GiftDetail extends GiftItem {
+  recipient_email: string | null
   purchaser_user_id: string | null
   claimed_by_user_id: string | null
   stripe_payment_intent_id: string | null
@@ -129,6 +130,7 @@ export function toGiftItem(row: Record<string, unknown>): GiftItem {
 function toGiftDetail(row: Record<string, unknown>): GiftDetail {
   return {
     ...toGiftItem(row),
+    recipient_email: text(row, 'recipient_email'),
     purchaser_user_id: text(row, 'purchaser_user_id'),
     claimed_by_user_id: text(row, 'claimed_by_user_id'),
     stripe_payment_intent_id: text(row, 'stripe_payment_intent_id'),

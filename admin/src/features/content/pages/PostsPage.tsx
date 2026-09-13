@@ -162,12 +162,13 @@ export function PostsPage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
+        dense
         title={t('title')}
         description={t('description')}
         actions={
-          <Button asChild>
+          <Button asChild size="sm">
             <Link to="/content/posts/new">
               <FileText aria-hidden="true" />
               {t('newPost')}

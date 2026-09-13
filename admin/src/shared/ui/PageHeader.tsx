@@ -9,9 +9,26 @@ export interface PageHeaderProps {
   description?: string
   actions?: React.ReactNode
   className?: string
+  /** Compact variant for table pages — smaller type, less vertical rhythm. */
+  dense?: boolean
 }
 
-export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, className, dense }: PageHeaderProps) {
+  if (dense) {
+    return (
+      <div className={cn('flex flex-wrap items-center justify-between gap-2', className)}>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-base font-semibold tracking-tight text-ink">{title}</h1>
+          {description ? (
+            <p className="truncate text-xs text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+        {actions ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>
+        ) : null}
+      </div>
+    )
+  }
   return (
     <div className={cn('flex flex-wrap items-start justify-between gap-4', className)}>
       <div className="space-y-1">

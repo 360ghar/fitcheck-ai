@@ -215,8 +215,9 @@ export function FeedbackPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t('title')} description={t('description')} />
+    <div className="space-y-3">
+
+      <PageHeader dense title={t('title')} description={t('description')} />
 
       <TableToolbar
         searchValue={table.tableState.q}
