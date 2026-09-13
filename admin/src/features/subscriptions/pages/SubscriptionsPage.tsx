@@ -33,6 +33,7 @@ import {
 } from '@/shared/ui/dialog'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { ErrorState } from '@/shared/ui/ErrorState'
+import { PageHeader } from '@/shared/ui/PageHeader'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { TableToolbar } from '@/shared/ui/TableToolbar'
@@ -388,6 +389,7 @@ export function SubscriptionsPage() {
   if (table.query.isError) {
     return (
       <div className="space-y-3">
+        <PageHeader dense title={t('title')} description={t('description')} />
         <ErrorState
           title={t('loadError.title')}
           message={t('loadError.message')}
@@ -404,6 +406,7 @@ export function SubscriptionsPage() {
 
   return (
     <div className="space-y-3">
+      <PageHeader dense title={t('title')} description={t('description')} />
 
       {showFailedBanner ? (
         <div

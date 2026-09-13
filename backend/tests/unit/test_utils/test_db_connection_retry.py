@@ -418,6 +418,7 @@ def test_run_sync_with_reconnect_rethrows_non_connection_errors(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_get_subscription_retries_on_dead_connection(monkeypatch):
+    from datetime import datetime, timedelta, timezone
     from unittest.mock import Mock
 
     from app.db.connection import SupabaseDB
@@ -434,16 +435,20 @@ async def test_get_subscription_retries_on_dead_connection(monkeypatch):
     )
 
     fresh_db = Mock()
+    now = datetime.now(timezone.utc)
+    # Anchor the period to "now" so the fixture stays entitled regardless of
+    # when the suite runs (hardcoded 2026-08 dates expired and downgraded the
+    # row to FREE once real time passed them).
     row = {
         "id": "22222222-2222-2222-2222-222222222222",
         "user_id": USER_ID,
         "plan_type": "plus_monthly",
         "status": "active",
-        "current_period_start": "2026-08-01T00:00:00+00:00",
+        "current_period_start": (now - timedelta(days=10)).isoformat(),
         # A paid plan without a current_period_end is not entitled
         # (effective_plan_type downgrades it) - give it a future end so the
         # row is treated as an active Plus subscription.
-        "current_period_end": "2026-08-31T00:00:00+00:00",
+        "current_period_end": (now + timedelta(days=10)).isoformat(),
         "cancel_at_period_end": False,
         "trial_end": None,
         "referral_credit_months": 0,

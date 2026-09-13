@@ -227,12 +227,18 @@ class GiftService:
         stored_occasion = str(voucher.get("occasion") or "").strip() or None
         stored_occasion_greeting = str(voucher.get("occasion_greeting") or "").strip() or None
         request_occasion = request.occasion.value if request.occasion else None
+        # Vouchers created before migration 061 have a NULL recipient_email.
+        # Treat that as an unbound legacy recipient so a lost-response retry
+        # still replays the original voucher instead of failing as an
+        # already-used request key.
+        stored_recipient = str(voucher.get("recipient_email") or "").strip().lower()
+        recipient_matches = not stored_recipient or stored_recipient == request.recipient_email
         return (
             voucher.get("source") == source
             and int(voucher.get("duration_months") or 0) == request.duration_months
             and str(voucher.get("from_name") or "").strip() == request.from_name
             and str(voucher.get("to_name") or "").strip() == request.to_name
-            and str(voucher.get("recipient_email") or "").strip().lower() == request.recipient_email
+            and recipient_matches
             and stored_message == request.message
             and stored_occasion == request_occasion
             and stored_occasion_greeting == request.occasion_greeting

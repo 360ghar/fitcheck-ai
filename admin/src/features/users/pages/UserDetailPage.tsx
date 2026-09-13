@@ -116,7 +116,6 @@ export function UserDetailPage() {
   const [clearOpen, setClearOpen] = useState(false)
 
   const outfitsTab = searchParams.get('outfits_tab') ?? 'outfits'
-  const itemsPage = Math.max(1, Number(searchParams.get('items_page') ?? '1') || 1)
 
   const detail = detailQuery.data as (typeof detailQuery.data & JsonRecord) | undefined
   const userRecord = detail?.user as JsonRecord | undefined
@@ -138,11 +137,8 @@ export function UserDetailPage() {
 
   // Extended keys — degrade gracefully when backend hasn't yet shipped them
   const extended = detail as JsonRecord | undefined
-  const items: JsonRecord[] = useMemo(() => {
-    const all = arrayValue(extended, 'items')
-    const start = (itemsPage - 1) * 12
-    return all.slice(start, start + 12)
-  }, [extended, itemsPage])
+  // Backend already caps the embedded items list (12); slice defensively only.
+  const items: JsonRecord[] = useMemo(() => arrayValue(extended, 'items').slice(0, 12), [extended])
   const outfits: JsonRecord[] = useMemo(
     () => arrayValue(extended, 'outfits').slice(0, 12),
     [extended],
@@ -679,7 +675,7 @@ export function UserDetailPage() {
                   {countRows.map((row) => (
                     <Field
                       key={row.key}
-                      label={t(`detail.${row.key}`)}
+                      label={t(`detail.${row.key}`, { defaultValue: row.key.replaceAll('_', ' ') })}
                       value={formatNumber(row.value)}
                     />
                   ))}

@@ -1,8 +1,8 @@
 import { PanelLeftClose, PanelLeftOpen, Search, Menu } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useMatches } from 'react-router-dom'
 
 import { DeploymentStatus } from '@/app/layout/DeploymentStatus'
+import { usePageTitle } from '@/app/layout/usePageTitle'
 import { ThemeToggle, UserMenu } from '@/app/layout/UserMenu'
 import { cn } from '@/shared/lib/cn'
 import { useCommandStore } from '@/shared/stores/commandStore'
@@ -19,16 +19,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed)
   const toggleSidebar = useUiStore((state) => state.toggleSidebar)
   const setCommandOpen = useCommandStore((state) => state.setOpen)
-  const matches = useMatches()
-  let titleKey: string | null = null
-  for (const match of [...matches].reverse()) {
-    const handle = match.handle as { titleKey?: string } | undefined
-    if (handle?.titleKey) {
-      titleKey = handle.titleKey
-      break
-    }
-  }
-  const pageTitle = titleKey ? t(titleKey) : null
+  const pageTitle = usePageTitle()
 
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-4 backdrop-blur sm:px-6">

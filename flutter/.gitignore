@@ -50,3 +50,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Gradle writes reports into android/build when invoked from the android dir
+/android/build/
+
+# Visual-regression diff output (master baselines are committed elsewhere)
+/test/visual/failures/

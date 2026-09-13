@@ -119,7 +119,6 @@
   "categories": {
     "title": "Categories",
     "description": "Organize blog posts into categories.",
-    "intro": "Categories are derived from published posts. Assign or rename them from the post editor.",
     "header": "All categories",
     "columnCategory": "Category",
     "postCount": "{{count}} posts",

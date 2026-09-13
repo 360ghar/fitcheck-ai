@@ -23,7 +23,7 @@ confirmed defect with focused regression coverage.
 
 ## Context / links
 
-- Related PR: https://github.com/360ghar/fitcheck-ai/pull/15
+- Related PR: <https://github.com/360ghar/fitcheck-ai/pull/15>
 - Baseline commit: `18aeb74ad546da5655f82f88ed77edd32ed2eb4e`
 
 ## Progress log

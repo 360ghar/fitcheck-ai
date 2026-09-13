@@ -27,7 +27,7 @@ regression test and fix each valid finding without changing unrelated behavior.
 ## Context / links
 
 - Related code: `backend/app/api/v1/photoshoot.py`, `backend/app/services/photoshoot_job_service.py`, `flutter/lib/features/`, `frontend/src/pages/oauth/`
-- Related issue: https://github.com/360ghar/fitcheck-ai/pull/15
+- Related issue: <https://github.com/360ghar/fitcheck-ai/pull/15>
 
 ## Progress log
 

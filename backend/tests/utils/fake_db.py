@@ -563,6 +563,9 @@ class FakeDB:
         """Mirror migration 060's row-locked trial extension outcome."""
         user_id = params.get("p_user_id")
         days = int(params.get("p_days") or 0)
+        # Match the RPC's day-range guard (1..90), like the service layer.
+        if not 1 <= days <= 90:
+            return FakeResult(data=[])
         record = next(
             (row for row in self._rows_for("subscriptions") if row.get("user_id") == user_id),
             None,
@@ -582,6 +585,8 @@ class FakeDB:
         base = max(before_dt, now) if before_dt else now
         after = base + timedelta(days=days)
         record["trial_end"] = after.isoformat()
+        # Mirror the RPC's updated_at touch so callers can assert on it.
+        record["updated_at"] = now.isoformat()
         return FakeResult(
             data=[
                 {
@@ -601,6 +606,7 @@ class FakeDB:
         today_iso = today.isoformat()
         period_start = today.replace(day=1).isoformat()
 
+        now_iso = utcnow().isoformat()
         settings = next(
             (row for row in self._rows_for("user_ai_settings") if row.get("user_id") == user_id),
             None,
@@ -614,6 +620,7 @@ class FakeDB:
                 "daily_generation_count": 0,
                 "daily_embedding_count": 0,
                 "last_reset_date": today_iso,
+                "updated_at": now_iso,
             }
         )
 
@@ -634,7 +641,7 @@ class FakeDB:
                 "monthly_embeddings": 0,
             }
             self._rows_for("subscription_usage").append(usage)
-        usage.update({"daily_photoshoot_images": 0, "last_photoshoot_reset": today_iso})
+        usage.update({"daily_photoshoot_images": 0, "last_photoshoot_reset": today_iso, "updated_at": now_iso})
         return FakeResult(data=[{"today": today_iso, "period_start": period_start}])
 
     def _consume_mcp_oauth_authorization_code(self, params: Dict[str, Any]) -> FakeResult:

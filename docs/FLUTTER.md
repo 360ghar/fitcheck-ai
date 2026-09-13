@@ -1,6 +1,6 @@
 # Flutter
 
-Last updated: 2026-08-30
+Last updated: 2026-09-13
 
 Mobile client under `flutter/` using GetX feature modules.
 

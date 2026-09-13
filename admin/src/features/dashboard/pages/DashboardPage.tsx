@@ -197,8 +197,12 @@ export function DashboardPage() {
   }
 
   const funnelDerived = useMemo(() => {
+    // A failed funnel request surfaces as an ErrorState in the render below;
+    // the overview-derived approximation is reserved for a successful null
+    // response from the optional endpoint.
+    if (funnel.isError) return { steps: [], isApprox: false }
     const backendSteps = funnel.data?.steps ?? []
-    const hasBackend = !funnel.isError && !!funnel.data && backendSteps.length > 0
+    const hasBackend = !!funnel.data && backendSteps.length > 0
     if (hasBackend) return { steps: backendSteps, isApprox: false }
     const approxSteps: NonNullable<AdminFunnelResponse['steps']> = [
       { label: t('funnel.stepSignups', { defaultValue: 'Signups (30d)' }), count: signups30d, pct_of_prev: 100 },
@@ -220,6 +224,13 @@ export function DashboardPage() {
     ]
     return { steps: approxSteps, isApprox: true }
   }, [funnel.data, funnel.isError, signups30d, active7d, trials, paidSubscriptions, t])
+
+  // Deep link to the Trends section preserves the selected ?days window.
+  const trendsLinkSearch = useMemo(() => {
+    const next = new URLSearchParams(searchParams)
+    next.set('section', 'trends')
+    return next.toString()
+  }, [searchParams])
 
   return (
     <div className="space-y-4">
@@ -305,7 +316,7 @@ export function DashboardPage() {
       </nav>
 
       {/* Section 1: KPI strip: 8 cells grid (existing 6 + trials_ending_7d + tickets_open_48h) */}
-      <Card id="section-overview">
+      <Card id="section-overview" className="scroll-mt-14">
         <CardHeader dense>
           <CardTitle className="text-sm">{t('sections.overview', { defaultValue: 'Key metrics' })}</CardTitle>
         </CardHeader>
@@ -387,11 +398,11 @@ export function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-12">
         <div className="lg:col-span-8">
       {/* Section 2: Revenue strip Card with 6 cells + 2 computed cells: ARPU and trialConversion */}
-      <Card id="section-revenue">
+      <Card id="section-revenue" className="scroll-mt-14">
         <CardHeader dense className="flex-row items-center justify-between">
           <CardTitle className="text-sm">{t('sections.revenue', { defaultValue: t('revenue.title') })}</CardTitle>
           <Link
-            to="/dashboard?section=trends"
+            to={`/dashboard?${trendsLinkSearch}`}
             className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             {t('revenue.viewTrends')}
@@ -451,7 +462,7 @@ export function DashboardPage() {
         </div>
         <div className="lg:col-span-4">
       {/* Section 6: Referrals+Promo+Gifts pulse Card: 4 cells + 2 extra */}
-      <Card id="section-referrals">
+      <Card id="section-referrals" className="scroll-mt-14">
         <CardHeader dense>
           <CardTitle className="text-sm">{t('sections.referralsPulse', { defaultValue: t('referrals.title') })}</CardTitle>
         </CardHeader>
@@ -489,7 +500,7 @@ export function DashboardPage() {
       </div>
 
       {/* Section 3: Trends Card: reuse existing TrendsCharts lazy, keep ?days Tabs via useSearchParams parseDays */}
-      <Card id="section-trends">
+      <Card id="section-trends" className="scroll-mt-14">
         <CardHeader dense className="flex-row items-center justify-between gap-2">
           <CardTitle className="text-sm">{t('sections.trends', { defaultValue: t('trends.title') })}</CardTitle>
           <Tabs
@@ -554,14 +565,12 @@ export function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-12">
         <div className="lg:col-span-7">
       {/* Section 4: Funnel strip Card: call useFunnelQuery(days). Graceful fallback */}
-      <Card id="section-funnel">
+      <Card id="section-funnel" className="scroll-mt-14">
         <CardHeader dense>
           <CardTitle className="text-sm">{t('sections.funnel', { defaultValue: t('funnel.title', { defaultValue: 'Funnel' }) })}</CardTitle>
-          {t('funnel.description', { defaultValue: 'Signup → active → trial → paid progression.' }) ? (
-            <p className="text-xs text-muted-foreground">
-              {t('funnel.description', { defaultValue: 'Signup → active → trial → paid progression.' })}
-            </p>
-          ) : null}
+          <p className="text-xs text-muted-foreground">
+            {t('funnel.description', { defaultValue: 'Signup → active → trial → paid progression.' })}
+          </p>
         </CardHeader>
         <CardContent dense>
           {funnel.isPending ? (
@@ -570,6 +579,11 @@ export function DashboardPage() {
                 <Skeleton key={`funnel-skeleton-${index}`} className="h-20 flex-1" />
               ))}
             </div>
+          ) : funnel.isError ? (
+            <ErrorState
+              message={normalizeError(funnel.error).message}
+              onRetry={() => void queryClient.invalidateQueries({ queryKey: dashboardKeys.funnel(trendsDays) })}
+            />
           ) : funnelDerived.steps.length === 0 ? (
             <EmptyState
               title={t('funnel.empty', { defaultValue: 'Funnel data unavailable' })}
@@ -616,7 +630,7 @@ export function DashboardPage() {
         </div>
         <div className="lg:col-span-5">
       {/* Section 5: Retention glance Card: useRetentionQuery(4). Graceful fallback */}
-      <Card id="section-retention">
+      <Card id="section-retention" className="scroll-mt-14">
         <CardHeader dense>
           <CardTitle className="text-sm">
             {t('sections.retention', { defaultValue: t('retention.title', { defaultValue: 'Retention glance' }) })}
@@ -633,7 +647,12 @@ export function DashboardPage() {
               <Skeleton className="h-8 w-full" />
               <Skeleton className="h-8 w-full" />
             </div>
-          ) : retention.isError || !retention.data ? (
+          ) : retention.isError ? (
+            <ErrorState
+              message={normalizeError(retention.error).message}
+              onRetry={() => void queryClient.invalidateQueries({ queryKey: dashboardKeys.retention(4) })}
+            />
+          ) : !retention.data ? (
             <EmptyState
               title={t('retention.empty', { defaultValue: 'Retention data not yet available.' })}
               message={t('retention.emptyHint', {
@@ -706,7 +725,7 @@ export function DashboardPage() {
           onRetry={() => void queryClient.invalidateQueries({ queryKey: dashboardKeys.topUsers })}
         />
 
-        <Card id="section-ops" className="min-w-0">
+        <Card className="min-w-0">
           <CardHeader dense className="flex-row items-center justify-between">
             <CardTitle className="text-sm">{t('activity.title')}</CardTitle>
             <Link
@@ -757,7 +776,7 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-0">
+        <Card id="section-ops" className="min-w-0 scroll-mt-14">
           <CardHeader dense className="flex-row items-center justify-between gap-2">
             <CardTitle className="text-sm">{t('sections.ops', { defaultValue: t('ops.title', { defaultValue: 'Ops health' }) })}</CardTitle>
             <Link
