@@ -563,24 +563,69 @@ async def list_outfits(
 async def available_items(
     user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
+    ids: Optional[str] = Query(
+        None,
+        description=(
+            "Optional comma-separated item UUIDs to restrict the picker to. "
+            "Callers that only need a known subset (e.g. an outfit's item_ids) "
+            "should pass them instead of fetching the whole closet."
+        ),
+    ),
 ):
     """Return simplified items list suitable for outfit-building UIs."""
     try:
-        res = await asyncio.to_thread(
+        # Opt-in subset filter (backward compatible: absent ids = whole closet).
+        # Invalid entries are ignored; an empty parsed set short-circuits to [].
+        # Guard: when this endpoint is invoked directly (tests/other routes),
+        # the FastAPI Query() default arrives as a ParamInfo/Query object, not
+        # None — only a real str enables the filter (same gotcha as the
+        # category guard in recommendations.match_items). Any real str —
+        # including an explicitly empty/blank "?ids=" — enables the filter: an
+        # explicitly requested empty subset must not silently widen to the
+        # whole closet.
+        id_list: Optional[List[str]] = None
+        if isinstance(ids, str):
+            valid: List[str] = []
+            for raw in ids.split(","):
+                # uuid.UUID("") raises ValueError, so blanks are skipped too.
+                try:
+                    uuid.UUID(raw.strip())
+                except ValueError:
+                    continue
+                valid.append(raw.strip())
+            # Dedupe (harmless to .in_() but keeps the cap honest) and cap.
+            id_list = list(dict.fromkeys(valid))[:100]
+            if not id_list:
+                return {"data": [], "message": "OK"}
+
+        query = (
             db.table("items")
             .select("id,name,category,colors,item_images(storage_path,image_url,thumbnail_url,is_primary)")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
-            .order("created_at", desc=True)
-            .limit(500)
-            .execute
         )
+        if id_list is not None:
+            # Same recency order as the unfiltered branch so callers that
+            # surface items (picker grids, prompt builders) see a stable
+            # ordering either way.
+            query = query.in_("id", id_list).order("created_at", desc=True)
+        else:
+            query = query.order("created_at", desc=True).limit(500)
+        res = await asyncio.to_thread(query.execute)
         items = []
-        for row in res.data or []:
-            images = row.get("item_images") or []
-            # Private buckets: materialize a fresh presigned URL per row from
-            # storage_path so picker grids never render stale/expired URLs.
-            await materialize_image_urls(images, owner_user_id=user_id)
+        # Independent per-row presign passes run concurrently; the list is
+        # small (<=500, or the requested subset) and each pass is local S3
+        # signing, so a gather here shortens picker latency to the slowest
+        # row instead of the sum of rows.
+        rows = list(res.data or [])
+        image_lists = [row.get("item_images") or [] for row in rows]
+        await asyncio.gather(
+            *(
+                materialize_image_urls(images, owner_user_id=user_id)
+                for images in image_lists
+            )
+        )
+        for row, images in zip(rows, image_lists):
             primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
             items.append(
                 {

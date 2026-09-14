@@ -11,6 +11,8 @@ vi.mock('@/api/items', () => ({
   batchDeleteItems: vi.fn(),
   toggleItemFavorite: vi.fn(),
   markItemAsWorn: vi.fn(),
+  // The detail pane's similar-items strip calls this on open.
+  findSimilarItems: vi.fn().mockResolvedValue({ items: [], source_item_id: 'item-1' }),
 }))
 
 import { getItems } from '@/api/items'
@@ -107,7 +109,8 @@ describe('WardrobePage detail selection is driven by the URL', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await user.click(await screen.findByText('Linen shirt'))
+    // Grid tiles are pure image; the item name is the card's accessible label.
+    await user.click(await screen.findByRole('button', { name: 'Linen shirt' }))
 
     await waitFor(() =>
       expect(screen.getByTestId('pathname')).toHaveTextContent('/wardrobe/item-1')

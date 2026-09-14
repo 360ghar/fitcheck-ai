@@ -1597,7 +1597,12 @@ async def test_batch_delete_wraps_unexpected_errors(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_stats_survives_unparseable_prices():
-    """A non-numeric price is skipped with a debug log, not fatal."""
+    """A non-numeric price is skipped with a debug log, not fatal.
+
+    FakeDB has no canned get_item_stats_aggregate RPC result, so the handler
+    takes the migration-gap fallback (legacy Python rollup) — which is exactly
+    the code path this test exercises.
+    """
     db = FakeDB(
         rows={
             "items": [
@@ -1609,6 +1614,7 @@ async def test_stats_survives_unparseable_prices():
                     "colors": ["Red"],
                     "condition": "good",
                     "price": "oops",
+                    "is_deleted": False,
                     "usage_times_worn": 3,
                 },
                 {
@@ -1619,6 +1625,7 @@ async def test_stats_survives_unparseable_prices():
                     "colors": [],
                     "condition": None,
                     "price": None,
+                    "is_deleted": False,
                     "usage_times_worn": None,
                 },
                 {
@@ -1629,10 +1636,11 @@ async def test_stats_survives_unparseable_prices():
                     "colors": ["blue"],
                     "condition": "dirty",
                     "price": 12.5,
+                    "is_deleted": False,
                     "usage_times_worn": 0,
                 },
             ]
-        }
+        },
     )
 
     result = await items_module.get_item_stats(user_id=USER_ID, db=db)

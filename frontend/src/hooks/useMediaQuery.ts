@@ -40,6 +40,8 @@ export const SPLIT_VIEWPORT_QUERY = '(min-width: 768px)'
 /** `lg` — the breakpoint where the shrunken list can hold masonry again. */
 export const WIDE_VIEWPORT_QUERY = '(min-width: 1024px)'
 
+/** `xs` — large-phone floor (iPhone SE); the dense closet grid steps here. */
+export const XS_QUERY = '(min-width: 375px)'
 /** `sm` */
 export const SM_QUERY = '(min-width: 640px)'
 /** `md` — alias of SPLIT_VIEWPORT_QUERY. */

@@ -44,6 +44,7 @@ publication. Preserve product functionality and existing workspace work.
 | 2026-09-05 | Eight fixed-image goldens pass for Home/Closet/Outfits/Studio, plus 320px/200% and tablet checks. Shared image regressions reproduce and fix stale re-mint results and data-URI preview support. |
 | 2026-09-05 | Independent review reproduced and fixed empty-Outfits overflow, long Closet list categories, missing Home photo URL recovery, and popup label constraints. Repository architecture/docs/theme/iOS-target checks pass. |
 | 2026-09-05 | iOS simulator debug build passed on Flutter 3.44.6; app installed and opened on iPhone 17 Pro / iOS 26.5. Inspected onboarding and login through native screenshot/accessibility tree. Final rebuild passed; native Back, single field labels and empty-form validation were inspected successfully. |
+| 2026-09-14 | Merged origin/main (PR #19 backend efficiency + mobile sweep). Kept Flutter magazine work and denser web masonry; ItemCard stays pure-image from main; route-layer debt recorded as TD-110. |
 
 ## Decision log
 

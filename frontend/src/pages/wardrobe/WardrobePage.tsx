@@ -223,6 +223,20 @@ export default function WardrobePage() {
     }
   }, [])
 
+  // Long-press starts a bulk selection (pointer-only gesture), so keyboard
+  // users get Escape as the exit — and everyone expects Escape to undo a
+  // marquee-style selection anyway. A dialog/menu open above the grid marks
+  // the event handled via preventDefault (Radix DismissableLayer does); that
+  // Escape dismisses the dialog and must not also wipe the selection.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      clearSelectedItems()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [clearSelectedItems])
+
   // F2b-02: the store's non-URL filters (category/color/occasion/condition/
   // search) persist across visits and leak server-side into the next fetch,
   // narrowing the list while the UI shows "All". The URL is this page's
@@ -552,20 +566,14 @@ export default function WardrobePage() {
           item={item}
           variant={variant}
           isSelected={isMultiSelected}
-          className={isOpenInPane ? 'border-ink' : undefined}
+          isSelecting={selectedItems.size > 0}
+          className={isOpenInPane ? 'ring-2 ring-ink ring-offset-2 ring-offset-background' : undefined}
           onClick={() => handleCardClick(item)}
+          onLongPress={() => toggleItemSelected(item.id)}
           onImageError={() => {
             // A broken image usually means the presigned URL expired; refetch
             // the current list once to obtain fresh URLs.
             void fetchItems(true)
-          }}
-          onToggleFavorite={(e) => {
-            e.stopPropagation()
-            handleToggleFavorite(item.id)
-          }}
-          onSelect={(e) => {
-            e.stopPropagation()
-            toggleItemSelected(item.id)
           }}
         />
       </div>
@@ -743,6 +751,9 @@ export default function WardrobePage() {
             isDetailLoading={isDetailLoading}
             editor={editor}
             notice={selectionHiddenByFilters ? 'Hidden by the current filters.' : null}
+            onOpenItem={(itemId) =>
+              navigate({ pathname: `${LIST_PATH}/${itemId}`, search: location.search })
+            }
           />
         }
         detailFooter={
@@ -754,6 +765,9 @@ export default function WardrobePage() {
               onMarkWorn={() => void handleMarkAsWorn(selectedItemDetail.id)}
               onToggleFavorite={() => void handleToggleFavorite(selectedItemDetail.id)}
               onDelete={() => handleDeleteItem(selectedItemDetail.id)}
+              onCreateOutfit={() =>
+                navigate(`/outfits/new?items=${selectedItemDetail.id}`)
+              }
             />
           ) : undefined
         }

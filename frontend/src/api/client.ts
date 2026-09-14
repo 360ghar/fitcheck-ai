@@ -348,6 +348,16 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const config = error.config as InternalAxiosRequestConfig | undefined;
 
+    // A deliberate AbortSignal cancellation is not a failure: the CALLER asked
+    // for it (e.g. an effect cleanup aborting a stale request on navigation).
+    // A CanceledError has no response but does have a request, so the
+    // transient-failure checks below would classify it as a network error —
+    // re-issuing an already-aborted config (with backoff) and toasting a
+    // "Connection Error" for it. Neither is ever wanted.
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+
     // No config means we cannot retry (e.g. request setup failed).
     if (!config) {
       notifyTerminalTransientError(error, config);
@@ -430,6 +440,13 @@ apiClient.interceptors.response.use(
       _retry?: boolean;
       _skipAuth?: boolean;
     };
+
+    // Mirror the retry interceptor's no-config guard: an error without a
+    // config (request setup failure, or a raw rejection like a bare
+    // CanceledError) has nothing to auth-retry or toast against.
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
 
     // Skip 401 handling for auth endpoints - they return 401 for invalid credentials,
     // not expired tokens, so we should let the error bubble up to the UI

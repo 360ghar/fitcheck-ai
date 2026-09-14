@@ -935,7 +935,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               {/* Referral Stats */}
               {referralStats && (
                 <div className="pt-4 border-t border-border">
-                  <div className="flex items-center gap-4 text-sm">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-muted-foreground/70" />
                       <span>

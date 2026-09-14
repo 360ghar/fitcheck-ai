@@ -155,7 +155,7 @@ export function FilterPanel({
       {/* Always visible: Search + Filter toggle (mobile) */}
       <div className="flex flex-wrap items-center gap-2 md:gap-4">
         {/* Search */}
-        <div className="min-w-0 flex-[1_1_18rem]">
+        <div className="min-w-0 flex-[1_1_0%] md:flex-[1_1_18rem]">
           <SearchBar
             placeholder="Search items..."
             value={filters.search}
@@ -171,7 +171,10 @@ export function FilterPanel({
               <Button
                 variant="outline"
                 size="icon"
-                className="relative shrink-0"
+                // h-12 (48px) matches the search pill beside it; size="icon"
+                // alone is h-11 (44px) and read as the small control in the
+                // row. The wrapper is md:hidden, so desktop is unaffected.
+                className="relative h-12 w-12 shrink-0"
                 aria-label={
                   activeFilterCount > 0
                     ? `Filters and sort, ${activeFilterCount} active`
@@ -186,7 +189,19 @@ export function FilterPanel({
                 )}
               </Button>
             </BottomSheetTrigger>
-            <BottomSheetContent height="large">
+            <BottomSheetContent
+              height="large"
+              footer={
+                <BottomSheetFooter>
+                  <Button variant="outline" onClick={onResetFilters} className="flex-1">
+                    Clear All
+                  </Button>
+                  <Button onClick={() => setIsOpen(false)} className="flex-1">
+                    Apply Filters
+                  </Button>
+                </BottomSheetFooter>
+              }
+            >
               <BottomSheetHeader>
                 <BottomSheetTitle>Filters & Sort</BottomSheetTitle>
                 <BottomSheetDescription className="sr-only">
@@ -194,7 +209,7 @@ export function FilterPanel({
                 </BottomSheetDescription>
               </BottomSheetHeader>
 
-              <div className="flex-1 overflow-y-auto py-4 space-y-6">
+              <div className="py-4 space-y-6">
                 {/* Category Section */}
                 <div className="space-y-2">
                   <label htmlFor="filter-category-mobile" className="text-sm font-medium text-foreground">Category</label>
@@ -302,6 +317,7 @@ export function FilterPanel({
                       id="wardrobe-custom-use-case"
                       name="custom_use_case"
                       autoComplete="off"
+                      className="min-w-0 flex-1"
                       placeholder="Custom use case…"
                       value={customUseCase}
                       onChange={(e) => setCustomUseCase(e.target.value)}
@@ -395,14 +411,6 @@ export function FilterPanel({
                 </div>
               </div>
 
-              <BottomSheetFooter>
-                <Button variant="outline" onClick={onResetFilters} className="flex-1">
-                  Clear All
-                </Button>
-                <Button onClick={() => setIsOpen(false)} className="flex-1">
-                  Apply Filters
-                </Button>
-              </BottomSheetFooter>
             </BottomSheetContent>
           </BottomSheet>
         </div>

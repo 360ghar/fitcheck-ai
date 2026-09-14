@@ -204,7 +204,11 @@ export function MasterDetailLayout({
             </div>
 
             {detailFooter && (
-              <div className="shrink-0 border-t border-border bg-background px-lg pt-md pb-bottom-nav">
+              // pb-sm, NOT pb-bottom-nav: inside this z-50 Sheet the bottom
+              // nav is hidden behind the overlay, so 64px of nav padding was
+              // pure dead zone (88px, 156px on notched devices, below the
+              // action buttons). SheetContent already pads the safe area.
+              <div className="shrink-0 border-t border-border bg-background px-lg pt-md pb-sm">
                 {detailFooter}
               </div>
             )}

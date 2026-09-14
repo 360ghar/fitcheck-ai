@@ -39,12 +39,19 @@ interface BottomSheetContentProps
   height?: 'auto' | 'half' | 'large' | 'full' | `${number}%` | `${number}vh` | `${number}dvh`
   /** Whether to show the drag indicator handle */
   showDragIndicator?: boolean
+  /**
+   * Pinned footer (actions row). Rendered OUTSIDE the scroll region as a
+   * `shrink-0` sibling, so primary actions stay visible without scrolling
+   * the body and sit above the keyboard scroll region. Pass the content
+   * through <BottomSheetFooter> for the standard border/padding treatment.
+   */
+  footer?: React.ReactNode
 }
 
 const BottomSheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   BottomSheetContentProps
->(({ className, children, height = '85dvh', showDragIndicator = true, ...props }, ref) => {
+>(({ className, children, footer, height = '85dvh', showDragIndicator = true, ...props }, ref) => {
   const getHeightClass = () => {
     switch (height) {
       case 'auto':
@@ -100,6 +107,13 @@ const BottomSheetContent = React.forwardRef<
         <div className="flex-1 overflow-y-auto overscroll-contain px-4">
           {children}
         </div>
+
+        {/* Pinned footer — a sibling of the scroller, never a child. Passing
+            it through `children` put <BottomSheetFooter> inside the block
+            scroll div where its `mt-auto` computed to 0, burying Apply/Reset
+            below every section (and under the keyboard once an input was
+            focused). */}
+        {footer && <div className="shrink-0">{footer}</div>}
       </SheetPrimitive.Content>
     </BottomSheetPortal>
   )

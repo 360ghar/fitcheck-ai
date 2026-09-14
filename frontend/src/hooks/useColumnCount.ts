@@ -3,17 +3,19 @@
  *
  * Dense tables so 3-4+ cards fit per row on real widths:
  *
- *   full  (no detail pane): base:3 sm:4 md:5 lg:6 xl:7 2xl:8
- *   split (detail open):                  lg:3 xl:4 2xl:4
+ *   full  (no detail pane): 3 (<375px) | 4 (375px–md) | md:5 lg:6 xl:7 2xl:8
+ *   split (detail open):                            lg:3 xl:4 2xl:4
  *
- * Tailwind breakpoints: sm=640, md=768, lg=1024, xl=1280, 2xl=1536.
+ * Tailwind breakpoints: xs=375, sm=640, md=768, lg=1024, xl=1280, 2xl=1536.
+ * Phones keep the PR #19 `xs` step (3 below 375px, 4 from 375 through just
+ * below `md`). From `md` up this branch is denser than main.
  *
  * The split mode applies only at lg+ because `WardrobePage`/`OutfitsPage`
  * force compact list rows at exactly md-with-detail, so the masonry is never
  * rendered in the cramped `md` band — `useColumnCount` never needs to answer
  * for it.
  */
-import { useMediaQuery, SM_QUERY, MD_QUERY, LG_QUERY, XL_QUERY, TWO_XL_QUERY } from './useMediaQuery'
+import { useMediaQuery, MD_QUERY, LG_QUERY, XL_QUERY, TWO_XL_QUERY, XS_QUERY } from './useMediaQuery'
 
 export interface UseColumnCountOptions {
   /** True when the detail pane is open, selecting the (fewer-column) split table. */
@@ -26,7 +28,7 @@ export function useColumnCount({ isDetailOpen = false }: UseColumnCountOptions =
   const isXl = useMediaQuery(XL_QUERY)
   const isLg = useMediaQuery(LG_QUERY)
   const isMd = useMediaQuery(MD_QUERY)
-  const isSm = useMediaQuery(SM_QUERY)
+  const isXs = useMediaQuery(XS_QUERY)
 
   if (isDetailOpen && isLg) {
     if (is2xl) return 4
@@ -38,6 +40,6 @@ export function useColumnCount({ isDetailOpen = false }: UseColumnCountOptions =
   if (isXl) return 7
   if (isLg) return 6
   if (isMd) return 5
-  if (isSm) return 4
+  if (isXs) return 4
   return 3
 }

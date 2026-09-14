@@ -104,6 +104,60 @@ def _white_garment_with_folds() -> bytes:
     return _encode(img)
 
 
+def _off_white_garment_with_shadow_ring() -> bytes:
+    """Dark garment on a 248 field with a neutral contact-shadow ring (~215).
+
+    Reproduces real generator drift: the field is not pure #FFFFFF and a soft
+    shadow hugs the silhouette. The old fixed-240 path left the ring opaque
+    (gray outline); the adaptive path must matte the field AND fade the ring.
+    The ring is ~20px wide (a realistic contact shadow) so it survives the
+    coarse-flood quantization and stays probeable after the sub-pixel feather.
+    """
+    img = Image.new("RGB", SIZE, (248, 248, 248))
+    draw = ImageDraw.Draw(img)
+    left, top, right, bottom = GARMENT_BOX
+    # Shadow ring: neutral darker band just outside the silhouette.
+    draw.rounded_rectangle(
+        (left - 22, top - 22, right + 22, bottom + 22), radius=52, fill=(215, 215, 215)
+    )
+    _draw_garment(draw, fill=(38, 44, 61))
+    return _encode(img)
+
+
+def _highlight_bridge_garment() -> bytes:
+    """White garment whose bright shoulder streak touches the frame border.
+
+    A thin near-white bridge from garment to border used to wick the flood
+    through the silhouette (the coarse-erode fix severs it). The interior must
+    survive opaque while the true backdrop still mattes.
+    """
+    img = Image.new("RGB", SIZE, (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    _draw_garment(draw, fill=(246, 246, 246), outline=(205, 205, 205))
+    left, top, right, _ = GARMENT_BOX
+    # 6px bright bridge from the left sleeve to the frame edge.
+    draw.rectangle([(0, top + 100), (left - 60, top + 106)], fill=(252, 252, 252))
+    return _encode(img)
+
+
+def _gray_gradient_backdrop() -> bytes:
+    """Deliberate gray-to-white gradient: must be honestly skipped (G1).
+
+    The gradient sweeps corner to corner so NO border side is uniform: the
+    adaptive path must NOT engage, the strict fallback finds no uniform field
+    and keeps the original.
+    """
+    img = Image.new("RGB", SIZE)
+    pixels = img.load()
+    for y in range(SIZE[1]):
+        for x in range(0, SIZE[0], 4):
+            value = 200 + ((x + y) * 55) // (SIZE[0] + SIZE[1])
+            for dx in range(4):
+                pixels[x + dx, y] = (value, value, value)
+    _draw_garment(ImageDraw.Draw(img), fill=(58, 70, 92))
+    return _encode(img)
+
+
 def _scene_photo() -> bytes:
     """No white backdrop at all - a mid-tone room with a gradient wall."""
     img = Image.new("RGB", SIZE)
@@ -199,6 +253,73 @@ def test_scene_photo_is_skipped_and_original_kept():
     assert result.status == STATUS_SKIPPED_NO_BACKGROUND
     assert result.transparent_fraction < MIN_TRANSPARENT_FRACTION
     assert result.image_bytes == source
+
+
+def test_off_white_field_with_shadow_ring_is_matted_and_ring_fades():
+    """Adaptive path: 248 field mattes, 215 contact ring goes semi, not opaque."""
+    result, _ = _run("off-white + shadow ring", _off_white_garment_with_shadow_ring())
+
+    assert result.status == STATUS_MATTED
+    assert MIN_TRANSPARENT_FRACTION < result.transparent_fraction < MAX_TRANSPARENT_FRACTION
+    assert result.center_opacity >= MIN_CENTER_OPACITY
+
+    with Image.open(io.BytesIO(result.image_bytes)) as out:
+        alpha = out.getchannel("A")
+        # Far corner (pure field) fully transparent, centre opaque.
+        assert alpha.getpixel((2, 2)) == 0
+        assert alpha.getpixel((SIZE[0] // 2, SIZE[1] // 2)) == 255
+        # A pixel just outside the silhouette (inside the old shadow ring)
+        # must be partially transparent, not an opaque gray outline. (x-17
+        # sits inside the halo-adjacent shadow zone; the razor mask edge
+        # lands a few px outside the drawn ring, so x-11 would already be
+        # solid background.)
+        ring_probe = alpha.getpixel((GARMENT_BOX[0] - 17, (GARMENT_BOX[1] + GARMENT_BOX[3]) // 2))
+        assert 0 < ring_probe < 255
+
+
+def test_highlight_bridge_does_not_leak_flood_into_garment():
+    """Coarse-erode fix: thin bright bridge to the border must not hollow out."""
+    result, _ = _run("highlight bridge", _highlight_bridge_garment())
+
+    assert result.status == STATUS_MATTED
+    assert result.center_opacity >= MIN_CENTER_OPACITY
+    with Image.open(io.BytesIO(result.image_bytes)) as out:
+        alpha = out.getchannel("A")
+        assert alpha.getpixel((SIZE[0] // 2, SIZE[1] // 2)) == 255
+
+
+def test_gray_gradient_backdrop_is_honestly_skipped():
+    """Varying border disables adaptation; G1 keeps the original untouched."""
+    source = _gray_gradient_backdrop()
+    result, _ = _run("gray gradient", source)
+
+    assert result.status == STATUS_SKIPPED_NO_BACKGROUND
+    assert result.image_bytes == source
+
+
+def test_edge_rgb_is_despilled_not_white_fringe():
+    """Semi edge pixels must carry garment color, not near-white blend RGB."""
+    result, _ = _run("despill check", _dark_garment_on_white())
+    assert result.status == STATUS_MATTED
+
+    with Image.open(io.BytesIO(result.image_bytes)) as out:
+        rgb = out.convert("RGB")
+        alpha = out.getchannel("A")
+        # Scan the silhouette band for semi pixels and require none to be
+        # near-white: despill pulled them toward the dark garment. Full-pixel
+        # resolution (the blend fringe is 1-2px wide; a strided scan steps
+        # clean over it).
+        fringe = 0
+        checked = 0
+        for y in range(GARMENT_BOX[1] - 6, GARMENT_BOX[3] + 6):
+            for x in range(GARMENT_BOX[0] - 6, GARMENT_BOX[2] + 6):
+                a = alpha.getpixel((x, y))
+                if 20 < a < 235:
+                    checked += 1
+                    if min(rgb.getpixel((x, y))) > 200:
+                        fringe += 1
+        assert checked > 0, "expected semi-transparent edge pixels to probe"
+        assert fringe == 0, f"{fringe}/{checked} edge pixels still white fringe"
 
 
 def test_oversized_success_reports_processed_dimensions():

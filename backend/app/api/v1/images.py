@@ -297,6 +297,16 @@ async def get_presigned_url(
     historical, the contract is "a URL you can fetch now".
     """
     if not storage_path or not _is_owned_by_user(storage_path, user_id):
+        # The 404 body stays indistinguishable (never a cross-user existence
+        # oracle); the cause class stays server-side so 404 bursts are
+        # diagnosable: "url" means the client echoed a full served URL back
+        # as storage_path, "key" means a stale or foreign bucket key.
+        logger.warning(
+            "Presigned URL refused: image not found",
+            cause="empty" if not storage_path else "unowned",
+            path_shape="url" if (storage_path or "").startswith(("http://", "https://")) else "key",
+            user_id=user_id,
+        )
         raise NotFoundError(
             message="Image not found",
             resource_type="image",

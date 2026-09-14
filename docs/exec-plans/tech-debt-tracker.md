@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-09-13 (TD-030–TD-109)
+Last updated: 2026-09-14 (TD-030–TD-110)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
@@ -126,6 +126,7 @@ Last updated: 2026-09-13 (TD-030–TD-109)
 
 | TD-108 | Four orphaned clay illustrations in `frontend/public/generated/` | low | web | `hero-wardrobe-16x9`, `avatar-wardrobe-1`, `demo-strip-bg`, `doodle-star` (+640 variants) are unreferenced after the clay-rebuild (hero switched to `hero-machine`; mascot/backdrop/doodle accents never wired). ~110KB ships in every deploy via `public/`. Wire them into a section or delete before the next image-budget pass. Found 2026-09-13 (clay-rebuild audit) |
 | TD-109 | Logged-in webapp has no rendered visual QA | low | web | The clay-rebuild visually judged the landing (11/11 slices via playwright + judge) but authenticated pages were only verified via harness + token reasoning — no test credentials exist for hosted Supabase auth (seed script requires a password chosen at seed time). Seed a known test account and judge dashboard/wardrobe/outfits next time webapp UI work happens. Found 2026-09-13 (clay-rebuild) |
+| TD-110 | Route-layer workflows still own service-layer logic | medium | backend | Flagged by PR #19 bot review (qodo architecture rule violations; valid per the AGENTS.md "routes thin, logic in services" rule, but the fat shape predates that PR — the diff only extended the handlers in place). Four route-layer workflows, route handlers plus their private helpers (not handlers alone): `ai.generate_try_on` (avatar/clothing ownership + download/downscale + provider-input prep), `items.get_item_stats` + its helper `_legacy_item_stats_rollup` (aggregate RPC orchestration + migration-gap Python rollup), `outfits.available_items` (ids parsing + query + image materialization), `recommendations` match/complete-look via the helpers `_fetch_match_pool`/`_rank_candidates` (pool fetch + scoring). Extract each into `app/services/` with typed failures mapped to HTTP at the route, and consider a mechanical route-LOC rule (see TD-013). Found 2026-09-14 (PR #19 review pass). Renumbered from main's TD-107 on merge into feat/flutter-premium-refresh to avoid colliding with the Flutter opaque-background item. |
 
 ## Process
 

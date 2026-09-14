@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { logger } from '@/lib/logger'
+import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -77,10 +78,10 @@ const TouchBadge = forwardRef<HTMLButtonElement, TouchBadgeProps>(function Touch
     <button
       ref={ref}
       type="button"
-      className="hit-expand inline-flex [--hit:-10px]"
+      className="hit-expand inline-flex max-w-full min-w-0 [--hit-x:-10px] [--hit-y:-6px]"
       {...buttonProps}
     >
-      <Badge variant={badgeVariant} className={badgeClassName}>
+      <Badge variant={badgeVariant} className={cn('min-w-0 max-w-full truncate', badgeClassName)}>
         {children}
       </Badge>
     </button>
@@ -230,7 +231,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
 
   return (
     <Card
-      className={`overflow-hidden transition-all ${
+      className={`relative overflow-hidden transition-all ${
         hasFailed
           ? 'border-destructive/40 bg-destructive/5'
           : isLowConfidence
@@ -287,8 +288,13 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
             </div>
           )}
 
-          {/* Status badges */}
-          <div className="absolute top-2 left-2 flex flex-col gap-1">
+          {/* Status badges — capped short of the action buttons so a badge's
+              hit-expand zone can never reach Regenerate/Delete (a mis-tap on
+              "N similar" was firing Regenerate and burning a credit). CSS calc
+              needs whitespace around `-`; the underscore form is Tailwind's
+              escape for it. min-w-0 + overflow-hidden keep a long badge itself
+              clipped to the cap instead of widening the flex column. */}
+          <div className="absolute top-2 left-2 flex max-w-[calc(100%_-_124px)] min-w-0 flex-col items-start gap-1 overflow-hidden">
             {hasDuplicates && (
               <TooltipProvider>
                 <Tooltip>
@@ -416,13 +422,16 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
         <div className="p-2.5 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             {item.personLabel ? (
-              <Badge variant="outline" className="text-xs max-w-[65%] truncate">
+              // min-w-0 flex-1: the badge absorbs all leftover space. The old
+              // max-w-[65%] fought the fixed-width Include cluster and cut
+              // labels to ~3 chars on a 390px two-column card.
+              <Badge variant="outline" className="min-w-0 flex-1 truncate text-xs">
                 {item.personLabel}
               </Badge>
             ) : (
               <span />
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex min-h-[44px] shrink-0 items-center gap-2">
               <Label htmlFor={`include-${item.tempId}`} className="text-xs text-muted-foreground">Include</Label>
               <Switch
                 id={`include-${item.tempId}`}
@@ -497,8 +506,11 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
                 />
               </div>
 
-              {/* Brand & Material */}
-              <div className="grid grid-cols-1 xs:grid-cols-2 gap-2">
+              {/* Brand & Material — md: (not sm:): between 640 and 767px the
+                  review grid already runs three columns, so an `sm:` 2-col
+                  split left the inputs ~85px (~8 chars). Only from `md` are
+                  the cards wide enough for the split to pay off. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Brand</Label>
                   <Input
@@ -530,7 +542,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
               {/* Color picker */}
               <div>
                 <Label className="text-xs">Colors</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
+                <div className="flex flex-wrap gap-x-2 gap-y-2.5 mt-1">
                   {COMMON_COLORS.map((color) => (
                     <TouchBadge
                       key={color}
@@ -546,7 +558,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
 
               <div>
                 <Label className="text-xs">Use cases</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
+                <div className="flex flex-wrap gap-x-2 gap-y-2.5 mt-1">
                   {DEFAULT_USE_CASES.map((useCase) => (
                     <TouchBadge
                       key={useCase}
@@ -588,7 +600,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
                         {formatUseCaseLabel(tag)}
                         <button
                           type="button"
-                          className="hit-expand hover:text-foreground"
+                          className="hit-expand [--hit:-12px] hover:text-foreground"
                           onClick={() => toggleUseCase(tag)}
                           aria-label={`Remove ${formatUseCaseLabel(tag)} tag`}
                         >

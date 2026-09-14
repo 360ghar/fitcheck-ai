@@ -331,7 +331,7 @@ export function SupportPanel() {
                   return (
                     <div
                       key={ticket.id}
-                      className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                      className="flex items-center justify-between gap-3 p-3 bg-muted/50 rounded-lg"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         {cat && <cat.icon className={`h-4 w-4 shrink-0 ${cat.color}`} />}
@@ -342,7 +342,7 @@ export function SupportPanel() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant={status?.variant || 'default'}>
+                      <Badge variant={status?.variant || 'default'} className="shrink-0 whitespace-nowrap">
                         {status?.label || ticket.status}
                       </Badge>
                     </div>

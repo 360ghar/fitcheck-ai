@@ -159,6 +159,29 @@ describe('apiClient retry logic', () => {
     // 1 initial + 2 retries, unchanged.
     expect(mock.history.post.length).toBe(3)
   })
+
+  it('does not retry or toast a canceled (aborted) request', async () => {
+    // An effect cleanup aborting a stale request (e.g. rapid navigation
+    // between item details) rejects with CanceledError: no response, but a
+    // request object — the shape isTransientFailure used to read as a network
+    // error, re-issuing the already-aborted config and toasting "Connection
+    // Error". A deliberate abort is neither retried nor toasted.
+    mock.onGet('/stale-similar').reply(() =>
+      Promise.reject(new axios.CanceledError('operation canceled'))
+    )
+
+    const promise = apiClient.get('/stale-similar').catch((e) => e)
+    // Drain any backoff timers to prove no retry attempt is scheduled.
+    await vi.advanceTimersByTimeAsync(5000)
+
+    const err = await promise
+    expect(axios.isCancel(err)).toBe(true)
+    // Exactly one attempt — the aborted config is never re-issued.
+    expect(mock.history.get.length).toBe(1)
+    expect(showNetworkError).not.toHaveBeenCalled()
+    expect(showApiError).not.toHaveBeenCalled()
+    expect(showWarning).not.toHaveBeenCalled()
+  })
 })
 
 describe('apiClient global error toasts — one toast per logical failure', () => {
