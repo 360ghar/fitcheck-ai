@@ -7,10 +7,16 @@ import 'package:flutter/material.dart';
 class AppCoreColors {
   AppCoreColors._();
 
-  static const Color backgroundLight = Color(0xFFFBFBF9);
-  static const Color backgroundDark = Color(0xFF1A1A17);
+  static const Color backgroundLight = Color(0xFFFBFAF7);
+  static const Color backgroundDark = Color(0xFF1F2321);
   static const Color surfaceLight = Color(0xFFFFFFFF);
-  static const Color surfaceDark = Color(0xFF232320);
-  static const Color borderLight = Color(0xFFDADAD3);
-  static const Color borderDark = Color(0xFF3A3A35);
+  static const Color surfaceDark = Color(0xFF282D29);
+  static const Color borderLight = Color(0xFFDEDFD5);
+  static const Color borderDark = Color(0xFF485047);
+  // Editorial section fields keep the same dark ink in both appearances.
+  static const Color editorialRose = Color(0xFFE6DED7);
+  static const Color editorialLinen = Color(0xFFE6E4D8);
+  static const Color editorialSage = Color(0xFFD7DFD4);
+  static const Color editorialSlate = Color(0xFFDDE2E3);
+  static const Color editorialInk = Color(0xFF2C302D);
 }

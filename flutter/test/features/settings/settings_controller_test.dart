@@ -20,10 +20,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show AuthException, User;
 
 import 'package:fitcheck_ai/core/services/theme_service.dart';
+import 'package:fitcheck_ai/core/services/persistence_service.dart';
 import 'package:fitcheck_ai/features/auth/controllers/auth_controller.dart';
 import 'package:fitcheck_ai/features/settings/controllers/settings_controller.dart';
 import 'package:fitcheck_ai/features/settings/models/user_preferences_model.dart';
@@ -128,11 +130,6 @@ class _FakeThemeService extends ThemeService {
   Future<void> setThemeMode(AppThemeMode mode) async {
     _mode = mode;
   }
-
-  @override
-  void syncFromBackend(AppThemeMode? backendMode) {
-    if (backendMode != null) _mode = backendMode;
-  }
 }
 
 /// Captures the url_launcher platform calls so a launch can be made to fail.
@@ -176,6 +173,8 @@ void main() {
 
   setUp(() {
     Get.reset();
+    SharedPreferences.setMockInitialValues({});
+    Get.put(PersistenceService());
     Get.put<ThemeService>(ThemeService());
     clipboardWrites.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -352,6 +351,70 @@ void main() {
   });
 
   group('preference saves preserve pending mutations', () {
+    for (final fail in [false, true]) {
+      testWidgets('preference fetch preserves cached dark mode, fail=$fail', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          const GetMaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        final repository = _FakeSettingsRepository()
+          ..onGetPreferences = () async {
+            if (fail) throw StateError('offline');
+            return UserPreferencesModel(preferredStyles: ['casual']);
+          };
+        final themeService = _FakeThemeService(AppThemeMode.dark);
+        final controller = SettingsController(
+          repository: repository,
+          authController: _FakeAuthController(),
+          themeService: themeService,
+        );
+        await controller.fetchPreferences();
+        expect(controller.preferences.value?.themeMode, AppThemeMode.dark);
+        expect(themeService.appThemeMode, AppThemeMode.dark);
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets(
+        'pending preference save preserves a newer theme, fail=$fail',
+        (tester) async {
+          await tester.pumpWidget(
+            const GetMaterialApp(home: Scaffold(body: SizedBox())),
+          );
+          final pending = Completer<UserPreferencesModel>();
+          final repository = _FakeSettingsRepository()
+            ..onUpdatePreferences = (_) => pending.future;
+          final themeService = _FakeThemeService(AppThemeMode.light);
+          final controller = SettingsController(
+            repository: repository,
+            authController: _FakeAuthController(),
+            themeService: themeService,
+          );
+          controller.preferences.value = UserPreferencesModel(
+            themeMode: AppThemeMode.light,
+            preferredStyles: ['casual'],
+          );
+          final save = controller.addPreferredStyle('formal');
+          await tester.pump();
+          final chooseDark = controller.updateThemeMode(AppThemeMode.dark);
+          if (fail) {
+            pending.completeError(StateError('offline'));
+          } else {
+            pending.complete(
+              UserPreferencesModel(preferredStyles: ['casual', 'formal']),
+            );
+          }
+          await tester.pump();
+          await save;
+          await chooseDark;
+          expect(controller.preferences.value?.themeMode, AppThemeMode.dark);
+          expect(themeService.appThemeMode, AppThemeMode.dark);
+          expect(repository.preferenceWrites, hasLength(1));
+          await tester.pumpAndSettle();
+        },
+      );
+    }
+
     testWidgets('keeps the latest overlapping preference fetch', (
       tester,
     ) async {
@@ -377,18 +440,19 @@ void main() {
       final newestFetch = controller.fetchPreferences();
       await tester.pump();
 
-      first.complete(UserPreferencesModel(themeMode: AppThemeMode.light));
+      first.complete(UserPreferencesModel(preferredStyles: ['casual']));
       await oldFetch;
       await tester.pump();
 
       expect(controller.isLoading.value, isTrue);
       expect(controller.preferences.value, isNull);
 
-      second.complete(UserPreferencesModel(themeMode: AppThemeMode.dark));
+      second.complete(UserPreferencesModel(preferredStyles: ['formal']));
       await newestFetch;
       await tester.pump();
 
-      expect(controller.preferences.value?.themeMode, AppThemeMode.dark);
+      expect(controller.preferences.value?.preferredStyles, ['formal']);
+      expect(controller.preferences.value?.themeMode, AppThemeMode.system);
       expect(controller.isLoading.value, isFalse);
       controller.onClose();
     });
@@ -416,48 +480,26 @@ void main() {
     });
 
     testWidgets(
-      'reverts a failed latest theme change to the last confirmed mode',
+      'all three theme choices work offline without a preference API write',
       (tester) async {
         await tester.pumpWidget(
           const GetMaterialApp(home: Scaffold(body: SizedBox())),
         );
-        final firstWrite = Completer<UserPreferencesModel>();
-        final secondWrite = Completer<UserPreferencesModel>();
-        var writes = 0;
         final repository = _FakeSettingsRepository()
-          ..onUpdatePreferences = (_) {
-            writes++;
-            return writes == 1 ? firstWrite.future : secondWrite.future;
-          };
+          ..onUpdatePreferences = (_) async => throw StateError('offline');
         final themeService = _FakeThemeService(AppThemeMode.system);
         final controller = SettingsController(
           repository: repository,
           authController: _FakeAuthController(),
           themeService: themeService,
         );
-        final initial = UserPreferencesModel(themeMode: AppThemeMode.system);
-        controller.preferences.value = initial;
-
-        final chooseLight = controller.updateThemeMode(AppThemeMode.light);
-        // Let the first backend write enter its pending state before the next
-        // user choice arrives. This preserves the overlapping-write scenario
-        // without racing the test's completer setup.
-        await tester.pump();
-        final chooseDark = controller.updateThemeMode(AppThemeMode.dark);
-        expect(themeService.appThemeMode, AppThemeMode.dark);
-
-        firstWrite.complete(initial.copyWith(themeMode: AppThemeMode.light));
-        await tester.pump();
-        await chooseLight;
-        await tester.pump();
-        expect(repository.preferenceWrites, hasLength(2));
-
-        secondWrite.completeError(StateError('write rejected'));
-        await tester.pump();
-        await chooseDark;
-
-        expect(controller.preferences.value?.themeMode, AppThemeMode.light);
-        expect(themeService.appThemeMode, AppThemeMode.light);
+        for (final mode in AppThemeMode.values) {
+          await controller.updateThemeMode(mode);
+          expect(controller.preferences.value?.themeMode, mode);
+          expect(themeService.appThemeMode, mode);
+          expect(controller.isSaving.value, isFalse);
+        }
+        expect(repository.preferenceWrites, isEmpty);
         await tester.pumpAndSettle();
       },
     );

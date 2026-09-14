@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import 'widgets/auth_ui.dart';
+import '../../../core/widgets/app_ui.dart';
 
 class AuthEntryPage extends StatelessWidget {
   const AuthEntryPage({super.key});
@@ -11,7 +12,6 @@ class AuthEntryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AuthUiTokens.of(context);
     final screenSize = MediaQuery.of(context).size;
-    final titleSize = (screenSize.width * 0.1).clamp(30.0, 44.0);
     final bodySize = (screenSize.width * 0.045).clamp(14.0, 18.0);
 
     return AuthScaffold(
@@ -23,50 +23,57 @@ class AuthEntryPage extends StatelessWidget {
             textColor: tokens.textColor,
             brandColor: tokens.brandColor,
           ),
-          _buildHeroText(
-            titleSize,
-            bodySize,
-            tokens,
+          const SizedBox(height: 32),
+          Text(
+            'This is\nyour style.',
+            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+              height: 1.02,
+              letterSpacing: -1.4,
+            ),
           ),
-          _buildActionSection(tokens, bodySize),
+          const SizedBox(height: 20),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AspectRatio(
+                  aspectRatio: 1.45,
+                  child: Image.asset(
+                    AuthScaffold.backgroundImage,
+                    fit: BoxFit.cover,
+                    semanticLabel: 'Wardrobe inspiration',
+                  ),
+                ),
+                Container(
+                  color: AppCoreColors.editorialRose,
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    'Your closet. New possibilities.',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: AppCoreColors.editorialInk,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Save the pieces you love. Create outfits, try new looks, and make every day feel like you.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: tokens.secondaryTextColor),
+          ),
+          const SizedBox(height: 24),
+          _buildActionSection(context, tokens, bodySize),
         ],
       ),
     );
   }
 
-  Widget _buildHeroText(
-    double titleSize,
-    double bodySize,
-    AuthUiTokens tokens,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Your AI-Powered\nVirtual Closet',
-          style: TextStyle(
-            fontSize: titleSize,
-            fontWeight: FontWeight.w800,
-            color: tokens.textColor,
-            height: 1.05,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacing16),
-        Text(
-          'Organize your closet, visualize new looks, and master your '
-          'style with high-precision AI guidance built for you.',
-          style: TextStyle(
-            fontSize: bodySize,
-            color: tokens.secondaryTextColor,
-            height: 1.5,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildActionSection(
+    BuildContext context,
     AuthUiTokens tokens,
     double bodySize,
   ) {
@@ -81,12 +88,12 @@ class AuthEntryPage extends StatelessWidget {
           onPressed: () => Get.toNamed(Routes.register),
           style: ElevatedButton.styleFrom(
             backgroundColor: tokens.brandColor,
-            foregroundColor: Colors.white,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
             padding: buttonPadding,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppConstants.radius16),
             ),
-            textStyle: const TextStyle(
+            textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
@@ -104,7 +111,7 @@ class AuthEntryPage extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppConstants.radius16),
             ),
-            textStyle: const TextStyle(
+            textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,

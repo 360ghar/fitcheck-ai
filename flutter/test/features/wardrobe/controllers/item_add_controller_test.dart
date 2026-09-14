@@ -1,13 +1,66 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:fitcheck_ai/core/services/ai_consent_service.dart';
 import 'package:fitcheck_ai/domain/enums/category.dart';
 import 'package:fitcheck_ai/domain/enums/condition.dart';
 import 'package:fitcheck_ai/features/wardrobe/controllers/item_add_controller.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
+import 'package:fitcheck_ai/features/wardrobe/models/batch_extraction_models.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/item_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart' hide Condition;
+
+class _GrantedConsent extends AiConsentService {
+  @override
+  Future<bool> ensureConsent({required String featureLabel}) async => true;
+
+  @override
+  // Consent is already granted; do not load platform preferences.
+  // ignore: must_call_super
+  void onInit() {}
+}
+
+class _ExtractionRepository extends FakeItemRepository {
+  final events = <String, StreamController<SSEEvent>>{};
+  final status = Completer<Map<String, dynamic>>();
+  final starts = <String>[];
+  final cancellations = <String>[];
+  final polls = <String>[];
+  Completer<SingleExtractionJob>? startGate;
+  Completer<void>? cancelGate;
+
+  @override
+  Future<SingleExtractionJob> extractItemsFromImageAsync(File image) async {
+    final id = 'job-${starts.length + 1}';
+    starts.add(id);
+    events[id] = StreamController<SSEEvent>.broadcast();
+    return startGate?.future ??
+        SingleExtractionJob(
+          jobId: id,
+          status: 'pending',
+          totalImages: 1,
+          sseUrl: '/events',
+        );
+  }
+
+  @override
+  Stream<SSEEvent> subscribeSingleExtractionEvents(String jobId) =>
+      events[jobId]!.stream;
+
+  @override
+  Future<Map<String, dynamic>> getSingleJobStatus(String jobId) {
+    polls.add(jobId);
+    return status.future;
+  }
+
+  @override
+  Future<void> cancelSingleExtraction(String jobId) async {
+    cancellations.add(jobId);
+    await cancelGate?.future;
+  }
+}
 
 /// A fake [ItemRepository] whose image-upload methods record their inputs so
 /// tests can assert the save-time upload strategy without any network.
@@ -18,8 +71,10 @@ class FakeItemRepository extends ItemRepository {
   final List<String> createdItemIds = [];
   int getItemCalls = 0;
   int createItemWithImageCalls = 0;
+  bool useRealSourceCreate = false;
 
-  Future<ItemImage?> Function(String itemId, String base64Image)? onUploadBase64;
+  Future<ItemImage?> Function(String itemId, String base64Image)?
+  onUploadBase64;
   Future<ItemImage?> Function(String itemId, String imageUrl)? onUploadFromUrl;
   Future<List<ItemImage>> Function(String itemId, List<File> images)?
   onUploadFiles;
@@ -42,6 +97,9 @@ class FakeItemRepository extends ItemRepository {
     required File image,
     required CreateItemRequest request,
   }) async {
+    if (useRealSourceCreate) {
+      return super.createItemWithImage(image: image, request: request);
+    }
     createItemWithImageCalls++;
     return ItemModel(
       id: 'item-src-$createItemWithImageCalls',
@@ -69,20 +127,14 @@ class FakeItemRepository extends ItemRepository {
   }
 
   @override
-  Future<ItemImage?> uploadImageFromUrl(
-    String itemId,
-    String imageUrl,
-  ) async {
+  Future<ItemImage?> uploadImageFromUrl(String itemId, String imageUrl) async {
     urlUploads.add(imageUrl);
     final handler = onUploadFromUrl;
     return handler == null ? null : await handler(itemId, imageUrl);
   }
 
   @override
-  Future<List<ItemImage>> uploadImages(
-    String itemId,
-    List<File> images,
-  ) async {
+  Future<List<ItemImage>> uploadImages(String itemId, List<File> images) async {
     fileUploads.add(images.map((f) => f.path).toList());
     final handler = onUploadFiles;
     return handler == null
@@ -153,37 +205,129 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
   }
 
+  group('ItemAddController extraction lifetime', () {
+    for (final action in ['reset', 'cancel', 'replace', 'dispose']) {
+      testWidgets('ignores a late poll after $action', (tester) async {
+        await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+        Get.put<AiConsentService>(_GrantedConsent());
+        final repo = _ExtractionRepository();
+        final controller = ItemAddController(itemRepository: repo);
+        await controller.processImage(File('/tmp/old.jpg'));
+        repo.events['job-1']!.addError(Exception('stream lost'));
+        await tester.pump();
+        expect(repo.polls, ['job-1']);
+
+        switch (action) {
+          case 'reset':
+            controller.reset();
+          case 'cancel':
+            await controller.cancelExtraction();
+          case 'replace':
+            await controller.processImage(File('/tmp/new.jpg'));
+          case 'dispose':
+            controller.onDelete();
+        }
+        repo.status.complete({
+          'status': 'completed',
+          'items': [
+            {'temp_id': 'old-item', 'category': 'tops', 'confidence': 0.9},
+          ],
+        });
+        await tester.pump();
+        expect(controller.generatedItems, isEmpty);
+        expect(controller.currentPhase.value, isNot('complete'));
+        if (action == 'replace') {
+          expect(controller.selectedImage.value?.path, '/tmp/new.jpg');
+          expect(controller.isProcessing.value, isTrue);
+          expect(repo.events['job-1']!.hasListener, isFalse);
+          expect(repo.events['job-2']!.hasListener, isTrue);
+        }
+        controller.onDelete();
+        for (final events in repo.events.values) {
+          await events.close();
+        }
+        await tester.pump(const Duration(seconds: 46));
+        expect(repo.polls, ['job-1']);
+      });
+    }
+
+    testWidgets('cancel during start never installs the late job stream', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+      Get.put<AiConsentService>(_GrantedConsent());
+      final repo = _ExtractionRepository()
+        ..startGate = Completer<SingleExtractionJob>();
+      final controller = ItemAddController(itemRepository: repo);
+      final pending = controller.processImage(File('/tmp/photo.jpg'));
+      await tester.pump();
+      await controller.cancelExtraction();
+      repo.startGate!.complete(
+        const SingleExtractionJob(
+          jobId: 'job-1',
+          status: 'pending',
+          totalImages: 1,
+          sseUrl: '/events',
+        ),
+      );
+      await pending;
+      expect(controller.isProcessing.value, isFalse);
+      expect(repo.events['job-1']!.hasListener, isFalse);
+      expect(repo.cancellations, ['job-1']);
+      controller.onDelete();
+      await repo.events['job-1']!.close();
+    });
+
+    testWidgets('late cancel response does not stop the replacement job', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+      Get.put<AiConsentService>(_GrantedConsent());
+      final repo = _ExtractionRepository()..cancelGate = Completer<void>();
+      final controller = ItemAddController(itemRepository: repo);
+      await controller.processImage(File('/tmp/old.jpg'));
+      final pendingCancel = controller.cancelExtraction();
+      await controller.processImage(File('/tmp/new.jpg'));
+      repo.cancelGate!.complete();
+      await pendingCancel;
+      expect(controller.isProcessing.value, isTrue);
+      expect(repo.events['job-2']!.hasListener, isTrue);
+      controller.onDelete();
+      for (final events in repo.events.values) {
+        await events.close();
+      }
+    });
+  });
+
   group('ItemAddController.saveGeneratedItems image strategy', () {
-    testWidgets(
-      'saves a URL-only generated image via uploadImageFromUrl '
-      '(regression: the URL was previously mis-routed into base64Decode, '
-      'threw, and the item was saved image-less)',
-      (tester) async {
-        final repo = FakeItemRepository();
-        final controller = await hostController(tester, repo);
-        // Post-job_complete state: the backend ships generated_image_base64
-        // as null for URL-backed items, so only the presigned URL remains.
-        controller.generatedItems.add(
-          generatedItem(
-            generatedImageUrl: 'https://cdn.example.com/generated/1.png',
-          ),
-        );
+    testWidgets('saves a URL-only generated image via uploadImageFromUrl '
+        '(regression: the URL was previously mis-routed into base64Decode, '
+        'threw, and the item was saved image-less)', (tester) async {
+      final repo = FakeItemRepository();
+      final controller = await hostController(tester, repo);
+      // Post-job_complete state: the backend ships generated_image_base64
+      // as null for URL-backed items, so only the presigned URL remains.
+      controller.generatedItems.add(
+        generatedItem(
+          generatedImageUrl: 'https://cdn.example.com/generated/1.png',
+        ),
+      );
 
-        await controller.saveGeneratedItems();
+      await controller.saveGeneratedItems();
 
-        expect(repo.urlUploads, ['https://cdn.example.com/generated/1.png']);
-        expect(
-          repo.base64Uploads,
-          isEmpty,
-          reason: 'an http URL is not base64 and must never reach '
-              'base64Decode',
-        );
-        expect(repo.fileUploads, isEmpty);
-        expect(controller.createdItems, hasLength(1));
-        await flushSnackbar(tester);
-        controller.onClose();
-      },
-    );
+      expect(repo.urlUploads, ['https://cdn.example.com/generated/1.png']);
+      expect(
+        repo.base64Uploads,
+        isEmpty,
+        reason:
+            'an http URL is not base64 and must never reach '
+            'base64Decode',
+      );
+      expect(repo.fileUploads, isEmpty);
+      expect(controller.createdItems, hasLength(1));
+      await flushSnackbar(tester);
+      controller.onClose();
+    });
 
     testWidgets('saves a data-URI image via uploadImageFromBase64', (
       tester,
@@ -207,8 +351,7 @@ void main() {
     testWidgets('falls back to the source photo when the URL upload fails', (
       tester,
     ) async {
-      final repo = FakeItemRepository()
-        ..onUploadFromUrl = (_, _) async => null;
+      final repo = FakeItemRepository()..onUploadFromUrl = (_, _) async => null;
       final controller = await hostController(tester, repo);
       controller.generatedItems.add(
         generatedItem(
@@ -225,7 +368,8 @@ void main() {
         [
           ['/tmp/source_photo.jpg'],
         ],
-        reason: 'a failed generated-image upload must degrade to the source '
+        reason:
+            'a failed generated-image upload must degrade to the source '
             'photo instead of saving the item image-less',
       );
       expect(controller.createdItems, hasLength(1));
@@ -233,63 +377,80 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets(
-      'falls back to the source photo when the base64 upload fails '
-      '(a data URI must never reach the URL strategy)',
-      (tester) async {
-        final repo = FakeItemRepository()
-          ..onUploadBase64 = (_, _) async => null;
-        final controller = await hostController(tester, repo);
-        controller.generatedItems.add(
-          generatedItem(generatedImageUrl: 'data:image/png;base64,QUJD'),
-        );
-        controller.selectedImage.value = File('/tmp/source_photo.jpg');
+    testWidgets('falls back to the source photo when the base64 upload fails '
+        '(a data URI must never reach the URL strategy)', (tester) async {
+      final repo = FakeItemRepository()..onUploadBase64 = (_, _) async => null;
+      final controller = await hostController(tester, repo);
+      controller.generatedItems.add(
+        generatedItem(generatedImageUrl: 'data:image/png;base64,QUJD'),
+      );
+      controller.selectedImage.value = File('/tmp/source_photo.jpg');
 
-        await controller.saveGeneratedItems();
+      await controller.saveGeneratedItems();
 
-        expect(repo.base64Uploads, ['QUJD']);
-        expect(
-          repo.urlUploads,
-          isEmpty,
-          reason: 'a data URI is not fetchable and must never reach the '
-              'URL strategy',
-        );
-        expect(
-          repo.fileUploads,
-          [
-            ['/tmp/source_photo.jpg'],
-          ],
-        );
-        expect(controller.createdItems, hasLength(1));
-        await flushSnackbar(tester);
-        controller.onClose();
-      },
-    );
+      expect(repo.base64Uploads, ['QUJD']);
+      expect(
+        repo.urlUploads,
+        isEmpty,
+        reason:
+            'a data URI is not fetchable and must never reach the '
+            'URL strategy',
+      );
+      expect(repo.fileUploads, [
+        ['/tmp/source_photo.jpg'],
+      ]);
+      expect(controller.createdItems, hasLength(1));
+      await flushSnackbar(tester);
+      controller.onClose();
+    });
 
-    testWidgets(
-      'keeps the item and refreshes it when every upload strategy fails '
-      '(no crash, no silent success)',
-      (tester) async {
-        final repo = FakeItemRepository();
-        repo.onUploadBase64 = (_, _) async => null;
-        repo.onUploadFromUrl = (_, _) async => null;
-        repo.onUploadFiles = (_, _) async => <ItemImage>[];
-        final controller = await hostController(tester, repo);
-        controller.generatedItems.add(
-          generatedItem(
-            generatedImageUrl: 'https://cdn.example.com/generated/1.png',
-          ),
-        );
+    testWidgets('keeps the item when every upload strategy fails '
+        '(no crash, no silent success)', (tester) async {
+      final repo = FakeItemRepository();
+      repo.onUploadBase64 = (_, _) async => null;
+      repo.onUploadFromUrl = (_, _) async => null;
+      repo.onUploadFiles = (_, _) async => <ItemImage>[];
+      final controller = await hostController(tester, repo);
+      controller.generatedItems.add(
+        generatedItem(
+          generatedImageUrl: 'https://cdn.example.com/generated/1.png',
+        ),
+      );
 
-        await controller.saveGeneratedItems();
+      await controller.saveGeneratedItems();
 
-        expect(repo.createdItemIds, hasLength(1));
-        expect(controller.createdItems, hasLength(1));
-        expect(repo.getItemCalls, 1);
-        await flushSnackbar(tester);
-        controller.onClose();
-      },
-    );
+      expect(repo.createdItemIds, hasLength(1));
+      expect(controller.createdItems, hasLength(1));
+      expect(repo.getItemCalls, 0);
+      await flushSnackbar(tester);
+      controller.onClose();
+    });
+
+    for (final generatedPhoto in [true, false]) {
+      testWidgets(
+        'retains created item after photo upload throws: generated=$generatedPhoto',
+        (tester) async {
+          final repo = FakeItemRepository()..useRealSourceCreate = true;
+          repo.onUploadFromUrl = (_, _) async => null;
+          repo.onUploadFiles = (_, _) async =>
+              throw StateError('Upload failed');
+          final controller = await hostController(tester, repo);
+          controller.generatedItems.add(
+            generatedItem(
+              generatedImageUrl: generatedPhoto
+                  ? 'https://cdn.example.com/generated.png'
+                  : null,
+            ),
+          );
+          controller.selectedImage.value = File('/tmp/source_photo.jpg');
+          await controller.saveGeneratedItems();
+          expect(repo.createdItemIds, hasLength(1));
+          expect(controller.createdItems.single.id, repo.createdItemIds.single);
+          await flushSnackbar(tester);
+          controller.onClose();
+        },
+      );
+    }
 
     testWidgets('uses the source photo when generation has no image yet', (
       tester,

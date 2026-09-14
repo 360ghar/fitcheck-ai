@@ -22,20 +22,12 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
         children: [
           // Use case selection
           Text(
-            'Choose Your Style',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
-            ),
+            'Choose the direction',
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: AppConstants.spacing12),
 
-          // Use case grid
-          Obx(() {
-            // Force observable read in Obx scope (itemBuilder runs lazily after)
-            final _ = controller.selectedUseCase.value;
-            return _buildUseCaseGrid(context, tokens);
-          }),
+          Obx(() => _buildUseCaseSelector(context, tokens)),
 
           const SizedBox(height: AppConstants.spacing24),
 
@@ -48,7 +40,7 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Custom Prompt',
+                  'Your idea',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: tokens.textPrimary,
@@ -75,7 +67,7 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
 
           // Aspect ratio selection
           Text(
-            'Image Format',
+            'Image format',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
               color: tokens.textPrimary,
@@ -89,7 +81,7 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
 
           // Image count slider
           Text(
-            'Number of Images',
+            'How many photos?',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
               color: tokens.textPrimary,
@@ -107,99 +99,64 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
           const SizedBox(height: AppConstants.spacing24),
 
           // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: controller.previousStep,
-                  style: OutlinedButton.styleFrom(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final back = OutlinedButton(
+                onPressed: controller.previousStep,
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                child: const Text('Back'),
+              );
+              final generate = Obx(
+                () => ElevatedButton(
+                  onPressed: controller.canGenerate
+                      ? controller.nextStep
+                      : null,
+                  style: ElevatedButton.styleFrom(
                     minimumSize: const Size(0, 48),
                   ),
-                  child: const Text('Back'),
+                  child: Text('Generate ${controller.numImages.value} Images'),
                 ),
-              ),
-              const SizedBox(width: AppConstants.spacing12),
-              Expanded(
-                flex: 2,
-                child: Obx(
-                  () => ElevatedButton(
-                    onPressed: controller.canGenerate
-                        ? controller.nextStep
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(0, 48),
-                    ),
-                    child: Text(
-                      'Generate ${controller.numImages.value} Images',
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 340 ||
+                  MediaQuery.textScalerOf(context).scale(14) > 20) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [generate, const SizedBox(height: 8), back],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: back),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(flex: 2, child: generate),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildUseCaseGrid(BuildContext context, AppUiTokens tokens) {
-    final useCases = PhotoshootUseCase.values;
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 130,
-        crossAxisSpacing: AppConstants.spacing8,
-        mainAxisSpacing: AppConstants.spacing8,
-        childAspectRatio: 1.1,
-      ),
-      itemCount: useCases.length,
-      itemBuilder: (context, index) {
-        final useCase = useCases[index];
-        return _buildUseCaseCard(context, tokens, useCase);
-      },
-    );
-  }
-
-  Widget _buildUseCaseCard(
-    BuildContext context,
-    AppUiTokens tokens,
-    PhotoshootUseCase useCase,
-  ) {
-    final isSelected = controller.selectedUseCase.value == useCase;
-
-    return InkWell(
-      onTap: () => controller.setUseCase(useCase),
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          border: Border.all(
-            color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
-            width: isSelected ? 2 : 1,
-          ),
-          color: isSelected
-              ? tokens.brandColor.withValues(alpha: 0.1)
-              : tokens.cardColor,
-        ),
-        padding: const EdgeInsets.all(AppConstants.spacing8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(useCase.icon, style: const TextStyle(fontSize: 22)),
-            const SizedBox(height: 4),
-            Text(
-              useCase.label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? tokens.brandColor : tokens.textPrimary,
-              ),
+  Widget _buildUseCaseSelector(BuildContext context, AppUiTokens tokens) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final useCase in PhotoshootUseCase.values)
+          ChoiceChip(
+            label: Text(useCase.label),
+            selected: controller.selectedUseCase.value == useCase,
+            selectedColor: AppCoreColors.editorialSage,
+            checkmarkColor: AppCoreColors.editorialInk,
+            labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: controller.selectedUseCase.value == useCase
+                  ? AppCoreColors.editorialInk
+                  : tokens.textPrimary,
             ),
-          ],
-        ),
-      ),
+            onSelected: (_) => controller.setUseCase(useCase),
+          ),
+      ],
     );
   }
 
@@ -211,8 +168,11 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
       padding: const EdgeInsets.all(AppConstants.spacing16),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 4,
             children: [
               Text(
                 '${controller.numImages.value} images',
@@ -282,7 +242,9 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
         children: [
           Icon(
             isPro ? Icons.star : Icons.info_outline,
-            color: isPro ? Colors.amber : tokens.textMuted,
+            color: isPro
+                ? Theme.of(context).colorScheme.primary
+                : tokens.textMuted,
             size: 20,
           ),
           const SizedBox(width: 8),
@@ -309,96 +271,25 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
   }
 
   Widget _buildAspectRatioSelector(BuildContext context, AppUiTokens tokens) {
-    final ratios = PhotoshootAspectRatio.values;
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: ratios.map((ratio) {
-          final isSelected = controller.selectedAspectRatio.value == ratio;
-          return Padding(
-            padding: const EdgeInsets.only(right: AppConstants.spacing8),
-            child: InkWell(
-              onTap: () => controller.setAspectRatio(ratio),
-              borderRadius: BorderRadius.circular(AppConstants.radius12),
-              child: Container(
-                width: 72,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing8,
-                  vertical: AppConstants.spacing12,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  border: Border.all(
-                    color: isSelected
-                        ? tokens.brandColor
-                        : tokens.cardBorderColor,
-                    width: isSelected ? 2 : 1,
-                  ),
-                  color: isSelected
-                      ? tokens.brandColor.withValues(alpha: 0.1)
-                      : tokens.cardColor,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Aspect ratio preview box
-                    _buildAspectRatioPreview(ratio, tokens, isSelected),
-                    const SizedBox(height: 6),
-                    Text(
-                      ratio.ratio,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: isSelected
-                            ? tokens.brandColor
-                            : tokens.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final ratio in PhotoshootAspectRatio.values)
+          ChoiceChip(
+            label: Text(ratio.ratio),
+            tooltip: ratio.label,
+            selected: controller.selectedAspectRatio.value == ratio,
+            selectedColor: AppCoreColors.editorialSage,
+            checkmarkColor: AppCoreColors.editorialInk,
+            labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: controller.selectedAspectRatio.value == ratio
+                  ? AppCoreColors.editorialInk
+                  : tokens.textPrimary,
             ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildAspectRatioPreview(
-    PhotoshootAspectRatio ratio,
-    AppUiTokens tokens,
-    bool isSelected,
-  ) {
-    // Calculate preview dimensions (max 36px in either dimension)
-    const double maxSize = 36.0;
-    double width;
-    double height;
-
-    if (ratio.aspectRatioValue >= 1) {
-      // Wider than tall
-      width = maxSize;
-      height = maxSize / ratio.aspectRatioValue;
-    } else {
-      // Taller than wide
-      height = maxSize;
-      width = maxSize * ratio.aspectRatioValue;
-    }
-
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: isSelected ? tokens.brandColor : tokens.textMuted,
-          width: 2,
-        ),
-        borderRadius: BorderRadius.circular(4),
-        color: isSelected
-            ? tokens.brandColor.withValues(alpha: 0.2)
-            : tokens.cardColor,
-      ),
+            onSelected: (_) => controller.setAspectRatio(ratio),
+          ),
+      ],
     );
   }
 }

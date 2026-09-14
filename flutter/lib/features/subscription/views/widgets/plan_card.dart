@@ -26,16 +26,17 @@ class PlanCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
-      elevation: isHighlighted ? 4 : 1,
+      elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         side: isHighlighted
-            ? const BorderSide(color: Color(0xFF6366F1), width: 2)
-            : BorderSide.none,
+            ? BorderSide(color: theme.colorScheme.primary, width: 2)
+            : BorderSide(color: theme.colorScheme.outlineVariant),
       ),
       child: InkWell(
         onTap: isLoading ? null : onTap,
-        borderRadius: BorderRadius.circular(12),
+        excludeFromSemantics: true,
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -47,14 +48,14 @@ class PlanCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.green.shade100,
+                    color: theme.colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     badge!,
                     style: TextStyle(
-                      color: Colors.green.shade800,
-                      fontSize: 11,
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -68,24 +69,23 @@ class PlanCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     price,
-                    style: theme.textTheme.headlineMedium?.copyWith(
+                    style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: isHighlighted
-                          ? const Color(0xFF6366F1)
+                          ? theme.colorScheme.primary
                           : theme.colorScheme.onSurface,
                     ),
                   ),
                   Text(
                     period,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(153),
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -96,19 +96,17 @@ class PlanCard extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: isLoading ? null : onTap,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isHighlighted
-                        ? const Color(0xFF6366F1)
-                        : theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: isLoading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 18,
                           width: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: theme.colorScheme.onPrimary,
                           ),
                         )
                       : const Text('Upgrade'),

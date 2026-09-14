@@ -11,8 +11,10 @@ import '../constants/api_constants.dart';
 /// Server-Sent Events (SSE) service for real-time updates
 /// Used for batch extraction progress updates
 class SSEService {
-  SSEService._();
-  static final SSEService instance = SSEService._();
+  SSEService({http.Client Function()? clientFactory})
+    : _clientFactory = clientFactory ?? http.Client.new;
+  static final SSEService instance = SSEService();
+  final http.Client Function() _clientFactory;
 
   /// Connect to an SSE endpoint and return a stream of events
   ///
@@ -33,13 +35,11 @@ class SSEService {
     while (retryCount < maxRetries) {
       try {
         bool sawTerminalEvent = false;
-        await for (
-          final event in _connectInternal(
-            url,
-            headers: headers,
-            lastEventId: lastEventId,
-          )
-        ) {
+        await for (final event in _connectInternal(
+          url,
+          headers: headers,
+          lastEventId: lastEventId,
+        )) {
           retryCount = 0; // Reset on successful event
           if (event.id != null) {
             lastEventId = event.id;
@@ -97,7 +97,7 @@ class SSEService {
     Map<String, String>? headers,
     int? lastEventId,
   }) async* {
-    final client = http.Client();
+    final client = _clientFactory();
 
     try {
       final request = http.Request('GET', Uri.parse(url));
@@ -127,6 +127,7 @@ class SSEService {
       }
 
       String buffer = '';
+      bool previousChunkEndedWithCR = false;
       // ponytail: cap the buffer so a stalled/malformed stream (no "\n\n"
       // boundary ever arriving) can't grow it unbounded. 4MB: live
       // image_complete events carry full base64 (a 1024px photo at ~85%
@@ -137,22 +138,25 @@ class SSEService {
       const maxBufferBytes = 4 * 1024 * 1024;
 
       await for (final chunk in response.stream.transform(utf8.decoder)) {
-        // Normalize line endings because many SSE servers (including
-        // sse-starlette) emit CRLF. Our parser operates on LF-delimited chunks.
-        buffer += chunk.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-
-        if (buffer.length > maxBufferBytes) {
-          throw SSEException(
-            'SSE buffer exceeded maximum size of $maxBufferBytes bytes '
-            'without a complete event',
-          );
-        }
+        if (chunk.isEmpty) continue;
+        // A CRLF can be split across two network chunks. The previous CR
+        // already became LF, so discard its matching LF exactly once.
+        final text = previousChunkEndedWithCR && chunk.startsWith('\n')
+            ? chunk.substring(1)
+            : chunk;
+        previousChunkEndedWithCR = chunk.endsWith('\r');
+        buffer += text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
         // Parse SSE format: "event: type\ndata: {...}\n\n"
         while (true) {
           final eventEnd = buffer.indexOf('\n\n');
           if (eventEnd == -1) {
             break;
+          }
+          if (eventEnd > maxBufferBytes) {
+            throw SSEException(
+              'SSE event exceeded maximum size of $maxBufferBytes characters',
+            );
           }
           final eventStr = buffer.substring(0, eventEnd);
           buffer = buffer.substring(eventEnd + 2);
@@ -161,6 +165,14 @@ class SSEService {
           if (event != null) {
             yield event;
           }
+        }
+        // Check the unfinished event after draining complete events. One
+        // network chunk can contain several valid events larger in total
+        // than this per-event bound.
+        if (buffer.length > maxBufferBytes) {
+          throw SSEException(
+            'SSE buffer exceeded maximum size of $maxBufferBytes characters',
+          );
         }
       }
     } finally {

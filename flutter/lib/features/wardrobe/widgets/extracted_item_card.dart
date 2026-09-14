@@ -67,42 +67,10 @@ class ExtractedItemCard extends StatelessWidget {
                       ),
                     ),
                     if (onToggleSelection != null)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Include',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: tokens.textMuted),
-                          ),
-                          const SizedBox(width: 6),
-                          GestureDetector(
-                            onTap: onToggleSelection,
-                            child: Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? tokens.brandColor
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? tokens.brandColor
-                                      : tokens.textMuted,
-                                  width: 2,
-                                ),
-                              ),
-                              child: isSelected
-                                  ? const Icon(
-                                      Icons.check,
-                                      size: 16,
-                                      color: Colors.white,
-                                    )
-                                  : null,
-                            ),
-                          ),
-                        ],
+                      Checkbox(
+                        value: isSelected,
+                        semanticLabel: 'Include ${item.name}',
+                        onChanged: (_) => onToggleSelection!(),
                       ),
                   ],
                 ),
@@ -116,20 +84,15 @@ class ExtractedItemCard extends StatelessWidget {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: item.isCurrentUserPerson
-                          ? Colors.green.withValues(alpha: 0.12)
-                          : tokens.brandColor.withValues(alpha: 0.1),
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       item.isCurrentUserPerson
                           ? '${item.personLabel} (You)'
                           : item.personLabel!,
-                      style: TextStyle(
-                        color: item.isCurrentUserPerson
-                            ? Colors.green.shade700
-                            : tokens.brandColor,
-                        fontSize: 10,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -149,10 +112,9 @@ class ExtractedItemCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    item.category.name.toUpperCase(),
-                    style: TextStyle(
+                    item.category.displayName,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: tokens.brandColor,
-                      fontSize: 10,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -183,17 +145,19 @@ class ExtractedItemCard extends StatelessWidget {
                   const SizedBox(height: AppConstants.spacing8),
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.warning_amber,
-                        size: 14,
-                        color: Colors.amber,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.error,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        item.error ?? 'Generation failed',
-                        style: const TextStyle(
-                          color: Colors.amber,
-                          fontSize: 11,
+                      Expanded(
+                        child: Text(
+                          item.error ?? 'Generation failed',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                         ),
                       ),
                     ],
@@ -205,7 +169,9 @@ class ExtractedItemCard extends StatelessWidget {
                   const SizedBox(height: AppConstants.spacing4),
                   Text(
                     '${(item.confidence! * 100).toStringAsFixed(0)}% confidence',
-                    style: TextStyle(color: tokens.textMuted, fontSize: 11),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ],
@@ -242,21 +208,14 @@ class ExtractedItemCard extends StatelessWidget {
               Positioned(
                 top: 4,
                 right: 4,
-                child: GestureDetector(
-                  onTap: onRemove,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      size: 14,
-                      color: Colors.white,
-                    ),
+                child: IconButton.filled(
+                  tooltip: 'Remove ${item.name}',
+                  onPressed: onRemove,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black.withValues(alpha: 0.6),
+                    foregroundColor: Colors.white,
                   ),
+                  icon: const Icon(Icons.close),
                 ),
               ),
 
@@ -265,20 +224,14 @@ class ExtractedItemCard extends StatelessWidget {
               Positioned(
                 bottom: 4,
                 right: 4,
-                child: GestureDetector(
-                  onTap: onEdit,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Icon(
-                      Icons.edit,
-                      size: 14,
-                      color: Colors.white,
-                    ),
+                child: IconButton.filled(
+                  tooltip: 'Edit ${item.name}',
+                  onPressed: onEdit,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black.withValues(alpha: 0.6),
+                    foregroundColor: Colors.white,
                   ),
+                  icon: const Icon(Icons.edit),
                 ),
               ),
 

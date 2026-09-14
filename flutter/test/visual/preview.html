@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FitCheck — Mobile design review</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #f0efe9; color: #2c302d; font: 15px/1.5 system-ui, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; max-width: 1320px; margin: 0 auto 32px; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -.8px; }
+  p { margin: 0; color: #646960; }
+  button { min-height: 48px; padding: 12px 20px; border: 0; border-radius: 12px; background: #3f5148; color: white; font: inherit; cursor: pointer; }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px 24px; max-width: 1320px; margin: auto; }
+  figure { margin: 0; min-width: 0; }
+  figcaption { margin-bottom: 12px; font-weight: 600; }
+  img { display: block; width: 100%; height: auto; border-radius: 16px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #3f5148; outline-offset: 5px; }
+  details { max-width: 1320px; margin: 40px auto 0; }
+  summary { cursor: pointer; min-height: 48px; }
+  .sizes { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 700px) { body { padding: 20px; } .sizes { grid-template-columns: 1fr; } }
+</style>
+<header>
+  <div><h1>FitCheck · The mobile edit</h1><p>Actual Flutter widget renders · local fixture data · tap a screen to view full size</p></div>
+  <button type="button" id="theme" aria-pressed="false">Show dark mode</button>
+</header>
+<main id="screens"></main>
+<details><summary>Compare 320px phone and 1024px tablet layouts</summary>
+  <div class="sizes">
+    <figure><figcaption>Home · 320px</figcaption><a href="goldens/home_320.png"><img src="goldens/home_320.png" alt="Home at 320px"></a></figure>
+    <figure><figcaption>Home · tablet</figcaption><a href="goldens/home_1024.png"><img src="goldens/home_1024.png" alt="Home with tablet navigation rail"></a></figure>
+  </div>
+</details>
+<script>
+  const screens = [['home', 'Home'], ['closet', 'Closet'], ['outfits', 'Outfits'], ['studio', 'Studio'], ['profile', 'Profile'], ['auth', 'Welcome']];
+  const toggle = document.querySelector('#theme');
+  function render(dark) {
+    document.querySelector('#screens').innerHTML = screens.map(([key, label]) => {
+      const src = `goldens/${key}_${dark ? 'dark' : 'light'}.png`;
+      return `<figure><figcaption>${label}</figcaption><a href="${src}"><img src="${src}" alt="${label}, ${dark ? 'dark' : 'light'} mode" loading="lazy"></a></figure>`;
+    }).join('');
+    toggle.setAttribute('aria-pressed', String(dark));
+    toggle.textContent = dark ? 'Show light mode' : 'Show dark mode';
+  }
+  toggle.addEventListener('click', () => render(toggle.getAttribute('aria-pressed') !== 'true'));
+  render(false);
+</script>
+</html>

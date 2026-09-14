@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../controllers/wardrobe_controller.dart';
@@ -11,7 +10,9 @@ import '../../../core/utils/error_handler.dart';
 /// Wardrobe statistics dashboard page
 /// Shows insights about the user's wardrobe including totals, categories, value, etc.
 class WardrobeStatsPage extends StatefulWidget {
-  const WardrobeStatsPage({super.key});
+  const WardrobeStatsPage({super.key, this.repository});
+
+  final ItemRepository? repository;
 
   @override
   State<WardrobeStatsPage> createState() => _WardrobeStatsPageState();
@@ -19,7 +20,8 @@ class WardrobeStatsPage extends StatefulWidget {
 
 class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
   final WardrobeController wardrobeController = Get.find<WardrobeController>();
-  final ItemRepository _itemRepository = ItemRepository();
+  late final ItemRepository _itemRepository =
+      widget.repository ?? ItemRepository();
 
   final RxMap<String, dynamic> stats = <String, dynamic>{}.obs;
   final RxBool isLoading = true.obs;
@@ -36,20 +38,16 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
       isLoading.value = true;
       error.value = '';
       final statistics = await _itemRepository.getStatistics();
-      stats.value = statistics;
+      if (mounted) stats.value = statistics;
     } catch (e) {
-      error.value = ErrorHandler.extractMessage(e);
+      if (mounted) error.value = ErrorHandler.extractMessage(e);
     } finally {
-      isLoading.value = false;
+      if (mounted) isLoading.value = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
-      Get.currentRoute,
-    );
-
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
@@ -77,7 +75,6 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
           ),
         ),
       ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
     );
   }
 
@@ -95,7 +92,11 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
         ),
       ),
       actions: [
-        IconButton(icon: const Icon(Icons.refresh), onPressed: _loadStats),
+        IconButton(
+          tooltip: 'Refresh closet statistics',
+          icon: const Icon(Icons.refresh),
+          onPressed: _loadStats,
+        ),
       ],
     );
   }
@@ -116,6 +117,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
     final tokens = AppUiTokens.of(context);
 
     return SliverFillRemaining(
+      hasScrollBody: false,
       child: Center(
         child: AppGlassCard(
           padding: const EdgeInsets.all(AppConstants.spacing24),
@@ -210,8 +212,10 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 'Total Items',
@@ -266,16 +270,16 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
         borderRadius: BorderRadius.circular(AppConstants.radius16),
         border: Border.all(color: tokens.cardBorderColor),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Icon(_getCategoryIcon(category), size: 16, color: tokens.textMuted),
-          const SizedBox(width: AppConstants.spacing6),
           Text(
             category.displayName,
             style: TextStyle(color: tokens.textSecondary, fontSize: 12),
           ),
-          const SizedBox(width: AppConstants.spacing4),
           Text(
             '×$count',
             style: TextStyle(
@@ -299,10 +303,14 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
           Container(
             padding: const EdgeInsets.all(AppConstants.spacing12),
             decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.1),
+              color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(AppConstants.radius12),
             ),
-            child: Icon(Icons.attach_money, color: Colors.green, size: 28),
+            child: Icon(
+              Icons.attach_money,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              size: 28,
+            ),
           ),
           const SizedBox(width: AppConstants.spacing16),
           Expanded(
@@ -372,17 +380,20 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Row(
+              Wrap(
+                spacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Icon(
                     _getCategoryIcon(category),
                     size: 16,
                     color: tokens.textMuted,
                   ),
-                  const SizedBox(width: AppConstants.spacing8),
                   Text(
                     category.displayName,
                     style: TextStyle(color: tokens.textSecondary, fontSize: 14),
@@ -426,11 +437,13 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
             children: [
               Icon(icon, size: 20, color: tokens.brandColor),
               const SizedBox(width: AppConstants.spacing8),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                 ),
               ),
             ],

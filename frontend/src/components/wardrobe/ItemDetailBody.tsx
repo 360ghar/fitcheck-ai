@@ -158,9 +158,9 @@ function resolveLedger(item: Item): { figure: string; label: string; note: strin
 
 function SpecRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-lg border-b border-border py-md">
+    <div className="flex items-start justify-between gap-md border-b border-border py-2">
       <dt className="shrink-0 text-xs text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right text-sm text-foreground">{children}</dd>
+      <dd className="min-w-0 text-right text-[13px] text-foreground">{children}</dd>
     </div>
   )
 }
@@ -232,8 +232,8 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
   const ledger = resolveLedger(item)
 
   return (
-    <div className="pb-lg">
-      {notice && <p className="pb-md text-sm text-muted-foreground">{notice}</p>}
+    <div className="pb-md">
+      {notice && <p className="pb-sm text-sm text-muted-foreground">{notice}</p>}
 
       {/* Hero. object-contain over a card surface so a cutout garment is shown
           whole — this surface exists to show the item, so it is never cropped. */}
@@ -242,17 +242,17 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
           <ZoomableImage
             src={heroSrc}
             alt={item.name}
-            className="mx-auto block max-h-[58svh] w-full object-contain"
+            className="mx-auto block max-h-[32svh] w-full object-contain"
           />
         ) : (
-          <div className="flex aspect-square items-center justify-center">
-            <Shirt className="h-10 w-10 text-ash" aria-hidden="true" />
+          <div className="flex aspect-[16/10] items-center justify-center">
+            <Shirt className="h-8 w-8 text-ash" aria-hidden="true" />
           </div>
         )}
       </div>
 
       {isEditing ? (
-        <div className="mt-lg space-y-lg">
+        <div className="mt-md space-y-md">
           <div>
             <Label htmlFor="item-edit-name">Name</Label>
             <Input
@@ -386,21 +386,21 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
         </div>
       ) : (
         <>
-          <div className="mt-lg">
+          <div className="mt-md">
             <p className="text-xs text-muted-foreground">
               {addedOn ? `Added ${addedOn}` : 'Added recently'}
             </p>
             {/* Condition only shows when it is not the default — one ink word and a
                 dot, in place of five hardcoded coloured pills. */}
             {item.condition && item.condition !== 'clean' && conditionLabel && (
-              <p className="mt-sm flex items-center gap-xs text-sm font-semibold text-foreground">
+              <p className="mt-xs flex items-center gap-xs text-[13px] font-semibold text-foreground">
                 <span className="h-1.5 w-1.5 rounded-full bg-foreground" aria-hidden="true" />
                 {conditionLabel}
               </p>
             )}
           </div>
 
-          <dl className="mt-lg border-t border-border">
+          <dl className="mt-md border-t border-border">
             <SpecRow label="Category">
               <span className="capitalize">
                 {item.category}
@@ -484,18 +484,18 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
           </dl>
 
           {item.notes && (
-            <div className="mt-lg">
+            <div className="mt-md">
               <p className="text-xs text-muted-foreground">Notes</p>
-              <p className="mt-xxs whitespace-pre-line text-sm text-foreground">{item.notes}</p>
+              <p className="mt-xxs whitespace-pre-line text-[13px] text-foreground">{item.notes}</p>
             </div>
           )}
 
           {/* Rendered only when there is genuinely more than one photo. A tab that
               said "No additional images" nine times out of ten was dead chrome. */}
           {extraImages.length > 0 && (
-            <div className="mt-xl">
+            <div className="mt-md">
               <p className="text-xs text-muted-foreground">More photos</p>
-              <div className="mt-sm grid grid-cols-2 xs:grid-cols-3 gap-sm">
+              <div className="mt-sm grid grid-cols-4 gap-xs">
                 {extraImages.map((image) => (
                   <div key={image.id} className="overflow-hidden rounded-md bg-card">
                     <ZoomableImage
@@ -516,9 +516,9 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
           {/* Similar items — first consumer of GET /items/:id/similar. Hidden
               entirely while loading or when the API comes back empty/fails. */}
           {similarItems && similarItems.length > 0 && onOpenItem && (
-            <div className="mt-xl">
+            <div className="mt-md">
               <p className="text-xs text-muted-foreground">Similar in your closet</p>
-              <div className="mt-sm grid grid-cols-3 xs:grid-cols-4 gap-sm">
+              <div className="mt-sm grid grid-cols-4 gap-xs">
                 {similarItems.slice(0, 8).map((sim) => {
                   // Same primary-image rule as the hero: images[0] can be a
                   // non-primary photo, and a photoless item needs the garment
@@ -553,23 +553,23 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
             </div>
           )}
 
-          <div className="mt-xl border-t border-border pt-lg">
-            {/* md:max-lg: the pane is only 211–289px wide in that one band (see
-                MasterDetailLayout), where a 40px figure and the date cannot share
-                a row. Stacking keeps the figure right-ranged instead of crushing it. */}
-            <div className="flex items-end justify-between gap-lg md:max-lg:flex-col md:max-lg:items-stretch md:max-lg:gap-md">
+          <div className="mt-md border-t border-border pt-md">
+            {/* md split pane is 38% (~292px at 768px). Stack the figure under
+                the date there so the 28px count cannot crush the date; lg+
+                (340px) has room for one row. */}
+            <div className="flex items-end justify-between gap-md md:max-lg:flex-col">
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Last worn</p>
-                <p className="mt-xxs text-sm text-foreground">{lastWorn || 'Not yet'}</p>
+                <p className="mt-xxs text-[13px] text-foreground">{lastWorn || 'Not yet'}</p>
               </div>
               <div className="shrink-0 text-right">
-                <span className="block font-display text-[40px] font-bold leading-none tracking-[-0.01em] tabular-nums text-foreground">
+                <span className="block font-display text-[28px] font-bold leading-none tracking-[-0.01em] tabular-nums text-foreground">
                   {ledger.figure}
                 </span>
                 <span className="mt-xs block text-xs text-muted-foreground">{ledger.label}</span>
               </div>
             </div>
-            <p className="mt-md text-xs tabular-nums text-muted-foreground">{ledger.note}</p>
+            <p className="mt-sm text-xs tabular-nums text-muted-foreground">{ledger.note}</p>
           </div>
         </>
       )}

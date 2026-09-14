@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../constants/app_constants.dart';
@@ -41,7 +40,9 @@ class AppImageViewer extends StatefulWidget {
       barrierDismissible: true,
       barrierLabel: 'Image Viewer',
       barrierColor: Colors.black.withValues(alpha: 0.9),
-      transitionDuration: const Duration(milliseconds: 200),
+      transitionDuration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return AppImageViewer(imageUrls: imageUrls, initialIndex: initialIndex);
       },
@@ -58,43 +59,21 @@ class AppImageViewer extends StatefulWidget {
 class _AppImageViewerState extends State<AppImageViewer> {
   late PageController _pageController;
   late int _currentIndex;
+  late final List<ImageProvider> _imageProviders;
   double _dragDistance = 0;
   bool _isDragging = false;
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
-
-    // Set status bar to light content for dark background
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarBrightness: Brightness.dark,
-        statusBarIconBrightness: Brightness.light,
-      ),
-    );
+    _currentIndex = widget.initialIndex.clamp(0, widget.imageUrls.length - 1);
+    _pageController = PageController(initialPage: _currentIndex);
+    _imageProviders = widget.imageUrls.map(appImageProvider).toList();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    // Restore system UI overlay style. The viewer opens over both themes, so
-    // match the brightness of whatever route sits underneath instead of
-    // always restoring to light-mode values.
-    final context = Get.context;
-    final dark =
-        context != null &&
-        Theme.of(context).brightness == Brightness.dark;
-    SystemChrome.setSystemUIOverlayStyle(
-      SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness:
-            dark ? Brightness.light : Brightness.dark,
-        systemNavigationBarColor: Colors.black,
-        systemNavigationBarIconBrightness: Brightness.light,
-      ),
-    );
     super.dispose();
   }
 
@@ -139,62 +118,68 @@ class _AppImageViewerState extends State<AppImageViewer> {
     final isGallery = widget.imageUrls.length > 1;
     final opacity = (1 - (_dragDistance.abs() / 300)).clamp(0.0, 1.0);
 
-    return GestureDetector(
-      onTap: _close,
-      onVerticalDragStart: _handleVerticalDragStart,
-      onVerticalDragUpdate: _handleVerticalDragUpdate,
-      onVerticalDragEnd: _handleVerticalDragEnd,
-      child: Material(
-        color: Colors.transparent,
-        child: Stack(
-          children: [
-            // Image gallery
-            Transform.translate(
-              offset: Offset(0, _dragDistance),
-              child: Opacity(
-                opacity: opacity,
-                child: isGallery
-                    ? _buildGallery()
-                    : _buildSingleImage(widget.imageUrls.first),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: GestureDetector(
+        onTap: _close,
+        onVerticalDragStart: _handleVerticalDragStart,
+        onVerticalDragUpdate: _handleVerticalDragUpdate,
+        onVerticalDragEnd: _handleVerticalDragEnd,
+        child: Material(
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              // Image gallery
+              Transform.translate(
+                offset: Offset(0, _dragDistance),
+                child: Opacity(
+                  opacity: opacity,
+                  child: isGallery ? _buildGallery() : _buildSingleImage(),
+                ),
               ),
-            ),
 
-            // Close button
-            Positioned(
-              top: MediaQuery.of(context).padding.top + AppConstants.spacing8,
-              right: AppConstants.spacing16,
-              child: Opacity(opacity: opacity, child: _buildCloseButton()),
-            ),
-
-            // Page indicator for galleries
-            if (isGallery)
+              // Close button
               Positioned(
-                bottom:
-                    MediaQuery.of(context).padding.bottom +
-                    AppConstants.spacing24,
-                left: 0,
-                right: 0,
-                child: Opacity(opacity: opacity, child: _buildPageIndicator()),
+                top: MediaQuery.of(context).padding.top + AppConstants.spacing8,
+                right: AppConstants.spacing16,
+                child: Opacity(opacity: opacity, child: _buildCloseButton()),
               ),
-          ],
+
+              // Page indicator for galleries
+              if (isGallery)
+                Positioned(
+                  bottom:
+                      MediaQuery.of(context).padding.bottom +
+                      AppConstants.spacing24,
+                  left: 0,
+                  right: 0,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: _buildPageIndicator(),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSingleImage(String imageUrl) {
+  Widget _buildSingleImage() {
     return Center(
       child: GestureDetector(
         onTap: () {}, // Prevent tap from propagating to dismiss
         child: PhotoView(
-          imageProvider: appImageProvider(imageUrl),
+          imageProvider: _imageProviders.first,
           minScale: PhotoViewComputedScale.contained,
           maxScale: PhotoViewComputedScale.covered * 3,
           initialScale: PhotoViewComputedScale.contained,
           backgroundDecoration: const BoxDecoration(color: Colors.transparent),
           loadingBuilder: (context, event) => Center(
             child: CircularProgressIndicator(
-              value: event == null
+              value:
+                  event?.expectedTotalBytes == null ||
+                      event!.expectedTotalBytes! <= 0
                   ? null
                   : event.cumulativeBytesLoaded /
                         (event.expectedTotalBytes ?? 1),
@@ -219,7 +204,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
         backgroundDecoration: const BoxDecoration(color: Colors.transparent),
         builder: (context, index) {
           return PhotoViewGalleryPageOptions(
-            imageProvider: appImageProvider(widget.imageUrls[index]),
+            imageProvider: _imageProviders[index],
             minScale: PhotoViewComputedScale.contained,
             maxScale: PhotoViewComputedScale.covered * 3,
             initialScale: PhotoViewComputedScale.contained,
@@ -227,7 +212,9 @@ class _AppImageViewerState extends State<AppImageViewer> {
         },
         loadingBuilder: (context, event) => Center(
           child: CircularProgressIndicator(
-            value: event == null
+            value:
+                event?.expectedTotalBytes == null ||
+                    event!.expectedTotalBytes! <= 0
                 ? null
                 : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
             color: Colors.white,

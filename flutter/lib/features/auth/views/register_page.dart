@@ -101,7 +101,6 @@ class _RegisterPageState extends State<RegisterPage> {
     final authController = Get.find<AuthController>();
     final tokens = AuthUiTokens.of(context);
     final screenSize = MediaQuery.of(context).size;
-    final titleSize = (screenSize.width * 0.085).clamp(26.0, 38.0);
     final bodySize = (screenSize.width * 0.04).clamp(14.0, 16.0);
 
     return AuthScaffold(
@@ -113,17 +112,13 @@ class _RegisterPageState extends State<RegisterPage> {
             textColor: tokens.textColor,
             brandColor: tokens.brandColor,
           ),
+          const SizedBox(height: AppConstants.spacing32),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Create Account',
-                style: TextStyle(
-                  fontSize: titleSize,
-                  fontWeight: FontWeight.w800,
-                  color: tokens.textColor,
-                  height: 1.1,
-                ),
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
@@ -166,6 +161,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ],
           ),
+          const SizedBox(height: AppConstants.spacing24),
           _buildLoginLink(tokens),
         ],
       ),
@@ -173,11 +169,8 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildNameField(AuthUiTokens tokens) {
-    return Semantics(
-      label: 'Full Name',
-      textField: true,
-      child: TextFormField(
-        controller: _nameController,
+    return TextFormField(
+      controller: _nameController,
       textCapitalization: TextCapitalization.words,
       textInputAction: TextInputAction.next,
       style: TextStyle(color: tokens.textColor),
@@ -194,46 +187,38 @@ class _RegisterPageState extends State<RegisterPage> {
         }
         return null;
       },
-    ),
     );
   }
 
   Widget _buildEmailField(AuthUiTokens tokens) {
-    return Semantics(
-      label: 'Email',
-      textField: true,
-      child: TextFormField(
-        controller: _emailController,
-        keyboardType: TextInputType.emailAddress,
-        textInputAction: TextInputAction.next,
-        style: TextStyle(color: tokens.textColor),
-        cursorColor: tokens.brandColor,
-        decoration: AuthFormStyles.inputDecoration(
-          context: context,
-          label: 'Email',
-          hint: 'Enter your email',
-          icon: Icons.mail,
-        ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your email';
-          }
-          if (!GetUtils.isEmail(value)) {
-            return 'Please enter a valid email';
-          }
-          return null;
-        },
+    return TextFormField(
+      controller: _emailController,
+      keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.next,
+      style: TextStyle(color: tokens.textColor),
+      cursorColor: tokens.brandColor,
+      decoration: AuthFormStyles.inputDecoration(
+        context: context,
+        label: 'Email',
+        hint: 'Enter your email',
+        icon: Icons.mail,
       ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please enter your email';
+        }
+        if (!GetUtils.isEmail(value)) {
+          return 'Please enter a valid email';
+        }
+        return null;
+      },
     );
   }
 
   Widget _buildPasswordField(AuthUiTokens tokens) {
     return Obx(
-      () => Semantics(
-        label: 'Password',
-        textField: true,
-        child: TextFormField(
-          controller: _passwordController,
+      () => TextFormField(
+        controller: _passwordController,
         obscureText: !_isPasswordVisible.value,
         textInputAction: TextInputAction.next,
         style: TextStyle(color: tokens.textColor),
@@ -244,7 +229,9 @@ class _RegisterPageState extends State<RegisterPage> {
           hint: 'Create a password',
           icon: Icons.lock,
           suffixIcon: IconButton(
-            tooltip: _isPasswordVisible.value ? 'Hide password' : 'Show password',
+            tooltip: _isPasswordVisible.value
+                ? 'Hide password'
+                : 'Show password',
             icon: Icon(
               _isPasswordVisible.value
                   ? Icons.visibility
@@ -266,17 +253,13 @@ class _RegisterPageState extends State<RegisterPage> {
           return null;
         },
       ),
-      ),
     );
   }
 
   Widget _buildConfirmPasswordField(AuthUiTokens tokens) {
     return Obx(
-      () => Semantics(
-        label: 'Confirm Password',
-        textField: true,
-        child: TextFormField(
-          controller: _confirmPasswordController,
+      () => TextFormField(
+        controller: _confirmPasswordController,
         obscureText: !_isConfirmPasswordVisible.value,
         textInputAction: TextInputAction.done,
         onFieldSubmitted: (_) => _handleRegister(),
@@ -312,7 +295,6 @@ class _RegisterPageState extends State<RegisterPage> {
           }
           return null;
         },
-      ),
       ),
     );
   }
@@ -384,15 +366,11 @@ class _RegisterPageState extends State<RegisterPage> {
     AuthController authController,
     AuthUiTokens tokens,
   ) {
-    return Semantics(
-      label: 'Create Account',
-      button: true,
-      enabled: !authController.isLoading.value,
-      child: ElevatedButton(
-        onPressed: authController.isLoading.value ? null : _handleRegister,
+    return ElevatedButton(
+      onPressed: authController.isLoading.value ? null : _handleRegister,
       style: ElevatedButton.styleFrom(
         backgroundColor: tokens.brandColor,
-        foregroundColor: Colors.white,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
@@ -407,17 +385,21 @@ class _RegisterPageState extends State<RegisterPage> {
           ? const SizedBox(
               height: 20,
               width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                semanticsLabel: 'Creating account',
+              ),
             )
           : const Text('Create Account'),
-    ),
     );
   }
 
   Widget _buildDivider(AuthUiTokens tokens) {
     return Row(
       children: [
-        Expanded(child: Divider(color: tokens.textColor.withValues(alpha: 0.2))),
+        Expanded(
+          child: Divider(color: tokens.textColor.withValues(alpha: 0.2)),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppConstants.spacing16,
@@ -432,7 +414,9 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
           ),
         ),
-        Expanded(child: Divider(color: tokens.textColor.withValues(alpha: 0.2))),
+        Expanded(
+          child: Divider(color: tokens.textColor.withValues(alpha: 0.2)),
+        ),
       ],
     );
   }
@@ -454,32 +438,27 @@ class _RegisterPageState extends State<RegisterPage> {
     // code).
     return Obx(() {
       final isLoading = authController.isGoogleSigningIn.value;
-      return Semantics(
-        label: 'Continue with Google',
-        button: true,
-        enabled: !isLoading,
-        child: OutlinedButton.icon(
-          onPressed: isLoading ? null : _handleGoogleSignIn,
-          icon: isLoading
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.login),
-          label: Text(isLoading ? 'Signing in...' : 'Continue with Google'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: tokens.textColor,
-            side: BorderSide(color: tokens.textColor.withValues(alpha: 0.4)),
-            padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.radius16),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.3,
-            ),
+      return OutlinedButton.icon(
+        onPressed: isLoading ? null : _handleGoogleSignIn,
+        icon: isLoading
+            ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.login),
+        label: Text(isLoading ? 'Signing in...' : 'Continue with Google'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: tokens.textColor,
+          side: BorderSide(color: tokens.textColor.withValues(alpha: 0.4)),
+          padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.radius16),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
           ),
         ),
       );
@@ -497,14 +476,10 @@ class _RegisterPageState extends State<RegisterPage> {
               'Already have an account? ',
               style: TextStyle(color: tokens.secondaryTextColor, fontSize: 14),
             ),
-            Semantics(
-              label: 'Log In',
-              button: true,
-              child: TextButton(
-                onPressed: () => Get.offNamed(Routes.login),
-                style: TextButton.styleFrom(foregroundColor: tokens.textColor),
-                child: const Text('Log In'),
-              ),
+            TextButton(
+              onPressed: () => Get.offNamed(Routes.login),
+              style: TextButton.styleFrom(foregroundColor: tokens.textColor),
+              child: const Text('Log In'),
             ),
           ],
         ),

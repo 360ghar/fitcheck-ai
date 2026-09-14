@@ -130,6 +130,7 @@ class _AppImageState extends State<AppImage> {
   /// per URL is enough: if the fresh URL fails too, the object is genuinely
   /// unreadable and an error tile is the honest result.
   bool _reminted = false;
+  int _sourceRevision = 0;
 
   @override
   void initState() {
@@ -154,6 +155,7 @@ class _AppImageState extends State<AppImage> {
   /// distinct fallback exists (identical/empty fallbacks are dropped — see
   /// [resolveFallbackUrl]).
   void _resolveActiveUrl() {
+    _sourceRevision++;
     final fallback = resolveFallbackUrl(
       widget.imageUrl ?? '',
       widget.fallbackUrl,
@@ -182,9 +184,15 @@ class _AppImageState extends State<AppImage> {
       return;
     }
     _reminted = true;
+    final revision = _sourceRevision;
     try {
       final freshUrl = await widget.remintUrl!(widget.storagePath!);
-      if (freshUrl == null || freshUrl.isEmpty || !mounted) return;
+      if (!mounted ||
+          revision != _sourceRevision ||
+          freshUrl == null ||
+          freshUrl.isEmpty) {
+        return;
+      }
       setState(() {
         _activeUrl = freshUrl;
       });
@@ -204,8 +212,21 @@ class _AppImageState extends State<AppImage> {
 
     if (_activeUrl == null || _activeUrl!.isEmpty) {
       imageWidget = _buildErrorWidget(context, tokens);
+    } else if (_activeUrl!.startsWith('data:image')) {
+      imageWidget = AppNetworkImage(
+        _activeUrl!,
+        fit: widget.fit,
+        width: widget.width,
+        height: widget.height,
+        cacheWidth: widget.memCacheWidth,
+        cacheHeight: widget.memCacheHeight,
+        fallbackUrl: widget.fallbackUrl,
+        errorWidget: (_, _, _) =>
+            widget.errorWidget ?? _buildErrorWidget(context, tokens),
+      );
     } else {
       final canRemint = widget.storagePath != null && widget.remintUrl != null;
+      final revision = _sourceRevision;
       imageWidget = CachedNetworkImage(
         imageUrl: _activeUrl!,
         cacheManager: widget.cacheManager,
@@ -232,7 +253,7 @@ class _AppImageState extends State<AppImage> {
           );
           if (!_usingFallback && fallback != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _retryWithFallback();
+              if (mounted && revision == _sourceRevision) _retryWithFallback();
             });
             return widget.placeholder ?? _buildPlaceholder(context, tokens);
           }
@@ -240,7 +261,7 @@ class _AppImageState extends State<AppImage> {
             // errorWidget runs during build; schedule the re-mint + retry
             // instead of calling setState inline.
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _remintAndRetry();
+              if (mounted && revision == _sourceRevision) _remintAndRetry();
             });
           }
           return widget.errorWidget ?? _buildErrorWidget(context, tokens);
@@ -307,7 +328,7 @@ class _AppImageState extends State<AppImage> {
     final loadingSurface = Container(
       width: widget.width,
       height: widget.height,
-      color: tokens.cardColor.withValues(alpha: 0.3),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
     );
 
     if (MediaQuery.disableAnimationsOf(context)) {
@@ -316,8 +337,9 @@ class _AppImageState extends State<AppImage> {
 
     return ExcludeSemantics(
       child: Shimmer.fromColors(
-        baseColor: tokens.cardColor.withValues(alpha: 0.4),
-        highlightColor: tokens.cardColor.withValues(alpha: 0.7),
+        baseColor: tokens.cardBorderColor,
+        highlightColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        enabled: TickerMode.valuesOf(context).enabled,
         period: const Duration(milliseconds: 1200),
         child: loadingSurface,
       ),
@@ -333,7 +355,7 @@ class _AppImageState extends State<AppImage> {
       child: Container(
         width: widget.width,
         height: widget.height,
-        color: tokens.cardColor.withValues(alpha: 0.3),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: Center(
           child: Icon(widget.errorIcon, size: 48, color: tokens.textMuted),
         ),

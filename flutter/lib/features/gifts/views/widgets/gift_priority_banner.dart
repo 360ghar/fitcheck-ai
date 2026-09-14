@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../core/constants/app_constants.dart';
-import '../../../../../core/widgets/app_ui.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/widgets/app_ui.dart';
 import '../../models/gift_models.dart';
 
 class GiftPriorityBanner extends StatelessWidget {

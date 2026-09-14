@@ -6,7 +6,8 @@ import '../../features/settings/models/user_preferences_model.dart';
 import 'persistence_service.dart';
 
 /// Theme service - handles theme persistence with local storage
-/// Loads immediately on app start, syncs with backend when online
+/// Loads before the first frame. The three-state mode is device-local because
+/// the backend settings contract only supports a two-state dark_mode flag.
 class ThemeService extends GetxController {
   static const String _themeStorageKey = 'fitcheck_theme_mode';
   static const AppThemeMode _defaultTheme = AppThemeMode.light;
@@ -87,14 +88,6 @@ class ThemeService extends GetxController {
       await _persistence.setString(_themeStorageKey, mode.name);
     } catch (e) {
       debugPrint('Failed to save theme to local storage: $e');
-    }
-  }
-
-  /// Sync theme from backend (called after API response)
-  /// Backend is source of truth when online
-  void syncFromBackend(AppThemeMode? backendMode) {
-    if (backendMode != null && backendMode != _themeMode.value) {
-      unawaited(setThemeMode(backendMode));
     }
   }
 }

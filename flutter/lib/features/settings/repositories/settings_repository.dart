@@ -11,7 +11,9 @@ class SettingsRepository {
   /// Get user preferences
   Future<UserPreferencesModel> getPreferences() async {
     try {
-      final response = await _apiClient.get('${ApiConstants.users}/preferences');
+      final response = await _apiClient.get(
+        '${ApiConstants.users}/preferences',
+      );
       final data = _extractPreferenceData(response.data);
       return UserPreferencesModel.fromJson(data);
     } on DioException catch (e) {
@@ -20,11 +22,15 @@ class SettingsRepository {
   }
 
   /// Update user preferences
-  Future<UserPreferencesModel> updatePreferences(UserPreferencesModel preferences) async {
+  Future<UserPreferencesModel> updatePreferences(
+    UserPreferencesModel preferences,
+  ) async {
     try {
       final response = await _apiClient.put(
         '${ApiConstants.users}/preferences',
-        data: preferences.toJson(),
+        // Light/Dark/System is persisted on the device. The preferences API
+        // does not accept theme_mode, and dark_mode cannot represent System.
+        data: preferences.toJson()..remove('theme_mode'),
       );
       final data = _extractPreferenceData(response.data);
       return UserPreferencesModel.fromJson(data);
@@ -45,7 +51,9 @@ class SettingsRepository {
   }
 
   /// Update user settings
-  Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> settings) async {
+  Future<Map<String, dynamic>> updateSettings(
+    Map<String, dynamic> settings,
+  ) async {
     try {
       final response = await _apiClient.put(
         '${ApiConstants.users}/settings',
@@ -110,7 +118,9 @@ class SettingsRepository {
       // not a shape this API produces, so there is nothing to fall back to.
       final payload = response.data;
       final data = payload is Map<String, dynamic> ? payload['data'] : null;
-      final exportUrl = data is Map<String, dynamic> ? data['export_url'] : null;
+      final exportUrl = data is Map<String, dynamic>
+          ? data['export_url']
+          : null;
       if (exportUrl is! String || exportUrl.isEmpty) {
         throw StateError('Export URL missing from response');
       }
@@ -119,5 +129,4 @@ class SettingsRepository {
       throw handleDioException(e);
     }
   }
-
 }

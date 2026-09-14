@@ -30,10 +30,7 @@ class BatchImageTile extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppConstants.radius12),
-        border: Border.all(
-          color: _getBorderColor(tokens),
-          width: 2,
-        ),
+        border: Border.all(color: _getBorderColor(tokens), width: 2),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppConstants.radius12 - 2),
@@ -64,21 +61,15 @@ class BatchImageTile extends StatelessWidget {
               Positioned(
                 top: 4,
                 right: 4,
-                child: GestureDetector(
-                  onTap: onRemove,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      size: 16,
-                      color: Colors.white,
-                    ),
+                child: IconButton.filled(
+                  tooltip: 'Remove photo',
+                  onPressed: onRemove,
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size.square(48),
+                    backgroundColor: Colors.black.withValues(alpha: 0.6),
+                    foregroundColor: Colors.white,
                   ),
+                  icon: const Icon(Icons.close, size: 20),
                 ),
               ),
 
@@ -98,9 +89,8 @@ class BatchImageTile extends StatelessWidget {
                   ),
                   child: Text(
                     '${image.extractedItems.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -115,9 +105,7 @@ class BatchImageTile extends StatelessWidget {
   Widget _buildStatusOverlay(AppUiTokens tokens) {
     return Container(
       color: _getOverlayColor(),
-      child: Center(
-        child: _buildStatusIcon(tokens),
-      ),
+      child: Center(child: _buildStatusIcon(tokens)),
     );
   }
 
@@ -144,11 +132,7 @@ class BatchImageTile extends StatelessWidget {
           ),
         );
       case BatchImageStatus.extracted:
-        return const Icon(
-          Icons.check_circle,
-          color: Colors.white,
-          size: 32,
-        );
+        return const Icon(Icons.check_circle, color: Colors.white, size: 32);
       case BatchImageStatus.generating:
         return const SizedBox(
           width: 24,
@@ -159,17 +143,9 @@ class BatchImageTile extends StatelessWidget {
           ),
         );
       case BatchImageStatus.generated:
-        return const Icon(
-          Icons.check_circle,
-          color: Colors.white,
-          size: 32,
-        );
+        return const Icon(Icons.check_circle, color: Colors.white, size: 32);
       case BatchImageStatus.failed:
-        return const Icon(
-          Icons.error,
-          color: Colors.white,
-          size: 32,
-        );
+        return const Icon(Icons.error, color: Colors.white, size: 32);
     }
   }
 

@@ -105,6 +105,13 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
           return ListView(
             padding: const EdgeInsets.all(AppConstants.spacing16),
             children: [
+              const AppEditorialHeader(
+                title: 'A gift of style',
+                subtitle:
+                    'Send a personal invitation or claim a gift from someone you know.',
+                color: AppCoreColors.editorialRose,
+              ),
+              const SizedBox(height: AppConstants.spacing16),
               if (_controller.error.value.isNotEmpty) ...[
                 _ErrorCard(
                   message: _controller.error.value,
@@ -234,7 +241,10 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
               validator: _email,
             ),
             DropdownButtonFormField<String>(
-              value: _occasion?.name ?? 'none',
+              key: ValueKey(_occasion),
+              initialValue: _occasion?.name ?? 'none',
+              isExpanded: true,
+              itemHeight: null,
               decoration: const InputDecoration(
                 labelText: 'Occasion (optional)',
               ),
@@ -265,6 +275,7 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
                 decoration: const InputDecoration(
                   labelText: 'Card greeting',
                   helperText: 'This appears on the card exactly as written.',
+                  helperMaxLines: 3,
                 ),
                 textInputAction: TextInputAction.next,
                 maxLength: 80,
@@ -371,7 +382,9 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
     final formContext = _formKey.currentContext;
     if (formContext != null) {
       final renderObject = formContext.findRenderObject();
-      if (renderObject is RenderBox && renderObject.attached && renderObject.hasSize) {
+      if (renderObject is RenderBox &&
+          renderObject.attached &&
+          renderObject.hasSize) {
         box = renderObject;
       }
     }
@@ -383,8 +396,9 @@ class _GiftVouchersPageState extends State<GiftVouchersPage> {
       await Share.share(
         '${greeting == null ? '' : '$greeting — '}${voucher.fromName} sent you ${_term(voucher.durationMonths)} of FitCheck Pro. $link',
         subject: 'A FitCheck Pro gift for ${voucher.toName}',
-        sharePositionOrigin:
-            box != null ? box.localToGlobal(Offset.zero) & box.size : null,
+        sharePositionOrigin: box != null
+            ? box.localToGlobal(Offset.zero) & box.size
+            : null,
       );
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: link));

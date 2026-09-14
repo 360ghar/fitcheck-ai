@@ -6,6 +6,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../shell/controllers/main_shell_controller.dart';
 import '../controllers/batch_extraction_controller.dart';
 import '../models/social_import_models.dart';
 import '../widgets/batch_image_tile.dart';
@@ -51,6 +52,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
 
             if (controller.isSocialMode && controller.hasActiveSocialJob) {
               return IconButton(
+                tooltip: 'Refresh import status',
                 onPressed: controller.refreshSocialStatus,
                 icon: const Icon(Icons.refresh),
               );
@@ -152,7 +154,9 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
           label,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: active ? Colors.white : tokens.textMuted,
+            color: active
+                ? Theme.of(context).colorScheme.onPrimary
+                : tokens.textMuted,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -214,11 +218,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
             padding: const EdgeInsets.all(AppConstants.spacing24),
             child: Column(
               children: [
-                Icon(
-                  Icons.check_circle_outline,
-                  size: 48,
-                  color: Colors.green,
-                ),
+                Icon(Icons.check_circle_outline, size: 48, color: Colors.green),
                 const SizedBox(height: AppConstants.spacing16),
                 Text(
                   'Import Complete',
@@ -243,9 +243,8 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
             height: 56,
             child: ElevatedButton.icon(
               onPressed: () {
-                // Same destination as a deep link to the wardrobe tab.
-                Get.offNamed(Routes.wardrobe);
                 controller.resetSocialImportState();
+                _openExistingCloset();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: tokens.brandColor,
@@ -265,6 +264,19 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
         ],
       ),
     );
+  }
+
+  /// Pop back to the live shell Closet tab. `Routes.wardrobe` now builds a
+  /// second shell, which stacks on Item Add instead of revealing the
+  /// existing tab.
+  void _openExistingCloset() {
+    if (Get.key.currentState?.canPop() == true &&
+        Get.isRegistered<MainShellController>()) {
+      Get.until((route) => route.isFirst);
+      Get.find<MainShellController>().changeTab(1);
+      return;
+    }
+    Get.offAllNamed(Routes.wardrobe);
   }
 
   Widget _buildSocialEndedState(
@@ -393,6 +405,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                               color: tokens.textMuted,
                               size: 20,
                             ),
+                            tooltip: 'Clear profile URL',
                             onPressed: controller.clearSocialUrl,
                           )
                         : null,
@@ -458,7 +471,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                       ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   disabledBackgroundColor: tokens.textMuted.withValues(
                     alpha: 0.3,
                   ),
@@ -475,7 +488,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
+                            tokens.textMuted,
                           ),
                         ),
                       )
@@ -580,6 +593,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
           Row(
             children: [
               IconButton(
+                tooltip: 'Back to profile URL',
                 onPressed: controller.resetSocialImportState,
                 icon: Icon(Icons.arrow_back, color: tokens.textMuted),
               ),
@@ -652,7 +666,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                     : controller.startSocialOAuthConnect,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppConstants.radius12),
                   ),
@@ -764,7 +778,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                     : () => _showOtpDialog(context, tokens),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
                 child: const Text('Enter 2FA Code'),
               ),
@@ -964,7 +978,9 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isPausedForRateLimit ? 'Import Paused' : 'Processing Photos',
+                      isPausedForRateLimit
+                          ? 'Import Paused'
+                          : 'Processing Photos',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: tokens.textPrimary,
                         fontWeight: FontWeight.w600,
@@ -1663,6 +1679,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
             ),
           ),
           IconButton(
+            tooltip: 'Edit ${item.name}',
             onPressed: () => _showEditSocialItemDialog(
               context,
               tokens,
@@ -2033,7 +2050,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                 onPressed: hasImages ? _startExtraction : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(
                     vertical: AppConstants.spacing16,
                   ),

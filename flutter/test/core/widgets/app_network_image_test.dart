@@ -35,6 +35,21 @@ String _presigned(String signature) =>
     '&X-Amz-Expires=3600&X-Amz-Signature=$signature';
 
 void main() {
+  test('image viewer provider supports generated data previews', () {
+    expect(
+      appImageProvider('data:image/png;base64,$_tinyPngBase64'),
+      isA<MemoryImage>(),
+    );
+    expect(
+      appImageProvider('https://images.fitcheckaiapp.com/photo.webp'),
+      isA<CachedNetworkImageProvider>(),
+    );
+    // Invalid previews fail through image errorBuilder instead of throwing in build.
+    expect(
+      () => appImageProvider('data:image/png;base64,@@@'),
+      returnsNormally,
+    );
+  });
   _fallbackTests();
   group('stableCacheKey', () {
     test('is identical across presigned signature rotation', () {
@@ -51,7 +66,9 @@ void main() {
 
     test('drops the query string entirely', () {
       expect(
-        stableCacheKey('https://images.fitcheckaiapp.com/a/items/b.webp?v=1&t=2'),
+        stableCacheKey(
+          'https://images.fitcheckaiapp.com/a/items/b.webp?v=1&t=2',
+        ),
         'images.fitcheckaiapp.com/a/items/b.webp',
       );
     });
@@ -102,7 +119,11 @@ void main() {
         'https://notfitcheckaiapp.com/x/items/y.webp',
       ];
       for (final url in foreign) {
-        expect(authHeadersForUrl(url), isNull, reason: 'must not send a token to $url');
+        expect(
+          authHeadersForUrl(url),
+          isNull,
+          reason: 'must not send a token to $url',
+        );
       }
     });
 
@@ -110,7 +131,9 @@ void main() {
       // Supabase is uninitialized under `flutter test`, which is the same code
       // path as signed-out: the helper must degrade to null, never throw.
       expect(
-        authHeadersForUrl('https://images.fitcheckaiapp.com/$_user/items/$_name.webp'),
+        authHeadersForUrl(
+          'https://images.fitcheckaiapp.com/$_user/items/$_name.webp',
+        ),
         isNull,
       );
     });
@@ -123,6 +146,27 @@ void main() {
   });
 
   group('AppNetworkImage data-URI rendering', () {
+    testWidgets('reuses decoded bytes until the image URL changes', (
+      tester,
+    ) async {
+      Future<void> show(String url, double width) => tester.pumpWidget(
+        MaterialApp(home: AppNetworkImage(url, width: width)),
+      );
+      const url = 'data:image/png;base64,$_tinyPngBase64';
+      await show(url, 100);
+      final first =
+          tester.widget<Image>(find.byType(Image)).image as MemoryImage;
+      await show(url, 120);
+      final rebuilt =
+          tester.widget<Image>(find.byType(Image)).image as MemoryImage;
+      expect(identical(first.bytes, rebuilt.bytes), isTrue);
+      // A distinct URI must invalidate the cached buffer, even for equal bytes.
+      await show('data:image/PNG;base64,$_tinyPngBase64', 120);
+      final replaced =
+          tester.widget<Image>(find.byType(Image)).image as MemoryImage;
+      expect(identical(first.bytes, replaced.bytes), isFalse);
+    });
+
     // The AI generation flows preview live output as data URIs until the
     // durable URL arrives. CachedNetworkImage cannot decode those, so the
     // widget must route them through Image.memory instead — these pin that
@@ -169,7 +213,8 @@ void main() {
       expect(
         find.byType(CachedNetworkImage),
         findsNothing,
-        reason: 'a malformed data URI must fail fast without a network round '
+        reason:
+            'a malformed data URI must fail fast without a network round '
             'trip',
       );
     });
@@ -187,10 +232,7 @@ void main() {
       await tester.pump();
 
       expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
-      expect(
-        find.byType(CachedNetworkImage),
-        findsNothing,
-      );
+      expect(find.byType(CachedNetworkImage), findsNothing);
     });
   });
 }
@@ -206,7 +248,8 @@ void main() {
 // once; this pins which fallbacks are worth retrying at all.
 void _fallbackTests() {
   group('resolveFallbackUrl', () {
-    const thumb = 'https://images.fitcheckaiapp.com/$_user/items/${_name}_thumb.webp';
+    const thumb =
+        'https://images.fitcheckaiapp.com/$_user/items/${_name}_thumb.webp';
     const full = 'https://images.fitcheckaiapp.com/$_user/items/$_name.webp';
 
     test('keeps a distinct full-size fallback', () {

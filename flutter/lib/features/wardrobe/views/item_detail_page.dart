@@ -103,7 +103,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                                     item.name,
                                     style: Theme.of(context)
                                         .textTheme
-                                        .headlineMedium
+                                        .titleLarge
                                         ?.copyWith(
                                           fontWeight: FontWeight.w700,
                                           color: tokens.textPrimary,
@@ -135,7 +135,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                                           color: item.isFavorite
                                               ? Colors.red
                                               : null,
-                                          size: 28,
+                                          size: 24,
                                         ),
                                 ),
                               ],
@@ -152,7 +152,9 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
 
                             const SizedBox(height: AppConstants.spacing16),
 
-                            // Category and condition
+                            // All attributes in one chip row (category,
+                            // condition, brand, colors, use cases) so the
+                            // meta grid starts inside the first viewport.
                             Wrap(
                               spacing: AppConstants.spacing8,
                               runSpacing: AppConstants.spacing8,
@@ -175,66 +177,25 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                                     'Size: ${item.size!}',
                                     tokens,
                                   ),
+                                if (item.colors != null)
+                                  for (final color in item.colors!)
+                                    _buildChip(context, color, tokens),
+                                if (item.occasionTags != null)
+                                  for (final tag in item.occasionTags!)
+                                    _buildChip(
+                                      context,
+                                      UseCases.displayLabel(tag),
+                                      tokens,
+                                    ),
                               ],
                             ),
 
-                            if (item.colors != null &&
-                                item.colors!.isNotEmpty) ...[
-                              const SizedBox(height: AppConstants.spacing16),
-                              Text(
-                                'Colors',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: tokens.textPrimary,
-                                    ),
-                              ),
-                              const SizedBox(height: AppConstants.spacing8),
-                              Wrap(
-                                spacing: AppConstants.spacing8,
-                                runSpacing: AppConstants.spacing8,
-                                children: item.colors!
-                                    .map(
-                                      (color) =>
-                                          _buildChip(context, color, tokens),
-                                    )
-                                    .toList(),
-                              ),
-                            ],
-
-                            if (item.occasionTags != null &&
-                                item.occasionTags!.isNotEmpty) ...[
-                              const SizedBox(height: AppConstants.spacing16),
-                              Text(
-                                'Use Cases',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: tokens.textPrimary,
-                                    ),
-                              ),
-                              const SizedBox(height: AppConstants.spacing8),
-                              Wrap(
-                                spacing: AppConstants.spacing8,
-                                runSpacing: AppConstants.spacing8,
-                                children: item.occasionTags!
-                                    .map(
-                                      (tag) => _buildChip(
-                                        context,
-                                        UseCases.displayLabel(tag),
-                                        tokens,
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ],
-
-                            const SizedBox(height: AppConstants.spacing24),
+                            const SizedBox(height: AppConstants.spacing16),
 
                             // Details section
                             _buildDetailsSection(context, item, tokens),
 
-                            const SizedBox(height: AppConstants.spacing24),
+                            const SizedBox(height: AppConstants.spacing16),
 
                             // Stats section
                             _buildStatsSection(
@@ -244,7 +205,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                               wardrobeController,
                             ),
 
-                            const SizedBox(height: AppConstants.spacing24),
+                            const SizedBox(height: AppConstants.spacing16),
 
                             // Tags section
                             if (item.tags != null && item.tags!.isNotEmpty) ...[
@@ -271,14 +232,14 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                                   );
                                 }).toList(),
                               ),
-                              const SizedBox(height: AppConstants.spacing24),
+                              const SizedBox(height: AppConstants.spacing16),
                             ],
 
                             // Metadata
                             _buildMetadataSection(context, item, tokens),
 
                             const SizedBox(
-                              height: 100,
+                              height: 48,
                             ), // Space for bottom actions
                           ],
                         ),
@@ -366,7 +327,9 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
         : <String>[];
 
     return SliverAppBar(
-      expandedHeight: 350,
+      // Compact hero on phones so title + chips reach the first viewport;
+      // tablets keep the taller editorial hero.
+      expandedHeight: MediaQuery.sizeOf(context).width >= 600 ? 350 : 220,
       pinned: false,
       backgroundColor: Colors.transparent,
       automaticallyImplyLeading: false,

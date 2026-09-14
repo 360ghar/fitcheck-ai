@@ -1,6 +1,5 @@
 import 'package:get/get.dart';
 import '../../features/outfits/controllers/outfit_list_controller.dart';
-import '../../features/outfits/controllers/outfit_creation_controller.dart';
 import '../../features/outfits/controllers/outfit_generation_controller.dart';
 
 /// Outfit binding - provides outfit-related controllers
@@ -11,12 +10,6 @@ class OutfitBinding extends Bindings {
     // List controller - manages outfit list, filters, pagination
     Get.lazyPut<OutfitListController>(
       () => OutfitListController(),
-      fenix: true,
-    );
-
-    // Creation controller - manages outfit creation form
-    Get.lazyPut<OutfitCreationController>(
-      () => OutfitCreationController(),
       fenix: true,
     );
 

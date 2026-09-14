@@ -26,7 +26,11 @@ void main() async {
   await EnvConfig.load();
 
   await SupabaseService.instance.init();
-  await AnalyticsService.instance.init();
+  // Optional telemetry starts after the first frame and owns its error path.
+  // A slow or unavailable analytics plugin cannot hold the launch screen.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(AnalyticsService.instance.init());
+  });
 
   // Best-effort cleanup of stale generated thumbnails (fire-and-forget; the
   // method swallows its own errors and must never delay startup).
@@ -54,15 +58,6 @@ void main() async {
   final codePushService = Get.put(CodePushService());
   await codePushService.loadCurrentPatch();
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.black,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
-
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -89,10 +84,7 @@ void main() async {
   // never reach PostHog telemetry in release builds. (Sentry's own
   // FlutterErrorIntegration captures these when Sentry is enabled.)
   FlutterError.onError = (FlutterErrorDetails details) {
-    AnalyticsService.instance.recordError(
-      details.exception,
-      details.stack,
-    );
+    AnalyticsService.instance.recordError(details.exception, details.stack);
     // Preserve default behaviour: dump full details in debug, minimal in
     // release, so developer ergonomics don't regress.
     FlutterError.presentError(details);
@@ -115,7 +107,8 @@ void main() async {
         options.dsn = sentryDsn;
         options.tracesSampleRate = 1.0;
         options.environment = kDebugMode ? 'development' : 'production';
-        options.release = '${packageInfo.packageName}@${packageInfo.version}+${packageInfo.buildNumber}';
+        options.release =
+            '${packageInfo.packageName}@${packageInfo.version}+${packageInfo.buildNumber}';
         // A Shorebird patch ships new Dart code under an UNCHANGED version and
         // build number, so `release` alone cannot tell a crash in patch 3 from
         // one in the original store build. `dist` is Sentry's own
@@ -125,22 +118,16 @@ void main() async {
         options.debug = kDebugMode;
       },
       appRunner: () {
-        runZonedGuarded(
-          () => runApp(const FitCheckApp()),
-          (error, stack) {
-            AnalyticsService.instance.recordError(error, stack);
-            ErrorHandler.captureToSentry(error, stackTrace: stack);
-          },
-        );
+        runZonedGuarded(() => runApp(const FitCheckApp()), (error, stack) {
+          AnalyticsService.instance.recordError(error, stack);
+          ErrorHandler.captureToSentry(error, stackTrace: stack);
+        });
       },
     );
   } else {
-    runZonedGuarded(
-      () => runApp(const FitCheckApp()),
-      (error, stack) {
-        AnalyticsService.instance.recordError(error, stack);
-      },
-    );
+    runZonedGuarded(() => runApp(const FitCheckApp()), (error, stack) {
+      AnalyticsService.instance.recordError(error, stack);
+    });
   }
 }
 
@@ -165,6 +152,12 @@ class FitCheckApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: Get.find<ThemeService>().currentThemeMode,
+      // Shell and entry screens have no AppBar to set platform icon contrast.
+      // Keep the root style in sync with explicit and system theme changes.
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: Theme.of(context).appBarTheme.systemOverlayStyle!,
+        child: child ?? const SizedBox.shrink(),
+      ),
       initialBinding: InitialBinding(),
       getPages: AppPages.routes,
       initialRoute: Routes.splash,

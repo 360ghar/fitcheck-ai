@@ -84,6 +84,12 @@ void main() {
   });
 
   Future<void> pumpWardrobe(WidgetTester tester) async {
+    // Remove the previous navigator before tearDown resets Get registrations,
+    // including when an assertion fails before the sheet is dismissed.
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 450));
+    });
     await tester.pumpWidget(
       ValueListenableBuilder<bool>(
         valueListenable: keyboardOpen,
@@ -123,8 +129,21 @@ void main() {
 
       expect(find.text('Set'), findsOneWidget);
 
-      // Focus the custom use-case field.
-      await tester.enterText(find.byType(TextField), 'brunch');
+      final sheetScrollView = find
+          .ancestor(
+            of: find.text('Filters'),
+            matching: find.byType(SingleChildScrollView),
+          )
+          .first;
+      final customUseCaseField = find.descendant(
+        of: sheetScrollView,
+        matching: find.widgetWithText(TextField, 'Custom use case'),
+      );
+      expect(customUseCaseField, findsOneWidget);
+
+      // The catalogue search field stays mounted behind the sheet. Focus
+      // only the sheet's labelled custom use-case input.
+      await tester.enterText(customUseCaseField, 'brunch');
       await tester.pump();
 
       // Open the (simulated) keyboard: GetX's modal bottom-sheet route
@@ -133,13 +152,6 @@ void main() {
       keyboardOpen.value = true;
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-
-      final sheetScrollView = find
-          .ancestor(
-            of: find.text('Set'),
-            matching: find.byType(SingleChildScrollView),
-          )
-          .first;
 
       // Precondition: Set starts outside the sheet's visible viewport (it
       // would be unreachable without the scrollable content).
@@ -153,10 +165,7 @@ void main() {
 
       final sheetScrollable = tester.state<ScrollableState>(
         find
-            .descendant(
-              of: sheetScrollView,
-              matching: find.byType(Scrollable),
-            )
+            .descendant(of: sheetScrollView, matching: find.byType(Scrollable))
             .first,
       );
       final offsetBefore = sheetScrollable.position.pixels;
@@ -178,18 +187,14 @@ void main() {
       expect(setRect.bottom, lessThanOrEqualTo(sheetRect.bottom + 1));
       expect(tester.takeException(), isNull);
 
-      // Clean up: dismiss the sheet so the focused field is disposed and the
-      // tree is fully torn down before the test ends (keeps the next test's
-      // Get registrations isolated). Pump past the deferred controller
-      // dispose (350ms) so no timers are left pending.
+      // Verify dismissal and pump past the deferred field-controller dispose
+      // (350ms). The fixture teardown also removes the tree on failed tests.
       await tester.ensureVisible(find.text('Apply'));
       await tester.pump();
       await tester.tap(find.text('Apply'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 450));
       expect(find.text('Filters'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
     },
   );
 

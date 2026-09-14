@@ -39,19 +39,29 @@ class SubscriptionDisclosure extends StatelessWidget {
   String get _billingSentence => isApple
       ? 'Payment is charged to your Apple ID at confirmation of purchase.'
       : 'Payment is charged to your Google Play account at confirmation of '
-          'purchase.';
+            'purchase.';
 
   String get _manageSentence => isApple
       ? 'Manage or cancel any time in Settings › your Apple ID › '
-          'Subscriptions.'
+            'Subscriptions.'
       : 'Manage or cancel any time in Google Play › Payments and '
-          'subscriptions.';
+            'subscriptions.';
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+  Future<void> _openUrl(BuildContext context, String url) async {
+    try {
+      if (await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      )) {
+        return;
+      }
+    } catch (_) {}
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Could not open this link. Please try again.'),
+      ),
+    );
   }
 
   static ButtonStyle _linkButtonStyle(TextStyle? textStyle) =>
@@ -59,7 +69,7 @@ class SubscriptionDisclosure extends StatelessWidget {
         // 44pt is Apple's minimum tap target. Note VisualDensity.compact is
         // deliberately absent: density is subtracted from minimumSize, and
         // with it these links measured 36pt.
-        minimumSize: const Size(48, 44),
+        minimumSize: const Size(48, 48),
         padding: EdgeInsets.zero,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         textStyle: textStyle,
@@ -71,7 +81,7 @@ class SubscriptionDisclosure extends StatelessWidget {
     // Deliberately a step more legible than the page's decorative muted text
     // (alpha 0.6): this is required disclosure a reviewer has to be able to
     // read, not a caption.
-    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.75);
+    final muted = theme.colorScheme.onSurfaceVariant;
     final bodyStyle = theme.textTheme.bodySmall?.copyWith(
       color: muted,
       height: 1.45,
@@ -108,7 +118,8 @@ class SubscriptionDisclosure extends StatelessWidget {
               button: true,
               label: 'Terms of use',
               child: TextButton(
-                onPressed: () => _openUrl(AppConstants.termsOfServiceUrl),
+                onPressed: () =>
+                    _openUrl(context, AppConstants.termsOfServiceUrl),
                 style: _linkButtonStyle(linkStyle),
                 child: const Text('Terms of Use'),
               ),
@@ -117,7 +128,8 @@ class SubscriptionDisclosure extends StatelessWidget {
               button: true,
               label: 'Privacy policy',
               child: TextButton(
-                onPressed: () => _openUrl(AppConstants.privacyPolicyUrl),
+                onPressed: () =>
+                    _openUrl(context, AppConstants.privacyPolicyUrl),
                 style: _linkButtonStyle(linkStyle),
                 child: const Text('Privacy Policy'),
               ),

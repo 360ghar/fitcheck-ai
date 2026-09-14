@@ -3,7 +3,10 @@
 Status: draft  
 Last updated: 2026-09-13
 
-Visual and interaction direction for FitCheck web (and guidance for mobile parity).
+Visual and interaction direction for FitCheck web. Native Flutter uses the
+approved colourful magazine system in [`flutter/DESIGN.md`](../flutter/DESIGN.md),
+with 48px controls and native navigation. Web viewport and CSS rules below apply
+to the web client.
 
 ## Intent
 

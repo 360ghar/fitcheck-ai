@@ -335,7 +335,6 @@ def test_recipient_matching_migration_keeps_legacy_links_and_secures_new_claims(
     assert migration.index("FOR UPDATE") < migration.rindex(key_lookup)
     assert migration.rindex("IF FOUND THEN") < migration.rindex("used_count = used_count + 1")
 
-
 def test_optional_occasion_migration_keeps_legacy_gifts_blank_and_replaces_the_rpc():
     migration = (
         Path(__file__).resolve().parents[3]

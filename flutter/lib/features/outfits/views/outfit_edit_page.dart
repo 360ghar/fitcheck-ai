@@ -15,10 +15,7 @@ import '../../../core/utils/error_handler.dart';
 class OutfitEditPage extends StatefulWidget {
   final String outfitId;
 
-  const OutfitEditPage({
-    super.key,
-    required this.outfitId,
-  });
+  const OutfitEditPage({super.key, required this.outfitId});
 
   @override
   State<OutfitEditPage> createState() => _OutfitEditPageState();
@@ -26,12 +23,14 @@ class OutfitEditPage extends StatefulWidget {
 
 class _OutfitEditPageState extends State<OutfitEditPage> {
   final _formKey = GlobalKey<FormState>();
-  final OutfitListController _outfitsController = Get.find<OutfitListController>();
+  final OutfitListController _outfitsController =
+      Get.find<OutfitListController>();
   final OutfitRepository _outfitRepository = OutfitRepository();
 
   // Always initialized so dispose is safe even if load fails / user pops early
   late final TextEditingController _nameController = TextEditingController();
-  late final TextEditingController _descriptionController = TextEditingController();
+  late final TextEditingController _descriptionController =
+      TextEditingController();
   late final TextEditingController _tagsController = TextEditingController();
 
   final Rx<Style?> selectedStyle = Rx<Style?>(null);
@@ -52,8 +51,16 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
 
   // Occasion options
   static const List<String> occasions = [
-    'casual', 'formal', 'business', 'sporty', 'date night',
-    'party', 'wedding', 'interview', 'weekend', 'travel'
+    'casual',
+    'formal',
+    'business',
+    'sporty',
+    'date night',
+    'party',
+    'wedding',
+    'interview',
+    'weekend',
+    'travel',
   ];
 
   @override
@@ -146,10 +153,16 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
             : _descriptionController.text.trim(),
         style: selectedStyle.value,
         season: selectedSeason.value,
-        occasion: selectedOccasion.value.isEmpty ? null : selectedOccasion.value,
+        occasion: selectedOccasion.value.isEmpty
+            ? null
+            : selectedOccasion.value,
         tags: _tagsController.text.trim().isEmpty
             ? null
-            : _tagsController.text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList(),
+            : _tagsController.text
+                  .split(',')
+                  .map((t) => t.trim())
+                  .where((t) => t.isNotEmpty)
+                  .toList(),
         isFavorite: isFavorite.value,
         isDraft: isDraft.value,
         isPublic: isPublic.value,
@@ -242,16 +255,18 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
         title: const Text('Edit Outfit'),
         elevation: 0,
         actions: [
-          Obx(() => TextButton(
-                onPressed: isSaving.value ? null : _saveChanges,
-                child: isSaving.value
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
-              )),
+          Obx(
+            () => TextButton(
+              onPressed: isSaving.value ? null : _saveChanges,
+              child: isSaving.value
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ),
         ],
       ),
       body: AppPageBackground(
@@ -301,41 +316,47 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                   Row(
                     children: [
                       Expanded(
-                        child: Obx(() => DropdownButtonFormField<Style>(
-                              initialValue: selectedStyle.value,
-                              decoration: const InputDecoration(
-                                labelText: 'Style',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: Style.values.map((style) {
-                                return DropdownMenuItem(
-                                  value: style,
-                                  child: Text(style.displayName),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                selectedStyle.value = value;
-                              },
-                            )),
+                        child: Obx(
+                          () => DropdownButtonFormField<Style>(
+                            isExpanded: true,
+                            initialValue: selectedStyle.value,
+                            decoration: const InputDecoration(
+                              labelText: 'Style',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: Style.values.map((style) {
+                              return DropdownMenuItem(
+                                value: style,
+                                child: Text(style.displayName),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              selectedStyle.value = value;
+                            },
+                          ),
+                        ),
                       ),
                       const SizedBox(width: AppConstants.spacing12),
                       Expanded(
-                        child: Obx(() => DropdownButtonFormField<Season>(
-                              initialValue: selectedSeason.value,
-                              decoration: const InputDecoration(
-                                labelText: 'Season',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: Season.values.map((season) {
-                                return DropdownMenuItem(
-                                  value: season,
-                                  child: Text(season.displayName),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                selectedSeason.value = value;
-                              },
-                            )),
+                        child: Obx(
+                          () => DropdownButtonFormField<Season>(
+                            isExpanded: true,
+                            initialValue: selectedSeason.value,
+                            decoration: const InputDecoration(
+                              labelText: 'Season',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: Season.values.map((season) {
+                              return DropdownMenuItem(
+                                value: season,
+                                child: Text(season.displayName),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              selectedSeason.value = value;
+                            },
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -343,22 +364,32 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                   const SizedBox(height: AppConstants.spacing16),
 
                   // Occasion
-                  Obx(() => DropdownButtonFormField<String>(
-                        initialValue: selectedOccasion.value.isEmpty ? null : selectedOccasion.value,
-                        decoration: const InputDecoration(
-                          labelText: 'Occasion',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: occasions.map((occasion) {
-                          return DropdownMenuItem(
-                            value: occasion,
-                            child: Text(occasion.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ')),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) selectedOccasion.value = value;
-                        },
-                      )),
+                  Obx(
+                    () => DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: selectedOccasion.value.isEmpty
+                          ? null
+                          : selectedOccasion.value,
+                      decoration: const InputDecoration(
+                        labelText: 'Occasion',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: occasions.map((occasion) {
+                        return DropdownMenuItem(
+                          value: occasion,
+                          child: Text(
+                            occasion
+                                .split(' ')
+                                .map((s) => s[0].toUpperCase() + s.substring(1))
+                                .join(' '),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) selectedOccasion.value = value;
+                      },
+                    ),
+                  ),
 
                   const SizedBox(height: AppConstants.spacing16),
 
@@ -377,26 +408,36 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                   AppGlassCard(
                     child: Column(
                       children: [
-                        Obx(() => SwitchListTile(
-                              title: const Text('Favorite'),
-                              subtitle: const Text('Add to your favorites'),
-                              value: isFavorite.value,
-                              onChanged: (value) => isFavorite.value = value,
-                            )),
+                        Obx(
+                          () => SwitchListTile(
+                            title: const Text('Favorite'),
+                            subtitle: const Text('Add to your favorites'),
+                            value: isFavorite.value,
+                            onChanged: (value) => isFavorite.value = value,
+                          ),
+                        ),
                         const Divider(),
-                        Obx(() => SwitchListTile(
-                              title: const Text('Draft'),
-                              subtitle: const Text('Save as draft (not visible in main list)'),
-                              value: isDraft.value,
-                              onChanged: (value) => isDraft.value = value,
-                            )),
+                        Obx(
+                          () => SwitchListTile(
+                            title: const Text('Draft'),
+                            subtitle: const Text(
+                              'Save as draft (not visible in main list)',
+                            ),
+                            value: isDraft.value,
+                            onChanged: (value) => isDraft.value = value,
+                          ),
+                        ),
                         const Divider(),
-                        Obx(() => SwitchListTile(
-                              title: const Text('Public'),
-                              subtitle: const Text('Allow sharing with public link'),
-                              value: isPublic.value,
-                              onChanged: (value) => isPublic.value = value,
-                            )),
+                        Obx(
+                          () => SwitchListTile(
+                            title: const Text('Public'),
+                            subtitle: const Text(
+                              'Allow sharing with public link',
+                            ),
+                            value: isPublic.value,
+                            onChanged: (value) => isPublic.value = value,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -427,15 +468,17 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               'Photos',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
             ),
             TextButton.icon(
               onPressed: _pickImage,
@@ -445,21 +488,27 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
           ],
         ),
 
-        if (_outfit!.outfitImages != null && _outfit!.outfitImages!.isNotEmpty || newImages.isNotEmpty)
+        if (_outfit!.outfitImages != null &&
+                _outfit!.outfitImages!.isNotEmpty ||
+            newImages.isNotEmpty)
           SizedBox(
             height: 120,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
                 // Existing images
-                ..._outfit!.outfitImages!.map((image) {
+                ...(_outfit!.outfitImages ?? []).map((image) {
                   final isDeleting = imagesToDelete.contains(image.id);
                   return Padding(
-                    padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                    padding: const EdgeInsets.only(
+                      right: AppConstants.spacing8,
+                    ),
                     child: Stack(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radius8,
+                          ),
                           child: SizedBox(
                             width: 100,
                             height: 100,
@@ -482,13 +531,18 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                           top: 4,
                           right: 4,
                           child: CircleAvatar(
-                            backgroundColor: isDeleting ? Colors.red : Colors.white,
+                            backgroundColor: isDeleting
+                                ? Colors.red
+                                : Colors.white,
                             child: IconButton(
                               icon: Icon(
                                 isDeleting ? Icons.close : Icons.delete_outline,
                                 color: isDeleting ? Colors.white : Colors.black,
                                 size: 16,
                               ),
+                              tooltip: isDeleting
+                                  ? 'Keep photo'
+                                  : 'Remove photo',
                               onPressed: () => _toggleImageDelete(image.id),
                               constraints: const BoxConstraints(
                                 minWidth: 28,
@@ -508,11 +562,15 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                   final index = entry.key;
                   final image = entry.value;
                   return Padding(
-                    padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                    padding: const EdgeInsets.only(
+                      right: AppConstants.spacing8,
+                    ),
                     child: Stack(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radius8,
+                          ),
                           child: Image.file(
                             image,
                             width: 100,
@@ -526,7 +584,12 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                           child: CircleAvatar(
                             backgroundColor: Colors.white,
                             child: IconButton(
-                              icon: const Icon(Icons.close, color: Colors.black, size: 16),
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.black,
+                                size: 16,
+                              ),
+                              tooltip: 'Remove new photo',
                               onPressed: () => _removeNewImage(index),
                               constraints: const BoxConstraints(
                                 minWidth: 28,
@@ -573,21 +636,26 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
     Get.dialog(
       AlertDialog(
         title: const Text('Delete Outfit?'),
-        content: const Text('This action cannot be undone. The outfit will be permanently removed.'),
+        content: const Text(
+          'This action cannot be undone. The outfit will be permanently removed.',
+        ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               Get.back();
               try {
                 await _outfitsController.deleteOutfit(widget.outfitId);
                 Get.back(); // Close edit page
-                ErrorHandler.showSuccess('Outfit removed successfully', title: 'Deleted');
+                ErrorHandler.showSuccess(
+                  'Outfit removed successfully',
+                  title: 'Deleted',
+                );
               } catch (e) {
-                ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
+                ErrorHandler.showError(
+                  ErrorHandler.extractMessage(e),
+                  title: 'Error',
+                );
               }
             },
             style: ElevatedButton.styleFrom(

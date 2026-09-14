@@ -1,13 +1,14 @@
 /**
  * useColumnCount — viewport → masonry column count.
  *
- *   full  (no detail pane): 3 (<375px) | 4 (375px–md) | lg:5 xl:6 2xl:7
- *   split (detail open):                            lg:2 xl:3 2xl:4
+ * Dense tables so 3-4+ cards fit per row on real widths:
+ *
+ *   full  (no detail pane): 3 (<375px) | 4 (375px–md) | md:5 lg:6 xl:7 2xl:8
+ *   split (detail open):                            lg:3 xl:4 2xl:4
  *
  * Tailwind breakpoints: xs=375, sm=640, md=768, lg=1024, xl=1280, 2xl=1536.
- * Phones run dense (Alta-style thumbnail wall): 3 columns on the smallest
- * screens, 4 from `xs` up through `md` — sm and md both land on 4, so only
- * the `xs` step needs checking.
+ * Phones keep the PR #19 `xs` step (3 below 375px, 4 from 375 through just
+ * below `md`). From `md` up this branch is denser than main.
  *
  * The split mode applies only at lg+ because `WardrobePage`/`OutfitsPage`
  * force compact list rows at exactly md-with-detail, so the masonry is never
@@ -31,14 +32,14 @@ export function useColumnCount({ isDetailOpen = false }: UseColumnCountOptions =
 
   if (isDetailOpen && isLg) {
     if (is2xl) return 4
-    if (isXl) return 3
-    return 2
+    if (isXl) return 4
+    return 3
   }
 
-  if (is2xl) return 7
-  if (isXl) return 6
-  if (isLg) return 5
-  if (isMd) return 4
+  if (is2xl) return 8
+  if (isXl) return 7
+  if (isLg) return 6
+  if (isMd) return 5
   if (isXs) return 4
   return 3
 }

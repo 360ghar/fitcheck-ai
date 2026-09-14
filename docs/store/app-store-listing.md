@@ -3,12 +3,12 @@
 **Work stream:** WS6 — App Store listing metadata, App Privacy, age rating, review notes & screenshot plan
 **Bundle identifier:** `com.fitcheckaiapp.fitcheckai`
 **Privacy Policy URL:** `https://fitcheckaiapp.com/privacy`
-**Last updated:** 2026-08-08
+**Last updated:** 2026-09-05
 
 > This document is the source of truth for everything that goes into App Store Connect (ASC) for
 > the FitCheck AI iOS app. Every field below is drafted and ready to paste. Companion docs:
-> - `docs/store/app-store-screenshots.md` — screenshot dimensions, screen list, and capture workflow.
-> - `flutter/scripts/capture_ios_screenshots.sh` — helper to boot simulators and capture screenshots.
+> - [Store screenshots](app-store-screenshots.md) — current dimensions and screen order.
+> - [Premium refresh asset pack](premium-refresh/README.md) — six iPhone and six iPad exports, gallery, source fixtures, and validation.
 > - `docs/store/play-store-aso.md` — Android/Google Play copy (this iOS copy is adapted from it).
 
 ---
@@ -60,16 +60,16 @@ New: AI Photoshoot Generator — turn selfies into studio-quality headshots for 
 FitCheck AI is your AI-powered virtual closet and personal stylist. Digitize your wardrobe, plan outfits, visualize new looks, and generate professional photos — all powered by cutting-edge artificial intelligence.
 
 AI WARDROBE EXTRACTION
-Snap or upload photos of your clothes and watch the AI automatically detect, categorize, and catalog every item. Batch processing digitizes your whole closet fast. The AI recognizes colors, materials, and patterns so each piece is tagged and searchable.
+Snap or upload photos of your clothes. AI suggests items, categories, colors, materials, and patterns for you to review before saving. Batch uploads help you add several photos to your closet.
 
 VIRTUAL TRY-ON
-See how an outfit looks before you wear it. The AI generates a realistic visualization of any clothing combination on your body. Perfect for planning daily looks or deciding what to wear to a big event.
+Explore how a garment could look on you. Select a photo of yourself and one garment to generate an AI try-on preview. Use the preview to explore ideas for daily looks or an upcoming event.
 
 AI PHOTOSHOOT GENERATOR
-Create professional photos for LinkedIn, dating apps, Instagram, and portfolios. Upload a few selfies and get studio-quality headshots in minutes. Choose professional, casual, or creative styles.
+Create professional photos for LinkedIn, dating apps, Instagram, and portfolios. Upload a few selfies to generate AI portraits. Choose professional, casual, or creative styles.
 
 SMART OUTFIT RECOMMENDATIONS
-Get personalized outfit suggestions based on weather, occasion, and your personal style. Stop wondering what to wear — the recommendations adapt to your preferences over time.
+Get outfit suggestions based on weather, occasion, and your selected preferences. Explore combinations from the clothes in your wardrobe.
 
 OUTFIT PLANNER & CALENDAR
 Plan outfits ahead on a calendar, schedule looks for upcoming events, and let weather-aware suggestions keep you ready for the day.
@@ -79,7 +79,7 @@ Track cost-per-wear, surface underused items, and make smarter buying decisions 
 
 KEY FEATURES
 - AI clothing detection from single or batch photo uploads
-- Virtual outfit visualization and try-on
+- Virtual try-on previews for a single garment
 - Professional AI photoshoot generator
 - Weather-based outfit recommendations
 - Astrology lucky-color suggestions
@@ -108,7 +108,7 @@ FitCheck AI connects to a secure cloud backend to run its AI features (item extr
 
 Download FitCheck AI and transform how you get dressed.
 ```
-(2,785 chars — well within the 4000 limit, leaving room to extend.)
+(2,658 chars — within the 4000 limit.)
 
 ### Keywords — `≤ 100 chars`, comma-separated, **NO spaces**
 
@@ -128,8 +128,8 @@ Welcome to FitCheck AI 1.0.5!
 
 - Unlock Plus or Pro with in-app purchase — monthly or yearly, right in the app
 - Redeem promo codes for free months of Plus or Pro
-- Faster AI photoshoot generation for studio-quality headshots
-- Instant over-the-air updates, so improvements reach you sooner
+- AI photoshoot generation with a progress view
+- Over-the-air app updates
 - Export or delete your account and data anytime from Settings
 
 Thanks for using FitCheck AI — tell us what you'd like to see next!
@@ -304,12 +304,12 @@ HOW TO TEST KEY FEATURES
 2. Wardrobe: open the Closet tab to see ~10-15 pre-loaded clothing items with categories/colors.
 3. AI extraction: tap Add Item -> upload a photo of clothing; the AI detects and tags the item
    (requires backend connectivity).
-4. Virtual try-on: open the More tab, then Try-On, pick items / an outfit; the AI renders the look on the
-   body profile (this calls the backend and can take ~10-30 seconds).
-5. AI photoshoot: open the Photoshoot tab, upload 1+ selfie, choose a style, and generate
-   studio-style images (backend, async; can take up to ~1 minute).
-6. Recommendations: open the More tab, then Recommendations, for weather/occasion-based outfit suggestions.
-7. Calendar: open the More tab, then Calendar, and plan an outfit on a date.
+4. Virtual try-on: open Studio -> Try-on, select a person photo and one garment, then generate
+   a preview. This requires the backend; processing time varies.
+5. AI photoshoot: open Studio -> Photoshoot, add photos, choose a style, and generate
+   AI portraits. The progress view shows the job status; processing time varies.
+6. Recommendations: open Profile -> For You for weather/occasion-based outfit suggestions.
+7. Calendar: open Profile -> Calendar and plan an outfit on a date.
 
 SUBSCRIPTIONS - HOW TO TEST THE UPGRADE FLOW
 Free to download. Plus and Pro (monthly and yearly) are sold only through
@@ -319,9 +319,9 @@ work in the Sandbox environment.
 
 To reach and complete an upgrade:
 1. Sign in with the demo account above.
-2. Tap the "More" tab (rightmost in the bottom bar).
+2. Tap the "Profile" tab (rightmost in the bottom bar).
 3. Tap "Plan & Billing" in the Account card.
-   (Alternative path: More -> Settings -> Subscription -> Manage Subscription.)
+   (Alternative path: Profile -> Settings -> Subscription -> Manage Subscription.)
 4. Under "Choose a plan", tap "Upgrade" on any plan card (Plus or Pro,
    Monthly or Yearly) and confirm with your Sandbox Apple Account.
 5. The purchase is verified server-side via the App Store Server API, and the
@@ -434,8 +434,9 @@ submitted. Most are not code and cannot be done by an agent.
 - [ ] **Age Rating** questionnaire submitted per §3 (UGC = Yes, AI = Yes; expect ~13+).
 - [ ] **App Review Information** filled with the seeded demo account (§4/§5) and contact details.
 - [ ] **Marketing icon** = `flutter/assets/icons/app_icon.png` (1024×1024, RGB, no alpha) uploaded.
-- [ ] **Screenshots** uploaded for iPhone 6.9" (1320×2868) and iPad 13" (2064×2752) — see
-      `docs/store/app-store-screenshots.md`.
+- [ ] **Screenshots** uploaded: six iPhone 6.9" (1320×2868) and six iPad 13" (2064×2752) images
+      from the [premium refresh asset pack](premium-refresh/README.md). These are Flutter fixture
+      renders; confirm they match the release build before upload.
 - [ ] A signed build uploaded via Xcode/Transporter and selected for the 1.0.5 version.
 - [ ] **Export Compliance** answered (standard HTTPS only → typically "uses exempt encryption").
 

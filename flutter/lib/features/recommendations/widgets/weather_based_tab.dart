@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'recommendation_grid.dart';
 import 'package:get/get.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
@@ -18,7 +19,8 @@ class WeatherBasedTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
-    final RecommendationsController controller = Get.find<RecommendationsController>();
+    final RecommendationsController controller =
+        Get.find<RecommendationsController>();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: AppConstants.spacing16),
@@ -27,40 +29,44 @@ class WeatherBasedTab extends StatelessWidget {
           // Location input
           Padding(
             padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller.weatherLocationInput,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => controller.fetchWeatherRecommendations(),
-                    onChanged: (value) => controller.weatherLocation.value = value,
-                    decoration: InputDecoration(
-                      labelText: 'Your Location',
-                      hintText: 'Enter city name',
-                      filled: true,
-                      fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                      prefixIcon: const Icon(Icons.location_on),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppConstants.radius12),
-                        borderSide: BorderSide.none,
+                TextField(
+                  controller: controller.weatherLocationInput,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => controller.fetchWeatherRecommendations(),
+                  onChanged: (value) =>
+                      controller.weatherLocation.value = value,
+                  decoration: InputDecoration(
+                    labelText: 'Your Location',
+                    hintText: 'Enter city name',
+                    filled: true,
+                    fillColor: tokens.cardColor.withValues(alpha: 0.5),
+                    prefixIcon: const Icon(Icons.location_on),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius12,
                       ),
+                      borderSide: BorderSide.none,
                     ),
                   ),
                 ),
-                const SizedBox(width: AppConstants.spacing12),
-                Obx(() => ElevatedButton(
-                      onPressed: controller.isLoadingWeather.value
-                          ? null
-                          : () => controller.fetchWeatherRecommendations(),
-                      child: controller.isLoadingWeather.value
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Get Recs'),
-                    )),
+                const SizedBox(height: AppConstants.spacing12),
+                Obx(
+                  () => ElevatedButton(
+                    onPressed: controller.isLoadingWeather.value
+                        ? null
+                        : () => controller.fetchWeatherRecommendations(),
+                    child: controller.isLoadingWeather.value
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Get recommendations'),
+                  ),
+                ),
               ],
             ),
           ),
@@ -71,7 +77,9 @@ class WeatherBasedTab extends StatelessWidget {
           Obx(() {
             if (controller.weatherError.value.isNotEmpty) {
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.spacing16,
+                ),
                 padding: const EdgeInsets.all(AppConstants.spacing16),
                 decoration: BoxDecoration(
                   color: tokens.cardColor.withValues(alpha: 0.6),
@@ -80,9 +88,9 @@ class WeatherBasedTab extends StatelessWidget {
                 ),
                 child: Text(
                   controller.weatherError.value,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   textAlign: TextAlign.center,
                 ),
               );
@@ -97,7 +105,9 @@ class WeatherBasedTab extends StatelessWidget {
             final icon = _getWeatherIcon(condition);
 
             return Container(
-              margin: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+              margin: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacing16,
+              ),
               padding: const EdgeInsets.all(AppConstants.spacing16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -108,33 +118,24 @@ class WeatherBasedTab extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(AppConstants.radius12),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, size: 48, color: tokens.brandColor),
-                  const SizedBox(width: AppConstants.spacing16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        controller.weatherDisplayTemperature,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      Text(
-                        condition.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' '),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                      ),
-                    ],
+                  Icon(icon, size: 40, color: tokens.brandColor),
+                  const SizedBox(height: 8),
+                  Text(
+                    controller.weatherDisplayTemperature,
+                    style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  const Spacer(),
+                  Text(
+                    condition,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   Text(
                     controller.weatherLocation.value,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ),
@@ -150,12 +151,20 @@ class WeatherBasedTab extends StatelessWidget {
             }
 
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacing16,
+              ),
               child: Wrap(
                 spacing: AppConstants.spacing8,
                 children: controller.preferredCategories.map((cat) {
                   return Chip(
-                    label: Text(cat.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ')),
+                    label: Text(
+                      cat
+                          .split(' ')
+                          .where((s) => s.isNotEmpty)
+                          .map((s) => s[0].toUpperCase() + s.substring(1))
+                          .join(' '),
+                    ),
                     backgroundColor: tokens.brandColor.withValues(alpha: 0.1),
                   );
                 }).toList(),
@@ -182,9 +191,12 @@ class WeatherBasedTab extends StatelessWidget {
               return const SizedBox.shrink();
             }
 
-            if (controller.weatherData.value == null || controller.weatherData.value!.isEmpty) {
+            if (controller.weatherData.value == null ||
+                controller.weatherData.value!.isEmpty) {
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.spacing16,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -197,16 +209,16 @@ class WeatherBasedTab extends StatelessWidget {
                     Text(
                       'Enter your location',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                          ),
+                        color: tokens.textPrimary,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppConstants.spacing8),
                     Text(
                       'We\'ll suggest items based on the weather',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.textMuted,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -216,21 +228,19 @@ class WeatherBasedTab extends StatelessWidget {
 
             if (controller.weatherRecommendations.isEmpty) {
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.spacing16,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.search_off,
-                      size: 64,
-                      color: tokens.textMuted,
-                    ),
+                    Icon(Icons.search_off, size: 64, color: tokens.textMuted),
                     const SizedBox(height: AppConstants.spacing16),
                     Text(
                       'No items match this weather',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                          ),
+                        color: tokens.textPrimary,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -238,16 +248,7 @@ class WeatherBasedTab extends StatelessWidget {
               );
             }
 
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: AppConstants.spacing12,
-                crossAxisSpacing: AppConstants.spacing12,
-                childAspectRatio: 0.75,
-              ),
+            return RecommendationGrid(
               itemCount: controller.weatherRecommendations.length,
               itemBuilder: (context, index) {
                 final item = controller.weatherRecommendations[index];
@@ -272,23 +273,22 @@ class WeatherBasedTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Image
-          Expanded(
+          AspectRatio(
+            aspectRatio: 1,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppConstants.radius8),
               child: item.itemImages != null && item.itemImages!.isNotEmpty
                   ? AppNetworkImage(
-                  item.itemImages!.first.url,
-                  fit: BoxFit.cover,
-                  storagePath: item.itemImages!.first.storagePath,
-                  remintUrl: _itemRepository.remintImageUrl,
-                  errorWidget: (_, _, _) => const Icon(Icons.broken_image_outlined),
-                )
+                      item.itemImages!.first.url,
+                      fit: BoxFit.cover,
+                      storagePath: item.itemImages!.first.storagePath,
+                      remintUrl: _itemRepository.remintImageUrl,
+                      errorWidget: (_, _, _) =>
+                          const Icon(Icons.broken_image_outlined),
+                    )
                   : Container(
                       color: tokens.cardColor.withValues(alpha: 0.5),
-                      child: Icon(
-                        Icons.image,
-                        color: tokens.textMuted,
-                      ),
+                      child: Icon(Icons.image, color: tokens.textMuted),
                     ),
             ),
           ),
@@ -296,18 +296,18 @@ class WeatherBasedTab extends StatelessWidget {
           // Name
           Text(
             item.name,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           // Category
           Text(
             item.category.displayName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
         ],
       ),
@@ -316,7 +316,9 @@ class WeatherBasedTab extends StatelessWidget {
 
   IconData _getWeatherIcon(String condition) {
     final lower = condition.toLowerCase();
-    if (lower.contains('sunny') || lower.contains('clear')) return Icons.wb_sunny;
+    if (lower.contains('sunny') || lower.contains('clear')) {
+      return Icons.wb_sunny;
+    }
     if (lower.contains('cloud')) return Icons.cloud;
     if (lower.contains('rain')) return Icons.water_drop;
     if (lower.contains('snow')) return Icons.ac_unit;

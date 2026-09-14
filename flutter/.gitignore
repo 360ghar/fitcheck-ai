@@ -51,6 +51,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Golden-failure artifacts written by failing `flutter test` runs
+# (isolatedDiff/maskedDiff/masterImage/testImage PNGs). Never commit these.
+test/visual/failures/
+
 # Gradle writes reports into android/build when invoked from the android dir
 /android/build/
 

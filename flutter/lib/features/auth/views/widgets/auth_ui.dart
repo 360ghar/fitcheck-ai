@@ -10,7 +10,6 @@ class AuthUiTokens {
     required this.textColor,
     required this.secondaryTextColor,
     required this.brandColor,
-    required this.overlayGradient,
     required this.cardColor,
     required this.cardBorderColor,
     required this.fieldFillColor,
@@ -23,7 +22,6 @@ class AuthUiTokens {
   final Color textColor;
   final Color secondaryTextColor;
   final Color brandColor;
-  final LinearGradient overlayGradient;
   final Color cardColor;
   final Color cardBorderColor;
   final Color fieldFillColor;
@@ -32,42 +30,24 @@ class AuthUiTokens {
   final Color fieldIconColor;
 
   factory AuthUiTokens.of(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDarkMode ? Colors.white : Colors.black;
-    final secondaryTextColor = textColor.withValues(alpha: isDarkMode ? 0.78 : 0.68);
-    final brandColor = Theme.of(context).colorScheme.primary;
-    final overlayGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: isDarkMode
-          ? [
-              Colors.black.withValues(alpha: 0.35),
-              Colors.black.withValues(alpha: 0.65),
-              Colors.black.withValues(alpha: 0.9),
-            ]
-          : [
-              Colors.white.withValues(alpha: 0.25),
-              Colors.white.withValues(alpha: 0.55),
-              Colors.white.withValues(alpha: 0.75),
-            ],
-    );
-    final cardColor = isDarkMode
-        ? Colors.black.withValues(alpha: 0.48)
-        : Colors.white.withValues(alpha: 0.85);
-    final cardBorderColor = textColor.withValues(alpha: isDarkMode ? 0.18 : 0.12);
-    final fieldFillColor = isDarkMode
-        ? Colors.white.withValues(alpha: 0.08)
-        : Colors.black.withValues(alpha: 0.05);
-    final fieldBorderColor = textColor.withValues(alpha: isDarkMode ? 0.25 : 0.2);
-    final fieldHintColor = textColor.withValues(alpha: isDarkMode ? 0.55 : 0.5);
-    final fieldIconColor = textColor.withValues(alpha: isDarkMode ? 0.7 : 0.6);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDarkMode = theme.brightness == Brightness.dark;
+    final textColor = scheme.onSurface;
+    final secondaryTextColor = scheme.onSurfaceVariant;
+    final brandColor = scheme.primary;
+    final cardColor = scheme.surface;
+    final cardBorderColor = scheme.outlineVariant;
+    final fieldFillColor = scheme.surfaceContainerHighest;
+    final fieldBorderColor = scheme.outlineVariant;
+    final fieldHintColor = scheme.onSurfaceVariant;
+    final fieldIconColor = scheme.onSurfaceVariant;
 
     return AuthUiTokens._(
       isDarkMode: isDarkMode,
       textColor: textColor,
       secondaryTextColor: secondaryTextColor,
       brandColor: brandColor,
-      overlayGradient: overlayGradient,
       cardColor: cardColor,
       cardBorderColor: cardBorderColor,
       fieldFillColor: fieldFillColor,
@@ -84,11 +64,10 @@ class AuthScaffold extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
 
-  static const String backgroundImage = 'assets/images/auth_background.jpg';
+  static const String backgroundImage = 'assets/images/wardrobe-editorial.webp';
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AuthUiTokens.of(context);
     final screenSize = MediaQuery.of(context).size;
     final horizontalPadding = screenSize.width < 360
         ? AppConstants.spacing16
@@ -101,53 +80,27 @@ class AuthScaffold extends StatelessWidget {
         );
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              backgroundImage,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(gradient: tokens.overlayGradient),
-            ),
-          ),
-          AnnotatedRegion<SystemUiOverlayStyle>(
-            value:
-                (tokens.isDarkMode
-                        ? SystemUiOverlayStyle.light
-                        : SystemUiOverlayStyle.dark)
-                    .copyWith(
-                      statusBarColor: Colors.transparent,
-                      systemNavigationBarColor: tokens.isDarkMode
-                          ? Colors.black
-                          : Colors.white,
-                      statusBarIconBrightness: tokens.isDarkMode
-                          ? Brightness.light
-                          : Brightness.dark,
-                      systemNavigationBarIconBrightness: tokens.isDarkMode
-                          ? Brightness.light
-                          : Brightness.dark,
-                    ),
-            child: SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: Theme.of(context).appBarTheme.systemOverlayStyle!,
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Center(
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight,
-                      ),
+                      constraints: const BoxConstraints(maxWidth: 560),
                       child: Padding(padding: resolvedPadding, child: child),
                     ),
-                  );
-                },
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
-        ],
+        ),
       ),
     );
   }
@@ -169,30 +122,31 @@ class AuthHeaderBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: brandColor,
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
+        if (Navigator.canPop(context))
+          BackButton(color: textColor)
+        else
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: brandColor,
+              borderRadius: BorderRadius.circular(AppConstants.radius12),
+            ),
+            child: Icon(
+              Icons.checkroom_outlined,
+              color: Theme.of(context).colorScheme.onPrimary,
+              size: 22,
+            ),
           ),
-          child: const Icon(
-            Icons.checkroom_outlined,
-            color: Colors.white,
-            size: 22,
-          ),
-        ),
         const SizedBox(width: AppConstants.spacing12),
         Expanded(
           child: Text(
             'FitCheck AI',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: textColor,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
+              letterSpacing: -0.6,
             ),
           ),
         ),
@@ -211,21 +165,17 @@ class AuthGlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AuthUiTokens.of(context);
-    return Container(
-      padding: padding ?? const EdgeInsets.all(AppConstants.spacing20),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(AppConstants.radius24),
-        border: Border.all(color: tokens.cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: tokens.isDarkMode ? 0.35 : 0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
+    return Material(
+      color: tokens.cardColor,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.radius16),
+        side: BorderSide(color: tokens.cardBorderColor),
       ),
-      child: child,
+      child: Padding(
+        padding: padding ?? const EdgeInsets.all(AppConstants.spacing20),
+        child: child,
+      ),
     );
   }
 }
@@ -295,53 +245,58 @@ class AuthFooterText extends StatelessWidget {
   static const String privacyPolicyUrl = AppConstants.privacyPolicyUrl;
   static const String termsOfServiceUrl = AppConstants.termsOfServiceUrl;
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  Future<void> _openUrl(BuildContext context, String url) async {
+    try {
+      if (await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      )) {
+        return;
+      }
+    } catch (_) {
+      // Report launcher failures in the page instead of failing silently.
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open this link. Please try again.'),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final linkStyle = TextStyle(
-      color: textColor.withValues(alpha: 0.65),
+    final linkStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
       fontSize: 12,
-      letterSpacing: 1.2,
+      letterSpacing: 0,
       fontWeight: FontWeight.w500,
     );
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
       children: [
-        Semantics(
-          button: true,
-          label: 'Privacy policy',
-          child: TextButton(
-            onPressed: () => _openUrl(privacyPolicyUrl),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(48, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-              foregroundColor: textColor.withValues(alpha: 0.65),
-              textStyle: linkStyle,
-            ),
-            child: const Text('PRIVACY POLICY'),
+        TextButton(
+          onPressed: () => _openUrl(context, privacyPolicyUrl),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            textStyle: linkStyle,
           ),
+          child: const Text('Privacy policy'),
         ),
-        Text('  |  ', style: linkStyle),
-        Semantics(
-          button: true,
-          label: 'Terms of service',
-          child: TextButton(
-            onPressed: () => _openUrl(termsOfServiceUrl),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(48, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-              foregroundColor: textColor.withValues(alpha: 0.65),
-              textStyle: linkStyle,
-            ),
-            child: const Text('TERMS OF SERVICE'),
+        TextButton(
+          onPressed: () => _openUrl(context, termsOfServiceUrl),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            textStyle: linkStyle,
           ),
+          child: const Text('Terms of service'),
         ),
       ],
     );
@@ -364,7 +319,7 @@ class AuthFormStyles {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      labelStyle: TextStyle(color: tokens.textColor.withValues(alpha: 0.7)),
+      labelStyle: TextStyle(color: tokens.secondaryTextColor),
       hintStyle: TextStyle(color: tokens.fieldHintColor),
       filled: true,
       fillColor: tokens.fieldFillColor,

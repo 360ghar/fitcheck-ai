@@ -1,36 +1,38 @@
 # Google Play Store ASO Optimization Guide
 
-**Last updated:** 2026-08-08
+**Last updated:** 2026-09-05
 
 ## App Title (30 characters max)
 **Current:** FitCheck AI
 **Recommended:** FitCheck AI: Wardrobe & Outfits
 
 ## Short Description (80 characters max)
-AI wardrobe organizer with virtual try-on, outfit planner & professional photoshoot generator
+Organize your closet, plan outfits, and explore AI try-on and photoshoots
+
+(73 characters.)
 
 ## Full Description (4000 characters max)
 
 FitCheck AI is your AI-powered virtual closet and personal stylist. Organize your wardrobe, plan outfits, and visualize looks with cutting-edge artificial intelligence.
 
 **AI WARDROBE EXTRACTION**
-Upload photos of your clothes and watch our AI automatically detect, categorize, and catalog every item. Supports batch processing for quick wardrobe digitization. The AI identifies colors, materials, brands, and patterns with 95%+ accuracy.
+Upload photos of your clothes. AI suggests items, categories, colors, materials, and patterns for you to review before saving. Batch uploads help you add several photos to your closet.
 
 **VIRTUAL TRY-ON**
-See how outfits look before you wear them. Our AI generates realistic visualizations of any clothing combination on your body. Perfect for planning your daily looks or special events.
+Explore how a garment could look on you. Select a photo of yourself and one garment to generate an AI try-on preview. Use the preview to explore ideas for daily looks or an upcoming event.
 
 **AI PHOTOSHOOT GENERATOR**
-Create professional photos for LinkedIn, dating apps, Instagram, and portfolios. Upload selfies and get studio-quality headshots instantly. Choose from professional, casual, or creative styles.
+Create professional photos for LinkedIn, dating apps, Instagram, and portfolios. Upload selfies to generate AI portraits. Choose from professional, casual, or creative styles.
 
 **SMART OUTFIT RECOMMENDATIONS**
-Get personalized outfit suggestions based on weather, occasion, and your unique style. Never wonder what to wear again. The AI learns your preferences over time for increasingly accurate suggestions.
+Get outfit suggestions based on weather, occasion, and your selected preferences. Explore combinations from the clothes in your wardrobe.
 
 **WARDROBE ANALYTICS**
 Track cost-per-wear, identify underutilized items, and make smarter fashion decisions with data-driven insights. Understand your wardrobe like never before.
 
 **KEY FEATURES:**
 • AI-powered clothing detection from photos
-• Virtual outfit visualization & try-on
+• Virtual try-on previews for a single garment
 • Professional AI photoshoot generator
 • Weather-based outfit recommendations
 • Astrology lucky color suggestions
@@ -67,90 +69,39 @@ Purchases** re-links your subscription on a new device with one tap.
 
 ---
 
-## Keywords (comma-separated, 100 characters max)
+## Keyword research notes
 wardrobe organizer, outfit planner, virtual closet, AI fashion, virtual try on, outfit generator, style app, clothing organizer, fashion assistant, wardrobe app
 
-## Screenshots (Required: 2-8, Recommended: 5+)
+## Current screenshots and feature graphic
 
-### Screenshot 1: Wardrobe View
-- Show organized digital closet with categorized items
-- Display color-coded categories (tops, bottoms, shoes, accessories)
-- Highlight the clean, modern interface
-- Include 6-8 items visible on screen
+Use the [premium refresh asset pack](premium-refresh/README.md), which replaces the
+previous screenshot plan. It contains six images per device set:
 
-### Screenshot 2: AI Extraction
-- Demonstrate multi-item detection from photo upload
-- Show the before (camera view) and after (extracted items)
-- Highlight the AI processing indicator
-- Display extracted items with metadata
+| Play Console section | Dimensions | Export directory |
+|---|---|---|
+| Phone | 1080 × 1920 | `premium-refresh/exports/play-store-phone/` |
+| 7-inch tablet | 1440 × 2560 | `premium-refresh/exports/play-store-tablet-7/` |
+| 10-inch tablet | 1800 × 3200 | `premium-refresh/exports/play-store-tablet-10/` |
 
-### Screenshot 3: Virtual Try-On
-- Show before/after outfit visualization
-- Display the user's photo alongside AI-generated outfit
-- Highlight realistic rendering and fabric details
-- Include multiple outfit options
+The order is Closet, Home, Outfits, Studio Try-on, Studio Photoshoot, and dark
+Closet. See the [screen inventory](app-store-screenshots.md) and
+[gallery](premium-refresh/gallery.html). The separate
+[feature graphic](premium-refresh/exports/play-store-feature.jpg) is 1024 × 500.
 
-### Screenshot 4: AI Photoshoot
-- Display generated professional photos
-- Show different styles (LinkedIn, casual, creative)
-- Highlight the quality and realism of generated images
-- Include the selection interface
+These images render actual Flutter views with deterministic sample data. They
+are not native device captures or live account sessions. Try-on shows one garment
+and a person photo as inputs. Photoshoot shows a labelled example and setup
+controls. No fabricated AI output is presented as a completed generation.
 
-### Screenshot 5: Outfit Recommendations
-- Weather-based suggestions interface
-- Show current weather and recommended outfits
-- Display multiple options with style scores
-- Include occasion tags
+The pack follows the muted palette in [`flutter/DESIGN.md`](../../flutter/DESIGN.md).
+Tablet exports show raw app UI without added marketing text or device frames.
+Phone taglines occupy less than 20% of the image. All exports are RGB JPEGs.
+These choices follow [Google Play's preview asset guidance](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en).
 
-### Screenshot 6: Analytics Dashboard
-- Cost-per-wear statistics
-- Wardrobe composition pie chart
-- Most/least worn items
-- Monthly usage trends
-
-### Screenshot 7: Calendar Planning
-- Outfit scheduling view
-- Show outfits assigned to specific dates
-- Include weather integration
-- Display event/occasion tagging
-
-### Screenshot 8: Gamification
-- Streaks and achievements screen
-- Show user progress and badges
-- Display leaderboard (if applicable)
-- Include XP and level indicators
-
-## Screenshot Guidelines
-
-### Specifications
-- **Resolution:** 1080x1920 (portrait) or 1920x1080 (landscape)
-- **Format:** PNG or JPEG
-- **Max file size:** 8 MB per screenshot
-- **Min screenshots:** 2
-- **Max screenshots:** 8
-
-### Design Tips
-1. Use high-quality device frames (Pixel, Samsung, etc.)
-2. Include localized text if targeting multiple countries
-3. Show real app content, not mockups
-4. Highlight key features in each screenshot
-5. Use consistent branding and color scheme
-6. Include brief captions (optional but recommended)
-
-## Feature Graphic (1024x500)
-
-Create a compelling graphic showing:
-- App name and logo prominently displayed
-- Key value proposition: "AI-Powered Virtual Closet"
-- Visual elements representing AI features
-- Modern, clean design with brand colors (indigo/purple gradient)
-- Text should be readable at small sizes
-
-**Suggested Elements:**
-- FitCheck AI logo
-- Tagline: "Your AI-Powered Virtual Closet"
-- Subtle background showing wardrobe/outfit visualization
-- Gradient overlay matching brand colors
+Before upload, run the validation steps in the asset pack README and check the
+images against the release build. Use the alt text in
+[`manifest.json`](premium-refresh/manifest.json) for each asset. Native device and
+live backend verification remain separate release checks.
 
 ## App Icon
 - Ensure high contrast and visibility at all sizes
@@ -184,7 +135,7 @@ Create a compelling graphic showing:
 
 2. **Short Description Variations:**
    - Current (feature-focused)
-   - Benefit-focused: "Transform your wardrobe with AI. Get daily outfit recommendations and virtual try-on."
+   - Benefit-focused: "Find outfit ideas in your closet and preview a garment with AI try-on"
    - Problem-focused: "Never wonder what to wear. AI-powered outfit planning and wardrobe organization."
 
 3. **Screenshot Order:**
@@ -203,7 +154,7 @@ Create a compelling graphic showing:
 ### Localization Checklist:
 - [ ] Translate app title if needed
 - [ ] Translate full description
-- [ ] Localize screenshots (text overlays)
+- [ ] Localize phone screenshot taglines and app text; keep tablet exports free of added text
 - [ ] Adapt feature graphic for local markets
 - [ ] Research local keywords
 
@@ -223,7 +174,7 @@ Create a compelling graphic showing:
 ### Pre-Launch Checklist:
 - [ ] All text within character limits
 - [ ] Screenshots meet specifications
-- [ ] Feature graphic created
+- [ ] Current [feature graphic](premium-refresh/exports/play-store-feature.jpg) reviewed and uploaded
 - [ ] Video uploaded (optional but recommended)
 - [ ] Privacy policy URL linked
 - [ ] Contact information provided

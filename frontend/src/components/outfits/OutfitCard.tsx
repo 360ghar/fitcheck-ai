@@ -117,7 +117,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           {/* Image. `bg-card` matches ItemCard (a no-op swap off `--muted`, which
               is byte-identical today) so a flat-lay look with alpha lands on a
               real surface. `object-cover` stays: see the note on the grid tile. */}
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-card">
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-card">
             {imageSrc ? (
               <img
                 src={imageSrc}
@@ -137,12 +137,12 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-sm text-foreground truncate">{outfit.name}</h3>
-            <p className="text-xs text-muted-foreground">
+            <h3 className="font-medium text-xs text-foreground truncate">{outfit.name}</h3>
+            <p className="text-[11px] text-muted-foreground">
               {outfit.item_ids.length} {outfit.item_ids.length === 1 ? 'item' : 'items'}
             </p>
             {outfit.style && (
-              <Badge variant="secondary" className="text-[10px] mt-1">
+              <Badge variant="secondary" className="text-[10px] mt-0.5">
                 {outfit.style}
               </Badge>
             )}
@@ -278,7 +278,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
         {hasAiImage && !isGenerating && (
           <Badge
             className={cn(
-              'absolute top-2.5 left-2.5 z-10',
+              'absolute top-2 left-2 z-10',
               'bg-accent-purple text-white text-[10px]'
             )}
           >
@@ -292,8 +292,8 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           <button
             type="button"
             className={cn(
-              'absolute top-2.5 right-2.5 z-10',
-              'w-9 h-9 rounded-full',
+              'absolute top-2 right-2 z-10',
+              'w-8 h-8 rounded-full',
               'flex items-center justify-center',
               'transition-colors duration-200',
               'touch-target',
@@ -324,17 +324,17 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             NO photo and NO scrim, so white here painted white-on-light — the
             outfit name and its meta row were simply invisible in light mode.
             Those states use the page ink instead. */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
+        <div className="absolute bottom-0 left-0 right-0 p-2 z-10">
           <h3
             className={cn(
-              'font-semibold text-sm truncate',
+              'font-semibold text-xs truncate',
               onPhoto ? 'text-white' : 'text-foreground'
             )}
           >
             {outfit.name}
           </h3>
 
-          <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center justify-between mt-0.5">
             <span
               className={cn(
                 'text-[10px]',
@@ -355,32 +355,6 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
               </Badge>
             )}
           </div>
-
-          {/* Additional info - shown on hover on desktop */}
-          {variant !== 'compact' && (
-            <div className="hidden md:flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              {outfit.worn_count > 0 && (
-                <span
-                  className={cn(
-                    'text-[10px]',
-                    onPhoto ? 'text-white/70' : 'text-muted-foreground'
-                  )}
-                >
-                  Worn {outfit.worn_count}x
-                </span>
-              )}
-              {outfit.description && (
-                <span
-                  className={cn(
-                    'text-[10px] truncate',
-                    onPhoto ? 'text-white/70' : 'text-muted-foreground'
-                  )}
-                >
-                  {outfit.description}
-                </span>
-              )}
-            </div>
-          )}
         </div>
       </div>
     )

@@ -632,7 +632,7 @@ export default function WardrobePage() {
   return (
     <div className="app-page max-w-7xl">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-2">
         <div>
           <h1 className="type-heading-xl text-foreground">Closet</h1>
           <p className="type-body-sm text-muted-foreground">
@@ -645,7 +645,7 @@ export default function WardrobePage() {
         </Button>
       </div>
 
-      <div className="md:hidden mb-4">
+      <div className="md:hidden mb-2">
         <Button onClick={() => setIsUploadModalOpen(true)} className="w-full">
           <Plus className="h-4 w-4 mr-2" />
           Add Item
@@ -682,7 +682,7 @@ export default function WardrobePage() {
 
       {/* Quick category chips — dense closet browsing (Alta-style) */}
       <div
-        className="scroll-rail mb-4 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="scroll-rail mb-2 -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label="Filter by category"
       >
@@ -712,7 +712,7 @@ export default function WardrobePage() {
           // ghost through the bar. A sticky toolbar should be an honest surface.
           // rounded-md (16px) per DESIGN.md 06 — rounded-xl aliases to 32px here,
           // which turned a 44px toolbar into most of a pill.
-          className="sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top)+0.5rem)] z-30 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5 md:top-4"
+          className="sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top)+0.5rem)] z-30 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 md:top-4"
           role="toolbar"
           aria-label="Selected items actions"
         >

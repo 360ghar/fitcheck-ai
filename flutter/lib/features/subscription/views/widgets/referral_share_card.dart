@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../../core/widgets/app_ui.dart';
 
 /// Callback matching [SubscriptionController.shareReferralLink] so iPad gets a popover origin.
-typedef ReferralShareCallback = Future<void> Function({Rect? sharePositionOrigin});
+typedef ReferralShareCallback =
+    Future<void> Function({Rect? sharePositionOrigin});
 
 /// Card for sharing referral code
 class ReferralShareCard extends StatelessWidget {
@@ -29,16 +31,12 @@ class ReferralShareCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF6366F1), Color(0xFF9333EA)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          borderRadius: BorderRadius.circular(16),
+          color: AppCoreColors.editorialRose,
         ),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -47,7 +45,11 @@ class ReferralShareCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.card_giftcard, color: Colors.white, size: 24),
+                  const Icon(
+                    Icons.card_giftcard,
+                    color: AppCoreColors.editorialInk,
+                    size: 24,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -56,7 +58,7 @@ class ReferralShareCard extends StatelessWidget {
                         const Text(
                           'Refer a Friend',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppCoreColors.editorialInk,
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
                           ),
@@ -64,7 +66,7 @@ class ReferralShareCard extends StatelessWidget {
                         Text(
                           'Both get 1 month of Pro free!',
                           style: TextStyle(
-                            color: Colors.white.withAlpha(204),
+                            color: AppCoreColors.editorialInk,
                             fontSize: 13,
                           ),
                         ),
@@ -89,15 +91,15 @@ class ReferralShareCard extends StatelessWidget {
                           Text(
                             'Your Code',
                             style: TextStyle(
-                              color: Colors.white.withAlpha(179),
-                              fontSize: 11,
+                              color: AppCoreColors.editorialInk,
+                              fontSize: 12,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             code,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppCoreColors.editorialInk,
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                               letterSpacing: 1,
@@ -108,8 +110,11 @@ class ReferralShareCard extends StatelessWidget {
                     ),
                     IconButton(
                       onPressed: onCopy,
-                      icon: const Icon(Icons.copy, color: Colors.white),
-                      tooltip: 'Copy',
+                      icon: const Icon(
+                        Icons.copy,
+                        color: AppCoreColors.editorialInk,
+                      ),
+                      tooltip: 'Copy referral link',
                     ),
                   ],
                 ),
@@ -123,8 +128,10 @@ class ReferralShareCard extends StatelessWidget {
                       icon: const Icon(Icons.link),
                       label: const Text('Copy Link'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withAlpha(128)),
+                        foregroundColor: AppCoreColors.editorialInk,
+                        side: const BorderSide(
+                          color: AppCoreColors.editorialInk,
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
@@ -141,7 +148,7 @@ class ReferralShareCard extends StatelessWidget {
                           label: const Text('Share'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF6366F1),
+                            foregroundColor: AppCoreColors.editorialInk,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         );
@@ -156,7 +163,7 @@ class ReferralShareCard extends StatelessWidget {
                   child: Text(
                     '$timesUsed friend${timesUsed == 1 ? '' : 's'} have used your code!',
                     style: TextStyle(
-                      color: Colors.white.withAlpha(204),
+                      color: AppCoreColors.editorialInk,
                       fontSize: 13,
                     ),
                   ),

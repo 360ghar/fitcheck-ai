@@ -6,85 +6,127 @@ import '../controllers/main_shell_controller.dart';
 import '../../dashboard/views/dashboard_content.dart';
 import '../../wardrobe/views/wardrobe_content.dart';
 import '../../outfits/views/outfits_content.dart';
-import '../../photoshoot/views/photoshoot_content.dart';
 import '../../profile/views/profile_content.dart';
+import 'studio_content.dart';
 
-/// Main shell page with persistent navbar and IndexedStack for tab switching.
-/// This eliminates navbar animation when switching between main tabs.
-class MainShellPage extends StatelessWidget {
-  const MainShellPage({super.key});
+/// One navigation surface with lazy, retained destinations.
+class MainShellPage extends StatefulWidget {
+  const MainShellPage({super.key, this.initialTab, this.initialStudioTool});
+
+  final int? initialTab;
+  final int? initialStudioTool;
+
+  @override
+  State<MainShellPage> createState() => _MainShellPageState();
+}
+
+class _MainShellPageState extends State<MainShellPage> {
+  late final MainShellController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = Get.find<MainShellController>();
+    if (widget.initialStudioTool != null) {
+      controller.changeStudioTool(widget.initialStudioTool!);
+    }
+    if (widget.initialTab != null) controller.changeTab(widget.initialTab!);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<MainShellController>();
-
-    return Scaffold(
-      body: Obx(
-        () => IndexedStack(
-          index: controller.currentIndex.value,
-          children: List.generate(
-            5,
-            (index) => _buildTabContent(index, controller),
-          ),
-        ),
-      ),
-      floatingActionButton: Obx(
-        () => _buildFloatingActionButton(controller.currentIndex.value),
-      ),
-      bottomNavigationBar: Obx(
-        () => AppBottomNavigationBar(
-          currentIndex: controller.currentIndex.value,
-          onTabChanged: controller.changeTab,
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useRail = constraints.maxWidth >= 840;
+        return Obx(() {
+          final selected = controller.currentIndex.value;
+          final canPopRoute = Navigator.of(context).canPop();
+          return PopScope(
+            canPop: canPopRoute || selected == 0,
+            onPopInvokedWithResult: (didPop, result) {
+              if (!didPop) controller.changeTab(0);
+            },
+            child: Scaffold(
+              appBar: canPopRoute
+                  ? AppBar(
+                      leading: const BackButton(),
+                      title: Text(
+                        AppBottomNavigationBar.navigationItems[selected].label,
+                      ),
+                    )
+                  : null,
+              body: Row(
+                children: [
+                  if (useRail) ...[
+                    NavigationRail(
+                      scrollable: true,
+                      selectedIndex: selected,
+                      onDestinationSelected: controller.changeTab,
+                      labelType: NavigationRailLabelType.all,
+                      destinations: [
+                        for (final item
+                            in AppBottomNavigationBar.navigationItems)
+                          NavigationRailDestination(
+                            icon: Icon(item.icon),
+                            selectedIcon: Icon(item.activeIcon),
+                            label: Text(item.label),
+                          ),
+                      ],
+                    ),
+                    const VerticalDivider(width: 1),
+                  ],
+                  Expanded(
+                    key: const ValueKey('shell-destinations'),
+                    child: IndexedStack(
+                      index: selected,
+                      children: List.generate(
+                        5,
+                        (index) => TickerMode(
+                          enabled: selected == index,
+                          child: controller.isTabLoaded(index)
+                              ? _tab(index)
+                              : const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              floatingActionButton: _floatingAction(selected),
+              bottomNavigationBar: useRail
+                  ? null
+                  : AppBottomNavigationBar(
+                      currentIndex: selected,
+                      onTabChanged: controller.changeTab,
+                    ),
+            ),
+          );
+        });
+      },
     );
   }
 
-  Widget _buildTabContent(int index, MainShellController controller) {
-    if (!controller.isTabLoaded(index)) {
-      return const SizedBox.shrink();
-    }
+  Widget _tab(int index) => switch (index) {
+    0 => const DashboardContent(),
+    1 => const WardrobeContent(),
+    2 => const OutfitsContent(),
+    3 => const StudioContent(),
+    _ => const ProfileContent(),
+  };
 
-    switch (index) {
-      case 0:
-        return const DashboardContent();
-      case 1:
-        return const PhotoshootContent();
-      case 2:
-        return const WardrobeContent();
-      case 3:
-        return const OutfitsContent();
-      case 4:
-        return const ProfileContent();
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildFloatingActionButton(int currentIndex) {
-    switch (currentIndex) {
-      case 2: // Closet
-        return Semantics(
-          label: 'Add closet item',
-          button: true,
-          child: FloatingActionButton.extended(
-            onPressed: () => Get.toNamed(Routes.wardrobeAdd),
-            icon: const Icon(Icons.add),
-            label: const Text('Add Item'),
-          ),
-        );
-      case 3: // Outfits
-        return Semantics(
-          label: 'Create new outfit',
-          button: true,
-          child: FloatingActionButton.extended(
-            onPressed: () => Get.toNamed(Routes.outfitBuilder),
-            icon: const Icon(Icons.add),
-            label: const Text('Create Outfit'),
-          ),
-        );
-      default:
-        return const SizedBox.shrink();
-    }
-  }
+  Widget? _floatingAction(int selected) => switch (selected) {
+    1 => FloatingActionButton.extended(
+      onPressed: () => Get.toNamed(Routes.wardrobeAdd),
+      tooltip: 'Add closet item',
+      icon: const Icon(Icons.add),
+      label: const Text('Add item'),
+    ),
+    2 => FloatingActionButton.extended(
+      onPressed: () => Get.toNamed(Routes.outfitBuilder),
+      tooltip: 'Create outfit',
+      icon: const Icon(Icons.add),
+      label: const Text('Create outfit'),
+    ),
+    _ => null,
+  };
 }

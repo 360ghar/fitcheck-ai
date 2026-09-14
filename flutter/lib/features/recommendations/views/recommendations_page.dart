@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../wardrobe/models/item_model.dart';
@@ -27,11 +26,22 @@ class RecommendationsPage extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
     final RecommendationsController controller =
         Get.find<RecommendationsController>();
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
-      Get.currentRoute,
-    );
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Recommendations'),
+        actions: [
+          Obx(
+            () => IconButton(
+              tooltip: 'Refresh recommendations',
+              onPressed: controller.isLoading.value
+                  ? null
+                  : controller.refreshCurrentTab,
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        ],
+      ),
       body: AppPageBackground(
         child: SafeArea(
           child: Column(
@@ -56,7 +66,6 @@ class RecommendationsPage extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
     );
   }
 
@@ -67,38 +76,6 @@ class RecommendationsPage extends StatelessWidget {
   ) {
     return Column(
       children: [
-        // Header
-        Padding(
-          padding: const EdgeInsets.all(AppConstants.spacing16),
-          child: Row(
-            children: [
-              Text(
-                'Recommendations',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              Obx(
-                () => IconButton(
-                  tooltip: 'Refresh recommendations',
-                  onPressed: controller.isLoading.value
-                      ? null
-                      : () => controller.refreshCurrentTab(),
-                  icon: controller.isLoading.value
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
-                ),
-              ),
-            ],
-          ),
-        ),
-
         // Tab bar
         TabBar(
           controller: controller.tabController,
@@ -107,11 +84,11 @@ class RecommendationsPage extends StatelessWidget {
           unselectedLabelColor: tokens.textMuted,
           indicatorColor: tokens.brandColor,
           tabs: const [
-            Tab(text: 'Find Matches', icon: Icon(Icons.search)),
-            Tab(text: 'Complete Look', icon: Icon(Icons.checkroom)),
-            Tab(text: 'Weather', icon: Icon(Icons.wb_sunny)),
-            Tab(text: 'Astrology', icon: Icon(Icons.auto_awesome)),
-            Tab(text: 'Shopping', icon: Icon(Icons.shopping_bag)),
+            Tab(text: 'Find Matches'),
+            Tab(text: 'Complete Look'),
+            Tab(text: 'Weather'),
+            Tab(text: 'Astrology'),
+            Tab(text: 'Shopping'),
           ],
         ),
       ],
@@ -145,7 +122,7 @@ class SelectedItemsChips extends StatelessWidget {
 
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-        height: 60,
+        height: MediaQuery.textScalerOf(context).scale(14) + 48,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           itemCount: selectedItems.length,
@@ -155,6 +132,7 @@ class SelectedItemsChips extends StatelessWidget {
               padding: const EdgeInsets.only(right: AppConstants.spacing8),
               child: Chip(
                 label: Text(item.name),
+                deleteButtonTooltipMessage: 'Remove ${item.name}',
                 avatar: ClipOval(
                   child: SizedBox(
                     width: 24,
@@ -168,9 +146,9 @@ class SelectedItemsChips extends StatelessWidget {
                             // load re-mint a fresh URL from the durable
                             // storage key.
                             storagePath: item.itemImages!.first.storagePath,
-                            remintUrl:
-                                SelectedItemsChips._itemRepository
-                                    .remintImageUrl,
+                            remintUrl: SelectedItemsChips
+                                ._itemRepository
+                                .remintImageUrl,
                             errorWidget: (_, _, _) =>
                                 const Icon(Icons.image, size: 16),
                           )
@@ -192,6 +170,7 @@ class SelectedItemsChips extends StatelessWidget {
 class RecommendationCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onTap;
+
   /// Optional favorite action; omit when favorites are not wired yet
   final VoidCallback? onFavorite;
 
@@ -217,7 +196,8 @@ class RecommendationCard extends StatelessWidget {
     // The response nests the full image rows under `images` (with the
     // durable storage key) alongside the flattened convenience `image_url`.
     final images = item['images'];
-    final storagePath = images is List && images.isNotEmpty && images.first is Map
+    final storagePath =
+        images is List && images.isNotEmpty && images.first is Map
         ? (images.first as Map)['storage_path']?.toString()
         : null;
 
@@ -230,7 +210,8 @@ class RecommendationCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image or placeholder
-            Expanded(
+            AspectRatio(
+              aspectRatio: 1,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppConstants.radius8),
                 child: imageUrl != null

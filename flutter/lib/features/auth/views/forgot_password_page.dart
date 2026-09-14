@@ -48,7 +48,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final authController = Get.find<AuthController>();
     final tokens = AuthUiTokens.of(context);
     final screenSize = MediaQuery.of(context).size;
-    final titleSize = (screenSize.width * 0.085).clamp(24.0, 36.0);
     final bodySize = (screenSize.width * 0.04).clamp(14.0, 16.0);
 
     return AuthScaffold(
@@ -60,17 +59,13 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             textColor: tokens.textColor,
             brandColor: tokens.brandColor,
           ),
+          const SizedBox(height: AppConstants.spacing32),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Reset Password',
-                style: TextStyle(
-                  fontSize: titleSize,
-                  fontWeight: FontWeight.w800,
-                  color: tokens.textColor,
-                  height: 1.1,
-                ),
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
@@ -97,6 +92,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               ),
             ],
           ),
+          const SizedBox(height: AppConstants.spacing24),
           _buildBottomLinks(tokens),
         ],
       ),
@@ -129,15 +125,16 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     );
   }
 
-  Widget _buildSubmitButton(AuthController authController, AuthUiTokens tokens) {
+  Widget _buildSubmitButton(
+    AuthController authController,
+    AuthUiTokens tokens,
+  ) {
     return ElevatedButton(
       onPressed: authController.isLoading.value ? null : _handleResetRequest,
       style: ElevatedButton.styleFrom(
         backgroundColor: tokens.brandColor,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(
-          vertical: AppConstants.spacing16,
-        ),
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
         ),
@@ -151,7 +148,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           ? const SizedBox(
               height: 20,
               width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                semanticsLabel: 'Sending reset link',
+              ),
             )
           : const Text('Send Reset Link'),
     );
@@ -162,9 +162,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       children: [
         TextButton(
           onPressed: () => Get.offNamed(Routes.login),
-          style: TextButton.styleFrom(
-            foregroundColor: tokens.textColor,
-          ),
+          style: TextButton.styleFrom(foregroundColor: tokens.textColor),
           child: const Text('Back to Sign In'),
         ),
         const SizedBox(height: AppConstants.spacing12),

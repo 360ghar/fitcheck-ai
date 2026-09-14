@@ -28,7 +28,7 @@ enum PhotoshootStep { upload, configure, generating, results }
 class PhotoshootController extends GetxController {
   /// Injectable repository for tests; production callers use the default.
   PhotoshootController({PhotoshootRepository? repository})
-      : _repository = repository ?? PhotoshootRepository();
+    : _repository = repository ?? PhotoshootRepository();
 
   final PhotoshootRepository _repository;
   final ImagePicker _imagePicker = ImagePicker();
@@ -38,6 +38,21 @@ class PhotoshootController extends GetxController {
 
   // SSE subscription for real-time progress
   StreamSubscription<ServerSentEvent>? _sseSubscription;
+  int _generationRun = 0;
+
+  bool _isCurrentRun(int run) => !isClosed && run == _generationRun;
+
+  bool _isActiveJob(int run, String id) =>
+      _isCurrentRun(run) && jobId.value == id;
+
+  void _stopGenerationUpdates() {
+    _generationRun++;
+    isLoadingUsage.value = false;
+    _sseSubscription?.cancel();
+    _sseSubscription = null;
+    _pollStarted = false;
+    _completionHandled = false;
+  }
 
   // Guards the bounded poll fallback so SSE error, silent stream end, and the
   // synthetic `error` event (SSEService fires all three for one failure) can
@@ -126,7 +141,7 @@ class PhotoshootController extends GetxController {
 
   @override
   void onClose() {
-    _sseSubscription?.cancel();
+    _stopGenerationUpdates();
     customPromptController.dispose();
     super.onClose();
   }
@@ -134,21 +149,25 @@ class PhotoshootController extends GetxController {
   /// Fetch current usage stats
   Future<void> fetchUsage() async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+    final run = _generationRun;
     isLoadingUsage.value = true;
     try {
-      usage.value = await _repository.getUsage();
+      final fetched = await _repository.getUsage();
+      if (!_isCurrentRun(run)) return;
+      usage.value = fetched;
       // Adjust numImages if it exceeds remaining
       if (numImages.value > remainingToday) {
         numImages.value = remainingToday.clamp(minImages, maxImages);
       }
     } catch (e) {
+      if (!_isCurrentRun(run)) return;
       // Non-blocking, default to free limits. Keep usage null (rather than a
       // PhotoshootUsage with remaining: 0) so the computed remainingToday
       // falls back to the free default and the user isn't locked out of
       // generating because a usage fetch failed.
       usage.value = null;
     } finally {
-      isLoadingUsage.value = false;
+      if (_isCurrentRun(run)) isLoadingUsage.value = false;
     }
   }
 
@@ -163,11 +182,14 @@ class PhotoshootController extends GetxController {
         imageQuality: 85,
       );
 
-      if (images.isNotEmpty) {
+      if (images.isNotEmpty && !isClosed) {
         // Calculate how many more photos we can add
         final spotsAvailable = maxPhotos - selectedPhotos.length;
         if (spotsAvailable <= 0) {
-          ErrorHandler.showValidation('Maximum $maxPhotos photos allowed', title: 'Limit Reached');
+          ErrorHandler.showValidation(
+            'Maximum $maxPhotos photos allowed',
+            title: 'Limit Reached',
+          );
           return;
         }
 
@@ -183,14 +205,22 @@ class PhotoshootController extends GetxController {
         error.value = '';
       }
     } catch (e) {
-      await PermissionHelper.showDeniedRecovery(permissionName: 'Photos');
+      if (!isClosed) {
+        await PermissionHelper.handleImagePickerError(
+          e,
+          permissionName: 'Photos',
+        );
+      }
     }
   }
 
   /// Pick a single photo from camera
   Future<void> pickFromCamera() async {
     if (selectedPhotos.length >= maxPhotos) {
-      ErrorHandler.showValidation('Maximum $maxPhotos photos allowed', title: 'Limit Reached');
+      ErrorHandler.showValidation(
+        'Maximum $maxPhotos photos allowed',
+        title: 'Limit Reached',
+      );
       return;
     }
 
@@ -204,7 +234,7 @@ class PhotoshootController extends GetxController {
         imageQuality: 85,
       );
 
-      if (image != null) {
+      if (image != null && !isClosed) {
         selectedPhotos.add(File(image.path));
         // The selection changed: cached encodings of the previous set no
         // longer match retryFailedSlot's expected photo order.
@@ -212,7 +242,12 @@ class PhotoshootController extends GetxController {
         error.value = '';
       }
     } catch (e) {
-      await PermissionHelper.showDeniedRecovery(permissionName: 'Camera');
+      if (!isClosed) {
+        await PermissionHelper.handleImagePickerError(
+          e,
+          permissionName: 'Camera',
+        );
+      }
     }
   }
 
@@ -254,7 +289,10 @@ class PhotoshootController extends GetxController {
     switch (currentStep.value) {
       case PhotoshootStep.upload:
         if (selectedPhotos.isEmpty) {
-          ErrorHandler.showValidation('Please add at least one photo', title: 'No Photos');
+          ErrorHandler.showValidation(
+            'Please add at least one photo',
+            title: 'No Photos',
+          );
           return;
         }
         currentStep.value = PhotoshootStep.configure;
@@ -263,7 +301,10 @@ class PhotoshootController extends GetxController {
         if (!canGenerate) {
           if (selectedUseCase.value == PhotoshootUseCase.custom &&
               customPrompt.value.isEmpty) {
-            ErrorHandler.showValidation('Please enter a custom prompt', title: 'Custom Prompt Required');
+            ErrorHandler.showValidation(
+              'Please enter a custom prompt',
+              title: 'Custom Prompt Required',
+            );
             return;
           }
           if (numImages.value > remainingToday) {
@@ -303,23 +344,23 @@ class PhotoshootController extends GetxController {
 
   /// Generate photoshoot images with SSE progress
   Future<void> generatePhotoshoot() async {
+    if (isClosed) return;
+    _stopGenerationUpdates();
+    final run = _generationRun;
     // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — must run
     // before any photo bytes are read or uploaded.
     if (!await Get.find<AiConsentService>().ensureConsent(
-      featureLabel: 'AI Photoshoot',
-    )) {
+          featureLabel: 'AI Photoshoot',
+        ) ||
+        !_isCurrentRun(run)) {
       return;
     }
 
     if (!canGenerate) return;
 
-    // Cancel any existing SSE subscription
-    _sseSubscription?.cancel();
-    // A fresh run may poll again; clear the previous run's fallback guard.
-    _pollStarted = false;
-    // A fresh run may complete again; clear the previous run's completion guard.
-    _completionHandled = false;
-
+    jobId.value = '';
+    sessionId.value = '';
+    retryingFailedIndex.value = -1;
     isGenerating.value = true;
     error.value = '';
     generationProgress.value = 0;
@@ -350,13 +391,8 @@ class PhotoshootController extends GetxController {
       // Convert photos to base64, caching each encoding by path so a later
       // retryFailedSlot skips re-encoding unchanged photos.
       generationStatus.value = 'Processing photos...';
-      final List<String> photosBase64 = await Future.wait(
-        selectedPhotos.map((file) async {
-          final bytes = await file.readAsBytes();
-          return _encodedPhotoCache[file.path] ??=
-              await compute(_encodeBase64, bytes);
-        }),
-      );
+      final photosBase64 = await _encodePhotos(run);
+      if (!_isCurrentRun(run)) return;
 
       generationStatus.value = 'Starting generation...';
       generationProgress.value = 10;
@@ -372,12 +408,17 @@ class PhotoshootController extends GetxController {
         batchSize: batchSize,
         aspectRatio: selectedAspectRatio.value,
       );
+      if (!_isCurrentRun(run)) {
+        await _cancelJob(response.jobId);
+        return;
+      }
 
       jobId.value = response.jobId;
 
       // Subscribe to SSE events for real-time progress
-      _subscribeToEvents(response.jobId);
+      _subscribeToEvents(response.jobId, run);
     } catch (e, stackTrace) {
+      if (!_isCurrentRun(run)) return;
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       AnalyticsService.instance.track(
@@ -400,6 +441,17 @@ class PhotoshootController extends GetxController {
       isGenerating.value = false;
     }
   }
+
+  Future<List<String>> _encodePhotos(int run) => Future.wait(
+    selectedPhotos.map((file) async {
+      final cached = _encodedPhotoCache[file.path];
+      if (cached != null) return cached;
+      final bytes = await file.readAsBytes();
+      final encoded = await compute(_encodeBase64, bytes);
+      if (_isCurrentRun(run)) _encodedPhotoCache[file.path] = encoded;
+      return encoded;
+    }),
+  );
 
   /// Update the ETA from rolling per-image latency (needs >= 2 samples).
   void _updateEta() {
@@ -428,23 +480,27 @@ class PhotoshootController extends GetxController {
   }
 
   /// Subscribe to SSE events for real-time progress
-  void _subscribeToEvents(String id) {
+  void _subscribeToEvents(String id, int run) {
     _sseSubscription?.cancel();
     _sseSubscription = _repository
         .subscribeToEvents(id)
         .listen(
-          _handleSSEEvent,
+          (event) {
+            if (_isActiveJob(run, id) && !_completionHandled) {
+              _handleSSEEvent(event, id, run);
+            }
+          },
           onError: (e) {
             debugPrint('SSE error: $e');
             // Fallback to polling if SSE fails
-            _startPollFallback(id);
+            _startPollFallback(id, run);
           },
           onDone: () {
             debugPrint('SSE stream ended');
             // If still generating, stream ended unexpectedly - fallback to polling
             if (isGenerating.value &&
                 currentStep.value == PhotoshootStep.generating) {
-              _startPollFallback(id);
+              _startPollFallback(id, run);
             }
           },
         );
@@ -457,15 +513,16 @@ class PhotoshootController extends GetxController {
   /// event closes the stream and onDone fires while the completion flow is
   /// still awaiting its reconcile, so a fallback poll must never start (or
   /// re-enter completion) after the job has finished.
-  void _startPollFallback(String id) {
+  void _startPollFallback(String id, int run) {
+    if (!_isActiveJob(run, id) || !isGenerating.value) return;
     if (_completionHandled) return;
     if (_pollStarted) return;
     _pollStarted = true;
-    _pollJobStatus(id);
+    _pollJobStatus(id, run);
   }
 
   /// Handle incoming SSE events
-  void _handleSSEEvent(ServerSentEvent event) {
+  void _handleSSEEvent(ServerSentEvent event, String id, int run) {
     debugPrint('Photoshoot SSE: ${event.type}');
 
     switch (event.type) {
@@ -516,8 +573,10 @@ class PhotoshootController extends GetxController {
                 : numImages.value;
             // Clamp the FRACTION (not the scaled value) so an overshoot can
             // never push progress past 100.
-            final fraction =
-                (generatedImages.length / denominator).clamp(0.0, 1.0);
+            final fraction = (generatedImages.length / denominator).clamp(
+              0.0,
+              1.0,
+            );
             final progress = 10 + (fraction * 90).toInt();
             generationProgress.value = progress;
             generationStatus.value =
@@ -549,7 +608,7 @@ class PhotoshootController extends GetxController {
         break;
 
       case 'job_complete':
-        _handleJobComplete(event.data);
+        _handleJobComplete(event.data, id, run);
         break;
 
       case 'job_failed':
@@ -561,7 +620,9 @@ class PhotoshootController extends GetxController {
         AnalyticsService.instance.track(
           'photoshoot_session_failed',
           properties: {
-            'session_id': sessionId.value.isNotEmpty ? sessionId.value : jobId.value,
+            'session_id': sessionId.value.isNotEmpty
+                ? sessionId.value
+                : jobId.value,
             'job_id': jobId.value,
             'use_case': selectedUseCase.value.name,
             'num_images': numImages.value,
@@ -572,19 +633,19 @@ class PhotoshootController extends GetxController {
         ErrorHandler.showError(error.value, title: 'Generation Failed');
         currentStep.value = PhotoshootStep.configure;
         isGenerating.value = false;
-        _sseSubscription?.cancel();
+        _stopGenerationUpdates();
         break;
 
       case 'job_cancelled':
         currentStep.value = PhotoshootStep.configure;
         isGenerating.value = false;
-        _sseSubscription?.cancel();
+        _stopGenerationUpdates();
         break;
 
       case 'error':
         // SSE connection error, fallback to polling (guarded: the stream's
         // onError callback fires for the same failure).
-        _startPollFallback(jobId.value);
+        _startPollFallback(id, run);
         break;
     }
   }
@@ -614,10 +675,11 @@ class PhotoshootController extends GetxController {
   /// images/failure state into UI state. The SSE job_complete event carries
   /// counts but no images, so a results screen must never depend on
   /// image_complete events alone (flaky streams / reconnects can drop them).
-  Future<void> _reconcileAfterComplete() async {
-    if (jobId.value.isEmpty || isClosed) return;
+  Future<void> _reconcileAfterComplete(String id, int run) async {
+    if (id.isEmpty || !_isActiveJob(run, id)) return;
     try {
-      final status = await _repository.getJobStatus(jobId.value);
+      final status = await _repository.getJobStatus(id);
+      if (!_isActiveJob(run, id)) return;
       _reconcileStatus(status);
       if (status.usage != null) {
         usage.value = status.usage;
@@ -630,13 +692,17 @@ class PhotoshootController extends GetxController {
   }
 
   /// Handle job completion
-  Future<void> _handleJobComplete(Map<String, dynamic>? data) async {
+  Future<void> _handleJobComplete(
+    Map<String, dynamic>? data,
+    String id,
+    int run,
+  ) async {
     // Idempotency gate - must run synchronously BEFORE any await. The
     // terminal job_complete SSE event closes the stream and its onDone starts
     // the poll fallback, whose 'complete' status re-enters this method; a
     // second run would duplicate the success snackbar, the
     // 'photoshoot_session_completed' analytics event, and the reconcile fetch.
-    if (_completionHandled) return;
+    if (!_isActiveJob(run, id) || _completionHandled) return;
     _completionHandled = true;
 
     generationProgress.value = 100;
@@ -669,8 +735,8 @@ class PhotoshootController extends GetxController {
     // Populate the gallery from the authoritative status BEFORE showing the
     // results step, so a missed image_complete event can never produce an
     // empty "0 images generated" results screen.
-    await _reconcileAfterComplete();
-    if (isClosed) return;
+    await _reconcileAfterComplete(id, run);
+    if (!_isActiveJob(run, id)) return;
 
     currentStep.value = PhotoshootStep.results;
     isGenerating.value = false;
@@ -704,8 +770,13 @@ class PhotoshootController extends GetxController {
   }
 
   /// Fallback polling if SSE fails
-  Future<void> _pollJobStatus(String id, {int attempt = 0}) async {
-    if (id.isEmpty || isClosed) return;
+  Future<void> _pollJobStatus(String id, int run, {int attempt = 0}) async {
+    if (id.isEmpty ||
+        !_isActiveJob(run, id) ||
+        !isGenerating.value ||
+        _completionHandled) {
+      return;
+    }
 
     // Bound the polling loop so a permanently unreachable job status endpoint
     // cannot spin forever (previously this recursion had no max-attempts cap).
@@ -716,11 +787,15 @@ class PhotoshootController extends GetxController {
       ErrorHandler.showError(error.value, title: 'Connection Lost');
       currentStep.value = PhotoshootStep.configure;
       isGenerating.value = false;
+      _stopGenerationUpdates();
       return;
     }
 
     try {
       final status = await _repository.getJobStatus(id);
+      if (!_isActiveJob(run, id) || !isGenerating.value || _completionHandled) {
+        return;
+      }
 
       // Skip no-op updates: RxList.assignAll notifies even when identical,
       // and a changed-value check keeps the UI quiet on unchanged ticks.
@@ -738,31 +813,38 @@ class PhotoshootController extends GetxController {
         case 'pending':
         case 'processing':
           await Future.delayed(const Duration(seconds: 2));
-          if (isGenerating.value && !isClosed) {
-            _pollJobStatus(id, attempt: attempt + 1);
+          if (isGenerating.value && _isActiveJob(run, id)) {
+            _pollJobStatus(id, run, attempt: attempt + 1);
           }
           break;
         case 'complete':
-          await _handleJobComplete({
-            'session_id': status.jobId,
-            'failed_count': status.failedCount,
-            'failed_indices': status.failedIndices,
-            'partial_success': status.partialSuccess,
-            if (status.usage != null) 'usage': status.usage!.toJson(),
-          });
+          await _handleJobComplete(
+            {
+              'session_id': status.jobId,
+              'failed_count': status.failedCount,
+              'failed_indices': status.failedIndices,
+              'partial_success': status.partialSuccess,
+              if (status.usage != null) 'usage': status.usage!.toJson(),
+            },
+            id,
+            run,
+          );
           break;
         case 'failed':
           error.value = status.error ?? 'Generation failed';
           ErrorHandler.showError(error.value, title: 'Generation Failed');
           currentStep.value = PhotoshootStep.configure;
           isGenerating.value = false;
+          _stopGenerationUpdates();
           break;
         case 'cancelled':
           currentStep.value = PhotoshootStep.configure;
           isGenerating.value = false;
+          _stopGenerationUpdates();
           break;
       }
     } catch (e) {
+      if (!_isActiveJob(run, id) || _completionHandled) return;
       debugPrint('Poll status error (attempt ${attempt + 1}): $e');
       // Transient polling errors are retried until the bounded cap above is
       // reached. We report only on the final attempt to avoid spamming
@@ -771,19 +853,21 @@ class PhotoshootController extends GetxController {
         ErrorHandler.reportError(e, 'Photoshoot polling exhausted');
       }
       await Future.delayed(const Duration(seconds: 3));
-      if (isGenerating.value && !isClosed) {
-        _pollJobStatus(id, attempt: attempt + 1);
+      if (isGenerating.value && _isActiveJob(run, id)) {
+        _pollJobStatus(id, run, attempt: attempt + 1);
       }
     }
   }
 
   /// Retry a single failed slot by generating one new image and filling the slot index.
   Future<void> retryFailedSlot(int failedIndex) async {
+    final run = _generationRun;
     // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — must run
     // before any photo bytes are read or uploaded.
     if (!await Get.find<AiConsentService>().ensureConsent(
-      featureLabel: 'AI Photoshoot',
-    )) {
+          featureLabel: 'AI Photoshoot',
+        ) ||
+        !_isCurrentRun(run)) {
       return;
     }
 
@@ -797,15 +881,8 @@ class PhotoshootController extends GetxController {
     try {
       // Cache-first: generatePhotoshoot already encoded these photos, so a
       // slot retry must not pay the multi-second compute() re-encode again.
-      final List<String> photosBase64 = await Future.wait(
-        selectedPhotos.map((file) async {
-          final cached = _encodedPhotoCache[file.path];
-          if (cached != null) return cached;
-          final bytes = await file.readAsBytes();
-          return _encodedPhotoCache[file.path] =
-              await compute(_encodeBase64, bytes);
-        }),
-      );
+      final photosBase64 = await _encodePhotos(run);
+      if (!_isCurrentRun(run)) return;
 
       final result = await _repository.generateSync(
         photos: photosBase64,
@@ -816,9 +893,13 @@ class PhotoshootController extends GetxController {
         numImages: 1,
         aspectRatio: selectedAspectRatio.value,
       );
+      if (!_isCurrentRun(run)) return;
 
       if (result.images.isEmpty) {
-        ErrorHandler.showError('Could not generate replacement image', title: 'Retry Failed');
+        ErrorHandler.showError(
+          'Could not generate replacement image',
+          title: 'Retry Failed',
+        );
         return;
       }
 
@@ -838,27 +919,37 @@ class PhotoshootController extends GetxController {
         usage.value = result.usage;
       }
 
-      ErrorHandler.showSuccess('Failed slot #${failedIndex + 1} has been replaced', title: 'Slot Retried');
+      ErrorHandler.showSuccess(
+        'Failed slot #${failedIndex + 1} has been replaced',
+        title: 'Slot Retried',
+      );
     } catch (e) {
-      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Retry Failed');
+      if (!_isCurrentRun(run)) return;
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
+        title: 'Retry Failed',
+      );
     } finally {
-      retryingFailedIndex.value = -1;
+      if (_isCurrentRun(run)) retryingFailedIndex.value = -1;
     }
   }
 
   /// Cancel generation job
   Future<void> cancelGeneration() async {
-    if (jobId.value.isEmpty) return;
+    final id = jobId.value;
+    _stopGenerationUpdates();
+    currentStep.value = PhotoshootStep.configure;
+    isGenerating.value = false;
+    retryingFailedIndex.value = -1;
+    if (id.isNotEmpty) await _cancelJob(id);
+  }
 
+  Future<void> _cancelJob(String id) async {
     try {
-      await _repository.cancelJob(jobId.value);
+      await _repository.cancelJob(id);
     } catch (e) {
       debugPrint('Failed to cancel job: $e');
     }
-
-    _sseSubscription?.cancel();
-    currentStep.value = PhotoshootStep.configure;
-    isGenerating.value = false;
   }
 
   /// Download a single image to gallery
@@ -915,9 +1006,15 @@ class PhotoshootController extends GetxController {
       }
 
       if (failedIndices.isEmpty) {
-        ErrorHandler.showSuccess('All $savedCount images saved to gallery', title: 'Saved');
+        ErrorHandler.showSuccess(
+          'All $savedCount images saved to gallery',
+          title: 'Saved',
+        );
       } else {
-        ErrorHandler.showError('$savedCount of ${generatedImages.length} saved. Failed: ${failedIndices.join(", ")}', title: 'Partially Saved');
+        ErrorHandler.showError(
+          '$savedCount of ${generatedImages.length} saved. Failed: ${failedIndices.join(", ")}',
+          title: 'Partially Saved',
+        );
       }
     } catch (e) {
       ErrorHandler.showError('Failed to save images: $e', title: 'Error');
@@ -978,9 +1075,9 @@ class PhotoshootController extends GetxController {
   /// completed generation for "New Style"); otherwise everything clears and
   /// the flow returns to upload ("New Photos").
   void reset({bool keepPhotos = false}) {
-    _sseSubscription?.cancel();
-    _pollStarted = false;
-    _completionHandled = false;
+    _stopGenerationUpdates();
+    isGenerating.value = false;
+    retryingFailedIndex.value = -1;
     if (!keepPhotos) {
       selectedPhotos.clear();
       // The selection changed: cached encodings of the previous set no
@@ -1009,8 +1106,9 @@ class PhotoshootController extends GetxController {
     currentSceneLabel.value = '';
     _sceneLabels.clear();
     _latencySamples.clear();
-    currentStep.value =
-        keepPhotos ? PhotoshootStep.configure : PhotoshootStep.upload;
+    currentStep.value = keepPhotos
+        ? PhotoshootStep.configure
+        : PhotoshootStep.upload;
     fetchUsage();
   }
 }

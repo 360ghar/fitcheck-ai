@@ -27,14 +27,12 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
                 controller.extractedItems.every(
                   (item) => item.includeInWardrobe,
                 );
-            return TextButton(
+            return IconButton(
+              tooltip: allSelected ? 'Deselect all items' : 'Select all items',
               onPressed: allSelected
                   ? controller.deselectAllItems
                   : controller.selectAllItems,
-              child: Text(
-                allSelected ? 'Deselect All' : 'Select All',
-                style: TextStyle(color: tokens.brandColor),
-              ),
+              icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
             );
           }),
         ],
@@ -308,8 +306,10 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
                       borderRadius: BorderRadius.circular(AppConstants.radius8),
                       border: Border.all(color: tokens.navBorder),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
                           '${group.label}${group.isCurrentUser ? ' (You)' : ''}',
@@ -319,15 +319,13 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
                                 fontWeight: FontWeight.w600,
                               ),
                         ),
-                        const SizedBox(width: 6),
                         Text(
                           '${group.included}/${group.total}',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: tokens.textMuted),
                         ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () =>
+                        TextButton(
+                          onPressed: () =>
                               controller.setPersonInclusion(group.key, true),
                           child: Text(
                             'Include',
@@ -338,9 +336,8 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
                                 ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () =>
+                        TextButton(
+                          onPressed: () =>
                               controller.setPersonInclusion(group.key, false),
                           child: Text(
                             'Exclude',
@@ -365,31 +362,34 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
 
   Widget _buildItemsGrid(BuildContext context, AppUiTokens tokens) {
     return Obx(
-      () => GridView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 190,
-          crossAxisSpacing: AppConstants.spacing12,
-          mainAxisSpacing: AppConstants.spacing12,
-          childAspectRatio: 0.65,
-        ),
-        itemCount: controller.extractedItems.length,
-        itemBuilder: (context, index) {
-          final item = controller.extractedItems[index];
+      () => CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spacing16,
+            ),
+            sliver: SliverProductGrid(
+              itemCount: controller.extractedItems.length,
+              itemBuilder: (context, index) {
+                final item = controller.extractedItems[index];
 
-          // Find source image path
-          final sourceImage = controller.selectedImages.firstWhereOrNull(
-            (img) => img.id == item.sourceImageId,
-          );
+                // Find source image path
+                final sourceImage = controller.selectedImages.firstWhereOrNull(
+                  (img) => img.id == item.sourceImageId,
+                );
 
-          return ExtractedItemCard(
-            item: item,
-            sourceImagePath: sourceImage?.filePath ?? '',
-            isSelected: item.isSelected,
-            onToggleSelection: () => controller.toggleItemInclude(item.id),
-            onRemove: () => _removeItem(context, tokens, item.id),
-          );
-        },
+                return ExtractedItemCard(
+                  item: item,
+                  sourceImagePath: sourceImage?.filePath ?? '',
+                  isSelected: item.isSelected,
+                  onToggleSelection: () =>
+                      controller.toggleItemInclude(item.id),
+                  onRemove: () => _removeItem(context, tokens, item.id),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -417,7 +417,7 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
                     : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(
                     vertical: AppConstants.spacing16,
                   ),
@@ -517,7 +517,10 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
         // failures are collected by the controller and reported by name.
         final failed = controller.saveFailures;
         if (failed.isEmpty) {
-          ErrorHandler.showSuccess('${savedItems.length} items added to your closet', title: 'Success');
+          ErrorHandler.showSuccess(
+            '${savedItems.length} items added to your closet',
+            title: 'Success',
+          );
         } else {
           ErrorHandler.showWarning(
             '${savedItems.length} of ${savedItems.length + failed.length} items were saved. '
@@ -529,7 +532,10 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
         controller.reset();
         Get.until((route) => route.isFirst);
       } else {
-        ErrorHandler.showError('Failed to save items. Please try again.', title: 'Error');
+        ErrorHandler.showError(
+          'Failed to save items. Please try again.',
+          title: 'Error',
+        );
       }
     } catch (e) {
       if (!context.mounted) return;

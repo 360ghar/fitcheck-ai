@@ -1,205 +1,124 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../core/constants/app_constants.dart';
 import '../../app/routes/app_routes.dart';
-import 'app_ui.dart';
 
-/// Reusable bottom navigation bar for main app pages
+/// The main shell owns this navigation bar and its selected destination.
 class AppBottomNavigationBar extends StatelessWidget {
-  final int currentIndex;
-
-  /// Optional callback for tab changes. If provided, navigation is handled
-  /// by the parent (MainShellPage). If null, uses Get.offAllNamed().
-  final void Function(int index)? onTabChanged;
-
   const AppBottomNavigationBar({
     super.key,
     required this.currentIndex,
-    this.onTabChanged,
+    required this.onTabChanged,
   });
 
-  // Bottom navigation items
-  static const List<NavigationItem> navigationItems = [
+  final int currentIndex;
+  final ValueChanged<int> onTabChanged;
+
+  static const navigationItems = [
     NavigationItem(
-      icon: Icons.home,
+      icon: Icons.home_outlined,
       activeIcon: Icons.home,
       label: 'Home',
       route: Routes.home,
     ),
     NavigationItem(
-      icon: Icons.camera_enhance,
-      activeIcon: Icons.camera_enhance,
-      label: 'Photoshoot',
-      route: Routes.photoshoot,
-    ),
-    NavigationItem(
-      icon: Icons.checkroom,
+      icon: Icons.checkroom_outlined,
       activeIcon: Icons.checkroom,
       label: 'Closet',
       route: Routes.wardrobe,
     ),
     NavigationItem(
-      icon: Icons.auto_awesome,
-      activeIcon: Icons.auto_awesome,
+      icon: Icons.style_outlined,
+      activeIcon: Icons.style,
       label: 'Outfits',
       route: Routes.outfits,
     ),
     NavigationItem(
-      icon: Icons.more_horiz,
-      activeIcon: Icons.more_horiz,
-      label: 'More',
-      route: Routes.more,
+      icon: Icons.auto_awesome_outlined,
+      activeIcon: Icons.auto_awesome,
+      label: 'Studio',
+      route: Routes.studio,
+    ),
+    NavigationItem(
+      icon: Icons.person_outline,
+      activeIcon: Icons.person,
+      label: 'Profile',
+      route: Routes.profile,
     ),
   ];
 
-  void _onTabTapped(int index) {
-    // If already on this tab, don't do anything
-    if (currentIndex == index) {
-      return;
-    }
-
-    // Use callback if provided (IndexedStack mode in MainShellPage)
-    if (onTabChanged != null) {
-      onTabChanged!(index);
-      return;
-    }
-
-    // Fallback to navigation (for pages outside the shell like "More" submenu)
-    final route = navigationItems[index].route;
-    if (Get.currentRoute != route) {
-      Get.offAllNamed(route);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-      child: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: tokens.navBackground,
-            borderRadius: BorderRadius.circular(AppConstants.radius24),
-            border: Border.all(color: tokens.navBorder),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: navigationItems.asMap().entries.map((entry) {
-              final index = entry.key;
-              final item = entry.value;
-              final isSelected = currentIndex == index;
-
-              return Expanded(
-                child: Semantics(
-                  label: item.label,
-                  button: true,
-                  selected: isSelected,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _onTabTapped(index),
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius16,
-                      ),
-                      child: AnimatedContainer(
-                        duration: AppConstants.animationDurationShort,
-                        curve: Curves.easeInOut,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? tokens.brandColor.withValues(alpha: 0.14)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(
-                            AppConstants.radius16,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isSelected ? item.activeIcon : item.icon,
-                              size: 22,
-                              color: isSelected
-                                  ? tokens.brandColor
-                                  : tokens.textSecondary,
-                            ),
-                            const SizedBox(height: 4),
-                            // Scale the label down on narrow surfaces
-                            // (~320px) instead of letting "Photoshoot" wrap
-                            // or clip inside its ~53px-wide Expanded slot.
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                item.label,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.w500,
-                                  color: isSelected
-                                      ? tokens.brandColor
-                                      : tokens.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: NavigationBar(
+          selectedIndex: currentIndex,
+          onDestinationSelected: onTabChanged,
+          animationDuration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: [
+            for (final item in navigationItems)
+              NavigationDestination(
+                icon: Icon(item.icon),
+                selectedIcon: Icon(item.activeIcon),
+                label: item.label,
+                tooltip: item.label,
+              ),
+          ],
         ),
       ),
     );
   }
 
-  /// Get the current index based on the current route
+  /// Includes legacy entry points and routes pushed from a destination.
   static int getIndexForRoute(String route) {
-    final normalized = route.split('?').first;
-    const moreRoutes = {
-      Routes.tryOn,
-      Routes.recommendations,
-      Routes.calendar,
-      Routes.gamification,
+    final path = Uri.parse(route).path;
+    if (path == Routes.photoshoot ||
+        path == Routes.tryOn ||
+        path == Routes.studio) {
+      return 3;
+    }
+    if (path == Routes.wardrobe || path.startsWith('${Routes.wardrobe}/')) {
+      return 1;
+    }
+    if (path == Routes.outfits || path.startsWith('${Routes.outfits}/')) {
+      return 2;
+    }
+    const profileRoutes = [
+      Routes.more,
       Routes.profile,
       Routes.settings,
-      Routes.help,
-      Routes.legal,
+      Routes.calendar,
+      Routes.recommendations,
+      Routes.gamification,
       Routes.subscription,
       Routes.referral,
+      Routes.gifts,
+      Routes.help,
+      Routes.legal,
       Routes.feedback,
-    };
-    if (moreRoutes.contains(normalized) ||
-        moreRoutes.any((item) => normalized.startsWith('$item/'))) {
-      return navigationItems.indexWhere((item) => item.route == Routes.more);
-    }
-    for (int i = 0; i < navigationItems.length; i++) {
-      final itemRoute = navigationItems[i].route;
-      if (itemRoute == normalized || normalized.startsWith('$itemRoute/')) {
-        return i;
-      }
+    ];
+    if (profileRoutes.any(
+      (prefix) => path == prefix || path.startsWith('$prefix/'),
+    )) {
+      return 4;
     }
     return 0;
   }
 }
 
 class NavigationItem {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final String route;
-
   const NavigationItem({
     required this.icon,
     required this.activeIcon,
     required this.label,
     required this.route,
   });
+
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final String route;
 }

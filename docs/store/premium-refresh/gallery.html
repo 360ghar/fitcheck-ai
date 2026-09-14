@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FitCheck AI · Store images</title>
+<style>
+@font-face{font-family:Bodoni;src:url('source/fonts/BodoniModa.ttf');font-weight:400 900}
+*{box-sizing:border-box}body{margin:0;background:#fbfaf7;color:#2c302d;font:16px/1.5 system-ui,sans-serif}
+main{max-width:1600px;margin:auto;padding:40px}h1{font:500 clamp(36px,5vw,64px)/1.1 Bodoni,serif;margin:8px 0 16px}
+.eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase}.intro{max-width:780px;color:#646960}
+a{color:#3f5148}nav{display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin:30px 0}
+select{font:inherit;padding:12px;border:1px solid #929b8d;border-radius:8px;background:#fff;min-height:48px;color:inherit}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}figure{margin:0}figure img{display:block;width:100%;height:auto;border-radius:8px;border:1px solid #deded7}
+figcaption{font-size:13px;color:#646960;padding:10px 0}h2{font:500 30px Bodoni,serif;margin:12px 0 24px}.feature{max-width:850px;margin-top:48px}.feature img{width:100%;border-radius:8px}
+.capture main{padding:24px}.capture header,.capture nav,.capture .feature{display:none}.capture .grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:18px}.capture h2{font-size:24px;margin-top:0}
+@media(max-width:800px){main{padding:24px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}}
+@media(max-width:460px){.grid{grid-template-columns:1fr}}
+</style>
+<main>
+<header><div class="eyebrow">FitCheck AI · September 2026</div><h1>A considered first impression.</h1><p class="intro">31 store images with the approved muted palette, image-only Closet and light and dark UI. The app panels are actual Flutter widget renders with sample data. Native release checks remain separate.</p></header>
+<nav><label for="preset">Device set</label><select id="preset"></select><a href="fitcheck-store-listing-images.zip" download>Download all images</a><a href="README.md">Asset notes</a></nav>
+<h2 id="heading"></h2><section class="grid" aria-label="Store screenshots"></section>
+<section class="feature"><h2>Google Play feature graphic</h2><a href="exports/play-store-feature.jpg"><img src="exports/play-store-feature.jpg" alt="FitCheck AI wardrobe tools with an ecru shirt and charcoal trousers"></a><p>1024 × 500 · JPEG</p></section>
+</main>
+<script>
+(async()=>{
+ const config=await(await fetch('source/screens.json')).json();
+ const select=document.querySelector('select');
+ const query=new URLSearchParams(location.search);
+ if(query.has('capture'))document.body.classList.add('capture');
+ for(const preset of config.presets){const option=new Option(`${preset.store} · ${preset.device}`,preset.id);select.add(option)}
+ select.value=config.presets.some(p=>p.id===query.get('preset'))?query.get('preset'):config.presets[0].id;
+ async function show(){
+  window.galleryReady=false;
+  const preset=config.presets.find(p=>p.id===select.value);
+  document.querySelector('#heading').textContent=`${preset.store} · ${preset.device} · ${preset.width} × ${preset.height}`;
+  const grid=document.querySelector('.grid');grid.replaceChildren();
+  for(const screen of config.screens){
+   const figure=document.createElement('figure'),link=document.createElement('a'),img=new Image(),caption=document.createElement('figcaption');
+   link.href=`exports/${preset.id}/${screen.id}.jpg`;img.src=link.href;img.alt=screen.alt;link.append(img);caption.textContent=screen.id;figure.append(link,caption);grid.append(figure);
+  }
+  await document.fonts.ready;await Promise.all([...document.images].map(img=>img.decode()));window.galleryReady=true;
+ }
+ select.addEventListener('change',show);await show();
+})()
+</script>
+</html>

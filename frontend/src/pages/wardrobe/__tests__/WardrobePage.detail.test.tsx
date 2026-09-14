@@ -119,6 +119,9 @@ describe('WardrobePage detail selection is driven by the URL', () => {
     // The pane renders its own content, including the cost-per-wear arithmetic.
     expect(await screen.findByText('cost per wear')).toBeInTheDocument()
     expect(screen.getByText('$40 ÷ 4 wears')).toBeInTheDocument()
+    expect(
+      screen.getByText('Last worn').closest('[class*="md:max-lg:flex-col"]'),
+    ).toBeTruthy()
 
     // Selection lives in the path, so opening a detail must NOT refetch the closet.
     expect(getItems).toHaveBeenCalledTimes(1)

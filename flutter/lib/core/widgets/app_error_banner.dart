@@ -6,9 +6,13 @@ import 'app_ui.dart';
 /// cloud-off icon plus the message on a card. Shared so the content screens
 /// cannot drift apart; render it inside a `SliverToBoxAdapter`.
 class AppErrorBanner extends StatelessWidget {
-  const AppErrorBanner({super.key, required this.message});
+  const AppErrorBanner({super.key, required this.message, this.onRetry});
 
   final String message;
+
+  /// When set, a compact Retry button appears so recovery does not depend
+  /// on discovering pull-to-refresh (offline users especially).
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,10 @@ class AppErrorBanner extends StatelessWidget {
               ),
             ),
           ),
+          if (onRetry != null) ...[
+            const SizedBox(width: AppConstants.spacing8),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
         ],
       ),
     );

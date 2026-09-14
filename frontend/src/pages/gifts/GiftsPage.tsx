@@ -329,11 +329,6 @@ export default function GiftsPage() {
     incomingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [incoming, selectedIncomingId])
 
-  useEffect(() => {
-    if (!selectedIncomingId || !incoming.some((voucher) => voucher.id === selectedIncomingId)) return
-    incomingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [incoming, selectedIncomingId])
-
   function resetIntent(): void {
     requestIdRef.current = null
     setNotice(null)

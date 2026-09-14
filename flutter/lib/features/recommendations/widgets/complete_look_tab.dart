@@ -21,96 +21,105 @@ class CompleteLookTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
-    final RecommendationsController controller = Get.find<RecommendationsController>();
+    final RecommendationsController controller =
+        Get.find<RecommendationsController>();
 
-    return Column(
-      children: [
-        // Selected items
-        SelectedItemsChips(
-          selectedItems: controller.selectedItems,
-          onRemove: (item) => controller.toggleItemSelection(item),
-        ),
+    return SingleChildScrollView(
+      key: const PageStorageKey('complete_look_tab'),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          // Selected items
+          SelectedItemsChips(
+            selectedItems: controller.selectedItems,
+            onRemove: (item) => controller.toggleItemSelection(item),
+          ),
 
-        const SizedBox(height: AppConstants.spacing16),
+          const SizedBox(height: AppConstants.spacing16),
 
-        // Options
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Obx(() => DropdownButtonFormField<Style>(
-                      initialValue: controller.completeLookStyle.value,
-                      decoration: InputDecoration(
-                        labelText: 'Style',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.radius12),
+          // Options
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spacing16,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Obx(
+                  () => DropdownButtonFormField<Style>(
+                    isExpanded: true,
+                    itemHeight: null,
+                    initialValue: controller.completeLookStyle.value,
+                    decoration: InputDecoration(
+                      labelText: 'Style',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radius12,
                         ),
                       ),
-                      items: Style.values.map((style) {
-                        return DropdownMenuItem(
-                          value: style,
-                          child: Text(style.displayName),
-                        );
-                      }).toList(),
-                      onChanged: controller.selectedItems.isEmpty
-                          ? null
-                          : (value) {
-                              controller.completeLookStyle.value = value;
-                            },
-                    )),
-              ),
-              const SizedBox(width: AppConstants.spacing12),
-              Expanded(
-                child: Obx(() => ElevatedButton.icon(
-                      onPressed: controller.selectedItems.isEmpty ||
-                              controller.isLoadingCompleteLooks.value
-                          ? null
-                          : () => controller.fetchCompleteLooks(),
-                      icon: controller.isLoadingCompleteLooks.value
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.auto_awesome),
-                      label: Text(
-                        controller.isLoadingCompleteLooks.value ? 'Generating...' : 'Generate',
-                      ),
-                    )),
-              ),
-            ],
+                    ),
+                    items: Style.values.map((style) {
+                      return DropdownMenuItem(
+                        value: style,
+                        child: Text(style.displayName),
+                      );
+                    }).toList(),
+                    onChanged: controller.selectedItems.isEmpty
+                        ? null
+                        : (value) {
+                            controller.completeLookStyle.value = value;
+                          },
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing12),
+                Obx(
+                  () => ElevatedButton.icon(
+                    onPressed:
+                        controller.selectedItems.isEmpty ||
+                            controller.isLoadingCompleteLooks.value
+                        ? null
+                        : () => controller.fetchCompleteLooks(),
+                    icon: controller.isLoadingCompleteLooks.value
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_awesome),
+                    label: Text(
+                      controller.isLoadingCompleteLooks.value
+                          ? 'Generating...'
+                          : 'Generate',
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
 
-        const SizedBox(height: AppConstants.spacing24),
+          const SizedBox(height: AppConstants.spacing24),
 
-        // Results or empty state
-        Expanded(
-          child: Obx(() {
+          // Results or empty state
+          Obx(() {
             if (controller.selectedItems.isEmpty) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.checkroom,
-                      size: 64,
-                      color: tokens.textMuted,
-                    ),
+                    Icon(Icons.checkroom, size: 64, color: tokens.textMuted),
                     const SizedBox(height: AppConstants.spacing16),
                     Text(
                       'Select items to complete the look',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                          ),
+                        color: tokens.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: AppConstants.spacing8),
                     Text(
                       'We\'ll suggest items to complete your outfit',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.textMuted,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                     ),
                   ],
                 ),
@@ -133,8 +142,8 @@ class CompleteLookTab extends StatelessWidget {
                       Text(
                         controller.completeLookError.value,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textPrimary,
-                            ),
+                          color: tokens.textPrimary,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: AppConstants.spacing12),
@@ -155,17 +164,13 @@ class CompleteLookTab extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.search_off,
-                      size: 64,
-                      color: tokens.textMuted,
-                    ),
+                    Icon(Icons.search_off, size: 64, color: tokens.textMuted),
                     const SizedBox(height: AppConstants.spacing16),
                     Text(
                       'No suggestions available',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                          ),
+                        color: tokens.textPrimary,
+                      ),
                     ),
                   ],
                 ),
@@ -173,20 +178,24 @@ class CompleteLookTab extends StatelessWidget {
             }
 
             return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.all(AppConstants.spacing16),
               itemCount: looks.length,
               itemBuilder: (context, index) {
                 final look = looks[index];
                 final items = look['items'] as List<ItemModel>? ?? [];
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: AppConstants.spacing12),
+                  padding: const EdgeInsets.only(
+                    bottom: AppConstants.spacing12,
+                  ),
                   child: _buildLookCard(context, items, look, tokens),
                 );
               },
             );
           }),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -198,7 +207,9 @@ class CompleteLookTab extends StatelessWidget {
   ) {
     final description = look['description']?.toString();
     final matchScore = look['match_score'];
-    final scoreLabel = matchScore is num ? '${matchScore.toInt()}% match' : null;
+    final scoreLabel = matchScore is num
+        ? '${matchScore.toInt()}% match'
+        : null;
 
     return AppGlassCard(
       padding: const EdgeInsets.all(AppConstants.spacing12),
@@ -206,15 +217,14 @@ class CompleteLookTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (description != null || scoreLabel != null)
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    description ?? 'Complete look suggestion',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
+                Text(
+                  description ?? 'Complete look suggestion',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 if (scoreLabel != null)
                   Container(
@@ -224,14 +234,16 @@ class CompleteLookTab extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: tokens.brandColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(AppConstants.radius12),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius12,
+                      ),
                     ),
                     child: Text(
                       scoreLabel,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.brandColor,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: tokens.brandColor,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
               ],
@@ -240,9 +252,9 @@ class CompleteLookTab extends StatelessWidget {
           if (items.isEmpty)
             Text(
               'No items returned for this look',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             )
           else
             Wrap(
@@ -300,17 +312,17 @@ class CompleteLookTab extends StatelessWidget {
           const SizedBox(height: AppConstants.spacing8),
           Text(
             item.name,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           Text(
             item.category.displayName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

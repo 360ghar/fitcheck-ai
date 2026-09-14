@@ -67,7 +67,6 @@ class GiftController extends GetxController {
   /// Fresh fetch that never joins an in-flight load. Mutations use this so
   /// the summary cannot stay stale when a load started before the write.
   Future<void> refreshAfterMutation() => _load(showLoader: false);
-
   Future<void> _load({required bool showLoader}) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     if (showLoader) isLoading.value = true;

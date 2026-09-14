@@ -147,7 +147,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           {/* Image — garment photos are matted WebP with a real alpha channel,
               so the thumb is a surface the cutout sits on. `object-contain`
               keeps a portrait silhouette whole instead of cropping its hem. */}
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-card p-0.5">
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-card p-0.5">
             {imageSrc ? (
               <img
                 src={imageSrc}
@@ -167,10 +167,10 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-sm text-foreground truncate">{item.name}</h3>
-            <p className="text-xs text-muted-foreground capitalize">{item.category}</p>
+            <h3 className="font-medium text-xs text-foreground truncate">{item.name}</h3>
+            <p className="text-[11px] text-muted-foreground capitalize">{item.category}</p>
             {item.brand && (
-              <p className="text-xs text-muted-foreground/70 truncate">{item.brand}</p>
+              <p className="text-[11px] text-muted-foreground/70 truncate">{item.brand}</p>
             )}
           </div>
 
