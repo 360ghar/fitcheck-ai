@@ -6,6 +6,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../shell/controllers/main_shell_controller.dart';
 import '../controllers/batch_extraction_controller.dart';
 import '../models/social_import_models.dart';
 import '../widgets/batch_image_tile.dart';
@@ -217,11 +218,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
             padding: const EdgeInsets.all(AppConstants.spacing24),
             child: Column(
               children: [
-                Icon(
-                  Icons.check_circle_outline,
-                  size: 48,
-                  color: Colors.green,
-                ),
+                Icon(Icons.check_circle_outline, size: 48, color: Colors.green),
                 const SizedBox(height: AppConstants.spacing16),
                 Text(
                   'Import Complete',
@@ -246,9 +243,8 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
             height: 56,
             child: ElevatedButton.icon(
               onPressed: () {
-                // Same destination as a deep link to the wardrobe tab.
-                Get.offNamed(Routes.wardrobe);
                 controller.resetSocialImportState();
+                _openExistingCloset();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: tokens.brandColor,
@@ -268,6 +264,19 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
         ],
       ),
     );
+  }
+
+  /// Pop back to the live shell Closet tab. `Routes.wardrobe` now builds a
+  /// second shell, which stacks on Item Add instead of revealing the
+  /// existing tab.
+  void _openExistingCloset() {
+    if (Get.key.currentState?.canPop() == true &&
+        Get.isRegistered<MainShellController>()) {
+      Get.until((route) => route.isFirst);
+      Get.find<MainShellController>().changeTab(1);
+      return;
+    }
+    Get.offAllNamed(Routes.wardrobe);
   }
 
   Widget _buildSocialEndedState(

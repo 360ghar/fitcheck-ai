@@ -38,6 +38,7 @@ ItemModel _item(String id, {String name = 'Test Item'}) => ItemModel(
 /// and failure without any network / Supabase involvement.
 class FakeItemRepository extends ItemRepository {
   int getItemsCalls = 0;
+  final List<int> requestedPages = [];
   Future<ItemsListResponse> Function()? onGetItems;
   Future<void> Function(String id)? onDeleteItem;
   Future<ItemModel> Function(String id)? onToggleFavorite;
@@ -56,6 +57,7 @@ class FakeItemRepository extends ItemRepository {
     String? sortOrder,
   }) {
     getItemsCalls++;
+    requestedPages.add(page);
     final handler = onGetItems;
     if (handler != null) return handler();
     return Future.value(
@@ -223,58 +225,125 @@ void main() {
       },
     );
 
+    testWidgets('offline invalidation drops a stale in-flight refresh', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      final firstRefresh = Completer<ItemsListResponse>();
+      fakeRepo.onGetItems = () {
+        switch (fakeRepo.getItemsCalls) {
+          case 1:
+            return firstRefresh.future;
+          default:
+            return Future.value(
+              ItemsListResponse(
+                items: [_item('reconnected')],
+                total: 1,
+                page: 1,
+                limit: 20,
+                hasMore: false,
+              ),
+            );
+        }
+      };
+      final controller = WardrobeController(itemRepository: fakeRepo);
+      controller.items.add(_item('existing'));
+      controller.currentPage.value = 3;
+      controller.hasMore.value = false;
+
+      final activeRefresh = controller.fetchItems(refresh: true);
+      await tester.pump();
+      fakeNetwork.connected = false;
+      await controller.fetchItems(refresh: true);
+      firstRefresh.complete(
+        ItemsListResponse(
+          items: [_item('stale')],
+          total: 1,
+          page: 1,
+          limit: 20,
+          hasMore: false,
+        ),
+      );
+      await activeRefresh;
+
+      expect(controller.items.single.id, 'existing');
+      expect(controller.currentPage.value, 3);
+
+      fakeNetwork.connected = true;
+      await controller.fetchItems(refresh: true);
+
+      expect(controller.items.single.id, 'reconnected');
+      expect(controller.currentPage.value, 2);
+      controller.onClose();
+      await settle(tester);
+    });
+
     testWidgets(
-      'offline invalidation clears a stale refresh pagination baseline',
+      'scrolling after a failed filter refresh retries its first page',
       (tester) async {
         await pumpApp(tester);
-        final firstRefresh = Completer<ItemsListResponse>();
-        fakeRepo.onGetItems = () {
-          switch (fakeRepo.getItemsCalls) {
-            case 1:
-              return firstRefresh.future;
-            case 2:
-              return Future.value(
-                ItemsListResponse(
-                  items: [_item('reconnected-page-one')],
-                  total: 2,
-                  page: 1,
-                  limit: 20,
-                  hasMore: true,
-                ),
-              );
-            default:
-              return Future.error(AuthException.unauthorized());
-          }
-        };
-        final controller = WardrobeController(itemRepository: fakeRepo);
-        controller.items.add(_item('existing'));
-        controller.currentPage.value = 3;
-        controller.hasMore.value = false;
-
-        final activeRefresh = controller.fetchItems(refresh: true);
-        await tester.pump();
-        fakeNetwork.connected = false;
-        await controller.fetchItems(refresh: true);
-        firstRefresh.complete(
-          ItemsListResponse(
-            items: [_item('stale')],
+        var fail = true;
+        fakeRepo.onGetItems = () async {
+          if (fail) throw AuthException.unauthorized();
+          return ItemsListResponse(
+            items: [_item('matching')],
             total: 1,
             page: 1,
             limit: 20,
             hasMore: false,
-          ),
-        );
-        await activeRefresh;
-
-        fakeNetwork.connected = true;
-        await controller.fetchItems();
-        expect(controller.currentPage.value, 2);
-        expect(controller.hasMore.value, isTrue);
-
+          );
+        };
+        final controller = WardrobeController(itemRepository: fakeRepo);
+        controller.items.add(_item('previous-filter'));
+        controller.currentPage.value = 3;
+        controller.hasMore.value = true;
+        controller.searchQuery.value = 'matching';
         await controller.fetchItems(refresh: true);
-
+        expect(controller.items.single.id, 'previous-filter');
+        expect(controller.currentPage.value, 3);
+        fail = false;
+        await controller.fetchItems();
+        expect(fakeRepo.requestedPages, [1, 1]);
+        expect(controller.items.map((item) => item.id), ['matching']);
         expect(controller.currentPage.value, 2);
-        expect(controller.hasMore.value, isTrue);
+        controller.onClose();
+        await settle(tester);
+      },
+    );
+
+    testWidgets(
+      'failed filter change on an exhausted list re-arms scroll retry',
+      (tester) async {
+        await pumpApp(tester);
+        var fail = true;
+        fakeRepo.onGetItems = () async {
+          if (fail) throw AuthException.unauthorized();
+          return ItemsListResponse(
+            items: [_item('matching')],
+            total: 1,
+            page: 1,
+            limit: 20,
+            hasMore: false,
+          );
+        };
+        final controller = WardrobeController(itemRepository: fakeRepo);
+        controller.items.add(_item('old'));
+        controller.currentPage.value = 3;
+        controller.hasMore.value = false;
+        controller.searchQuery.value = 'matching';
+        await controller.fetchItems();
+        expect(fakeRepo.requestedPages, [1]);
+        expect(
+          controller.hasMore.value,
+          isTrue,
+          reason:
+              'InfiniteScrollWrapper gates onLoadMore on hasMore, so a '
+              'failed filter fetch must re-arm it or scroll retry is dead',
+        );
+        fail = false;
+        await controller.fetchItems();
+        expect(fakeRepo.requestedPages, [1, 1]);
+        expect(controller.items.map((item) => item.id), ['matching']);
         controller.onClose();
         await settle(tester);
       },

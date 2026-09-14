@@ -101,6 +101,7 @@ class _TryOn extends TryOnController {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late GoldenFileComparator previousGoldenComparator;
   late String flatlay;
   late String outfit;
   late String shirt;
@@ -144,6 +145,20 @@ void main() {
     await (FontLoader(
       'MaterialIcons',
     )..addFont(Future.value(ByteData.sublistView(icons)))).load();
+    previousGoldenComparator = goldenFileComparator;
+    final comparator = goldenFileComparator;
+    if (comparator is LocalFileComparator) {
+      // Goldens were captured on macOS; CI runs ubuntu-latest. Allow a small
+      // raster delta so antialias/font hinting cannot fail the Flutter job.
+      goldenFileComparator = _MagazineGoldenComparator(
+        comparator.basedir.resolve('magazine_screens_test.dart'),
+        precisionTolerance: 0.01,
+      );
+    }
+  });
+
+  tearDownAll(() {
+    goldenFileComparator = previousGoldenComparator;
   });
 
   setUp(() {
@@ -658,4 +673,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+}
+
+class _MagazineGoldenComparator extends LocalFileComparator {
+  _MagazineGoldenComparator(
+    super.testFile, {
+    required double precisionTolerance,
+  }) : assert(
+         0 <= precisionTolerance && precisionTolerance <= 1,
+         'precisionTolerance must be between 0 and 1',
+       ),
+       _precisionTolerance = precisionTolerance;
+
+  final double _precisionTolerance;
+
+  @override
+  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    final result = await GoldenFileComparator.compareLists(
+      imageBytes,
+      await getGoldenBytes(golden),
+    );
+    final passed = result.passed || result.diffPercent <= _precisionTolerance;
+    if (passed) {
+      result.dispose();
+      return true;
+    }
+    final error = await generateFailureOutput(result, golden, basedir);
+    result.dispose();
+    throw FlutterError(error);
+  }
 }

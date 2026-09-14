@@ -1,5 +1,7 @@
 import 'package:fitcheck_ai/app/routes/app_routes.dart';
 import 'package:fitcheck_ai/core/services/persistence_service.dart';
+import 'package:fitcheck_ai/features/shell/controllers/main_shell_controller.dart';
+import 'package:fitcheck_ai/features/shell/views/main_shell_page.dart';
 import 'package:fitcheck_ai/features/wardrobe/controllers/batch_extraction_controller.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/social_import_models.dart';
 import 'package:fitcheck_ai/features/wardrobe/views/batch_image_selector_page.dart';
@@ -68,8 +70,7 @@ Future<void> _pumpSocialSelector(
       getPages: [
         GetPage(
           name: Routes.wardrobe,
-          page: () =>
-              const Scaffold(body: Center(child: Text('wardrobe-tab'))),
+          page: () => const Scaffold(body: Center(child: Text('wardrobe-tab'))),
         ),
       ],
       home: const BatchImageSelectorPage(),
@@ -96,7 +97,8 @@ void main() {
       expect(
         find.text('Import Complete'),
         findsOneWidget,
-        reason: 'a completed job must show closure UI instead of hanging on '
+        reason:
+            'a completed job must show closure UI instead of hanging on '
             'the processing view forever',
       );
       expect(find.text('Processing Photos'), findsNothing);
@@ -105,25 +107,50 @@ void main() {
     });
 
     testWidgets(
-      'View Wardrobe navigates to the wardrobe route and resets state',
+      'View Wardrobe pops to the existing shell Closet tab and resets state',
       (tester) async {
         Get.put<PersistenceService>(_InMemoryPersistenceService());
+        final shell = Get.put(MainShellController());
         final controller = BatchExtractionController();
         Get.put(controller);
         controller.socialJob.value = terminalJob(
           SocialImportJobStatus.completed,
         );
+        controller.inputMode.value = BatchInputMode.social;
 
-        await _pumpSocialSelector(tester, controller);
+        await tester.pumpWidget(
+          GetMaterialApp(
+            home: const Scaffold(
+              key: ValueKey('shell'),
+              body: Text('shell-home'),
+            ),
+          ),
+        );
+        await tester.pump();
+        Get.to(() => const Scaffold(body: Text('item-add')));
+        await tester.pumpAndSettle();
+        Get.to(() => const BatchImageSelectorPage());
+        await tester.pumpAndSettle();
 
         await tester.tap(find.text('View Wardrobe'));
         await tester.pumpAndSettle();
 
-        expect(find.text('wardrobe-tab'), findsOneWidget);
+        expect(find.text('shell-home'), findsOneWidget);
+        expect(find.text('item-add'), findsNothing);
+        expect(find.text('Import Complete'), findsNothing);
+        expect(find.byType(MainShellPage), findsNothing);
+        expect(find.byType(BatchImageSelectorPage), findsNothing);
+        expect(
+          shell.currentIndex.value,
+          1,
+          reason:
+              'the existing shell must switch to Closet, not push a second shell',
+        );
         expect(
           controller.socialJob.value,
           isNull,
-          reason: 'the completed job must be cleared so reopening the '
+          reason:
+              'the completed job must be cleared so reopening the '
               'selector does not show a stale terminal card',
         );
       },
@@ -158,7 +185,8 @@ void main() {
       expect(
         find.text('Import from Social'),
         findsWidgets,
-        reason: 'after Start Over the selector should be back on the '
+        reason:
+            'after Start Over the selector should be back on the '
             'input form, ready for a new attempt',
       );
     });
@@ -169,9 +197,7 @@ void main() {
       Get.put<PersistenceService>(_InMemoryPersistenceService());
       final controller = BatchExtractionController();
       Get.put(controller);
-      controller.socialJob.value = terminalJob(
-        SocialImportJobStatus.cancelled,
-      );
+      controller.socialJob.value = terminalJob(SocialImportJobStatus.cancelled);
 
       await _pumpSocialSelector(tester, controller);
 

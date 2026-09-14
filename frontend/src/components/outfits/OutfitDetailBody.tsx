@@ -98,10 +98,10 @@ export function OutfitDetailBody({
           four. Set against a hairline, ranged right, like the due-slip in the
           back of a library book. */}
       <div className="mt-md border-t border-border pt-md">
-        {/* md:max-lg: the pane is only 211–289px wide in that one band (see
-            MasterDetailLayout), where a 40px figure and the date cannot share a
-            row. Stacking keeps the figure right-ranged instead of crushing it. */}
-        <div className="flex items-end justify-between gap-md">
+        {/* md split pane is 38% (~292px at 768px). Stack the figure under the
+            date there so the count cannot crush the date; lg+ (340px) has room
+            for one row. */}
+        <div className="flex items-end justify-between gap-md md:max-lg:flex-col">
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Last worn</p>
             <p className="mt-xxs text-[13px] text-foreground">{lastWorn || 'Not yet'}</p>

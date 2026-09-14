@@ -26,11 +26,15 @@ class WardrobeController extends GetxController {
   // Workers for cleanup
   final List<Worker> _workers = [];
   int _fetchGeneration = 0;
-  // The first active refresh owns the baseline. Later refreshes share it so a
-  // latest failure restores pagination for the retained list, not an earlier
-  // request's temporary page-one reset.
-  int? _refreshBaselinePage;
-  bool? _refreshBaselineHasMore;
+  (String, String, String, String, String, String, bool) _loadedFilters = (
+    '',
+    '',
+    '',
+    '',
+    '',
+    'newest',
+    false,
+  );
   // Monotonic token for single-item detail fetches (fetchItemById). Bumped
   // before each fetch so an earlier detail fetch (A) resolving AFTER a newer
   // one (B) cannot overwrite B's fetchedItem and leave B on a permanent
@@ -178,16 +182,11 @@ class WardrobeController extends GetxController {
   /// Fetch items from server with filters
   Future<void> fetchItems({bool refresh = false}) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
-    final previousPage = currentPage.value;
-    final previousHasMore = hasMore.value;
 
     if (!_networkService.isConnected.value) {
       // Invalidate any in-flight fetch so stale results for the previous
-      // filters cannot populate the new filter state after reconnect. Its
-      // refresh baseline belongs to that invalidated request as well; keeping
-      // it would let a later failed refresh restore obsolete pagination.
+      // filters cannot populate the new filter state after reconnect.
       _fetchGeneration++;
-      _clearRefreshBaseline();
       isLoading.value = false;
       isLoadingMore.value = false;
       isOffline.value = true;
@@ -195,27 +194,8 @@ class WardrobeController extends GetxController {
       return;
     }
 
-    if (refresh) {
-      _refreshBaselinePage ??= currentPage.value;
-      _refreshBaselineHasMore ??= hasMore.value;
-      _fetchGeneration++;
-      currentPage.value = 1;
-      hasMore.value = true;
-      // The old list stays visible until the refreshed page arrives: a
-      // failed refresh (flaky network, server 500) must not leave the user
-      // staring at a fake "empty closet" state. The grid swaps atomically on
-      // success below.
-    } else {
-      // Block load-more while ANY fetch is in flight. During a refresh
-      // (isLoading=true) a scroll notification would otherwise start a
-      // concurrent page-N fetch that gets stale-guarded later — wasted
-      // bandwidth. Safe for initial load: it runs from onInit before any
-      // scroll exists, and InfiniteScrollWrapper only ever calls load-more.
-      if (isLoadingMore.value || isLoading.value) return;
-      _fetchGeneration++;
-    }
-    final requestGeneration = _fetchGeneration;
-    final requestPage = currentPage.value;
+    // A scroll notification must not start another request during a fetch.
+    if (!refresh && (isLoadingMore.value || isLoading.value)) return;
     final requestSearch = searchQuery.value.isEmpty ? null : searchQuery.value;
     final requestCategories = selectedCategories.isEmpty
         ? null
@@ -230,16 +210,36 @@ class WardrobeController extends GetxController {
         ? null
         : selectedConditions.map((c) => c.name.toLowerCase()).toList();
     final requestSortType = sortType.value;
+    final requestFavoritesOnly = favoritesOnly.value ? true : null;
+    final requestFilters = (
+      requestSearch ?? '',
+      requestCategories?.join(',') ?? '',
+      requestColors?.join(',') ?? '',
+      requestOccasion ?? '',
+      requestConditions?.join(',') ?? '',
+      requestSortType,
+      requestFavoritesOnly == true,
+    );
+    // A failed filter refresh retains the old list and its cursor. Scrolling
+    // must retry the new filters from page 1, not append to that old list.
+    final replace = refresh || requestFilters != _loadedFilters;
+    final requestGeneration = ++_fetchGeneration;
+    final requestPage = replace ? 1 : currentPage.value;
 
     try {
-      if (refresh) {
+      if (replace) {
         isLoading.value = true;
+        if (requestFilters != _loadedFilters) {
+          // The grid still shows a list loaded under different filters, and a
+          // fully-exhausted one has hasMore == false. Re-arm paging so a
+          // failed filter fetch can be retried from page 1 by scrolling.
+          hasMore.value = true;
+        }
       } else {
         isLoadingMore.value = true;
       }
       error.value = '';
 
-      // Build filter parameters for server-side filtering
       final response = await RetryHelper.execute(
         operation: () => _itemRepository.getItems(
           page: requestPage,
@@ -251,7 +251,7 @@ class WardrobeController extends GetxController {
           conditions: requestConditions,
           sortBy: _mapSortTypeToApi(requestSortType),
           sortOrder: _getSortOrder(requestSortType),
-          isFavorite: favoritesOnly.value ? true : null,
+          isFavorite: requestFavoritesOnly,
         ),
         maxAttempts: 3,
       );
@@ -262,24 +262,19 @@ class WardrobeController extends GetxController {
       // fetch and is replaced only once the new page has actually loaded, so
       // a failed refresh never blanks the grid. Initial load / load-more
       // append instead of clearing.
-      if (refresh) {
+      if (replace) {
         items
           ..clear()
           ..addAll(response.items);
-        _clearRefreshBaseline();
       } else {
         items.addAll(response.items);
       }
+      _loadedFilters = requestFilters;
       totalItems.value = response.total;
       hasMore.value = response.hasMore;
-      currentPage.value++;
+      currentPage.value = requestPage + 1;
     } catch (e) {
       if (requestGeneration != _fetchGeneration || isClosed) return;
-      if (refresh) {
-        currentPage.value = _refreshBaselinePage ?? previousPage;
-        hasMore.value = _refreshBaselineHasMore ?? previousHasMore;
-        _clearRefreshBaseline();
-      }
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');
     } finally {
@@ -288,11 +283,6 @@ class WardrobeController extends GetxController {
         isLoadingMore.value = false;
       }
     }
-  }
-
-  void _clearRefreshBaseline() {
-    _refreshBaselinePage = null;
-    _refreshBaselineHasMore = null;
   }
 
   /// Fetch a single item from the server.

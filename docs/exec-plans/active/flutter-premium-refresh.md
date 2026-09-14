@@ -45,6 +45,7 @@ publication. Preserve product functionality and existing workspace work.
 | 2026-09-05 | Independent review reproduced and fixed empty-Outfits overflow, long Closet list categories, missing Home photo URL recovery, and popup label constraints. Repository architecture/docs/theme/iOS-target checks pass. |
 | 2026-09-05 | iOS simulator debug build passed on Flutter 3.44.6; app installed and opened on iPhone 17 Pro / iOS 26.5. Inspected onboarding and login through native screenshot/accessibility tree. Final rebuild passed; native Back, single field labels and empty-form validation were inspected successfully. |
 | 2026-09-14 | Merged origin/main (PR #19 backend efficiency + mobile sweep). Kept Flutter magazine work and denser web masonry; ItemCard stays pure-image from main; route-layer debt recorded as TD-110. |
+| 2026-09-15 | Review follow-up: social-import View Wardrobe pops to the existing Closet tab; Closet copies the outfits filter-retry pagination; web wear ledger stacks in the md split pane; visual goldens allow 1% raster tolerance on Linux CI. |
 
 ## Decision log
 
@@ -109,8 +110,9 @@ live generation, billing or production API integration.
 - Android build tooling reports future-support warnings for the existing
   Gradle/AGP/Kotlin versions. iOS uses CocoaPods fallback for plugins that do not
   yet support Swift Package Manager. No dependency upgrade was included.
-- Exact Linux golden raster parity must be confirmed on the first CI run;
-  source and fonts are pinned, but this execution ran on macOS.
+- Visual goldens now use a 1% `LocalFileComparator` tolerance so Linux CI
+  antialias/font hinting cannot fail the job. Re-capture on ubuntu-latest if a
+  real layout change is intended.
 
 ## Deferred debt
 
