@@ -72,7 +72,7 @@ export function ChipGroup({
               <button
                 type="button"
                 onClick={() => remove(token)}
-                className="rounded-full p-0.5 hover:bg-primary/20 touch-target"
+                className="rounded-full p-0.5 hover:bg-primary/20 hit-expand"
                 aria-label={`Remove ${token}`}
               >
                 <X className="h-3 w-3" />

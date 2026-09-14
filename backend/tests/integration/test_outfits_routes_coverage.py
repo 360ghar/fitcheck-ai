@@ -926,6 +926,59 @@ async def test_available_items_returns_simplified_picker_rows():
 
 
 @pytest.mark.asyncio
+async def test_available_items_filters_to_requested_ids():
+    """The opt-in ids filter restricts the picker to the requested subset
+    (generation flows pass outfit.item_ids instead of fetching the closet)."""
+    db = _OutfitsFakeDB(
+        {
+            "items": [
+                _item_row(
+                    ITEM_ID,
+                    item_images=[
+                        {"image_url": "https://cdn/a.jpg", "thumbnail_url": "https://cdn/a-t.jpg", "is_primary": True}
+                    ],
+                ),
+                _item_row(
+                    ITEM_ID_2,
+                    name="Denim jacket",
+                    category="outerwear",
+                    colors=["blue"],
+                    item_images=[{"image_url": "https://cdn/b.jpg", "thumbnail_url": "https://cdn/b-t.jpg"}],
+                ),
+            ]
+        }
+    )
+
+    result = await outfits_module.available_items(user_id=USER_ID, db=db, ids=ITEM_ID_2)
+
+    rows = {i["id"]: i for i in result["data"]}
+    assert list(rows) == [ITEM_ID_2]
+    assert rows[ITEM_ID_2]["image_url"] == "https://cdn/b-t.jpg"
+
+
+@pytest.mark.asyncio
+async def test_available_items_empty_ids_returns_empty():
+    """An ids filter with no valid UUIDs short-circuits to [] without a query."""
+    db = _OutfitsFakeDB({"items": [_item_row(ITEM_ID)]})
+
+    result = await outfits_module.available_items(user_id=USER_ID, db=db, ids="not-a-uuid")
+
+    assert result["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_available_items_explicitly_empty_ids_returns_empty():
+    """An explicitly empty "?ids=" is a requested EMPTY subset, not a missing
+    filter: it must short-circuit to [] instead of silently widening to the
+    whole closet (a caller passing an empty outfit.item_ids expects [])."""
+    db = _OutfitsFakeDB({"items": [_item_row(ITEM_ID)]})
+
+    result = await outfits_module.available_items(user_id=USER_ID, db=db, ids="")
+
+    assert result["data"] == []
+
+
+@pytest.mark.asyncio
 async def test_available_items_degrades_unexpected_errors_to_database_error():
     db = _RaisingDB("items")
 

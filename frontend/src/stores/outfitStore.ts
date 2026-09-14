@@ -1100,7 +1100,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       }
 
       const itemIds = new Set(outfit.item_ids);
-      const availableItems = await outfitsApi.getAvailableItems();
+      const availableItems = await outfitsApi.getAvailableItems(outfit.item_ids);
       const promptItems: Parameters<typeof generateOutfit>[0] = [];
       for (const it of availableItems) {
         if (itemIds.has(it.id)) {
@@ -1276,7 +1276,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
         // Get items for generation
         const itemIds = new Set(outfit.item_ids);
-        const availableItems = await outfitsApi.getAvailableItems();
+        const availableItems = await outfitsApi.getAvailableItems(outfit.item_ids);
         const promptItems: Parameters<typeof generateOutfit>[0] = [];
         for (const it of availableItems) {
           if (itemIds.has(it.id)) {

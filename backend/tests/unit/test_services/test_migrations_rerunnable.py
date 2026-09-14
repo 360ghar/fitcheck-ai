@@ -136,8 +136,12 @@ def _check_file(path: Path) -> list:
     for m in re.finditer(r"CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)", top, re.I):
         if not _is_inside(m.start(), spans):
             flag("CREATE TABLE without IF NOT EXISTS", m.start())
-    for m in re.finditer(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?!IF\s+NOT\s+EXISTS)", top, re.I):
-        if not _is_inside(m.start(), spans):
+    for m in re.finditer(r"CREATE\s+(?:UNIQUE\s+)?INDEX\b", top, re.I):
+        if _is_inside(m.start(), spans):
+            continue
+        # CONCURRENTLY (index build outside a transaction, so it cannot block
+        # writes on a populated DB) is allowed between INDEX and the guard.
+        if not re.match(r"\s+(?:CONCURRENTLY\s+)?IF\s+NOT\s+EXISTS\b", top[m.end(): m.end() + 64], re.I):
             flag("CREATE INDEX without IF NOT EXISTS", m.start())
     for m in re.finditer(r"CREATE\s+(?!OR\s+REPLACE\s+FUNCTION\b)FUNCTION\b", top, re.I):
         if not _is_inside(m.start(), spans):

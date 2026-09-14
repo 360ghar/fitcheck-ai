@@ -377,6 +377,90 @@ def _prepare_item_for_response(item: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+async def _fetch_match_pool(
+    db: Client,
+    user_id: str,
+    source_ids: List[str],
+    category: Optional[str] = None,
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Fetch source rows + the match candidate pool in one concurrent round.
+
+    Shared by ``match_items`` and ``complete_look``: previously ``complete_look``
+    fetched its seeds and then re-invoked ``match_items``, which re-fetched the
+    same source rows plus the whole up-to-500-row pool a second time (with a
+    second presign pass). Both endpoints now call this helper once.
+    """
+    candidates_q = (
+        db.table("items")
+        .select("*, item_images(*)")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .not_.in_("id", source_ids)
+        .order("created_at")
+    )
+    if category:
+        candidates_q = candidates_q.eq("category", category)
+    # Exclude laundry/repair/donate by default (docs)
+    candidates_q = candidates_q.not_.in_("condition", ["laundry", "repair", "donate"])
+
+    sources_res, candidates_res = await asyncio.gather(
+        asyncio.to_thread(
+            db.table("items")
+            .select("*, item_images(*)")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .in_("id", source_ids)
+            .execute
+        ),
+        asyncio.to_thread(candidates_q.limit(500).execute),
+    )
+    sources = [
+        _prepare_item_for_response(i)
+        for i in await _materialize_item_images(sources_res.data or [], owner_user_id=user_id)
+    ]
+    candidates = [
+        _prepare_item_for_response(i)
+        for i in await _materialize_item_images(candidates_res.data or [], owner_user_id=user_id)
+    ]
+    if len(candidates) >= 500:
+        logger.warning(
+            "Match candidate pool hit the 500-row cap; matches may be incomplete",
+            user_id=user_id,
+            source_count=len(source_ids),
+            candidate_count=len(candidates),
+        )
+    return sources, candidates
+
+
+def _rank_candidates(
+    sources: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+    *,
+    min_score: int = 0,
+    include_reasons: bool = False,
+    cap: int,
+) -> List[Dict[str, Any]]:
+    """Score every source x candidate pair, sort by score desc, truncate.
+
+    Shared by ``match_items`` and ``complete_look`` so the two scoring loops
+    cannot drift apart again (complete_look previously re-inlined this loop
+    without reasons or the min_score filter).
+    """
+    scored: List[Dict[str, Any]] = []
+    for source in sources:
+        for cand in candidates:
+            score, reasons = _score_match(source, cand)
+            score_pct = int(round(score * 100))
+            if score_pct < min_score:
+                continue
+            entry: Dict[str, Any] = {"item": cand, "score": score_pct}
+            if include_reasons:
+                entry["reasons"] = [r.capitalize() for r in reasons]
+            scored.append(entry)
+    scored.sort(key=lambda m: m["score"], reverse=True)
+    return scored[:cap]
+
+
 def _build_complete_look_response(item: Dict[str, Any], position: int) -> Dict[str, Any]:
     """Build a capsule wardrobe item response."""
     return {
@@ -503,70 +587,30 @@ async def match_items(
     """Find items that match the given item(s)."""
     requested_limit = request.limit or limit
     source_ids = list(dict.fromkeys(request.item_ids or ([request.item_id] if request.item_id else [])))
-    sources_res = await asyncio.to_thread(
-        db.table("items")
-        .select("*, item_images(*)")
-        .eq("user_id", user_id)
-        .eq("is_deleted", False)
-        .in_("id", source_ids)
-        .execute
-    )
-    sources = [
-        _prepare_item_for_response(i)
-        for i in await _materialize_item_images(sources_res.data or [], owner_user_id=user_id)
-    ]
-    if not sources:
-        raise ItemNotFoundError()
-
-    # Candidate pool: same wardrobe excluding sources. The query is ordered
-    # deterministically and the 500-row cap is surfaced in logs: a silent
-    # truncation would make the "best" matches depend on storage order.
-    candidates_q = (
-        db.table("items")
-        .select("*, item_images(*)")
-        .eq("user_id", user_id)
-        .eq("is_deleted", False)
-        .not_.in_("id", source_ids)
-        .order("created_at")
-    )
     # Guard: when this endpoint is invoked directly by other routes (not via
     # FastAPI routing), the Query() defaults arrive as ParamInfo instances.
-    # ParamInfo is truthy, so `if category:` below would apply a bogus
-    # `.eq("category", <ParamInfo>)` filter and drop every candidate.
+    # ParamInfo is truthy, so `if category:` in the pool fetch would apply a
+    # bogus `.eq("category", <ParamInfo>)` filter and drop every candidate.
     if not isinstance(category, str):
         category = None
     if not isinstance(min_score, int):
         min_score = 0
     if not isinstance(limit, int):
         limit = 10
-    if category:
-        candidates_q = candidates_q.eq("category", category)
-    # Exclude laundry/repair/donate by default (docs)
-    candidates_q = candidates_q.not_.in_("condition", ["laundry", "repair", "donate"])
-    candidates_res = await asyncio.to_thread(candidates_q.limit(500).execute)
-    candidates = [
-        _prepare_item_for_response(i)
-        for i in await _materialize_item_images(candidates_res.data or [], owner_user_id=user_id)
-    ]
-    if len(candidates) >= 500:
-        logger.warning(
-            "Match candidate pool hit the 500-row cap; matches may be incomplete",
-            user_id=user_id,
-            source_count=len(source_ids),
-            candidate_count=len(candidates),
-        )
+    # One concurrent round for sources + candidate pool (up to 500 rows,
+    # deterministically ordered). Shared with complete_look so the pool is
+    # never fetched twice per request.
+    sources, candidates = await _fetch_match_pool(db, user_id, source_ids, category=category)
+    if not sources:
+        raise ItemNotFoundError()
 
-    matches: List[Dict[str, Any]] = []
-    for source in sources:
-        for cand in candidates:
-            score, reasons = _score_match(source, cand)
-            score_pct = int(round(score * 100))
-            if score_pct < min_score:
-                continue
-            matches.append({"item": cand, "score": score_pct, "reasons": [r.capitalize() for r in reasons]})
-
-    matches.sort(key=lambda m: m["score"], reverse=True)
-    matches = matches[:requested_limit]
+    matches = _rank_candidates(
+        sources,
+        candidates,
+        min_score=min_score,
+        include_reasons=True,
+        cap=requested_limit,
+    )
 
     # Basic "complete looks" (top+bottom+shoes when possible)
     complete_looks: List[Dict[str, Any]] = []
@@ -622,33 +666,15 @@ async def complete_look(
             details={"field": "item_ids or start_item_id"}
         )
 
-    seed_res = await asyncio.to_thread(
-        db.table("items")
-        .select("*, item_images(*)")
-        .eq("user_id", user_id)
-        .eq("is_deleted", False)
-        .in_("id", seed_ids)
-        .execute
-    )
-    seeds = [
-        _prepare_item_for_response(i)
-        for i in await _materialize_item_images(seed_res.data or [], owner_user_id=user_id)
-    ]
+    # One concurrent round for seeds + candidate pool via the shared helper:
+    # previously this fetched the seeds and then re-invoked match_items,
+    # which re-fetched the same source rows plus the whole pool a second
+    # time (with a second presign pass).
+    seeds, candidates = await _fetch_match_pool(db, user_id, seed_ids)
     if not seeds:
         raise ItemNotFoundError()
 
-    # Reuse match logic
-    match_res = await match_items(
-        MatchRequest(item_ids=seed_ids, limit=50),
-        # Explicit query-parameter values: without them the FastAPI Query()
-        # defaults arrive as truthy ParamInfo objects and poison the filter.
-        category=None,
-        limit=50,
-        min_score=0,
-        user_id=user_id,
-        db=db,
-    )
-    matches = (match_res.get("data") or {}).get("matches") or []
+    matches = _rank_candidates(seeds, candidates, cap=50)
 
     looks: List[Dict[str, Any]] = [
         {

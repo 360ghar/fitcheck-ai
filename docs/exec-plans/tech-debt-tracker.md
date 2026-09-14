@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-09-13 (TD-030–TD-106)
+Last updated: 2026-09-14 (TD-030–TD-107)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
@@ -119,6 +119,7 @@ Last updated: 2026-09-13 (TD-030–TD-106)
 | TD-104 | Safe-area offset class recipes repeated across ~10 components | low | web | The hit-area half of this debt is RESOLVED: the 2026-08-31 simplify pass added the `.hit-expand` utility (CSS-var inset, `--hit`/`--hit-x`/`--hit-y`) next to `.touch-target` in `index.css` and replaced the hand-rolled `after:absolute after:inset-[-Npx]` recipe in 8 call sites across 7 files. Remaining: `calc(1rem+var(--safe-area-top))`-style offsets repeat in ~10 more places (dialog, sheet, lightbox, layouts, toast) — one safe-offset CSS var would dedupe them. Found 2026-08-31 (simplify review); hit-area half resolved 2026-08-31 (simplify pass) |
 | TD-105 | Four orphaned clay illustrations in `frontend/public/generated/` | low | web | `hero-wardrobe-16x9`, `avatar-wardrobe-1`, `demo-strip-bg`, `doodle-star` (+640 variants) are unreferenced after the clay-rebuild (hero switched to `hero-machine`; mascot/backdrop/doodle accents never wired). ~110KB ships in every deploy via `public/`. Wire them into a section or delete before the next image-budget pass. Found 2026-09-13 (clay-rebuild audit) |
 | TD-106 | Logged-in webapp has no rendered visual QA | low | web | The clay-rebuild visually judged the landing (11/11 slices via playwright + judge) but authenticated pages were only verified via harness + token reasoning — no test credentials exist for hosted Supabase auth (seed script requires a password chosen at seed time). Seed a known test account and judge dashboard/wardrobe/outfits next time webapp UI work happens. Found 2026-09-13 (clay-rebuild) |
+| TD-107 | Route-layer workflows still own service-layer logic | medium | backend | Flagged by PR #19 bot review (qodo architecture rule violations; valid per the AGENTS.md "routes thin, logic in services" rule, but the fat shape predates that PR — the diff only extended the handlers in place). Four route-layer workflows, route handlers plus their private helpers (not handlers alone): `ai.generate_try_on` (avatar/clothing ownership + download/downscale + provider-input prep), `items.get_item_stats` + its helper `_legacy_item_stats_rollup` (aggregate RPC orchestration + migration-gap Python rollup), `outfits.available_items` (ids parsing + query + image materialization), `recommendations` match/complete-look via the helpers `_fetch_match_pool`/`_rank_candidates` (pool fetch + scoring). Extract each into `app/services/` with typed failures mapped to HTTP at the route, and consider a mechanical route-LOC rule (see TD-013). Found 2026-09-14 (PR #19 review pass) |
 
 ## Process
 

@@ -284,8 +284,27 @@ async def get_leaderboard(
             prof_rows = prof_result.data if prof_result else []
             profiles = {str(p.get("id")): p for p in prof_rows if p.get("id")}
 
+        # `users.avatar_url` stores the presigned URL captured at upload time,
+        # so it is dead after OBJECT_STORAGE_PRESIGN_TTL and must be
+        # re-materialized on every read — every leaderboard face was a broken
+        # image before this. presigned=True is required: these are OTHER
+        # users' keys and the Worker's ownership rule (first path segment ==
+        # token sub) 404s a cross-user path in worker mode.
+        #
+        # The per-row materializations are independent, so they run
+        # concurrently (gather) instead of awaiting sequentially in the loop:
+        # leaderboard latency becomes the slowest avatar, not the sum.
+        avatar_urls = await asyncio.gather(
+            *(
+                materialize_avatar_url(
+                    profiles.get(str(r.get("user_id") or ""), {}).get("avatar_url"),
+                    presigned=True,
+                )
+                for r in rows
+            )
+        )
         entries: List[Dict[str, Any]] = []
-        for idx, r in enumerate(rows):
+        for idx, (r, fresh_avatar) in enumerate(zip(rows, avatar_urls)):
             uid = str(r.get("user_id") or "")
             current_streak = _safe_int(r.get("current_streak"), 0)
             total_points = _compute_points(current_streak)
@@ -295,17 +314,7 @@ async def get_leaderboard(
                     "rank": idx + 1,
                     "user_id": uid,
                     "username": _display_name(profile),
-                    # `users.avatar_url` stores the presigned URL captured at
-                    # upload time, so it is dead after OBJECT_STORAGE_PRESIGN_TTL
-                    # and must be re-materialized on every read — every
-                    # leaderboard face was a broken image before this.
-                    # presigned=True is required: these are OTHER users' keys and
-                    # the Worker's ownership rule (first path segment == token
-                    # sub) 404s a cross-user path in worker mode.
-                    "avatar_url": await materialize_avatar_url(
-                        profile.get("avatar_url"), presigned=True
-                    )
-                    or profile.get("avatar_url"),
+                    "avatar_url": fresh_avatar or profile.get("avatar_url"),
                     "level": _compute_level(total_points),
                     "total_points": total_points,
                     "current_streak": current_streak,

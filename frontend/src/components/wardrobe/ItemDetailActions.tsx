@@ -1,14 +1,12 @@
 /**
  * ItemDetailActions — the pinned action row of the closet detail surface.
  *
- * One filled primary, tertiary text actions, one overflow menu. The dialog this
- * replaces shipped an outlined "Mark as Worn" beside a filled "Delete" in view
- * mode and an outlined "Cancel" beside a filled "Save Changes" in edit mode —
- * both of them the filled-plus-outlined couplet, and one of them putting a
- * destructive action in the primary slot.
+ * One filled primary, icon secondaries, one overflow menu. The card grid no
+ * longer carries a favorite heart, so this footer is where favoriting lives —
+ * a visible, stateful icon button rather than a buried overflow item.
  */
 
-import { Check, Edit, Heart, Loader2, MoreVertical, Trash2 } from 'lucide-react'
+import { Check, Heart, Loader2, MoreVertical, Pencil, Shirt, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -26,6 +24,8 @@ export interface ItemDetailActionsProps {
   onMarkWorn: () => void
   onToggleFavorite: () => void
   onDelete: () => void
+  /** Start outfit creation pre-seeded with this item (/outfits/new?items=…). */
+  onCreateOutfit?: () => void
 }
 
 export function ItemDetailActions({
@@ -35,6 +35,7 @@ export function ItemDetailActions({
   onMarkWorn,
   onToggleFavorite,
   onDelete,
+  onCreateOutfit,
 }: ItemDetailActionsProps) {
   if (editor.isEditing) {
     return (
@@ -69,15 +70,32 @@ export function ItemDetailActions({
   }
 
   return (
-    <div className="flex items-center gap-sm">
-      <Button onClick={onMarkWorn} disabled={isBusy} className="min-w-0 flex-1">
+    <div className="flex flex-wrap items-center gap-sm">
+      <Button onClick={onMarkWorn} disabled={isBusy} className="min-w-0 flex-1 basis-32">
         <Check className="h-4 w-4" aria-hidden="true" />
         <span className="truncate">Mark as worn</span>
       </Button>
 
-      <Button variant="tertiary" onClick={editor.begin} disabled={isBusy} className="shrink-0">
-        <Edit className="h-4 w-4" aria-hidden="true" />
-        Edit
+      {/* Favorite left the overflow menu: the grid cards dropped their hearts,
+          so this is the only favoriting surface left — it must be visible and
+          stateful, not a menu line. */}
+      <Button
+        variant="tertiary"
+        size="icon"
+        onClick={onToggleFavorite}
+        disabled={isBusy}
+        aria-label={item.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
+        aria-pressed={item.is_favorite}
+        className="shrink-0"
+      >
+        <Heart
+          className={`h-4 w-4 ${item.is_favorite ? 'fill-current text-primary' : ''}`}
+          aria-hidden="true"
+        />
+      </Button>
+
+      <Button variant="tertiary" size="icon" onClick={editor.begin} disabled={isBusy} aria-label="Edit item" className="shrink-0">
+        <Pencil className="h-4 w-4" aria-hidden="true" />
       </Button>
 
       <DropdownMenu>
@@ -87,13 +105,12 @@ export function ItemDetailActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuItem disabled={isBusy} onClick={onToggleFavorite}>
-            <Heart
-              className={`h-4 w-4 mr-2 ${item.is_favorite ? 'fill-current text-primary' : ''}`}
-              aria-hidden="true"
-            />
-            {item.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
-          </DropdownMenuItem>
+          {onCreateOutfit && (
+            <DropdownMenuItem onClick={onCreateOutfit}>
+              <Shirt className="h-4 w-4 mr-2" aria-hidden="true" />
+              Create outfit with this item
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem className="text-destructive" disabled={isBusy} onClick={onDelete}>
             <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
             Delete item

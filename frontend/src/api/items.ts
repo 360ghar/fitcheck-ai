@@ -275,7 +275,7 @@ export function checkDuplicatesQueued(
  */
 export async function findSimilarItems(
   itemId: string,
-  options?: { limit?: number; minScore?: number }
+  options?: { limit?: number; minScore?: number; signal?: AbortSignal }
 ): Promise<{ items: Item[]; source_item_id: string }> {
   try {
     const params = new URLSearchParams();
@@ -284,7 +284,10 @@ export async function findSimilarItems(
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     const response = await apiClient.get<ApiEnvelope<{ items: Item[]; source_item_id: string }>>(
-      `/api/v1/items/${itemId}/similar${queryString}`
+      `/api/v1/items/${itemId}/similar${queryString}`,
+      // Aborted by the caller's effect cleanup: a stale search stops its
+      // embedding generation + vector query instead of running to completion.
+      { signal: options?.signal }
     );
     return response.data.data;
   } catch (error) {
