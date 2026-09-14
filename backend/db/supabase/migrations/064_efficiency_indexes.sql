@@ -18,7 +18,8 @@
 -- calls it with the service-role client. Same style as migrations 022/024/
 -- 026/031/044.
 --
--- Idempotent (CREATE INDEX IF NOT EXISTS + CREATE OR REPLACE): safe to
+-- Idempotent (CREATE INDEX IF NOT EXISTS + CREATE OR REPLACE, plus recovery
+-- for INVALID leftovers of a failed/canceled concurrent build): safe to
 -- re-run in the SQL editor.
 --
 -- Target: Supabase Postgres (apply on hosted Supabase only).
@@ -32,8 +33,69 @@
 -- (still idempotent, still safe to re-run).
 
 -- =============================================================================
+-- Data normalization: items.is_deleted
+-- =============================================================================
+-- The column ships NULLable (BOOLEAN DEFAULT FALSE), but every read in the
+-- app filters `is_deleted = FALSE` (PostgREST/SQL equality excludes NULLs),
+-- so a legacy NULL row would be permanently invisible. Normalize instead of
+-- tolerating NULLs: backfill to the insert default, then make NULL
+-- unrepresentable, so all readers (and the RPC below) can use a plain
+-- `is_deleted = FALSE` predicate with identical semantics. Guarded by the
+-- nullability check so a re-run no-ops once the column is NOT NULL.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'items'
+          AND column_name = 'is_deleted'
+          AND is_nullable = 'YES'
+    ) THEN
+        UPDATE public.items SET is_deleted = FALSE WHERE is_deleted IS NULL;
+        ALTER TABLE public.items ALTER COLUMN is_deleted SET NOT NULL;
+    END IF;
+END;
+$$;
+
+-- =============================================================================
 -- Composite indexes
 -- =============================================================================
+
+-- A failed or canceled CONCURRENTLY build leaves an INVALID index with the
+-- target name behind; `CREATE INDEX ... IF NOT EXISTS` would then keep
+-- skipping that name forever, leaving the hot query without a usable index
+-- while still paying the update overhead. Drop any invalid leftover up front
+-- so the guarded builds below actually rebuild. Valid indexes are untouched,
+-- so re-runs remain no-ops. (Plain DROP INDEX, not CONCURRENTLY: an invalid
+-- index has no live content and DO runs as one transaction.)
+DO $$
+DECLARE
+    idx_name text;
+BEGIN
+    FOREACH idx_name IN ARRAY ARRAY[
+        'idx_items_user_deleted_created',
+        'idx_items_user_favorite',
+        'idx_items_user_category',
+        'idx_outfits_user_created',
+        'idx_user_streaks_current',
+        'idx_calendar_events_user_start',
+        'idx_shared_outfits_outfit_visibility'
+    ]
+    LOOP
+        IF EXISTS (
+            SELECT 1
+            FROM pg_index i
+            JOIN pg_class c ON c.oid = i.indexrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relname = idx_name
+              AND NOT i.indisvalid
+        ) THEN
+            EXECUTE format('DROP INDEX public.%I', idx_name);
+        END IF;
+    END LOOP;
+END;
+$$;
 
 -- Wardrobe list/browse: WHERE user_id = ? AND is_deleted = false
 -- ORDER BY created_at DESC (default sort), plus the count query.
@@ -72,8 +134,11 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_shared_outfits_outfit_visibility
 -- RPC: get_item_stats_aggregate
 -- =============================================================================
 -- Replaces the up-to-1000-row Python rollup in GET /items/stats with one
--- index-friendly aggregate. Semantics mirror the old Python loop exactly:
--- only non-deleted rows of the owner; NULL/blank category counts as
+-- index-friendly aggregate. Semantics match the app-wide read scope exactly:
+-- only rows of the owner with is_deleted = FALSE (the column is NOT NULL
+-- after the normalization above, so this predicate needs no NULL handling
+-- and cannot drift from the clients' `.eq("is_deleted", false)` reads);
+-- NULL/blank category counts as
 -- "other", NULL/blank condition as "clean"; colors are counted per element
 -- (lowercased, non-string JSON coerced with ::text like str(c) did);
 -- total_value sums price and skips NULL/unparseable values.
@@ -89,7 +154,7 @@ BEGIN
             price
         FROM public.items
         WHERE user_id = user_uuid
-          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND is_deleted = FALSE
     ),
     color_counts AS (
         SELECT lower(
@@ -106,7 +171,7 @@ BEGIN
             CASE WHEN jsonb_typeof(i.colors) = 'array' THEN i.colors ELSE '[]'::jsonb END
         ) AS c(value)
         WHERE i.user_id = user_uuid
-          AND COALESCE(i.is_deleted, FALSE) = FALSE
+          AND i.is_deleted = FALSE
     )
     SELECT jsonb_build_object(
         'total_items', (SELECT COUNT(*) FROM scoped),
@@ -138,5 +203,3 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 REVOKE ALL ON FUNCTION public.get_item_stats_aggregate(UUID)
     FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_item_stats_aggregate(UUID) TO service_role;
-
-COMMIT;

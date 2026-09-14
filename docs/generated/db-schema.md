@@ -271,6 +271,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `061_gift_voucher_recipient_matching.sql` → `gift_vouchers`
 - `062_gift_voucher_occasions.sql` → `gift_vouchers`
 - `063_gift_occasion_and_trial_guards.sql` → `gift_vouchers`
+- `064_efficiency_indexes.sql` → `items`
 
 ## Related
 

@@ -101,16 +101,18 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.target !== e.currentTarget) return
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault()
-        onClick?.()
-      }
       // Keyboard equivalent of the long-press gesture: a pointer user holds a
-      // tile to start bulk selection; a keyboard user shifts+enters. Kept on
-      // a modifier so Enter/Space remain unambiguous open/toggle actions.
+      // tile to start bulk selection; a keyboard user shifts+enters. Checked
+      // FIRST and terminal — a shifted Enter must not also fall through to the
+      // plain-Enter branch and open/toggle the item in the same keystroke.
       if (onLongPress && e.key === 'Enter' && e.shiftKey) {
         e.preventDefault()
         onLongPress()
+        return
+      }
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        onClick?.()
       }
     }
 

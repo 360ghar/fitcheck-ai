@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { Shirt } from 'lucide-react'
 import { describe, expect, it, vi } from 'vitest'
@@ -407,6 +407,27 @@ describe('app shell + primitive mobile contract', () => {
       container.querySelector('[data-testid="item-card-selected-badge"]')
     ).not.toBeNull()
     expect(container.firstElementChild).toHaveClass('ring-2', 'ring-primary')
+  })
+
+  it('starts bulk selection with Shift+Enter without also opening the item', () => {
+    // Shift+Enter is the keyboard long-press, checked before the plain-Enter
+    // branch. When it was checked after it, one keystroke both opened the
+    // item (onClick) and started bulk selection (onLongPress).
+    const onClick = vi.fn()
+    const onLongPress = vi.fn()
+    render(
+      <ItemCard item={sweepCardItem} onClick={onClick} onLongPress={onLongPress} />
+    )
+
+    const tile = screen.getByRole('button', { name: 'Black Tee' })
+    fireEvent.keyDown(tile, { key: 'Enter', shiftKey: true })
+    expect(onLongPress).toHaveBeenCalledTimes(1)
+    expect(onClick).not.toHaveBeenCalled()
+
+    // Plain Enter stays the open/toggle action.
+    fireEvent.keyDown(tile, { key: 'Enter' })
+    expect(onClick).toHaveBeenCalledTimes(1)
+    expect(onLongPress).toHaveBeenCalledTimes(1)
   })
 
   it('keeps min-w-0 on the AppLayout main flex item', () => {
