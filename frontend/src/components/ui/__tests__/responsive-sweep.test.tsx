@@ -4,6 +4,8 @@ import { Shirt } from 'lucide-react'
 import { describe, expect, it, vi } from 'vitest'
 
 import DemoSection from '@/components/landing/DemoSection'
+import AppLayout from '@/components/layout/AppLayout'
+import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import Hero from '@/components/landing/Hero'
 import PhotoshootShowcase from '@/components/landing/PhotoshootShowcase'
 import TrustBar from '@/components/landing/TrustBar'
@@ -29,6 +31,14 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { Textarea } from '@/components/ui/textarea'
 import { ToastProvider, ToastViewport } from '@/components/ui/toast'
+import { ExtractedItemsGrid } from '@/components/wardrobe/ExtractedItemsGrid'
+import { ItemCard } from '@/components/wardrobe/ItemCard'
+import {
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetTitle,
+} from '@/components/ui/bottom-sheet'
+import type { DetectedItem, Item } from '@/types'
 import BlogPostPage from '@/pages/blog/BlogPostPage'
 
 // Radix popper positions the open dropdown via ResizeObserver, which jsdom
@@ -61,6 +71,25 @@ vi.mock('@/components/seo/JsonLd', () => ({
   buildHowToSchema: () => ({}),
   buildArticleSchema: () => ({}),
 }))
+
+// Grid (default-variant) card fixture for the mobile-chrome compaction locks.
+const sweepCardItem = {
+  id: 'i1',
+  user_id: 'u1',
+  name: 'Black Tee',
+  category: 'tops',
+  colors: ['Black'],
+  materials: [],
+  seasonal_tags: [],
+  occasion_tags: [],
+  tags: [],
+  condition: 'clean',
+  is_favorite: false,
+  usage_times_worn: 0,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  images: [{ image_url: 'blob:full', thumbnail_url: 'blob:thumb', is_primary: true }],
+} as unknown as Item
 
 describe('responsive sweep regression guards', () => {
   it('keeps the landing hero on a minmax(0, 1fr) track on narrow screens', () => {
@@ -294,5 +323,122 @@ describe('app shell + primitive mobile contract', () => {
     const thumb = screen.getByRole('slider')
     expect(root.className).not.toContain('touch-none')
     expect(thumb).toHaveClass('touch-none')
+  })
+
+  it('stacks the wardrobe review grid one card per row below xs', () => {
+    const item: DetectedItem = {
+      tempId: 't1',
+      category: 'tops',
+      colors: ['Black'],
+      confidence: 0.9,
+      detailedDescription: 'A black tee',
+      status: 'generated',
+      name: 'Black Tee',
+      includeInWardrobe: true,
+      generatedImageUrl: 'blob:generated',
+    }
+    const { container } = render(
+      <ExtractedItemsGrid
+        items={[item]}
+        onItemUpdate={vi.fn()}
+        onItemDelete={vi.fn()}
+        onItemRegenerate={vi.fn()}
+        onSaveAll={vi.fn()}
+        onBack={vi.fn()}
+        isSaving={false}
+      />
+    )
+    const grid = container.querySelector('[class*="xs:grid-cols-2"]')
+    expect(grid).not.toBeNull()
+    expect(grid).toHaveClass('grid')
+    // 360px phones get one readable card per row; 375px+ (xs) may go two-up.
+    expect(grid).toHaveClass('grid-cols-1')
+    expect(grid).toHaveClass('xs:grid-cols-2')
+    expect(grid).toHaveClass('sm:grid-cols-3')
+  })
+
+  it('keeps the review-grid save footer pinned while scrolling', () => {
+    const { container } = render(
+      <ExtractedItemsGrid
+        items={[]}
+        onItemUpdate={vi.fn()}
+        onItemDelete={vi.fn()}
+        onItemRegenerate={vi.fn()}
+        onSaveAll={vi.fn()}
+        onBack={vi.fn()}
+        isSaving={false}
+      />
+    )
+    // Save used to sit at the bottom of a multi-viewport scroll; it must pin
+    // to the dialog scroller's visible bottom instead.
+    const footer = container.querySelector('div.sticky.bottom-0')
+    expect(footer).not.toBeNull()
+    expect(footer).toHaveClass('z-10', 'bg-background')
+  })
+
+  it('reserves item card height before the image decodes', () => {
+    render(<ItemCard item={sweepCardItem} />)
+    // The name is the tile's accessible label, not visible text (pure-image
+    // card), so the img itself is decorative.
+    const img = screen.getByRole('button', { name: 'Black Tee' }).querySelector('img')
+    expect(img).not.toBeNull()
+    // The backend ships image width/height as null, so this aspect box is the
+    // only thing keeping the card taller than a ~2px sliver pre-decode.
+    expect(img).toHaveClass('aspect-[3/4]')
+  })
+
+  it('renders the grid card as a pure image tile — no text, no buttons', () => {
+    // Cards are matted cutouts; every action lives in the detail surface and a
+    // long-press starts bulk selection. The tile itself carries no chrome.
+    const { container } = render(<ItemCard item={sweepCardItem} />)
+    expect(container.querySelector('button')).toBeNull()
+    expect(screen.queryByText('Black Tee')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/favorites/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Select item/i)).not.toBeInTheDocument()
+  })
+
+  it('shows selection chrome only while a bulk selection is active', () => {
+    const { container, rerender } = render(<ItemCard item={sweepCardItem} isSelecting />)
+    expect(container.querySelector('[data-testid="item-card-selected-badge"]')).toBeNull()
+    expect(container.firstElementChild).not.toHaveClass('ring-2')
+
+    rerender(<ItemCard item={sweepCardItem} isSelecting isSelected />)
+    expect(
+      container.querySelector('[data-testid="item-card-selected-badge"]')
+    ).not.toBeNull()
+    expect(container.firstElementChild).toHaveClass('ring-2', 'ring-primary')
+  })
+
+  it('keeps min-w-0 on the AppLayout main flex item', () => {
+    // Without it a wide intrinsic child (the wardrobe chip rail sums to ~780px
+    // of min-content) grew `main` to 810px on a 360px phone, rendering a
+    // clipped desktop layout under body's overflow-x-hidden.
+    render(
+      <MemoryRouter>
+        <ThemeProvider defaultTheme="light">
+          <AppLayout />
+        </ThemeProvider>
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('main')).toHaveClass('min-w-0', 'flex-1')
+  })
+
+  it('pins the bottom-sheet footer outside the scroll region', () => {
+    render(
+      <BottomSheet open>
+        <BottomSheetContent
+          height="large"
+          footer={<button type="button">Apply Filters</button>}
+        >
+          <BottomSheetTitle className="sr-only">Filters</BottomSheetTitle>
+          <div>Filters body</div>
+        </BottomSheetContent>
+      </BottomSheet>
+    )
+    const apply = screen.getByText('Apply Filters')
+    // The footer must be a sibling of the scroller, not a child — inside the
+    // scroller it scrolled away with the body (mt-auto was a no-op there).
+    expect(apply.closest('.overflow-y-auto')).toBeNull()
+    expect(apply.closest('.shrink-0')).not.toBeNull()
   })
 })

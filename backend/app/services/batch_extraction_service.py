@@ -298,6 +298,7 @@ class BatchExtractionService:
             "error": skip_msg,
             "code": "AI_SERVICE_ERROR",
             "error_kind": "upstream_quota",
+            "retryable": True,
             "completed_count": len(job.extraction_completed),
             "failed_count": len(job.extraction_failed),
             "total_images": job.total_images,
@@ -439,7 +440,13 @@ class BatchExtractionService:
                 # here (it is raised pre-flight, before the job starts).
                 error_kind = getattr(e, "error_kind", None)
                 retry_after = getattr(e, "retry_after_seconds", None)
+                retryable = bool(getattr(e, "retryable", False))
                 code = "AI_SERVICE_ERROR"
+                # Transient provider outages (quota/5xx/breaker-open) are
+                # client-retryable, and the source photo is the durable input
+                # a retry needs — so it must survive. Only deterministic
+                # failures delete it (stale-upload orphan sweep, A2-06).
+                transient_failure = retryable or error_kind in ("upstream_quota", "transient")
 
                 # Unrecoverable upstream capacity exhaustion: stop grinding the
                 # remaining images. The Agnes fallback already tried and failed
@@ -468,11 +475,17 @@ class BatchExtractionService:
 
                 await BatchJobService.mark_extraction_failed(job.job_id, image_id, error_msg)
 
-                # This image's extraction failed: its source photo was already
-                # uploaded to {user}/sources/ before the vision call, and a
-                # failed extraction would otherwise leave it orphaned forever
-                # (canonical category, no sweep) — best-effort delete (A2-06).
-                await self._delete_failed_source_image(job, image_id)
+                if transient_failure:
+                    logger.info(
+                        "Retaining source image after transient extraction failure; client may retry",
+                        extra={"job_id": job.job_id, "image_id": image_id, "error_kind": error_kind},
+                    )
+                else:
+                    # This image's extraction failed deterministically: its source
+                    # photo was already uploaded to {user}/sources/ before the
+                    # vision call, and would otherwise be orphaned forever
+                    # (canonical category, no sweep) — best-effort delete (A2-06).
+                    await self._delete_failed_source_image(job, image_id)
 
                 await BatchJobService.broadcast_event(job.job_id, "image_extraction_failed", {
                     "job_id": job.job_id,
@@ -480,6 +493,7 @@ class BatchExtractionService:
                     "error": error_msg,
                     "code": code,
                     "error_kind": error_kind,
+                    "retryable": retryable,
                     "retry_after_seconds": retry_after,
                     "completed_count": len(job.extraction_completed),
                     "failed_count": len(job.extraction_failed),

@@ -602,6 +602,7 @@ export function CalendarView({
               variant={viewMode === 'week' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('week')}
+              aria-label="Week view"
               className="gap-1"
             >
               <CalendarDays className="h-4 w-4" />
@@ -611,6 +612,7 @@ export function CalendarView({
               variant={viewMode === 'agenda' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('agenda')}
+              aria-label="Agenda view"
               className="gap-1"
             >
               <List className="h-4 w-4" />
@@ -620,6 +622,7 @@ export function CalendarView({
               variant={viewMode === 'month' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('month')}
+              aria-label="Month view"
               className="gap-1"
             >
               <Grid3x3 className="h-4 w-4" />

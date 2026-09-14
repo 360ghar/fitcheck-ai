@@ -55,6 +55,7 @@ from app.utils.db import (
     items_schema_migration_hint,
     jsonb_contains,
     safe_search_term,
+    unwrap_rpc_result,
 )
 from app.utils.parallel import parallel_with_retry
 from app.api.v1.images import _is_owned_by_user, materialize_parent_images
@@ -1405,6 +1406,50 @@ async def batch_delete_items(
         raise DatabaseError("Failed to batch delete items", operation="delete")
 
 
+async def _legacy_item_stats_rollup(db: Client, user_id: str) -> Dict[str, Any]:
+    """Pre-migration-064 fallback: count categories/conditions/colors/value in Python.
+
+    Only used while the hosted DB has not applied migration 064 (the
+    get_item_stats_aggregate RPC is missing). Mirrors the old handler loop
+    exactly: up to 1000 rows, no is_deleted filter (matching the original).
+    """
+    agg_res = await asyncio.to_thread(
+        db.table("items")
+        .select("category,colors,condition,price")
+        .eq("user_id", user_id)
+        .limit(1000)  # Limit to prevent fetching thousands of items
+        .execute
+    )
+    items_by_category: Dict[str, int] = {}
+    items_by_condition: Dict[str, int] = {}
+    items_by_color: Dict[str, int] = {}
+    total_value = 0.0
+    rows = agg_res.data or []
+    for item in rows:
+        cat = (item.get("category") or "other").lower()
+        items_by_category[cat] = items_by_category.get(cat, 0) + 1
+
+        cond = (item.get("condition") or "clean").lower()
+        items_by_condition[cond] = items_by_condition.get(cond, 0) + 1
+
+        for c in item.get("colors") or []:
+            ckey = str(c).lower()
+            items_by_color[ckey] = items_by_color.get(ckey, 0) + 1
+
+        if item.get("price") is not None:
+            try:
+                total_value += float(item["price"])
+            except Exception as e:
+                logger.debug("Could not parse item price", item_id=item.get("id"), price=item.get("price"), error=str(e))
+    return {
+        "total_items": len(rows),
+        "items_by_category": items_by_category,
+        "items_by_condition": items_by_condition,
+        "items_by_color": items_by_color,
+        "total_value": round(total_value, 2),
+    }
+
+
 @router.get("/stats", response_model=Dict[str, Any])
 async def get_item_stats(
     user_id: str = Depends(get_active_user_id),
@@ -1412,21 +1457,14 @@ async def get_item_stats(
 ):
     """Compute wardrobe item statistics for dashboard/analytics."""
     try:
-        # Count, the aggregation payload, and the most/least-worn extremes are
-        # independent reads; run them concurrently. The extremes are pushed
-        # into SQL (ORDER BY + LIMIT) instead of sorting up to 1000 rows in
-        # Python, and the aggregation query drops the columns only that Python
-        # sort used.
-        count_res, agg_res, most_res, least_res = await asyncio.gather(
+        # Count and the most/least-worn extremes are independent reads; run
+        # them concurrently. The extremes are pushed into SQL (ORDER BY +
+        # LIMIT) instead of sorting up to 1000 rows in Python, and the
+        # category/condition/color/value rollup is a single GROUP BY aggregate
+        # (migration 064) instead of a 1000-row Python loop.
+        count_res, most_res, least_res = await asyncio.gather(
             asyncio.to_thread(
                 db.table("items").select("id", count="exact").eq("user_id", user_id).execute
-            ),
-            asyncio.to_thread(
-                db.table("items")
-                .select("category,colors,condition,price")
-                .eq("user_id", user_id)
-                .limit(1000)  # Limit to prevent fetching thousands of items
-                .execute
             ),
             asyncio.to_thread(
                 db.table("items")
@@ -1449,29 +1487,44 @@ async def get_item_stats(
         )
 
         count = getattr(count_res, "count", None)
-        items = agg_res.data or []
-        total_items = count if count is not None else len(items)
-        items_by_category: Dict[str, int] = {}
-        items_by_condition: Dict[str, int] = {}
-        items_by_color: Dict[str, int] = {}
-        total_value = 0.0
+        agg: Dict[str, Any] = {}
+        try:
+            agg_res = await asyncio.to_thread(
+                db.rpc(
+                    "get_item_stats_aggregate",
+                    {"user_uuid": user_id},
+                ).execute
+            )
+            # JSONB-returning RPC: PostgREST keys the row by the function name
+            # ([{"get_item_stats_aggregate": {...}}]) — unwrap_rpc_result's
+            # key= handles that. The function always returns exactly one row,
+            # so an empty payload means the RPC is absent (or a test double
+            # with no canned result) and takes the legacy fallback below.
+            agg_row = unwrap_rpc_result(agg_res, key="get_item_stats_aggregate")
+            if isinstance(agg_row, dict) and agg_row:
+                agg = agg_row
+        except Exception as e:
+            if not is_pgrst202_missing_rpc(e):
+                raise
+            # Migration 064 not applied on the hosted DB (PGRST202): fall
+            # through to the legacy Python rollup so the endpoint keeps
+            # working during the gap.
+            logger.warning(
+                "get_item_stats_aggregate RPC missing (migration 064 not applied); "
+                "falling back to Python rollup",
+                user_id=user_id,
+            )
+        if not agg:
+            agg = await _legacy_item_stats_rollup(db, user_id)
 
-        for item in items:
-            cat = (item.get("category") or "other").lower()
-            items_by_category[cat] = items_by_category.get(cat, 0) + 1
-
-            cond = (item.get("condition") or "clean").lower()
-            items_by_condition[cond] = items_by_condition.get(cond, 0) + 1
-
-            for c in item.get("colors") or []:
-                ckey = str(c).lower()
-                items_by_color[ckey] = items_by_color.get(ckey, 0) + 1
-
-            if item.get("price") is not None:
-                try:
-                    total_value += float(item["price"])
-                except Exception as e:
-                    logger.debug("Could not parse item price", item_id=item.get("id"), price=item.get("price"), error=str(e))
+        total_items = count if count is not None else int(agg.get("total_items") or 0)
+        items_by_category = {str(k): int(v) for k, v in (agg.get("items_by_category") or {}).items()}
+        items_by_condition = {str(k): int(v) for k, v in (agg.get("items_by_condition") or {}).items()}
+        items_by_color = {str(k): int(v) for k, v in (agg.get("items_by_color") or {}).items()}
+        try:
+            total_value = round(float(agg.get("total_value") or 0.0), 2)
+        except (TypeError, ValueError):
+            total_value = 0.0
 
         most_worn = most_res.data or []
         least_worn = least_res.data or []

@@ -279,8 +279,10 @@ export function ExtractedItemsGrid({
           </div>
         )}
 
-        {/* Items grid */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        {/* Items grid — the dialog's own scroller (BatchExtractionFlow) owns
+            scrolling; this wrapper is inert flow (the old flex-1 +
+            overflow-y-auto never engaged inside the block parent). */}
+        <div className="min-w-0">
           {activeItems.length === 0 ? (
             <EmptyState
               title="No items to save"
@@ -288,7 +290,7 @@ export function ExtractedItemsGrid({
               onSecondary={onBack}
             />
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
               {activeItems.map((item) => (
                 <ExtractedItemCard
                   key={item.tempId}
@@ -304,8 +306,11 @@ export function ExtractedItemsGrid({
         </div>
       </div>
 
-      {/* Footer actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-border mt-4">
+      {/* Footer actions — sticky so Save stays reachable without scrolling
+          past every card. Only consumer is the BatchExtractionFlow dialog
+          scroller, whose own safe-area padding sits below this bar while it
+          is stuck. */}
+      <div className="sticky bottom-0 z-10 bg-background flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 pb-4 border-t border-border mt-4">
         <Button variant="outline" onClick={onBack} disabled={isSaving}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back

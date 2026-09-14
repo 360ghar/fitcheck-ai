@@ -69,6 +69,20 @@ def _patch_get_public_url(monkeypatch, url_factory=None):
     monkeypatch.setattr(StorageService, "get_public_url", staticmethod(_presign))
 
 
+def _patch_download_downscale(monkeypatch, values=("b64-avatar", "b64-clothing")):
+    """Stub StorageService.download_and_downscale_to_base64 for try-on.
+
+    Try-on sends providers inline base64 (never bucket URLs), so the route
+    downloads owned keys bucket-side; tests pin the downloaded bytes here.
+    Calls run avatar-first, clothing-second.
+    """
+    monkeypatch.setattr(
+        StorageService,
+        "download_and_downscale_to_base64",
+        staticmethod(AsyncMock(side_effect=list(values))),
+    )
+
+
 def _extract_items_result() -> dict:
     return {
         "items": [],
@@ -126,44 +140,6 @@ async def test_materialize_image_source_returns_fresh_url_for_owned_path(monkeyp
     url = await ai_module._materialize_image_source(None, OWNED, USER_ID)
 
     assert url == f"https://cdn.example/{OWNED}"
-
-
-# ===========================================================================
-# _provider_ready_avatar_url
-# ===========================================================================
-
-
-@pytest.mark.asyncio
-async def test_provider_ready_avatar_url_uses_fresh_materialized_url(monkeypatch):
-    async def _fresh(_avatar_url, *, presigned=False):
-        return "https://fresh.example/avatar.jpg"
-
-    monkeypatch.setattr(ai_module, "materialize_avatar_url", _fresh)
-
-    assert await ai_module._provider_ready_avatar_url(OWNED_AVATAR) == "https://fresh.example/avatar.jpg"
-
-
-@pytest.mark.asyncio
-async def test_provider_ready_avatar_url_passes_https_external_url(monkeypatch):
-    async def _none(_avatar_url, *, presigned=False):
-        return None
-
-    monkeypatch.setattr(ai_module, "materialize_avatar_url", _none)
-    url = "https://lh3.googleusercontent.com/a/AA123456"
-
-    assert await ai_module._provider_ready_avatar_url(url) == url
-
-
-@pytest.mark.asyncio
-async def test_provider_ready_avatar_url_rejects_non_https_external_url(monkeypatch):
-    async def _none(_avatar_url, *, presigned=False):
-        return None
-
-    monkeypatch.setattr(ai_module, "materialize_avatar_url", _none)
-
-    with pytest.raises(HTTPException) as exc_info:
-        await ai_module._provider_ready_avatar_url("http://169.254.169.254/latest/meta-data/")
-    assert exc_info.value.status_code == 400
 
 
 # ===========================================================================
@@ -854,18 +830,15 @@ async def test_generate_try_on_happy_path_with_stored_avatar(monkeypatch):
     # inline path, so opt out explicitly.
     request = _try_on_request(save_to_storage=False)
     _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
-    monkeypatch.setattr(
-        ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
-    )
-    _patch_get_public_url(monkeypatch)
+    _patch_download_downscale(monkeypatch)
     _patch_rate_limit(monkeypatch)
 
     result = await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
 
     assert result["message"] == "Try-on image generated successfully"
     gen = ai_module.get_image_generation_agent.return_value.generate_try_on
-    assert gen.await_args.kwargs["user_avatar_base64"] == "https://fresh.example/a.jpg"
-    assert gen.await_args.kwargs["clothing_image_base64"] == f"https://cdn.example/{OWNED}"
+    assert gen.await_args.kwargs["user_avatar_base64"] == "b64-avatar"
+    assert gen.await_args.kwargs["clothing_image_base64"] == "b64-clothing"
 
 
 @pytest.mark.asyncio
@@ -873,21 +846,21 @@ async def test_generate_try_on_happy_path_with_avatar_storage_path(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url=None)]})
     request = _try_on_request(avatar_storage_path=OWNED_AVATAR, save_to_storage=False)
     _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
-    _patch_get_public_url(monkeypatch)
+    _patch_download_downscale(monkeypatch)
     _patch_rate_limit(monkeypatch)
 
     result = await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
 
     assert result["message"] == "Try-on image generated successfully"
     gen = ai_module.get_image_generation_agent.return_value.generate_try_on
-    assert gen.await_args.kwargs["user_avatar_base64"] == f"https://cdn.example/{OWNED_AVATAR}"
+    assert gen.await_args.kwargs["user_avatar_base64"] == "b64-avatar"
 
 
 @pytest.mark.asyncio
-async def test_generate_try_on_bad_gateway_when_avatar_url_empty(monkeypatch):
+async def test_generate_try_on_bad_gateway_when_avatar_download_fails(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url=None)]})
     request = _try_on_request(avatar_storage_path=OWNED_AVATAR)
-    _patch_get_public_url(monkeypatch, url_factory=lambda path: "")
+    _patch_download_downscale(monkeypatch, values=(None,))
     _patch_rate_limit(monkeypatch)
 
     with pytest.raises(HTTPException) as exc_info:
@@ -898,17 +871,18 @@ async def test_generate_try_on_bad_gateway_when_avatar_url_empty(monkeypatch):
 @pytest.mark.asyncio
 async def test_generate_try_on_with_inline_clothing_image(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
-    request = _try_on_request(clothing_image=INLINE_IMAGE, save_to_storage=False)
-    _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
-    monkeypatch.setattr(
-        ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
+    request = _try_on_request(
+        clothing_image=INLINE_IMAGE, clothing_storage_path=None, save_to_storage=False
     )
+    _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
+    _patch_download_downscale(monkeypatch, values=("b64-avatar",))
     _patch_rate_limit(monkeypatch)
 
     result = await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
 
     assert result["message"] == "Try-on image generated successfully"
     gen = ai_module.get_image_generation_agent.return_value.generate_try_on
+    assert gen.await_args.kwargs["user_avatar_base64"] == "b64-avatar"
     assert gen.await_args.kwargs["clothing_image_base64"] == INLINE_IMAGE
 
 
@@ -917,10 +891,7 @@ async def test_generate_try_on_saves_to_storage(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
     request = _try_on_request(save_to_storage=True)
     _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
-    _patch_get_public_url(monkeypatch)
-    monkeypatch.setattr(
-        ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
-    )
+    _patch_download_downscale(monkeypatch)
     monkeypatch.setattr(
         ai_module,
         "save_generated_image",
@@ -946,10 +917,7 @@ async def test_generate_try_on_url_first_by_default(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
     request = _try_on_request()
     _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
-    _patch_get_public_url(monkeypatch)
-    monkeypatch.setattr(
-        ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
-    )
+    _patch_download_downscale(monkeypatch)
     monkeypatch.setattr(
         ai_module,
         "save_generated_image",
@@ -970,9 +938,7 @@ async def test_generate_try_on_wraps_generic_errors(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
     request = _try_on_request()
     _fake_agent(monkeypatch, "generate_try_on", error=RuntimeError("boom"))
-    monkeypatch.setattr(
-        ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
-    )
+    _patch_download_downscale(monkeypatch)
     _patch_rate_limit(monkeypatch)
 
     with pytest.raises(AIServiceError) as exc_info:
@@ -985,9 +951,7 @@ async def test_generate_try_on_propagates_fitcheck_exception(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
     request = _try_on_request()
     _fake_agent(monkeypatch, "generate_try_on", error=AIServiceError("provider refused"))
-    monkeypatch.setattr(
-        ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
-    )
+    _patch_download_downscale(monkeypatch)
     _patch_rate_limit(monkeypatch)
 
     with pytest.raises(AIServiceError):

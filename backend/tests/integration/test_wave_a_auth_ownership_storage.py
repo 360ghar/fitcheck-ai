@@ -492,10 +492,10 @@ def test_validate_image_rejects_non_image_bytes_with_allowed_extension():
 
 
 # --------------------------------------------------------------------------- #
-# ai.py storage-path ownership + avatar URL refresh
+# ai.py storage-path ownership
 # --------------------------------------------------------------------------- #
 from app.api.v1 import ai as ai_module  # noqa: E402
-from app.api.v1.ai import _owned_storage_path, _provider_ready_avatar_url  # noqa: E402
+from app.api.v1.ai import _owned_storage_path  # noqa: E402
 
 
 def test_owned_storage_path_accepts_canonical_keys_only():
@@ -515,47 +515,6 @@ def test_owned_storage_path_accepts_canonical_keys_only():
     # Traversal / encoded separators
     assert not _owned_storage_path("users/user-a/items/../user-b/0123456789abcdef0123456789abcdef.jpg", "user-a")
     assert not _owned_storage_path("users/user-a/items/0123456789abcdef0123456789abcdef.jpg ", "user-a")
-
-
-@pytest.mark.asyncio
-async def test_provider_ready_avatar_url_refreshes_stored_presigned_url(monkeypatch):
-    """A stored (expiring) presigned URL must be reduced to its bucket key and
-    re-materialized so providers never receive a stale URL."""
-    user_id = "01234567-89ab-cdef-0123-456789abcdef"
-    key = f"users/{user_id}/avatars/0123456789abcdef0123456789abcdef.jpg"
-    fresh = f"https://storage.example/{key}?fresh=1"
-
-    async def _fake_presign(k):
-        return f"https://storage.example/{k}?fresh=1"
-
-    monkeypatch.setattr(StorageService, "get_public_url", staticmethod(_fake_presign))
-    stored = f"https://storage.example/{key}?X-Amz-Expires=3600&Signature=deadbeef"
-    assert await _provider_ready_avatar_url(stored) == fresh
-
-
-@pytest.mark.asyncio
-async def test_provider_ready_avatar_url_passes_https_external_urls(monkeypatch):
-    monkeypatch.setattr(
-        StorageService,
-        "get_public_url",
-        staticmethod(lambda key: pytest.fail(f"must not presign external key {key}")),
-    )
-    url = "https://lh3.googleusercontent.com/a/AA123456"
-    assert await _provider_ready_avatar_url(url) == url
-
-
-@pytest.mark.asyncio
-async def test_provider_ready_avatar_url_rejects_non_https_external_url(monkeypatch):
-    from fastapi import HTTPException
-
-    monkeypatch.setattr(
-        StorageService,
-        "get_public_url",
-        staticmethod(lambda key: pytest.fail(f"must not presign external key {key}")),
-    )
-    with pytest.raises(HTTPException) as exc_info:
-        await _provider_ready_avatar_url("http://169.254.169.254/latest/meta-data/")
-    assert exc_info.value.status_code == 400
 
 
 class _UserDB:
@@ -588,11 +547,26 @@ class _UserDB:
 
 
 @pytest.mark.asyncio
-async def test_try_on_surfaces_http_exception_for_non_https_avatar_url():
-    """The route must propagate HTTPException (400) instead of wrapping it in a
-    500 AIServiceError — regression for the swallowed-400 pattern."""
+async def test_try_on_surfaces_http_exception_for_non_https_avatar_url(monkeypatch):
+    """A non-https external avatar URL must propagate an HTTPException instead
+    of wrapping in a 500 AIServiceError — and must never be fetched or handed
+    to the provider. Providers now receive inline base64, so a dead http URL
+    degrades to the 502 avatar-load failure inside the rate-limited block
+    (the old 400 came from the removed URL-materialization guard); the
+    limiter's subscription reads are stubbed accordingly."""
     from fastapi import HTTPException
     from app.models.ai import TryOnRequest
+    from app.services.subscription_service import SubscriptionService
+
+    rate_check = SimpleNamespace(
+        allowed=True,
+        limit=10,
+        current_count=1,
+        remaining=9,
+        plan_type=SimpleNamespace(value="free"),
+    )
+    monkeypatch.setattr(SubscriptionService, "check_limit", AsyncMock(return_value=rate_check))
+    monkeypatch.setattr(SubscriptionService, "increment_usage", AsyncMock())
 
     db = _UserDB("http://169.254.169.254/latest/meta-data/")
     request = TryOnRequest(
@@ -600,7 +574,7 @@ async def test_try_on_surfaces_http_exception_for_non_https_avatar_url():
     )
     with pytest.raises(HTTPException) as exc_info:
         await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
-    assert exc_info.value.status_code == 400
+    assert exc_info.value.status_code == 502
 
 
 @pytest.mark.asyncio

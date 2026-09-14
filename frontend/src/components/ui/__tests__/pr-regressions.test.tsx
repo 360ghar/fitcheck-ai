@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { CalendarView } from '@/components/calendar/CalendarView'
 import { ItemImage } from '@/components/ui/item-image'
-import { ItemCard } from '@/components/wardrobe/ItemCard'
 import { useItemEditor } from '@/components/wardrobe/useItemEditor'
 import { OutfitCard } from '@/components/outfits/OutfitCard'
 import { OutfitMetaBar } from '@/components/outfits/create/OutfitMetaBar'
@@ -63,15 +62,10 @@ describe('PR regression guards', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ id: 'first' }))
   })
 
-  it('keeps favorite controls visible in narrow list rows', () => {
-    const { rerender } = render(
-      <ItemCard item={item('item-1', 'Linen shirt')} variant="list" />
-    )
-    expect(screen.getByRole('button', { name: 'Add to favorites' })).toHaveClass(
-      'row-cq-favorite'
-    )
-
-    rerender(<OutfitCard outfit={outfit} variant="list" />)
+  it('keeps favorite controls visible in narrow outfit list rows', () => {
+    // ItemCard dropped its heart (actions moved to the detail surface);
+    // OutfitCard is a separate component and keeps its row heart.
+    render(<OutfitCard outfit={outfit} variant="list" />)
     expect(screen.getByRole('button', { name: 'Add to favorites' })).toHaveClass(
       'row-cq-favorite'
     )

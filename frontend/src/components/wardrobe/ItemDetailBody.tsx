@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { FilterChip } from '@/components/ui/filter-chip'
+import { findSimilarItems } from '@/api/items'
 import {
   Select,
   SelectContent,
@@ -169,10 +170,32 @@ export interface ItemDetailBodyProps {
   editor: ItemEditor
   /** One quiet line of context, e.g. when the selection is filtered out of the list. */
   notice?: string | null
+  /** Open another item's detail surface (used by the similar-items strip). */
+  onOpenItem?: (itemId: string) => void
 }
 
-export function ItemDetailBody({ item, editor, notice }: ItemDetailBodyProps) {
+export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailBodyProps) {
   const { isEditing, form, setField, customUseCase, setCustomUseCase } = editor
+
+  // Similar items — the API has existed for a while; this is its first
+  // consumer. Fetched per item id, kept in local state (the pane remounts per
+  // item via MasterDetailLayout), and a failure just hides the strip.
+  const [similarItems, setSimilarItems] = React.useState<Item[] | null>(null)
+  React.useEffect(() => {
+    if (isEditing) return
+    let cancelled = false
+    setSimilarItems(null)
+    findSimilarItems(item.id)
+      .then((res) => {
+        if (!cancelled) setSimilarItems(res.items ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setSimilarItems([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [item.id, isEditing])
 
   const heroImage = item.images?.find((img) => img.is_primary) || item.images?.[0]
   const heroSrc = heroImage?.image_url || heroImage?.thumbnail_url || null
@@ -203,6 +226,7 @@ export function ItemDetailBody({ item, editor, notice }: ItemDetailBodyProps) {
   const conditionLabel = CONDITIONS.find((c) => c.value === item.condition)?.label
   const addedOn = formatDay(item.created_at)
   const lastWorn = formatDay(item.usage_last_worn)
+  const purchaseDay = formatDay(item.purchase_date)
   const ledger = resolveLedger(item)
 
   return (
@@ -383,6 +407,37 @@ export function ItemDetailBody({ item, editor, notice }: ItemDetailBodyProps) {
             </SpecRow>
             {item.brand && <SpecRow label="Brand">{item.brand}</SpecRow>}
             {item.size && <SpecRow label="Size">{item.size}</SpecRow>}
+            {item.style && (
+              <SpecRow label="Style">
+                <span className="capitalize">{item.style}</span>
+              </SpecRow>
+            )}
+            {(item.material || item.materials.length > 0) && (
+              <SpecRow label="Material">
+                <span className="capitalize">
+                  {[item.material, ...item.materials]
+                    .filter((m, idx, arr) => m && arr.indexOf(m) === idx)
+                    .join(', ')}
+                </span>
+              </SpecRow>
+            )}
+            {item.pattern && (
+              <SpecRow label="Pattern">
+                <span className="capitalize">{item.pattern}</span>
+              </SpecRow>
+            )}
+            {(item.season || item.seasonal_tags.length > 0) && (
+              <SpecRow label="Season">
+                <span className="capitalize">
+                  {[
+                    item.season && item.season !== 'all-season' ? item.season.replace('-', ' ') : null,
+                    ...item.seasonal_tags,
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
+                </span>
+              </SpecRow>
+            )}
             {item.colors.length > 0 && (
               <SpecRow label="Colours">
                 <span className="flex flex-wrap items-center justify-end gap-x-md gap-y-xxs">
@@ -413,6 +468,13 @@ export function ItemDetailBody({ item, editor, notice }: ItemDetailBodyProps) {
                 {item.occasion_tags.map(formatUseCaseLabel).join(', ')}
               </SpecRow>
             )}
+            {(item.price != null || item.purchase_price != null) && (
+              <SpecRow label="Price">
+                {formatMoney((item.price ?? item.purchase_price) as number)}
+              </SpecRow>
+            )}
+            {purchaseDay && <SpecRow label="Purchased">{purchaseDay}</SpecRow>}
+            {item.purchase_location && <SpecRow label="From">{item.purchase_location}</SpecRow>}
           </dl>
 
           {item.notes && (
@@ -440,6 +502,35 @@ export function ItemDetailBody({ item, editor, notice }: ItemDetailBodyProps) {
                       onError={thumbnailErrorFallback(image.image_url)}
                     />
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Similar items — first consumer of GET /items/:id/similar. Hidden
+              entirely while loading or when the API comes back empty/fails. */}
+          {similarItems && similarItems.length > 0 && onOpenItem && (
+            <div className="mt-xl">
+              <p className="text-xs text-muted-foreground">Similar in your closet</p>
+              <div className="mt-sm grid grid-cols-3 xs:grid-cols-4 gap-sm">
+                {similarItems.slice(0, 8).map((sim) => (
+                  <button
+                    key={sim.id}
+                    type="button"
+                    onClick={() => onOpenItem(sim.id)}
+                    aria-label={`Open ${sim.name}`}
+                    className="group overflow-hidden rounded-md bg-card transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <img
+                      src={sim.images?.[0]?.thumbnail_url || sim.images?.[0]?.image_url}
+                      alt=""
+                      className="aspect-square w-full object-contain"
+                      loading="lazy"
+                      onError={thumbnailErrorFallback(
+                        sim.images?.[0]?.image_url ?? ''
+                      )}
+                    />
+                  </button>
                 ))}
               </div>
             </div>

@@ -145,9 +145,11 @@ export async function generateOutfitVisualization(
 }
 
 /**
- * Get all items that can be added to outfits
+ * Get all items that can be added to outfits.
+ * Pass `ids` (an outfit's item_ids) to fetch only that subset instead of the
+ * whole closet — the backend filters server-side.
  */
-export async function getAvailableItems(): Promise<Array<{
+export async function getAvailableItems(ids?: string[]): Promise<Array<{
   id: string;
   name: string;
   category: string;
@@ -155,6 +157,7 @@ export async function getAvailableItems(): Promise<Array<{
   colors: string[];
 }>> {
   try {
+    const params = ids && ids.length > 0 ? { ids: ids.join(',') } : undefined;
     const response = await apiClient.get<
       ApiEnvelope<
       Array<{
@@ -165,7 +168,7 @@ export async function getAvailableItems(): Promise<Array<{
         colors: string[];
       }>
       >
-    >('/api/v1/outfits/available-items');
+    >('/api/v1/outfits/available-items', { params });
     return response.data.data;
   } catch (error) {
     throw getApiError(error);

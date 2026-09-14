@@ -1,6 +1,6 @@
 # Development Setup
 
-Last updated: 2026-08-29
+Last updated: 2026-09-14
 
 ## Overview
 

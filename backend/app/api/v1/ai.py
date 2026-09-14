@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from supabase import Client
 
-from app.api.v1.images import _is_owned_by_user, materialize_avatar_url
+from app.api.v1.images import _is_owned_by_user
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError, ValidationError
@@ -70,35 +70,6 @@ async def _materialize_image_source(
     if not storage_path or not _owned_storage_path(storage_path, user_id):
         raise HTTPException(status_code=403, detail="Image storage path is not owned by the current user")
     return await StorageService.get_public_url(storage_path)
-
-
-async def _provider_ready_avatar_url(avatar_url: str) -> str:
-    """Return a fresh, provider-readable URL for a stored profile avatar.
-
-    ``users.avatar_url`` holds either a bucket key, a presigned GET URL that
-    expires after ``OBJECT_STORAGE_PRESIGN_TTL``, a legacy public Supabase URL,
-    or an external (OAuth) URL. Keys and our-bucket URLs are reduced to their
-    bucket key and re-materialized so providers never receive a stale URL;
-    external URLs are passed through only over https (the Gemini download
-    boundary enforces its own SSRF guard for the actual fetch).
-
-    ``presigned=True`` is mandatory here: an AI provider fetches the URL from its
-    own infrastructure and cannot present the app's JWT, so a worker-mode URL
-    would 404 on it.
-    """
-    fresh = await materialize_avatar_url(avatar_url, presigned=True)
-    if fresh:
-        return fresh
-    if avatar_url.startswith("https://"):
-        return avatar_url
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail={
-            "error": "Invalid avatar URL",
-            "code": "AVATAR_URL_INVALID",
-            "message": "Profile avatar must be an owned image or a public https URL",
-        },
-    )
 
 
 async def _fetch_user_avatar_base64(user_id: str, db: Client) -> Optional[str]:
@@ -568,15 +539,20 @@ async def generate_try_on(
         if request.avatar_storage_path:
             if not _owned_storage_path(request.avatar_storage_path, user_id):
                 raise HTTPException(status_code=403, detail="Avatar storage path is not owned by the current user")
-            avatar_url = await StorageService.get_public_url(request.avatar_storage_path)
-        elif avatar_url:  # pragma: no cover - the AVATAR_REQUIRED guard above ensures this is truthy
-            # Stored avatar URLs expire (OBJECT_STORAGE_PRESIGN_TTL); reduce to
-            # the bucket key and re-materialize so providers get a fresh URL.
-            avatar_url = await _provider_ready_avatar_url(avatar_url)
+            avatar_url = request.avatar_storage_path
 
         async with rate_limited_operation(user_id, OperationType.GENERATION, db):
-            # Providers receive the URL directly; legacy base64 clients remain accepted for clothing input.
-            avatar_base64 = avatar_url
+            # Providers receive inline base64, never a bucket URL: presigned
+            # R2 URLs are caller-private and worker-mode URLs need the app
+            # JWT, so neither is fetchable from provider infrastructure
+            # (Agnes 400s "image must be a public http(s) URL or valid image
+            # base64"). Owned keys — and presigned URLs wrapping them —
+            # download bucket-side, SSRF-safe, downscaled to the AI reference
+            # cap; external https avatars (OAuth pictures) still pass through
+            # for the provider to fetch.
+            avatar_base64 = await StorageService.download_and_downscale_to_base64(avatar_url) if avatar_url else None
+            if not avatar_base64 and avatar_url and avatar_url.startswith("https://"):
+                avatar_base64 = avatar_url
             if not avatar_base64:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
@@ -586,10 +562,24 @@ async def generate_try_on(
             # 3. Get generation agent
             agent = await get_image_generation_agent(user_id=user_id, db=db)
 
-            # 4. Generate try-on image with retry
-            clothing_image = await _materialize_image_source(
-                request.clothing_image, request.clothing_storage_path, user_id
-            )
+            # 4. Generate try-on image with retry (reference inputs are
+            # inline base64 per the agent contract — see the avatar note
+            # above for why bucket URLs must not reach the provider).
+            if request.clothing_storage_path:
+                if not _owned_storage_path(request.clothing_storage_path, user_id):
+                    raise HTTPException(status_code=403, detail="Image storage path is not owned by the current user")
+                clothing_image = await StorageService.download_and_downscale_to_base64(
+                    request.clothing_storage_path
+                )
+                if not clothing_image:
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Clothing image could not be loaded",
+                    )
+            else:
+                # Legacy inline base64 (required by the request model when no
+                # storage path is given).
+                clothing_image = request.clothing_image
             result = await with_retry(
                 lambda: agent.generate_try_on(
                     user_avatar_base64=avatar_base64,

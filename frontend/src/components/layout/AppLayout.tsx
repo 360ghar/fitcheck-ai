@@ -52,7 +52,12 @@ function AppLayoutContent() {
         id="main-content"
         tabIndex={-1}
         className={cn(
-          'flex-1 transition-[margin] duration-200',
+          // `min-w-0` is load-bearing: a flex item's default `min-width: auto`
+          // adopts its content's min-content width, so a wide intrinsic child
+          // (e.g. the wardrobe chip rail, a flex row summing to ~780px) forced
+          // this main to 810px on a 360px phone and the page rendered as a
+          // clipped desktop layout under `body`'s `overflow-x-hidden`.
+          'min-w-0 flex-1 transition-[margin] duration-200',
           isCollapsed ? 'md:ml-16' : 'md:ml-60'
         )}
       >
