@@ -1158,6 +1158,109 @@ async def test_extract_failure_deletes_uploaded_source_image():
 
 
 @pytest.mark.asyncio
+async def test_extract_daily_quota_failure_deletes_source_and_emits_not_retryable():
+    """A deterministic daily-quota failure deletes the {user}/sources/ upload
+    (nothing server-side consumes a retained source) and the event reports
+    retryable: false."""
+    job = _make_job(["img-1"])
+    await _register(job)
+    agent = MagicMock()
+    agent.extract_multiple_items = AsyncMock(
+        side_effect=AIServiceError(
+            "daily quota", retryable=False, error_kind="upstream_quota", retry_after_seconds=3600
+        )
+    )
+    service = BatchExtractionService(user_id="u1", db=Mock())
+    deleted = []
+
+    async def fake_delete(db, storage_path, **kwargs):
+        deleted.append(storage_path)
+        return True
+
+    broadcasts = []
+
+    async def fake_broadcast(job_id, event, payload):
+        broadcasts.append((event, payload))
+
+    with (
+        patch.object(
+            BatchExtractionService, "_fetch_user_avatar_base64", AsyncMock(return_value=None)
+        ),
+        patch("app.services.batch_extraction_service.with_retry", new=_call_once),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_source_image",
+            new=AsyncMock(
+                return_value={
+                    "image_url": "https://cdn/s.jpg",
+                    "storage_path": "u1/sources/s.jpg",
+                }
+            ),
+        ),
+        patch(
+            "app.services.batch_extraction_service.StorageService.delete_image",
+            new=fake_delete,
+        ),
+        patch.object(BatchJobService, "broadcast_event", new=fake_broadcast),
+    ):
+        result = await service._extract_single_image(job, "img-1", _make_photo_b64(), agent)
+
+    assert result == []
+    assert deleted == ["u1/sources/s.jpg"]
+    failed = [p for name, p in broadcasts if name == "image_extraction_failed"]
+    assert failed and failed[-1]["retryable"] is False
+
+
+@pytest.mark.asyncio
+async def test_extract_transient_failure_also_deletes_source():
+    """Even a retryable transient failure deletes the source upload: no
+    server-side flow reads it back (a client retry resubmits its own bytes),
+    so retention would only orphan the object (A2-06)."""
+    job = _make_job(["img-1"])
+    await _register(job)
+    agent = MagicMock()
+    agent.extract_multiple_items = AsyncMock(
+        side_effect=AIServiceError("overloaded", retryable=True, error_kind="transient")
+    )
+    service = BatchExtractionService(user_id="u1", db=Mock())
+    deleted = []
+    broadcasts = []
+
+    async def fake_delete(db, storage_path, **kwargs):
+        deleted.append(storage_path)
+        return True
+
+    async def fake_broadcast(job_id, event, payload):
+        broadcasts.append((event, payload))
+
+    with (
+        patch.object(
+            BatchExtractionService, "_fetch_user_avatar_base64", AsyncMock(return_value=None)
+        ),
+        patch("app.services.batch_extraction_service.with_retry", new=_call_once),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_source_image",
+            new=AsyncMock(
+                return_value={
+                    "image_url": "https://cdn/s.jpg",
+                    "storage_path": "u1/sources/s.jpg",
+                }
+            ),
+        ),
+        patch(
+            "app.services.batch_extraction_service.StorageService.delete_image",
+            new=fake_delete,
+        ),
+        patch.object(BatchJobService, "broadcast_event", new=fake_broadcast),
+    ):
+        result = await service._extract_single_image(job, "img-1", _make_photo_b64(), agent)
+
+    assert result == []
+    assert deleted == ["u1/sources/s.jpg"]
+    failed = [p for name, p in broadcasts if name == "image_extraction_failed"]
+    assert failed and failed[-1]["retryable"] is True
+
+
+@pytest.mark.asyncio
 async def test_extract_failure_delete_is_best_effort():
     """A failing delete RPC must not mask the extraction failure."""
     job = _make_job(["img-1"])

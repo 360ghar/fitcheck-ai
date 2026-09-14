@@ -20,12 +20,15 @@ def _stats_mock_db(*, count=3, agg_payload=None, worn_rows=None, rpc_missing=Fal
     """Wire the stats reads to canned results.
 
     MagicMock returns the same chain for every call, so the count query
-    (select -> eq -> execute) and the extremes queries (select -> eq ->
-    order -> limit -> execute) are distinguished by which mock attribute
-    they end on. The aggregate arrives via db.rpc(...).execute.
+    (select -> eq -> eq -> execute) and the extremes queries (select -> eq ->
+    eq -> order -> limit -> execute) are distinguished by which mock attribute
+    they end on. The second ``.eq`` (the is_deleted scope) must return the
+    same chain object — real query builders do — or the wiring misses it.
+    The aggregate arrives via db.rpc(...).execute.
     """
     db = Mock()
     eq_chain = db.table.return_value.select.return_value.eq.return_value
+    eq_chain.eq.return_value = eq_chain
     eq_chain.execute.return_value = Mock(data=[], count=count)
     eq_chain.order.return_value.limit.return_value.execute.return_value = Mock(
         data=worn_rows or []
@@ -124,6 +127,74 @@ async def test_stats_extreme_queries_request_nullslast_ordering():
     # never-worn items rank first.
     assert order_calls[1].args == ("usage_times_worn",)
     assert order_calls[1].kwargs == {"nullsfirst": False}
+
+
+@pytest.mark.asyncio
+async def test_stats_accepts_scalar_jsonb_rpc_payload():
+    """PostgREST v10+ returns a scalar JSONB function's payload BARE (the
+    object itself, not keyed by the function name); the unwrap must accept
+    that shape too, or every migrated deployment silently degrades to the
+    1000-row Python rollup."""
+    agg_payload = {
+        "total_items": 7,
+        "items_by_category": {"tops": 7},
+        "items_by_condition": {"clean": 7},
+        "items_by_color": {},
+        "total_value": 0,
+    }
+    db = _stats_mock_db(count=7, agg_payload=agg_payload)
+    # Override: the RPC resolves to the bare aggregate object (v10+ shape).
+    db.rpc.return_value.execute.return_value = Mock(data=agg_payload)
+
+    result = await items_module.get_item_stats(user_id=USER_ID, db=db)
+
+    assert result["data"]["total_items"] == 7
+    assert result["data"]["items_by_category"] == {"tops": 7}
+    assert result["data"]["items_by_condition"] == {"clean": 7}
+
+
+@pytest.mark.asyncio
+async def test_stats_scopes_every_read_to_active_items():
+    """Count, both wear-extrema queries, and (in the fallback case) the
+    legacy rollup must all filter is_deleted — the RPC aggregates active
+    items only, so an unfiltered count or extrema covers a different
+    population for accounts with soft-deleted rows."""
+    db = _stats_mock_db(
+        count=2,
+        agg_payload={
+            "total_items": 2,
+            "items_by_category": {},
+            "items_by_condition": {},
+            "items_by_color": {},
+            "total_value": 0,
+        },
+    )
+
+    await items_module.get_item_stats(user_id=USER_ID, db=db)
+
+    eq_calls = db.table.return_value.select.return_value.eq.return_value.eq.call_args_list
+    deleted_scopes = [c for c in eq_calls if c.args == ("is_deleted", False)]
+    # count + most-worn + least-worn.
+    assert len(deleted_scopes) == 3
+
+
+@pytest.mark.asyncio
+async def test_stats_fallback_scopes_rollup_to_active_items():
+    db = _stats_mock_db(count=1, rpc_missing=True)
+    eq_chain = db.table.return_value.select.return_value.eq.return_value
+    eq_chain.limit.return_value.execute.return_value = Mock(
+        data=[
+            {"category": "tops", "colors": [], "condition": "clean", "price": 5},
+        ]
+    )
+
+    result = await items_module.get_item_stats(user_id=USER_ID, db=db)
+
+    assert result["data"]["total_items"] == 1
+    eq_calls = db.table.return_value.select.return_value.eq.return_value.eq.call_args_list
+    deleted_scopes = [c for c in eq_calls if c.args == ("is_deleted", False)]
+    # count + most-worn + least-worn + legacy rollup.
+    assert len(deleted_scopes) == 4
 
 
 @pytest.mark.asyncio

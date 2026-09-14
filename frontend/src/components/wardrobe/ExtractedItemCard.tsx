@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { logger } from '@/lib/logger'
+import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -77,10 +78,10 @@ const TouchBadge = forwardRef<HTMLButtonElement, TouchBadgeProps>(function Touch
     <button
       ref={ref}
       type="button"
-      className="hit-expand inline-flex [--hit-x:-10px] [--hit-y:-6px]"
+      className="hit-expand inline-flex max-w-full min-w-0 [--hit-x:-10px] [--hit-y:-6px]"
       {...buttonProps}
     >
-      <Badge variant={badgeVariant} className={badgeClassName}>
+      <Badge variant={badgeVariant} className={cn('min-w-0 max-w-full truncate', badgeClassName)}>
         {children}
       </Badge>
     </button>
@@ -289,8 +290,11 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
 
           {/* Status badges — capped short of the action buttons so a badge's
               hit-expand zone can never reach Regenerate/Delete (a mis-tap on
-              "N similar" was firing Regenerate and burning a credit). */}
-          <div className="absolute top-2 left-2 flex max-w-[calc(100%-124px)] flex-col gap-1">
+              "N similar" was firing Regenerate and burning a credit). CSS calc
+              needs whitespace around `-`; the underscore form is Tailwind's
+              escape for it. min-w-0 + overflow-hidden keep a long badge itself
+              clipped to the cap instead of widening the flex column. */}
+          <div className="absolute top-2 left-2 flex max-w-[calc(100%_-_124px)] min-w-0 flex-col items-start gap-1 overflow-hidden">
             {hasDuplicates && (
               <TooltipProvider>
                 <Tooltip>
@@ -502,10 +506,11 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
                 />
               </div>
 
-              {/* Brand & Material — sm: (not xs:): two-up only pays off once
-                  the card is ~220px wide; at 390px two-col review cards the
-                  inputs collapsed to 68px (~4 visible chars). */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* Brand & Material — md: (not sm:): between 640 and 767px the
+                  review grid already runs three columns, so an `sm:` 2-col
+                  split left the inputs ~85px (~8 chars). Only from `md` are
+                  the cards wide enough for the split to pay off. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Brand</Label>
                   <Input

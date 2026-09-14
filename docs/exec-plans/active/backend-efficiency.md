@@ -17,13 +17,13 @@ Make the hottest backend reads cheaper without any caching layer (serverless Rai
 
 ## Acceptance criteria
 
-- [x] Migration `064_efficiency_indexes.sql` applies cleanly on hosted Supabase (7 indexes + `get_item_stats_aggregate` RPC). *(SQL parse-validated with pglast; migration-prefix check green; awaiting manual apply on hosted Supabase.)*
+- [ ] Migration `064_efficiency_indexes.sql` applies cleanly on hosted Supabase (7 indexes + `get_item_stats_aggregate` RPC). *(SQL parse-validated with pglast; migration-prefix check green. NOT yet applied on hosted Supabase — the criterion stays unchecked until the manual apply lands and the post-apply EXPLAIN check passes.)*
 - [ ] `GET /items`, `GET /outfits` list queries filter + sort via the new composite indexes (EXPLAIN shows index scan, no Sort node, on a representative user). *(Post-apply check on live Supabase.)*
 - [x] `GET /outfits/available-items?ids=<n ids>` returns only those rows; no `ids` → unchanged behavior (recency order kept in both branches).
 - [x] `GET /items/stats` returns the identical response shape with no 1000-row fetch (RPC + PGRST202/empty-payload fallback to the legacy Python rollup).
 - [x] Leaderboard + available-items materialization loops run concurrently (`asyncio.gather`).
 - [x] `POST /recommendations/complete-look` fetches the candidate pool once (`_fetch_match_pool`, shared with `match_items`).
-- [x] `pytest` 4214 passed (1 pre-existing failure in `test_wave_a` try-on, reproduced without these changes; caused by other uncommitted work in ai.py), ruff green; arch + docs + migrations checks green (schema doc regenerated); frontend tsc/lint/tests green (352/352).
+- [x] `pytest` 4218 passed / 4 skipped / 0 failed (final PR-#19 review-fix run; supersedes the stale "4214 passed, 1 pre-existing failure" note, which mixed two different runs), ruff green; arch + docs + migrations checks green (schema doc regenerated); frontend eslint clean, 356/356 tests, build green.
 
 ## Context / links
 
@@ -45,6 +45,7 @@ Make the hottest backend reads cheaper without any caching layer (serverless Rai
 | 2026-09-14 | Plan approved (no-cache scope). Implementing. |
 | 2026-09-14 | All changes landed: migration 064, available-items `ids` filter (+ web call sites pass `outfit.item_ids`), stats RPC with migration-gap fallback, gather-parallelized leaderboard/picker materialization, shared `_fetch_match_pool` for match + complete-look. Regression tests added (ids filter x2, RPC stats + fallback). Backend 4214 passed / ruff clean; frontend tsc + lint + 352/352. `check_architecture`/`check_migrations`/`check_docs_structure` green, `db-schema.md` regenerated. |
 | 2026-09-14 | Self-review fixes: FastAPI `Query()` ParamInfo guard for direct handler calls (same gotcha as match_items), empty-RPC-payload → legacy fallback, recency order preserved in the `ids` branch, legacy rollup keeps the original no-`is_deleted` scope for exact pre-migration parity. |
+| 2026-09-14 | PR #19 review pass (50 bot comments validated): migration 064 → `CREATE INDEX CONCURRENTLY` outside a transaction + `jsonb_typeof` colors guard; stats endpoint + legacy fallback scoped to non-deleted rows; stats RPC unwrap accepts PostgREST v10+ bare scalar-JSONB payloads (not just the keyed row); `?ids=` empty string short-circuits to `[]`; try-on restores inline-clothing precedence and keeps failed own-storage avatar URLs on the 502 path (only true external OAuth URLs pass through); batch extraction deletes the source photo on EVERY failure (nothing server-side consumes a retained copy); shared `_rank_candidates` for match/complete-look scoring; similar-items endpoint filters `is_deleted`. Criterion 1 unchecked again (hosted apply still pending). Route-thinness findings logged as TD-107. Final: backend 4218 passed / 0 failed, ruff green; frontend 356/356 + lint + build green. |
 
 ## Decision log
 

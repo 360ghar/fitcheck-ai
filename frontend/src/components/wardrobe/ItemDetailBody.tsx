@@ -180,20 +180,22 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
   // Similar items — the API has existed for a while; this is its first
   // consumer. Fetched per item id, kept in local state (the pane remounts per
   // item via MasterDetailLayout), and a failure just hides the strip.
+  // Aborted on cleanup: rapid navigation must kill the stale AI-backed search
+  // (embedding generation + vector query), not just ignore its response.
   const [similarItems, setSimilarItems] = React.useState<Item[] | null>(null)
   React.useEffect(() => {
     if (isEditing) return
-    let cancelled = false
+    const controller = new AbortController()
     setSimilarItems(null)
-    findSimilarItems(item.id)
+    findSimilarItems(item.id, { signal: controller.signal })
       .then((res) => {
-        if (!cancelled) setSimilarItems(res.items ?? [])
+        if (!controller.signal.aborted) setSimilarItems(res.items ?? [])
       })
       .catch(() => {
-        if (!cancelled) setSimilarItems([])
+        if (!controller.signal.aborted) setSimilarItems([])
       })
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [item.id, isEditing])
 
@@ -426,7 +428,11 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
                 <span className="capitalize">{item.pattern}</span>
               </SpecRow>
             )}
-            {(item.season || item.seasonal_tags.length > 0) && (
+            {/* 'all-season' carries no signal (it is the default), so it is
+                filtered out of the value below — the row must then only render
+                when a real season or a tag exists, or it renders with an empty
+                value. */}
+            {((item.season && item.season !== 'all-season') || item.seasonal_tags.length > 0) && (
               <SpecRow label="Season">
                 <span className="capitalize">
                   {[
@@ -513,25 +519,36 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
             <div className="mt-xl">
               <p className="text-xs text-muted-foreground">Similar in your closet</p>
               <div className="mt-sm grid grid-cols-3 xs:grid-cols-4 gap-sm">
-                {similarItems.slice(0, 8).map((sim) => (
-                  <button
-                    key={sim.id}
-                    type="button"
-                    onClick={() => onOpenItem(sim.id)}
-                    aria-label={`Open ${sim.name}`}
-                    className="group overflow-hidden rounded-md bg-card transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <img
-                      src={sim.images?.[0]?.thumbnail_url || sim.images?.[0]?.image_url}
-                      alt=""
-                      className="aspect-square w-full object-contain"
-                      loading="lazy"
-                      onError={thumbnailErrorFallback(
-                        sim.images?.[0]?.image_url ?? ''
+                {similarItems.slice(0, 8).map((sim) => {
+                  // Same primary-image rule as the hero: images[0] can be a
+                  // non-primary photo, and a photoless item needs the garment
+                  // placeholder instead of a broken empty <img>.
+                  const simImage = sim.images?.find((img) => img.is_primary) || sim.images?.[0]
+                  const simSrc = simImage?.thumbnail_url || simImage?.image_url
+                  return (
+                    <button
+                      key={sim.id}
+                      type="button"
+                      onClick={() => onOpenItem(sim.id)}
+                      aria-label={`Open ${sim.name}`}
+                      className="group overflow-hidden rounded-md bg-card transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {simSrc ? (
+                        <img
+                          src={simSrc}
+                          alt=""
+                          className="aspect-square w-full object-contain"
+                          loading="lazy"
+                          onError={thumbnailErrorFallback(simImage?.image_url ?? '')}
+                        />
+                      ) : (
+                        <div className="flex aspect-square w-full items-center justify-center">
+                          <Shirt className="h-6 w-6 text-muted-foreground/40" aria-hidden="true" />
+                        </div>
                       )}
-                    />
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}

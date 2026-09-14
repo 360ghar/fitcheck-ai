@@ -1410,13 +1410,15 @@ async def _legacy_item_stats_rollup(db: Client, user_id: str) -> Dict[str, Any]:
     """Pre-migration-064 fallback: count categories/conditions/colors/value in Python.
 
     Only used while the hosted DB has not applied migration 064 (the
-    get_item_stats_aggregate RPC is missing). Mirrors the old handler loop
-    exactly: up to 1000 rows, no is_deleted filter (matching the original).
+    get_item_stats_aggregate RPC is missing). Mirrors the RPC's semantics so
+    the fallback produces the same population as the aggregate: up to 1000
+    rows, active (non-deleted) items only.
     """
     agg_res = await asyncio.to_thread(
         db.table("items")
         .select("category,colors,condition,price")
         .eq("user_id", user_id)
+        .eq("is_deleted", False)
         .limit(1000)  # Limit to prevent fetching thousands of items
         .execute
     )
@@ -1461,15 +1463,19 @@ async def get_item_stats(
         # them concurrently. The extremes are pushed into SQL (ORDER BY +
         # LIMIT) instead of sorting up to 1000 rows in Python, and the
         # category/condition/color/value rollup is a single GROUP BY aggregate
-        # (migration 064) instead of a 1000-row Python loop.
+        # (migration 064) instead of a 1000-row Python loop. Every read is
+        # scoped to ACTIVE items (.eq("is_deleted", False)) so total_items and
+        # the wear extremes cover exactly the population the RPC aggregates —
+        # a soft-deleted row must not shift the count or the extrema.
         count_res, most_res, least_res = await asyncio.gather(
             asyncio.to_thread(
-                db.table("items").select("id", count="exact").eq("user_id", user_id).execute
+                db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False).execute
             ),
             asyncio.to_thread(
                 db.table("items")
                 .select("id,name,usage_times_worn")
                 .eq("user_id", user_id)
+                .eq("is_deleted", False)
                 # nullslast: a NULL wear count must rank as "never worn"
                 # (Postgres puts NULLs first under DESC by default).
                 .order("usage_times_worn", desc=True, nullsfirst=False)
@@ -1480,6 +1486,7 @@ async def get_item_stats(
                 db.table("items")
                 .select("id,name,usage_times_worn")
                 .eq("user_id", user_id)
+                .eq("is_deleted", False)
                 .order("usage_times_worn", nullsfirst=False)
                 .limit(5)
                 .execute
@@ -1495,12 +1502,20 @@ async def get_item_stats(
                     {"user_uuid": user_id},
                 ).execute
             )
-            # JSONB-returning RPC: PostgREST keys the row by the function name
-            # ([{"get_item_stats_aggregate": {...}}]) — unwrap_rpc_result's
-            # key= handles that. The function always returns exactly one row,
-            # so an empty payload means the RPC is absent (or a test double
-            # with no canned result) and takes the legacy fallback below.
+            # JSONB-returning RPC. PostgREST versions disagree on the payload
+            # shape for a scalar function: older releases key the single row by
+            # the function name ([{"get_item_stats_aggregate": {...}}]), while
+            # v10+ returns the JSONB object itself ({"total_items": ...}). Try
+            # the keyed shape first, then the bare object — but never accept the
+            # bare payload when it still looks keyed (that would unwrap to the
+            # outer row, not the aggregate). An empty/None payload means the RPC
+            # is absent (or a test double with no canned result) and takes the
+            # legacy fallback below.
             agg_row = unwrap_rpc_result(agg_res, key="get_item_stats_aggregate")
+            if not (isinstance(agg_row, dict) and agg_row):
+                bare = unwrap_rpc_result(agg_res)
+                if isinstance(bare, dict) and bare and "get_item_stats_aggregate" not in bare:
+                    agg_row = bare
             if isinstance(agg_row, dict) and agg_row:
                 agg = agg_row
         except Exception as e:
@@ -2024,12 +2039,16 @@ async def find_similar_items(
     try:
         item_id_str = str(item_id)
 
-        # Fetch the source item
+        # Fetch the source item. is_deleted filter: a soft-deleted item has no
+        # detail surface anymore, so asking for its similar items is a 404 —
+        # and its vector may still be live in the store, which must not leak
+        # into other users' strips either (results query below).
         item_result = await asyncio.to_thread(
             db.table("items")
             .select("*")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
+            .eq("is_deleted", False)
             .maybe_single()
             .execute
         )
@@ -2094,13 +2113,16 @@ async def find_similar_items(
                     "message": "No similar items found"
                 }
 
-            # Fetch full item details
+            # Fetch full item details. is_deleted filter: the vector store can
+            # lag a delete, so a soft-deleted row may still be returned by the
+            # search — the DB read is the source of truth and drops it here.
             similar_ids = [item["item_id"] for item in similar_items]
             items_result = await asyncio.to_thread(
                 db.table("items")
                 .select("*, item_images(*)")
                 .in_("id", similar_ids)
                 .eq("user_id", user_id)
+                .eq("is_deleted", False)
                 .execute
             )
 

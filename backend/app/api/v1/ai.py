@@ -15,6 +15,7 @@ from supabase import Client
 from app.api.v1.images import _is_owned_by_user
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
+from app.core.storage_keys import key_from_path
 from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError, ValidationError
 from app.services.rate_limit import rate_limited_operation
 from app.models.subscription import OperationType
@@ -549,9 +550,17 @@ async def generate_try_on(
             # base64"). Owned keys — and presigned URLs wrapping them —
             # download bucket-side, SSRF-safe, downscaled to the AI reference
             # cap; external https avatars (OAuth pictures) still pass through
-            # for the provider to fetch.
+            # for the provider to fetch. A FAILED download of an own-storage
+            # https URL must NOT fall back to passing that URL through: reduce
+            # it to a key first, and keep only true external URLs on the
+            # pass-through branch (everything else 502s below).
             avatar_base64 = await StorageService.download_and_downscale_to_base64(avatar_url) if avatar_url else None
-            if not avatar_base64 and avatar_url and avatar_url.startswith("https://"):
+            if (
+                not avatar_base64
+                and avatar_url
+                and avatar_url.startswith("https://")
+                and not key_from_path(avatar_url)
+            ):
                 avatar_base64 = avatar_url
             if not avatar_base64:
                 raise HTTPException(
@@ -565,7 +574,13 @@ async def generate_try_on(
             # 4. Generate try-on image with retry (reference inputs are
             # inline base64 per the agent contract — see the avatar note
             # above for why bucket URLs must not reach the provider).
-            if request.clothing_storage_path:
+            # Legacy inline base64 wins when both fields arrive, matching the
+            # old _materialize_image_source precedence: a client that sends an
+            # inline image must not start 502ing because a stale storage path
+            # rides along.
+            if request.clothing_image:
+                clothing_image = request.clothing_image
+            elif request.clothing_storage_path:
                 if not _owned_storage_path(request.clothing_storage_path, user_id):
                     raise HTTPException(status_code=403, detail="Image storage path is not owned by the current user")
                 clothing_image = await StorageService.download_and_downscale_to_base64(
@@ -577,8 +592,6 @@ async def generate_try_on(
                         detail="Clothing image could not be loaded",
                     )
             else:
-                # Legacy inline base64 (required by the request model when no
-                # storage path is given).
                 clothing_image = request.clothing_image
             result = await with_retry(
                 lambda: agent.generate_try_on(

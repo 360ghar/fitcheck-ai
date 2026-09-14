@@ -225,10 +225,13 @@ export default function WardrobePage() {
 
   // Long-press starts a bulk selection (pointer-only gesture), so keyboard
   // users get Escape as the exit — and everyone expects Escape to undo a
-  // marquee-style selection anyway.
+  // marquee-style selection anyway. A dialog/menu open above the grid marks
+  // the event handled via preventDefault (Radix DismissableLayer does); that
+  // Escape dismisses the dialog and must not also wipe the selection.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') clearSelectedItems()
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      clearSelectedItems()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)

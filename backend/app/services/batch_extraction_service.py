@@ -442,11 +442,6 @@ class BatchExtractionService:
                 retry_after = getattr(e, "retry_after_seconds", None)
                 retryable = bool(getattr(e, "retryable", False))
                 code = "AI_SERVICE_ERROR"
-                # Transient provider outages (quota/5xx/breaker-open) are
-                # client-retryable, and the source photo is the durable input
-                # a retry needs — so it must survive. Only deterministic
-                # failures delete it (stale-upload orphan sweep, A2-06).
-                transient_failure = retryable or error_kind in ("upstream_quota", "transient")
 
                 # Unrecoverable upstream capacity exhaustion: stop grinding the
                 # remaining images. The Agnes fallback already tried and failed
@@ -475,17 +470,14 @@ class BatchExtractionService:
 
                 await BatchJobService.mark_extraction_failed(job.job_id, image_id, error_msg)
 
-                if transient_failure:
-                    logger.info(
-                        "Retaining source image after transient extraction failure; client may retry",
-                        extra={"job_id": job.job_id, "image_id": image_id, "error_kind": error_kind},
-                    )
-                else:
-                    # This image's extraction failed deterministically: its source
-                    # photo was already uploaded to {user}/sources/ before the
-                    # vision call, and would otherwise be orphaned forever
-                    # (canonical category, no sweep) — best-effort delete (A2-06).
-                    await self._delete_failed_source_image(job, image_id)
+                # Nothing server-side consumes a retained source photo (there
+                # is no job-retry endpoint; a client retry resubmits the job
+                # with its own image bytes), so EVERY failed extraction deletes
+                # the {user}/sources/ upload — retaining it would orphan the
+                # object forever (canonical category, no sweep, A2-06). The
+                # event's `retryable` flag below still tells the client the
+                # failure is worth resubmitting.
+                await self._delete_failed_source_image(job, image_id)
 
                 await BatchJobService.broadcast_event(job.job_id, "image_extraction_failed", {
                     "job_id": job.job_id,

@@ -432,6 +432,35 @@ async def _fetch_match_pool(
     return sources, candidates
 
 
+def _rank_candidates(
+    sources: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+    *,
+    min_score: int = 0,
+    include_reasons: bool = False,
+    cap: int,
+) -> List[Dict[str, Any]]:
+    """Score every source x candidate pair, sort by score desc, truncate.
+
+    Shared by ``match_items`` and ``complete_look`` so the two scoring loops
+    cannot drift apart again (complete_look previously re-inlined this loop
+    without reasons or the min_score filter).
+    """
+    scored: List[Dict[str, Any]] = []
+    for source in sources:
+        for cand in candidates:
+            score, reasons = _score_match(source, cand)
+            score_pct = int(round(score * 100))
+            if score_pct < min_score:
+                continue
+            entry: Dict[str, Any] = {"item": cand, "score": score_pct}
+            if include_reasons:
+                entry["reasons"] = [r.capitalize() for r in reasons]
+            scored.append(entry)
+    scored.sort(key=lambda m: m["score"], reverse=True)
+    return scored[:cap]
+
+
 def _build_complete_look_response(item: Dict[str, Any], position: int) -> Dict[str, Any]:
     """Build a capsule wardrobe item response."""
     return {
@@ -575,17 +604,13 @@ async def match_items(
     if not sources:
         raise ItemNotFoundError()
 
-    matches: List[Dict[str, Any]] = []
-    for source in sources:
-        for cand in candidates:
-            score, reasons = _score_match(source, cand)
-            score_pct = int(round(score * 100))
-            if score_pct < min_score:
-                continue
-            matches.append({"item": cand, "score": score_pct, "reasons": [r.capitalize() for r in reasons]})
-
-    matches.sort(key=lambda m: m["score"], reverse=True)
-    matches = matches[:requested_limit]
+    matches = _rank_candidates(
+        sources,
+        candidates,
+        min_score=min_score,
+        include_reasons=True,
+        cap=requested_limit,
+    )
 
     # Basic "complete looks" (top+bottom+shoes when possible)
     complete_looks: List[Dict[str, Any]] = []
@@ -649,13 +674,7 @@ async def complete_look(
     if not seeds:
         raise ItemNotFoundError()
 
-    matches: List[Dict[str, Any]] = []
-    for seed in seeds:
-        for cand in candidates:
-            score, _reasons = _score_match(seed, cand)
-            matches.append({"item": cand, "score": int(round(score * 100))})
-    matches.sort(key=lambda m: m["score"], reverse=True)
-    matches = matches[:50]
+    matches = _rank_candidates(seeds, candidates, cap=50)
 
     looks: List[Dict[str, Any]] = [
         {

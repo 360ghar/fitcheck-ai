@@ -579,9 +579,12 @@ async def available_items(
         # Guard: when this endpoint is invoked directly (tests/other routes),
         # the FastAPI Query() default arrives as a ParamInfo/Query object, not
         # None — only a real str enables the filter (same gotcha as the
-        # category guard in recommendations.match_items).
+        # category guard in recommendations.match_items). Any real str —
+        # including an explicitly empty/blank "?ids=" — enables the filter: an
+        # explicitly requested empty subset must not silently widen to the
+        # whole closet.
         id_list: Optional[List[str]] = None
-        if isinstance(ids, str) and ids.strip():
+        if isinstance(ids, str):
             valid: List[str] = []
             for raw in ids.split(","):
                 # uuid.UUID("") raises ValueError, so blanks are skipped too.

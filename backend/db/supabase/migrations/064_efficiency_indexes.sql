@@ -22,8 +22,14 @@
 -- re-run in the SQL editor.
 --
 -- Target: Supabase Postgres (apply on hosted Supabase only).
-
-BEGIN;
+--
+-- NOT wrapped in BEGIN/COMMIT: the indexes are created CONCURRENTLY, which
+-- Postgres refuses inside a transaction block. Applying a plain CREATE INDEX
+-- on a populated database takes ACCESS EXCLUSIVE locks and blocks all writes
+-- to items/outfits/user_streaks/calendar_events/shared_outfits for the build
+-- duration; CONCURRENTLY lets reads and writes continue. Note CONCURRENTLY
+-- cannot build inside a transaction, so run the file as-is in the SQL editor
+-- (still idempotent, still safe to re-run).
 
 -- =============================================================================
 -- Composite indexes
@@ -31,35 +37,35 @@ BEGIN;
 
 -- Wardrobe list/browse: WHERE user_id = ? AND is_deleted = false
 -- ORDER BY created_at DESC (default sort), plus the count query.
-CREATE INDEX IF NOT EXISTS idx_items_user_deleted_created
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_items_user_deleted_created
     ON public.items(user_id, is_deleted, created_at DESC);
 
 -- Favorites filter (browse + /recommendations/personalized).
-CREATE INDEX IF NOT EXISTS idx_items_user_favorite
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_items_user_favorite
     ON public.items(user_id, is_favorite)
     WHERE is_favorite = TRUE;
 
 -- By-category endpoint + category filters.
-CREATE INDEX IF NOT EXISTS idx_items_user_category
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_items_user_category
     ON public.items(user_id, category);
 
 -- Outfits list: WHERE user_id = ? ORDER BY created_at DESC (plus count).
-CREATE INDEX IF NOT EXISTS idx_outfits_user_created
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_outfits_user_created
     ON public.outfits(user_id, created_at DESC);
 
 -- Leaderboard: ORDER BY current_streak DESC LIMIT 25 + the gt() rank count.
 -- user_streaks previously had no index at all (PK only).
-CREATE INDEX IF NOT EXISTS idx_user_streaks_current
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_user_streaks_current
     ON public.user_streaks(current_streak DESC);
 
 -- Calendar month views: WHERE user_id = ? AND start_time BETWEEN ? AND ?
 -- ORDER BY start_time.
-CREATE INDEX IF NOT EXISTS idx_calendar_events_user_start
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_calendar_events_user_start
     ON public.calendar_events(user_id, start_time);
 
 -- Public share lookup: WHERE outfit_id = ? AND visibility = 'public'
 -- ORDER BY created_at DESC LIMIT 1.
-CREATE INDEX IF NOT EXISTS idx_shared_outfits_outfit_visibility
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_shared_outfits_outfit_visibility
     ON public.shared_outfits(outfit_id, visibility, created_at DESC);
 
 -- =============================================================================
@@ -93,7 +99,12 @@ BEGIN
                    END
                ) AS color
         FROM public.items i
-        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(i.colors, '[]'::jsonb)) AS c(value)
+        -- jsonb_array_elements raises on a scalar/object payload; the column
+        -- accepts arbitrary JSONB, so non-array values contribute no colors
+        -- instead of failing the whole statistics response.
+        CROSS JOIN LATERAL jsonb_array_elements(
+            CASE WHEN jsonb_typeof(i.colors) = 'array' THEN i.colors ELSE '[]'::jsonb END
+        ) AS c(value)
         WHERE i.user_id = user_uuid
           AND COALESCE(i.is_deleted, FALSE) = FALSE
     )

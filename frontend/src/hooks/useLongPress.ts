@@ -12,6 +12,11 @@
  * tile right after entering selection mode) and forwards genuine taps to
  * `options.onClick`. Movement >10px cancels: a scroll started on a tile must
  * scroll, not select.
+ *
+ * The gesture is bound to ONE pointer: a second pointer landing on the tile
+ * (or its release) can neither schedule a second callback nor cancel the
+ * first press, and the timer is cleared if the pointer leaves the element —
+ * a mouse that drifts off the tile mid-hold abandoned the gesture.
  */
 
 import { useCallback, useEffect, useRef } from 'react'
@@ -31,6 +36,8 @@ export function useLongPress({ delay = 450, onLongPress, onClick }: UseLongPress
   const firedRef = useRef(false)
   // Kept in a ref so handlers.onClick can read it synchronously.
   const suppressClickRef = useRef(false)
+  // The one pointer this gesture follows; others are ignored entirely.
+  const activePointerRef = useRef<number | null>(null)
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -38,16 +45,28 @@ export function useLongPress({ delay = 450, onLongPress, onClick }: UseLongPress
       timerRef.current = null
     }
     originRef.current = null
+    activePointerRef.current = null
   }, [])
 
   useEffect(() => clearTimer, [clearTimer])
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
-      // Multi-button mice (right-click) are not long-press gestures.
-      if (event.button !== 0) return
+      // A second pointer while a press is live must neither disturb it nor
+      // schedule a second callback — resetting the flags here would let the
+      // first finger's release-click through right after selection started.
+      if (activePointerRef.current !== null) return
+      // Reset press state BEFORE the gesture-eligibility guard: a right-click
+      // pointerdown must clear the previous press's flags, or the stale
+      // firedRef would suppress this click's legitimate native context menu.
       firedRef.current = false
       suppressClickRef.current = false
+      // Multi-button mice (right-click) are not long-press gestures; a
+      // non-primary pointer never starts one.
+      if (event.button !== 0 || !event.isPrimary) {
+        return
+      }
+      activePointerRef.current = event.pointerId
       originRef.current = { x: event.clientX, y: event.clientY }
       timerRef.current = setTimeout(() => {
         timerRef.current = null
@@ -61,6 +80,7 @@ export function useLongPress({ delay = 450, onLongPress, onClick }: UseLongPress
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent) => {
+      if (event.pointerId !== activePointerRef.current) return
       const origin = originRef.current
       if (!origin) return
       const moved =
@@ -74,9 +94,27 @@ export function useLongPress({ delay = 450, onLongPress, onClick }: UseLongPress
     [clearTimer]
   )
 
-  const onPointerUp = useCallback(() => {
-    clearTimer()
-  }, [clearTimer])
+  const onPointerUp = useCallback(
+    (event: React.PointerEvent) => {
+      if (event.pointerId !== activePointerRef.current) return
+      clearTimer()
+    },
+    [clearTimer]
+  )
+
+  const onPointerLeave = useCallback(
+    (event: React.PointerEvent) => {
+      if (event.pointerId !== activePointerRef.current) return
+      // Mouse: no implicit pointer capture, so once the cursor drifts off the
+      // tile the element sees no further move/up events — without this the
+      // timer would fire the selection after the user abandoned the hold.
+      // Touch pointers are implicitly captured to the element, so a scroll
+      // started on the tile still receives move events and is cancelled by
+      // the >10px rule above; leave only arrives after its release.
+      clearTimer()
+    },
+    [clearTimer]
+  )
 
   const onContextMenu = useCallback((event: React.MouseEvent) => {
     // Long-press on touch fires contextmenu; swallow it while our press is
@@ -105,6 +143,7 @@ export function useLongPress({ delay = 450, onLongPress, onClick }: UseLongPress
       onPointerMove,
       onPointerUp,
       onPointerCancel: onPointerUp,
+      onPointerLeave,
       onContextMenu,
       onClick: onClickHandler,
     },

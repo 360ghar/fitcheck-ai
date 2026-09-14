@@ -869,6 +869,61 @@ async def test_generate_try_on_bad_gateway_when_avatar_download_fails(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_generate_try_on_bad_gateway_when_owned_https_avatar_download_fails(monkeypatch):
+    """A failed download of an OWN-storage https avatar must 502, never fall
+    back to passing the (caller-private) URL through to the provider."""
+    db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url=f"https://cdn.example/{OWNED_AVATAR}")]})
+    request = _try_on_request(clothing_image=INLINE_IMAGE, clothing_storage_path=None, save_to_storage=False)
+    _patch_download_downscale(monkeypatch, values=(None,))
+    _patch_rate_limit(monkeypatch)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
+    assert exc_info.value.status_code == 502
+
+
+@pytest.mark.asyncio
+async def test_generate_try_on_passes_external_https_avatar_through(monkeypatch):
+    """OAuth avatars (external https pictures) are not our storage: the
+    download helper refuses them, and the URL itself is passed through for
+    the provider to fetch."""
+    external = "https://lh3.googleusercontent.com/a/ACg8ocJxample/avatar.jpg"
+    db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url=external)]})
+    request = _try_on_request(clothing_image=INLINE_IMAGE, clothing_storage_path=None, save_to_storage=False)
+    _patch_download_downscale(monkeypatch, values=(None,))
+    _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
+    _patch_rate_limit(monkeypatch)
+
+    result = await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
+
+    assert result["message"] == "Try-on image generated successfully"
+    gen = ai_module.get_image_generation_agent.return_value.generate_try_on
+    assert gen.await_args.kwargs["user_avatar_base64"] == external
+
+
+@pytest.mark.asyncio
+async def test_generate_try_on_prefers_inline_clothing_over_storage_path(monkeypatch):
+    """Legacy precedence: an inline clothing image wins when both fields
+    arrive, so a stale storage path cannot start failing the request."""
+    db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
+    request = _try_on_request(clothing_image=INLINE_IMAGE, clothing_storage_path=OWNED, save_to_storage=False)
+    download = AsyncMock(side_effect=["b64-avatar"])
+    monkeypatch.setattr(
+        StorageService, "download_and_downscale_to_base64", staticmethod(download)
+    )
+    _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
+    _patch_rate_limit(monkeypatch)
+
+    result = await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
+
+    assert result["message"] == "Try-on image generated successfully"
+    gen = ai_module.get_image_generation_agent.return_value.generate_try_on
+    assert gen.await_args.kwargs["clothing_image_base64"] == INLINE_IMAGE
+    # The unused storage path must not be downloaded either.
+    assert download.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_generate_try_on_with_inline_clothing_image(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
     request = _try_on_request(

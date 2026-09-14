@@ -1614,6 +1614,7 @@ async def test_stats_survives_unparseable_prices():
                     "colors": ["Red"],
                     "condition": "good",
                     "price": "oops",
+                    "is_deleted": False,
                     "usage_times_worn": 3,
                 },
                 {
@@ -1624,6 +1625,7 @@ async def test_stats_survives_unparseable_prices():
                     "colors": [],
                     "condition": None,
                     "price": None,
+                    "is_deleted": False,
                     "usage_times_worn": None,
                 },
                 {
@@ -1634,6 +1636,7 @@ async def test_stats_survives_unparseable_prices():
                     "colors": ["blue"],
                     "condition": "dirty",
                     "price": 12.5,
+                    "is_deleted": False,
                     "usage_times_worn": 0,
                 },
             ]

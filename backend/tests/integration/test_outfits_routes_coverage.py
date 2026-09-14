@@ -967,6 +967,18 @@ async def test_available_items_empty_ids_returns_empty():
 
 
 @pytest.mark.asyncio
+async def test_available_items_explicitly_empty_ids_returns_empty():
+    """An explicitly empty "?ids=" is a requested EMPTY subset, not a missing
+    filter: it must short-circuit to [] instead of silently widening to the
+    whole closet (a caller passing an empty outfit.item_ids expects [])."""
+    db = _OutfitsFakeDB({"items": [_item_row(ITEM_ID)]})
+
+    result = await outfits_module.available_items(user_id=USER_ID, db=db, ids="")
+
+    assert result["data"] == []
+
+
+@pytest.mark.asyncio
 async def test_available_items_degrades_unexpected_errors_to_database_error():
     db = _RaisingDB("items")
 

@@ -105,6 +105,13 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
         e.preventDefault()
         onClick?.()
       }
+      // Keyboard equivalent of the long-press gesture: a pointer user holds a
+      // tile to start bulk selection; a keyboard user shifts+enters. Kept on
+      // a modifier so Enter/Space remain unambiguous open/toggle actions.
+      if (onLongPress && e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault()
+        onLongPress()
+      }
     }
 
     if (variant === 'list') {
@@ -123,12 +130,16 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             'hover:bg-surface-soft transition-colors cursor-pointer',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             'touch-target',
+            // Same selection state as the tile variant: rows are toggle
+            // targets while a bulk selection is on, so they must show it.
+            isSelecting && isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
             className
           )}
-          onClick={onClick}
+          {...(onLongPress ? longPressHandlers : { onClick })}
           role="button"
           tabIndex={0}
           aria-label={item.name}
+          aria-pressed={isSelecting ? isSelected : undefined}
           onKeyDown={handleKeyDown}
         >
           {/* Image — garment photos are matted WebP with a real alpha channel,
@@ -161,17 +172,31 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             )}
           </div>
 
-          {/* Condition — a quiet dot + label; secondary affordance hides below
-              the 20rem container width (.row-cq-secondary in index.css). */}
-          <span className="row-cq-secondary flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {/* Selection badge — mirrors the tile variant so users can see which
+              rows the bulk actions will hit. */}
+          {isSelecting && isSelected && (
             <span
-              className={cn('h-1.5 w-1.5 shrink-0 rounded-full', getConditionDot(item.condition))}
-              aria-hidden="true"
-            />
-            {item.condition !== 'clean' ? (
+              data-testid="item-card-selected-badge"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+            >
+              <Check className="h-3 w-3" strokeWidth={3} />
+            </span>
+          )}
+
+          {/* Condition — a quiet dot + label; secondary affordance hides below
+              the 20rem container width (.row-cq-secondary in index.css).
+              `clean` is the default state and renders nothing: the dot map has
+              no clean entry, so rendering the wrapper unconditionally would
+              show a misleading "other" dot. */}
+          {item.condition !== 'clean' && (
+            <span className="row-cq-secondary flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span
+                className={cn('h-1.5 w-1.5 shrink-0 rounded-full', getConditionDot(item.condition))}
+                aria-hidden="true"
+              />
               <span className="capitalize">{item.condition}</span>
-            ) : null}
-          </span>
+            </span>
+          )}
         </div>
       )
     }
@@ -192,7 +217,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
         role="button"
         tabIndex={0}
         aria-label={item.name}
-        aria-selected={isSelecting ? isSelected : undefined}
+        aria-pressed={isSelecting ? isSelected : undefined}
         onKeyDown={handleKeyDown}
       >
         {/* aspect box reserves the tile's height BEFORE the image decodes. The
