@@ -33,9 +33,12 @@ def test_get_client_creates_singleton(monkeypatch):
     monkeypatch.setattr(connection, "create_client", Mock(return_value=client))
     assert SupabaseDB.get_client() is client
     assert SupabaseDB.get_client() is client  # cached
-    connection.create_client.assert_called_once_with(
-        "https://proj.supabase.co", "anon-key"
-    )
+    connection.create_client.assert_called_once()
+    args, kwargs = connection.create_client.call_args
+    assert args == ("https://proj.supabase.co", "anon-key")
+    # The transport is injected through SyncClientOptions (the HTTP/1.1 fix
+    # for the 2026-09-17 h2 state race - see test_db_client_transport.py).
+    assert kwargs["options"].httpx_client is not None
 
 
 def test_get_client_missing_credentials_raises(monkeypatch):
@@ -51,9 +54,10 @@ def test_get_service_client_creates_singleton(monkeypatch):
     monkeypatch.setattr(connection, "create_client", Mock(return_value=client))
     assert SupabaseDB.get_service_client() is client
     assert SupabaseDB.get_service_client() is client
-    connection.create_client.assert_called_once_with(
-        "https://proj.supabase.co", "service-key"
-    )
+    connection.create_client.assert_called_once()
+    args, kwargs = connection.create_client.call_args
+    assert args == ("https://proj.supabase.co", "service-key")
+    assert kwargs["options"].httpx_client is not None
 
 
 def test_get_service_client_missing_credentials_raises(monkeypatch):

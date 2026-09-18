@@ -13,6 +13,7 @@ import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/request_id.dart';
 
 /// Controller for item add page
 /// Handles image processing, AI extraction, product image generation, and item creation
@@ -29,6 +30,27 @@ class ItemAddController extends GetxController {
       Get.isRegistered<WardrobeSyncService>()
           ? Get.find<WardrobeSyncService>()
           : WardrobeSyncService();
+
+  /// Idempotency keys for the creates this page performs, keyed by the
+  /// extracted item's temp id (TD-109).
+  ///
+  /// A save pass creates one item per detected garment and keeps going when one
+  /// of them fails, so the user re-taps Save with some items already committed.
+  /// Holding the key per item makes that second pass REPLAY those creates
+  /// instead of inserting duplicates, and it is also what lets a create whose
+  /// response was lost be retried safely.
+  final Map<String, String> _createRequestIds = <String, String>{};
+
+  /// Key for one detected item's create.
+  ///
+  /// Keyed by the extraction temp id (see `requestIdIdentity`), which identifies
+  /// a garment across attempts, so a re-tap of Save replays the row it already
+  /// committed instead of inserting a second one.
+  String _requestIdFor(String tempId, Object item) =>
+      _createRequestIds.putIfAbsent(
+        requestIdIdentity(tempId, item),
+        () => newRequestId('item'),
+      );
 
   // Reactive state
   final Rx<File?> selectedImage = Rx<File?>(null);
@@ -768,6 +790,7 @@ class ItemAddController extends GetxController {
           final created = await _itemRepository.createItemWithImage(
             image: selectedImage.value!,
             request: request,
+            clientRequestId: _requestIdFor(item.tempId, item),
           );
 
           createdItems.add(created);
@@ -840,7 +863,13 @@ class ItemAddController extends GetxController {
             final isDataUri = rawImageUrl.startsWith('data:image');
             var imageUploaded = false;
 
-            final created = await _itemRepository.createItem(request);
+            final created = await _itemRepository.createItem(
+              request,
+              clientRequestId: _requestIdFor(
+                itemWithImage.tempId,
+                itemWithImage,
+              ),
+            );
             if (isDataUri) {
               final base64Data = rawImageUrl.replaceFirst(
                 RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
@@ -893,6 +922,10 @@ class ItemAddController extends GetxController {
             finalItem = await _itemRepository.createItemWithImage(
               image: selectedImage.value!,
               request: request,
+              clientRequestId: _requestIdFor(
+                itemWithImage.tempId,
+                itemWithImage,
+              ),
             );
           } else {
             continue; // No image available at all - nothing to save.

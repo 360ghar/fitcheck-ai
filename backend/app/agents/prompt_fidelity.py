@@ -19,6 +19,17 @@ SINGLE_PERSON_LOCK = """SINGLE PERSON LOCK (highest priority):
 - Ignore and discard any other person, face, or body visible in the reference images - never render or merge them.
 - Ignore any garment in the references that is not in the outfit described below."""
 
+# Reference-neutral counterpart to SINGLE_PERSON_LOCK for the outfit branches
+# with NO person reference (the generic "model" path). The references there are
+# garment-only shots, so SINGLE_PERSON_LOCK's "ALL reference images show the
+# SAME single person" claim would be false - and a false claim teaches the model
+# to distrust the locks. Same job: one figure only, wearing everything.
+SINGLE_FIGURE_LOCK = """SINGLE FIGURE LOCK (highest priority):
+- Output EXACTLY ONE person: the model wearing the complete outfit described in the inventory above.
+- No second person, no background figures, no group or double shot, no mannequin, no mirrored or reflected figure.
+- The one model wears ALL the outfit items together; never spread the outfit across multiple people.
+- Ignore any person visible inside a garment reference image; take garment appearance only."""
+
 # Short identity lock for person + reference image workflows
 IDENTITY_LOCK = """IDENTITY LOCK (highest priority):
 - Same person as the reference image. Do not redesign the face.
@@ -56,6 +67,17 @@ OUTFIT_LOCK = """OUTFIT LOCK:
 - Match every listed clothing/footwear/accessory item exactly.
 - Preserve color shades, materials, patterns, silhouette, fit, logos, and hardware.
 - Do not add, remove, swap, or invent items."""
+
+# Closing block for both outfit person branches. Agnes weights the LAST text
+# most, so the four product asks (one person, every item, simple pose, empty
+# white backdrop) close the prompt in one place instead of being scattered
+# mid-prompt. Person-only: the flat-lay branch keeps NO_PERSON_NEGATIVES, and
+# OUTFIT_LOCK above stays shared with sandwich_prompt (photoshoot).
+OUTFIT_OUTPUT_CONTRACT = """OUTPUT CONTRACT (final - overrides everything above):
+- Exactly ONE person in frame, full body, wearing every listed item; nothing added, nothing swapped.
+- Simple, natural pose; arms relaxed; no props; no extreme motion.
+- Plain empty studio backdrop - nothing else in frame: no props, no furniture, no scenery, no text, no second person.
+- Reproduce every garment exactly - from its reference image when one is provided, otherwise from its inventory description."""
 
 # Combined appendix for photoshoot image generation (appended after full_prompt)
 PHOTOSHOOT_FIDELITY_APPENDIX = f"""{IDENTITY_LOCK}

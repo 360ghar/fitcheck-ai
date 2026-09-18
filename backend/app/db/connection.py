@@ -22,23 +22,109 @@ query via `asyncio.to_thread` so it stops blocking the loop on nearly every
 authenticated request, without changing the client architecture.
 """
 
+import httpx
 from supabase import create_client, Client
+from supabase.lib.client_options import SyncClientOptions
 from app.core.config import settings
-from typing import Optional
+from typing import Optional, Tuple
 import logging
 import threading
+import time
 
 logger = logging.getLogger(__name__)
 
 # Guards creation/rebuild of the singleton clients. supabase-py's sync client
-# owns ONE httpx HTTP/2 connection pool; when the Supabase gateway drops that
-# connection every concurrent request detects it. Without a lock, each one
-# independently tears down and rebuilds the singleton, which (a) wastes
-# connections and (b) races inside httpx's pool bookkeeping (the
-# "deque mutated during iteration" / "list changed size during iteration"
-# transport errors). All creation/rebuild paths take this lock so a failure
-# wave produces exactly ONE fresh client that every waiter then shares.
+# owns ONE httpx connection pool (HTTP/1.1, see below); when the Supabase
+# gateway drops a connection every concurrent request detects it. Without a
+# lock, each one independently tears down and rebuilds the singleton, which
+# (a) wastes connections and (b) races inside httpx's pool bookkeeping. All
+# creation/rebuild paths take this lock so a failure wave produces exactly ONE
+# fresh client that every waiter then shares.
 _client_lock = threading.Lock()
+
+# ============================================================================
+# Transport configuration: HTTP/1.1, explicit limits, bounded timeouts.
+#
+# RCA 2026-09-17 (production log): postgrest-py builds its sync httpx client
+# with ``http2=True``, i.e. ONE multiplexed connection shared by every
+# ``asyncio.to_thread`` worker (~32 by default). httpcore 1.0.9 calls
+# ``h2_state.send_headers()`` (which mutates ``h2_state.streams``) BEFORE
+# taking its write lock - see httpcore/_sync/http2.py:249 vs :465 - while
+# another thread iterates that same dict in
+# ``h2.connection.open_outbound_streams``. The result is
+# ``RuntimeError: dictionary keys changed during iteration`` on
+# ``/api/v1/items`` and every later request on that pool failing with
+# ``Supabase pooled connection error``. HTTP/1.1 removes the race
+# structurally: httpcore's HTTP11Connection refuses concurrent use
+# (``ConnectionNotAvailable``) and the pool hands the second caller a second
+# connection, so one request owns one connection at a time.
+#
+# The timeouts are equally load-bearing: postgrest's default is 120s
+# (DEFAULT_POSTGREST_CLIENT_TIMEOUT), so a hung gateway call pinned a worker
+# thread for two minutes and the bounded executor saturated, turning every
+# route into an 8-26s queue wait (observed 25.7s ``POST /api/v1/items``).
+# ============================================================================
+
+SUPABASE_HTTP_LIMITS = httpx.Limits(
+    max_connections=40,
+    max_keepalive_connections=20,
+    keepalive_expiry=30.0,
+)
+SUPABASE_HTTP_TIMEOUT = httpx.Timeout(
+    connect=5.0,
+    read=15.0,
+    write=15.0,
+    pool=10.0,
+)
+
+# Minimum seconds between two pool rebuilds. A second failure inside the
+# window reuses the current client: an HTTP/1.1 pool discards a dead
+# connection and opens a fresh one on the next request by itself, so the
+# retry is still effective, while churning pools adds load on a gateway that
+# is already unhealthy.
+SUPABASE_REBUILD_MIN_INTERVAL_SECONDS = 2.0
+
+
+def _build_http_client() -> httpx.Client:
+    """Transport shared by the postgrest/storage/auth/functions clients.
+
+    ``http2=False`` is the fix for the 2026-09-17 h2 state race (see the block
+    comment above); the limits bound how many sockets a rebuild storm can
+    accumulate; the timeout bounds how long a hung call can hold a worker
+    thread. ``follow_redirects`` matches postgrest's/storage3's own default so
+    passing our client changes only the transport, not the redirect behavior.
+    """
+    return httpx.Client(
+        http2=False,
+        follow_redirects=True,
+        timeout=SUPABASE_HTTP_TIMEOUT,
+        limits=SUPABASE_HTTP_LIMITS,
+    )
+
+
+def _build_supabase_client(url: str, key: str) -> Tuple[Client, httpx.Client]:
+    """Build a Supabase client plus the httpx transport it owns.
+
+    supabase-py forwards ``options.httpx_client`` to postgrest, storage, auth
+    and functions, so ONE transport is shared by all four - which is also why
+    the transport handle is returned and kept: rebuilding the client must close
+    the old pool or every rebuild leaks one.
+    """
+    http_client = _build_http_client()
+    return (
+        create_client(url, key, options=SyncClientOptions(httpx_client=http_client)),
+        http_client,
+    )
+
+
+def _close_http_client(http_client: Optional[httpx.Client]) -> None:
+    """Close a superseded transport; never raise on teardown."""
+    if http_client is None:
+        return
+    try:
+        http_client.close()
+    except Exception as close_error:  # pragma: no cover - teardown is best-effort
+        logger.warning("Failed to close superseded Supabase transport: %s", close_error)
 
 
 class SupabaseDB:
@@ -46,6 +132,12 @@ class SupabaseDB:
 
     _instance: Optional[Client] = None
     _service_instance: Optional[Client] = None
+    # The httpx transport each singleton owns (see _build_supabase_client):
+    # kept so a rebuild can close the superseded pool instead of leaking it.
+    _instance_http: Optional[httpx.Client] = None
+    _service_http: Optional[httpx.Client] = None
+    # Monotonic timestamp of the last service-client rebuild (rebuild coalescing).
+    _last_service_rebuild_at: float = 0.0
 
     @classmethod
     def get_client(cls) -> Client:
@@ -59,7 +151,9 @@ class SupabaseDB:
                     if not settings.SUPABASE_URL or not settings.SUPABASE_PUBLISHABLE_KEY:
                         raise ValueError("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY must be set")
 
-                    cls._instance = create_client(settings.SUPABASE_URL, settings.SUPABASE_PUBLISHABLE_KEY)
+                    cls._instance, cls._instance_http = _build_supabase_client(
+                        settings.SUPABASE_URL, settings.SUPABASE_PUBLISHABLE_KEY
+                    )
                     logger.info("Supabase client initialized")
         return cls._instance
 
@@ -75,7 +169,9 @@ class SupabaseDB:
                     if not settings.SUPABASE_URL or not settings.SUPABASE_SECRET_KEY:
                         raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY must be set for service client")
 
-                    cls._service_instance = create_client(settings.SUPABASE_URL, settings.SUPABASE_SECRET_KEY)
+                    cls._service_instance, cls._service_http = _build_supabase_client(
+                        settings.SUPABASE_URL, settings.SUPABASE_SECRET_KEY
+                    )
                     logger.info("Supabase service client initialized")
         return cls._service_instance
 
@@ -83,8 +179,13 @@ class SupabaseDB:
     def reset(cls):
         """Reset the singleton instance (useful for testing)."""
         with _client_lock:
+            _close_http_client(cls._instance_http)
+            _close_http_client(cls._service_http)
             cls._instance = None
             cls._service_instance = None
+            cls._instance_http = None
+            cls._service_http = None
+            cls._last_service_rebuild_at = 0.0
 
     @classmethod
     def rebuild_service_client(cls, stale: Optional[Client] = None) -> Client:
@@ -97,28 +198,79 @@ class SupabaseDB:
         ``asyncio.to_thread``) or from sync code.
 
         Pass ``stale`` — the client the caller just saw fail — to get that
-        share-one-rebuild property. It is what makes this a double-check rather
-        than an unconditional teardown: when a gateway blip fails K concurrent
+        share-one-rebuild property. It is what makes this a double-check
+        rather than an unconditional teardown: when a gateway blip fails K concurrent
         requests, the first waiter through the lock rebuilds and the other K-1
         observe that the singleton is no longer the client they found dead and
         reuse it. Without it every waiter builds its own client and its own httpx
-        HTTP/2 pool, and because the async wrapper calls this via
+        pool, and because the async wrapper calls this via
         ``asyncio.to_thread`` they also serialize K worker threads on this lock,
         so recovery latency grows linearly with concurrency.
 
         Omitting ``stale`` keeps the old unconditional behaviour, for callers
         that cannot name the client that failed.
+
+        Two further guards, both added with the 2026-09-17 HTTP/1.1 transport:
+
+        - The superseded SERVICE httpx transport is CLOSED. It used to be
+          dropped on the floor, so every rebuild leaked a pool of keep-alive
+          sockets. A request still in flight on the closed pool raises
+          ``RuntimeError: ... client has been closed``, which
+          ``app.utils.db`` treats as a retryable pooled-connection error and
+          replays through the fresh client.
+        - The ANON singleton is reset (so a gateway blip that killed its pool
+          heals on the next ``get_client()``) but its transport is deliberately
+          NOT closed: it is not the client being replaced, and its in-flight
+          calls (``anon_db.auth.*`` in app/api/v1/auth.py) do not go through the
+          retry helper, so closing its pool under them would surface httpx's
+          "client has been closed" as an unretried 500 on sign-in/sign-up. The
+          abandoned pool is idle and its sockets are bounded by
+          ``SUPABASE_HTTP_LIMITS.keepalive_expiry``.
+        - A rebuild inside ``SUPABASE_REBUILD_MIN_INTERVAL_SECONDS`` of the
+          previous one is coalesced (the current client is returned
+          unchanged). With HTTP/1.1 a dead connection is discarded and
+          replaced on the next request without any rebuild, so retrying on the
+          current client still recovers from a blip, while rebuilding again
+          would only churn a new pool against a gateway that is already
+          unhealthy.
         """
         with _client_lock:
             current = cls._service_instance
             if stale is not None and current is not None and current is not stale:
                 # Another waiter in this same failure wave already rebuilt.
                 return current
+            now = time.monotonic()
+            if (
+                stale is not None
+                and current is not None
+                and now - cls._last_service_rebuild_at < SUPABASE_REBUILD_MIN_INTERVAL_SECONDS
+            ):
+                logger.warning(
+                    "Supabase client rebuild coalesced; retrying on the current client",
+                    extra={
+                        "seconds_since_last_rebuild": round(
+                            now - cls._last_service_rebuild_at, 3
+                        )
+                    },
+                )
+                return current
+            # Close the superseded SERVICE transport before dropping the
+            # reference: without this every rebuild leaks one keep-alive pool.
+            # The anon singleton is reset (that is what lets a blip that killed
+            # its pool heal) but its transport is NOT closed - see the docstring:
+            # anon auth calls are not retried, so closing under them would turn
+            # a recoverable blip into a sign-in 500.
+            _close_http_client(cls._service_http)
             cls._service_instance = None
+            cls._service_http = None
             cls._instance = None
+            cls._instance_http = None
             if not settings.SUPABASE_URL or not settings.SUPABASE_SECRET_KEY:
                 raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY must be set for service client")
-            cls._service_instance = create_client(settings.SUPABASE_URL, settings.SUPABASE_SECRET_KEY)
+            cls._service_instance, cls._service_http = _build_supabase_client(
+                settings.SUPABASE_URL, settings.SUPABASE_SECRET_KEY
+            )
+            cls._last_service_rebuild_at = time.monotonic()
             logger.info("Supabase service client rebuilt (pooled connection recovery)")
             return cls._service_instance
 

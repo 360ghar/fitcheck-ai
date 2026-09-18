@@ -336,6 +336,32 @@ async def test_create_item_inserts_with_images_and_stores_embedding(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_create_item_writes_are_upsert_on_primary_key(monkeypatch):
+    """Both create writes carry ``on_conflict="id"``.
+
+    Each runs inside ``execute_with_reconnect``, so a lost response re-sends the
+    same client-generated rows. A plain insert then answered ``duplicate key
+    value violates unique constraint "item_images_pkey"`` on production
+    (2026-09-17); asserting the recorded on_conflict pins the upsert that makes
+    the retry replay instead (write contract in app/utils/db.py).
+    """
+    db = FakeDB()
+    _patch_embedding(monkeypatch)
+    _patch_vector_service(monkeypatch)
+    item = ItemCreate(
+        name="Tee",
+        category="tops",
+        images=[ItemImageBase(image_url="https://cdn/1.jpg", is_primary=True)],
+    )
+
+    await items_module.create_item(item=item, user_id=USER_ID, db=db)
+
+    writes = {(table, on_conflict) for table, _payload, on_conflict in db.inserts}
+    assert ("items", "id") in writes
+    assert ("item_images", "id") in writes
+
+
+@pytest.mark.asyncio
 async def test_create_item_skips_embedding_when_quota_exhausted(monkeypatch):
     db = FakeDB()
     reserve, generate, release = _patch_embedding(monkeypatch, reserved=False)
@@ -2409,7 +2435,7 @@ async def test_create_item_rolls_back_promoted_images_when_image_insert_fails(mo
         deleted.append(storage_path)
         return True
 
-    monkeypatch.setattr(StorageService, "promote_temp_image_to_item", staticmethod(fake_promote))
+    monkeypatch.setattr(StorageService, "copy_temp_image_to_item", staticmethod(fake_promote))
     monkeypatch.setattr(StorageService, "delete_image", staticmethod(fake_delete_image))
 
     real = items_module.execute_with_reconnect
@@ -2441,7 +2467,47 @@ async def test_create_item_rolls_back_promoted_images_when_image_insert_fails(mo
     assert ("items", None) in db.deletes
     # ...and every object THIS attempt promoted was deleted best-effort.
     assert promoted == [f"users/{USER_ID}/tmp/photoshoot/{'a' * 32}.png"]
+    # ONLY the canonical object: the staged tmp source is deliberately kept so
+    # the caller's retry (which re-sends the same tmp key) still resolves. A
+    # rollback that deleted the source too is exactly the 2026-09-17
+    # "Failed to move image: NoSuchKey" 503 loop.
     assert deleted == ["u1/items/p.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_create_item_deletes_staged_tmp_source_after_commit(monkeypatch):
+    """The copy-based promotion leaves the tmp source in place during the
+    create; it is deleted only once the item + image rows have committed, so a
+    rolled-back attempt keeps its recovery path."""
+    db = FakeDB(rows={"items": []})
+    deleted = []
+    tmp_source = f"users/{USER_ID}/tmp/photoshoot/{'b' * 32}.png"
+
+    async def fake_copy(*, db, user_id, temp_storage_path, filename_hint="generated.png", source_content=None):
+        return {
+            "image_url": "https://cdn/p.jpg",
+            "thumbnail_url": "https://cdn/p-t.jpg",
+            "storage_path": "u1/items/p.jpg",
+        }
+
+    async def fake_delete_image(*, db, storage_path, bucket=None):
+        deleted.append(storage_path)
+        return True
+
+    monkeypatch.setattr(StorageService, "copy_temp_image_to_item", staticmethod(fake_copy))
+    monkeypatch.setattr(StorageService, "delete_image", staticmethod(fake_delete_image))
+
+    item = ItemCreate(
+        name="Tee",
+        category="tops",
+        images=[
+            ItemImageBase(image_url="", storage_path=tmp_source, is_primary=True)
+        ],
+    )
+    result = await items_module.create_item(item=item, user_id=USER_ID, db=db)
+
+    assert result["message"] == "Created"
+    assert deleted == [tmp_source]
 
 
 @pytest.mark.asyncio

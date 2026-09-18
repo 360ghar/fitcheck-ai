@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **242** operations across **214** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **247** operations across **219** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -1356,9 +1356,16 @@ Return simplified items list suitable for outfit-building UIs.
 
 **Auth:** required — `Authorization: Bearer <jwt>`
 
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `ids` | query | string (nullable) | no | Optional comma-separated item UUIDs to restrict the picker to. Callers that only need a known subset (e.g. an outfit's item_ids) should pass them instead of fetching the whole closet. |
+
 **Responses:**
 
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
 
 ### POST /api/v1/outfits/batch-delete
 
@@ -3253,6 +3260,8 @@ Poll status of a demo photoshoot job (no auth).
 
 Ownership is validated by re-deriving the demo pseudo-user from the
 request IP, so one visitor cannot read another visitor's demo job.
+Poll from the same network that started the demo; a different egress
+IP or an expired job returns 404.
 
 **Auth:** none (public endpoint)
 
@@ -5228,6 +5237,118 @@ the cached profile.
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 - **Errors:** 422 Unprocessable Entity
 
+### GET /api/v1/admin/users/{user_id}/billing
+
+Subscription + Stripe invoice history for one user.
+
+``iap_transactions`` is populated only for callers that also hold
+``iap.read`` — otherwise it is an empty list. Stripe unix-second
+timestamps (``created``/``period_start``/``period_end``) are normalized
+to ISO-8601 UTC, like every other datetime in the API.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string | yes |  |
+
+**Responses:**
+
+**Response 200:** Returns `AdminUserBilling` — GET /admin/users/{user_id}/billing.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `iap_transactions` | array<object> | no |  |
+| `stripe_configured` | boolean | no |  |
+| `stripe_invoices` | array<object> | no |  |
+| `subscription` | object (nullable) | no |  |
+| `user_id` | string | yes |  |
+
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/admin/users/{user_id}/body-profile
+
+Body profiles + gender (photoshoot realism inputs). Never encrypted bytes.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string | yes |  |
+
+**Responses:**
+
+**Response 200:** Returns `AdminUserBodyProfile` — GET /admin/users/{user_id}/body-profile (never ``encrypted_data``).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `gender` | string (nullable) | no |  |
+| `profiles` | array<object> | no |  |
+| `user_id` | string | yes |  |
+
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/admin/users/{user_id}/generations
+
+Normalized generations explorer for one user (all kinds or one kind).
+
+Read-only view over extraction jobs, outfits + images, outfit render runs,
+photoshoot jobs, and social import jobs. Media URLs are re-minted at read
+time; ``*_base64`` payloads are stripped server-side. ``status`` filters
+the job kinds (saved outfits have no status column and are excluded while
+a filter is active); ``kind=all`` merges each kind's recent window and
+``total``/``counts`` honor the filter.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string | yes |  |
+| `kind` | query | enum: all, item, outfit, outfit_render, photoshoot, social_import | no |  |
+| `page` | query | integer | no |  |
+| `page_size` | query | integer | no |  |
+| `status` | query | string (nullable) | no |  |
+
+**Responses:**
+
+**Response 200:** Returns `AdminUserGenerationsPage` — GET /admin/users/{user_id}/generations.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `counts` | object<integer> | no |  |
+| `items` | array<`AdminUserGeneration`> | no |  |
+| `page` | integer | no |  |
+| `page_size` | integer | no |  |
+| `total` | integer | no |  |
+| `user_id` | string | yes |  |
+
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/admin/users/{user_id}/generations/{kind}/{generation_id}
+
+One generation of a specific kind, ownership-guarded on ``user_id``.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `generation_id` | path | string | yes |  |
+| `kind` | path | enum: item, outfit, outfit_render, photoshoot, social_import | yes |  |
+| `user_id` | path | string | yes |  |
+
+**Responses:**
+
+- **200** Returns `AdminUserGeneration` — see [Models](#models).
+- **Errors:** 422 Unprocessable Entity
+
 ### PATCH /api/v1/admin/users/{user_id}/quota-override
 
 Set (or clear with null) a per-user daily AI quota override.
@@ -5256,6 +5377,32 @@ must not be able to change another user's daily AI quota.
 **Responses:**
 
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### GET /api/v1/admin/users/{user_id}/referrals
+
+Referral code, redemptions (with referred-user identity), promo codes.
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `user_id` | path | string | yes |  |
+
+**Responses:**
+
+**Response 200:** Returns `AdminUserReferrals` — GET /admin/users/{user_id}/referrals.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `code` | string (nullable) | no |  |
+| `promo_redemptions` | array<object> | no |  |
+| `redemptions` | array<object> | no |  |
+| `times_used` | integer | no |  |
+| `user_id` | string | yes |  |
+
 - **Errors:** 422 Unprocessable Entity
 
 ### POST /api/v1/admin/users/{user_id}/subscription/extend-trial
@@ -5702,6 +5849,28 @@ GET /admin/users/{user_id}/activity.
 | `recent_jobs` | array<object> | no |  |
 | `user_id` | string | yes |  |
 
+### `AdminUserBilling`
+
+GET /admin/users/{user_id}/billing.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `iap_transactions` | array<object> | no |  |
+| `stripe_configured` | boolean | no |  |
+| `stripe_invoices` | array<object> | no |  |
+| `subscription` | object (nullable) | no |  |
+| `user_id` | string | yes |  |
+
+### `AdminUserBodyProfile`
+
+GET /admin/users/{user_id}/body-profile (never ``encrypted_data``).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `gender` | string (nullable) | no |  |
+| `profiles` | array<object> | no |  |
+| `user_id` | string | yes |  |
+
 ### `AdminUserDetail`
 
 GET /admin/users/{user_id} — full profile detail (360 view). Core keys (user, subscription, usage, counts, recent_jobs) are always present; 360 keys are optional and best-effort (missing table -> []). ``extra="allow"`` keeps the contract stable when the service adds a new section without a model bump (the admin console reads via schema.d.ts).
@@ -5724,6 +5893,40 @@ GET /admin/users/{user_id} — full profile detail (360 view). Core keys (user, 
 | `trips` | array<object> | no |  |
 | `usage` | object | no |  |
 | `user` | object | yes |  |
+
+### `AdminUserGeneration`
+
+One normalized generation of any kind (generations explorer + viewer). Every kind (item extraction run, saved outfit, outfit render run, photoshoot job, social import) maps to this single shape so the console renders one gallery component. ``media`` entries carry read-time re-minted URLs; ``meta`` holds kind-specific fields. ``extra="allow"`` keeps the contract stable as kinds gain fields.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `completed_at` | string (nullable) | no |  |
+| `created_at` | string (nullable) | no |  |
+| `duration_ms` | integer (nullable) | no |  |
+| `error` | string (nullable) | no |  |
+| `failed_count` | integer | no |  |
+| `id` | string | yes |  |
+| `kind` | string | yes |  |
+| `media` | array<object> | no |  |
+| `media_count` | integer | no |  |
+| `meta` | object | no |  |
+| `source` | object<string> | no |  |
+| `status` | string (nullable) | no |  |
+| `subtitle` | string (nullable) | no |  |
+| `title` | string | no |  |
+
+### `AdminUserGenerationsPage`
+
+GET /admin/users/{user_id}/generations.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `counts` | object<integer> | no |  |
+| `items` | array<`AdminUserGeneration`> | no |  |
+| `page` | integer | no |  |
+| `page_size` | integer | no |  |
+| `total` | integer | no |  |
+| `user_id` | string | yes |  |
 
 ### `AdminUserListItem`
 
@@ -5756,6 +5959,18 @@ PATCH /admin/users/{user_id} body. ``role`` must be one of the admin roles or ``
 | `is_active` | boolean (nullable) | no |  |
 | `is_admin` | boolean (nullable) | no |  |
 | `role` | string (nullable) | no |  |
+
+### `AdminUserReferrals`
+
+GET /admin/users/{user_id}/referrals.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `code` | string (nullable) | no |  |
+| `promo_redemptions` | array<object> | no |  |
+| `redemptions` | array<object> | no |  |
+| `times_used` | integer | no |  |
+| `user_id` | string | yes |  |
 
 ### `AssignOutfitRequest`
 

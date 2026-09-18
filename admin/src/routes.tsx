@@ -27,6 +27,7 @@ export const routeManifest = {
   trends: { titleKey: 'placeholder:trends.title', permission: 'dashboards.read' },
   users: { titleKey: 'placeholder:users.title', permission: 'users.read' },
   userDetail: { titleKey: 'placeholder:userDetail.title', permission: 'users.read' },
+  userGeneration: { titleKey: 'placeholder:userGeneration.title', permission: 'users.read' },
   subscriptions: { titleKey: 'placeholder:subscriptions.title', permission: 'subscriptions.read' },
   iap: { titleKey: 'placeholder:iap.title', permission: 'iap.read' },
   quotas: { titleKey: 'placeholder:quotas.title', permission: 'quotas.read' },
@@ -67,6 +68,11 @@ const UsersPage = lazyPage(() =>
 )
 const UserDetailPage = lazyPage(() =>
   import('@/features/users/pages/UserDetailPage').then((m) => ({ default: m.UserDetailPage })),
+)
+const GenerationDetailPage = lazyPage(() =>
+  import('@/features/users/pages/GenerationDetailPage').then((m) => ({
+    default: m.GenerationDetailPage,
+  })),
 )
 const SubscriptionsPage = lazyPage(() =>
   import('@/features/subscriptions/pages/SubscriptionsPage').then((m) => ({
@@ -191,6 +197,12 @@ export const appRouteObjects: RouteObject[] = [
         path: 'users/:id',
         element: guardedPage(UserDetailPage, 'users.read'),
         handle: { titleKey: routeManifest.userDetail.titleKey },
+      },
+      {
+        // Full-page generation viewer (explorer cards deep-link here).
+        path: 'users/:id/generations/:kind/:generationId',
+        element: guardedPage(GenerationDetailPage, 'users.read'),
+        handle: { titleKey: routeManifest.userGeneration.titleKey },
       },
       {
         path: 'subscriptions',

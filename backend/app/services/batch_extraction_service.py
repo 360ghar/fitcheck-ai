@@ -877,9 +877,18 @@ class BatchExtractionService:
                         include_shadows=False,
                         reference_image=reference_image_base64,
                     ),
-                    max_retries=1,
+                    # Two retries (parity with the extraction leg above). One
+                    # was not enough for a provider-side concurrency rejection:
+                    # both attempts landed inside the same full queue and every
+                    # batch item failed (2026-09-17 log). The provider gate
+                    # (AI_IMAGE_PROVIDER_CONCURRENCY) keeps us under the
+                    # gateway's cap in the first place; this covers the rest.
+                    # A content-policy 400 stays non-retried via
+                    # should_retry=is_retryable_error.
+                    max_retries=2,
                     initial_delay=2.0,
                     backoff_factor=2.0,
+                    jitter=True,
                     retryable_exceptions=(AIServiceError,),
                     should_retry=is_retryable_error,
                     on_retry=lambda attempt, error, delay: logger.warning(

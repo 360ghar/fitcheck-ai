@@ -3,8 +3,13 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { apiGet, apiPatch, apiPost } from '@/shared/api/client'
 import type {
   AdminUserActivity,
+  AdminUserBilling,
+  AdminUserBodyProfile,
   AdminUserDetail,
+  AdminUserGeneration,
+  AdminUserGenerationsPage,
   AdminUserPatch,
+  AdminUserReferrals,
   PageResponse_AdminUserListItem_,
 } from '@/shared/api/schemaTypes'
 import type { TableStateParams } from '@/shared/hooks/useTableState'
@@ -30,6 +35,20 @@ export const userKeys = {
   list: (params: TableStateParams) => [...userKeys.all, 'list', params] as const,
   detail: (id: string) => [...userKeys.all, 'detail', id] as const,
   activity: (id: string) => [...userKeys.all, 'activity', id] as const,
+  generations: (id: string, params: GenerationsParams) =>
+    [...userKeys.all, 'generations', id, params] as const,
+  generation: (id: string, kind: string, generationId: string) =>
+    [...userKeys.all, 'generation', id, kind, generationId] as const,
+  billing: (id: string) => [...userKeys.all, 'billing', id] as const,
+  referrals: (id: string) => [...userKeys.all, 'referrals', id] as const,
+  bodyProfile: (id: string) => [...userKeys.all, 'bodyProfile', id] as const,
+}
+
+export interface GenerationsParams {
+  kind: string
+  status: string | null
+  page: number
+  pageSize: number
 }
 
 export function listUsers(
@@ -83,6 +102,109 @@ export function useUserActivityQuery(userId: string, options?: { enabled?: boole
   return useQuery({
     queryKey: userKeys.activity(userId),
     queryFn: () => getUserActivity(userId),
+    staleTime: QUERY_STALE_TIMES.lists,
+    retry: QUERY_RETRY.get,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+/**
+ * Generations explorer — one normalized payload across item extraction runs,
+ * saved outfits, outfit render runs, photoshoot jobs, and social imports.
+ * `kind=all` merges each kind's recent window (see backend contract); the
+ * per-kind tabs page exactly.
+ */
+export function getUserGenerations(
+  userId: string,
+  params: GenerationsParams,
+): Promise<AdminUserGenerationsPage> {
+  const search = new URLSearchParams({
+    kind: params.kind,
+    page: String(params.page),
+    page_size: String(params.pageSize),
+  })
+  if (params.status) search.set('status', params.status)
+  return apiGet<AdminUserGenerationsPage>(
+    `/api/v1/admin/users/${userId}/generations?${search.toString()}`,
+  )
+}
+
+export function useUserGenerationsQuery(
+  userId: string,
+  params: GenerationsParams,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: userKeys.generations(userId, params),
+    queryFn: () => getUserGenerations(userId, params),
+    placeholderData: keepPreviousData,
+    staleTime: QUERY_STALE_TIMES.lists,
+    retry: QUERY_RETRY.get,
+    enabled: (options?.enabled ?? true) && userId !== '',
+  })
+}
+
+export function getUserGeneration(
+  userId: string,
+  kind: string,
+  generationId: string,
+): Promise<AdminUserGeneration> {
+  return apiGet<AdminUserGeneration>(
+    `/api/v1/admin/users/${userId}/generations/${kind}/${generationId}`,
+  )
+}
+
+export function useGenerationQuery(
+  userId: string,
+  kind: string,
+  generationId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: userKeys.generation(userId, kind, generationId),
+    queryFn: () => getUserGeneration(userId, kind, generationId),
+    staleTime: QUERY_STALE_TIMES.lists,
+    retry: QUERY_RETRY.get,
+    enabled: (options?.enabled ?? true) && userId !== '' && kind !== '' && generationId !== '',
+  })
+}
+
+export function getUserBilling(userId: string): Promise<AdminUserBilling> {
+  return apiGet<AdminUserBilling>(`/api/v1/admin/users/${userId}/billing`)
+}
+
+export function useUserBillingQuery(userId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: userKeys.billing(userId),
+    queryFn: () => getUserBilling(userId),
+    staleTime: QUERY_STALE_TIMES.lists,
+    retry: QUERY_RETRY.get,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function getUserReferrals(userId: string): Promise<AdminUserReferrals> {
+  return apiGet<AdminUserReferrals>(`/api/v1/admin/users/${userId}/referrals`)
+}
+
+export function useUserReferralsQuery(userId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: userKeys.referrals(userId),
+    queryFn: () => getUserReferrals(userId),
+    staleTime: QUERY_STALE_TIMES.lists,
+    retry: QUERY_RETRY.get,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function getUserBodyProfile(userId: string): Promise<AdminUserBodyProfile> {
+  return apiGet<AdminUserBodyProfile>(`/api/v1/admin/users/${userId}/body-profile`)
+}
+
+export function useUserBodyProfileQuery(userId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: userKeys.bodyProfile(userId),
+    queryFn: () => getUserBodyProfile(userId),
     staleTime: QUERY_STALE_TIMES.lists,
     retry: QUERY_RETRY.get,
     enabled: options?.enabled ?? true,

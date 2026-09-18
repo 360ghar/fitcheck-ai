@@ -196,8 +196,8 @@ async def test_outfit_sends_avatar_plus_numbered_garment_references():
 @pytest.mark.asyncio
 async def test_outfit_with_avatar_and_no_item_references_keeps_legacy_header():
     """Legacy clients that send no item_ids get the pre-existing header and a
-    single avatar image - no garment scaffolding leaks in. Only the
-    single-person fix is layered on top."""
+    single avatar image - no garment scaffolding leaks in. The single-person
+    fix still leads; the later scene/contract additions don't touch it."""
     agent = _make_agent()
 
     await agent.generate_outfit(
@@ -210,9 +210,10 @@ async def test_outfit_with_avatar_and_no_item_references_keeps_legacy_header():
 
     prompt = content[1]["text"]
     # The first header line and the task line are byte-identical to the
-    # pre-existing prompt; the main-subject line and SINGLE PERSON LOCK are
-    # the only additions. Anything else is an unintended prompt regression on
-    # the one path that already works in production.
+    # pre-existing prompt; the main-subject line and SINGLE PERSON LOCK still
+    # lead. Scene framing and the closing contract come later in the prompt -
+    # anything touching THIS header is an unintended regression on the one
+    # path that already works in production.
     assert prompt.startswith(
         "REFERENCE IMAGE = person identity (source of truth for face/body/hair/skin).\n"
         "The person reference is the main subject - if it shows other people, render only this person.\n"
@@ -284,6 +285,79 @@ async def test_generic_model_numbers_garments_from_image_one():
     prompt = content[1]["text"]
     assert 'IMAGE 1 = Item 1 "Striped linen trousers" (bottoms)' in prompt
     assert "GARMENT REFERENCE LOCK" in prompt
+
+
+@pytest.mark.asyncio
+async def test_generic_model_outfit_pins_single_figure_white_backdrop_and_contract():
+    """No avatar: the reference-neutral one-figure lock, the hard-pinned flat
+    white backdrop (caller scene tokens are ignored for outfits), the
+    simple-pose constraint and the closing output contract are all present."""
+    agent = _make_agent()
+
+    await agent.generate_outfit(
+        items=[_item("Striped linen trousers", "bottoms", reference="dHJvdXNlcnM=")],
+        background="sunset beach",
+        pose="standing front",
+    )
+
+    prompt = _captured_chat_content(agent)[-1]["text"]
+    assert "SINGLE FIGURE LOCK" in prompt
+    assert "no second person" in prompt
+    assert "sunset beach" not in prompt
+    assert "pure flat #FFFFFF white background" in prompt
+    assert "simple, natural stance" in prompt
+    assert "face clearly visible, front or slight 3/4" in prompt
+
+
+@pytest.mark.asyncio
+async def test_outfit_prompts_end_with_the_output_contract():
+    """Agnes weights the LAST text most, so the contract (one person, every
+    item, simple pose, empty white backdrop) must close both person branches."""
+    for kwargs in (
+        {"user_avatar_base64": "ZmFrZQ=="},
+        {},  # generic-model branch; the garment reference keeps it on chat()
+    ):
+        agent = _make_agent()
+        await agent.generate_outfit(
+            items=[_item("tee", "tops", reference="c3dlYXRlcg==")], **kwargs
+        )
+        prompt = _captured_chat_content(agent)[-1]["text"]
+        assert prompt.strip().endswith(
+            "Reproduce every garment exactly - from its reference image "
+            "when one is provided, otherwise from its inventory description."
+        )
+
+
+@pytest.mark.asyncio
+async def test_avatar_outfit_front_pose_keeps_face_visible_framing():
+    agent = _make_agent()
+
+    await agent.generate_outfit(
+        items=[_item("tee", "tops")],
+        user_avatar_base64="ZmFrZQ==",
+        pose="standing front",
+    )
+
+    prompt = _captured_chat_content(agent)[-1]["text"]
+    assert "simple, natural stance" in prompt
+    assert "face clearly visible, front or slight 3/4" in prompt
+
+
+@pytest.mark.asyncio
+async def test_avatar_outfit_back_pose_gets_angle_respecting_framing():
+    """The frontend multi-pose presets send back/side views; the framing clause
+    must not simultaneously demand a camera-facing face."""
+    agent = _make_agent()
+
+    await agent.generate_outfit(
+        items=[_item("tee", "tops")],
+        user_avatar_base64="ZmFrZQ==",
+        pose="standing back view",
+    )
+
+    prompt = _captured_chat_content(agent)[-1]["text"]
+    assert "keep the requested camera angle exactly" in prompt
+    assert "face clearly visible" not in prompt
 
 
 @pytest.mark.asyncio

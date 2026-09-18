@@ -798,6 +798,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/{user_id}/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin User Billing
+         * @description Subscription + Stripe invoice history for one user.
+         *
+         *     ``iap_transactions`` is populated only for callers that also hold
+         *     ``iap.read`` — otherwise it is an empty list. Stripe unix-second
+         *     timestamps (``created``/``period_start``/``period_end``) are normalized
+         *     to ISO-8601 UTC, like every other datetime in the API.
+         */
+        get: operations["admin_user_billing_api_v1_admin_users__user_id__billing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/body-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin User Body Profile
+         * @description Body profiles + gender (photoshoot realism inputs). Never encrypted bytes.
+         */
+        get: operations["admin_user_body_profile_api_v1_admin_users__user_id__body_profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/generations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin User Generations
+         * @description Normalized generations explorer for one user (all kinds or one kind).
+         *
+         *     Read-only view over extraction jobs, outfits + images, outfit render runs,
+         *     photoshoot jobs, and social import jobs. Media URLs are re-minted at read
+         *     time; ``*_base64`` payloads are stripped server-side. ``status`` filters
+         *     the job kinds (saved outfits have no status column and are excluded while
+         *     a filter is active); ``kind=all`` merges each kind's recent window and
+         *     ``total``/``counts`` honor the filter.
+         */
+        get: operations["admin_user_generations_api_v1_admin_users__user_id__generations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/generations/{kind}/{generation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin User Generation Detail
+         * @description One generation of a specific kind, ownership-guarded on ``user_id``.
+         */
+        get: operations["admin_user_generation_detail_api_v1_admin_users__user_id__generations__kind___generation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{user_id}/quota-override": {
         parameters: {
             query?: never;
@@ -823,6 +915,26 @@ export interface paths {
          *     must not be able to change another user's daily AI quota.
          */
         patch: operations["admin_quota_override_api_v1_admin_users__user_id__quota_override_patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/referrals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin User Referrals
+         * @description Referral code, redemptions (with referred-user identity), promo codes.
+         */
+        get: operations["admin_user_referrals_api_v1_admin_users__user_id__referrals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/admin/users/{user_id}/subscription/extend-trial": {
@@ -3465,6 +3577,8 @@ export interface paths {
          *
          *     Ownership is validated by re-deriving the demo pseudo-user from the
          *     request IP, so one visitor cannot read another visitor's demo job.
+         *     Poll from the same network that started the demo; a different egress
+         *     IP or an expired job returns 404.
          */
         get: operations["demo_photoshoot_status_api_v1_photoshoot_demo__job_id__status_get"];
         put?: never;
@@ -5373,6 +5487,49 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AdminUserBilling
+         * @description GET /admin/users/{user_id}/billing.
+         */
+        AdminUserBilling: {
+            /** Iap Transactions */
+            iap_transactions?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Stripe Configured
+             * @default false
+             */
+            stripe_configured: boolean;
+            /** Stripe Invoices */
+            stripe_invoices?: {
+                [key: string]: unknown;
+            }[];
+            /** Subscription */
+            subscription?: {
+                [key: string]: unknown;
+            } | null;
+            /** User Id */
+            user_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdminUserBodyProfile
+         * @description GET /admin/users/{user_id}/body-profile (never ``encrypted_data``).
+         */
+        AdminUserBodyProfile: {
+            /** Gender */
+            gender?: string | null;
+            /** Profiles */
+            profiles?: {
+                [key: string]: unknown;
+            }[];
+            /** User Id */
+            user_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AdminUserDetail
          * @description GET /admin/users/{user_id} — full profile detail (360 view).
          *
@@ -5450,6 +5607,94 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AdminUserGeneration
+         * @description One normalized generation of any kind (generations explorer + viewer).
+         *
+         *     Every kind (item extraction run, saved outfit, outfit render run,
+         *     photoshoot job, social import) maps to this single shape so the console
+         *     renders one gallery component. ``media`` entries carry read-time
+         *     re-minted URLs; ``meta`` holds kind-specific fields. ``extra="allow"``
+         *     keeps the contract stable as kinds gain fields.
+         */
+        AdminUserGeneration: {
+            /** Completed At */
+            completed_at?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Error */
+            error?: string | null;
+            /**
+             * Failed Count
+             * @default 0
+             */
+            failed_count: number;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Media */
+            media?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Media Count
+             * @default 0
+             */
+            media_count: number;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            };
+            /** Source */
+            source?: {
+                [key: string]: string;
+            };
+            /** Status */
+            status?: string | null;
+            /** Subtitle */
+            subtitle?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AdminUserGenerationsPage
+         * @description GET /admin/users/{user_id}/generations.
+         */
+        AdminUserGenerationsPage: {
+            /** Counts */
+            counts?: {
+                [key: string]: number;
+            };
+            /** Items */
+            items?: components["schemas"]["AdminUserGeneration"][];
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Page Size
+             * @default 20
+             */
+            page_size: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /** User Id */
+            user_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AdminUserListItem
          * @description One row of GET /admin/users.
          */
@@ -5504,6 +5749,31 @@ export interface components {
             is_admin?: boolean | null;
             /** Role */
             role?: string | null;
+        };
+        /**
+         * AdminUserReferrals
+         * @description GET /admin/users/{user_id}/referrals.
+         */
+        AdminUserReferrals: {
+            /** Code */
+            code?: string | null;
+            /** Promo Redemptions */
+            promo_redemptions?: {
+                [key: string]: unknown;
+            }[];
+            /** Redemptions */
+            redemptions?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Times Used
+             * @default 0
+             */
+            times_used: number;
+            /** User Id */
+            user_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /** AssignOutfitRequest */
         AssignOutfitRequest: {
@@ -8725,6 +8995,137 @@ export interface operations {
             };
         };
     };
+    admin_user_billing_api_v1_admin_users__user_id__billing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserBilling"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_user_body_profile_api_v1_admin_users__user_id__body_profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserBodyProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_user_generations_api_v1_admin_users__user_id__generations_get: {
+        parameters: {
+            query?: {
+                kind?: "all" | "item" | "outfit" | "outfit_render" | "photoshoot" | "social_import";
+                status?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserGenerationsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_user_generation_detail_api_v1_admin_users__user_id__generations__kind___generation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                kind: "item" | "outfit" | "outfit_render" | "photoshoot" | "social_import";
+                generation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserGeneration"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     admin_quota_override_api_v1_admin_users__user_id__quota_override_patch: {
         parameters: {
             query?: never;
@@ -8749,6 +9150,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_user_referrals_api_v1_admin_users__user_id__referrals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserReferrals"];
                 };
             };
             /** @description Validation Error */
@@ -12421,7 +12853,10 @@ export interface operations {
     };
     available_items_api_v1_outfits_available_items_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional comma-separated item UUIDs to restrict the picker to. Callers that only need a known subset (e.g. an outfit's item_ids) should pass them instead of fetching the whole closet. */
+                ids?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -12437,6 +12872,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

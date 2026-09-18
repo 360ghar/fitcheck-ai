@@ -26,6 +26,20 @@ test.describe('users', () => {
     await expect(page).toHaveURL(/\/users\/user_3$/)
     await expect(page.getByRole('heading', { name: 'Carol Example' })).toBeVisible()
 
+    // Generations explorer: switch to the Items tab (URL state), then open
+    // the full-page viewer for the batch extraction run.
+    await page.getByRole('tab', { name: 'Items' }).click()
+    await expect(page).toHaveURL(/gen_tab=item/)
+    await page.getByRole('button', { name: 'Open batch', exact: true }).click()
+    await expect(page).toHaveURL(/\/users\/user_3\/generations\/item\/job_1$/)
+    // Title card + extracted-items card (labels also echo in the meta rows).
+    await expect(page.getByText('batch').first()).toBeVisible()
+    await expect(page.getByText('Extracted items').first()).toBeVisible()
+
+    // Back to the detail page for the rest of the journey.
+    await page.goBack()
+    await expect(page).toHaveURL(/\/users\/user_3/)
+
     // Suspend flow: confirm dialog → success toast.
     await page.getByRole('button', { name: 'Suspend user', exact: true }).click()
     const dialog = page.getByRole('dialog')

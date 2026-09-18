@@ -1,12 +1,43 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { JsonRecord } from '@/features/users/lib/users'
 import { stringValue } from '@/features/users/lib/users'
+import { Badge } from '@/shared/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import { EmptyState } from '@/shared/ui/EmptyState'
 
+interface ItemImage {
+  url: string
+  thumbUrl: string
+  isPrimary: boolean
+}
+
+function imagesOf(item: JsonRecord): ItemImage[] {
+  const raw = item['images']
+  if (!Array.isArray(raw)) return []
+  const entries: ItemImage[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const record = entry as JsonRecord
+    const url = stringValue(record, 'url') ?? stringValue(record, 'image_url')
+    if (!url) continue
+    entries.push({
+      url,
+      thumbUrl: stringValue(record, 'thumb_url') ?? url,
+      isPrimary: record['is_primary'] === true,
+    })
+  }
+  return entries
+}
+
+/** Uploads grid — one tile per wardrobe item. Tiles open a viewer with every
+ * generated/catalog image plus the original source photo. */
 export function ItemsGrid({ items }: { items: JsonRecord[] }) {
   const { t } = useTranslation('users')
+  const [openItem, setOpenItem] = useState<JsonRecord | null>(null)
+
   if (items.length === 0) {
     return (
       <Card>
@@ -32,7 +63,13 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
             const category = stringValue(row, 'category') ?? ''
             const image = stringValue(row, 'image_url') ?? stringValue(row, 'thumbnail_url') ?? ''
             return (
-              <div key={id} className="overflow-hidden rounded-md border border-border">
+              <button
+                key={id}
+                type="button"
+                onClick={() => setOpenItem(row)}
+                aria-label={t('detail.itemsOpen', { name })}
+                className="overflow-hidden rounded-md border border-border text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 {image ? (
                   <img src={image} alt={name} className="h-20 w-full object-cover" loading="lazy" />
                 ) : (
@@ -42,10 +79,86 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
                   <p className="truncate text-xs font-medium leading-tight text-ink">{name}</p>
                   {category ? <p className="truncate text-[10px] leading-tight text-muted-foreground">{category}</p> : null}
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>
+
+        <Dialog open={openItem !== null} onOpenChange={(open) => !open && setOpenItem(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{openItem ? stringValue(openItem, 'name') ?? '—' : ''}</DialogTitle>
+              <DialogDescription>
+                {openItem ? stringValue(openItem, 'category') ?? '' : ''}
+              </DialogDescription>
+            </DialogHeader>
+            {openItem ? (
+              <div className="space-y-3">
+                {(() => {
+                  const images = imagesOf(openItem)
+                  const source = stringValue(openItem, 'source_image_url')
+                  return (
+                    <>
+                      {images.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          {images.map((image) => (
+                            <a
+                              key={image.url}
+                              href={image.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="relative block overflow-hidden rounded-md border border-border"
+                            >
+                              <img
+                                src={image.thumbUrl || image.url}
+                                alt={stringValue(openItem, 'name') ?? ''}
+                                className="h-28 w-full object-cover"
+                                loading="lazy"
+                              />
+                              {image.isPrimary ? (
+                                <Badge variant="secondary" className="absolute left-1 top-1 text-[10px]">
+                                  {t('detail.itemsPrimaryImage')}
+                                </Badge>
+                              ) : null}
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">{t('detail.itemsNoImages')}</p>
+                      )}
+                      {source ? (
+                        <div>
+                          <p className="py-1 text-xs font-medium text-muted-foreground">
+                            {t('detail.itemsSourcePhoto')}
+                          </p>
+                          <a
+                            href={source}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block overflow-hidden rounded-md border border-border"
+                          >
+                            <img
+                              src={source}
+                              alt={t('detail.itemsSourcePhoto')}
+                              className="h-40 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </a>
+                        </div>
+                      ) : null}
+                      <div className="rounded-md border border-border bg-surface-card px-3 py-2">
+                        <p className="text-xs text-muted-foreground">{t('detail.genSourceId')}</p>
+                        <code className="block truncate font-mono text-xs text-ink">
+                          {stringValue(openItem, 'id') ?? '—'}
+                        </code>
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   )

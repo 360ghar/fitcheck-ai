@@ -634,6 +634,24 @@ async def test_create_outfit_persists_and_returns_the_row():
 
 
 @pytest.mark.asyncio
+async def test_create_outfit_insert_is_upsert_on_primary_key():
+    """The outfit insert carries ``on_conflict="id"``: it runs inside
+    ``execute_with_reconnect`` and a lost response re-sends the same
+    client-generated id, which as a plain insert duplicated the row / 500ed
+    (write contract in app/utils/db.py, 2026-09-17 RCA)."""
+    db = _OutfitsFakeDB({"items": [_item_row()]})
+
+    await outfits_module.create_outfit(
+        OutfitCreate(name="Weekend", item_ids=[UUID(ITEM_ID)]),
+        user_id=USER_ID,
+        db=db,
+    )
+
+    writes = {(table, on_conflict) for table, _payload, on_conflict in db.inserts}
+    assert ("outfits", "id") in writes
+
+
+@pytest.mark.asyncio
 async def test_create_outfit_rejects_unknown_items():
     db = _OutfitsFakeDB({"items": [_item_row()]})
 

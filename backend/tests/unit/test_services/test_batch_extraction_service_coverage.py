@@ -957,6 +957,45 @@ async def test_generate_single_item_generation_failure():
     assert "item_generation_failed" in events
 
 
+@pytest.mark.asyncio
+async def test_generation_retry_budget_absorbs_a_full_provider_queue():
+    """2026-09-17: with max_retries=1 both generation attempts landed inside the
+    same full provider queue and every batch item failed. The generation leg now
+    uses the extraction leg's budget (two retries) with jittered backoff, and
+    still refuses to retry a non-retryable error (should_retry)."""
+    job = _make_job(["img-1"])
+    job.persistence_db = object()
+    await _register(job)
+    item = DetectedItemData(temp_id="t1", image_id="img-1", category="tops")
+    job.detected_items = [item]
+    agent = MagicMock()
+    agent.generate_product_image = AsyncMock(return_value=_FakeGeneratedImage())
+    service = BatchExtractionService(user_id="u1", db=None)
+    captured = {}
+
+    async def _capture(fn, **kwargs):
+        captured.update(kwargs)
+        return await fn()
+
+    with (
+        patch("app.services.batch_extraction_service.with_retry", new=_capture),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_temp_generated_image",
+            new=AsyncMock(return_value={"image_url": "https://cdn/gen.webp"}),
+        ),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+    ):
+        await service._generate_single_item(job, item, agent, None)
+
+    assert captured["max_retries"] == 2
+    assert captured["initial_delay"] == 2.0
+    assert captured["backoff_factor"] == 2.0
+    assert captured["jitter"] is True
+    # Content-policy / non-retryable AIServiceErrors must still fail fast.
+    assert captured["should_retry"](AIServiceError("blocked", retryable=False)) is False
+    assert captured["should_retry"](AIServiceError("busy", retryable=True)) is True
+
+
 # ---------------------------------------------------------------------------
 # _cache_extraction_results
 # ---------------------------------------------------------------------------

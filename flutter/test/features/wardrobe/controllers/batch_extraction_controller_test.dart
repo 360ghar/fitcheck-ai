@@ -131,6 +131,9 @@ class FakeItemRepository extends ItemRepository {
   final List<String> createdItemIds = [];
   int getItemCalls = 0;
 
+  /// Idempotency keys the controller sent, in call order (TD-109).
+  final List<String?> createRequestIds = [];
+
   Future<ItemImage?> Function(String itemId, String base64Image)? onUploadBase64;
   Future<ItemImage?> Function(String itemId, String imageUrl)? onUploadFromUrl;
   Future<List<ItemImage>> Function(String itemId, List<File> images)?
@@ -138,7 +141,11 @@ class FakeItemRepository extends ItemRepository {
   Future<ItemModel> Function(String itemId)? onGetItem;
 
   @override
-  Future<ItemModel> createItem(CreateItemRequest request) async {
+  Future<ItemModel> createItem(
+    CreateItemRequest request, {
+    String? clientRequestId,
+  }) async {
+    createRequestIds.add(clientRequestId);
     final id = 'item-${createdItemIds.length + 1}';
     createdItemIds.add(id);
     return ItemModel(

@@ -75,14 +75,17 @@ def persistence_db(db: Any) -> Any:
 # =============================================================================
 # Pooled-connection resilience
 #
-# supabase-py keeps ONE httpx pool per singleton client (SupabaseDB). When the
-# Supabase gateway or a proxy between it and the app restarts / idles the
-# connection, every subsequent request on that pool fails with an HTTP/2
-# transport error (observed 2026-08-01: `<ConnectionTerminated error_code:1,
+# supabase-py keeps ONE httpx pool per singleton client (SupabaseDB builds it,
+# HTTP/1.1). When the Supabase gateway or a proxy between it and the app
+# restarts / idles a connection, requests on that pool fail with a transport
+# error (observed 2026-08-01: `<ConnectionTerminated error_code:1,
 # last_stream_id:...>` on /items, /auth/oauth/sync, /outfits and usage
-# increments - a process restart was the only thing that healed it). The
-# helpers below detect that class of error and retry once through a freshly
-# built client, which also heals all later requests.
+# increments - a process restart was the only thing that healed it; observed
+# 2026-09-17: `RuntimeError: dictionary keys changed during iteration` from the
+# shared HTTP/2 connection, fixed by moving the transport to HTTP/1.1). The
+# helpers below detect that class of error and retry once, rebuilding the client
+# for the dead-connection class only; all later requests then use the fresh
+# client.
 # =============================================================================
 
 _DB_TRANSIENT_ERRORS = (
@@ -115,6 +118,21 @@ _DB_CONNECTION_TEXT_MARKERS = (
     # generate-outfit 500).
     "deque mutated during iteration",
     "list changed size during iteration",
+    # The 2026-09-17 production h2 state corruption: httpcore's sync HTTP/2
+    # connection mutated ``h2_state.streams`` (in ``send_headers``) on one
+    # thread while another iterated it in
+    # ``h2.connection.open_outbound_streams`` - "RuntimeError: dictionary keys
+    # changed during iteration" on POST /items, after which every request on
+    # that pool failed. The transport is now HTTP/1.1 (app/db/connection.py), so
+    # this marker only covers an in-flight request racing an already-running
+    # old process; a retry through the fresh client heals it.
+    "dictionary keys changed during iteration",
+    # Rebuilding the client now CLOSES the superseded transport (it used to be
+    # dropped and leaked). A request that was still writing on that pool raises
+    # httpx's "Cannot send a request, as the client has been closed" - a
+    # revoked-client race, not an application bug, so it retries through the
+    # fresh client like any other pooled-connection error.
+    "as the client has been closed",
     # h2 ProtocolError state-machine text when a dead connection receives
     # frames: "Invalid input StreamInputs.SEND_HEADERS in state 5" and
     # "Invalid input ConnectionInputs.RECV_DATA in state ConnectionState.CLOSED"
@@ -122,6 +140,13 @@ _DB_CONNECTION_TEXT_MARKERS = (
     # restart). Also covers the 2026-08-03 "Server disconnected" bursts.
     "invalid input",
 )
+
+# Pool-saturation signals: the client and its pool are healthy, just busy. The
+# caller still retries (after its backoff), but WITHOUT rebuilding the client -
+# a fresh pool would not add capacity and rebuilding against a saturated
+# gateway only churns connections. Distinct from the dead-connection class
+# above, which is what a rebuild exists for.
+_DB_POOL_SATURATION_MARKERS = ("pool timeout",)
 
 
 # HTTP statuses postgrest-py records in `APIError.code` (via
@@ -170,6 +195,21 @@ def is_db_connection_error(exc: Exception) -> bool:
     return any(marker in text for marker in _DB_CONNECTION_TEXT_MARKERS)
 
 
+def is_pool_saturation_error(exc: Exception) -> bool:
+    """True when the connection failed because the local pool was empty, not dead.
+
+    Only meaningful for exceptions :func:`is_db_connection_error` already
+    accepts. Callers retry these against the SAME client: the pooled client is
+    healthy, it just had no free connection within the pool timeout, and
+    rebuilding it would discard a working pool (see the rebuild-coalescing note
+    in ``app/db/connection.py``).
+    """
+    if isinstance(exc, httpx.PoolTimeout):
+        return True
+    text = str(exc).lower().strip()
+    return any(marker in text for marker in _DB_POOL_SATURATION_MARKERS)
+
+
 async def execute_with_reconnect(
     builder: Callable[[Any], Any],
     db: Any,
@@ -206,9 +246,22 @@ async def execute_with_reconnect(
     the request OR that the response was lost after the server committed it.
     For non-idempotent writes (e.g. a fresh ``outfits`` insert) the retry can
     therefore duplicate the row in the rare lost-response case - the same
-    hazard a user-triggered manual retry already had, now automatic. Prefer
-    wrapping reads and idempotent upserts (``on_conflict``) for exact-once
-    semantics; wrap plain inserts knowing the tradeoff.
+    hazard a user-triggered manual retry already had, now automatic. The
+    contract for everything wrapped here is therefore:
+
+    - reads and idempotent upserts (``on_conflict``) are always safe;
+    - a plain ``insert`` is safe ONLY when retrying it cannot produce a
+      duplicate: either the row carries a client-generated primary key and the
+      insert is expressed as ``upsert(..., on_conflict="<pk>")`` (a lost-response
+      retry then replays onto the same key), or the caller passes
+      ``max_retries=0`` and accepts fail-closed behaviour.
+
+    The 2026-09-17 production log is what this contract exists for: the item
+    create retried a plain ``item_images`` insert with fixed client-generated
+    ids after a lost response and answered
+    ``duplicate key value violates unique constraint "item_images_pkey"`` on
+    every affected request. Do not wrap a db-minted-key insert in this helper
+    without ``max_retries=0``.
     """
     from app.db.connection import SupabaseDB  # local import avoids a cycle
 
@@ -239,19 +292,31 @@ async def execute_with_reconnect(
                     extra={"db_error": str(exc)[:300], "max_retries": max_retries, **(extra or {})},
                 )
                 raise
-            logger.warning(
-                "Supabase pooled connection error, rebuilding client and retrying once",
-                extra={
-                    "db_error": str(exc)[:300],
-                    "attempt": attempt_no + 1,
-                    "max_retries": max_retries,
-                    **(extra or {}),
-                },
-            )
-            # Rebuild under the singleton lock off-thread so concurrent failing
-            # requests share ONE fresh client. Passing the client we just saw fail
-            # is what enables that sharing (see SupabaseDB.rebuild_service_client).
-            attempt_db = await asyncio.to_thread(SupabaseDB.rebuild_service_client, attempt_db)
+            if is_pool_saturation_error(exc):
+                # Healthy pool, no free connection: retry on the same client.
+                logger.warning(
+                    "Supabase pool saturated, retrying without rebuilding the client",
+                    extra={
+                        "db_error": str(exc)[:300],
+                        "attempt": attempt_no + 1,
+                        "max_retries": max_retries,
+                        **(extra or {}),
+                    },
+                )
+            else:
+                logger.warning(
+                    "Supabase pooled connection error, rebuilding client and retrying once",
+                    extra={
+                        "db_error": str(exc)[:300],
+                        "attempt": attempt_no + 1,
+                        "max_retries": max_retries,
+                        **(extra or {}),
+                    },
+                )
+                # Rebuild under the singleton lock off-thread so concurrent failing
+                # requests share ONE fresh client. Passing the client we just saw fail
+                # is what enables that sharing (see SupabaseDB.rebuild_service_client).
+                attempt_db = await asyncio.to_thread(SupabaseDB.rebuild_service_client, attempt_db)
             await asyncio.sleep(backoff_seconds)
 
 
@@ -281,19 +346,30 @@ def run_sync_with_reconnect(
                     extra={"db_error": str(exc)[:300], "max_retries": max_retries, **(extra or {})},
                 )
                 raise
-            logger.warning(
-                "Supabase pooled connection error (sync call), rebuilding client and retrying once",
-                extra={
-                    "db_error": str(exc)[:300],
-                    "attempt": attempt_no + 1,
-                    "max_retries": max_retries,
-                    **(extra or {}),
-                },
-            )
-            # Rebuild under the singleton lock so concurrent failing requests
-            # share ONE fresh client. Passing the client we just saw fail is what
-            # enables that sharing (see SupabaseDB.rebuild_service_client).
-            attempt_db = SupabaseDB.rebuild_service_client(attempt_db)
+            if is_pool_saturation_error(exc):
+                logger.warning(
+                    "Supabase pool saturated (sync call), retrying without rebuilding the client",
+                    extra={
+                        "db_error": str(exc)[:300],
+                        "attempt": attempt_no + 1,
+                        "max_retries": max_retries,
+                        **(extra or {}),
+                    },
+                )
+            else:
+                logger.warning(
+                    "Supabase pooled connection error (sync call), rebuilding client and retrying once",
+                    extra={
+                        "db_error": str(exc)[:300],
+                        "attempt": attempt_no + 1,
+                        "max_retries": max_retries,
+                        **(extra or {}),
+                    },
+                )
+                # Rebuild under the singleton lock so concurrent failing requests
+                # share ONE fresh client. Passing the client we just saw fail is what
+                # enables that sharing (see SupabaseDB.rebuild_service_client).
+                attempt_db = SupabaseDB.rebuild_service_client(attempt_db)
             time.sleep(backoff_seconds)
 
 

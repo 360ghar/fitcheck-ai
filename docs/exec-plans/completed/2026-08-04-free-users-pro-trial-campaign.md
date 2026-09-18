@@ -43,6 +43,8 @@ Every user still on the free plan gets a 1-month Pro trial (`plan_type=pro_month
 | 2026-08-04 | Live run: 112 granted, 112 emailed (100 Resend, 12 SMTP), 0 failures. |
 | 2026-08-04 | Post-run verification: all 112 rows match campaign state; 1 free row remains = `info@360ghar.com` (excluded). |
 | 2026-08-06 | Re-run (same script, same audit file): 1,505 users scanned, 74 free/active eligible (excl. `info@360ghar.com`); 74 granted + 74 emailed via Resend, 0 failures; trial_end 2026-09-06. Post-run: all 74 rows verified (`pro_monthly`/`trial`, `cancel_at_period_end=true`); remaining free/active rows = 1 (`info@360ghar.com`). |
+| 2026-09-18 | Email copy updated: added the friend/family referral line with each recipient's own share link (`<REFERRAL_BASE_URL>/auth/register?ref=<code>`, fetched from `referral_codes`; no code = dashboard pitch). No recipients were re-emailed; the change applies to future sends. |
+| 2026-09-18 | Live run #3 (same script + audit file, new copy): 2,158 users scanned, 15 free/active eligible (excl. `info@360ghar.com`); 15 granted + 15 emailed via Resend, 0 failures; trial_end 2026-10-18. All 15 had a referral code, so 0 fallback pitches. Post-run: all 15 rows verified (`pro_monthly`/`trial`, `cancel_at_period_end=true`); remaining free/active rows = 0. Audit now 631 granted / 631 emailed, no duplicate grants. |
 
 ## Decision log
 
@@ -66,8 +68,11 @@ DRY_RUN=1 .venv/bin/python scripts/upgrade_free_users_to_pro.py   # preview, no 
 
 ## Deferred debt
 
-- Revert window: after 2026-09-06, run `revert_expired_pro_trials.py` with
-  `AUDIT_FILE=backend/logs/free_users_pro_trial.jsonl` (or schedule it).
+- Revert window: the audit file now mixes trial_end values (2026-09-04/09-06 from
+  the August runs, 2026-10-18 from the 2026-09-18 run). Run
+  `revert_expired_pro_trials.py` with `AUDIT_FILE=backend/logs/free_users_pro_trial.jsonl`
+  after 2026-10-18 to catch every expired grant in one pass (it only reverts rows
+  whose `trial_end` has passed AND still matches the audited value).
 - Observed (pre-existing, not caused by this campaign): `info@360ghar.com`'s row
   was downgraded from pro trial to free at 2026-08-04T19:01:59Z via the
   "Store purchase expired/refunded; downgraded to free" path in

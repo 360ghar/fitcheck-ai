@@ -143,6 +143,13 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
     // ── Users (list mirrors the backend service: q/status/role/plan + paging) ──
     const userDetailMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)$/)
     const userActivityMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/activity$/)
+    const userGenerationsMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/generations$/)
+    const userGenerationMatch = path.match(
+      /^\/api\/v1\/admin\/users\/([^/]+)\/generations\/([^/]+)\/([^/]+)$/,
+    )
+    const userBillingMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/billing$/)
+    const userReferralsMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/referrals$/)
+    const userBodyProfileMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/body-profile$/)
     const refundMatch = path.match(/^\/api\/v1\/admin\/subscriptions\/user\/([^/]+)\/refund$/)
 
     if (method === 'GET' && path === '/api/v1/admin/users') {
@@ -197,6 +204,62 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
     }
     if (method === 'GET' && userActivityMatch) {
       return respondJson(route, userFixtures.activity)
+    }
+    if (method === 'GET' && userGenerationsMatch) {
+      const userId = userGenerationsMatch[1]
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      const kind = url.searchParams.get('kind') ?? 'all'
+      const status = url.searchParams.get('status')
+      const pageNum = Number(url.searchParams.get('page') ?? '1')
+      const pageSize = Number(url.searchParams.get('page_size') ?? '12')
+      let rows = userFixtures.generations.items.filter(
+        (item) => kind === 'all' || item.kind === kind,
+      )
+      if (status) rows = rows.filter((item) => item.status === status)
+      const start = (pageNum - 1) * pageSize
+      return respondJson(route, {
+        ...userFixtures.generations,
+        items: rows.slice(start, start + pageSize),
+        total: userFixtures.generations.total,
+        page: pageNum,
+        page_size: pageSize,
+      })
+    }
+    if (method === 'GET' && userGenerationMatch) {
+      const [, userId, kind, generationId] = userGenerationMatch
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      const generation = userFixtures.generations.items.find(
+        (item) => item.kind === kind && item.id === generationId,
+      )
+      if (!generation) {
+        return respondJson(route, { error: 'Generation not found', code: 'NOT_FOUND', details: {} }, 404)
+      }
+      return respondJson(route, generation)
+    }
+    if (method === 'GET' && userBillingMatch) {
+      const userId = userBillingMatch[1]
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      return respondJson(route, { ...userFixtures.billing, user_id: userId })
+    }
+    if (method === 'GET' && userReferralsMatch) {
+      const userId = userReferralsMatch[1]
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      return respondJson(route, { ...userFixtures.referrals, user_id: userId })
+    }
+    if (method === 'GET' && userBodyProfileMatch) {
+      const userId = userBodyProfileMatch[1]
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      return respondJson(route, { ...userFixtures.bodyProfile, user_id: userId })
     }
 
     // ── Subscriptions ────────────────────────────────────────────────────

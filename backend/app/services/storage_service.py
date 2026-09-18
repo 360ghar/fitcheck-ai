@@ -917,6 +917,36 @@ class StorageService:
         )
 
     @staticmethod
+    async def _copy_object(old_path: str, new_path: str, *, operation: str) -> bool:
+        """Server-side object copy that tolerates a concurrent promotion.
+
+        A copy that fails because the SOURCE is missing is treated as success
+        when the DESTINATION already exists: a concurrent caller already copied
+        it, so re-uploading would only duplicate the work. When the destination
+        does not exist the error is a genuine "source never existed" and is
+        raised.
+
+        Returns True when the copy was skipped because the destination was
+        already present (the caller then has no source object to delete), False
+        when this call performed the copy.
+        """
+        backend = get_storage_backend()
+        try:
+            await backend.copy(old_path, new_path)
+            return False
+        except Exception as e:
+            if _is_no_such_key_error(e) and await backend.exists(new_path):
+                logger.warning(
+                    f"{operation}: source missing but destination exists; "
+                    "treating as already copied",
+                    old_path=old_path,
+                    new_path=new_path,
+                    error=str(e),
+                )
+                return True
+            raise
+
+    @staticmethod
     async def move_image(
         db,
         old_path: str,
@@ -959,41 +989,26 @@ class StorageService:
                 source-missing/destination-present idempotent retry
         """
         try:
-            backend = get_storage_backend()
-            try:
-                await backend.copy(old_path, new_path)
-            except Exception as e:
-                if _is_no_such_key_error(e):
-                    # Idempotent promotion: a concurrent caller already moved
-                    # this source. Treat as success ONLY when the destination
-                    # is actually there; otherwise the source is genuinely
-                    # missing and this is a real failure.
-                    destination_exists = await backend.exists(new_path)
-                    if destination_exists:
-                        logger.warning(
-                            "Move source missing but destination exists; "
-                            "treating as already moved",
-                            old_path=old_path,
-                            new_path=new_path,
-                            bucket=bucket,
-                            error=str(e),
-                        )
-                        return True
-                raise
-            try:
-                await backend.delete(old_path)
-            except Exception as e:
-                # Copy committed; only the cleanup delete failed. The move's
-                # intent is satisfied and retrying the whole move would
-                # duplicate the object — log and succeed (A2-14).
-                logger.warning(
-                    "Move copy succeeded but source delete failed; "
-                    "source may need manual cleanup",
-                    old_path=old_path,
-                    new_path=new_path,
-                    bucket=bucket,
-                    error=str(e),
-                )
+            # Shared copy + "already copied" tolerance (see _copy_object); the
+            # source is deleted only when THIS call performed the copy.
+            already_copied = await StorageService._copy_object(
+                old_path, new_path, operation="Move image"
+            )
+            if not already_copied:
+                try:
+                    await get_storage_backend().delete(old_path)
+                except Exception as e:
+                    # Copy committed; only the cleanup delete failed. The move's
+                    # intent is satisfied and retrying the whole move would
+                    # duplicate the object — log and succeed (A2-14).
+                    logger.warning(
+                        "Move copy succeeded but source delete failed; "
+                        "source may need manual cleanup",
+                        old_path=old_path,
+                        new_path=new_path,
+                        bucket=bucket,
+                        error=str(e),
+                    )
 
             logger.info(
                 "Moved image",
@@ -1314,12 +1329,19 @@ class StorageService:
         filename_hint: str = "generated.png",
         source_content: Optional[bytes] = None,
     ) -> dict:
-        """Move a temporary generated image into the canonical item image path.
+        """MOVE a temporary generated image into the canonical item image path.
 
         Uses an S3 server-side copy (``tmp/{user_id}/...`` ->
         ``{user_id}/items/...``), then creates the ``_thumb`` sibling for the
         promoted object (tmp objects never carry one). Best-effort thumb: a
         failure only costs the variant, never the promotion.
+
+        The staged source is deleted as part of the move, so this variant is
+        only safe for callers whose own state is already durable. A caller that
+        might have to UNDO the promotion must use
+        :meth:`copy_temp_image_to_item` instead: once the source is gone, a
+        rollback that deletes the canonical object destroys the only copy and
+        the caller's retry answers ``NoSuchKey`` forever (2026-09-17 RCA).
 
         ``source_content`` avoids the extra full-object download that the
         thumbnail build would otherwise trigger: when the caller already has
@@ -1329,6 +1351,53 @@ class StorageService:
         existing download-then-encode fallback runs, so behavior is
         identical for callers that do not hold the bytes.
         """
+        return await StorageService._promote_temp_image(
+            db=db,
+            user_id=user_id,
+            temp_storage_path=temp_storage_path,
+            filename_hint=filename_hint,
+            source_content=source_content,
+            delete_source=True,
+        )
+
+    @staticmethod
+    async def copy_temp_image_to_item(
+        db,
+        user_id: str,
+        temp_storage_path: str,
+        filename_hint: str = "generated.png",
+        source_content: Optional[bytes] = None,
+    ) -> dict:
+        """COPY a temporary generated image into the canonical item image path.
+
+        Same promotion as :meth:`promote_temp_image_to_item` except the staged
+        ``tmp/...`` source is LEFT IN PLACE, so the caller can undo the
+        promotion (delete the returned canonical object) without destroying the
+        only copy, and can be retried with the same tmp key. The caller owns
+        the source cleanup and must delete it once its own rows have committed
+        (``items.create_item`` does this; an abandoned tmp object is covered by
+        the weekly temp cleanup).
+        """
+        return await StorageService._promote_temp_image(
+            db=db,
+            user_id=user_id,
+            temp_storage_path=temp_storage_path,
+            filename_hint=filename_hint,
+            source_content=source_content,
+            delete_source=False,
+        )
+
+    @staticmethod
+    async def _promote_temp_image(
+        db,
+        user_id: str,
+        temp_storage_path: str,
+        filename_hint: str,
+        source_content: Optional[bytes],
+        *,
+        delete_source: bool,
+    ) -> dict:
+        """Shared promotion body for the move/copy variants (see their docs)."""
         # Legacy preview keys (pre-restructure shapes held in DB rows) are
         # mapped to their current ``users/`` home before the move, mirroring
         # the delete paths (see app/core/storage_keys.py): after the layout
@@ -1346,11 +1415,49 @@ class StorageService:
         src_ext = os.path.splitext(source_path)[1].lower()
         ext = src_ext or os.path.splitext(filename_hint)[1].lower() or ".png"
         new_path = mint_key(user_id, "items", ext)
-        await StorageService.move_image(
-            db=db,
-            old_path=source_path,
-            new_path=new_path,
-        )
+        if delete_source:
+            await StorageService.move_image(
+                db=db,
+                old_path=source_path,
+                new_path=new_path,
+            )
+        else:
+            # Copy-only: keep the source so a rollback can undo the canonical
+            # object without destroying the only copy (2026-09-17 RCA).
+            #
+            # NOT idempotent across attempts: the destination is minted fresh
+            # per call, so promoting the same source twice writes two canonical
+            # objects (the later attempt's rows win and the earlier object is
+            # orphaned). That is bounded, and it is the trade this change makes
+            # deliberately - the previous move deleted the source up front, so a
+            # rollback left the client's retry answering NoSuchKey (503)
+            # forever. Clients that send ``client_request_id`` never re-promote
+            # (the replay lookup in create_item returns the committed row
+            # first). The already-copied tolerance inside _copy_object still
+            # covers any caller that passes a deterministic destination.
+            #
+            # Failures are wrapped as StorageServiceError (503) exactly like
+            # move_image's: the caller must see a retryable storage error, not
+            # the raw S3 error (which the create-item catch-all would turn into
+            # a 500).
+            try:
+                already_present = await StorageService._copy_object(
+                    source_path, new_path, operation="Copy temp image to item"
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to copy temp image into the item path",
+                    old_path=source_path,
+                    new_path=new_path,
+                    error=str(e),
+                )
+                raise StorageServiceError(f"Failed to copy image: {str(e)}")
+            if already_present:
+                logger.info(
+                    "Temp image destination already existed; reusing it",
+                    old_path=source_path,
+                    new_path=new_path,
+                )
         try:
             backend = get_storage_backend()
             # Thumb from caller-supplied content when it is in hand (no extra

@@ -38,8 +38,17 @@ Optional env:
     AUDIT_FILE=backend/logs/free_users_pro_trial.jsonl
     PAGE_SIZE=500
     EMAIL_RATE_LIMIT_MS=250     # throttle between sends
+    REFERRAL_BASE_URL=          # optional; defaults to FRONTEND_URL, else the prod site
+    REFERRAL_SAMPLE_CODE=ABCD1234                     # code shown in the dry-run preview
 
 Notes:
+    - The email ends with a friend/family referral line carrying the user's own
+      referral link (<base>/auth/register?ref=<code>), so each recipient gets a
+      clickable share URL. The base resolves as REFERRAL_BASE_URL, else a
+      non-localhost FRONTEND_URL, else https://fitcheckaiapp.com - so a dev
+      FRONTEND_URL can never put localhost links in a live blast. Users with no
+      row in `referral_codes` get the same pitch pointing at the Referrals panel
+      instead of a link.
     - EMAIL_TRANSPORT=split: first RESEND_DAILY_CAP recipients via Resend
       (Resend has a ~100/day cap), the rest via Gmail SMTP; both credential
       sets are required.
@@ -72,6 +81,15 @@ from supabase import create_client
 
 RESEND_URL = "https://api.resend.com/emails"
 SUBJECT = "You've got Pro, on us. Thanks for being an early FitCheck user."
+
+# Share-link base for the referral line. Must match the app's FRONTEND_URL
+# (ReferralService.get_share_url) or the links land on the wrong host; the
+# canonical site URL is https://fitcheckaiapp.com (frontend seo-config.ts).
+DEFAULT_REFERRAL_BASE_URL = "https://fitcheckaiapp.com"
+REFERRAL_REGISTER_PATH = "/auth/register"
+
+# Code used only by the dry-run preview so the sample email shows a real link.
+DEFAULT_REFERRAL_SAMPLE_CODE = "ABCD1234"
 
 # Default audit path resolves relative to the repo backend root (scripts/..),
 # so the script works from any cwd: <backend>/logs/free_users_pro_trial.jsonl.
@@ -121,6 +139,23 @@ def _env_int(name: str, default: int) -> int:
     except ValueError:
         print(f"WARNING: {name}={raw!r} is not an int, using {default}", file=sys.stderr)
         return default
+
+
+def _resolve_referral_base_url() -> str:
+    """Base URL for the referral share links.
+
+    Precedence: explicit REFERRAL_BASE_URL, then the app's FRONTEND_URL when it
+    points at a real host, then the canonical prod URL. A localhost FRONTEND_URL
+    (the local-dev default) is ignored so a developer environment can never put
+    dead links in a live blast.
+    """
+    explicit = os.environ.get("REFERRAL_BASE_URL", "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+    frontend = os.environ.get("FRONTEND_URL", "").strip()
+    if frontend and "localhost" not in frontend and "127.0.0.1" not in frontend:
+        return frontend.rstrip("/")
+    return DEFAULT_REFERRAL_BASE_URL
 
 
 def _utc_now_iso() -> str:
@@ -226,6 +261,33 @@ def _fetch_subscriptions(db: Any, user_ids: list[str]) -> dict[str, dict[str, An
     return out
 
 
+def _fetch_referral_codes(db: Any, user_ids: list[str]) -> dict[str, str]:
+    """Return {user_id: referral_code} for the given user_ids (paged).
+
+    Same 200-id chunking as _fetch_subscriptions. `referral_codes` rows are
+    backfilled for existing users (migration 007) and created by the signup
+    trigger (008), so a missing entry is rare; callers fall back to a link-free
+    pitch rather than rendering a broken share URL.
+    """
+    out: dict[str, str] = {}
+    chunk_size = 200
+    for i in range(0, len(user_ids), chunk_size):
+        chunk = user_ids[i : i + chunk_size]
+        res = db.table("referral_codes").select("user_id,code").in_(
+            "user_id", chunk
+        ).execute()
+        for row in (res.data or []):
+            code = (row.get("code") or "").strip()
+            if code:
+                out[row["user_id"]] = code
+    return out
+
+
+def _build_share_url(base_url: str, code: str) -> str:
+    """Same URL shape as ReferralService.get_share_url."""
+    return f"{base_url.rstrip('/')}{REFERRAL_REGISTER_PATH}?ref={code}"
+
+
 def _get_transport_plan(recipients: list[dict[str, Any]], resend_cap: int, mode: str) -> dict[str, Any]:
     """Decide how many recipients go via Resend vs SMTP.
 
@@ -244,10 +306,49 @@ def _get_transport_plan(recipients: list[dict[str, Any]], resend_cap: int, mode:
 # --------------------------------------------------------------------------- #
 # email
 # --------------------------------------------------------------------------- #
-def _render_email(full_name: str | None, trial_end: str) -> tuple[str, str]:
-    """Render the "You've got Pro, on us" trial email (HTML + plain text)."""
+def _render_email(
+    full_name: str | None,
+    trial_end: str,
+    referral_url: str | None = None,
+) -> tuple[str, str]:
+    """Render the "You've got Pro, on us" trial email (HTML + plain text).
+
+    ``referral_url`` is the recipient's own share link
+    (<base>/auth/register?ref=<code>). When it is None (no referral code on
+    file) the same friend/family pitch points at the in-app Referrals panel
+    instead, so the email never renders a broken or empty link.
+    """
     first = (full_name or "").strip().split(" ", 1)[0]
     greeting = f"Hi {first}," if first else "Hi there,"
+
+    referral_pitch = (
+        "Want more Pro months? Invite friends &amp; family: every friend who "
+        "joins earns you both a free month of Pro."
+    )
+    if referral_url:
+        referral_html = f"""<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;">
+              {referral_pitch}
+            </p>
+            <p style="margin:0 0 8px 0;font-size:13px;line-height:1.5;color:#6b7280;">
+              Share your link: <a href="{referral_url}" style="color:#6b7280;text-decoration:underline;">{referral_url}</a>
+            </p>"""
+        referral_text = (
+            "Want more Pro months? Invite friends & family: every friend who "
+            "joins earns you both a free month of Pro.\n\n"
+            f"Share your link: {referral_url}\n\n"
+        )
+    else:
+        referral_html = f"""<p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;">
+              {referral_pitch}
+            </p>
+            <p style="margin:0 0 8px 0;font-size:13px;line-height:1.5;color:#6b7280;">
+              Grab your link from the Referrals panel in your dashboard.
+            </p>"""
+        referral_text = (
+            "Want more Pro months? Invite friends & family: every friend who "
+            "joins earns you both a free month of Pro.\n\n"
+            "Grab your link from the Referrals panel in your dashboard.\n\n"
+        )
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -269,10 +370,11 @@ def _render_email(full_name: str | None, trial_end: str) -> tuple[str, str]:
               Your Pro features are already active. Enjoy higher limits on
               wardrobe extraction, AI outfit generation, and more.
             </p>
-            <p style="margin:0 0 8px 0;font-size:13px;line-height:1.5;color:#6b7280;">
+            <p style="margin:0 0 16px 0;font-size:13px;line-height:1.5;color:#6b7280;">
               Your Pro access runs until {trial_end}, after which your account
               returns to the free plan automatically.
             </p>
+            {referral_html}
           </td></tr>
           <tr><td style="padding:16px 40px 32px 40px;border-top:1px solid #f0f0f0;">
             <p style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af;">
@@ -293,6 +395,7 @@ def _render_email(full_name: str | None, trial_end: str) -> tuple[str, str]:
         "extraction, AI outfit generation, and more.\n\n"
         f"Your Pro access runs until {trial_end}, after which your account "
         "returns to the free plan automatically.\n\n"
+        f"{referral_text}"
         "-- The FitCheck AI team\nhttps://www.fitcheckaiapp.com\n"
     )
     return html, text
@@ -389,6 +492,8 @@ def main() -> int:
     rate_ms = _env_int("EMAIL_RATE_LIMIT_MS", 250)
     resend_cap = _env_int("RESEND_DAILY_CAP", 100)
     audit_path = Path(_env("AUDIT_FILE", str(DEFAULT_AUDIT_PATH)))
+    referral_base_url = _resolve_referral_base_url()
+    referral_sample_code = _env("REFERRAL_SAMPLE_CODE", DEFAULT_REFERRAL_SAMPLE_CODE).strip()
     exclude_emails = {
         e.strip().lower()
         for e in _env("EXCLUDE_EMAIL", DEFAULT_EXCLUDE_EMAIL).replace(";", ",").split(",")
@@ -441,10 +546,15 @@ def main() -> int:
     print(f"  transport    = {transport_mode}" + (f" (resend cap {resend_cap})" if transport_mode == "split" else ""))
     print(f"  exclude      = {sorted(exclude_emails)}")
     print(f"  audit_file   = {audit_path}")
+    print(f"  referral_url = {referral_base_url}{REFERRAL_REGISTER_PATH}?ref=<code>")
     print()
 
     # --- preview email --------------------------------------------------------
-    sample_html, sample_text = _render_email("Alex", trial_end_pretty)
+    sample_html, sample_text = _render_email(
+        "Alex",
+        trial_end_pretty,
+        _build_share_url(referral_base_url, referral_sample_code or DEFAULT_REFERRAL_SAMPLE_CODE),
+    )
     if dry_run:
         print("---- email preview (subject) ----")
         print(SUBJECT)
@@ -591,6 +701,13 @@ def main() -> int:
         print("  nothing to send.")
         return 1 if grant_failed > 0 else 0
 
+    # Per-user referral link for the friend/family line. Fetched only for the
+    # recipients actually being emailed. A user with no referral_codes row
+    # falls back to the dashboard pitch (see _render_email).
+    referral_codes = _fetch_referral_codes(db, [u["id"] for u in to_email])
+    missing_codes = len(to_email) - len(referral_codes)
+    print(f"  referral codes:  {len(referral_codes)} found, {missing_codes} missing (fallback pitch)")
+
     # Exclusive lock: a concurrent run would double-send the same users.
     lock_path = _acquire_lock(audit_path)
 
@@ -602,7 +719,12 @@ def main() -> int:
                 if not group:
                     continue
                 for u in group:
-                    html, text = _render_email(u.get("full_name"), trial_end_pretty)
+                    code = referral_codes.get(u["id"])
+                    html, text = _render_email(
+                        u.get("full_name"),
+                        trial_end_pretty,
+                        _build_share_url(referral_base_url, code) if code else None,
+                    )
                     to_addr = u["email"]
                     if transport == "resend":
                         ok, detail = _send_email_resend(
