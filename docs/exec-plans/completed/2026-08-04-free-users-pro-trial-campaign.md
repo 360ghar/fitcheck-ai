@@ -72,9 +72,9 @@ DRY_RUN=1 .venv/bin/python scripts/upgrade_free_users_to_pro.py   # preview, no 
   the August runs, 2026-10-18 from the 2026-09-18 run). The August grants are
   already expired — run the expiry-safe revert for them now, then again after
   2026-10-18 for the September grants:
-  `cd backend && AUDIT_FILE=logs/free_users_pro_trial.jsonl python scripts/revert_expired_pro_trials.py`
-  (run from `backend/`: the script lives at `backend/scripts/` and writes its
-  audit under `backend/logs/`. The old form failed from both cwd — repo root
+  `cd backend && AUDIT_FILE=logs/free_users_pro_trial.jsonl .venv/bin/python scripts/revert_expired_pro_trials.py`
+  (run from `backend/`: the script lives at `backend/scripts/` and reads its
+  audit from `backend/logs/`. The old form failed from both cwd — repo root
   has no `scripts/...` and `backend/` would double to `backend/backend/logs`.)
   (it only reverts rows whose `trial_end` has passed AND still matches the
   audited value).

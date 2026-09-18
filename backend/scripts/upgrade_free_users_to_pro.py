@@ -63,6 +63,7 @@ Notes:
 """
 from __future__ import annotations
 
+from html import escape as html_escape
 import ipaddress
 import json
 import os
@@ -76,7 +77,7 @@ from email.message import EmailMessage
 from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 from dateutil.relativedelta import relativedelta
@@ -188,8 +189,15 @@ def _resolve_referral_base_url() -> str:
     """
     explicit = os.environ.get("REFERRAL_BASE_URL", "").strip()
     if explicit:
-        parsed = urlparse(explicit)
-        if parsed.scheme in ("http", "https") and _is_public_http_host(parsed.hostname):
+        try:
+            parsed = urlparse(explicit)
+        except ValueError:
+            parsed = None
+        if (
+            parsed is not None
+            and parsed.scheme in ("http", "https")
+            and _is_public_http_host(parsed.hostname)
+        ):
             return explicit.rstrip("/")
         print(
             f"WARNING: REFERRAL_BASE_URL={explicit!r} is not a public http(s) URL; ignoring",
@@ -333,7 +341,7 @@ def _fetch_referral_codes(db: Any, user_ids: list[str]) -> dict[str, str]:
 
 def _build_share_url(base_url: str, code: str) -> str:
     """Same URL shape as ReferralService.get_share_url."""
-    return f"{base_url.rstrip('/')}{REFERRAL_REGISTER_PATH}?ref={code}"
+    return f"{base_url.rstrip('/')}{REFERRAL_REGISTER_PATH}?ref={quote(code, safe='')}"
 
 
 def _get_transport_plan(recipients: list[dict[str, Any]], resend_cap: int, mode: str) -> dict[str, Any]:
@@ -374,11 +382,14 @@ def _render_email(
         "joins earns you both a free month of Pro."
     )
     if referral_url:
+        # Codes are [a-z0-9-] today, but a backfilled/malformed code could
+        # carry &/"< — escape for the href attribute and link text.
+        safe_url = html_escape(referral_url, quote=True)
         referral_html = f"""<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;">
               {referral_pitch}
             </p>
             <p style="margin:0 0 8px 0;font-size:13px;line-height:1.5;color:#6b7280;">
-              Share your link: <a href="{referral_url}" style="color:#6b7280;text-decoration:underline;">{referral_url}</a>
+              Share your link: <a href="{safe_url}" style="color:#6b7280;text-decoration:underline;">{safe_url}</a>
             </p>"""
         referral_text = (
             "Want more Pro months? Invite friends & family: every friend who "
