@@ -25,8 +25,9 @@ describe('GenerationDetailPage', () => {
   it('renders a photoshoot generation: gallery, metadata, source ids', async () => {
     renderViewer('photoshoot')
 
-    // Title from use_case (also echoed in the metadata rows)
-    expect(await screen.findAllByText('linkedin').then((all) => all.length)).toBeGreaterThanOrEqual(1)
+    // Title is the page h1 — the use_case meta row echoes the same text, so
+    // assert the heading, not bare text.
+    expect(await screen.findByRole('heading', { name: 'linkedin' })).toBeInTheDocument()
     // Metadata rows render from meta
     expect(screen.getByText('Aspect ratio')).toBeInTheDocument()
     expect(screen.getByText('4:5')).toBeInTheDocument()

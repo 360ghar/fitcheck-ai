@@ -613,7 +613,7 @@ export function createUsersHandlers(initial?: Partial<UsersHandlersState>) {
           { status: 404 },
         )
       }
-      return HttpResponse.json(adminUserBillingFixture)
+      return HttpResponse.json({ ...adminUserBillingFixture, user_id: userId })
     }),
 
     http.get('*/api/v1/admin/users/:userId/referrals', ({ params }) => {
@@ -625,7 +625,7 @@ export function createUsersHandlers(initial?: Partial<UsersHandlersState>) {
           { status: 404 },
         )
       }
-      return HttpResponse.json(adminUserReferralsFixture)
+      return HttpResponse.json({ ...adminUserReferralsFixture, user_id: userId })
     }),
 
     http.get('*/api/v1/admin/users/:userId/body-profile', ({ params }) => {
@@ -637,7 +637,7 @@ export function createUsersHandlers(initial?: Partial<UsersHandlersState>) {
           { status: 404 },
         )
       }
-      return HttpResponse.json(adminUserBodyProfileFixture)
+      return HttpResponse.json({ ...adminUserBodyProfileFixture, user_id: userId })
     }),
 
     http.get('*/api/v1/admin/users', ({ request }) => {

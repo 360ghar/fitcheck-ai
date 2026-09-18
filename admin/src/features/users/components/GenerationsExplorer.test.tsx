@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { RouteObject } from 'react-router-dom'
@@ -34,8 +34,14 @@ describe('GenerationsExplorer', () => {
     expect(await screen.findByText('instagram')).toBeInTheDocument()
     // Outfit + render run share the outfit title
     expect(screen.getAllByText('Summer Look 1').length).toBe(2)
-    // Media count + failed count surfaces
-    expect(screen.getAllByText(/image/).length).toBeGreaterThanOrEqual(1)
+    // Media count + failed count surfaces — scoped per card so one card
+    // cannot satisfy every assertion (outfit + render share a title).
+    expect(within(screen.getByRole('button', { name: 'Open batch' })).getByText(/image/)).toBeInTheDocument()
+    const summerCards = screen.getAllByRole('button', { name: 'Open Summer Look 1' })
+    expect(summerCards.length).toBe(2)
+    for (const card of summerCards) {
+      expect(within(card).getByText(/image/)).toBeInTheDocument()
+    }
   })
 
   it('writes gen_tab into the URL when switching tabs', async () => {

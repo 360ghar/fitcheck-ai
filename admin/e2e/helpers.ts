@@ -53,6 +53,20 @@ function respondJson(route: Route, body: unknown, status = 200): Promise<void> {
   })
 }
 
+/**
+ * Generations owned by one user. The shared fixture rows are user_1's;
+ * journey 4 opens user_3's viewer on the shared item run, so user_3 owns a
+ * copy of that id only. Every other user owns nothing: like the backend's
+ * ownership guard, a kind+id that exists for another user 404s instead of
+ * leaking fixture data across users.
+ */
+function generationsForUser(userId: string) {
+  const items = userFixtures.generations.items ?? []
+  if (userId === 'user_1') return items
+  if (userId === 'user_3') return items.filter((item) => item.kind === 'item' && item.id === 'job_1')
+  return []
+}
+
 function unauthorizedBody(): Record<string, unknown> {
   return { error: 'Unauthorized', code: 'AUTH_UNAUTHORIZED', details: {} }
 }
@@ -214,7 +228,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
       const status = url.searchParams.get('status')
       const pageNum = Number(url.searchParams.get('page') ?? '1')
       const pageSize = Number(url.searchParams.get('page_size') ?? '12')
-      let rows = userFixtures.generations.items.filter(
+      let rows = generationsForUser(userId).filter(
         (item) => kind === 'all' || item.kind === kind,
       )
       if (status) rows = rows.filter((item) => item.status === status)
@@ -232,7 +246,9 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
       if (!users.some((user) => user.id === userId)) {
         return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
       }
-      const generation = userFixtures.generations.items.find(
+      // Per-user lookup like the backend's ownership guard: a kind+id that
+      // exists for another user 404s instead of leaking fixture data.
+      const generation = generationsForUser(userId).find(
         (item) => item.kind === kind && item.id === generationId,
       )
       if (!generation) {

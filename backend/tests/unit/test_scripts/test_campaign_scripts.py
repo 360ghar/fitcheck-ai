@@ -85,8 +85,11 @@ def test_referral_base_url_precedence_and_localhost_guard(monkeypatch):
     monkeypatch.setenv("FRONTEND_URL", "https://fitcheckaiapp.com/")
     assert upgrade._resolve_referral_base_url() == "https://fitcheckaiapp.com"
 
-    monkeypatch.setenv("REFERRAL_BASE_URL", "https://staging.example.org/")
-    assert upgrade._resolve_referral_base_url() == "https://staging.example.org"
+    # Explicit REFERRAL_BASE_URL wins when it is a public http(s) URL. A
+    # literal global IP keeps this assertion DNS-free (the suite blocks
+    # sockets; fitcheckaiapp.com below only passes because it IS the default).
+    monkeypatch.setenv("REFERRAL_BASE_URL", "https://93.184.216.34/")
+    assert upgrade._resolve_referral_base_url() == "https://93.184.216.34"
 
 
 def test_referral_base_url_rejects_loopback_and_private_hosts(monkeypatch):
@@ -105,6 +108,20 @@ def test_referral_base_url_rejects_loopback_and_private_hosts(monkeypatch):
         assert upgrade._resolve_referral_base_url() == upgrade.DEFAULT_REFERRAL_BASE_URL
     monkeypatch.setenv("FRONTEND_URL", "https://fitcheckaiapp.com/")
     assert upgrade._resolve_referral_base_url() == "https://fitcheckaiapp.com"
+
+
+def test_referral_base_url_explicit_value_is_validated(monkeypatch):
+    """An explicit REFERRAL_BASE_URL is not trusted blindly: non-http(s)
+    schemes and non-public hosts fall back to the production default."""
+    monkeypatch.delenv("FRONTEND_URL", raising=False)
+    for bad in (
+        "ftp://fitcheckaiapp.com/",
+        "javascript:alert(1)",
+        "http://10.0.0.5:3000",
+        "http://localhost:3000",
+    ):
+        monkeypatch.setenv("REFERRAL_BASE_URL", bad)
+        assert upgrade._resolve_referral_base_url() == upgrade.DEFAULT_REFERRAL_BASE_URL
 
 
 class _Query:

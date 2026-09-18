@@ -26,6 +26,7 @@ import pytest
 from app.core.config import settings
 from app.core.exceptions import NotFoundError, ValidationError
 from app.services.admin_user_generations_service import (
+    _fresh_url,
     get_user_billing,
     get_user_body_profile,
     get_user_generation,
@@ -317,6 +318,44 @@ async def test_kind_all_merges_sorted_with_exact_counts():
         "photoshoot_jobs": 1,
         "social_import_jobs": 1,
     }
+
+
+@pytest.mark.asyncio
+async def test_all_view_total_counts_only_reachable_window_rows():
+    """One kind x 100 rows must report 50 (the per-kind window), not 100:
+    pages past the merged set would otherwise come back empty."""
+    db = FakeDB(
+        rows={
+            "extraction_jobs": [
+                {
+                    "id": f"job_{i:03d}",
+                    "user_id": USER,
+                    "status": "completed",
+                    "created_at": f"2026-09-{(i % 28) + 1:02d}T00:00:00Z",
+                }
+                for i in range(100)
+            ],
+            "outfits": [],
+            "outfit_generations": [],
+            "photoshoot_jobs": [],
+            "social_import_jobs": [],
+        }
+    )
+    page = await list_user_generations(db, USER, kind="all")
+    assert page["counts"]["item_generations"] == 100
+    assert page["total"] == 50
+
+
+@pytest.mark.asyncio
+async def test_fresh_url_passes_through_another_users_key_unminted():
+    """The admin view must not mint presigned URLs for another user's objects
+    (copied URLs, shared references); public keys stay exempt."""
+    other_key = f"users/22222222-2222-2222-2222-222222222222/items/{HEX32}.png"
+    assert await _fresh_url(other_key, user_id=USER, operation="test") == other_key
+    own_key = f"users/{USER}/items/{HEX32}.png"
+    assert await _fresh_url(own_key, user_id=USER, operation="test") == (
+        f"https://presigned.test/{own_key}"
+    )
 
 
 @pytest.mark.asyncio

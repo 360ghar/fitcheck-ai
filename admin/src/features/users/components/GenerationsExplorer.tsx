@@ -52,7 +52,9 @@ export function GenerationsExplorer({ userId }: { userId: string }) {
   const items = query.data?.items ?? []
   const total = query.data?.total ?? 0
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1)
-  const outOfRange = page > totalPages && total > 0
+  // Any page past the last one gets recovery buttons — even when the filter
+  // matches zero rows (totalPages floors at 1, so `total > 0` would hide them).
+  const outOfRange = page > totalPages
 
   const updateParams = (mutate: (next: URLSearchParams) => void) => {
     setSearchParams((prev) => {
@@ -212,13 +214,13 @@ function GenerationCard({ userId, item }: { userId: string; item: AdminUserGener
           loading="lazy"
         />
       ) : (
-        <div className="flex h-20 w-full items-center justify-center bg-surface-card text-muted-foreground">
+        <span className="flex h-20 w-full items-center justify-center bg-surface-card text-muted-foreground">
           <ImageIcon className="size-4" aria-hidden="true" />
-        </div>
+        </span>
       )}
-      <div className="space-y-1 px-1.5 py-1">
-        <p className="truncate text-xs font-medium leading-tight text-ink">{title}</p>
-        <div className="flex flex-wrap items-center gap-1">
+      <span className="block space-y-1 px-1.5 py-1">
+        <span className="block truncate text-xs font-medium leading-tight text-ink">{title}</span>
+        <span className="flex flex-wrap items-center gap-1">
           <Badge variant="secondary" className="text-[10px]">
             {t(generationKindLabelKey(kind))}
           </Badge>
@@ -228,16 +230,16 @@ function GenerationCard({ userId, item }: { userId: string; item: AdminUserGener
               label={t(generationStatusLabelKey(status), { defaultValue: status })}
             />
           ) : null}
-        </div>
-        <div className="flex items-center justify-between gap-1 text-[10px] leading-tight text-muted-foreground">
+        </span>
+        <span className="flex items-center justify-between gap-1 text-[10px] leading-tight text-muted-foreground">
           <span className="truncate">{subtitle ?? formatDateTimeValue(item.created_at)}</span>
           <span className="whitespace-nowrap">
             {failedCount > 0
               ? t('detail.genFailedCount', { count: failedCount })
               : t('detail.genMediaCount', { count: mediaCount })}
           </span>
-        </div>
-      </div>
+        </span>
+      </span>
     </button>
   )
 }

@@ -71,13 +71,13 @@ describe('UserDetailPage', () => {
     expect(await screen.findByText('ABCD-0001')).toBeInTheDocument()
     expect(screen.getByText(/Sep \d, 2024/)).toBeInTheDocument()
 
-    // Referrals: code + promo
-    expect(screen.getByText('alice-abc123')).toBeInTheDocument()
-    expect(screen.getByText('WELCOME')).toBeInTheDocument()
+    // Referrals: code + promo (independent queries — await each section).
+    expect(await screen.findByText('alice-abc123')).toBeInTheDocument()
+    expect(await screen.findByText('WELCOME')).toBeInTheDocument()
 
     // Body profile: profile name (+ its default badge echo) + gender
-    expect(screen.getAllByText('Default').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Female')).toBeInTheDocument()
+    expect((await screen.findAllByText('Default')).length).toBeGreaterThanOrEqual(1)
+    expect(await screen.findByText('Female')).toBeInTheDocument()
   })
 
   it('suspend flow: confirm dialog, PATCH is_active=false, optimistic status flip + toast', async () => {

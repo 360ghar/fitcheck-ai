@@ -110,12 +110,17 @@ async def _fresh_url(stored: Any, *, user_id: str, operation: str) -> Optional[s
     ``key_from_path`` alone is not a safe gate: an unrelated relative string
     would flow through as a garbage key and presign a URL that 404s. The
     ``parse_key`` check keeps re-minting limited to keys the storage grammar
-    actually recognizes (canonical/thumb/preview/export/public).
+    actually recognizes (canonical/thumb/preview/export/public). Keys owned by
+    a DIFFERENT user (copied URLs, shared references) pass through unminted:
+    the admin view must not mint presigned URLs for another user's objects.
     """
     if not isinstance(stored, str) or not stored:
         return None
     key = key_from_path(stored)
-    if not key or parse_key(key) is None:
+    parsed = parse_key(key) if key else None
+    if not key or parsed is None:
+        return stored
+    if parsed.user and parsed.user != user_id:
         return stored
     try:
         return await StorageService.get_public_url(key)
@@ -865,13 +870,17 @@ async def list_user_generations(
     items = merged[offset : offset + page_size]
     counts = await _generation_counts(db, user_id, status=status)
     # Cap the reported total to the reachable recent window: each kind only
-    # contributes its most recent _ALL_KIND_WINDOW rows to the merge, so pages
-    # past that window would otherwise be empty while total claims more.
-    reachable_cap = _ALL_KIND_WINDOW * len(GEN_KINDS)
+    # contributes its most recent _ALL_KIND_WINDOW rows to the merge, so the
+    # total is the sum of per-kind reachable rows — never the uncapped sum,
+    # which would offer pages past the merged set (e.g. one kind x 100 rows
+    # reporting 100 while only 50 are reachable).
+    reachable_total = sum(
+        min(counts.get(COUNT_KEYS[kind], 0), _ALL_KIND_WINDOW) for kind in GEN_KINDS
+    )
     return {
         "user_id": user_id,
         "items": items,
-        "total": min(sum(counts.values()), reachable_cap),
+        "total": reachable_total,
         "page": page,
         "page_size": page_size,
         "counts": counts,

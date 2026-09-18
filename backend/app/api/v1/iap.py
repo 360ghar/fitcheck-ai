@@ -149,7 +149,19 @@ async def _claim_event(db: Client, table: str, pk_column: str, pk_value: str, ev
 
     try:
         await execute_with_reconnect(
-            _insert, db, extra={"operation": "iap_claim_insert", "table": table}
+            _insert,
+            db,
+            extra={"operation": "iap_claim_insert", "table": table},
+            # Plain inserts are not replay-safe: if this insert commits but
+            # its response is lost, a retry replays the same PK, reads back
+            # the fresh ``processing`` row it just created, mistakes it for
+            # another worker's lease, and ACKs an event that was never
+            # processed (the store never redelivers an ACK). Fail closed with
+            # 500 so the store redelivers instead. Same contract as the
+            # append-only audit writes (see app/services/audit_service.py).
+            # Residual: a redelivery landing inside the 5-minute lease still
+            # ACKs; an ownership token (CAS on insert) is the durable fix.
+            max_retries=0,
         )
         return _CLAIM_CLAIMED
     except Exception as exc:

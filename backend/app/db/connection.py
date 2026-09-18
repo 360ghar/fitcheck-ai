@@ -129,9 +129,11 @@ def _close_http_client(http_client: Optional[httpx.Client]) -> None:
 
 # Grace period before a retired transport is closed. In-flight requests hold a
 # reference to the old pool; closing it under them raises "client has been
-# closed". Retiring first and closing after the keep-alive window lets them
-# drain. Matches SUPABASE_HTTP_LIMITS.keepalive_expiry.
-_RETIRED_TRANSPORT_GRACE_SECONDS = 30.0
+# closed". Retiring first and closing after the window lets them drain. Sized
+# above the worst-case single call the pool can hold (connect 5 + read 15 +
+# write 15 + pool-wait 10 = 45s) plus margin, and above
+# SUPABASE_HTTP_LIMITS.keepalive_expiry so idle sockets are already reaped.
+_RETIRED_TRANSPORT_GRACE_SECONDS = 60.0
 
 
 def _retire_http_client(http_client: Optional[httpx.Client]) -> None:
@@ -244,13 +246,11 @@ class SupabaseDB:
           ``app.utils.db`` treats as a retryable pooled-connection error and
           replays through the fresh client.
         - The ANON singleton is reset (so a gateway blip that killed its pool
-          heals on the next ``get_client()``) but its transport is deliberately
-          NOT closed: it is not the client being replaced, and its in-flight
-          calls (``anon_db.auth.*`` in app/api/v1/auth.py) do not go through the
-          retry helper, so closing its pool under them would surface httpx's
-          "client has been closed" as an unretried 500 on sign-in/sign-up. The
-          abandoned pool is idle and its sockets are bounded by
-          ``SUPABASE_HTTP_LIMITS.keepalive_expiry``.
+          heals on the next ``get_client()``) and its transport is retired on
+          the same grace timer as the service one: retirement closes the pool
+          only after in-flight calls drain, so anon auth calls (which do not
+          go through the retry helper) are not closed under, while the
+          abandoned pool no longer leaks one client per rebuild.
         - A rebuild inside ``SUPABASE_REBUILD_MIN_INTERVAL_SECONDS`` of the
           previous one is coalesced (the current client is returned
           unchanged). With HTTP/1.1 a dead connection is discarded and
@@ -283,11 +283,12 @@ class SupabaseDB:
             # requests may still hold it, and closing under them raises
             # "client has been closed". The retired pool closes after the
             # grace window; its sockets stay bounded by keepalive limits.
-            # The anon singleton is reset (that is what lets a blip that killed
-            # its pool heal) but its transport is NOT closed - see the docstring:
-            # anon auth calls are not retried, so closing under them would turn
-            # a recoverable blip into a sign-in 500.
+            # The anon transport is retired too (its pool would otherwise leak
+            # one client per rebuild). Retirement is grace-delayed, not
+            # immediate, so in-flight anon auth calls — which do not go
+            # through the retry helper — still drain instead of 500ing.
             retired_service_http = cls._service_http
+            retired_anon_http = cls._instance_http
             cls._service_instance = None
             cls._service_http = None
             cls._instance = None
@@ -300,6 +301,7 @@ class SupabaseDB:
             cls._last_service_rebuild_at = time.monotonic()
             logger.info("Supabase service client rebuilt (pooled connection recovery)")
             _retire_http_client(retired_service_http)
+            _retire_http_client(retired_anon_http)
             return cls._service_instance
 
 

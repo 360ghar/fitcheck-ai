@@ -96,7 +96,7 @@ def test_build_supabase_client_injects_the_transport(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_rebuild_closes_superseded_transports(monkeypatch):
+def test_rebuild_retires_superseded_transports(monkeypatch):
     monkeypatch.setattr(connection.settings, "SUPABASE_URL", "https://x.supabase.co")
     monkeypatch.setattr(connection.settings, "SUPABASE_SECRET_KEY", "secret")
 
@@ -112,21 +112,32 @@ def test_rebuild_closes_superseded_transports(monkeypatch):
         "_build_supabase_client",
         lambda url, key: (object(), "fresh-transport"),
     )
+    retired = []
+    monkeypatch.setattr(connection, "_retire_http_client", retired.append)
 
     rebuilt = SupabaseDB.rebuild_service_client()
 
     assert rebuilt is SupabaseDB._service_instance
     assert SupabaseDB._service_http == "fresh-transport"
-    # Leaking one pool per rebuild is what this guards against - for the client
-    # actually being replaced.
-    assert old_service_transport.is_closed
-    # The anon singleton is reset (its pool heals on the next get_client()) but
-    # NOT closed: anon auth calls (anon_db.auth.*) do not go through the retry
-    # helper, so closing its pool under an in-flight sign-in would surface
-    # httpx's "client has been closed" as an unretried 500.
+    # Both superseded pools retire on the grace timer instead of closing
+    # inline: in-flight calls drain first, then the pool closes. Closing
+    # inline is what turned rebuilds into "client has been closed" 500s, and
+    # never retiring the anon pool leaked one client per rebuild.
+    assert retired == [old_service_transport, old_anon_transport]
+    # The anon singleton is reset (its pool heals on the next get_client()).
     assert SupabaseDB._instance is None
-    assert not old_anon_transport.is_closed
+    assert SupabaseDB._instance_http is None
+    old_service_transport.close()
     old_anon_transport.close()
+
+
+def test_retired_transport_grace_covers_worst_case_call():
+    """The grace timer must outlast the slowest single call a retired pool can
+    still hold (connect + read + write + pool-wait), or the tail still closes
+    under a flight."""
+    timeout = connection.SUPABASE_HTTP_TIMEOUT
+    worst_case = timeout.connect + timeout.read + timeout.write + timeout.pool
+    assert connection._RETIRED_TRANSPORT_GRACE_SECONDS >= worst_case
 
 
 def test_rebuild_inside_coalescing_window_reuses_the_current_client(monkeypatch):

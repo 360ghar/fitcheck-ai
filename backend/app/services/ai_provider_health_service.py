@@ -117,6 +117,10 @@ class AIProviderHealthService:
 
     def __init__(self):
         self._health_cache: Dict[str, HealthStatus] = {}
+        # Host-level overload deadline: a concurrency rejection throttles the
+        # whole gateway, so the 10s cooldown applies to every key on that
+        # host — not just the (host, key) entry that recorded it.
+        self._host_overload_until: Dict[str, float] = {}
         self._lock = asyncio.Lock()
 
     async def check_provider_health(
@@ -147,6 +151,19 @@ class AIProviderHealthService:
 
         # Check cache first
         async with self._lock:
+            # Host-wide overload runs before the per-key cache: the gateway
+            # throttles all keys on the host, so a rejection recorded under
+            # one key must block the others for the same 10s window.
+            host_until = self._host_overload_until.get(base_url, 0.0)
+            if time.time() < host_until:
+                return HealthStatus(
+                    available=False,
+                    last_check=time.time(),
+                    consecutive_failures=0,
+                    cooldown_seconds=OVERLOAD_COOLDOWN_SECONDS,
+                    error="Provider overloaded (concurrency limit)",
+                    overload_until=host_until,
+                )
             if cache_key in self._health_cache:
                 cached = self._health_cache[cache_key]
                 age = time.time() - cached.last_check
@@ -374,14 +391,19 @@ class AIProviderHealthService:
                 return
             if overload:
                 failures = prev.consecutive_failures if prev else 0
+                overload_until = now + OVERLOAD_COOLDOWN_SECONDS
                 self._health_cache[cache_key] = HealthStatus(
                     available=False,
                     last_check=now,
                     consecutive_failures=failures,
                     cooldown_seconds=OVERLOAD_COOLDOWN_SECONDS,
                     error="Provider overloaded (concurrency limit)",
-                    overload_until=now + OVERLOAD_COOLDOWN_SECONDS,
+                    overload_until=overload_until,
                 )
+                # The gateway throttles every key on this host, not just the
+                # key that drew the rejection: stamp the host deadline so
+                # other keys honor the same cooldown (checked above).
+                self._host_overload_until[base_url] = overload_until
                 logger.warning(
                     f"Provider {base_url} rejected a call on its concurrency limit",
                     extra={

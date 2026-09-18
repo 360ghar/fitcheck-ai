@@ -111,9 +111,11 @@ export function GenerationDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">
+          {/* Page title is a real heading (UserDetailPage uses h1 the same
+              way); section cards below keep CardTitle. */}
+          <h1 className="text-lg font-semibold leading-none tracking-tight">
             {generation.title || t(generationKindLabelKey(parsedKind))}
-          </CardTitle>
+          </h1>
           {generation.subtitle ? <CardDescription>{generation.subtitle}</CardDescription> : null}
         </CardHeader>
         <CardContent className="space-y-3">
@@ -289,8 +291,10 @@ function SourceIds({ generation }: { generation: JsonRecord }) {
               className="size-6"
               aria-label={t('detail.genCopyId', { value })}
               onClick={() => {
-                void navigator.clipboard.writeText(value)
-                toast.success(t('detail.genCopyIdToast'))
+                navigator.clipboard
+                  .writeText(value)
+                  .then(() => toast.success(t('detail.genCopyIdToast')))
+                  .catch((error: unknown) => toast.error(normalizeError(error).message))
               }}
             >
               <Copy className="size-3" aria-hidden="true" />
@@ -365,7 +369,15 @@ function MediaGallery({ generation }: { generation: JsonRecord }) {
                   alt={entry.label ?? ''}
                   className="h-full w-full object-cover"
                   loading="lazy"
-                  onError={() => setBroken((prev) => new Set(prev).add(index))}
+                  onError={(event) => {
+                    // A dead thumbnail must not condemn the full image: retry
+                    // the full URL first, mark broken only when that fails too.
+                    if (entry.thumbUrl && event.currentTarget.src !== entry.url) {
+                      event.currentTarget.src = entry.url
+                    } else {
+                      setBroken((prev) => new Set(prev).add(index))
+                    }
+                  }}
                 />
               )}
             </button>

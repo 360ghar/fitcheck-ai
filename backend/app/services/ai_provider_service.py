@@ -892,8 +892,17 @@ class AIProviderService:
                     if e.retry_after_seconds and next_url == attempt_url:
                         # Same-gateway fallback: the 200-overload hint says the
                         # queue is full, so wait it out instead of re-entering
-                        # immediately. Bounded so a bad hint cannot stall saves.
-                        wait = min(float(e.retry_after_seconds), 8.0)
+                        # immediately. The wait must cover the health gate's
+                        # overload cooldown (10s): waiting only the short hint
+                        # fails the gate and the fallback never runs. Bounded
+                        # so a bad hint cannot stall saves.
+                        from app.services.ai_provider_health_service import (
+                            OVERLOAD_COOLDOWN_SECONDS,
+                        )
+                        wait = min(
+                            max(float(e.retry_after_seconds), OVERLOAD_COOLDOWN_SECONDS),
+                            OVERLOAD_COOLDOWN_SECONDS + 2.0,
+                        )
                         logger.warning(
                             "Image provider overloaded; waiting before same-host fallback",
                             wait_seconds=wait,
@@ -1763,8 +1772,8 @@ class AIProviderService:
                         self._provider_body_text(body)
                     ):
                         raise self._TransientImageAPIOverload(
-                            f"status={resp.status_code}: concurrency-limited 200 "
-                            "envelope with no images",
+                            f"status={resp.status_code}: exceeded concurrency limit "
+                            "(concurrency-limited 200 envelope with no images)",
                             retry_after_seconds=self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS,
                         )
                     return resp
@@ -1910,7 +1919,8 @@ class AIProviderService:
                 image_url, ok=False, api_key=image_key, overload=is_overload
             )
             raise AIServiceError(
-                f"AI image provider returned no images for model {model}",
+                f"AI image provider returned no images for model {model}"
+                + (" (exceeded concurrency limit)" if is_overload else ""),
                 retryable=True,
                 retry_after_seconds=(
                     self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS if is_overload else None

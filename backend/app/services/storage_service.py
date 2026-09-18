@@ -60,10 +60,20 @@ logger = get_context_logger(__name__)
 # Last successful copy-promotion per temp source key. Two concurrent creates
 # can share one staged tmp object: the first to commit deletes the source
 # while the second is still copying to its own freshly minted destination,
-# so the second copy raises NoSuchKey. The fallback below reuses the
-# already-promoted object instead of failing. Bounded by temp-key cardinality
-# per process lifetime; tmp keys are single-use.
+# so the second copy raises NoSuchKey. The fallback below copies the
+# already-promoted bytes into the late caller's own destination instead of
+# failing. Bounded LRU-style: entries are only needed inside the
+# concurrent-create window (tmp keys are single-use), so the oldest entry is
+# evicted past the cap instead of growing with process lifetime.
 _PROMOTED_BY_SOURCE: dict = {}
+_PROMOTED_BY_SOURCE_MAX_ENTRIES = 1024
+
+
+def _remember_promotion(source_path: str, promoted: dict) -> None:
+    """Record a copy-promotion, evicting the oldest entry past the cap."""
+    _PROMOTED_BY_SOURCE[source_path] = dict(promoted)
+    while len(_PROMOTED_BY_SOURCE) > _PROMOTED_BY_SOURCE_MAX_ENTRIES:
+        _PROMOTED_BY_SOURCE.pop(next(iter(_PROMOTED_BY_SOURCE)))
 
 
 # Allowed file extensions
@@ -1460,13 +1470,52 @@ class StorageService:
                 if ("nosuchkey" in text or "not found" in text or "notfound" in text):
                     reused = _PROMOTED_BY_SOURCE.get(source_path)
                     if reused is not None:
+                        # Copy the reused bytes into this caller's own
+                        # new_path (never share one canonical object across
+                        # items: each item owns its object, so deleting or
+                        # rolling back either item cannot destroy the other's
+                        # image). URLs are reminted from the new path — the
+                        # cached presigned URL may already have expired.
+                        reused_path = reused.get("storage_path")
                         logger.info(
-                            "Temp source already promoted by a concurrent create; reusing it",
+                            "Temp source already promoted by a concurrent create; copying it",
                             old_path=source_path,
                             new_path=new_path,
-                            reused_path=reused.get("storage_path"),
+                            reused_path=reused_path,
                         )
-                        return dict(reused)
+                        try:
+                            await StorageService._copy_object(
+                                reused_path,
+                                new_path,
+                                operation="Copy reused promotion to item",
+                            )
+                        except Exception as copy_exc:
+                            logger.error(
+                                "Failed to copy reused promotion into the item path",
+                                old_path=source_path,
+                                new_path=new_path,
+                                reused_path=reused_path,
+                                error=str(copy_exc),
+                            )
+                            raise StorageServiceError(f"Failed to copy image: {str(copy_exc)}")
+                        try:
+                            backend = get_storage_backend()
+                            reused_thumb = thumb_key_for(reused_path)
+                            new_thumb = thumb_key_for(new_path)
+                            if reused_thumb and new_thumb:
+                                await backend.copy(reused_thumb, new_thumb)
+                        except Exception as thumb_exc:  # noqa: BLE001 - thumb is best-effort
+                            logger.warning(
+                                "Failed to copy reused thumbnail; item keeps the full image",
+                                new_path=new_path,
+                                error=str(thumb_exc),
+                            )
+                        image_url = await StorageService.get_public_url(new_path)
+                        return {
+                            "image_url": image_url,
+                            "thumbnail_url": image_url,
+                            "storage_path": new_path,
+                        }
                 logger.error(
                     "Failed to copy temp image into the item path",
                     old_path=source_path,
@@ -1503,7 +1552,7 @@ class StorageService:
             "storage_path": new_path,
         }
         if not delete_source:
-            _PROMOTED_BY_SOURCE[source_path] = dict(promoted)
+            _remember_promotion(source_path, promoted)
         return promoted
 
     @staticmethod

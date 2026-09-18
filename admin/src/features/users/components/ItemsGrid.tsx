@@ -93,7 +93,9 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
           })}
         </div>
 
-        <Dialog open={openItem !== null} onOpenChange={(open) => !open && setOpenItem(null)}>
+        {/* Gated on the current items: a dialog for a previous user's item
+            must not survive a user switch while the new list loads. */}
+        <Dialog open={openItem !== null && items.includes(openItem)} onOpenChange={(open) => !open && setOpenItem(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>{openItem ? itemDisplayName(openItem) : ''}</DialogTitle>

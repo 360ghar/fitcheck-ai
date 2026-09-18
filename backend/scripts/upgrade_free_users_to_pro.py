@@ -188,9 +188,20 @@ def _resolve_referral_base_url() -> str:
     """
     explicit = os.environ.get("REFERRAL_BASE_URL", "").strip()
     if explicit:
-        return explicit.rstrip("/")
+        parsed = urlparse(explicit)
+        if parsed.scheme in ("http", "https") and _is_public_http_host(parsed.hostname):
+            return explicit.rstrip("/")
+        print(
+            f"WARNING: REFERRAL_BASE_URL={explicit!r} is not a public http(s) URL; ignoring",
+            file=sys.stderr,
+        )
     frontend = os.environ.get("FRONTEND_URL", "").strip()
-    if frontend and _is_public_http_host(urlparse(frontend).hostname):
+    parsed_frontend = urlparse(frontend) if frontend else None
+    if (
+        parsed_frontend
+        and parsed_frontend.scheme in ("http", "https")
+        and _is_public_http_host(parsed_frontend.hostname)
+    ):
         return frontend.rstrip("/")
     return DEFAULT_REFERRAL_BASE_URL
 
@@ -740,8 +751,14 @@ def main() -> int:
 
     # Per-user referral link for the friend/family line. Fetched only for the
     # recipients actually being emailed. A user with no referral_codes row
-    # falls back to the dashboard pitch (see _render_email).
-    referral_codes = _fetch_referral_codes(db, [u["id"] for u in to_email])
+    # falls back to the dashboard pitch (see _render_email). A lookup failure
+    # must not abort the run after grants were written but before the email
+    # loop: degrade to the link-free pitch for everyone instead.
+    try:
+        referral_codes = _fetch_referral_codes(db, [u["id"] for u in to_email])
+    except Exception as exc:  # noqa: BLE001 - email loop must still run
+        print(f"WARNING: referral-code lookup failed ({exc}); using fallback pitch", file=sys.stderr)
+        referral_codes = {}
     missing_codes = len(to_email) - len(referral_codes)
     print(f"  referral codes:  {len(referral_codes)} found, {missing_codes} missing (fallback pitch)")
 

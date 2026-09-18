@@ -1006,6 +1006,38 @@ async def test_generation_retry_budget_absorbs_a_full_provider_queue():
         captured["should_retry"](AIServiceError("read timed out", retryable=True))
         is False
     )
+    # A Retry-After hint only retries on an overload rejection: 5xx hints can
+    # arrive post-accept (lost response), and retrying those double-bills.
+    assert (
+        captured["should_retry"](
+            AIServiceError("AI request failed (503): busy", retryable=True, retry_after_seconds=2.0)
+        )
+        is False
+    )
+    assert (
+        captured["should_retry"](
+            AIServiceError(
+                "AI image provider overloaded after retries: status=200: exceeded "
+                "concurrency limit (concurrency-limited 200 envelope with no images)",
+                retryable=True,
+                retry_after_seconds=2.0,
+            )
+        )
+        is True
+    )
+    # Connection-establishment failures retry; post-send transport text does not.
+    assert (
+        captured["should_retry"](
+            AIServiceError("AI image request failed: ConnectError: refused", retryable=True)
+        )
+        is True
+    )
+    assert (
+        captured["should_retry"](
+            AIServiceError("AI image request failed: Connection reset by peer", retryable=True)
+        )
+        is False
+    )
 
 
 @pytest.mark.asyncio

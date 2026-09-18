@@ -79,22 +79,31 @@ class _ReentrantSemaphoreSlot:
     the codebase fans out first and acquires per child.
     """
 
+    # Depth shared by ALL slot instances guarding the same semaphore, keyed
+    # (id(semaphore), task_id). The factories mint a fresh manager per call,
+    # so per-instance depths double-consumed permits on nested acquisition
+    # (and deadlocked outright at cap=1); the map keeps nesting reentrant.
+    _depths: Dict[tuple, int] = {}
+
     def __init__(self, semaphore: asyncio.Semaphore, held: ContextVar[bool]) -> None:
         self._semaphore = semaphore
         self._held = held
-        self._depths: Dict[int, int] = {}
+
+    def _key(self, task_id: int) -> tuple:
+        return (id(self._semaphore), task_id)
 
     async def __aenter__(self) -> "_ReentrantSemaphoreSlot":
         try:
             task_id = id(asyncio.current_task())
         except RuntimeError:  # no running loop in tests using stubs
             task_id = 0
-        depth = self._depths.get(task_id, 0)
+        key = self._key(task_id)
+        depth = self._depths.get(key, 0)
         if depth > 0:
-            self._depths[task_id] = depth + 1
+            self._depths[key] = depth + 1
             return self
         await self._semaphore.acquire()
-        self._depths[task_id] = 1
+        self._depths[key] = 1
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -102,11 +111,12 @@ class _ReentrantSemaphoreSlot:
             task_id = id(asyncio.current_task())
         except RuntimeError:
             task_id = 0
-        depth = self._depths.get(task_id, 0)
+        key = self._key(task_id)
+        depth = self._depths.get(key, 0)
         if depth > 1:
-            self._depths[task_id] = depth - 1
+            self._depths[key] = depth - 1
         elif depth == 1:
-            del self._depths[task_id]
+            del self._depths[key]
             self._semaphore.release()
 
 

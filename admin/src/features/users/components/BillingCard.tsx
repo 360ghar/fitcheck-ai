@@ -103,7 +103,7 @@ export function BillingCard({ userId }: { userId: string }) {
                 <dl className="divide-y divide-border">
                   <Field
                     label={t('columns.plan')}
-                    value={planLabel ? t(planLabel, { defaultValue: plan ?? '' }) : t('plans.none')}
+                    value={plan ? t(planLabel ?? '', { defaultValue: plan }) : t('plans.none')}
                   />
                   <Field
                     label={t('detail.status')}

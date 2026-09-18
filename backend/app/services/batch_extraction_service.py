@@ -48,20 +48,26 @@ def _is_pre_generation_retryable(exc: Exception) -> bool:
     """
     if not is_retryable_error(exc):
         return False
-    if getattr(exc, "retry_after_seconds", None) is not None:
-        return True
     text = str(exc).lower()
-    return any(
-        marker in text
-        for marker in (
-            "concurrency",
-            "overload",
-            "connect",
-            "connection",
-            "pool",
-            "temporarily unavailable",
-        )
+    is_overload = any(
+        marker in text for marker in ("concurrency", "overload", "temporarily unavailable")
     )
+    if getattr(exc, "retry_after_seconds", None) is not None:
+        # A Retry-After hint is only trustworthy pre-generation on an
+        # overload rejection: 5xx hints can arrive post-accept (the provider
+        # propagates them through its exhausted AIServiceError), and
+        # retrying those would double-bill a lost response.
+        return is_overload
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+        return True
+    # Connection-establishment failures wrapped as AIServiceError carry our
+    # own "ClassName: detail" prefix (see _format_exception_message), so
+    # these two tokens are structured signals, not provider-text inference.
+    # Bare "connection"/"pool" substrings are excluded: a post-send transport
+    # failure can mention them while the response stays ambiguous.
+    if "connecterror" in text or "connecttimeout" in text:
+        return True
+    return is_overload
 
 # Hosts whose avatar URLs the extraction pipeline may fetch DIRECTLY with
 # httpx. ``users.avatar_url`` is user-controlled (an external OAuth picture is

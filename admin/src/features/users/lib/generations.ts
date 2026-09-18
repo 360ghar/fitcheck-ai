@@ -130,6 +130,7 @@ export function metaRows(record: JsonRecord): Array<{ key: string; value: JsonRe
     'discovered_photos',
     'processed_photos',
     'total_photos',
+    'failed_photos',
     'auth_required',
   ]
   const rows: Array<{ key: string; value: JsonRecord[string] }> = []
