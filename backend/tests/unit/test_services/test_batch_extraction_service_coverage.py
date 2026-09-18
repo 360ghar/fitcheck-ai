@@ -957,6 +957,127 @@ async def test_generate_single_item_generation_failure():
     assert "item_generation_failed" in events
 
 
+@pytest.mark.asyncio
+async def test_generation_retry_budget_absorbs_a_full_provider_queue():
+    """2026-09-17: with max_retries=1 both generation attempts landed inside the
+    same full provider queue and every batch item failed. The generation leg now
+    uses the extraction leg's budget (two retries) with jittered backoff, and
+    still refuses to retry a non-retryable error (should_retry)."""
+    job = _make_job(["img-1"])
+    job.persistence_db = object()
+    await _register(job)
+    item = DetectedItemData(temp_id="t1", image_id="img-1", category="tops")
+    job.detected_items = [item]
+    agent = MagicMock()
+    agent.generate_product_image = AsyncMock(return_value=_FakeGeneratedImage())
+    service = BatchExtractionService(user_id="u1", db=None)
+    captured = {}
+
+    async def _capture(fn, **kwargs):
+        captured.update(kwargs)
+        return await fn()
+
+    with (
+        patch("app.services.batch_extraction_service.with_retry", new=_capture),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_temp_generated_image",
+            new=AsyncMock(return_value={"image_url": "https://cdn/gen.webp"}),
+        ),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+    ):
+        await service._generate_single_item(job, item, agent, None)
+
+    assert captured["max_retries"] == 2
+    assert captured["initial_delay"] == 2.0
+    assert captured["backoff_factor"] == 2.0
+    assert captured["jitter"] is True
+    # Content-policy / non-retryable AIServiceErrors must still fail fast.
+    assert captured["should_retry"](AIServiceError("blocked", retryable=False)) is False
+    # Pre-generation overload (concurrency rejection) retries; an ambiguous
+    # post-accept timeout (retryable but no overload signal) must NOT retry
+    # here — the provider has no idempotency key on this path.
+    assert (
+        captured["should_retry"](
+            AIServiceError("Exceeded concurrency limit", retryable=True)
+        )
+        is True
+    )
+    assert (
+        captured["should_retry"](AIServiceError("read timed out", retryable=True))
+        is False
+    )
+    # A Retry-After hint only retries on an overload rejection: 5xx hints can
+    # arrive post-accept (lost response), and retrying those double-bills.
+    assert (
+        captured["should_retry"](
+            AIServiceError("AI request failed (503): busy", retryable=True, retry_after_seconds=2.0)
+        )
+        is False
+    )
+    assert (
+        captured["should_retry"](
+            AIServiceError(
+                "AI image provider overloaded after retries: status=200: exceeded "
+                "concurrency limit (concurrency-limited 200 envelope with no images)",
+                retryable=True,
+                retry_after_seconds=2.0,
+            )
+        )
+        is True
+    )
+    # Connection-establishment failures retry; post-send transport text does not.
+    assert (
+        captured["should_retry"](
+            AIServiceError("AI image request failed: ConnectError: refused", retryable=True)
+        )
+        is True
+    )
+    assert (
+        captured["should_retry"](
+            AIServiceError("AI image request failed: Connection reset by peer", retryable=True)
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_generation_retry_actually_retries_overload_then_succeeds():
+    """The retry budget is exercised, not just asserted: a transient overload
+    fails the first attempt and the real ``with_retry`` runs the second."""
+    from app.utils.retry import with_retry as _real_with_retry
+
+    job = _make_job(["img-1"])
+    job.persistence_db = object()
+    await _register(job)
+    item = DetectedItemData(temp_id="t1", image_id="img-1", category="tops")
+    job.detected_items = [item]
+    agent = MagicMock()
+    agent.generate_product_image = AsyncMock(
+        side_effect=[
+            AIServiceError("Exceeded concurrency limit", retryable=True),
+            _FakeGeneratedImage(),
+        ]
+    )
+    service = BatchExtractionService(user_id="u1", db=None)
+
+    with (
+        patch(
+            "app.services.batch_extraction_service.with_retry",
+            new=_real_with_retry,
+        ),
+        patch("asyncio.sleep", new=AsyncMock()),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_temp_generated_image",
+            new=AsyncMock(return_value={"image_url": "https://cdn/gen.webp"}),
+        ),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+    ):
+        result = await service._generate_single_item(job, item, agent, None)
+
+    assert agent.generate_product_image.await_count == 2
+    assert result == "Z2VuZXJhdGVk"
+
+
 # ---------------------------------------------------------------------------
 # _cache_extraction_results
 # ---------------------------------------------------------------------------

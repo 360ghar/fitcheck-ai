@@ -18,12 +18,14 @@ from typing import Any, Dict, List, Optional
 from app.agents.prompt_fidelity import (
     GARMENT_REFERENCE_LOCK,
     NO_PERSON_NEGATIVES,
+    OUTFIT_OUTPUT_CONTRACT,
     PRODUCT_TEXT_ONLY_NEGATIVES,
     OUTFIT_LOCK,
     PERSON_REFERENCE_FIDELITY,
     PRODUCT_CUSTOM_BACKGROUND_LOCK,
     PRODUCT_REFERENCE_LOCK,
     SHORT_NEGATIVES,
+    SINGLE_FIGURE_LOCK,
     SOURCE_PHOTO_REFERENCE_LOCK,
 )
 from app.core.logging_config import get_context_logger
@@ -330,6 +332,34 @@ class ImageGenerationAgent:
             f"{text}"
         )
 
+    # Pose tokens whose subject faces away or sideways: for those the framing
+    # clause must not demand a visible face, or the prompt contradicts itself
+    # (the frontend multi-pose presets send "standing back view" and
+    # "standing side profile").
+    _FACE_AWAY_TOKENS = ("back", "profile", "side", "rear")
+
+    @staticmethod
+    def _pose_framing(pose: str) -> str:
+        """Framing clause for the SCENE block, adapted to the requested pose.
+
+        Front-ish poses get the face-visible constraint; back/side poses get an
+        angle-respecting one instead, so the prompt never carries two opposing
+        camera instructions at once. Both keep the full body in frame - a
+        cropped head or missing feet reads as a broken outfit render.
+        """
+        if re.search(
+            r"\b(?:back|profile|side|rear)\b",
+            (pose or "").lower(),
+        ):
+            return (
+                "full body head to toe; keep the requested camera angle exactly - "
+                "do not turn the subject toward the camera; no cropped head or feet"
+            )
+        return (
+            "full body head to toe; face clearly visible, front or slight 3/4; "
+            "no sunglasses; no cropped head or feet"
+        )
+
     @classmethod
     def _collect_garment_references(
         cls,
@@ -518,7 +548,9 @@ class ImageGenerationAgent:
                 the output reproduces the real garment; items without one are
                 still rendered from their text description.
             style: Overall style (casual, formal, streetwear, etc.)
-            background: Background description
+            background: Accepted for wire compatibility but IGNORED - outfit
+                renders always sit on the flat white studio backdrop (product
+                images still honor custom scenes).
             pose: Model pose
             lighting: Lighting description
             view_angle: Camera angle
@@ -550,12 +582,17 @@ class ImageGenerationAgent:
         )
 
         wants_flat_lay = not include_model or "flat lay" in pose.lower()
-        # Flat lay has no person in frame, so it may demand an isolated
-        # silhouette; the model/avatar branches get flat white without that
-        # clause. Both end up on a flat white backdrop, which keeps model shots
-        # visually consistent with the now-transparent item shots and leaves the
-        # corpus matte-ready if a real segmenter is ever added.
-        background = _resolve_background(background, matte_ready=wants_flat_lay)
+        # Outfit renders ALWAYS sit on the flat white studio backdrop, whatever
+        # the caller sends: a person shot gets the opaque white variant, a flat
+        # lay the matte-ready one with the isolated-silhouette clause (which
+        # only makes sense with no person in frame). This keeps model shots
+        # visually consistent with the now-transparent item shots, leaves the
+        # corpus matte-ready if a real segmenter is ever added, and makes the
+        # white/empty scene part of the outfit product contract (see
+        # OUTFIT_OUTPUT_CONTRACT). The `background` parameter stays on the
+        # signature for wire compatibility; product images still honor custom
+        # scenes via their own _resolve_background call.
+        background = _resolve_background("white", matte_ready=wants_flat_lay)
 
         # Build item descriptions
         item_descriptions = []
@@ -706,12 +743,15 @@ Composition: ONE single flat lay photograph of these garments arranged together 
 SCENE (change only these):
 - Style: {style}
 - Background: {background}
-- Pose: {pose} (face clearly visible; front or slight 3/4; no sunglasses)
+- Pose: {pose} - simple, natural stance; arms relaxed; no props; no extreme motion
 - View angle: {view_angle}
+- Framing: {self._pose_framing(pose)}
 - Lighting: {lighting} (even face light; no beauty-filter look)
 - Clothing fits naturally with realistic draping
 
-Output one photoreal photo of THIS same person. Do not invent a new face."""
+Output one photoreal photo of THIS same person. Do not invent a new face.
+
+{OUTFIT_OUTPUT_CONTRACT}"""
 
             return await self._generate_with_references(
                 self._tidy_prompt(base_prompt),
@@ -722,26 +762,36 @@ Output one photoreal photo of THIS same person. Do not invent a new face."""
             )
 
         else:
-            # Generic model generation (no avatar)
+            # Generic model generation (no avatar). SINGLE_FIGURE_LOCK (not
+            # PERSON_REFERENCE_FIDELITY) goes here: with no person reference
+            # the "ALL reference images show the SAME single person" claim
+            # would be false, and the one-figure ban is exactly what stops a
+            # multi-garment reference set from rendering one figure per
+            # garment.
             prompt = f"""Professional fashion photo of a {model_gender} model wearing a cohesive {style} outfit: {items_list}.
 
 {custom_section}{reference_map}
 {source_photo_block}{garment_block}
 {outfit_inventory}
 
+{SINGLE_FIGURE_LOCK}
+
 {OUTFIT_LOCK}
 {body_desc}
 
 Style:
 - Background: {background}
-- Pose: {pose}
+- Pose: {pose} - simple, natural stance; arms relaxed; no props; no extreme motion
 - View angle: {view_angle}
+- Framing: {self._pose_framing(pose)}
 - Lighting: {lighting}
 - Sharp focus, realistic fabric textures, accurate colors
 
 Composition: ONE single photograph of the model wearing this outfit{no_collage}.
 
-{SHORT_NEGATIVES}"""
+{SHORT_NEGATIVES}
+
+{OUTFIT_OUTPUT_CONTRACT}"""
 
             return await self._generate_with_references(
                 self._tidy_prompt(prompt),

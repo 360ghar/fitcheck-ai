@@ -25,6 +25,7 @@ Sample request format (Agnes chat/vision):
 """
 
 import base64
+import asyncio
 import random
 import time
 from dataclasses import dataclass
@@ -34,6 +35,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.core.config import settings
+from app.core.concurrency import provider_image_slot
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.models.ai import HealthCheckResult
@@ -519,6 +521,56 @@ class AIProviderService:
         lowered = (error_detail or "").lower()
         return "unable to generate this content" in lowered or "content policy" in lowered
 
+    # Provider-side concurrency rejections. The gateway's own cap was exceeded:
+    # that is our AGGREGATE request rate, not a defect in the provider, and it
+    # is always safe to retry (nothing was generated, nothing billed). Agnes
+    # reports it in the response BODY ("WARNING: Exceeded concurrency limit.")
+    # and has paired it with statuses this module does not treat as transient,
+    # so the text is matched independently of the status code (2026-09-17
+    # production log: a 30-wide fan-out had every batch item fail this way).
+    _PROVIDER_OVERLOAD_MARKERS = (
+        "exceeded concurrency limit",
+        "concurrency limit",
+        "too many concurrent",
+    )
+    # Retry floor for a bare concurrency rejection. Deliberately longer than the
+    # generic transient delay: the queue is ALREADY full, so a sub-second retry
+    # re-enters the same queue and occupies a provider slot for nothing. Still
+    # well under the max_delay ceiling, and a Retry-After header overrides it.
+    _PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS = 2.0
+
+    @classmethod
+    def _is_provider_overload_text(cls, detail: str) -> bool:
+        """True when a provider response body names its own concurrency limit."""
+        lowered = (detail or "").lower()
+        return any(marker in lowered for marker in cls._PROVIDER_OVERLOAD_MARKERS)
+
+    @classmethod
+    def _provider_body_text(cls, payload: Any) -> str:
+        """Flatten an already-parsed provider response into searchable text.
+
+        A gateway may answer 200 with the concurrency warning in the envelope
+        and an empty ``data`` array instead of an error status; the parsed body
+        is the only place that reason survives.
+        """
+        try:
+            return str(payload)[:2000]
+        except Exception:  # noqa: BLE001 - a hostile __str__ must not mask the real error
+            return ""
+
+    @staticmethod
+    def _is_success_status(response: httpx.Response) -> bool:
+        """True for 2xx/3xx responses (no rejection reason to read).
+
+        Only used to decide whether a body is worth parsing for an overload
+        message. Duck-typed responses that expose no real integer status are
+        treated as successful so their body is never parsed.
+        """
+        status = getattr(response, "status_code", None)
+        if not isinstance(status, int):
+            return True
+        return 200 <= status < 400
+
     @staticmethod
     def _retry_delay_seconds(attempt: int) -> float:
         # Faster retry profile for better user experience
@@ -595,14 +647,36 @@ class AIProviderService:
 
         if self._is_transient_http_status(response.status_code):
             headers = getattr(response, "headers", {}) or {}
+            detail = self._http_error_detail(response)
+            if headers.get("Retry-After"):
+                retry_after: Optional[float] = self._http_retry_delay_seconds(response, 0)
+            elif self._is_provider_overload_text(detail):
+                # Concurrency-marked 429/503 without Retry-After: the queue is
+                # already full, so the 2s floor applies here too — otherwise the
+                # retry re-enters after the generic 0.5s delay.
+                retry_after = self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS
+            else:
+                retry_after = None
             raise self._TransientChatAPIOverload(
-                f"status={response.status_code}: {self._http_error_detail(response)}",
-                retry_after_seconds=(
-                    self._http_retry_delay_seconds(response, 0)
-                    if headers.get("Retry-After")
-                    else None
-                ),
+                f"status={response.status_code}: {detail}",
+                retry_after_seconds=retry_after,
             )
+        if not self._is_success_status(response):
+            detail = self._http_error_detail(response)
+            if self._is_provider_overload_text(detail):
+                # Same reasoning as the /images/generations leg: the body names
+                # the gateway's concurrency cap while the status is otherwise
+                # permanent, and the request was rejected before any work was
+                # done. Retry it.
+                headers = getattr(response, "headers", {}) or {}
+                raise self._TransientChatAPIOverload(
+                    f"status={response.status_code}: {detail}",
+                    retry_after_seconds=(
+                        self._http_retry_delay_seconds(response, 0)
+                        if headers.get("Retry-After")
+                        else self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS
+                    ),
+                )
         response.raise_for_status()
         return response.json(), response.status_code
 
@@ -700,6 +774,41 @@ class AIProviderService:
 
         raise last_exc or AIServiceError("All AI chat attempts failed")
 
+    async def _record_chat_outcome(
+        self, base_url: str, api_key: Optional[str], data: Any, model: str
+    ) -> AIResponse:
+        """Parse the chat response, then record the REAL outcome (TD-108).
+
+        Order is the point: a 200 whose body cannot be parsed is a provider
+        failure, so parsing runs first and the circuit breaker only hears about
+        outcomes the caller accepted. Recording before parsing made ONE call
+        record a success (which resets a genuine failure streak) and then a
+        failure.
+
+        Exactly one outcome per real call: a parse failure is recorded here and
+        the exception is marked ``health_recorded`` so the generic
+        ``except AIServiceError`` handler in :meth:`chat` does not record it a
+        second time on its way out.
+        """
+        # Local import: same circular-import reason as chat()'s own lookup.
+        from app.services.ai_provider_health_service import get_health_service
+
+        health_service = get_health_service()
+        try:
+            parsed = self._parse_chat_response(data, model, base_url)
+        except AIServiceError as parse_error:
+            # Unusable body (malformed/truncated/inline-image violation): that
+            # is a provider failure, not a local bug - record it before letting
+            # the error out, so the breaker still learns from a provider that
+            # keeps answering 200 with garbage. Only AIServiceError is caught:
+            # any other exception type is a local bug, and the outer handlers
+            # record it exactly once on its way out.
+            parse_error.health_recorded = True
+            await health_service.record_result(base_url, ok=False, api_key=api_key)
+            raise
+        await health_service.record_result(base_url, ok=True, api_key=api_key)
+        return parsed
+
     async def chat(
         self,
         messages: List[ChatMessage],
@@ -786,6 +895,28 @@ class AIProviderService:
                     cross_host_fallback = next_url != attempt_url
                     if not (e.retryable or (e.fallback_eligible and cross_host_fallback)):
                         raise
+                    if e.retry_after_seconds and next_url == attempt_url:
+                        # Same-gateway fallback: only an overload hint says the
+                        # queue is full, so only it waits out the health gate's
+                        # overload cooldown (10s). A non-overload transient hint
+                        # honors its own delay instead of inflating to 10-12s.
+                        # Bounded so a bad hint cannot stall saves.
+                        from app.services.ai_provider_health_service import (
+                            OVERLOAD_COOLDOWN_SECONDS,
+                        )
+                        if self._is_provider_overload_text(str(e)):
+                            wait = min(
+                                max(float(e.retry_after_seconds), OVERLOAD_COOLDOWN_SECONDS),
+                                OVERLOAD_COOLDOWN_SECONDS + 2.0,
+                            )
+                        else:
+                            wait = min(float(e.retry_after_seconds), OVERLOAD_COOLDOWN_SECONDS + 2.0)
+                        logger.warning(
+                            "Image provider overloaded; waiting before same-host fallback",
+                            wait_seconds=wait,
+                            error=str(e)[:200],
+                        )
+                        await asyncio.sleep(wait)
                     logger.warning(
                         "Image generation failed, trying fallback model",
                         primary_model=primary_model,
@@ -886,8 +1017,24 @@ class AIProviderService:
             }
         ]
 
+        async def _dispatch(
+            attempts: List[Dict[str, Any]],
+        ) -> Tuple[Dict[str, Any], int]:
+            """Run the attempt loop, gated on the image-provider budget.
+
+            Only image requests (response_modalities) draw down the gateway's
+            image concurrency; plain chat/vision traffic must not queue behind
+            it. The gate wraps the whole loop - primary attempt, its internal
+            retries, and the fallback attempt - so one caller can never hold
+            more than one provider slot at a time.
+            """
+            if is_image_request:
+                async with provider_image_slot():
+                    return await self._call_with_retry_and_fallback(attempts)
+            return await self._call_with_retry_and_fallback(attempts)
+
         try:
-            data, status_code = await self._call_with_retry_and_fallback(chat_attempts)
+            data, status_code = await _dispatch(chat_attempts)
 
             logger.info(
                 "AI chat response received",
@@ -911,12 +1058,12 @@ class AIProviderService:
 
             # A3-01: a ``return`` inside the try body skips the else clause,
             # so the circuit breaker never learned from chat successes — the
-            # else's record_result was dead code. Record the real outcome
-            # here (and on every other success/failure path below).
-            await health_service.record_result(
-                active_base_url, ok=True, api_key=active_api_key
+            # else's record_result was dead code. Record the real outcome here
+            # (and on every other success/failure path below), AFTER the
+            # response parses: see _record_chat_outcome (TD-108).
+            return await self._record_chat_outcome(
+                active_base_url, active_api_key, data, use_model
             )
-            return self._parse_chat_response(data, use_model, active_base_url)
 
         except httpx.HTTPStatusError as e:
             error_detail = self._http_error_detail(e.response)
@@ -944,23 +1091,31 @@ class AIProviderService:
                     }
                 ]
                 try:
-                    data, status_code = await self._call_with_retry_and_fallback(fallback_attempts)
+                    data, status_code = await _dispatch(fallback_attempts)
                     logger.info(
                         "AI chat response received after response_format fallback",
                         status_code=status_code,
                         latency_ms=round((time.monotonic() - started_at) * 1000, 2),
                         choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
                     )
-                    await health_service.record_result(
-                        active_base_url, ok=True, api_key=active_api_key
+                    # Parse first, then record (TD-108): a fallback response
+                    # we cannot parse must not be logged as a success.
+                    return await self._record_chat_outcome(
+                        active_base_url, active_api_key, data, use_model
                     )
-                    return self._parse_chat_response(data, use_model, active_base_url)
                 except httpx.HTTPStatusError as fallback_error:
                     error_detail = self._http_error_detail(fallback_error.response)
                     e = fallback_error
                     status = e.response.status_code
 
             retryable = self._is_transient_http_status(status)
+            is_overload = self._is_provider_overload_text(error_detail)
+            # An explicit concurrency rejection is retryable no matter which
+            # status carried it: the gateway is up, it just refused the request
+            # ahead of any work. Without this the batch-item retry and the
+            # caller-level retry both skip a request that would have succeeded
+            # a second later.
+            retryable = retryable or is_overload
             # Put status + body in the message so Railway/log UIs that only
             # show `message` still surface the real failure cause.
             fail_msg = f"Chat request failed (status={status}): {error_detail}"
@@ -969,10 +1124,11 @@ class AIProviderService:
                 status_code=status,
                 error=error_detail,
                 retryable=retryable,
+                overload=is_overload,
                 exc_info=False,
             )
             await health_service.record_result(
-                active_base_url, ok=False, api_key=active_api_key
+                active_base_url, ok=False, api_key=active_api_key, overload=is_overload
             )
             raise AIServiceError(
                 f"AI request failed ({status}): {error_detail}",
@@ -1005,21 +1161,43 @@ class AIProviderService:
                         "base_url": active_base_url,
                     }]
                     try:
-                        data, status_code = await self._call_with_retry_and_fallback(
-                            fallback_attempts
-                        )
+                        data, status_code = await _dispatch(fallback_attempts)
+                    except AIServiceError as fallback_error:
+                        if not fallback_error.health_recorded:
+                            await health_service.record_result(
+                                active_base_url,
+                                ok=False,
+                                api_key=active_api_key,
+                                overload=self._is_provider_overload_text(
+                                    fallback_error.provider_error_detail
+                                    or str(fallback_error)
+                                ),
+                            )
+                        raise
                     except Exception:
                         await health_service.record_result(
                             active_base_url, ok=False, api_key=active_api_key
                         )
                         raise
-                    await health_service.record_result(
-                        active_base_url, ok=True, api_key=active_api_key
+                    # Parse first, then record (TD-108).
+                    return await self._record_chat_outcome(
+                        active_base_url, active_api_key, data, use_model
                     )
-                    return self._parse_chat_response(data, use_model, active_base_url)
-            await health_service.record_result(
-                active_base_url, ok=False, api_key=active_api_key
-            )
+            # A failure reaches this handler either from _dispatch (transport /
+            # status exhaustion - nothing has recorded it yet) or from
+            # _record_chat_outcome, which records the unusable-200 case itself
+            # and marks the exception. Record only when the outcome is still
+            # unaccounted for: recording twice made one call count as a success
+            # AND a failure (TD-108).
+            if not provider_error.health_recorded:
+                await health_service.record_result(
+                    active_base_url,
+                    ok=False,
+                    api_key=active_api_key,
+                    overload=self._is_provider_overload_text(
+                        provider_error.provider_error_detail or str(provider_error)
+                    ),
+                )
             raise
 
         except (httpx.RequestError, httpx.TimeoutException, ValueError, KeyError, TypeError) as e:
@@ -1539,41 +1717,121 @@ class AIProviderService:
                 # same transient set as chat(). Permanent 4xx fail via
                 # raise_for_status without entering with_retry.
                 headers = getattr(response, "headers", {}) or {}
+                detail = self._http_error_detail(response)
+                if headers.get("Retry-After"):
+                    image_retry_after: Optional[float] = self._http_retry_delay_seconds(response, 0)
+                elif self._is_provider_overload_text(detail):
+                    # Concurrency-marked rejection without Retry-After: same
+                    # 2s floor as the chat leg, or the retry re-enters a full
+                    # queue after the generic delay.
+                    image_retry_after = self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS
+                else:
+                    image_retry_after = None
                 raise self._TransientImageAPIOverload(
-                    f"status={response.status_code}: {self._http_error_detail(response)}",
-                    retry_after_seconds=(
-                        self._http_retry_delay_seconds(response, 0)
-                        if headers.get("Retry-After")
-                        else None
-                    ),
+                    f"status={response.status_code}: {detail}",
+                    retry_after_seconds=image_retry_after,
                 )
+            if not self._is_success_status(response):
+                detail = self._http_error_detail(response)
+                if self._is_provider_overload_text(detail):
+                    # The gateway spelled out that OUR concurrency is over its
+                    # cap while answering with a status that is otherwise
+                    # permanent (Agnes has used 400 for this). The body is
+                    # conclusive and the request was rejected before any
+                    # generation, so retry it like the transient case instead of
+                    # surfacing a permanent error.
+                    headers = getattr(response, "headers", {}) or {}
+                    raise self._TransientImageAPIOverload(
+                        f"status={response.status_code}: {detail}",
+                        retry_after_seconds=(
+                            self._http_retry_delay_seconds(response, 0)
+                            if headers.get("Retry-After")
+                            else self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS
+                        ),
+                    )
             response.raise_for_status()
             return response
 
         try:
-            response = await with_retry(
-                _post_image_request,
-                # ponytail: one internal retry; the call site's with_retry adds
-                # one more round (kept low so a 429 storm isn't amplified).
-                max_retries=1,
-                initial_delay=0.5,
-                backoff_factor=1.5,
-                max_delay=5.0,
-                retryable_exceptions=self._TRANSIENT_TRANSPORT_ERRORS + (self._TransientImageAPIOverload,),
-            )
-            data = response.json()
+            # Provider-side gate (2026-09-17 RCA): IMAGE_PROVIDER_SEMAPHORE
+            # bounds how many image requests are in flight at the shared
+            # gateway, whose own concurrency limit answered
+            # "WARNING: Exceeded concurrency limit." to everything past its cap
+            # once a 30-wide fan-out arrived. Held ACROSS the internal retry so
+            # a retry cannot jump the queue and re-enter the same full gateway.
+            # The response body is read inside the block: releasing the slot
+            # while the provider is still streaming would understate load.
+            async with provider_image_slot():
+                async def _post_and_check_overload() -> httpx.Response:
+                    # Parse the 200 envelope INSIDE the retry wrapper so a
+                    # concurrency-limited 200 (warning + no images) earns the
+                    # same internal retry as a 429/503 status. Anything else
+                    # (parse failure, moderation empty, real images) returns
+                    # the response for the existing downstream handling.
+                    resp = await _post_image_request()
+                    try:
+                        body = resp.json()
+                    except Exception:
+                        return resp
+                    items = body.get("data", []) if isinstance(body, dict) else []
+                    has_images = (
+                        any(
+                            isinstance(it, dict) and (it.get("b64_json") or it.get("url"))
+                            for it in items
+                        )
+                        if isinstance(items, list)
+                        else False
+                    )
+                    if not has_images and self._is_provider_overload_text(
+                        self._provider_body_text(body)
+                    ):
+                        raise self._TransientImageAPIOverload(
+                            f"status={resp.status_code}: exceeded concurrency limit "
+                            "(concurrency-limited 200 envelope with no images)",
+                            retry_after_seconds=self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS,
+                        )
+                    return resp
+
+                response = await with_retry(
+                    _post_and_check_overload,
+                    # ponytail: one internal retry; the call site's with_retry adds
+                    # one more round (kept low so a 429 storm isn't amplified).
+                    # The first delay is longer than chat()'s because the
+                    # concurrency rejection above is a full queue, not a blip.
+                    max_retries=1,
+                    initial_delay=2.0,
+                    backoff_factor=1.5,
+                    max_delay=8.0,
+                    retryable_exceptions=self._TRANSIENT_TRANSPORT_ERRORS + (self._TransientImageAPIOverload,),
+                )
+                data = response.json()
         except self._TransientImageAPIOverload as e:
             # Transient gateway status after exhausting retries: fallback-worthy.
+            # A bare concurrency rejection is recorded as OVERLOAD: it counts
+            # against the short overload cooldown instead of the auth/4xx
+            # failure streak, because the gateway is healthy and our own
+            # fan-out was too wide. Feeding it to the streak opened the breaker
+            # for a working provider (2026-09-17: "Circuit breaker OPEN ...
+            # after 15 consecutive real call failures" on 503s that were all
+            # concurrency rejections).
+            message = str(e)
+            is_overload = self._is_provider_overload_text(message)
             logger.warning(
                 "Image generation provider overloaded after retries; raising fallback",
-                error_message=str(e)[:500],
+                error_message=message[:500],
+                overload=is_overload,
                 exc_info=False,
             )
-            await health_service.record_result(image_url, ok=False, api_key=image_key)
+            await health_service.record_result(
+                image_url, ok=False, api_key=image_key, overload=is_overload
+            )
             raise AIServiceError(
                 f"AI image provider overloaded after retries: {e}",
                 retryable=True,
-                retry_after_seconds=e.retry_after_seconds,
+                retry_after_seconds=(
+                    e.retry_after_seconds
+                    or (self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS if is_overload else None)
+                ),
             )
         except httpx.HTTPStatusError as e:
             error_detail = self._http_error_detail(e.response)
@@ -1667,9 +1925,20 @@ class AIProviderService:
             # Agnes returned 200 with no usable images - most commonly a silent
             # content-moderation refusal. Retryable so the fallback model gets
             # a chance, since no image was actually produced (nothing to double-bill).
-            await health_service.record_result(image_url, ok=False, api_key=image_key)
+            # A concurrency rejection can arrive this way too (200 + warning in
+            # the envelope, no data array): record it as overload so a merely
+            # busy gateway never counts toward opening the circuit breaker.
+            is_overload = self._is_provider_overload_text(self._provider_body_text(data))
+            await health_service.record_result(
+                image_url, ok=False, api_key=image_key, overload=is_overload
+            )
             raise AIServiceError(
-                f"AI image provider returned no images for model {model}", retryable=True
+                f"AI image provider returned no images for model {model}"
+                + (" (exceeded concurrency limit)" if is_overload else ""),
+                retryable=True,
+                retry_after_seconds=(
+                    self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS if is_overload else None
+                ),
             )
 
         await health_service.record_result(image_url, ok=True, api_key=image_key)

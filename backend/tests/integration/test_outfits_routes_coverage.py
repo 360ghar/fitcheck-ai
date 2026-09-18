@@ -36,6 +36,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
+import httpx
 
 from app.api.v1 import outfits as outfits_module
 from app.api.v1 import images as images_module
@@ -631,6 +632,73 @@ async def test_create_outfit_persists_and_returns_the_row():
     assert result["data"]["images"] == []
     assert result["data"]["worn_count"] == 0
     assert db.rows["outfits"][0]["user_id"] == USER_ID
+
+
+@pytest.mark.asyncio
+async def test_create_outfit_insert_is_upsert_on_primary_key():
+    """The outfit insert carries ``on_conflict="id"``: it runs inside
+    ``execute_with_reconnect`` and a lost response re-sends the same
+    client-generated id, which as a plain insert duplicated the row / 500ed
+    (write contract in app/utils/db.py, 2026-09-17 RCA)."""
+    db = _OutfitsFakeDB({"items": [_item_row()]})
+
+    await outfits_module.create_outfit(
+        OutfitCreate(name="Weekend", item_ids=[UUID(ITEM_ID)]),
+        user_id=USER_ID,
+        db=db,
+    )
+
+    writes = {(table, on_conflict) for table, _payload, on_conflict in db.inserts}
+    assert ("outfits", "id") in writes
+
+
+class _FlakyOutfitsDB(_OutfitsFakeDB):
+    """Commit the first outfits upsert, then raise a retryable pool error.
+
+    Models the lost-response case: the row committed server-side but the
+    response never arrived, so ``execute_with_reconnect`` replays the same
+    upsert on the rebuilt client.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._flaked = False
+
+    def table(self, name):
+        builder = super().table(name)
+        if name != "outfits":
+            return builder
+        real_execute = builder.execute
+
+        def _flaky_execute():
+            result = real_execute()
+            if not self._flaked:
+                self._flaked = True
+                raise httpx.RemoteProtocolError("GOAWAY received")
+            return result
+
+        builder.execute = _flaky_execute
+        return builder
+
+
+@pytest.mark.asyncio
+async def test_create_outfit_lost_response_retry_replays_single_row(monkeypatch):
+    """Lost-response retry replays the committed upsert onto the same id."""
+    db = _FlakyOutfitsDB({"items": [_item_row()]})
+    monkeypatch.setattr(
+        "app.db.connection.SupabaseDB.rebuild_service_client",
+        classmethod(lambda cls, stale=None: db),
+    )
+
+    result = await outfits_module.create_outfit(
+        OutfitCreate(name="Weekend", item_ids=[UUID(ITEM_ID)]),
+        user_id=USER_ID,
+        db=db,
+    )
+
+    assert result["message"] == "Created"
+    assert db._flaked
+    assert len(db.rows.get("outfits", [])) == 1
 
 
 @pytest.mark.asyncio

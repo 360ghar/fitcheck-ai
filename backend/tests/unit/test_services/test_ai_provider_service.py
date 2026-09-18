@@ -1549,3 +1549,232 @@ async def test_chat_does_not_retry_content_policy_400_on_same_host_fallback():
     # Only the primary was attempted; no wasted second call to the same gateway.
     assert len(fake_client.urls) == 1
     assert fake_client.urls[0].startswith("https://image.example.com")
+
+
+# =============================================================================
+# Provider-side concurrency gate (2026-09-17 overload RCA)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_images_api_holds_the_provider_slot_around_the_post(monkeypatch):
+    """The outbound image POST runs inside provider_image_slot(): that is the
+    whole point of the gate (bound the fan-out at the shared gateway)."""
+    import asyncio as _asyncio
+
+    sem = _asyncio.Semaphore(1)
+    monkeypatch.setattr("app.core.concurrency.IMAGE_PROVIDER_SEMAPHORE", sem)
+
+    observed = []
+
+    class _SlotObservingClient:
+        async def post(self, url, json=None, headers=None):
+            observed.append(sem._value)
+            return _FakeResponse({"data": [{"b64_json": "ZmFrZQ=="}]})
+
+    service = AIProviderService(_make_config())
+    with patch.object(
+        AIProviderService, "_get_client", AsyncMock(return_value=_SlotObservingClient())
+    ):
+        await service._generate_image_via_images_api("a cat", model="image-model")
+
+    assert observed == [0], "the provider slot must be held during the POST"
+    assert sem._value == 1, "the slot must be released after the call"
+
+
+@pytest.mark.asyncio
+async def test_images_api_provider_slot_caps_parallel_generation(monkeypatch):
+    """N concurrent generations must never exceed the provider cap.
+
+    This is the 2026-09-17 failure mode: a 30-wide batch hit a gateway that
+    allows far fewer, so every item past the cap was rejected. With the gate in
+    place the in-flight count is capped at the configured value.
+    """
+    import asyncio as _asyncio
+
+    sem = _asyncio.Semaphore(2)
+    monkeypatch.setattr("app.core.concurrency.IMAGE_PROVIDER_SEMAPHORE", sem)
+
+    class _ConcurrencyProbeClient:
+        def __init__(self):
+            self.in_flight = 0
+            self.max_in_flight = 0
+
+        async def post(self, url, json=None, headers=None):
+            self.in_flight += 1
+            self.max_in_flight = max(self.max_in_flight, self.in_flight)
+            await _asyncio.sleep(0.02)
+            self.in_flight -= 1
+            return _FakeResponse({"data": [{"b64_json": "ZmFrZQ=="}]})
+
+    probe = _ConcurrencyProbeClient()
+    service = AIProviderService(_make_config())
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=probe)):
+        results = await _asyncio.gather(
+            *[
+                service._generate_image_via_images_api(f"a cat {i}", model="image-model")
+                for i in range(5)
+            ]
+        )
+
+    assert probe.max_in_flight == 2
+    assert all(r.images == ["ZmFrZQ=="] for r in results)
+
+
+@pytest.mark.asyncio
+async def test_images_api_retries_concurrency_warning_on_permanent_status():
+    """Agnes reports its own cap in the BODY ("WARNING: Exceeded concurrency
+    limit."), sometimes with a status this module treats as permanent. The body
+    is conclusive (nothing was generated), so it must retry rather than surface
+    as a permanent user-facing error."""
+    from types import SimpleNamespace
+
+    class _Overload400Client:
+        def __init__(self):
+            self.call_count = 0
+
+        async def post(self, url, json=None, headers=None):
+            self.call_count += 1
+            response = _FakeResponse({"error": {"message": "WARNING: Exceeded concurrency limit."}})
+            response.status_code = 400
+            response.text = '{"error": {"message": "WARNING: Exceeded concurrency limit."}}'
+            return response
+
+    health = SimpleNamespace(
+        check_provider_health=AsyncMock(
+            return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
+        ),
+        record_result=AsyncMock(),
+    )
+    client = _Overload400Client()
+    service = AIProviderService(_make_config())
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=client)), \
+         patch("app.services.ai_provider_health_service.get_health_service", return_value=health), \
+         patch("asyncio.sleep", AsyncMock()):
+        with pytest.raises(AIServiceError) as exc_info:
+            await service._generate_image_via_images_api("a cat", model="image-model")
+
+    assert client.call_count == 2, "a concurrency rejection must be retried"
+    assert exc_info.value.retryable is True
+    assert exc_info.value.retry_after_seconds is not None, (
+        "the retry must back off ~2s instead of re-entering the full queue"
+    )
+    assert health.record_result.await_args.kwargs["overload"] is True, (
+        "a concurrency rejection must not feed the auth/4xx failure streak"
+    )
+
+
+@pytest.mark.asyncio
+async def test_images_api_empty_data_with_concurrency_warning_is_overload():
+    """The same rejection can arrive as a 200 with the warning in the envelope
+    and no data array: still retryable, still recorded as overload."""
+    from types import SimpleNamespace
+
+    class _Overload200Client:
+        async def post(self, url, json=None, headers=None):
+            response = _FakeResponse(
+                {"data": [], "warning": "WARNING: Exceeded concurrency limit."}
+            )
+            response.status_code = 200
+            return response
+
+    health = SimpleNamespace(
+        check_provider_health=AsyncMock(
+            return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
+        ),
+        record_result=AsyncMock(),
+    )
+    service = AIProviderService(_make_config())
+    with patch.object(
+        AIProviderService, "_get_client", AsyncMock(return_value=_Overload200Client())
+    ), patch("app.services.ai_provider_health_service.get_health_service", return_value=health):
+        with pytest.raises(AIServiceError) as exc_info:
+            await service._generate_image_via_images_api("a cat", model="image-model")
+
+    assert exc_info.value.retryable is True
+    assert health.record_result.await_args.kwargs["overload"] is True
+
+
+@pytest.mark.asyncio
+async def test_chat_takes_the_provider_slot_only_for_image_requests(monkeypatch):
+    """Text/vision traffic shares the gateway but not its IMAGE concurrency
+    budget, so it must not queue behind the provider gate."""
+    import asyncio as _asyncio
+
+    sem = _asyncio.Semaphore(1)
+    monkeypatch.setattr("app.core.concurrency.IMAGE_PROVIDER_SEMAPHORE", sem)
+
+    observed = []
+
+    async def _fake_loop(self, attempts):
+        observed.append(sem._value)
+        return {"choices": []}, 200
+
+    service = AIProviderService(_make_config())
+    with patch.object(AIProviderService, "_call_with_retry_and_fallback", _fake_loop), \
+         patch.object(AIProviderService, "_parse_chat_response", lambda *a, **k: "sentinel"):
+        await service.chat(
+            messages=[ChatMessage(role="user", content="a cat")],
+            response_modalities=["TEXT", "IMAGE"],
+        )
+        assert observed == [0], "image requests hold the provider slot"
+
+        observed.clear()
+        await service.chat(messages=[ChatMessage(role="user", content="hello")])
+        assert observed == [1], "text requests must not consume an image provider slot"
+
+
+@pytest.mark.asyncio
+async def test_malformed_chat_response_records_exactly_one_failure():
+    """TD-108: one real call must produce exactly ONE recorded outcome.
+
+    A 200 whose body cannot be parsed used to record a success (resetting a
+    genuine failure streak) and then a failure for the same call, so the
+    breaker both under- and over-counted depending on which record landed last.
+    """
+    from types import SimpleNamespace
+
+    class _MalformedClient:
+        async def post(self, url, json=None, headers=None):
+            return _FakeResponse({"choices": []})  # 200, no usable message
+
+    health = SimpleNamespace(
+        check_provider_health=AsyncMock(
+            return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
+        ),
+        record_result=AsyncMock(),
+    )
+    service = AIProviderService(_make_config())
+    with patch.object(
+        AIProviderService, "_get_client", AsyncMock(return_value=_MalformedClient())
+    ), patch("app.services.ai_provider_health_service.get_health_service", return_value=health):
+        with pytest.raises(AIServiceError):
+            await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert health.record_result.await_count == 1, (
+        "one real call must record one outcome, not a success followed by a failure"
+    )
+    assert health.record_result.await_args.kwargs["ok"] is False, (
+        "an unparseable 200 is a provider failure, never a success"
+    )
+
+
+@pytest.mark.asyncio
+async def test_successful_chat_records_exactly_one_success():
+    """Happy-path half of the same invariant."""
+    from types import SimpleNamespace
+
+    health = SimpleNamespace(
+        check_provider_health=AsyncMock(
+            return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
+        ),
+        record_result=AsyncMock(),
+    )
+    service = AIProviderService(_make_config())
+    with patch.object(
+        AIProviderService, "_get_client", AsyncMock(return_value=_FakeClient())
+    ), patch("app.services.ai_provider_health_service.get_health_service", return_value=health):
+        await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert health.record_result.await_count == 1
+    assert health.record_result.await_args.kwargs["ok"] is True

@@ -295,13 +295,15 @@ async def _fetch_outfit(
     include_items: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Fetch an outfit with images, normalized for the API contract."""
-    result = await asyncio.to_thread(
-        db.table("outfits")
+    result = await execute_with_reconnect(
+        lambda d: d.table("outfits")
         .select("*, outfit_images(*)")
         .eq("id", outfit_id)
         .eq("user_id", user_id)
         .maybe_single()
-        .execute
+        .execute(),
+        db,
+        extra={"operation": "fetch_outfit.lookup", "user_id": user_id},
     )
     if not result or not result.data:
         return None
@@ -314,12 +316,14 @@ async def _fetch_outfit(
             # owned, but an id-only items fetch would return foreign rows
             # (incl. storage paths, which materialize_image_urls would
             # happily presign) for corrupted/legacy item_ids.
-            items_res = await asyncio.to_thread(
-                db.table("items")
+            items_res = await execute_with_reconnect(
+                lambda d: d.table("items")
                 .select("*, item_images(*)")
                 .in_("id", item_ids)
                 .eq("user_id", user_id)
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "fetch_outfit.items", "user_id": user_id},
             )
             for i in items_res.data or []:
                 # Flutter ItemImage requires non-null `url`: synthesize it
@@ -384,7 +388,7 @@ async def create_outfit(
         }
 
         res = await execute_with_reconnect(
-            lambda d: d.table("outfits").insert(insert).execute(),
+            lambda d: d.table("outfits").upsert(insert, on_conflict="id").execute(),
             db,
             extra={"operation": "create_outfit.insert", "user_id": user_id},
         )
@@ -598,20 +602,33 @@ async def available_items(
             if not id_list:
                 return {"data": [], "message": "OK"}
 
-        query = (
-            db.table("items")
-            .select("id,name,category,colors,item_images(storage_path,image_url,thumbnail_url,is_primary)")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
+        def _build_available_items_query(d: Any) -> Any:
+            """Build the picker query off the passed client (see below)."""
+            q = (
+                d.table("items")
+                .select("id,name,category,colors,item_images(storage_path,image_url,thumbnail_url,is_primary)")
+                .eq("user_id", user_id)
+                .eq("is_deleted", False)
+            )
+            if id_list is not None:
+                # Same recency order as the unfiltered branch so callers that
+                # surface items (picker grids, prompt builders) see a stable
+                # ordering either way.
+                q = q.in_("id", id_list).order("created_at", desc=True)
+            else:
+                q = q.order("created_at", desc=True).limit(500)
+            return q
+
+        # Rebuilding the query from the passed client lets execute_with_reconnect
+        # replay it through a fresh client when the pooled Supabase connection
+        # dies: this route used a raw asyncio.to_thread and answered
+        # ``RemoteProtocolError: <ConnectionTerminated ...>`` as an unhandled
+        # 500 (2026-09-17 production log, GET /outfits/available-items).
+        res = await execute_with_reconnect(
+            lambda d: _build_available_items_query(d).execute(),
+            db,
+            extra={"operation": "available_items.select", "user_id": user_id},
         )
-        if id_list is not None:
-            # Same recency order as the unfiltered branch so callers that
-            # surface items (picker grids, prompt builders) see a stable
-            # ordering either way.
-            query = query.in_("id", id_list).order("created_at", desc=True)
-        else:
-            query = query.order("created_at", desc=True).limit(500)
-        res = await asyncio.to_thread(query.execute)
         items = []
         # Independent per-row presign passes run concurrently; the list is
         # small (<=500, or the requested subset) and each pass is local S3

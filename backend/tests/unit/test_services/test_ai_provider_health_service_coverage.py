@@ -16,6 +16,8 @@ import pytest
 from app.services.ai_provider_health_service import (
     AIProviderHealthService,
     HealthStatus,
+    OVERLOAD_COOLDOWN_SECONDS,
+    _breaker_cooldown,
     _cache_key,
 )
 
@@ -234,3 +236,185 @@ def test_clear_cache_evicts_keyed_entries_for_the_host():
     svc.clear_cache(HOST)
 
     assert svc._health_cache == {other: svc._health_cache[other]}
+
+
+# =============================================================================
+# Adaptive cooldown + overload accounting (2026-09-17 RCA)
+#
+# A flat 120s window was wrong in both directions: a one-off blip blocked every
+# user of that provider key for two minutes, and a genuinely dead provider was
+# only retried every two minutes forever. On top of that, provider-side
+# CONCURRENCY rejections were counted as provider failures, so a busy minute
+# opened the breaker for a healthy gateway ("Circuit breaker OPEN ... after 15
+# consecutive real call failures").
+# =============================================================================
+
+
+def _freeze_jitter(monkeypatch, value: float) -> None:
+    """Pin the +/-25% cooldown jitter so bounds are assertable."""
+    monkeypatch.setattr(
+        "app.services.ai_provider_health_service.random.random", lambda: value
+    )
+
+
+def test_breaker_cooldown_grows_then_caps(monkeypatch):
+    _freeze_jitter(monkeypatch, 0.5)  # factor 1.0
+    assert _breaker_cooldown(1) == pytest.approx(20.0)
+    assert _breaker_cooldown(3) == pytest.approx(20.0)
+    assert _breaker_cooldown(4) == pytest.approx(40.0)
+    assert _breaker_cooldown(5) == pytest.approx(80.0)
+    assert _breaker_cooldown(6) == pytest.approx(160.0)
+    assert _breaker_cooldown(7) == pytest.approx(300.0)  # capped
+    assert _breaker_cooldown(20) == pytest.approx(300.0)
+
+
+def test_breaker_cooldown_extreme_streak_does_not_overflow(monkeypatch):
+    """A very long outage must not raise OverflowError in `2 ** steps`."""
+    _freeze_jitter(monkeypatch, 0.5)  # factor 1.0
+    assert _breaker_cooldown(2000) == pytest.approx(300.0)
+
+
+def test_breaker_cooldown_is_jittered(monkeypatch):
+    """A fleet of workers must not retry in lockstep and re-create the pile-up."""
+    _freeze_jitter(monkeypatch, 0.0)
+    low = _breaker_cooldown(3)
+    _freeze_jitter(monkeypatch, 1.0)
+    high = _breaker_cooldown(3)
+
+    assert low == pytest.approx(15.0)
+    assert high == pytest.approx(25.0)
+
+
+@pytest.mark.asyncio
+async def test_real_call_failures_record_a_growing_cooldown(monkeypatch):
+    _freeze_jitter(monkeypatch, 0.5)
+    svc = AIProviderHealthService()
+
+    cooldowns = []
+    for _ in range(5):
+        await svc.record_result(HOST, ok=False, api_key=API_KEY)
+        cooldowns.append(svc._health_cache[_key()].cooldown_seconds)
+
+    assert cooldowns == pytest.approx([20.0, 20.0, 20.0, 40.0, 80.0])
+    # Still closed for the first two; open from the threshold onwards.
+    assert svc._health_cache[_key()].available is False
+
+
+@pytest.mark.asyncio
+async def test_success_clears_the_cooldown():
+    svc = AIProviderHealthService()
+    for _ in range(3):
+        await svc.record_result(HOST, ok=False, api_key=API_KEY)
+    assert svc._health_cache[_key()].cooldown_seconds > 0
+
+    await svc.record_result(HOST, ok=True, api_key=API_KEY)
+
+    entry = svc._health_cache[_key()]
+    assert entry.available is True
+    assert entry.consecutive_failures == 0
+    assert entry.cooldown_seconds == 0.0
+
+
+@pytest.mark.asyncio
+async def test_record_result_overload_does_not_advance_the_streak():
+    """Concurrency rejections are our own fan-out, not provider faults: a burst
+    of them must not advance the failure streak, but they do block admission
+    for the short overload cooldown (evaluated before the 60s health TTL)."""
+    svc = AIProviderHealthService()
+    await svc.record_result(HOST, ok=False, api_key=API_KEY)
+    await svc.record_result(HOST, ok=False, api_key=API_KEY)
+    for _ in range(6):
+        await svc.record_result(HOST, ok=False, api_key=API_KEY, overload=True)
+
+    entry = svc._health_cache[_key()]
+    assert entry.consecutive_failures == 2, "overloads must not count as failures"
+    assert entry.available is False, "overload blocks admission for its cooldown"
+    assert entry.cooldown_seconds == pytest.approx(OVERLOAD_COOLDOWN_SECONDS)
+    assert entry.overload_until > entry.last_check
+    assert "concurrency" in (entry.error or "").lower()
+
+    # Admission: the host-wide deadline blocks a second key without probing,
+    # and the fail-fast carries the remaining backoff.
+    with patch("app.services.ai_provider_health_service.httpx.AsyncClient") as client_cls:
+        blocked = await svc.check_provider_health(HOST, "other-key")
+    assert blocked.available is False
+    assert blocked.retry_after_seconds is not None and blocked.retry_after_seconds > 0
+    client_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_record_result_overload_keeps_an_open_breaker_open():
+    """An overload must not be read as a recovery either."""
+    svc = AIProviderHealthService()
+    for _ in range(3):
+        await svc.record_result(HOST, ok=False, api_key=API_KEY)
+    assert svc._health_cache[_key()].available is False
+
+    await svc.record_result(HOST, ok=False, api_key=API_KEY, overload=True)
+
+    entry = svc._health_cache[_key()]
+    assert entry.available is False
+    assert entry.consecutive_failures == 3
+
+
+@pytest.mark.asyncio
+async def test_open_breaker_inside_the_recorded_cooldown_does_not_probe():
+    """Past the 60s health TTL but inside the adaptive cooldown: fail fast."""
+    svc = AIProviderHealthService()
+    svc._health_cache[_key()] = HealthStatus(
+        available=False,
+        last_check=time.time() - 65,
+        consecutive_failures=5,
+        cooldown_seconds=80.0,
+        error="Provider call failed (5 consecutive)",
+    )
+
+    with patch("app.services.ai_provider_health_service.httpx.AsyncClient") as client_cls:
+        result = await svc.check_provider_health(HOST, API_KEY)
+
+    assert result.available is False
+    client_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_open_breaker_past_the_recorded_cooldown_reprobes():
+    svc = AIProviderHealthService()
+    svc._health_cache[_key()] = HealthStatus(
+        available=False,
+        last_check=time.time() - 90,
+        consecutive_failures=5,
+        cooldown_seconds=80.0,
+        error="Provider call failed (5 consecutive)",
+    )
+
+    with _patch_client(status_code=200):
+        result = await svc.check_provider_health(HOST, API_KEY)
+
+    assert result.available is True
+
+
+@pytest.mark.asyncio
+async def test_entries_without_a_cooldown_fall_back_to_the_legacy_window():
+    """Restored/legacy state (or a status built by hand) still has a usable
+    window instead of being retried immediately."""
+    svc = AIProviderHealthService()
+    svc._health_cache[_key()] = HealthStatus(
+        available=False, last_check=time.time() - 90, consecutive_failures=3,
+    )
+
+    with patch("app.services.ai_provider_health_service.httpx.AsyncClient") as client_cls:
+        result = await svc.check_provider_health(HOST, API_KEY)
+
+    assert result.available is False
+    client_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_probe_failure_carries_a_cooldown():
+    """Probe-written failures feed the same adaptive cooldown."""
+    svc = AIProviderHealthService()
+    with _patch_client(status_code=503):
+        result = await svc.check_provider_health(HOST, API_KEY)
+
+    assert result.available is False
+    assert result.cooldown_seconds > 0

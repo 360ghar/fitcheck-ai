@@ -380,6 +380,99 @@ def test_no_parenless_execute_builders_in_app_code():
     )
 
 
+def test_no_retried_plain_inserts_without_explicit_max_retries():
+    """Structural guard for the write contract: anything wrapped in
+    ``execute_with_reconnect`` may be replayed after a lost response, so a
+    wrapped ``insert(...)`` must either be an ``upsert(..., on_conflict=...)``
+    on a client-generated key or opt out with an explicit ``max_retries=0``.
+
+    Regression for the 2026-09-17 production log: ``create_item`` retried a
+    plain ``item_images`` insert with fixed client-generated ids and answered
+    ``duplicate key value violates unique constraint "item_images_pkey"``
+    (SQLSTATE 23505) on every affected request, plus a DB-minted-key audit and
+    promo-code insert that a retry would have duplicated.
+    """
+    import ast
+    from pathlib import Path
+
+    app_dir = Path(app.__file__).resolve().parents[1] / "app"
+    offenders: list[str] = []
+
+    def _contains_insert(node: ast.AST) -> bool:
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call):
+                func = child.func
+                name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+                if name == "insert":
+                    return True
+        return False
+
+    for path in app_dir.rglob("*.py"):
+        tree = ast.parse(path.read_text())
+        # Index builder bodies (``def _insert(d): ...``) by enclosing scope so
+        # a wrapped Name reference (e.g. iap._claim_event's ``_insert``)
+        # resolves to its body instead of slipping past the guard.
+        parent: dict = {}
+        for node in ast.walk(tree):
+            for child in ast.iter_child_nodes(node):
+                parent[child] = node
+        defs_by_scope: dict = {}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                scope = None
+                scope_node = parent.get(node)
+                while scope_node is not None and not isinstance(
+                    scope_node, (ast.FunctionDef, ast.AsyncFunctionDef)
+                ):
+                    scope_node = parent.get(scope_node)
+                if scope_node is not None:
+                    scope = scope_node.name
+                defs_by_scope.setdefault((scope, node.name), node)
+
+        def _builder_body(name: str, call_node: ast.AST):
+            scope_node = parent.get(call_node)
+            while scope_node is not None and not isinstance(
+                scope_node, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                scope_node = parent.get(scope_node)
+            if scope_node is not None:
+                hit = defs_by_scope.get((scope_node.name, name))
+                if hit is not None:
+                    return hit
+            return defs_by_scope.get((None, name))
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name not in {"execute_with_reconnect", "run_sync_with_reconnect"}:
+                continue
+            if any(
+                kw.arg == "max_retries"
+                and isinstance(kw.value, ast.Constant)
+                and type(kw.value.value) is int
+                and kw.value.value == 0
+                for kw in node.keywords
+            ):
+                continue  # explicitly opted out of the retry with max_retries=0
+            if not node.args:
+                continue
+            first = node.args[0]
+            if isinstance(first, ast.Name):
+                body = _builder_body(first.id, node)
+                if body is None or not _contains_insert(body):
+                    continue
+            elif not _contains_insert(first):
+                continue
+            offenders.append(f"{path.relative_to(app_dir.parent)}:{node.lineno}")
+
+    assert not offenders, (
+        "a reconnect-wrapped insert must be upsert(..., on_conflict=...) on a "
+        "client-generated key, or pass max_retries=0:\n  " + "\n  ".join(offenders)
+    )
+
+
 # ---------------------------------------------------------------------------
 # run_sync_with_reconnect (sync)
 # ---------------------------------------------------------------------------
@@ -489,7 +582,7 @@ def test_rebuild_service_client_shares_one_client_across_a_failure_wave(monkeypa
 
     created = []
 
-    def fake_create_client(url, key):
+    def fake_create_client(url, key, options=None):
         client = object()
         created.append(client)
         return client
@@ -519,7 +612,7 @@ def test_rebuild_service_client_without_stale_always_rebuilds(monkeypatch):
     created = []
     monkeypatch.setattr(
         "app.db.connection.create_client",
-        lambda url, key: created.append(object()) or created[-1],
+        lambda url, key, options=None: created.append(object()) or created[-1],
     )
     monkeypatch.setattr("app.db.connection.settings.SUPABASE_URL", "https://x.supabase.co")
     monkeypatch.setattr("app.db.connection.settings.SUPABASE_SECRET_KEY", "secret")

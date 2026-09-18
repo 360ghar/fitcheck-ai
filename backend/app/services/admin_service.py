@@ -395,15 +395,24 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
 
     async def _fetch_items() -> List[Dict[str, Any]]:
         # items has no image_url column (images live in item_images); embed
-        # the relation and normalize a cover image_url for the admin grid.
-        # Fall back to the bare column set when the embed fails (relation
-        # missing on an older deployment).
-        for with_embed in (True, False):
-            columns = (
-                "id,name,category,created_at,item_images(image_url,is_primary)"
-                if with_embed
-                else "id,name,category,created_at"
-            )
+        # the relation and materialize EVERY image URL at read time so the
+        # console never renders an expired presigned URL (post-S3-migration
+        # rows hold durable storage_path keys, not live URLs). Fall back
+        # through source_image_url -> bare columns for older deployments.
+        # Deferred import: admin_user_generations_service imports this module
+        # (shared list helpers), so the edge must stay function-local.
+        from app.services.admin_user_generations_service import fresh_image_url
+
+        embed = (
+            "item_images(image_url,thumbnail_url,storage_path,is_primary,created_at)"
+        )
+        for columns in (
+            f"id,name,category,created_at,source_image_url,source_image_storage_path,{embed}",
+            f"id,name,category,created_at,source_image_url,{embed}",
+            f"id,name,category,created_at,{embed}",
+            "id,name,category,created_at",
+        ):
+            with_source = "source_image_url" in columns
             try:
                 res = await execute_with_reconnect(
                     lambda d, c=columns: d.table("items")
@@ -417,21 +426,57 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                 )
             except Exception as exc:
                 _log_swallowed("admin.get_user.detail.items", exc)
-                if not with_embed:
-                    return []
                 continue
             rows: List[Dict[str, Any]] = []
             for row in res.data or []:
                 r = dict(row)
                 images = r.pop("item_images", None)
+                image_entries: List[Dict[str, Any]] = []
+                if isinstance(images, list):
+                    for image in images:
+                        if not isinstance(image, dict):
+                            continue
+                        url = await fresh_image_url(
+                            image.get("storage_path") or image.get("image_url"),
+                            user_id=user_id,
+                            operation="admin.get_user.detail.items",
+                        )
+                        if not url:
+                            continue
+                        thumb = image.get("thumbnail_url")
+                        thumb_url = (
+                            await fresh_image_url(
+                                thumb,
+                                user_id=user_id,
+                                operation="admin.get_user.detail.items",
+                            )
+                            if thumb
+                            else None
+                        )
+                        image_entries.append(
+                            {
+                                "url": url,
+                                "thumb_url": thumb_url or url,
+                                "is_primary": bool(image.get("is_primary")),
+                            }
+                        )
                 cover = None
-                if isinstance(images, list) and images:
-                    primary = next((i for i in images if i.get("is_primary")), None)
-                    cover = (primary or images[0]).get("image_url")
-                elif isinstance(images, dict):
-                    cover = images.get("image_url")
+                if image_entries:
+                    primary = next(
+                        (e for e in image_entries if e["is_primary"]), image_entries[0]
+                    )
+                    cover = primary["url"]
+                    r["images"] = image_entries
                 if cover:
                     r["image_url"] = cover
+                if with_source and (r.get("source_image_storage_path") or r.get("source_image_url")):
+                    source = await fresh_image_url(
+                        r.get("source_image_storage_path") or r.get("source_image_url"),
+                        user_id=user_id,
+                        operation="admin.get_user.detail.items.source",
+                    )
+                    if source:
+                        r["source_image_url"] = source
                 rows.append(r)
             return rows
         return []
@@ -439,10 +484,18 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
     async def _fetch_outfits() -> List[Dict[str, Any]]:
         # outfits.name is the display title (task says title). Try title then name
         # so both schema variants work; also attempt an outfit_images embed for
-        # cover art when the relation exists -- cheap to try, harmless to drop.
+        # cover art, materializing every URL at read time (durable storage_path
+        # + short-lived URL after the S3 migration) — cheap to try, harmless
+        # to drop.
+        from app.services.admin_user_generations_service import fresh_image_url
+
+        image_embed = (
+            "outfit_images(image_url,thumbnail_url,storage_path,pose,lighting,"
+            "generation_type,is_primary,created_at)"
+        )
         for cols in (
-            "id,title,created_at,outfit_images(image_url,is_primary)",
-            "id,name,created_at,outfit_images(image_url,is_primary)",
+            f"id,title,created_at,{image_embed}",
+            f"id,name,created_at,{image_embed}",
             "id,title,created_at",
             "id,name,created_at",
         ):
@@ -464,13 +517,49 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                     for row in res.data or []:
                         r = dict(row)
                         images = r.pop("outfit_images", None)
+                        image_entries: List[Dict[str, Any]] = []
+                        if isinstance(images, list):
+                            for image in images:
+                                if not isinstance(image, dict):
+                                    continue
+                                url = await fresh_image_url(
+                                    image.get("storage_path") or image.get("image_url"),
+                                    user_id=user_id,
+                                    operation="admin.get_user.detail.outfits",
+                                )
+                                if not url:
+                                    continue
+                                thumb = image.get("thumbnail_url")
+                                thumb_url = (
+                                    await fresh_image_url(
+                                        thumb,
+                                        user_id=user_id,
+                                        operation="admin.get_user.detail.outfits",
+                                    )
+                                    if thumb
+                                    else None
+                                )
+                                label_parts = [
+                                    str(part)
+                                    for part in (image.get("pose"), image.get("generation_type"))
+                                    if part
+                                ]
+                                image_entries.append(
+                                    {
+                                        "url": url,
+                                        "thumb_url": thumb_url or url,
+                                        "is_primary": bool(image.get("is_primary")),
+                                        "label": " · ".join(label_parts) or None,
+                                    }
+                                )
                         # Normalize cover: first primary or first image.
                         cover = None
-                        if isinstance(images, list) and images:
-                            primary = next((i for i in images if i.get("is_primary")), None)
-                            cover = (primary or images[0]).get("image_url")
-                        elif isinstance(images, dict):
-                            cover = images.get("image_url")
+                        if image_entries:
+                            primary = next(
+                                (e for e in image_entries if e["is_primary"]), image_entries[0]
+                            )
+                            cover = primary["url"]
+                            r["images"] = image_entries
                         if cover:
                             r["cover_image_url"] = cover
                         # Normalize title field for callers that expect `title`
@@ -716,13 +805,18 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
         _fetch_support_tickets(),
     )
 
-    # Extend counts where cheap: gifts, collections, trips — batched concurrently.
+    # Extend counts where cheap: gifts, collections, trips + generation
+    # kinds for the explorer strip — batched concurrently.
     extend_tables = (
         ("outfit_collections", "collections"),
         ("trips", "trips"),
         ("gift_entitlement_grants", "gifts"),
         ("shared_outfits", "shared_outfits"),
         ("support_tickets", "support_tickets"),
+        ("extraction_jobs", "item_generations"),
+        ("outfit_generations", "outfit_renders"),
+        ("photoshoot_jobs", "photoshoot_jobs"),
+        ("social_import_jobs", "social_import_jobs"),
     )
     extend_results = await asyncio.gather(
         *(
@@ -2507,6 +2601,13 @@ async def create_promo_code(db: Any, data: Dict[str, Any]) -> Dict[str, Any]:
             lambda d: d.table("promo_codes").insert(row).execute(),
             db,
             extra={"operation": "admin.create_promo_code.insert", "code": code},
+            # DB-minted primary key (the row carries no ``id``), so a retry
+            # after a lost response is not idempotent: it would either
+            # duplicate the code or trip the unique constraint and surface the
+            # 23505 below as a bogus "already exists". Fail closed instead -
+            # the operator sees a retryable error and re-submits (write
+            # contract in app/utils/db.py).
+            max_retries=0,
         )
     except Exception as exc:  # noqa: BLE001 - map DB constraint errors to validation
         if "23505" in str(exc).lower() or "duplicate" in str(exc).lower():

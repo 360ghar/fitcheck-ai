@@ -61,6 +61,12 @@ async def record_audit(
                 "entity_type": entity_type,
                 "entity_id": row["entity_id"],
             },
+            # Append-only table with a DB-minted primary key: an automatic
+            # retry after a lost response would write the event twice, and an
+            # audit trail that silently duplicates entries is worse than one
+            # that drops a best-effort entry (this call already swallows
+            # failures by contract). See the write contract in app/utils/db.py.
+            max_retries=0,
         )
     except Exception as exc:  # noqa: BLE001 - audit must never raise
         logger.warning(

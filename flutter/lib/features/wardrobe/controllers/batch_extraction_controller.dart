@@ -14,6 +14,7 @@ import '../services/wardrobe_sync_service.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/permission_helper.dart';
+import '../../../core/utils/request_id.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../models/batch_extraction_models.dart';
@@ -65,6 +66,28 @@ class BatchExtractionController extends GetxController {
 
   // Constants
   static const int maxImages = 50;
+
+  /// Idempotency keys for the creates this flow performs, keyed by the extracted
+  /// item's temp id (TD-109).
+  ///
+  /// The save pass keeps going when one item fails, so the user can re-tap Save
+  /// with some items already committed. Holding the key per item makes that
+  /// second pass REPLAY those creates instead of inserting duplicates, and it
+  /// also makes a create whose response was lost safe to retry. The key is
+  /// derived through `requestIdIdentity`, so a model with no usable id falls
+  /// back to its object identity instead of colliding with a sibling.
+  final Map<String, String> _createRequestIds = <String, String>{};
+
+  /// Save-session nonce: temp ids are only unique within one extraction, so
+  /// the idempotency map is scoped per save pass. Incremented on reset and on
+  /// every save so a reused temp id never replays a previous save's row.
+  int _saveSession = 0;
+
+  String _requestIdFor(String tempId, Object item) =>
+      _createRequestIds.putIfAbsent(
+        's$_saveSession:${requestIdIdentity(tempId, item)}',
+        () => newRequestId('item'),
+      );
 
   /// Upper bound on the SSE-fallback polling loops. ~2 minutes at the 2s
   /// cadence below, matching PhotoshootController's cap.
@@ -1425,6 +1448,8 @@ class BatchExtractionController extends GetxController {
     }
 
     final savedItems = <ItemModel>[];
+    final seenIds = <String>{};
+    _saveSession++;
     error.value = '';
 
     for (final item in selected) {
@@ -1444,7 +1469,10 @@ class BatchExtractionController extends GetxController {
               : UseCases.normalizeList(selectedUseCases),
         );
 
-        final created = await _itemRepo.createItem(request);
+        final created = await _itemRepo.createItem(
+          request,
+          clientRequestId: _requestIdFor(item.id, item),
+        );
 
         // Image upload strategy, in priority order. Each stage only runs when
         // the previous one produced no image:
@@ -1514,7 +1542,11 @@ class BatchExtractionController extends GetxController {
             '("${item.name}") has no images after all upload strategies',
           );
         }
-        savedItems.add(savedItem);
+        // Idempotent replays return the same committed row: dedupe locally so
+        // one database item never appears twice in the wardrobe list.
+        if (seenIds.add(savedItem.id)) {
+          savedItems.add(savedItem);
+        }
       } catch (e) {
         // A10b-06: record the drop so the review page can report the
         // partial failure instead of claiming everything was saved.
@@ -1537,6 +1569,8 @@ class BatchExtractionController extends GetxController {
   void reset() {
     _sseSubscription?.cancel();
     resetSocialImportState();
+    _createRequestIds.clear();
+    _saveSession++;
     selectedImages.clear();
     extractedItems.clear();
     jobStatus.value = BatchJobStatus.idle;

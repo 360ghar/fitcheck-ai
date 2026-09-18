@@ -11,6 +11,7 @@ import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 import '../services/wardrobe_sync_service.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/request_id.dart';
 
 /// Manual entry form for adding items
 /// Can be used with or without an image
@@ -45,6 +46,17 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   final RxList<File> additionalImages = <File>[].obs;
 
   final ImagePicker _imagePicker = ImagePicker();
+
+  /// Idempotency key for this form's create (TD-109).
+  ///
+  /// Minted on the first submit and reused by every retry of that same submit,
+  /// so a create whose response was lost (or a submit that failed after the
+  /// item row committed) replays the committed item instead of adding a second
+  /// one. Cleared once the item is saved, so a fresh submit is a fresh item.
+  /// Re-minted when the draft payload changes: retrying an edited draft under
+  /// the old key would replay the stale row and silently discard the edit.
+  String? _clientRequestId;
+  String? _lastRequestJson;
 
   // Common color options
   static const List<String> commonColors = [
@@ -110,11 +122,23 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
             : UseCases.normalizeList(selectedUseCases),
       );
 
+      final requestId = (() {
+        final payloadJson = request.toJson().toString();
+        if (_clientRequestId == null || _lastRequestJson != payloadJson) {
+          _clientRequestId = newRequestId('item');
+          _lastRequestJson = payloadJson;
+        }
+        return _clientRequestId!;
+      })();
       final created = imageToUse == null
-          ? await ItemRepository().createItem(request)
+          ? await ItemRepository().createItem(
+              request,
+              clientRequestId: requestId,
+            )
           : await ItemRepository().createItemWithImage(
               image: imageToUse,
               request: request,
+              clientRequestId: requestId,
             );
 
       // Upload additional images if any (excluding the one already used).
@@ -141,6 +165,11 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
           ? Get.find<WardrobeSyncService>()
           : WardrobeSyncService();
       sync.addItem(created);
+
+      // Saved: the next submit is a different item and must NOT reuse this key
+      // (the backend would replay the row just created).
+      _clientRequestId = null;
+      _lastRequestJson = null;
 
       Get.back(); // Close form
       Get.back(); // Close item add page

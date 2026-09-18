@@ -177,7 +177,7 @@ async def _normalize_create_image_row(img, db, user_id: str) -> Dict[str, Any]:
 
     - preview key owned by the caller (``tmp/...``, ``generated/...``, legacy
       ``{user}/tmp/...``) -> promoted to a canonical ``{user}/items/...``
-      object (server-side copy, see ``promote_temp_image_to_item``) and fresh
+      object (server-side copy, see ``copy_temp_image_to_item``) and fresh
       URLs minted, so the reference survives the weekly temp cleanup;
     - canonical key owned by the caller -> kept, URLs left as supplied (they
       were minted at upload time);
@@ -234,7 +234,14 @@ async def _normalize_create_image_row(img, db, user_id: str) -> Dict[str, Any]:
     if is_preview_key(storage_path):
         # Preview key (tmp/generated, either layout): promote to a canonical
         # item object so the reference survives the weekly temp cleanup.
-        promoted = await StorageService.promote_temp_image_to_item(
+        #
+        # COPY, not move (2026-09-17 RCA): the staged tmp source must outlive
+        # this attempt, because the create is rolled back on any later failure
+        # and the caller's retry re-sends the same tmp key. A move deleted the
+        # source up front, so the rollback destroyed the only copy and every
+        # retry answered "Failed to move image: NoSuchKey" (503). create_item
+        # deletes the source itself once its rows have committed.
+        promoted = await StorageService.copy_temp_image_to_item(
             db=db,
             user_id=user_id,
             temp_storage_path=storage_path,
@@ -482,8 +489,15 @@ async def create_item(
         }
 
         try:
+            # upsert-on-PK, not insert: this call is wrapped in the reconnect
+            # retry, and a lost response (server committed, client never saw it)
+            # makes the retry re-send the same row. With a plain insert that
+            # retry answered ``duplicate key ... items_pkey`` and the request
+            # 500ed (2026-09-17 production log); merging on the client-generated
+            # id instead replays the committed row, so the retry is exact-once
+            # in effect (see the write contract in app/utils/db.py).
             inserted = await execute_with_reconnect(
-                lambda d: d.table("items").insert(item_data).execute(),
+                lambda d: d.table("items").upsert(item_data, on_conflict="id").execute(),
                 db,
                 extra={"operation": "create_item.insert", "user_id": user_id},
                 max_retries=1,
@@ -522,7 +536,16 @@ async def create_item(
         # canonical storage_path passed through untouched points at a
         # pre-existing object the caller owns (e.g. from a previous upload)
         # and must never be deleted by the rollback.
+        #
+        # Promotion is a COPY, not a move (2026-09-17 production RCA): the
+        # staged ``tmp/...`` source stays in place until this request has
+        # committed, so a rollback can undo the canonical object without
+        # destroying the only copy. The old move deleted the tmp source up
+        # front, so a rolled-back create left the client holding a key that no
+        # longer existed anywhere and its retry answered
+        # ``Failed to move image: NoSuchKey`` (503) forever.
         promoted_storage_paths: List[str] = []
+        temp_source_paths: List[str] = []
         images: List[Dict[str, Any]] = []
         try:
             # Insert images in a single batch. Each reference is normalized
@@ -542,6 +565,7 @@ async def create_item(
                     img_row = await _normalize_create_image_row(img, db, user_id)
                     if reference and is_preview_key(reference):
                         promoted_storage_paths.append(img_row.get("storage_path"))
+                        temp_source_paths.append(reference)
                     img_row.update({
                         "id": img_id,
                         "item_id": item_id,
@@ -552,9 +576,14 @@ async def create_item(
                     })
                     image_rows.append(img_row)
 
-                # Single batch insert for all images
+                # Single batch upsert for all images: these ids are minted here
+                # and the call is retried on a dead pooled connection, so a
+                # lost response re-sends the same rows. A plain insert then
+                # answered ``duplicate key ... item_images_pkey`` (2026-09-17
+                # production log); merging on the id replays the committed rows
+                # instead (write contract in app/utils/db.py).
                 await execute_with_reconnect(
-                    lambda d: d.table("item_images").insert(image_rows).execute(),
+                    lambda d: d.table("item_images").upsert(image_rows, on_conflict="id").execute(),
                     db,
                     extra={"operation": "create_item.insert_images", "user_id": user_id},
                     max_retries=1,
@@ -604,13 +633,22 @@ async def create_item(
             # Best-effort reverse: delete the item row, then every object this
             # attempt promoted, logging each step so a leftover orphan is
             # recoverable by operators.
+            #
+            # The staged tmp sources are deliberately NOT deleted here: they are
+            # the client's recovery path, because its retry re-sends the same
+            # tmp key. Deleting canonical objects only (and keeping the source)
+            # is what makes a failed create retryable instead of permanently
+            # 503ing on NoSuchKey (2026-09-17 RCA). An abandoned tmp object is
+            # covered by the weekly temp cleanup.
             try:
-                await asyncio.to_thread(
-                    db.table("items")
+                await execute_with_reconnect(
+                    lambda d: d.table("items")
                     .delete()
                     .eq("id", item_id)
                     .eq("user_id", user_id)
-                    .execute
+                    .execute(),
+                    db,
+                    extra={"operation": "create_item.rollback_delete", "user_id": user_id},
                 )
             except Exception as rollback_error:
                 logger.error(
@@ -629,6 +667,22 @@ async def create_item(
                         error=str(rollback_error),
                     )
             raise
+
+        # Committed: the item row and its image rows are durable, so the staged
+        # tmp objects this request promoted from are now redundant. Cleanup runs
+        # here, AFTER the rollback-eligible block, so any failure above still
+        # leaves the source alive for the client's retry. Best-effort by design:
+        # a failed delete only leaves an object the weekly temp cleanup takes.
+        for temp_path in temp_source_paths:
+            try:
+                await StorageService.delete_image(db=db, storage_path=temp_path)
+            except Exception as cleanup_error:
+                logger.warning(
+                    "Create item: failed to clean up promoted temp object",
+                    item_id=item_id,
+                    storage_path=temp_path,
+                    error=str(cleanup_error),
+                )
 
         # Return full item with images
         row["images"] = images

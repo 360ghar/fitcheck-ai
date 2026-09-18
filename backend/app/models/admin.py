@@ -131,6 +131,81 @@ class AdminUserActivity(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class AdminUserGeneration(BaseModel):
+    """One normalized generation of any kind (generations explorer + viewer).
+
+    Every kind (item extraction run, saved outfit, outfit render run,
+    photoshoot job, social import) maps to this single shape so the console
+    renders one gallery component. ``media`` entries carry read-time
+    re-minted URLs; ``meta`` holds kind-specific fields. ``extra="allow"``
+    keeps the contract stable as kinds gain fields.
+    """
+
+    kind: str
+    id: str
+    status: Optional[str] = None
+    created_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    duration_ms: Optional[int] = None
+    title: str = ""
+    subtitle: Optional[str] = None
+    media: List[Dict[str, Any]] = Field(default_factory=list)
+    media_count: int = 0
+    failed_count: int = 0
+    error: Optional[str] = None
+    meta: Dict[str, Any] = Field(default_factory=dict)
+    source: Dict[str, str] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdminUserGenerationsPage(BaseModel):
+    """GET /admin/users/{user_id}/generations."""
+
+    user_id: str
+    items: List[AdminUserGeneration] = Field(default_factory=list)
+    total: int = 0
+    page: int = Field(1, ge=1)
+    page_size: int = Field(20, ge=1, le=50)
+    counts: Dict[str, int] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdminUserBilling(BaseModel):
+    """GET /admin/users/{user_id}/billing."""
+
+    user_id: str
+    subscription: Optional[Dict[str, Any]] = None
+    stripe_invoices: List[Dict[str, Any]] = Field(default_factory=list)
+    iap_transactions: List[Dict[str, Any]] = Field(default_factory=list)
+    stripe_configured: bool = False
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdminUserReferrals(BaseModel):
+    """GET /admin/users/{user_id}/referrals."""
+
+    user_id: str
+    code: Optional[str] = None
+    times_used: int = 0
+    redemptions: List[Dict[str, Any]] = Field(default_factory=list)
+    promo_redemptions: List[Dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdminUserBodyProfile(BaseModel):
+    """GET /admin/users/{user_id}/body-profile (never ``encrypted_data``)."""
+
+    user_id: str
+    profiles: List[Dict[str, Any]] = Field(default_factory=list)
+    gender: Optional[str] = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 # =============================================================================
 # Subscriptions
 # =============================================================================

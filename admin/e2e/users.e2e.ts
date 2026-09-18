@@ -26,6 +26,27 @@ test.describe('users', () => {
     await expect(page).toHaveURL(/\/users\/user_3$/)
     await expect(page.getByRole('heading', { name: 'Carol Example' })).toBeVisible()
 
+    // Generations explorer: switch to the Items tab (URL state), then open
+    // the full-page viewer for the batch extraction run.
+    await page.getByRole('tab', { name: 'Items' }).click()
+    await expect(page).toHaveURL(/gen_tab=item/)
+    await page.getByRole('button', { name: 'Open batch', exact: true }).click()
+    await expect(page).toHaveURL(/\/users\/user_3\/generations\/item\/job_1$/)
+    // Title is the page h1; the extracted-items section is asserted through
+    // its list row. (A plain li has no accessible name in Chromium, so a
+    // getByRole name filter never matches — scope structurally instead. The
+    // 'Extracted items' CardTitle is a div and the label echoes in the meta
+    // rows, so neither bare text nor heading works for the section.)
+    await expect(page.getByRole('heading', { name: 'batch' })).toBeVisible()
+    await expect(page.locator('li', { hasText: 'Linen Shirt' })).toContainText('Linen Shirt')
+
+    // Back to the detail page for the rest of the journey.
+    await page.goBack()
+    // Anchored: the viewer URL (/users/user_3/generations/...) contains the
+    // same substring, so an unanchored match would pass even when goBack()
+    // never leaves the viewer.
+    await expect(page).toHaveURL(/\/users\/user_3(\?|$)/)
+
     // Suspend flow: confirm dialog → success toast.
     await page.getByRole('button', { name: 'Suspend user', exact: true }).click()
     const dialog = page.getByRole('dialog')

@@ -56,6 +56,30 @@ describe('UserDetailPage', () => {
     expect(screen.getByText('batch_extraction')).toBeInTheDocument()
   })
 
+  it('renders generations explorer, billing, referrals and body profile sections', async () => {
+    const { handlers } = createUsersHandlers()
+    server.use(...handlers)
+    renderUserDetail()
+
+    // Generations explorer: photoshoot card + kind tabs
+    expect(await screen.findByText('linkedin')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Items' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Renders' })).toBeInTheDocument()
+
+    // Billing: Stripe invoice from fixture — number plus a real calendar
+    // date (unix-seconds must not render as January 1970).
+    expect(await screen.findByText('ABCD-0001')).toBeInTheDocument()
+    expect(screen.getByText(/Sep \d, 2024/)).toBeInTheDocument()
+
+    // Referrals: code + promo (independent queries — await each section).
+    expect(await screen.findByText('alice-abc123')).toBeInTheDocument()
+    expect(await screen.findByText('WELCOME')).toBeInTheDocument()
+
+    // Body profile: profile name (+ its default badge echo) + gender
+    expect((await screen.findAllByText('Default')).length).toBeGreaterThanOrEqual(1)
+    expect(await screen.findByText('Female')).toBeInTheDocument()
+  })
+
   it('suspend flow: confirm dialog, PATCH is_active=false, optimistic status flip + toast', async () => {
     const { handlers, state } = createUsersHandlers()
     server.use(...handlers)

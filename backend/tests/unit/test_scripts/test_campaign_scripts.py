@@ -26,6 +26,7 @@ def _load(name: str):
 
 
 grant = _load("grant_free_pro_month.py")
+upgrade = _load("upgrade_free_users_to_pro.py")
 revert = _load("revert_expired_pro_trials.py")
 
 
@@ -40,6 +41,87 @@ def _load_blog_script(name: str):
 
 blog_verify = _load_blog_script("verify.py")
 blog_rollback = _load_blog_script("rollback.py")
+
+
+def test_trial_email_carries_the_recipients_referral_link():
+    """The trial email's friend/family line must include that user's own link."""
+    url = "https://fitcheckaiapp.com/auth/register?ref=ALEX1234"
+
+    html, text = upgrade._render_email("Alex Doe", "Sep 04, 2026", url)
+
+    assert "Want more Pro months?" in html
+    assert "every friend who joins earns you both a free month of Pro" in html
+    assert url in html
+    assert url in text
+    assert "Invite friends & family" in text
+
+
+def test_trial_email_falls_back_to_the_dashboard_without_a_code():
+    """No referral code on file must not render a broken or empty share link."""
+    html, text = upgrade._render_email("Alex Doe", "Sep 04, 2026", None)
+
+    assert "Want more Pro months?" in html
+    assert "Referrals panel" in html
+    assert "Referrals panel" in text
+    assert "?ref=" not in html
+    assert "ref=" not in text
+
+
+def test_referral_share_url_matches_the_app_shape():
+    assert upgrade._build_share_url("https://fitcheckaiapp.com/", "ABC123") == (
+        "https://fitcheckaiapp.com/auth/register?ref=ABC123"
+    )
+
+
+def test_referral_base_url_precedence_and_localhost_guard(monkeypatch):
+    monkeypatch.delenv("REFERRAL_BASE_URL", raising=False)
+    monkeypatch.delenv("FRONTEND_URL", raising=False)
+    assert upgrade._resolve_referral_base_url() == upgrade.DEFAULT_REFERRAL_BASE_URL
+
+    # A dev FRONTEND_URL must never leak localhost links into a live blast.
+    monkeypatch.setenv("FRONTEND_URL", "http://localhost:3000")
+    assert upgrade._resolve_referral_base_url() == upgrade.DEFAULT_REFERRAL_BASE_URL
+
+    monkeypatch.setenv("FRONTEND_URL", "https://fitcheckaiapp.com/")
+    assert upgrade._resolve_referral_base_url() == "https://fitcheckaiapp.com"
+
+    # Explicit REFERRAL_BASE_URL wins when it is a public http(s) URL. A
+    # literal global IP keeps this assertion DNS-free (the suite blocks
+    # sockets; fitcheckaiapp.com below only passes because it IS the default).
+    monkeypatch.setenv("REFERRAL_BASE_URL", "https://93.184.216.34/")
+    assert upgrade._resolve_referral_base_url() == "https://93.184.216.34"
+
+
+def test_referral_base_url_rejects_loopback_and_private_hosts(monkeypatch):
+    """SSRF-adjacent guard: non-public base URLs (loopback, unspecified,
+    private LAN) must fall back to the production default, never into links."""
+    monkeypatch.delenv("REFERRAL_BASE_URL", raising=False)
+    for bad in (
+        "http://127.0.0.1:3000",
+        "http://0.0.0.0:3000",
+        "http://[::1]:3000",
+        "http://10.0.0.5:3000",
+        "http://192.168.1.10/",
+        "not-a-url",
+    ):
+        monkeypatch.setenv("FRONTEND_URL", bad)
+        assert upgrade._resolve_referral_base_url() == upgrade.DEFAULT_REFERRAL_BASE_URL
+    monkeypatch.setenv("FRONTEND_URL", "https://fitcheckaiapp.com/")
+    assert upgrade._resolve_referral_base_url() == "https://fitcheckaiapp.com"
+
+
+def test_referral_base_url_explicit_value_is_validated(monkeypatch):
+    """An explicit REFERRAL_BASE_URL is not trusted blindly: non-http(s)
+    schemes and non-public hosts fall back to the production default."""
+    monkeypatch.delenv("FRONTEND_URL", raising=False)
+    for bad in (
+        "ftp://fitcheckaiapp.com/",
+        "javascript:alert(1)",
+        "http://10.0.0.5:3000",
+        "http://localhost:3000",
+    ):
+        monkeypatch.setenv("REFERRAL_BASE_URL", bad)
+        assert upgrade._resolve_referral_base_url() == upgrade.DEFAULT_REFERRAL_BASE_URL
 
 
 class _Query:

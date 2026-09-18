@@ -420,6 +420,17 @@ class Settings(BaseSettings):
     # under high parallelism, so raise cautiously.
     AI_EXTRACTION_CONCURRENCY: int = 30
     AI_GENERATION_CONCURRENCY: int = 30
+    # Provider-side cap on CONCURRENT image-generation HTTP requests, nested
+    # inside AI_GENERATION_CONCURRENCY. The process-wide generation cap bounds
+    # our own memory; this one bounds how hard we hit the shared image gateway,
+    # which enforces its own concurrency limit ("WARNING: Exceeded concurrency
+    # limit." on every request past it - 2026-09-17 production log, where a
+    # 30-wide fan-out made every batch item fail after one retry). Lower is
+    # slower but succeeds: a batch serializes to
+    # ceil(batch_size / AI_IMAGE_PROVIDER_CONCURRENCY) waves. 15 is the
+    # operator-chosen value (2026-09-18), still half the process-wide cap; raise
+    # it only when the provider's own limit is known to be higher.
+    AI_IMAGE_PROVIDER_CONCURRENCY: int = 15
     AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES: int = 12
     # Hard cap on TOTAL inline input images per image-generation call. The
     # Agnes image gateway (agnes-image-2.1-flash) rejects requests with more
@@ -514,7 +525,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
 
-    @field_validator("AI_GENERATION_CONCURRENCY", "AI_EXTRACTION_CONCURRENCY", mode="after")
+    @field_validator("AI_GENERATION_CONCURRENCY", "AI_EXTRACTION_CONCURRENCY", "AI_IMAGE_PROVIDER_CONCURRENCY", mode="after")
     @classmethod
     def _cap_process_concurrency(cls, value: int) -> int:
         """Clamp process-wide concurrency caps.

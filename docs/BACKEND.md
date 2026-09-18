@@ -1,6 +1,6 @@
 # Backend
 
-Last updated: 2026-09-13
+Last updated: 2026-09-18
 
 Deep guide for the FastAPI app under `backend/`. Architecture layers: root `ARCHITECTURE.md`. Package-local agent entry: `backend/CLAUDE.md` (thin pointer here).
 
@@ -60,7 +60,35 @@ reconnect-protected delete), `feedback_service.py`, `promo_service.py`,
   pool can throw `RuntimeError: deque mutated during iteration` under
   concurrent shared-client use; `app/utils/db.py` `is_db_connection_error` +
   `execute_with_reconnect`/`run_sync_with_reconnect` detect both classes and
-  rebuild the client and retry once on the hot paths. Structured PostgREST
+  rebuild the client and retry once on the hot paths. **Both clients now use an
+  explicit HTTP/1.1 transport** (`_build_http_client` in `app/db/connection.py`,
+  injected via `SyncClientOptions(httpx_client=…)`; `http2=False`, 40/20
+  connection limits, `Timeout(connect=5, read=15, write=15, pool=10)`): postgrest
+  defaulted to HTTP/2 with a **120 s** timeout over ONE multiplexed connection
+  shared by the whole `to_thread` pool, and httpcore mutates `h2_state.streams`
+  in `send_headers` before taking its write lock — the 2026-09-17
+  `dictionary keys changed during iteration` storm (`docs/exec-plans/active/2026-09-18-production-log-rca-fixes.md`).
+  HTTP/1.1 refuses concurrent reuse of a busy connection, so one request owns
+  one connection and that race cannot happen; the 15 s read timeout stops a
+  stalled request from pinning a worker for two minutes. `rebuild_service_client`
+  closes the superseded **service** transport and coalesces rebuilds within 2 s
+  (a failure wave used to stampede `create_client`); the anon singleton is reset
+  but its pool is left open, because anon auth calls are not retried and closing
+  under them would turn a recoverable blip into a sign-in 500. A **pool timeout**
+  retries on the same client, since a busy pool is not a dead pool. Write
+  contract: anything wrapped
+  in `execute_with_reconnect` must be read-only, an upsert-on-PK (client-minted
+  UUIDs), or an explicitly idempotent RPC — a plain `insert` replayed after a
+  lost response is what produced the 23505 `item_images_pkey` errors.
+  **Client idempotency:** `POST /items` also accepts `client_request_id`
+  (≤64 chars). A repeated key returns the already-committed row instead of
+  inserting a second item (and collapses the concurrent-insert 23505 race onto
+  the winner). Both clients now send one — the web batch save, and Flutter's
+  item-add / batch-save / manual-entry paths, which mint it once per item and
+  reuse it across retries (TD-109). Without a key, a retry after a committed
+  create can duplicate the item, or re-promote a `tmp/` source the server
+  already deleted and answer a 503 no retry can clear.
+  Structured PostgREST
   responses (`APIError`) are retried only when the `code` is a bare gateway
   HTTP status (429/500/502/503/520/521/522/524 — a non-PostgREST-JSON 5xx/429
   body, i.e. the gateway itself in a bad state); deterministic SQLSTATE/PGRST
@@ -168,7 +196,17 @@ trust boundary** — the UI's permission gating is cosmetic.
   `docs/exec-plans/active/2026-08-07-admin-panel.md` and `admin/README.md`.
 - **Key endpoint groups** (all under `/api/v1/admin`): `GET /me` (session
   bootstrap: profile + role + permissions), `users` (list/detail/PATCH
-  role-is_active/is_admin with self-demotion + last-admin guards/activity),
+  role-is_active/is_admin with self-demotion + last-admin guards/activity;
+  per-user `generations` + `generations/{kind}/{id}` — a unified,
+  normalized view over extraction jobs, outfits, outfit render runs,
+  photoshoot jobs and social imports with base64 payloads stripped and image
+  URLs re-minted at read time; `status` filters the job kinds (saved outfits
+  have no status column and are excluded while a filter is active) and
+  `total`/`counts` honor the filter; the viewer fetches photoshoots by id so
+  jobs of any age open; `billing` — Stripe invoices via
+  `Invoice.list` (unix-second timestamps normalized to ISO-8601 UTC),
+  IAP rows only when the caller also holds `iap.read`;
+  `referrals`; `body-profile` — never exposes `encrypted_data`),
   `subscriptions` (+ `POST …/refund`, Stripe-only; store-billed rows
   rejected), `iap/transactions` (+ `mark-refunded`, status-only — store
   webhooks stay authoritative), `quotas` (+ `PATCH /users/{id}/quota-override`),
@@ -331,8 +369,11 @@ The pipeline enforces two **process-wide** `asyncio.Semaphore` ceilings (singlet
 |---------|---------|------|
 | `AI_EXTRACTION_CONCURRENCY` | 30 | concurrent per-image vision extraction calls |
 | `AI_GENERATION_CONCURRENCY` | 30 | concurrent per-item product-image generations (also gates `generate_variations`) |
+| `AI_IMAGE_PROVIDER_CONCURRENCY` | 15 | concurrent image requests in flight at the shared gateway, nested INSIDE `AI_GENERATION_CONCURRENCY` |
 
 Each matte adds ~110ms of GIL-held C work per generated image, run via `asyncio.to_thread` so it never sits on the event loop serving the SSE stream (a full-resolution flood fill would have been ~562ms and, at 30-wide, ~17s of serialized CPU).
+
+The provider gate exists because the process-wide ceiling and the provider's ceiling are different limits: the Agnes image gateway enforces its own concurrency cap and answers everything past it with `WARNING: Exceeded concurrency limit.`, so a 30-wide batch had **every** item past its cap rejected and then tripped the provider circuit breaker (2026-09-17). `provider_image_slot()` (reentrant, like `image_gen_slot()`) wraps the outbound image POST — the images-API leg and the `response_modalities` chat leg — always acquired **inside** a generation slot, so the ordering is generation → provider and the two gates cannot deadlock. A rejection body naming that limit is treated as retryable overload regardless of the status code, with a ~2 s retry floor (`Retry-After` still wins); `record_result(..., overload=True)` gives it a 10 s cooldown instead of advancing the consecutive-failure streak. **Consequence:** batch throughput is provider-bound — a 30-item batch runs 15-wide (two waves) instead of 30-wide, in exchange for not failing every item. Raise `AI_IMAGE_PROVIDER_CONCURRENCY` only as far as the gateway plan actually allows (it is clamped to `AI_GENERATION_CONCURRENCY`).
 
 These are NOT per-job: two simultaneous batch jobs draw from the same pool. A per-job `generation_batch_size` (route default = `AI_GENERATION_CONCURRENCY`) can only tighten below the global ceiling, never exceed it. Raise cautiously: each in-flight request holds a multi-MB base64 buffer, and shared AI gateways can 429/503 under high parallelism. Floors at 1 so a misconfigured 0/negative value cannot deadlock the pipeline.
 
@@ -341,11 +382,11 @@ These are NOT per-job: two simultaneous batch jobs draw from the same pool. A pe
 1. Client submits selected items (each with its wardrobe `item_id`) and generation options to `POST /api/v1/ai/generate-outfit`.
 2. **Resolve garment references** (`resolve_outfit_item_references` in `app/services/item_reference_service.py`): one batched, **user-scoped** query over `items` + `item_images` for the submitted ids, then download + downscale (`AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE`, default 768) with process-wide bounded concurrency. Up to `AI_MAX_OUTFIT_ITEMS` text items are accepted (default 100), but only the first `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` stored image references (default 12) are resolved. This cap is current behavior; the active no-cap acceptance criterion is not verified. Ownership is enforced by `.eq("user_id", …)` on the parent `items` row, since `item_images` has no `user_id` of its own; another user's id resolves to nothing. Any failure (missing image, dead URL, DB error) degrades that item to text-only rather than failing the request. Runs inside the rate limit (one generation charge regardless of reference count) but outside `with_retry`.
 3. **Resolve the source photo (upload flow only)** — when the request carries `use_source_photo: true` (`GenerateOutfitRequest`; set only by `frontend/src/lib/outfit-from-upload.ts` for the one-outfit-per-uploaded-photo flow), `resolve_outfit_source_reference` fetches the **original uploaded photo** the items were extracted from (`items.source_image_url`) with one batched, user-scoped query, dedupes by URL, and sends at most one photo (the one shared by the most items; a tie is skipped; `AI_OUTFIT_SOURCE_REFERENCE_MIN_SHARED_ITEMS` gates coverage, `AI_OUTFIT_SOURCE_REFERENCE_MAX_IMAGES` caps). It is downscaled to the same 768px edge and added to the prompt as an "as worn" reference (`SOURCE_PHOTO_REFERENCE_LOCK`), so the render reproduces real fit/draping/layering instead of compounding the loss from the extracted/generated item shots. Every failure degrades to the item-reference-only behavior. The flag defaults **off**: the outfit builder, preview, and manual regenerations never send the source photo.
-4. `image_generation_agent.generate_outfit` builds one inline image list — avatar first when used, then the source photo (upload flow only), then garments in item order — and a prompt that binds `IMAGE n` → `Item n` (`_build_reference_map` in `app/agents/image_generation_agent.py`, `GARMENT_REFERENCE_LOCK` in `app/agents/prompt_fidelity.py`). Items with no image are explicitly told to render from their description. Avatar flows (outfit visualization with a profile photo, and try-on) lead with `SINGLE_PERSON_LOCK` (`PERSON_REFERENCE_FIDELITY` in `app/agents/prompt_fidelity.py`): every reference image is bound to ONE main subject wearing the entire outfit, a second person / group shot is banned outright, and any other person or item visible in the references must be ignored — weak models previously sometimes rendered a multi-person image, one figure per reference. `IDENTITY_LOCK` stays ahead of the garment block so the avatar remains the sole source for face/body/hair/skin (the source photo is an outfit source, never an identity source). Multi-image has to go through `chat(..., response_modalities=["TEXT","IMAGE"])`, since `generate_image()` takes a single `reference_image`; with zero images the pre-existing text-to-image path is used unchanged.
+4. `image_generation_agent.generate_outfit` builds one inline image list — avatar first when used, then the source photo (upload flow only), then garments in item order — and a prompt that binds `IMAGE n` → `Item n` (`_build_reference_map` in `app/agents/image_generation_agent.py`, `GARMENT_REFERENCE_LOCK` in `app/agents/prompt_fidelity.py`). Items with no image are explicitly told to render from their description. **One-person locks per branch:** avatar flows (outfit visualization with a profile photo, and try-on) lead with `SINGLE_PERSON_LOCK` (`PERSON_REFERENCE_FIDELITY` in `app/agents/prompt_fidelity.py`): every reference image is bound to ONE main subject wearing the entire outfit, a second person / group shot is banned outright, and any other person or item visible in the references must be ignored — weak models previously sometimes rendered a multi-person image, one figure per reference. The avatar-less (generic-model) branch carries the reference-neutral `SINGLE_FIGURE_LOCK` instead: its references are garment-only, so `SINGLE_PERSON_LOCK`'s "ALL reference images show the SAME single person" claim would be false there; the lock still bans second figures, mannequins, and mirrored duplicates. `IDENTITY_LOCK` stays ahead of the garment block so the avatar remains the sole source for face/body/hair/skin (the source photo is an outfit source, never an identity source). **Scene constraints:** both person branches constrain the pose to a simple, natural stance (arms relaxed, no props, no extreme motion) and carry a `_pose_framing` clause that adapts to the requested pose — face-visible wording for front-ish poses, angle-respecting wording for the back/side presets the frontend multi-pose flow sends. **Closing contract:** both person branches end with `OUTFIT_OUTPUT_CONTRACT` (exactly one person, every listed item, simple pose, plain empty backdrop) because the flash-tier provider weights the final text most. **Background:** the backdrop is hard-pinned — `generate_outfit` always resolves it to the flat white studio fragment (opaque white for person shots, matte-ready for flat lays) and ignores caller-supplied scene tokens; the `background` request field remains on the wire for compatibility, and product images still honor custom scenes. Multi-image has to go through `chat(..., response_modalities=["TEXT","IMAGE"])`, since `generate_image()` takes a single `reference_image`; with zero images the text-to-image path is used unchanged.
 5. Backend stores generated images and updates outfit records.
 6. Client receives image URLs and render metadata.
 
-Sending no `item_id` is still valid and produces the previous text-only prompt byte-for-byte on the avatar-less (generic-model) branch; sending `use_source_photo: false` (the default) leaves the avatar-less branches byte-for-byte unchanged, while avatar flows carry the single-person additions above. Grep `Outfit item references resolved` / `Outfit source photo reference resolved` and `AI image generation request started` (`reference_images=`) to see how many references a generation actually carried.
+Sending no `item_id` is still valid (every item renders from its text description); both person branches now carry the one-person lock, framing clause, and closing contract described above, so no outfit prompt is byte-for-byte inherited from before that refactor. Grep `Outfit item references resolved` / `Outfit source photo reference resolved` and `AI image generation request started` (`reference_images=`) to see how many references a generation actually carried.
 
 ### Generated image transparency
 
@@ -545,6 +586,10 @@ docstring before running):
   app-side, leaving its billing rail untouched (provider dashboard must cancel it).
 - `upgrade_free_users_to_pro.py` — one-off campaign: every still-free user gets a
   1-month Pro trial + email; conditional writes never overwrite paid/trial rows.
+  The email ends with a friend/family referral line carrying the recipient's own
+  share link (`REFERRAL_BASE_URL`, else a non-localhost `FRONTEND_URL`, else
+  `https://fitcheckaiapp.com`; users with no `referral_codes` row get a
+  dashboard-link pitch instead). Re-runs skip anyone already in the audit file.
 - `revert_expired_pro_trials.py` — undo expired `grant_free_pro_month` trials
   (reads the campaign audit file; no auto-expiry exists in the app).
 - `seed_app_store_reviewer.py` — seed an App Store reviewer demo account with a
@@ -562,7 +607,7 @@ Required: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SU
 
 Storage: `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET` (canonical only — no provider-specific aliases); `IMAGE_SERVING_MODE` (`presigned` default | `worker`), `IMAGE_CDN_BASE_URL`, `THUMBNAIL_SERVING`
 
-AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg, see `.env.example`), `AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE` (garment reference size, default 768), `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` (default 12), `AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY` (default 8), and `AI_MAX_OUTFIT_ITEMS` (default 100)
+AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg, see `.env.example`), `AI_EXTRACTION_CONCURRENCY` / `AI_GENERATION_CONCURRENCY` (process-wide caps, default 30, see "Batch concurrency caps"), `AI_IMAGE_PROVIDER_CONCURRENCY` (provider-side image gate, default 15), `AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE` (garment reference size, default 768), `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` (default 12), `AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY` (default 8), and `AI_MAX_OUTFIT_ITEMS` (default 100)
 
 Optional: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, social import flags,
 `ENABLE_GAMIFICATION` (default `false`),

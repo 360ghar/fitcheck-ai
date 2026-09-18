@@ -17,7 +17,6 @@ generation.
 
 from __future__ import annotations
 
-import asyncio
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -27,6 +26,7 @@ from app.core.config import settings
 from app.core.concurrency import REFERENCE_DOWNLOAD_SEMAPHORE
 from app.core.logging_config import get_context_logger
 from app.services.storage_service import StorageService
+from app.utils.db import execute_with_reconnect
 from app.utils.parallel import parallel_map_settled
 
 logger = get_context_logger(__name__)
@@ -96,12 +96,14 @@ async def resolve_outfit_item_references(
     # Deliberately no is_deleted filter: an outfit that still lists a
     # soft-deleted item should keep rendering that garment faithfully.
     try:
-        res = await asyncio.to_thread(
-            db.table("items")
+        res = await execute_with_reconnect(
+            lambda d: d.table("items")
             .select("id,item_images(image_url,thumbnail_url,is_primary)")
             .eq("user_id", user_id)
             .in_("id", requested_ids)
-            .execute
+            .execute(),
+            db,
+            extra={"operation": "item_reference.fetch_images", "user_id": user_id},
         )
         rows = res.data or []
     except Exception as e:
@@ -257,12 +259,14 @@ async def resolve_outfit_source_reference(
     # user's photo can never be fetched (and StorageService is never handed an
     # attacker-chosen URL — no SSRF surface).
     try:
-        res = await asyncio.to_thread(
-            db.table("items")
+        res = await execute_with_reconnect(
+            lambda d: d.table("items")
             .select("id,source_image_url")
             .eq("user_id", user_id)
             .in_("id", requested_ids)
-            .execute
+            .execute(),
+            db,
+            extra={"operation": "item_reference.fetch_source_images", "user_id": user_id},
         )
         rows = res.data or []
     except Exception as e:

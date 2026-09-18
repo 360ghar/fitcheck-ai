@@ -1740,6 +1740,88 @@
         "title": "AdminUserActivity",
         "type": "object"
       },
+      "AdminUserBilling": {
+        "additionalProperties": true,
+        "description": "GET /admin/users/{user_id}/billing.",
+        "properties": {
+          "iap_transactions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Iap Transactions",
+            "type": "array"
+          },
+          "stripe_configured": {
+            "default": false,
+            "title": "Stripe Configured",
+            "type": "boolean"
+          },
+          "stripe_invoices": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Stripe Invoices",
+            "type": "array"
+          },
+          "subscription": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscription"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "AdminUserBilling",
+        "type": "object"
+      },
+      "AdminUserBodyProfile": {
+        "additionalProperties": true,
+        "description": "GET /admin/users/{user_id}/body-profile (never ``encrypted_data``).",
+        "properties": {
+          "gender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gender"
+          },
+          "profiles": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "AdminUserBodyProfile",
+        "type": "object"
+      },
       "AdminUserDetail": {
         "additionalProperties": true,
         "description": "GET /admin/users/{user_id} \u2014 full profile detail (360 view).\n\nCore keys (user, subscription, usage, counts, recent_jobs) are always\npresent; 360 keys are optional and best-effort (missing table -> []).\n``extra=\"allow\"`` keeps the contract stable when the service adds a new\nsection without a model bump (the admin console reads via schema.d.ts).",
@@ -1863,6 +1945,174 @@
           "user"
         ],
         "title": "AdminUserDetail",
+        "type": "object"
+      },
+      "AdminUserGeneration": {
+        "additionalProperties": true,
+        "description": "One normalized generation of any kind (generations explorer + viewer).\n\nEvery kind (item extraction run, saved outfit, outfit render run,\nphotoshoot job, social import) maps to this single shape so the console\nrenders one gallery component. ``media`` entries carry read-time\nre-minted URLs; ``meta`` holds kind-specific fields. ``extra=\"allow\"``\nkeeps the contract stable as kinds gain fields.",
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "failed_count": {
+            "default": 0,
+            "title": "Failed Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "media": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Media",
+            "type": "array"
+          },
+          "media_count": {
+            "default": 0,
+            "title": "Media Count",
+            "type": "integer"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "source": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Source",
+            "type": "object"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "AdminUserGeneration",
+        "type": "object"
+      },
+      "AdminUserGenerationsPage": {
+        "additionalProperties": true,
+        "description": "GET /admin/users/{user_id}/generations.",
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserGeneration"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 20,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "AdminUserGenerationsPage",
         "type": "object"
       },
       "AdminUserListItem": {
@@ -2069,6 +2319,53 @@
           }
         },
         "title": "AdminUserPatch",
+        "type": "object"
+      },
+      "AdminUserReferrals": {
+        "additionalProperties": true,
+        "description": "GET /admin/users/{user_id}/referrals.",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "promo_redemptions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Promo Redemptions",
+            "type": "array"
+          },
+          "redemptions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Redemptions",
+            "type": "array"
+          },
+          "times_used": {
+            "default": 0,
+            "title": "Times Used",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "AdminUserReferrals",
         "type": "object"
       },
       "AssignOutfitRequest": {
@@ -10077,6 +10374,282 @@
         ]
       }
     },
+    "/api/v1/admin/users/{user_id}/billing": {
+      "get": {
+        "description": "Subscription + Stripe invoice history for one user.\n\n``iap_transactions`` is populated only for callers that also hold\n``iap.read`` \u2014 otherwise it is an empty list. Stripe unix-second\ntimestamps (``created``/``period_start``/``period_end``) are normalized\nto ISO-8601 UTC, like every other datetime in the API.",
+        "operationId": "admin_user_billing_api_v1_admin_users__user_id__billing_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserBilling"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin User Billing",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/body-profile": {
+      "get": {
+        "description": "Body profiles + gender (photoshoot realism inputs). Never encrypted bytes.",
+        "operationId": "admin_user_body_profile_api_v1_admin_users__user_id__body_profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserBodyProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin User Body Profile",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/generations": {
+      "get": {
+        "description": "Normalized generations explorer for one user (all kinds or one kind).\n\nRead-only view over extraction jobs, outfits + images, outfit render runs,\nphotoshoot jobs, and social import jobs. Media URLs are re-minted at read\ntime; ``*_base64`` payloads are stripped server-side. ``status`` filters\nthe job kinds (saved outfits have no status column and are excluded while\na filter is active); ``kind=all`` merges each kind's recent window and\n``total``/``counts`` honor the filter.",
+        "operationId": "admin_user_generations_api_v1_admin_users__user_id__generations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "item",
+                "outfit",
+                "outfit_render",
+                "photoshoot",
+                "social_import"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserGenerationsPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin User Generations",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/generations/{kind}/{generation_id}": {
+      "get": {
+        "description": "One generation of a specific kind, ownership-guarded on ``user_id``.",
+        "operationId": "admin_user_generation_detail_api_v1_admin_users__user_id__generations__kind___generation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "item",
+                "outfit",
+                "outfit_render",
+                "photoshoot",
+                "social_import"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "generation_id",
+            "required": true,
+            "schema": {
+              "title": "Generation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserGeneration"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin User Generation Detail",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/users/{user_id}/quota-override": {
       "patch": {
         "description": "Set (or clear with null) a per-user daily AI quota override.\n\nThe override lives on ``users.custom_daily_quota`` (migration 037);\nnull restores the plan default. Audit: ``quota.override``.\n\nA4-14/M2: gated by ``quotas.write`` (super_admin/admin) instead of the\nblanket ``require_admin`` \u2014 a content_editor has no quotas surface and\nmust not be able to change another user's daily AI quota.",
@@ -10132,6 +10705,54 @@
           }
         ],
         "summary": "Admin Quota Override",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/referrals": {
+      "get": {
+        "description": "Referral code, redemptions (with referred-user identity), promo codes.",
+        "operationId": "admin_user_referrals_api_v1_admin_users__user_id__referrals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserReferrals"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin User Referrals",
         "tags": [
           "Admin"
         ]
@@ -16066,6 +16687,26 @@
       "get": {
         "description": "Return simplified items list suitable for outfit-building UIs.",
         "operationId": "available_items_api_v1_outfits_available_items_get",
+        "parameters": [
+          {
+            "description": "Optional comma-separated item UUIDs to restrict the picker to. Callers that only need a known subset (e.g. an outfit's item_ids) should pass them instead of fetching the whole closet.",
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional comma-separated item UUIDs to restrict the picker to. Callers that only need a known subset (e.g. an outfit's item_ids) should pass them instead of fetching the whole closet.",
+              "title": "Ids"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -16078,6 +16719,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -17514,7 +18165,7 @@
     },
     "/api/v1/photoshoot/demo/{job_id}/status": {
       "get": {
-        "description": "Poll status of a demo photoshoot job (no auth).\n\nOwnership is validated by re-deriving the demo pseudo-user from the\nrequest IP, so one visitor cannot read another visitor's demo job.",
+        "description": "Poll status of a demo photoshoot job (no auth).\n\nOwnership is validated by re-deriving the demo pseudo-user from the\nrequest IP, so one visitor cannot read another visitor's demo job.\nPoll from the same network that started the demo; a different egress\nIP or an expired job returns 404.",
         "operationId": "demo_photoshoot_status_api_v1_photoshoot_demo__job_id__status_get",
         "parameters": [
           {

@@ -351,6 +351,7 @@ class AIServiceError(ServiceError):
         provider_status: Optional[int] = None,
         provider_error_detail: Optional[str] = None,
         fallback_eligible: bool = False,
+        health_recorded: bool = False,
     ):
         # retryable: true only for transient failures (429/503/timeout) worth
         # retrying against a fallback model; false for auth/content-policy/parse
@@ -372,12 +373,19 @@ class AIServiceError(ServiceError):
         # agent call on a refusal would amplify latency (each attempt is a
         # multi-second generation), so only the model-fallback loop consults
         # this flag, never with_retry.
+        #
+        # health_recorded: internal bookkeeping for the provider circuit
+        # breaker. True when the raising call site has ALREADY told
+        # AIProviderHealthService how the call went, so the generic
+        # ``except AIServiceError`` handler in AIProviderService.chat() must not
+        # record the same outcome again (TD-108). Never serialized by to_dict().
         self.retryable = retryable
         self.error_kind = error_kind
         self.retry_after_seconds = retry_after_seconds
         self.provider_status = provider_status
         self.provider_error_detail = provider_error_detail
         self.fallback_eligible = fallback_eligible
+        self.health_recorded = health_recorded
         super().__init__(message, "ai")
 
     def to_dict(self) -> Dict[str, Any]:

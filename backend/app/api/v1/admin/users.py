@@ -12,9 +12,14 @@ from app.core.exceptions import PermissionDeniedError
 from app.core.permissions import has_permission
 from app.models.admin import (
     AdminUserActivity,
+    AdminUserBilling,
+    AdminUserBodyProfile,
     AdminUserDetail,
+    AdminUserGeneration,
+    AdminUserGenerationsPage,
     AdminUserListItem,
     AdminUserPatch,
+    AdminUserReferrals,
     ExtendTrialRequest,
     PageResponse,
 )
@@ -25,6 +30,13 @@ from app.services.admin_service import (
     list_users,
     update_user,
     user_activity,
+)
+from app.services.admin_user_generations_service import (
+    get_user_billing,
+    get_user_body_profile,
+    get_user_generation,
+    get_user_referrals,
+    list_user_generations,
 )
 from app.services.audit_service import record_audit
 
@@ -128,6 +140,96 @@ async def admin_user_patch(
             user_agent=http_request.headers.get("user-agent"),
         )
     return {"user": result["user"], "changes": result["changes"]}
+
+
+@router.get("/users/{user_id}/generations", response_model=AdminUserGenerationsPage)
+async def admin_user_generations(
+    user_id: str,
+    kind: Literal["all", "item", "outfit", "outfit_render", "photoshoot", "social_import"] = Query("all"),
+    status: Optional[str] = Query(None, min_length=1, max_length=40),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    db: Client = Depends(get_db),
+    user: Dict[str, Any] = Depends(require_permission("users.read")),
+) -> AdminUserGenerationsPage:
+    """Normalized generations explorer for one user (all kinds or one kind).
+
+    Read-only view over extraction jobs, outfits + images, outfit render runs,
+    photoshoot jobs, and social import jobs. Media URLs are re-minted at read
+    time; ``*_base64`` payloads are stripped server-side. ``status`` filters
+    the job kinds (saved outfits have no status column and are excluded while
+    a filter is active); ``kind=all`` merges each kind's recent window and
+    ``total``/``counts`` honor the filter.
+    """
+    result = await list_user_generations(
+        db,
+        user_id,
+        kind=kind,
+        status=status,
+        page=page,
+        page_size=page_size,
+    )
+    return AdminUserGenerationsPage(
+        user_id=result["user_id"],
+        items=[AdminUserGeneration(**item) for item in result["items"]],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        counts=result["counts"],
+    )
+
+
+@router.get("/users/{user_id}/generations/{kind}/{generation_id}", response_model=AdminUserGeneration)
+async def admin_user_generation_detail(
+    user_id: str,
+    kind: Literal["item", "outfit", "outfit_render", "photoshoot", "social_import"],
+    generation_id: str,
+    db: Client = Depends(get_db),
+    user: Dict[str, Any] = Depends(require_permission("users.read")),
+) -> AdminUserGeneration:
+    """One generation of a specific kind, ownership-guarded on ``user_id``."""
+    result = await get_user_generation(db, user_id, kind, generation_id)
+    return AdminUserGeneration(**result)
+
+
+@router.get("/users/{user_id}/billing", response_model=AdminUserBilling)
+async def admin_user_billing(
+    user_id: str,
+    db: Client = Depends(get_db),
+    user: Dict[str, Any] = Depends(require_permission("subscriptions.read")),
+) -> AdminUserBilling:
+    """Subscription + Stripe invoice history for one user.
+
+    ``iap_transactions`` is populated only for callers that also hold
+    ``iap.read`` — otherwise it is an empty list. Stripe unix-second
+    timestamps (``created``/``period_start``/``period_end``) are normalized
+    to ISO-8601 UTC, like every other datetime in the API.
+    """
+    include_iap = has_permission(user, "iap.read")
+    result = await get_user_billing(db, user_id, include_iap=include_iap)
+    return AdminUserBilling(**result)
+
+
+@router.get("/users/{user_id}/referrals", response_model=AdminUserReferrals)
+async def admin_user_referrals(
+    user_id: str,
+    db: Client = Depends(get_db),
+    user: Dict[str, Any] = Depends(require_permission("users.read")),
+) -> AdminUserReferrals:
+    """Referral code, redemptions (with referred-user identity), promo codes."""
+    result = await get_user_referrals(db, user_id)
+    return AdminUserReferrals(**result)
+
+
+@router.get("/users/{user_id}/body-profile", response_model=AdminUserBodyProfile)
+async def admin_user_body_profile(
+    user_id: str,
+    db: Client = Depends(get_db),
+    user: Dict[str, Any] = Depends(require_permission("users.read")),
+) -> AdminUserBodyProfile:
+    """Body profiles + gender (photoshoot realism inputs). Never encrypted bytes."""
+    result = await get_user_body_profile(db, user_id)
+    return AdminUserBodyProfile(**result)
 
 
 @router.get("/users/{user_id}/activity", response_model=AdminUserActivity)

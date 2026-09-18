@@ -53,6 +53,20 @@ function respondJson(route: Route, body: unknown, status = 200): Promise<void> {
   })
 }
 
+/**
+ * Generations owned by one user. The shared fixture rows are user_1's;
+ * journey 4 opens user_3's viewer on the shared item run, so user_3 owns a
+ * copy of that id only. Every other user owns nothing: like the backend's
+ * ownership guard, a kind+id that exists for another user 404s instead of
+ * leaking fixture data across users.
+ */
+function generationsForUser(userId: string) {
+  const items = userFixtures.generations.items ?? []
+  if (userId === 'user_1') return items
+  if (userId === 'user_3') return items.filter((item) => item.kind === 'item' && item.id === 'job_1')
+  return []
+}
+
 function unauthorizedBody(): Record<string, unknown> {
   return { error: 'Unauthorized', code: 'AUTH_UNAUTHORIZED', details: {} }
 }
@@ -143,6 +157,13 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
     // ── Users (list mirrors the backend service: q/status/role/plan + paging) ──
     const userDetailMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)$/)
     const userActivityMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/activity$/)
+    const userGenerationsMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/generations$/)
+    const userGenerationMatch = path.match(
+      /^\/api\/v1\/admin\/users\/([^/]+)\/generations\/([^/]+)\/([^/]+)$/,
+    )
+    const userBillingMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/billing$/)
+    const userReferralsMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/referrals$/)
+    const userBodyProfileMatch = path.match(/^\/api\/v1\/admin\/users\/([^/]+)\/body-profile$/)
     const refundMatch = path.match(/^\/api\/v1\/admin\/subscriptions\/user\/([^/]+)\/refund$/)
 
     if (method === 'GET' && path === '/api/v1/admin/users') {
@@ -197,6 +218,92 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
     }
     if (method === 'GET' && userActivityMatch) {
       return respondJson(route, userFixtures.activity)
+    }
+    if (method === 'GET' && userGenerationsMatch) {
+      const userId = userGenerationsMatch[1]
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      const kind = url.searchParams.get('kind') ?? 'all'
+      const status = url.searchParams.get('status')
+      const pageNum = Number(url.searchParams.get('page') ?? '1')
+      const pageSize = Number(url.searchParams.get('page_size') ?? '12')
+      const owned = generationsForUser(userId)
+      let rows = owned.filter(
+        (item) => kind === 'all' || item.kind === kind,
+      )
+      if (status) rows = rows.filter((item) => item.status === status)
+      const start = (pageNum - 1) * pageSize
+      // Like the backend contract: the response carries the requested
+      // user's id and counts computed from their own rows — not the shared
+      // user_1 fixture's id and nonzero counts.
+      const counts: Record<string, number> = {
+        item_generations: 0,
+        outfits: 0,
+        outfit_renders: 0,
+        photoshoot_jobs: 0,
+        social_import_jobs: 0,
+      }
+      for (const item of owned) {
+        const key =
+          item.kind === 'item'
+            ? 'item_generations'
+            : item.kind === 'outfit'
+              ? 'outfits'
+              : item.kind === 'outfit_render'
+                ? 'outfit_renders'
+                : item.kind === 'photoshoot'
+                  ? 'photoshoot_jobs'
+                  : item.kind === 'social_import'
+                    ? 'social_import_jobs'
+                    : null
+        if (key) counts[key] += 1
+      }
+      return respondJson(route, {
+        ...userFixtures.generations,
+        user_id: userId,
+        items: rows.slice(start, start + pageSize),
+        total: rows.length,
+        page: pageNum,
+        page_size: pageSize,
+        counts,
+      })
+    }
+    if (method === 'GET' && userGenerationMatch) {
+      const [, userId, kind, generationId] = userGenerationMatch
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      // Per-user lookup like the backend's ownership guard: a kind+id that
+      // exists for another user 404s instead of leaking fixture data.
+      const generation = generationsForUser(userId).find(
+        (item) => item.kind === kind && item.id === generationId,
+      )
+      if (!generation) {
+        return respondJson(route, { error: 'Generation not found', code: 'NOT_FOUND', details: {} }, 404)
+      }
+      return respondJson(route, generation)
+    }
+    if (method === 'GET' && userBillingMatch) {
+      const userId = userBillingMatch[1]
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      return respondJson(route, { ...userFixtures.billing, user_id: userId })
+    }
+    if (method === 'GET' && userReferralsMatch) {
+      const userId = userReferralsMatch[1]
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      return respondJson(route, { ...userFixtures.referrals, user_id: userId })
+    }
+    if (method === 'GET' && userBodyProfileMatch) {
+      const userId = userBodyProfileMatch[1]
+      if (!users.some((user) => user.id === userId)) {
+        return respondJson(route, { error: 'User not found', code: 'USER_NOT_FOUND', details: {} }, 404)
+      }
+      return respondJson(route, { ...userFixtures.bodyProfile, user_id: userId })
     }
 
     // ── Subscriptions ────────────────────────────────────────────────────

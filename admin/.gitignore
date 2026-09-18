@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+test-results/
+playwright-report/
 *.tsbuildinfo
 
 # env files — never commit secrets

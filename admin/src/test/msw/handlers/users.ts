@@ -3,9 +3,13 @@ import type { HttpHandler } from 'msw'
 
 import type {
   AdminUserActivity,
+  AdminUserBilling,
+  AdminUserBodyProfile,
   AdminUserDetail,
+  AdminUserGenerationsPage,
   AdminUserListItem,
   AdminUserPatch,
+  AdminUserReferrals,
   ExtendTrialRequest,
   PageResponse_AdminUserListItem_,
 } from '@/shared/api/schemaTypes'
@@ -287,6 +291,227 @@ export const adminUserActivityFixture: AdminUserActivity = {
   ],
 }
 
+/**
+ * Generations explorer fixtures — one item per kind so explorer tabs and the
+ * full-page viewer can both be exercised.
+ */
+export const adminUserGenerationsFixture: AdminUserGenerationsPage = {
+  user_id: 'user_1',
+  items: [
+    {
+      kind: 'photoshoot',
+      id: 'ps_job_1',
+      status: 'complete',
+      created_at: '2026-08-06T14:00:00Z',
+      completed_at: '2026-08-06T14:05:00Z',
+      duration_ms: 300000,
+      title: 'linkedin',
+      subtitle: '2/2 images',
+      media: [
+        {
+          url: 'https://cdn.example.com/photoshoot/1.jpg',
+          thumb_url: 'https://cdn.example.com/photoshoot/1_thumb.jpg',
+          label: '#0',
+        },
+        {
+          url: 'https://cdn.example.com/photoshoot/2.jpg',
+          thumb_url: 'https://cdn.example.com/photoshoot/2_thumb.jpg',
+          label: '#1',
+        },
+      ],
+      media_count: 2,
+      failed_count: 0,
+      error: null,
+      meta: {
+        use_case: 'linkedin',
+        custom_prompt: null,
+        aspect_ratio: '4:5',
+        num_images: 2,
+        failed_indices: [],
+        image_failures: [],
+      },
+      source: { table: 'photoshoot_jobs', id: 'ps_job_1' },
+    },
+    {
+      kind: 'item',
+      id: 'job_1',
+      status: 'completed',
+      created_at: '2026-08-06T08:00:00Z',
+      completed_at: '2026-08-06T08:04:00Z',
+      duration_ms: 240000,
+      title: 'batch',
+      subtitle: '2/2',
+      media: [
+        {
+          url: 'https://cdn.example.com/generated/shirt.jpg',
+          thumb_url: 'https://cdn.example.com/generated/shirt.jpg',
+          label: 'Linen Shirt',
+        },
+      ],
+      media_count: 2,
+      failed_count: 0,
+      error: null,
+      meta: {
+        job_type: 'batch',
+        total_images: 1,
+        total_items: 2,
+        generations_completed: 2,
+        generations_failed: 0,
+        items: [{ name: 'Linen Shirt', category: 'tops', image_url: 'https://cdn.example.com/generated/shirt.jpg' }],
+      },
+      source: { table: 'extraction_jobs', id: 'job_1' },
+    },
+    {
+      kind: 'outfit_render',
+      id: 'render_1',
+      status: 'failed',
+      created_at: '2026-08-05T18:00:00Z',
+      completed_at: '2026-08-05T18:01:00Z',
+      duration_ms: 60000,
+      title: 'Summer Look 1',
+      subtitle: 'variations 1',
+      media: [],
+      media_count: 0,
+      failed_count: 1,
+      error: 'Image generation failed: provider timeout',
+      meta: { outfit_id: 'outfit_1', outfit_name: 'Summer Look 1', pose: 'front', variations: 1 },
+      source: { table: 'outfit_generations', id: 'render_1' },
+    },
+    {
+      kind: 'outfit',
+      id: 'outfit_1',
+      status: null,
+      created_at: '2026-08-01T12:00:00Z',
+      completed_at: null,
+      duration_ms: null,
+      title: 'Summer Look 1',
+      subtitle: '3 items',
+      media: [
+        {
+          url: 'https://cdn.example.com/outfits/1.jpg',
+          thumb_url: 'https://cdn.example.com/outfits/1_thumb.jpg',
+          label: 'front · ai',
+        },
+      ],
+      media_count: 1,
+      failed_count: 0,
+      error: null,
+      meta: { occasion: 'casual', item_count: 3, worn_count: 2 },
+      source: { table: 'outfits', id: 'outfit_1' },
+    },
+    {
+      kind: 'social_import',
+      id: 'import_1',
+      status: 'completed',
+      created_at: '2026-08-05T11:00:00Z',
+      completed_at: '2026-08-05T11:30:00Z',
+      duration_ms: 1800000,
+      title: 'instagram',
+      subtitle: 'https://instagram.com/p/demo',
+      media: [
+        {
+          url: 'https://cdn.example.com/import/1_thumb.jpg',
+          thumb_url: 'https://cdn.example.com/import/1_thumb.jpg',
+          label: '#0',
+        },
+      ],
+      media_count: 1,
+      failed_count: 0,
+      error: null,
+      meta: {
+        platform: 'instagram',
+        source_url: 'https://instagram.com/p/demo',
+        approved_photos: 1,
+        photos: [{ id: 'ph_1', ordinal: 0, status: 'approved' }],
+      },
+      source: { table: 'social_import_jobs', id: 'import_1' },
+    },
+  ],
+  total: 5,
+  page: 1,
+  page_size: 12,
+  counts: {
+    item_generations: 1,
+    outfits: 1,
+    outfit_renders: 1,
+    photoshoot_jobs: 1,
+    social_import_jobs: 1,
+  },
+}
+
+export const adminUserBillingFixture: AdminUserBilling = {
+  user_id: 'user_1',
+  subscription: {
+    plan_type: 'pro_monthly',
+    status: 'active',
+    billing_provider: 'stripe',
+    stripe_customer_id: 'cus_test_1',
+    amount: 29,
+  },
+  stripe_invoices: [
+    {
+      id: 'in_1',
+      number: 'ABCD-0001',
+      // Backend normalizes Stripe unix-seconds to ISO-8601 UTC (like every
+      // other API datetime) — keep the fixture on the real contract.
+      created: '2024-09-04T12:00:00Z',
+      period_start: '2024-09-03T12:00:00Z',
+      period_end: '2024-09-04T12:00:00Z',
+      amount_paid: 2900,
+      currency: 'usd',
+      status: 'paid',
+      hosted_invoice_url: 'https://invoice.example/in_1',
+      invoice_pdf: 'https://invoice.example/in_1/pdf',
+    },
+  ],
+  iap_transactions: [],
+  stripe_configured: true,
+}
+
+export const adminUserReferralsFixture: AdminUserReferrals = {
+  user_id: 'user_1',
+  code: 'alice-abc123',
+  times_used: 2,
+  redemptions: [
+    {
+      id: 'rr_1',
+      referred_user_id: 'user_2',
+      referred_email: 'bob@example.com',
+      referred_name: null,
+      referrer_credit_applied: true,
+      referred_credit_applied: true,
+      credit_months: 1,
+      redeemed_at: '2026-08-02T00:00:00Z',
+    },
+  ],
+  promo_redemptions: [
+    {
+      id: 'pr_1',
+      code: 'WELCOME',
+      plan_type: 'plus_monthly',
+      months: 1,
+      created_at: '2026-07-01T00:00:00Z',
+    },
+  ],
+}
+
+export const adminUserBodyProfileFixture: AdminUserBodyProfile = {
+  user_id: 'user_1',
+  profiles: [
+    {
+      id: 'bp_1',
+      name: 'Default',
+      height_cm: 170,
+      weight_kg: 60,
+      body_shape: 'hourglass',
+      skin_tone: 'medium',
+      is_default: true,
+      created_at: '2026-07-15T00:00:00Z',
+    },
+  ],
+  gender: 'female',
+}
+
 export interface UsersHandlersState {
   users: AdminUserListItem[]
   /** Every list/detail request URL, for test assertions */
@@ -297,6 +522,8 @@ export interface UsersHandlersState {
   lastExtendTrial: { userId: string; days: number } | null
   /** Whether clear-counters was called */
   lastClearCounters: string | null
+  /** Last generations explorer query (path), for test assertions */
+  lastGenerationsQuery: URL | null
 }
 
 function defaultState(): UsersHandlersState {
@@ -306,6 +533,7 @@ function defaultState(): UsersHandlersState {
     lastPatchBody: null,
     lastExtendTrial: null,
     lastClearCounters: null,
+    lastGenerationsQuery: null,
   }
 }
 
@@ -324,6 +552,94 @@ export function createUsersHandlers(initial?: Partial<UsersHandlersState>) {
   const { users, requests } = state
 
   const handlers: HttpHandler[] = [
+    http.get('*/api/v1/admin/users/:userId/generations/:kind/:generationId', ({ params }) => {
+      const userId = params.userId as string
+      const row = users.find((user) => user.id === userId)
+      if (!row) {
+        return HttpResponse.json(
+          { error: 'User not found', code: 'USER_NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      const kind = params.kind as string
+      const generationId = params.generationId as string
+      const generation = (adminUserGenerationsFixture.items ?? []).find(
+        (item) => item.kind === kind && item.id === generationId,
+      )
+      if (!generation) {
+        return HttpResponse.json(
+          { error: 'Generation not found', code: 'NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      return HttpResponse.json(generation)
+    }),
+
+    http.get('*/api/v1/admin/users/:userId/generations', ({ request, params }) => {
+      const url = new URL(request.url)
+      state.lastGenerationsQuery = url
+      const userId = params.userId as string
+      const row = users.find((user) => user.id === userId)
+      if (!row) {
+        return HttpResponse.json(
+          { error: 'User not found', code: 'USER_NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      const kind = url.searchParams.get('kind') ?? 'all'
+      const status = url.searchParams.get('status')
+      const page = Number(url.searchParams.get('page') ?? '1')
+      const pageSize = Number(url.searchParams.get('page_size') ?? '12')
+      let items = (adminUserGenerationsFixture.items ?? []).filter(
+        (item) => kind === 'all' || item.kind === kind,
+      )
+      if (status) items = items.filter((item) => item.status === status)
+      const start = (page - 1) * pageSize
+      return HttpResponse.json({
+        ...adminUserGenerationsFixture,
+        items: items.slice(start, start + pageSize),
+        total: items.length,
+        page,
+        page_size: pageSize,
+      })
+    }),
+
+    http.get('*/api/v1/admin/users/:userId/billing', ({ params }) => {
+      const userId = params.userId as string
+      const row = users.find((user) => user.id === userId)
+      if (!row) {
+        return HttpResponse.json(
+          { error: 'User not found', code: 'USER_NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      return HttpResponse.json({ ...adminUserBillingFixture, user_id: userId })
+    }),
+
+    http.get('*/api/v1/admin/users/:userId/referrals', ({ params }) => {
+      const userId = params.userId as string
+      const row = users.find((user) => user.id === userId)
+      if (!row) {
+        return HttpResponse.json(
+          { error: 'User not found', code: 'USER_NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      return HttpResponse.json({ ...adminUserReferralsFixture, user_id: userId })
+    }),
+
+    http.get('*/api/v1/admin/users/:userId/body-profile', ({ params }) => {
+      const userId = params.userId as string
+      const row = users.find((user) => user.id === userId)
+      if (!row) {
+        return HttpResponse.json(
+          { error: 'User not found', code: 'USER_NOT_FOUND', details: {} },
+          { status: 404 },
+        )
+      }
+      return HttpResponse.json({ ...adminUserBodyProfileFixture, user_id: userId })
+    }),
+
     http.get('*/api/v1/admin/users', ({ request }) => {
       const url = new URL(request.url)
       requests.push(url)

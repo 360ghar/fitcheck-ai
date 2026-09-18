@@ -34,6 +34,50 @@ from app.utils.retry import is_retryable_error, with_retry
 
 logger = logging.getLogger(__name__)
 
+
+def _is_pre_generation_retryable(exc: Exception) -> bool:
+    """Retry gate for billable product-image generation (no idempotency key).
+
+    The provider has no idempotency key on this path, so a retry after the
+    request was accepted bills twice. Only failures known to happen BEFORE
+    any generation are retried: explicit concurrency/overload rejections
+    (retry_after hint or overload text) and connection-establishment failures.
+    A read timeout after the request was sent is ambiguous (accepted + lost
+    response vs never processed) and must NOT retry here — the provider layer
+    already spent its own retry budget.
+    """
+    if not is_retryable_error(exc):
+        return False
+    text = str(exc).lower()
+    is_overload = any(
+        marker in text for marker in ("concurrency", "overload", "temporarily unavailable")
+    )
+    if getattr(exc, "retry_after_seconds", None) is not None:
+        # A Retry-After hint is only trustworthy pre-generation on an
+        # overload rejection: 5xx hints can arrive post-accept (the provider
+        # propagates them through its exhausted AIServiceError), and
+        # retrying those would double-bill a lost response.
+        return is_overload
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+        return True
+    # Connection-establishment failures wrapped as AIServiceError carry our
+    # own "ClassName: detail" prefix (see _format_exception_message), so
+    # these two tokens are structured signals, not provider-text inference.
+    # Bare "connection"/"pool" substrings are excluded: a post-send transport
+    # failure can mention them while the response stays ambiguous.
+    if "connecterror" in text or "connecttimeout" in text:
+        return True
+    # No structured hint: only pre-accept overload rejections may retry. Every
+    # overload-text AIServiceError the provider layer emits derives from a
+    # pre-accept rejection (status-based transient overload or the
+    # concurrency-limited 200 envelope) — except post-status failures, which
+    # carry provider_status (HTTPStatusError path) and may have been accepted
+    # server-side. Message text alone cannot prove otherwise, so fail closed
+    # on those instead of double-billing a lost response.
+    if getattr(exc, "provider_status", None) is not None:
+        return False
+    return is_overload
+
 # Hosts whose avatar URLs the extraction pipeline may fetch DIRECTLY with
 # httpx. ``users.avatar_url`` is user-controlled (an external OAuth picture is
 # possible), so a raw GET of the stored value would be an SSRF primitive.
@@ -877,11 +921,23 @@ class BatchExtractionService:
                         include_shadows=False,
                         reference_image=reference_image_base64,
                     ),
-                    max_retries=1,
+                    # Two retries (parity with the extraction leg above). One
+                    # was not enough for a provider-side concurrency rejection:
+                    # both attempts landed inside the same full queue and every
+                    # batch item failed (2026-09-17 log). The provider gate
+                    # (AI_IMAGE_PROVIDER_CONCURRENCY) keeps us under the
+                    # gateway's cap in the first place; this covers the rest.
+                    # A content-policy 400 stays non-retried via
+                    # should_retry. The gate below further restricts retries
+                    # to pre-generation failures (overload / connect): the
+                    # provider has no idempotency key here, so retrying an
+                    # ambiguous post-accept timeout would double-bill.
+                    max_retries=2,
                     initial_delay=2.0,
                     backoff_factor=2.0,
+                    jitter=True,
                     retryable_exceptions=(AIServiceError,),
-                    should_retry=is_retryable_error,
+                    should_retry=_is_pre_generation_retryable,
                     on_retry=lambda attempt, error, delay: logger.warning(
                         f"Retrying generation for item {item.temp_id}",
                         extra={"attempt": attempt, "delay": delay, "error": str(error)},

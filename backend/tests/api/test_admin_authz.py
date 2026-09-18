@@ -40,6 +40,8 @@ PARAM_SAMPLES = {
     "code_id": "code-1",
     "entity_type": "user",
     "entity_id": "user-1",
+    "kind": "item",
+    "generation_id": "gen-1",
 }
 
 # Routes that touch object storage / the real schema cache — covered in

@@ -4,7 +4,15 @@ Process-wide concurrency gates for AI extraction and generation.
 Single source of truth for the asyncio.Semaphore singletons shared across all
 concurrent batch jobs (batch_extraction_service.py) and the outfit-variation
 fan-out (image_generation_agent.generate_variations). Caps are configurable via
-AI_EXTRACTION_CONCURRENCY / AI_GENERATION_CONCURRENCY (see app/core/config.py).
+AI_EXTRACTION_CONCURRENCY / AI_GENERATION_CONCURRENCY /
+AI_IMAGE_PROVIDER_CONCURRENCY (see app/core/config.py).
+
+Two different limits are in play for images: GENERATION_SEMAPHORE bounds our own
+memory and CPU (every in-flight generation buffers multi-MB base64), while
+IMAGE_PROVIDER_SEMAPHORE bounds the fan-out at the shared image gateway, which
+enforces its own cap. Both are acquired through reentrant slot managers -
+``image_gen_slot()`` / ``provider_image_slot()`` - in that order, never the
+reverse, so the pair cannot deadlock.
 
 Built eagerly at import. On Python 3.10+ asyncio.Semaphore() no longer
 requires a running event loop, so importing this module outside an asyncio
@@ -25,6 +33,17 @@ EXTRACTION_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(
 GENERATION_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(
     max(1, settings.AI_GENERATION_CONCURRENCY)
 )
+# Provider-side image-generation gate, nested INSIDE GENERATION_SEMAPHORE.
+# GENERATION_SEMAPHORE bounds OUR memory (each in-flight generation buffers
+# multi-MB base64); this one bounds how hard we hit the shared image gateway,
+# which enforces its own concurrency limit and answers
+# "WARNING: Exceeded concurrency limit." to everything past it (2026-09-17
+# production log: a 30-wide fan-out failed every batch item after one retry,
+# then tripped the provider circuit breaker). Clamped to the generation cap so
+# the knob cannot silently become the non-binding constraint.
+IMAGE_PROVIDER_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(
+    max(1, min(settings.AI_IMAGE_PROVIDER_CONCURRENCY, settings.AI_GENERATION_CONCURRENCY))
+)
 REFERENCE_DOWNLOAD_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(
     max(1, settings.AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY)
 )
@@ -32,6 +51,9 @@ REFERENCE_DOWNLOAD_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(
 
 _IMAGE_GEN_SLOT_HELD: ContextVar[bool] = ContextVar(
     "image_gen_slot_held", default=False
+)
+_PROVIDER_IMAGE_SLOT_HELD: ContextVar[bool] = ContextVar(
+    "provider_image_slot_held", default=False
 )
 
 # Task id -> set of lock object ids held by that task. Reentrancy bookkeeping
@@ -42,7 +64,63 @@ _IMAGE_GEN_SLOT_HELD: ContextVar[bool] = ContextVar(
 _HELD_LOCKS: Dict[int, Set[int]] = {}
 
 
-class ImageGenSlot:
+class _ReentrantSemaphoreSlot:
+    """Reentrant per-task acquisition of one process-wide semaphore.
+
+    ``asyncio.Semaphore`` is not reentrant, and every image-generation entry
+    point nests (variations -> generate_outfit -> _generate_with_references;
+    batch -> generate_product_image -> _generate_image). Held-state is tracked
+    per ``asyncio.Task`` (not a ContextVar): the outermost acquisition by a
+    task takes the slot, nested acquisitions from the SAME task are no-ops.
+    A child task created under a held slot acquires a real permit — sharing
+    the parent's slot via ContextVar inheritance let unbounded child fan-out
+    run on one permit. Callers must not hold a slot while awaiting children
+    that need the same slot (that would deadlock once the pool is exhausted);
+    the codebase fans out first and acquires per child.
+    """
+
+    # Depth shared by ALL slot instances guarding the same semaphore, keyed
+    # (id(semaphore), task_id). The factories mint a fresh manager per call,
+    # so per-instance depths double-consumed permits on nested acquisition
+    # (and deadlocked outright at cap=1); the map keeps nesting reentrant.
+    _depths: Dict[tuple, int] = {}
+
+    def __init__(self, semaphore: asyncio.Semaphore, held: ContextVar[bool]) -> None:
+        self._semaphore = semaphore
+        self._held = held
+
+    def _key(self, task_id: int) -> tuple:
+        return (id(self._semaphore), task_id)
+
+    async def __aenter__(self) -> "_ReentrantSemaphoreSlot":
+        try:
+            task_id = id(asyncio.current_task())
+        except RuntimeError:  # no running loop in tests using stubs
+            task_id = 0
+        key = self._key(task_id)
+        depth = self._depths.get(key, 0)
+        if depth > 0:
+            self._depths[key] = depth + 1
+            return self
+        await self._semaphore.acquire()
+        self._depths[key] = 1
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        try:
+            task_id = id(asyncio.current_task())
+        except RuntimeError:
+            task_id = 0
+        key = self._key(task_id)
+        depth = self._depths.get(key, 0)
+        if depth > 1:
+            self._depths[key] = depth - 1
+        elif depth == 1:
+            del self._depths[key]
+            self._semaphore.release()
+
+
+class ImageGenSlot(_ReentrantSemaphoreSlot):
     """Reentrant per-task acquisition of GENERATION_SEMAPHORE.
 
     Every image-generation entry point (try-on, outfit, product, photoshoot,
@@ -51,34 +129,29 @@ class ImageGenSlot:
     of each running unbounded (2026-08-03: container OOM during a try-on /
     image-gen storm - TD-044; each in-flight request buffers multi-MB base64).
 
-    Reentrancy: entry points nest (variations -> generate_outfit ->
-    _generate_with_references; batch -> generate_product_image -> _generate_image),
-    and ``asyncio.Semaphore`` is not reentrant - a second acquire from the same
-    task would block forever on the slot it already holds. The held-state is
-    therefore tracked per task via a ContextVar: the outermost acquisition
-    takes the slot; nested acquisitions from the same task are no-ops. Child
-    tasks copy the parent context at creation, so work spawned under a held
-    slot shares the parent's budget instead of deadlocking.
-
     Use ``image_gen_slot()`` at every acquisition site - never the raw
-    semaphore - so the reentrancy bookkeeping stays consistent.
+    semaphore - so the reentrancy bookkeeping stays consistent. See
+    ``_ReentrantSemaphoreSlot`` for the reentrancy contract.
     """
 
     def __init__(self) -> None:
-        self._token = None
+        super().__init__(GENERATION_SEMAPHORE, _IMAGE_GEN_SLOT_HELD)
 
-    async def __aenter__(self) -> "ImageGenSlot":
-        if _IMAGE_GEN_SLOT_HELD.get():
-            self._token = None
-            return self
-        await GENERATION_SEMAPHORE.acquire()
-        self._token = _IMAGE_GEN_SLOT_HELD.set(True)
-        return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
-        if self._token is not None:
-            _IMAGE_GEN_SLOT_HELD.reset(self._token)
-            GENERATION_SEMAPHORE.release()
+class ProviderImageSlot(_ReentrantSemaphoreSlot):
+    """Reentrant per-task acquisition of IMAGE_PROVIDER_SEMAPHORE.
+
+    The second, provider-facing gate (2026-09-17 RCA): GENERATION_SEMAPHORE
+    bounds our own memory, this one bounds how many image requests are in
+    flight at the shared gateway, whose own concurrency limit answered
+    "WARNING: Exceeded concurrency limit." to every request past it. Acquired
+    INSIDE a generation slot, always in that order (generation -> provider),
+    so the two gates cannot deadlock; the provider gate is what the caller
+    waits on while holding a generation slot.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(IMAGE_PROVIDER_SEMAPHORE, _PROVIDER_IMAGE_SLOT_HELD)
 
 
 def image_gen_slot() -> ImageGenSlot:
@@ -90,6 +163,21 @@ def image_gen_slot() -> ImageGenSlot:
             response = await ai_service.chat(...)
     """
     return ImageGenSlot()
+
+
+def provider_image_slot() -> ProviderImageSlot:
+    """Async context manager acquiring the shared IMAGE-PROVIDER slot.
+
+    Wrap the outbound image-generation HTTP request (not the whole pipeline):
+    the point is to bound concurrency at the provider, not to serialize our
+    own post-processing.
+
+    Example::
+
+        async with provider_image_slot():
+            response = await client.post(images_url, json=payload)
+    """
+    return ProviderImageSlot()
 
 
 class KeyedLock:

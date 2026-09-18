@@ -1,6 +1,6 @@
 # Admin console
 
-Last updated: 2026-09-13
+Last updated: 2026-09-18
 
 Internal admin console for FitCheck AI founder + ops/content/support staff,
 under `admin/`. A React 19 SPA deployed to `admin.fitcheckaiapp.com`, separate
@@ -26,6 +26,27 @@ file is the docs/-level entry point and intentionally does not duplicate
   `backend/app/core/permissions.py`; the app mirrors the map only to shape UI
   (`admin/src/shared/lib/permissions.ts`). A non-admin Google account gets 403
   from `/api/v1/admin/me` and is bounced.
+
+## User detail: generations + context
+
+The user detail page is a full support surface, not just profile + counts:
+
+- **Generations explorer** — one paginated gallery over every AI generation
+  kind (item extractions, outfits, outfit render runs, photoshoots, social
+  imports) with a status filter. Tab / status / page live in the URL
+  (`gen_tab`, `gen_status`, `gen_page`), matching the URL-is-table-state rule.
+  Every card opens a full-page viewer route
+  (`/users/:id/generations/:kind/:generationId`) with the generated media
+  gallery, metadata, error banner, source table/id, and kind-specific lists
+  (extracted items, imported photos). The backend normalizes all five kinds
+  into one contract, strips `*_base64` payloads, and re-mints presigned image
+  URLs at read time (`backend/app/services/admin_user_generations_service.py`).
+- **Items grid** — extracted wardrobe items with a click-through dialog
+  showing every generated image plus the source photo.
+- **Billing / Referrals / Body profile** cards — Stripe invoices
+  (`subscriptions.read`; IAP rows additionally gated on `iap.read`), referral
+  code + redemptions + promo redemptions, and body profiles (never
+  `encrypted_data`).
 
 ## Stack
 
@@ -174,12 +195,13 @@ npm run e2e   # Playwright: 8 critical journeys across 6 spec files, chromium
 ```
 
 - `lint`: ESLint 9 flat config, `--max-warnings 0`; `typecheck`: `tsc --noEmit`
-  (app + node configs); `test`: Vitest (jsdom + MSW, 33 files / 231 tests,
+  (app + node configs); `test`: Vitest (jsdom + MSW, 35 files / 240 tests,
   never hits the network); `check:schema`: contract drift; `check:bundle`:
   bundle-size budget.
-- E2E (`admin/e2e/*.e2e.ts`): the 8 critical journeys from spec §10 — login
-  success/failure/sign-out, role-based 403, users list/detail/suspend, refund,
-  storage cleanup, command palette, theme persistence. `/api/**` is stubbed by
+- E2E (`admin/e2e/*.e2e.ts`): the critical journeys from spec §10 — login
+  success/failure/sign-out, role-based 403, users list/detail/suspend plus the
+  generations explorer → full-page viewer step, refund, storage cleanup,
+  command palette, theme persistence. `/api/**` is stubbed by
   Playwright route interception (no MSW) against a production build served by
   `vite preview` on :4173.
 - CI (`.github/workflows/admin-ci.yml`, triggered on `admin/**`): typecheck →

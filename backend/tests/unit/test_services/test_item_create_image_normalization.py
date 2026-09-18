@@ -6,7 +6,9 @@ Pins the create-image normalization contract:
   returning None for true external URLs, a derived value reliably means the
   URL embeds one of our key shapes, so it must be owned like an explicit one);
 - an owned preview key (derived from the URL) -> promoted to a canonical item
-  object via promote_temp_image_to_item;
+  object via ``copy_temp_image_to_item`` (copy, not move: the tmp source has to
+  survive a rolled-back create so the caller's retry can resolve it - see the
+  2026-09-17 NoSuchKey RCA);
 - a true external URL (e.g. an OAuth picture) -> legacy passthrough unchanged
   (no key to promote or re-mint from).
 """
@@ -62,7 +64,7 @@ async def test_owned_preview_url_is_derived_and_promoted():
     }
     with patch.object(
         StorageService,
-        "promote_temp_image_to_item",
+        "copy_temp_image_to_item",
         new=AsyncMock(return_value=promoted),
     ) as promote:
         row = await items_module._normalize_create_image_row(img, Mock(), USER_ID)

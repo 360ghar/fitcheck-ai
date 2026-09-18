@@ -19,13 +19,30 @@ class FakeItemRepository extends ItemRepository {
   int getItemCalls = 0;
   int createItemWithImageCalls = 0;
 
+  /// Idempotency keys the controller sent, in call order (TD-109).
+  final List<String?> createRequestIds = [];
+  final List<String?> createWithImageRequestIds = [];
+
+  /// Optional hook to make a create fail (or return a specific item).
+  Future<ItemModel> Function(
+    CreateItemRequest request,
+    String? clientRequestId,
+  )?
+  onCreateItem;
+
   Future<ItemImage?> Function(String itemId, String base64Image)? onUploadBase64;
   Future<ItemImage?> Function(String itemId, String imageUrl)? onUploadFromUrl;
   Future<List<ItemImage>> Function(String itemId, List<File> images)?
   onUploadFiles;
 
   @override
-  Future<ItemModel> createItem(CreateItemRequest request) async {
+  Future<ItemModel> createItem(
+    CreateItemRequest request, {
+    String? clientRequestId,
+  }) async {
+    createRequestIds.add(clientRequestId);
+    final hook = onCreateItem;
+    if (hook != null) return hook(request, clientRequestId);
     final id = 'item-${createdItemIds.length + 1}';
     createdItemIds.add(id);
     return ItemModel(
@@ -41,7 +58,9 @@ class FakeItemRepository extends ItemRepository {
   Future<ItemModel> createItemWithImage({
     required File image,
     required CreateItemRequest request,
+    String? clientRequestId,
   }) async {
+    createWithImageRequestIds.add(clientRequestId);
     createItemWithImageCalls++;
     return ItemModel(
       id: 'item-src-$createItemWithImageCalls',
@@ -308,5 +327,91 @@ void main() {
       await flushSnackbar(tester);
       controller.onClose();
     });
+
+    testWidgets(
+      're-tapping Save reuses the SAME client_request_id per item (TD-109)',
+      (tester) async {
+        final repo = FakeItemRepository();
+        var failSecondItem = true;
+        repo.onCreateItem = (request, _) async {
+          if (failSecondItem && request.name == 'Second') {
+            throw Exception('response lost in transit');
+          }
+          return ItemModel(
+            id: 'item-${request.name}',
+            userId: 'user-1',
+            name: request.name,
+            category: request.category,
+            condition: request.condition,
+          );
+        };
+        final controller = await hostController(tester, repo);
+        controller.generatedItems.addAll([
+          generatedItem(
+            tempId: 'temp-1',
+            name: 'First',
+            generatedImageUrl: 'https://cdn.example.com/1.png',
+          ),
+          generatedItem(
+            tempId: 'temp-2',
+            name: 'Second',
+            generatedImageUrl: 'https://cdn.example.com/2.png',
+          ),
+        ]);
+
+        await controller.saveGeneratedItems();
+        // The first pass popped the page (one item did save); re-push so the
+        // second pass's Get.back() has somewhere to go.
+        Get.to(const Scaffold(body: Text('page-2')));
+        await tester.pumpAndSettle();
+        failSecondItem = false;
+        await controller.saveGeneratedItems();
+
+        // Two items x two passes. An item's key must be identical across the
+        // passes - that is what makes the backend REPLAY the committed row
+        // instead of inserting a duplicate - and different from its sibling's.
+        expect(repo.createRequestIds, hasLength(4));
+        expect(repo.createRequestIds[0], isNotNull);
+        expect(repo.createRequestIds[2], repo.createRequestIds[0]);
+        expect(repo.createRequestIds[3], repo.createRequestIds[1]);
+        expect(repo.createRequestIds[0], isNot(repo.createRequestIds[1]));
+        await flushSnackbar(tester);
+        controller.onClose();
+      },
+    );
+
+    testWidgets(
+      'two garments with no temp_id must not collapse into one item (TD-109)',
+      (tester) async {
+        final repo = FakeItemRepository();
+        final controller = await hostController(tester, repo);
+        // 'unknown' is the sentinel DetectedItemData.fromJson uses when the
+        // extraction payload omits temp_id. Keying on it would make the second
+        // create REPLAY the first and silently merge two garments into one.
+        controller.generatedItems.addAll([
+          generatedItem(
+            tempId: 'unknown',
+            name: 'First',
+            generatedImageUrl: 'https://cdn.example.com/1.png',
+          ),
+          generatedItem(
+            tempId: 'unknown',
+            name: 'Second',
+            generatedImageUrl: 'https://cdn.example.com/2.png',
+          ),
+        ]);
+
+        await controller.saveGeneratedItems();
+
+        expect(repo.createRequestIds, hasLength(2));
+        expect(
+          repo.createRequestIds[0],
+          isNot(repo.createRequestIds[1]),
+          reason: 'distinct garments must never share an idempotency key',
+        );
+        await flushSnackbar(tester);
+        controller.onClose();
+      },
+    );
   });
 }

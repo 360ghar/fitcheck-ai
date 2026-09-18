@@ -109,6 +109,11 @@ Legacy fallback (`get_user_role`): explicit `role` in the admin set wins; otherw
 | `GET /users/{user_id}` | `users.read` | Full detail: profile + subscription + usage + counts + recent jobs |
 | `PATCH /users/{user_id}` | `users.write` | Role / is_admin / is_active edits; self-demotion + last-admin guards; audit per changed field |
 | `GET /users/{user_id}/activity` | `users.read` | Recent audit events + jobs for one user (25 each) |
+| `GET /users/{user_id}/generations` | `users.read` | Unified generation list across kinds (`kind=item\|outfit\|outfit_render\|photoshoot\|social_import\|all`, status filter, page ≤ 50); base64 stripped, image URLs re-minted at read time |
+| `GET /users/{user_id}/generations/{kind}/{generation_id}` | `users.read` | One normalized generation: media, meta, error, source table/id |
+| `GET /users/{user_id}/billing` | `subscriptions.read` | Subscription + Stripe invoices (via `Invoice.list`); IAP rows only when the caller also has `iap.read` |
+| `GET /users/{user_id}/referrals` | `users.read` | Referral code + redemptions (referred identity) + promo redemptions |
+| `GET /users/{user_id}/body-profile` | `users.read` | Body profiles (never `encrypted_data`) + account gender |
 | `GET /subscriptions` | `subscriptions.read` | Paginated subscriptions (plan/status filters, sort) |
 | `GET /subscriptions/user/{user_id}` | `subscriptions.read` | Full subscription detail incl. provider identifiers + usage |
 | `POST /subscriptions/user/{user_id}/refund` | `subscriptions.refund` | Full refund of latest Stripe charge (store-billed rows rejected); audit `subscription.refunded` |

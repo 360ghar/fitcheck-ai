@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
+// `show` keeps flutter/foundation's own `Category` (an annotation) from
+// colliding with the domain enum imported below.
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../models/item_model.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
@@ -11,6 +14,7 @@ import '../../../core/exceptions/app_exceptions.dart';
 import '../../../core/services/sse_service.dart';
 import '../models/batch_extraction_models.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/request_id.dart';
 
 /// Wardrobe item repository
 class ItemRepository {
@@ -77,9 +81,22 @@ class ItemRepository {
   }
 
   /// Create new item
-  Future<ItemModel> createItem(CreateItemRequest request) async {
+  ///
+  /// `clientRequestId` is the backend idempotency key (TD-109): pass the SAME
+  /// value for every attempt of one logical save and the server replays the
+  /// committed row instead of inserting a duplicate - which is what a retry
+  /// needs after a response is lost in transit, or after the user re-taps Save
+  /// on a batch where some items already committed. Omit it and a fresh key is
+  /// minted, so a transport-level replay of THIS call is still idempotent.
+  Future<ItemModel> createItem(
+    CreateItemRequest request, {
+    String? clientRequestId,
+  }) async {
     try {
-      final payload = _normalizeCreateItemPayload(request.toJson());
+      final payload = createItemPayload(
+        request,
+        clientRequestId: clientRequestId,
+      );
       final response = await _apiClient.post(ApiConstants.items, data: payload);
       return _parseItem(response.data);
     } on DioException catch (e) {
@@ -87,13 +104,43 @@ class ItemRepository {
     }
   }
 
+  /// The POST /items body, including the idempotency key (TD-109).
+  ///
+  /// Split out and annotated so a test can assert the key reaches the wire:
+  /// the transport is an [ApiClient] singleton with no injectable seam.
+  @visibleForTesting
+  Map<String, dynamic> createItemPayload(
+    CreateItemRequest request, {
+    String? clientRequestId,
+  }) {
+    final payload = _normalizeCreateItemPayload(request.toJson());
+    payload['client_request_id'] = clientRequestId ?? newRequestId('item');
+    return payload;
+  }
+
   /// Create item with image
+  ///
+  /// One idempotency key covers the create (and therefore its internal retries)
+  /// for the whole call. A retried save replays the committed row; the replay
+  /// already carries its images, so the upload is skipped instead of adding a
+  /// second `item_images` row for the same save.
   Future<ItemModel> createItemWithImage({
     required File image,
     required CreateItemRequest request,
+    String? clientRequestId,
   }) async {
     try {
-      final created = await createItem(request);
+      final created = await createItem(
+        request,
+        clientRequestId: clientRequestId ?? newRequestId('item'),
+      );
+      if (created.itemImages != null && created.itemImages!.isNotEmpty) {
+        return created;
+      }
+      final existing = await getItem(created.id);
+      if (existing.itemImages != null && existing.itemImages!.isNotEmpty) {
+        return existing;
+      }
       await uploadImages(created.id, [image]);
       return getItem(created.id);
     } on DioException catch (e) {

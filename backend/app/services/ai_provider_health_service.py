@@ -7,12 +7,17 @@ Prevents cascading failures by detecting unavailable providers early and failing
 Key features:
 - Health check with 5-second timeout before requests
 - Cache health status for 60 seconds (avoid checking on every request)
-- Circuit breaker: After 3 consecutive failures, mark provider unavailable for 2 minutes
+- Circuit breaker: after 3 consecutive failures the provider is marked
+  unavailable, and the cooldown grows from 20s (doubling, capped at 5min,
+  jittered) instead of a flat 2 minutes. Provider-side concurrency rejections
+  take a separate short cooldown and never advance the failure streak.
 - Fail fast with clear error messages instead of retrying unavailable providers
 """
 
 import asyncio
 import hashlib
+import math
+import random
 import time
 from typing import Dict, Optional
 from dataclasses import dataclass
@@ -49,13 +54,71 @@ def _cache_key(base_url: str, api_key: Optional[str]) -> str:
         return base_url
     return f"{base_url}|{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
 
+
+def _overload_host_key(base_url: str) -> str:
+    """Normalize a provider base URL to a host:port key for overload state.
+
+    `/v1` vs `/v1/`, path prefixes, and case variants share one gateway, so
+    they must share one cooldown entry.
+    """
+    try:
+        parsed = urlparse(base_url or "")
+        host = (parsed.hostname or str(base_url or "")).lower()
+        port = parsed.port
+        if port is None:
+            port = 443 if (parsed.scheme or "").lower() == "https" else 80
+        return f"{host}:{port}"
+    except Exception:  # noqa: BLE001 - never break admission on a weird URL
+        return str(base_url or "").lower().rstrip("/")
+
 logger = get_context_logger(__name__)
 
 # Configuration
 HEALTH_CHECK_TTL_SECONDS = 60  # Cache health status for 60 seconds
 CIRCUIT_BREAKER_THRESHOLD = 3  # Open circuit after 3 consecutive failures
-CIRCUIT_BREAKER_RESET_TIMEOUT = 120  # Try again after 2 minutes
+CIRCUIT_BREAKER_RESET_TIMEOUT = 120  # Legacy flat window, used by probe-written
+# entries that carry no cooldown of their own. Real-call outcomes use the
+# adaptive window below instead.
+CIRCUIT_BREAKER_BASE_COOLDOWN = 20.0  # First open: retry after ~20s
+CIRCUIT_BREAKER_MAX_COOLDOWN = 300.0  # Doubling ceiling: never wait > 5min
+# A concurrency rejection is not a provider fault (see record_result overload
+# below): it earns a short, single-purpose cooldown so a busy minute does not
+# escalate into a multi-minute fail-fast window.
+OVERLOAD_COOLDOWN_SECONDS = 10.0
 HEALTH_CHECK_TIMEOUT = 5.0  # 5-second timeout for health checks
+
+
+def _breaker_cooldown(consecutive_failures: int) -> float:
+    """How long the breaker stays open for a failure streak.
+
+    Flat 120s was wrong in both directions (2026-09-17 RCA): a provider that
+    blipped once stayed blocked for two full minutes, and a provider that was
+    genuinely down got retried every two minutes forever. The window now grows
+    geometrically from the point the breaker opens (20s, 40s, 80s, 160s, capped
+    at 300s) and is jittered by +/-25% so a fleet of workers does not retry in
+    lockstep and re-create the same pile-up that opened the breaker.
+
+    The EFFECTIVE window is ``max(HEALTH_CHECK_TTL_SECONDS, cooldown)``: a cache
+    entry younger than its 60s TTL is returned before the breaker is consulted,
+    so a short streak (3-4 failures = 20s/40s) waits out the TTL and only longer
+    streaks (5+ = 80s+) extend past it. That floor is intended - the first
+    minute of fail-fast is unchanged, and a blip no longer costs the second
+    minute the flat window charged.
+    """
+    steps_over_threshold = max(0, consecutive_failures - CIRCUIT_BREAKER_THRESHOLD)
+    # Cap the exponent before exponentiation: an unbounded `2 ** steps` raises
+    # OverflowError at ~1027 consecutive failures (float base multiplication),
+    # which would break health checks and record_result() mid-outage. The cap
+    # is derived from the configured limits so the max cooldown is unchanged.
+    max_steps = math.ceil(
+        math.log2(CIRCUIT_BREAKER_MAX_COOLDOWN / CIRCUIT_BREAKER_BASE_COOLDOWN)
+    )
+    steps_over_threshold = min(steps_over_threshold, max_steps)
+    cooldown = min(
+        CIRCUIT_BREAKER_BASE_COOLDOWN * (2 ** steps_over_threshold),
+        CIRCUIT_BREAKER_MAX_COOLDOWN,
+    )
+    return min(cooldown * (0.75 + random.random() * 0.5), CIRCUIT_BREAKER_MAX_COOLDOWN)
 
 
 @dataclass
@@ -66,6 +129,16 @@ class HealthStatus:
     consecutive_failures: int
     latency_ms: Optional[float] = None
     error: Optional[str] = None
+    # How long this entry keeps the breaker open. 0 falls back to
+    # CIRCUIT_BREAKER_RESET_TIMEOUT for entries written before this field
+    # existed (probes, tests, restored state).
+    cooldown_seconds: float = 0.0
+    # Overload entries block admission only until this timestamp, independent
+    # of the 60s health TTL and the failure-streak cooldown. 0 = not overload.
+    overload_until: float = 0.0
+    # Seconds until the overload gate reopens, for caller backoff. Set only on
+    # host-wide fail-fast responses.
+    retry_after_seconds: Optional[float] = None
 
 
 class AIProviderHealthService:
@@ -73,6 +146,10 @@ class AIProviderHealthService:
 
     def __init__(self):
         self._health_cache: Dict[str, HealthStatus] = {}
+        # Host-level overload deadline: a concurrency rejection throttles the
+        # whole gateway, so the 10s cooldown applies to every key on that
+        # host — not just the (host, key) entry that recorded it.
+        self._host_overload_until: Dict[str, float] = {}
         self._lock = asyncio.Lock()
 
     async def check_provider_health(
@@ -103,22 +180,48 @@ class AIProviderHealthService:
 
         # Check cache first
         async with self._lock:
+            # Host-wide overload runs before the per-key cache: the gateway
+            # throttles all keys on the host, so a rejection recorded under
+            # one key must block the others for the same 10s window.
+            host_key = _overload_host_key(base_url)
+            host_until = self._host_overload_until.get(host_key, 0.0)
+            now = time.time()
+            if now < host_until:
+                return HealthStatus(
+                    available=False,
+                    last_check=now,
+                    consecutive_failures=0,
+                    cooldown_seconds=OVERLOAD_COOLDOWN_SECONDS,
+                    error="Provider overloaded (concurrency limit)",
+                    overload_until=host_until,
+                    retry_after_seconds=max(host_until - now, 0.0),
+                )
             if cache_key in self._health_cache:
                 cached = self._health_cache[cache_key]
                 age = time.time() - cached.last_check
 
+                # Overload admission runs before the generic TTL: a 10s
+                # concurrency cooldown must block requests even on a closed
+                # breaker, and must release after 10s even on an open one.
+                if cached.overload_until:
+                    if time.time() < cached.overload_until:
+                        return cached
+                    # Overload window expired: fall through to a fresh
+                    # decision instead of serving the stale cached entry for
+                    # the rest of the 60s TTL.
                 # Return cached if within TTL
-                if age < HEALTH_CHECK_TTL_SECONDS:
+                elif age < HEALTH_CHECK_TTL_SECONDS:
                     return cached
 
                 # Circuit breaker: if too many failures, wait longer before retry
                 if cached.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD:
-                    if age < CIRCUIT_BREAKER_RESET_TIMEOUT:
+                    cooldown = cached.cooldown_seconds or CIRCUIT_BREAKER_RESET_TIMEOUT
+                    if age < cooldown:
                         logger.warning(
                             f"Circuit breaker OPEN for {base_url}",
                             extra={
                                 "consecutive_failures": cached.consecutive_failures,
-                                "retry_in_seconds": CIRCUIT_BREAKER_RESET_TIMEOUT - age,
+                                "retry_in_seconds": round(cooldown - age, 1),
                             },
                         )
                         return cached  # Return cached failure status
@@ -198,6 +301,7 @@ class AIProviderHealthService:
                     available=is_healthy,
                     last_check=time.time(),
                     consecutive_failures=0 if is_healthy else failures,
+                    cooldown_seconds=0.0 if is_healthy else _breaker_cooldown(failures),
                     latency_ms=latency,
                     error=None if is_healthy else error_msg,
                 )
@@ -232,6 +336,7 @@ class AIProviderHealthService:
                 available=False,
                 last_check=time.time(),
                 consecutive_failures=failures,
+                cooldown_seconds=_breaker_cooldown(failures),
                 latency_ms=None,
                 error=f"Connection error: {type(e).__name__}",
             )
@@ -253,6 +358,7 @@ class AIProviderHealthService:
                 available=False,
                 last_check=time.time(),
                 consecutive_failures=failures,
+                cooldown_seconds=_breaker_cooldown(failures),
                 latency_ms=None,
                 error=str(e),
             )
@@ -272,7 +378,11 @@ class AIProviderHealthService:
         return status
 
     async def record_result(
-        self, base_url: str, ok: bool, api_key: Optional[str] = None
+        self,
+        base_url: str,
+        ok: bool,
+        api_key: Optional[str] = None,
+        overload: bool = False,
     ) -> None:
         """Record the outcome of a REAL provider call (not a probe).
 
@@ -289,6 +399,16 @@ class AIProviderHealthService:
         ``api_key`` must match the key used for the call (A3-10): the breaker
         is keyed per (host, key), so a user-specific BYOK failure cannot open
         the breaker for other users on the same host.
+
+        ``overload=True`` marks a failure the provider attributed to OUR own
+        concurrency ("Exceeded concurrency limit."): the gateway is healthy and
+        refusing work it has no slot for. Such an outcome neither advances nor
+        resets the failure streak - it only installs a short cooldown, so a
+        busy minute backs the caller off without turning into a multi-minute
+        fail-fast outage (2026-09-17: 15 concurrency rejections opened the
+        breaker for 120s on a provider that was up the whole time). If the
+        breaker was already open with a longer adaptive window, this shortens
+        it: a reply - even a refusal - proves the provider is reachable.
         """
         now = time.time()
         cache_key = _cache_key(base_url, api_key)
@@ -301,11 +421,37 @@ class AIProviderHealthService:
                     consecutive_failures=0,
                 )
                 return
+            if overload:
+                failures = prev.consecutive_failures if prev else 0
+                overload_until = now + OVERLOAD_COOLDOWN_SECONDS
+                self._health_cache[cache_key] = HealthStatus(
+                    available=False,
+                    last_check=now,
+                    consecutive_failures=failures,
+                    cooldown_seconds=OVERLOAD_COOLDOWN_SECONDS,
+                    error="Provider overloaded (concurrency limit)",
+                    overload_until=overload_until,
+                )
+                # The gateway throttles every key on this host, not just the
+                # key that drew the rejection: stamp the host deadline so
+                # other keys honor the same cooldown (checked above).
+                self._host_overload_until[_overload_host_key(base_url)] = overload_until
+                logger.warning(
+                    f"Provider {base_url} rejected a call on its concurrency limit",
+                    extra={
+                        "base_url": base_url,
+                        "consecutive_failures": failures,
+                        "retry_in_seconds": OVERLOAD_COOLDOWN_SECONDS,
+                    },
+                )
+                return
             failures = (prev.consecutive_failures + 1) if prev else 1
+            cooldown = _breaker_cooldown(failures)
             self._health_cache[cache_key] = HealthStatus(
                 available=failures < CIRCUIT_BREAKER_THRESHOLD,
                 last_check=now,
                 consecutive_failures=failures,
+                cooldown_seconds=cooldown,
                 error=f"Provider call failed ({failures} consecutive)",
             )
             if not self._health_cache[cache_key].available:
@@ -315,7 +461,7 @@ class AIProviderHealthService:
                     extra={
                         "base_url": base_url,
                         "consecutive_failures": failures,
-                        "retry_in_seconds": CIRCUIT_BREAKER_RESET_TIMEOUT,
+                        "retry_in_seconds": round(cooldown, 1),
                     },
                 )
 
@@ -336,8 +482,19 @@ class AIProviderHealthService:
             prefix = f"{base_url}|"
             for key in [k for k in self._health_cache if k.startswith(prefix)]:
                 self._health_cache.pop(key, None)
+            # A post-failure reset must also release the host-wide overload
+            # deadline, or every key keeps fail-fasting until it lapses.
+            self._host_overload_until.pop(_overload_host_key(base_url), None)
+            self._sweep_expired_host_overloads()
         else:
             self._health_cache.clear()
+            self._host_overload_until.clear()
+
+    def _sweep_expired_host_overloads(self) -> None:
+        """Drop lapsed host deadlines so the map cannot grow unbounded."""
+        now = time.time()
+        for key in [k for k, until in self._host_overload_until.items() if until <= now]:
+            self._host_overload_until.pop(key, None)
 
 
 # Global singleton

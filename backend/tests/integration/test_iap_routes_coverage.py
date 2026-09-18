@@ -629,10 +629,16 @@ class _ClaimTable:
 
     def execute(self):
         if self.last == "insert":
+            self.db.insert_calls += 1
             if self.db.insert_error is not None:
                 raise self.db.insert_error
             return Mock(data=[{}])
         if self.last == "select":
+            self.db._selects += 1
+            # Second select is the post-race re-read: optionally model the
+            # winner's lease landing between our CAS and the re-read.
+            if self.db._selects > 1 and self.db.row_second is not None:
+                return Mock(data=self.db.row_second)
             return Mock(data=self.db.row)
         if self.last == "update":
             return Mock(data=self.db.update_rows)
@@ -640,10 +646,13 @@ class _ClaimTable:
 
 
 class _ClaimDB:
-    def __init__(self, row=None, update_rows=None, insert_error=None):
+    def __init__(self, row=None, update_rows=None, insert_error=None, row_second=None):
         self.row = row
+        self.row_second = row_second
+        self._selects = 0
         self.update_rows = [] if update_rows is None else update_rows
         self.insert_error = insert_error
+        self.insert_calls = 0
         self.last_payload = None
         self.eq_calls = []
         self.is_calls = []
@@ -729,7 +738,11 @@ async def test_claim_event_stale_processing_lease_is_reclaimed():
 
 
 @pytest.mark.asyncio
-async def test_claim_event_lost_cas_race_is_acked():
+async def test_claim_event_lost_cas_race_rereads_before_acking():
+    """P1: a zero-row CAS must not blind-ACK. The re-read shows the row is
+    still claimable here, so one fresh CAS runs; it also misses, so the
+    webhook fails closed (500, store redelivers) instead of ACKing an
+    unprocessed event."""
     db = _ClaimDB(
         insert_error=_duplicate_error(),
         row={
@@ -738,6 +751,28 @@ async def test_claim_event_lost_cas_race_is_acked():
             "attempts": 1,
         },
         update_rows=[],
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert exc_info.value.status_code == 500
+@pytest.mark.asyncio
+async def test_claim_event_lost_cas_race_acks_live_winner_lease():
+    """Same zero-row CAS, but the re-read shows another worker's live lease
+    (or an already-processed row): only then is the delivery ACKed."""
+    from app.utils.datetime_util import utcnow_iso
+    db = _ClaimDB(
+        insert_error=_duplicate_error(),
+        row={
+            "status": "failed",
+            "processing_started_at": "2026-01-01T00:00:00+00:00",
+            "attempts": 1,
+        },
+        update_rows=[],
+        row_second={
+            "status": "processing",
+            "processing_started_at": utcnow_iso(),
+            "attempts": 2,
+        },
     )
     outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
     assert outcome == iap._CLAIM_ACKED
@@ -753,6 +788,19 @@ async def test_claim_event_legacy_row_without_lease_uses_null_predicate():
     outcome = await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
     assert outcome == iap._CLAIM_CLAIMED
     assert ("processing_started_at", "null") in db.is_calls
+
+
+@pytest.mark.asyncio
+async def test_claim_event_insert_transport_error_fails_closed_without_retry():
+    """P1: a lost-response insert must 500 (store redelivers), never retry
+    into a duplicate + fresh-lease ACK that strands the event unprocessed."""
+    import httpx
+
+    db = _ClaimDB(insert_error=httpx.ConnectError("connection failed"))
+    with pytest.raises(HTTPException) as exc_info:
+        await iap._claim_event(db, "apple_iap_events", "notification_id", "n-1", "SUBSCRIBED")
+    assert exc_info.value.status_code == 500
+    assert db.insert_calls == 1
 
 
 # ---------------------------------------------------------------------------

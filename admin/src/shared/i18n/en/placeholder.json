@@ -11,6 +11,9 @@
   "userDetail": {
     "title": "User details"
   },
+  "userGeneration": {
+    "title": "Generation details"
+  },
   "subscriptions": {
     "title": "Subscriptions"
   },

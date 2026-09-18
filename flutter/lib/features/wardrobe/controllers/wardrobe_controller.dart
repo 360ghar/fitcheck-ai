@@ -609,11 +609,24 @@ class WardrobeController extends GetxController {
   }
 
   /// Add multiple newly created items to the list
-  /// Called by BatchExtractionController after batch saving items
+  /// Called by BatchExtractionController after batch saving items.
+  /// Upserts by id: idempotent replays replace the existing row instead of
+  /// duplicating the tile, and `totalItems` grows only for genuinely new ids.
   void addItems(List<ItemModel> newItems) {
     if (newItems.isEmpty) return;
-    items.insertAll(0, newItems);
-    totalItems.value += newItems.length;
+    final seen = <String>{};
+    var added = 0;
+    for (final item in newItems) {
+      if (!seen.add(item.id)) continue;
+      final index = items.indexWhere((existing) => existing.id == item.id);
+      if (index == -1) {
+        items.insert(added, item);
+        added++;
+      } else {
+        items[index] = item;
+      }
+    }
+    totalItems.value += added;
   }
 
   /// Update an existing item in the list (for immediate UI update)

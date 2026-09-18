@@ -1,7 +1,7 @@
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -51,7 +51,12 @@ import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { Switch } from '@/shared/ui/switch'
 
 const ItemsGrid = lazy(() => import('@/features/users/components/ItemsGrid'))
-const OutfitsGallery = lazy(() => import('@/features/users/components/OutfitsGallery'))
+const GenerationsExplorer = lazy(
+  () => import('@/features/users/components/GenerationsExplorer'),
+)
+const BillingCard = lazy(() => import('@/features/users/components/BillingCard'))
+const ReferralsCard = lazy(() => import('@/features/users/components/ReferralsCard'))
+const BodyProfileCard = lazy(() => import('@/features/users/components/BodyProfileCard'))
 const Timeline = lazy(() => import('@/features/users/components/Timeline'))
 const CollectionsTripsStreaks = lazy(
   () => import('@/features/users/components/CollectionsTripsStreaks'),
@@ -98,7 +103,6 @@ function SectionSkeleton() {
 export function UserDetailPage() {
   const { id } = useParams<{ id: string }>()
   const userId = id ?? ''
-  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation('users')
   const { can } = usePermission()
   const canManageUser = can('users.write')
@@ -115,9 +119,11 @@ export function UserDetailPage() {
   const [extendDays, setExtendDays] = useState('7')
   const [clearOpen, setClearOpen] = useState(false)
 
-  const outfitsTab = searchParams.get('outfits_tab') ?? 'outfits'
-
   const detail = detailQuery.data as (typeof detailQuery.data & JsonRecord) | undefined
+  // Extended keys — degrade gracefully when backend hasn't yet shipped them
+  const extended = detail as JsonRecord | undefined
+  // Backend already caps the embedded items list (12); slice defensively only.
+  const items: JsonRecord[] = useMemo(() => arrayValue(extended, 'items').slice(0, 12), [extended])
   const userRecord = detail?.user as JsonRecord | undefined
   const name = displayName(userRecord)
   const email = stringValue(userRecord, 'email') ?? '—'
@@ -135,28 +141,6 @@ export function UserDetailPage() {
   const subPlanLabel = subPlan ? planLabelKey(subPlan) : null
   const subStatus = subscriptionStatus(subscription)
 
-  // Extended keys — degrade gracefully when backend hasn't yet shipped them
-  const extended = detail as JsonRecord | undefined
-  // Backend already caps the embedded items list (12); slice defensively only.
-  const items: JsonRecord[] = useMemo(() => arrayValue(extended, 'items').slice(0, 12), [extended])
-  const outfits: JsonRecord[] = useMemo(
-    () => arrayValue(extended, 'outfits').slice(0, 12),
-    [extended],
-  )
-  const photoshootJobs: JsonRecord[] = useMemo(() => {
-    const raw =
-      arrayValue(extended, 'photoshoot').length > 0
-        ? arrayValue(extended, 'photoshoot')
-        : arrayValue(extended, 'photoshoot_jobs')
-    // Also merge recent_jobs that are photoshoot type when extended key missing
-    const fallback =
-      raw.length === 0
-        ? ((detail?.recent_jobs as unknown as JsonRecord[] | undefined) ?? []).filter(
-            (j) => stringValue(j, 'job_type') === 'photoshoot' || stringValue(j, 'use_case') !== null,
-          )
-        : []
-    return (raw.length > 0 ? raw : fallback).slice(0, 12)
-  }, [extended, detail?.recent_jobs])
   const collections: JsonRecord[] = useMemo(() => arrayValue(extended, 'collections'), [extended])
   const trips: JsonRecord[] = useMemo(() => arrayValue(extended, 'trips'), [extended])
   const achievements: JsonRecord[] = useMemo(
@@ -356,6 +340,9 @@ export function UserDetailPage() {
             { id: 'section-uploads', label: t('detail.navUploads') },
             { id: 'section-generations', label: t('detail.navGenerations') },
             { id: 'section-collections', label: t('detail.navCollections') },
+            { id: 'section-billing', label: t('detail.navBilling') },
+            { id: 'section-referrals', label: t('detail.navReferrals') },
+            { id: 'section-body', label: t('detail.navBody') },
             { id: 'section-counts', label: t('detail.navCounts') },
             { id: 'section-timeline', label: t('detail.navTimeline') },
           ].map((item) => (
@@ -699,19 +686,10 @@ export function UserDetailPage() {
           {/* BENTO RowD: Generations (7) + Collections (5) */}
           <div className="grid gap-4 lg:grid-cols-12">
             <div className="lg:col-span-7">
-          {/* Section 5: Generations — Outfits + Photoshoot (lazy) */}
+          {/* Section 5: Generations — paginated explorer across every kind (lazy) */}
           <div id="section-generations" className="scroll-mt-28">
             <Suspense fallback={<SectionSkeleton />}>
-              <OutfitsGallery
-                outfits={outfits}
-                photoshootJobs={photoshootJobs}
-                defaultTab={outfitsTab}
-                onTabChange={(tab: string) => setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev)
-                  next.set('outfits_tab', tab)
-                  return next
-                })}
-              />
+              <GenerationsExplorer userId={userId} />
             </Suspense>
           </div>
             </div>
@@ -735,6 +713,25 @@ export function UserDetailPage() {
             <Suspense fallback={<SectionSkeleton />}>
               <CountsStrip counts={counts ?? {}} />
             </Suspense>
+          </div>
+
+          {/* BENTO RowE: Billing (5) + Referrals (4) + Body profile (3) */}
+          <div className="grid gap-4 lg:grid-cols-12">
+            <div id="section-billing" className="scroll-mt-28 lg:col-span-5">
+              <Suspense fallback={<SectionSkeleton />}>
+                <BillingCard userId={userId} />
+              </Suspense>
+            </div>
+            <div id="section-referrals" className="scroll-mt-28 lg:col-span-4">
+              <Suspense fallback={<SectionSkeleton />}>
+                <ReferralsCard userId={userId} />
+              </Suspense>
+            </div>
+            <div id="section-body" className="scroll-mt-28 lg:col-span-3">
+              <Suspense fallback={<SectionSkeleton />}>
+                <BodyProfileCard userId={userId} />
+              </Suspense>
+            </div>
           </div>
 
           {/* Section 8: Activity timeline (lazy) */}

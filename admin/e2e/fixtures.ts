@@ -9,8 +9,12 @@ import {
 import { adminSearchFixture } from '../src/test/msw/handlers/search'
 import {
   adminUserActivityFixture,
+  adminUserBillingFixture,
+  adminUserBodyProfileFixture,
   adminUserDetailFixture,
+  adminUserGenerationsFixture,
   adminUserListFixture,
+  adminUserReferralsFixture,
 } from '../src/test/msw/handlers/users'
 
 /**
@@ -44,6 +48,10 @@ export const userFixtures = {
   list: adminUserListFixture,
   detail: adminUserDetailFixture,
   activity: adminUserActivityFixture,
+  generations: adminUserGenerationsFixture,
+  billing: adminUserBillingFixture,
+  referrals: adminUserReferralsFixture,
+  bodyProfile: adminUserBodyProfileFixture,
 }
 
 /** Super-admin /me — grants every permission (`*`). */
