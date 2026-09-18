@@ -16,6 +16,7 @@ Key features:
 
 import asyncio
 import hashlib
+import math
 import random
 import time
 from typing import Dict, Optional
@@ -88,6 +89,14 @@ def _breaker_cooldown(consecutive_failures: int) -> float:
     minute the flat window charged.
     """
     steps_over_threshold = max(0, consecutive_failures - CIRCUIT_BREAKER_THRESHOLD)
+    # Cap the exponent before exponentiation: an unbounded `2 ** steps` raises
+    # OverflowError at ~1027 consecutive failures (float base multiplication),
+    # which would break health checks and record_result() mid-outage. The cap
+    # is derived from the configured limits so the max cooldown is unchanged.
+    max_steps = math.ceil(
+        math.log2(CIRCUIT_BREAKER_MAX_COOLDOWN / CIRCUIT_BREAKER_BASE_COOLDOWN)
+    )
+    steps_over_threshold = min(steps_over_threshold, max_steps)
     cooldown = min(
         CIRCUIT_BREAKER_BASE_COOLDOWN * (2 ** steps_over_threshold),
         CIRCUIT_BREAKER_MAX_COOLDOWN,

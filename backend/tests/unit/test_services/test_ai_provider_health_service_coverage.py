@@ -268,6 +268,12 @@ def test_breaker_cooldown_grows_then_caps(monkeypatch):
     assert _breaker_cooldown(20) == pytest.approx(300.0)
 
 
+def test_breaker_cooldown_extreme_streak_does_not_overflow(monkeypatch):
+    """A very long outage must not raise OverflowError in `2 ** steps`."""
+    _freeze_jitter(monkeypatch, 0.5)  # factor 1.0
+    assert _breaker_cooldown(2000) == pytest.approx(300.0)
+
+
 def test_breaker_cooldown_is_jittered(monkeypatch):
     """A fleet of workers must not retry in lockstep and re-create the pile-up."""
     _freeze_jitter(monkeypatch, 0.0)
