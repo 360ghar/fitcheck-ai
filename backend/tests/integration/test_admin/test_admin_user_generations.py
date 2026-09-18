@@ -172,7 +172,9 @@ async def test_photoshoot_maps_images_prompt_and_failures():
     assert generation["title"] == "aesthetic"
     assert generation["media"][0]["url"] == f"https://presigned.test/{TMP_KEY}"
     assert generation["media"][0]["label"] == "#0"
-    assert generation["failed_count"] == 2
+    # failed_indices [1] + image_failures [{index: 1}] describe the SAME
+    # image: failed_count dedupes on index instead of summing both lists.
+    assert generation["failed_count"] == 1
     assert generation["meta"]["custom_prompt"] == "golden hour"
     assert generation["meta"]["aspect_ratio"] == "1:1"
     assert generation["meta"]["image_failures"][0]["error"] == "provider timeout"

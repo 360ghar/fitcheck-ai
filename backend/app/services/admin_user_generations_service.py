@@ -625,6 +625,17 @@ async def _normalize_photoshoot(row: Dict[str, Any], *, user_id: str) -> Dict[st
     failed_indices = row.get("failed_indices") or []
     raw_failures = row.get("image_failures") or []
     image_failures = _strip_base64(raw_failures) if isinstance(raw_failures, list) else []
+    # failed_indices + image_failures are two views of the same failures;
+    # dedupe on index so an image present in both counts once.
+    failed_index_keys = {
+        str(index)
+        for index in (failed_indices if isinstance(failed_indices, list) else [])
+    }
+    failed_index_keys.update(
+        str(detail.get("index"))
+        for detail in (image_failures if isinstance(image_failures, list) else [])
+        if isinstance(detail, dict) and detail.get("index") is not None
+    )
     generation = _generation(
         kind="photoshoot",
         row=row,
@@ -632,10 +643,7 @@ async def _normalize_photoshoot(row: Dict[str, Any], *, user_id: str) -> Dict[st
         subtitle=f"{len(media)}/{row.get('num_images') or '?'} images",
         media=media,
         media_count=row.get("num_images") or len(media),
-        failed_count=(
-            (len(failed_indices) if isinstance(failed_indices, list) else 0)
-            + (len(image_failures) if isinstance(image_failures, list) else 0)
-        ),
+        failed_count=len(failed_index_keys),
     )
     generation["meta"] = {
         "use_case": _iso(row.get("use_case")),
@@ -763,6 +771,7 @@ async def _normalize_rows(
                 result = await execute_with_reconnect(
                     lambda d: d.table("outfits")
                     .select("id,name")
+                    .eq("user_id", user_id)
                     .in_("id", list(set(outfit_ids)))
                     .execute(),
                     db,
@@ -1083,7 +1092,10 @@ async def get_user_billing(
             iap = []
 
     subscription = dict(sub_row) if isinstance(sub_row, dict) else {}
-    subscription["amount"] = plan_display_amount(subscription.get("plan_type"))
+    if subscription:
+        # Display-only mirror of configured plan prices (settings PLAN_*_PRICE);
+        # not a live Stripe price — this function only fetches invoices.
+        subscription["amount"] = plan_display_amount(subscription.get("plan_type"))
     return {
         "user_id": user_id,
         "subscription": subscription or None,
