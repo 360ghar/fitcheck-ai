@@ -54,6 +54,23 @@ def _cache_key(base_url: str, api_key: Optional[str]) -> str:
         return base_url
     return f"{base_url}|{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
 
+
+def _overload_host_key(base_url: str) -> str:
+    """Normalize a provider base URL to a host:port key for overload state.
+
+    `/v1` vs `/v1/`, path prefixes, and case variants share one gateway, so
+    they must share one cooldown entry.
+    """
+    try:
+        parsed = urlparse(base_url or "")
+        host = (parsed.hostname or str(base_url or "")).lower()
+        port = parsed.port
+        if port is None:
+            port = 443 if (parsed.scheme or "").lower() == "https" else 80
+        return f"{host}:{port}"
+    except Exception:  # noqa: BLE001 - never break admission on a weird URL
+        return str(base_url or "").lower().rstrip("/")
+
 logger = get_context_logger(__name__)
 
 # Configuration
@@ -119,6 +136,9 @@ class HealthStatus:
     # Overload entries block admission only until this timestamp, independent
     # of the 60s health TTL and the failure-streak cooldown. 0 = not overload.
     overload_until: float = 0.0
+    # Seconds until the overload gate reopens, for caller backoff. Set only on
+    # host-wide fail-fast responses.
+    retry_after_seconds: Optional[float] = None
 
 
 class AIProviderHealthService:
@@ -163,15 +183,18 @@ class AIProviderHealthService:
             # Host-wide overload runs before the per-key cache: the gateway
             # throttles all keys on the host, so a rejection recorded under
             # one key must block the others for the same 10s window.
-            host_until = self._host_overload_until.get(base_url, 0.0)
-            if time.time() < host_until:
+            host_key = _overload_host_key(base_url)
+            host_until = self._host_overload_until.get(host_key, 0.0)
+            now = time.time()
+            if now < host_until:
                 return HealthStatus(
                     available=False,
-                    last_check=time.time(),
+                    last_check=now,
                     consecutive_failures=0,
                     cooldown_seconds=OVERLOAD_COOLDOWN_SECONDS,
                     error="Provider overloaded (concurrency limit)",
                     overload_until=host_until,
+                    retry_after_seconds=max(host_until - now, 0.0),
                 )
             if cache_key in self._health_cache:
                 cached = self._health_cache[cache_key]
@@ -412,7 +435,7 @@ class AIProviderHealthService:
                 # The gateway throttles every key on this host, not just the
                 # key that drew the rejection: stamp the host deadline so
                 # other keys honor the same cooldown (checked above).
-                self._host_overload_until[base_url] = overload_until
+                self._host_overload_until[_overload_host_key(base_url)] = overload_until
                 logger.warning(
                     f"Provider {base_url} rejected a call on its concurrency limit",
                     extra={
@@ -459,8 +482,19 @@ class AIProviderHealthService:
             prefix = f"{base_url}|"
             for key in [k for k in self._health_cache if k.startswith(prefix)]:
                 self._health_cache.pop(key, None)
+            # A post-failure reset must also release the host-wide overload
+            # deadline, or every key keeps fail-fasting until it lapses.
+            self._host_overload_until.pop(_overload_host_key(base_url), None)
+            self._sweep_expired_host_overloads()
         else:
             self._health_cache.clear()
+            self._host_overload_until.clear()
+
+    def _sweep_expired_host_overloads(self) -> None:
+        """Drop lapsed host deadlines so the map cannot grow unbounded."""
+        now = time.time()
+        for key in [k for k, until in self._host_overload_until.items() if until <= now]:
+            self._host_overload_until.pop(key, None)
 
 
 # Global singleton

@@ -333,6 +333,14 @@ async def test_record_result_overload_does_not_advance_the_streak():
     assert entry.overload_until > entry.last_check
     assert "concurrency" in (entry.error or "").lower()
 
+    # Admission: the host-wide deadline blocks a second key without probing,
+    # and the fail-fast carries the remaining backoff.
+    with patch("app.services.ai_provider_health_service.httpx.AsyncClient") as client_cls:
+        blocked = await svc.check_provider_health(HOST, "other-key")
+    assert blocked.available is False
+    assert blocked.retry_after_seconds is not None and blocked.retry_after_seconds > 0
+    client_cls.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_record_result_overload_keeps_an_open_breaker_open():

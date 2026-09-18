@@ -647,13 +647,19 @@ class AIProviderService:
 
         if self._is_transient_http_status(response.status_code):
             headers = getattr(response, "headers", {}) or {}
+            detail = self._http_error_detail(response)
+            if headers.get("Retry-After"):
+                retry_after: Optional[float] = self._http_retry_delay_seconds(response, 0)
+            elif self._is_provider_overload_text(detail):
+                # Concurrency-marked 429/503 without Retry-After: the queue is
+                # already full, so the 2s floor applies here too — otherwise the
+                # retry re-enters after the generic 0.5s delay.
+                retry_after = self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS
+            else:
+                retry_after = None
             raise self._TransientChatAPIOverload(
-                f"status={response.status_code}: {self._http_error_detail(response)}",
-                retry_after_seconds=(
-                    self._http_retry_delay_seconds(response, 0)
-                    if headers.get("Retry-After")
-                    else None
-                ),
+                f"status={response.status_code}: {detail}",
+                retry_after_seconds=retry_after,
             )
         if not self._is_success_status(response):
             detail = self._http_error_detail(response)
@@ -890,19 +896,21 @@ class AIProviderService:
                     if not (e.retryable or (e.fallback_eligible and cross_host_fallback)):
                         raise
                     if e.retry_after_seconds and next_url == attempt_url:
-                        # Same-gateway fallback: the 200-overload hint says the
-                        # queue is full, so wait it out instead of re-entering
-                        # immediately. The wait must cover the health gate's
-                        # overload cooldown (10s): waiting only the short hint
-                        # fails the gate and the fallback never runs. Bounded
-                        # so a bad hint cannot stall saves.
+                        # Same-gateway fallback: only an overload hint says the
+                        # queue is full, so only it waits out the health gate's
+                        # overload cooldown (10s). A non-overload transient hint
+                        # honors its own delay instead of inflating to 10-12s.
+                        # Bounded so a bad hint cannot stall saves.
                         from app.services.ai_provider_health_service import (
                             OVERLOAD_COOLDOWN_SECONDS,
                         )
-                        wait = min(
-                            max(float(e.retry_after_seconds), OVERLOAD_COOLDOWN_SECONDS),
-                            OVERLOAD_COOLDOWN_SECONDS + 2.0,
-                        )
+                        if self._is_provider_overload_text(str(e)):
+                            wait = min(
+                                max(float(e.retry_after_seconds), OVERLOAD_COOLDOWN_SECONDS),
+                                OVERLOAD_COOLDOWN_SECONDS + 2.0,
+                            )
+                        else:
+                            wait = min(float(e.retry_after_seconds), OVERLOAD_COOLDOWN_SECONDS + 2.0)
                         logger.warning(
                             "Image provider overloaded; waiting before same-host fallback",
                             wait_seconds=wait,
@@ -1709,13 +1717,19 @@ class AIProviderService:
                 # same transient set as chat(). Permanent 4xx fail via
                 # raise_for_status without entering with_retry.
                 headers = getattr(response, "headers", {}) or {}
+                detail = self._http_error_detail(response)
+                if headers.get("Retry-After"):
+                    image_retry_after: Optional[float] = self._http_retry_delay_seconds(response, 0)
+                elif self._is_provider_overload_text(detail):
+                    # Concurrency-marked rejection without Retry-After: same
+                    # 2s floor as the chat leg, or the retry re-enters a full
+                    # queue after the generic delay.
+                    image_retry_after = self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS
+                else:
+                    image_retry_after = None
                 raise self._TransientImageAPIOverload(
-                    f"status={response.status_code}: {self._http_error_detail(response)}",
-                    retry_after_seconds=(
-                        self._http_retry_delay_seconds(response, 0)
-                        if headers.get("Retry-After")
-                        else None
-                    ),
+                    f"status={response.status_code}: {detail}",
+                    retry_after_seconds=image_retry_after,
                 )
             if not self._is_success_status(response):
                 detail = self._http_error_detail(response)
