@@ -129,7 +129,10 @@ export function GenerationDetailPage() {
             </div>
           ) : null}
 
-          <MediaGallery generation={generation} />
+          <MediaGallery
+            key={`${stringValue(generation, 'kind') ?? ''}:${stringValue(generation, 'id') ?? ''}`}
+            generation={generation}
+          />
 
           <dl className="divide-y divide-border">
             <Field label={t('detail.createdAt')} value={formatDateTimeValue(generation.created_at)} />
@@ -160,7 +163,7 @@ export function GenerationDetailPage() {
             <ul className="divide-y divide-border">
               {(meta['items'] as JsonRecord[]).map((item, index) => (
                 <li
-                  key={stringValue(item, 'name') ?? `item-${index}`}
+                  key={`${stringValue(item, 'name') ?? 'item'}-${index}`}
                   className="flex items-center justify-between gap-3 py-1.5"
                 >
                   <span className="min-w-0 truncate text-sm text-ink">
@@ -291,7 +294,13 @@ function SourceIds({ generation }: { generation: JsonRecord }) {
               className="size-6"
               aria-label={t('detail.genCopyId', { value })}
               onClick={() => {
-                navigator.clipboard
+                const clipboard =
+                  typeof navigator !== 'undefined' ? navigator.clipboard : undefined
+                if (!clipboard) {
+                  toast.error(normalizeError(new Error('Clipboard unavailable')).message)
+                  return
+                }
+                clipboard
                   .writeText(value)
                   .then(() => toast.success(t('detail.genCopyIdToast')))
                   .catch((error: unknown) => toast.error(normalizeError(error).message))

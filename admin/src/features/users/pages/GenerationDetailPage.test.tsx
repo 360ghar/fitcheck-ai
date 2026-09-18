@@ -35,8 +35,9 @@ describe('GenerationDetailPage', () => {
     expect(screen.getByText('ps_job_1')).toBeInTheDocument()
     // Media thumbnails: 2 images
     expect(screen.getAllByRole('button', { name: /Show image/ }).length).toBe(2)
-    // Back link carries the user name
-    expect(screen.getByText('Back to Alice Example')).toBeInTheDocument()
+    // Back link carries the user name — awaited: it resolves from the
+    // independent user-detail query, not the generation query above.
+    expect(await screen.findByText('Back to Alice Example')).toBeInTheDocument()
   })
 
   it('renders the error banner for a failed generation', async () => {

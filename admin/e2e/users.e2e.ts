@@ -42,7 +42,10 @@ test.describe('users', () => {
 
     // Back to the detail page for the rest of the journey.
     await page.goBack()
-    await expect(page).toHaveURL(/\/users\/user_3/)
+    // Anchored: the viewer URL (/users/user_3/generations/...) contains the
+    // same substring, so an unanchored match would pass even when goBack()
+    // never leaves the viewer.
+    await expect(page).toHaveURL(/\/users\/user_3(\?|$)/)
 
     // Suspend flow: confirm dialog → success toast.
     await page.getByRole('button', { name: 'Suspend user', exact: true }).click()

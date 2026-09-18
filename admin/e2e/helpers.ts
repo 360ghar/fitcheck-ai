@@ -228,17 +228,45 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
       const status = url.searchParams.get('status')
       const pageNum = Number(url.searchParams.get('page') ?? '1')
       const pageSize = Number(url.searchParams.get('page_size') ?? '12')
-      let rows = generationsForUser(userId).filter(
+      const owned = generationsForUser(userId)
+      let rows = owned.filter(
         (item) => kind === 'all' || item.kind === kind,
       )
       if (status) rows = rows.filter((item) => item.status === status)
       const start = (pageNum - 1) * pageSize
+      // Like the backend contract: the response carries the requested
+      // user's id and counts computed from their own rows — not the shared
+      // user_1 fixture's id and nonzero counts.
+      const counts: Record<string, number> = {
+        item_generations: 0,
+        outfits: 0,
+        outfit_renders: 0,
+        photoshoot_jobs: 0,
+        social_import_jobs: 0,
+      }
+      for (const item of owned) {
+        const key =
+          item.kind === 'item'
+            ? 'item_generations'
+            : item.kind === 'outfit'
+              ? 'outfits'
+              : item.kind === 'outfit_render'
+                ? 'outfit_renders'
+                : item.kind === 'photoshoot'
+                  ? 'photoshoot_jobs'
+                  : item.kind === 'social_import'
+                    ? 'social_import_jobs'
+                    : null
+        if (key) counts[key] += 1
+      }
       return respondJson(route, {
         ...userFixtures.generations,
+        user_id: userId,
         items: rows.slice(start, start + pageSize),
         total: rows.length,
         page: pageNum,
         page_size: pageSize,
+        counts,
       })
     }
     if (method === 'GET' && userGenerationMatch) {

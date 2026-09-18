@@ -116,7 +116,7 @@ export function GenerationsExplorer({ userId }: { userId: string }) {
       <CardContent className="py-2">
         {query.isError ? (
           <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
-        ) : query.isPending ? (
+        ) : query.isPending || query.isPlaceholderData ? (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, i) => (
               <Skeleton key={i} className="h-28 w-full rounded-md" />
@@ -212,6 +212,16 @@ function GenerationCard({ userId, item }: { userId: string; item: AdminUserGener
           alt={cover.label ?? title}
           className="h-20 w-full object-cover"
           loading="lazy"
+          onError={(event) => {
+            // Stale thumbnail must not leave a broken tile: fall back to the
+            // full image (same pattern as the detail viewer), hiding only
+            // when both fail.
+            if (cover.thumbUrl && event.currentTarget.src !== cover.url) {
+              event.currentTarget.src = cover.url
+            } else {
+              event.currentTarget.style.display = 'none'
+            }
+          }}
         />
       ) : (
         <span className="flex h-20 w-full items-center justify-center bg-surface-card text-muted-foreground">

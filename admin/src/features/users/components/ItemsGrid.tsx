@@ -45,7 +45,10 @@ function itemDisplayName(item: JsonRecord): string {
  * generated/catalog image plus the original source photo. */
 export function ItemsGrid({ items }: { items: JsonRecord[] }) {
   const { t } = useTranslation('users')
-  const [openItem, setOpenItem] = useState<JsonRecord | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
+  // Resolve the open row by stable id each render: a refetch clones row
+  // objects, so object identity would close the viewer mid-read. A user
+  // switch still closes it — the new list carries different ids.
 
   if (items.length === 0) {
     return (
@@ -59,6 +62,11 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
       </Card>
     )
   }
+  const openItem = openId
+    ? (items
+        .slice(0, 12)
+        .find((row, index) => (stringValue(row, 'id') ?? `item-${index}`) === openId) ?? null)
+    : null
   return (
     <Card>
       <CardHeader className="py-2">
@@ -75,19 +83,19 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
               <button
                 key={id}
                 type="button"
-                onClick={() => setOpenItem(row)}
+                onClick={() => setOpenId(id)}
                 aria-label={t('detail.itemsOpen', { name })}
                 className="overflow-hidden rounded-md border border-border text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {image ? (
                   <img src={image} alt={name} className="h-20 w-full object-cover" loading="lazy" />
                 ) : (
-                  <div className="h-20 w-full bg-surface-card" />
+                  <span className="block h-20 w-full bg-surface-card" />
                 )}
-                <div className="px-1.5 py-1">
-                  <p className="truncate text-xs font-medium leading-tight text-ink">{name}</p>
-                  {category ? <p className="truncate text-[10px] leading-tight text-muted-foreground">{category}</p> : null}
-                </div>
+                <span className="block px-1.5 py-1">
+                  <span className="block truncate text-xs font-medium leading-tight text-ink">{name}</span>
+                  {category ? <span className="block truncate text-[10px] leading-tight text-muted-foreground">{category}</span> : null}
+                </span>
               </button>
             )
           })}
@@ -95,7 +103,7 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
 
         {/* Gated on the current items: a dialog for a previous user's item
             must not survive a user switch while the new list loads. */}
-        <Dialog open={openItem !== null && items.includes(openItem)} onOpenChange={(open) => !open && setOpenItem(null)}>
+        <Dialog open={openItem !== null} onOpenChange={(open) => !open && setOpenId(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>{openItem ? itemDisplayName(openItem) : ''}</DialogTitle>

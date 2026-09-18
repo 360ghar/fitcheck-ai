@@ -372,7 +372,7 @@ export const adminUserGenerationsFixture: AdminUserGenerationsPage = {
       subtitle: 'variations 1',
       media: [],
       media_count: 0,
-      failed_count: 0,
+      failed_count: 1,
       error: 'Image generation failed: provider timeout',
       meta: { outfit_id: 'outfit_1', outfit_name: 'Summer Look 1', pose: 'front', variations: 1 },
       source: { table: 'outfit_generations', id: 'render_1' },

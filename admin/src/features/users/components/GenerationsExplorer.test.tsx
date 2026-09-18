@@ -39,9 +39,16 @@ describe('GenerationsExplorer', () => {
     expect(within(screen.getByRole('button', { name: 'Open batch' })).getByText(/image/)).toBeInTheDocument()
     const summerCards = screen.getAllByRole('button', { name: 'Open Summer Look 1' })
     expect(summerCards.length).toBe(2)
-    for (const card of summerCards) {
-      expect(within(card).getByText(/image/)).toBeInTheDocument()
-    }
+    // The outfit card renders its media count; the failed render run
+    // (failed_count 1 in the fixture) renders the failed-count branch.
+    // Exact strings, distinguished by subtitle: the "Failed" StatusBadge
+    // must not satisfy the count assertion.
+    const renderCard = summerCards.find((card) => within(card).queryByText(/variations/))
+    const outfitCard = summerCards.find((card) => within(card).queryByText(/3 items/))
+    expect(renderCard).toBeDefined()
+    expect(outfitCard).toBeDefined()
+    expect(within(renderCard as HTMLElement).getByText('1 failed')).toBeInTheDocument()
+    expect(within(outfitCard as HTMLElement).getByText('1 image')).toBeInTheDocument()
   })
 
   it('writes gen_tab into the URL when switching tabs', async () => {
