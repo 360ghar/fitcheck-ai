@@ -25,6 +25,7 @@ Sample request format (Agnes chat/vision):
 """
 
 import base64
+import asyncio
 import random
 import time
 from dataclasses import dataclass
@@ -888,6 +889,17 @@ class AIProviderService:
                     cross_host_fallback = next_url != attempt_url
                     if not (e.retryable or (e.fallback_eligible and cross_host_fallback)):
                         raise
+                    if e.retry_after_seconds and next_url == attempt_url:
+                        # Same-gateway fallback: the 200-overload hint says the
+                        # queue is full, so wait it out instead of re-entering
+                        # immediately. Bounded so a bad hint cannot stall saves.
+                        wait = min(float(e.retry_after_seconds), 8.0)
+                        logger.warning(
+                            "Image provider overloaded; waiting before same-host fallback",
+                            wait_seconds=wait,
+                            error=str(e)[:200],
+                        )
+                        await asyncio.sleep(wait)
                     logger.warning(
                         "Image generation failed, trying fallback model",
                         primary_model=primary_model,
@@ -1133,6 +1145,18 @@ class AIProviderService:
                     }]
                     try:
                         data, status_code = await _dispatch(fallback_attempts)
+                    except AIServiceError as fallback_error:
+                        if not fallback_error.health_recorded:
+                            await health_service.record_result(
+                                active_base_url,
+                                ok=False,
+                                api_key=active_api_key,
+                                overload=self._is_provider_overload_text(
+                                    fallback_error.provider_error_detail
+                                    or str(fallback_error)
+                                ),
+                            )
+                        raise
                     except Exception:
                         await health_service.record_result(
                             active_base_url, ok=False, api_key=active_api_key
@@ -1715,8 +1739,38 @@ class AIProviderService:
             # The response body is read inside the block: releasing the slot
             # while the provider is still streaming would understate load.
             async with provider_image_slot():
+                async def _post_and_check_overload() -> httpx.Response:
+                    # Parse the 200 envelope INSIDE the retry wrapper so a
+                    # concurrency-limited 200 (warning + no images) earns the
+                    # same internal retry as a 429/503 status. Anything else
+                    # (parse failure, moderation empty, real images) returns
+                    # the response for the existing downstream handling.
+                    resp = await _post_image_request()
+                    try:
+                        body = resp.json()
+                    except Exception:
+                        return resp
+                    items = body.get("data", []) if isinstance(body, dict) else []
+                    has_images = (
+                        any(
+                            isinstance(it, dict) and (it.get("b64_json") or it.get("url"))
+                            for it in items
+                        )
+                        if isinstance(items, list)
+                        else False
+                    )
+                    if not has_images and self._is_provider_overload_text(
+                        self._provider_body_text(body)
+                    ):
+                        raise self._TransientImageAPIOverload(
+                            f"status={resp.status_code}: concurrency-limited 200 "
+                            "envelope with no images",
+                            retry_after_seconds=self._PROVIDER_OVERLOAD_RETRY_FLOOR_SECONDS,
+                        )
+                    return resp
+
                 response = await with_retry(
-                    _post_image_request,
+                    _post_and_check_overload,
                     # ponytail: one internal retry; the call site's with_retry adds
                     # one more round (kept low so a 429 storm isn't amplified).
                     # The first delay is longer than chat()'s because the

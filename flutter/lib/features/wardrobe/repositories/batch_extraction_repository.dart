@@ -86,15 +86,20 @@ class BatchExtractionRepository {
 
     if (eventData['items'] != null) {
       final itemsList = eventData['items'] as List;
-      for (final itemData in itemsList) {
+      final batchMicros = DateTime.now().microsecondsSinceEpoch;
+      for (var index = 0; index < itemsList.length; index++) {
+        final itemData = itemsList[index];
         try {
           final raw = itemData as Map<String, dynamic>;
           final normalized = <String, dynamic>{
             ...raw,
+            // Unique fallback per item in this event: siblings missing
+            // temp_id must NOT share one millisecond key, or their creates
+            // collapse into a single replayed row on the backend.
             'temp_id':
                 raw['temp_id'] ??
                 raw['id'] ??
-                'item_${DateTime.now().millisecondsSinceEpoch}',
+                'item_${batchMicros}_${index}_$sourceImageId',
             'image_id': raw['image_id'] ?? sourceImageId,
             'name':
                 raw['name'] ??

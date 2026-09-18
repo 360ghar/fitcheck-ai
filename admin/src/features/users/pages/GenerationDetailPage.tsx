@@ -49,7 +49,7 @@ export function GenerationDetailPage() {
     return (
       <div className="space-y-3">
         <BackLink userId={userId} />
-        <EmptyState title={t('detail.notFoundTitle')} message={t('detail.notFoundMessage')} />
+        <EmptyState title={t('detail.genNotFoundTitle')} message={t('detail.genNotFoundMessage')} />
       </div>
     )
   }
@@ -183,12 +183,15 @@ export function GenerationDetailPage() {
             <ul className="divide-y divide-border">
               {(meta['photos'] as JsonRecord[]).map((photo) => (
                 <li
-                  key={stringValue(photo, 'id') ?? stringValue(photo, 'ordinal') ?? 'photo'}
+                  key={stringValue(photo, 'id') ?? (typeof photo['ordinal'] === 'number' ? String(photo['ordinal']) : stringValue(photo, 'ordinal')) ?? 'photo'}
                   className="flex items-center justify-between gap-3 py-1.5"
                 >
                   <span className="text-sm text-ink">
                     {t('detail.genPhotoOrdinal', {
-                      ordinal: stringValue(photo, 'ordinal') ?? '—',
+                      ordinal:
+                        typeof photo['ordinal'] === 'number'
+                          ? String(photo['ordinal'])
+                          : (stringValue(photo, 'ordinal') ?? '—'),
                     })}
                   </span>
                   <StatusBadge
@@ -334,7 +337,7 @@ function MediaGallery({ generation }: { generation: JsonRecord }) {
             alt={active.label ?? ''}
             className="max-h-72 w-auto max-w-full object-contain"
             onError={() =>
-              setBroken((prev) => new Set(prev).add(Math.min(selected, media.length - 1)))
+              setBroken((prev) => new Set(prev).add(activeIndex))
             }
           />
         )}
@@ -347,9 +350,9 @@ function MediaGallery({ generation }: { generation: JsonRecord }) {
               type="button"
               onClick={() => setSelected(index)}
               aria-label={t('detail.genSelectMedia', { index: index + 1 })}
-              aria-current={index === selected}
+              aria-current={index === activeIndex}
               className={`h-14 w-14 shrink-0 overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                index === selected ? 'border-primary' : 'border-border'
+                index === activeIndex ? 'border-primary' : 'border-border'
               }`}
             >
               {broken.has(index) ? (
@@ -370,7 +373,7 @@ function MediaGallery({ generation }: { generation: JsonRecord }) {
         </div>
       ) : null}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{active.label ?? t('detail.genMediaNth', { index: selected + 1 })}</span>
+        <span>{active.label ?? t('detail.genMediaNth', { index: activeIndex + 1 })}</span>
         <a
           href={active.url}
           target="_blank"

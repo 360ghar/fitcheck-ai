@@ -30,9 +30,13 @@ String newRequestId(String prefix) =>
 /// Prefer the model's own id, which identifies the garment across attempts and
 /// re-taps of Save. Fall back to the object's identity when the model carries no
 /// usable id (`null`, empty, or the `'unknown'` sentinel that
-/// `DetectedItemData.fromJson` uses for a missing `temp_id`): two garments
-/// sharing an identity would COLLAPSE into one item, because the second create
-/// would replay the first row instead of inserting its own.
+/// `DetectedItemData.fromJson` uses for a missing `temp_id`): the fallback is
+/// stable for the same live object (same-save retries are safe), but callers
+/// must scope their key map per save session — a rebuilt object or a reused
+/// temp id in a LATER save would otherwise replay an earlier row. The batch
+/// repository mints a unique temp id per item per event, and the batch
+/// controller namespaces its map per save pass, so the fallback never spans
+/// saves.
 String requestIdIdentity(String? modelId, Object item) {
   final id = modelId?.trim() ?? '';
   if (id.isEmpty || id == 'unknown') {

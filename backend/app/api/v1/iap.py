@@ -127,10 +127,16 @@ async def _claim_event(db: Client, table: str, pk_column: str, pk_value: str, ev
     mid-handling) — is reclaimed with a compare-and-swap on
     ``processing_started_at`` so the store retry actually reprocesses it
     instead of being acknowledged forever.
+
+    All ledger reads/writes go through ``execute_with_reconnect`` so a
+    concurrent service-client rebuild (retired transport) retries on the
+    fresh client instead of 500ing the webhook.
     """
-    try:
-        await asyncio.to_thread(
-            db.table(table)
+    from app.utils.db import execute_with_reconnect
+
+    def _insert(d: Client):
+        return (
+            d.table(table)
             .insert({
                 pk_column: pk_value,
                 "event_type": event_type,
@@ -138,21 +144,34 @@ async def _claim_event(db: Client, table: str, pk_column: str, pk_value: str, ev
                 "processing_started_at": utcnow_iso(),
                 "attempts": 1,
             })
-            .execute
+            .execute()
+        )
+
+    try:
+        await execute_with_reconnect(
+            _insert, db, extra={"operation": "iap_claim_insert", "table": table}
         )
         return _CLAIM_CLAIMED
     except Exception as exc:
         if "duplicate" not in str(exc).lower() and "unique" not in str(exc).lower():
+            # execute_with_reconnect already retried connection-class errors
+            # (including a retired-transport closed-client race) on the fresh
+            # client; anything reaching here is a real failure.
             raise HTTPException(status_code=500, detail="Failed to record webhook event") from exc
 
     # Duplicate: inspect the existing row before deciding.
-    try:
-        existing = await asyncio.to_thread(
-            db.table(table)
+    def _select(d: Client):
+        return (
+            d.table(table)
             .select("status,processing_started_at,attempts")
             .eq(pk_column, pk_value)
             .maybe_single()
-            .execute
+            .execute()
+        )
+
+    try:
+        existing = await execute_with_reconnect(
+            _select, db, extra={"operation": "iap_claim_select", "table": table}
         )
     except Exception:
         # Cannot inspect the ledger (missing table / dead connection). A
@@ -186,20 +205,27 @@ async def _claim_event(db: Client, table: str, pk_column: str, pk_value: str, ev
 
     # failed, pending, or stale-processing: reclaim with a CAS on the lease.
     previous_started = row.get("processing_started_at")
-    claim_query = (
-        db.table(table)
-        .update({
-            "status": _WEBHOOK_STATUS_PROCESSING,
-            "processing_started_at": utcnow_iso(),
-            "attempts": int(row.get("attempts") or 0) + 1,
-        })
-        .eq(pk_column, pk_value)
+    attempts = int(row.get("attempts") or 0) + 1
+
+    def _claim(d: Client):
+        query = (
+            d.table(table)
+            .update({
+                "status": _WEBHOOK_STATUS_PROCESSING,
+                "processing_started_at": utcnow_iso(),
+                "attempts": attempts,
+            })
+            .eq(pk_column, pk_value)
+        )
+        if previous_started is not None:
+            query = query.eq("processing_started_at", previous_started)
+        else:
+            query = query.is_("processing_started_at", "null")
+        return query.execute()
+
+    claim = await execute_with_reconnect(
+        _claim, db, extra={"operation": "iap_claim_reclaim", "table": table}
     )
-    if previous_started is not None:
-        claim_query = claim_query.eq("processing_started_at", previous_started)
-    else:
-        claim_query = claim_query.is_("processing_started_at", "null")
-    claim = await asyncio.to_thread(claim_query.execute)
     claim_data = getattr(claim, "data", None)
     if claim_data is not None and not claim_data:
         # Lost the CAS race to a concurrent retry.

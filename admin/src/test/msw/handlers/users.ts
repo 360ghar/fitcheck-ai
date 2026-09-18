@@ -598,7 +598,7 @@ export function createUsersHandlers(initial?: Partial<UsersHandlersState>) {
       return HttpResponse.json({
         ...adminUserGenerationsFixture,
         items: items.slice(start, start + pageSize),
-        total: adminUserGenerationsFixture.total,
+        total: items.length,
         page,
         page_size: pageSize,
       })

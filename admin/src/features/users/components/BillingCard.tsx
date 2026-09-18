@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import { ExternalLink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -20,11 +21,36 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
+// Stripe minor-unit exponents (ISO 4217): zero-decimal currencies have no
+// subdivision, most have 2, a few have 3. Default 2 matches the old behavior.
+const ZERO_DECIMAL = new Set([
+  'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA',
+  'PYG', 'RWF', 'UGX', 'UYI', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
+])
+const THREE_DECIMAL = new Set(['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND'])
+
+export function invoiceMinorUnit(currency: string): number {
+  const code = currency.toUpperCase()
+  if (ZERO_DECIMAL.has(code)) return 0
+  if (THREE_DECIMAL.has(code)) return 3
+  return 2
+}
+
 function invoiceAmount(invoice: JsonRecord): string | null {
   const amount = invoice['amount_paid']
   const currency = stringValue(invoice, 'currency') ?? 'usd'
   if (typeof amount !== 'number') return null
-  return formatMoney(amount / 100, currency.toUpperCase())
+  return formatMoney(amount / 10 ** invoiceMinorUnit(currency), currency.toUpperCase())
+}
+
+/** Translated status/platform label with the raw backend value as fallback. */
+export function billingLabel(
+  t: TFunction<'users'>,
+  prefix: 'detail.billingStatus' | 'detail.billingPlatform',
+  raw: string | null | undefined,
+): string {
+  if (!raw) return '—'
+  return t(`${prefix}_${raw}`, { defaultValue: raw })
 }
 
 /** Billing history: stored subscription + Stripe invoices (+ IAP when the
@@ -85,7 +111,7 @@ export function BillingCard({ userId }: { userId: string }) {
                       stringValue(subscription, 'status') ? (
                         <StatusBadge
                           status={stringValue(subscription, 'status') ?? ''}
-                          label={stringValue(subscription, 'status') ?? '—'}
+                          label={billingLabel(t, 'detail.billingStatus', stringValue(subscription, 'status'))}
                         />
                       ) : (
                         '—'
@@ -129,7 +155,7 @@ export function BillingCard({ userId }: { userId: string }) {
                               </span>
                               <StatusBadge
                                 status={stringValue(invoice, 'status') ?? ''}
-                                label={stringValue(invoice, 'status') ?? '—'}
+                                label={billingLabel(t, 'detail.billingStatus', stringValue(invoice, 'status'))}
                               />
                               {url ? (
                                 <a
@@ -162,14 +188,14 @@ export function BillingCard({ userId }: { userId: string }) {
                           className="flex items-center justify-between gap-2 py-1.5 text-xs"
                         >
                           <span className="min-w-0 truncate">
-                            {stringValue(txn, 'platform') ?? '—'}
+                            {billingLabel(t, 'detail.billingPlatform', stringValue(txn, 'platform'))}
                             <span className="ml-2 font-mono text-muted-foreground">
                               {stringValue(txn, 'transaction_id') ?? ''}
                             </span>
                           </span>
                           <StatusBadge
                             status={stringValue(txn, 'status') ?? ''}
-                            label={stringValue(txn, 'status') ?? '—'}
+                            label={billingLabel(t, 'detail.billingStatus', stringValue(txn, 'status'))}
                           />
                         </li>
                       ))}

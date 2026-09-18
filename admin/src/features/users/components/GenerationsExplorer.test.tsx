@@ -28,7 +28,10 @@ describe('GenerationsExplorer', () => {
   it('renders generation cards across kinds with media, status and counts', async () => {
     renderExplorer()
 
+    // Distinct cards per kind: item extraction, photoshoot, social import.
+    expect(await screen.findByText('batch')).toBeInTheDocument()
     expect(await screen.findByText('linkedin')).toBeInTheDocument()
+    expect(await screen.findByText('instagram')).toBeInTheDocument()
     // Outfit + render run share the outfit title
     expect(screen.getAllByText('Summer Look 1').length).toBe(2)
     // Media count + failed count surfaces
@@ -38,7 +41,7 @@ describe('GenerationsExplorer', () => {
   it('writes gen_tab into the URL when switching tabs', async () => {
     const { handlers, state } = createUsersHandlers()
     server.use(...handlers)
-    renderExplorer()
+    const { router } = renderExplorer()
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('tab', { name: 'Items' }))
@@ -46,15 +49,17 @@ describe('GenerationsExplorer', () => {
     await waitFor(() => {
       expect(state.lastGenerationsQuery?.searchParams.get('kind')).toBe('item')
     })
+    expect(new URLSearchParams(router.state.location.search).get('gen_tab')).toBe('item')
   })
 
   it('navigates to the full-page viewer when a card is clicked', async () => {
-    renderExplorer()
+    const { router } = renderExplorer()
     const user = userEvent.setup()
 
     await user.click(await screen.findByText('linkedin'))
 
     expect(await screen.findByText('viewer-marker')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/users/user_1/generations/photoshoot/ps_job_1')
   })
 
   it('shows the empty state when the user has no generations', async () => {

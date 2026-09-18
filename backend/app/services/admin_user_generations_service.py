@@ -25,8 +25,10 @@ Two invariants the whole module enforces:
 Pagination contract for ``kind="all"``: each kind contributes its most recent
 rows (``min(page * page_size, _ALL_KIND_WINDOW)`` per kind), merged and sorted
 by ``created_at`` desc, then sliced. ``total`` is the sum of exact per-kind
-counts. "All" is therefore a recent-activity view, not a deep archive — the
-per-kind tabs page exactly.
+counts CAPPED to the reachable recent window (``_ALL_KIND_WINDOW`` rows per
+kind) so navigation never reaches empty pages beyond the merged set. "All" is
+therefore a recent-activity view, not a deep archive — the per-kind tabs page
+exactly.
 """
 
 from __future__ import annotations
@@ -343,15 +345,22 @@ async def _normalize_item_job(row: Dict[str, Any], *, user_id: str) -> Dict[str,
     operation = "admin.user_generations.item"
     raw_items = row.get("items")
     items = _strip_base64(raw_items) if isinstance(raw_items, list) else []
-    media: List[Dict[str, Any]] = []
-    for extracted in items[:_MEDIA_CAP]:
+    # Re-mint EVERY item URL for metadata (not just the media window): meta
+    # entries past _MEDIA_CAP must not serve expired stored URLs.
+    fresh_by_index: Dict[int, Optional[str]] = {}
+    for index, extracted in enumerate(items):
         if not isinstance(extracted, dict):
             continue
-        url = await _fresh_url(
+        fresh_by_index[index] = await _fresh_url(
             extracted.get("generated_image_storage_path") or extracted.get("generated_image_url"),
             user_id=user_id,
             operation=operation,
         )
+    media: List[Dict[str, Any]] = []
+    for index, extracted in enumerate(items[:_MEDIA_CAP]):
+        if not isinstance(extracted, dict):
+            continue
+        url = fresh_by_index.get(index)
         if not url:
             continue
         media.append(
@@ -397,9 +406,9 @@ async def _normalize_item_job(row: Dict[str, Any], *, user_id: str) -> Dict[str,
             {
                 "name": item.get("name"),
                 "category": item.get("category"),
-                "image_url": item.get("generated_image_url"),
+                "image_url": fresh_by_index.get(index),
             }
-            for item in items
+            for index, item in enumerate(items)
             if isinstance(item, dict)
         ],
     }
@@ -609,7 +618,8 @@ async def _normalize_photoshoot(row: Dict[str, Any], *, user_id: str) -> Dict[st
         ),
     )
     failed_indices = row.get("failed_indices") or []
-    image_failures = row.get("image_failures") or []
+    raw_failures = row.get("image_failures") or []
+    image_failures = _strip_base64(raw_failures) if isinstance(raw_failures, list) else []
     generation = _generation(
         kind="photoshoot",
         row=row,
@@ -854,10 +864,14 @@ async def list_user_generations(
     offset = (page - 1) * page_size
     items = merged[offset : offset + page_size]
     counts = await _generation_counts(db, user_id, status=status)
+    # Cap the reported total to the reachable recent window: each kind only
+    # contributes its most recent _ALL_KIND_WINDOW rows to the merge, so pages
+    # past that window would otherwise be empty while total claims more.
+    reachable_cap = _ALL_KIND_WINDOW * len(GEN_KINDS)
     return {
         "user_id": user_id,
         "items": items,
-        "total": sum(counts.values()),
+        "total": min(sum(counts.values()), reachable_cap),
         "page": page,
         "page_size": page_size,
         "counts": counts,

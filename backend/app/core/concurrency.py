@@ -70,30 +70,43 @@ class _ReentrantSemaphoreSlot:
     ``asyncio.Semaphore`` is not reentrant, and every image-generation entry
     point nests (variations -> generate_outfit -> _generate_with_references;
     batch -> generate_product_image -> _generate_image). Held-state is tracked
-    per task via a ContextVar: the outermost acquisition takes the slot, nested
-    acquisitions from the same task are no-ops, and child tasks copy the parent
-    context at creation so work spawned under a held slot shares its budget
-    instead of deadlocking. Each gate needs its OWN ContextVar, otherwise a
-    held generation slot would make the nested provider slot a no-op and the
-    provider cap would stop binding.
+    per ``asyncio.Task`` (not a ContextVar): the outermost acquisition by a
+    task takes the slot, nested acquisitions from the SAME task are no-ops.
+    A child task created under a held slot acquires a real permit — sharing
+    the parent's slot via ContextVar inheritance let unbounded child fan-out
+    run on one permit. Callers must not hold a slot while awaiting children
+    that need the same slot (that would deadlock once the pool is exhausted);
+    the codebase fans out first and acquires per child.
     """
 
     def __init__(self, semaphore: asyncio.Semaphore, held: ContextVar[bool]) -> None:
         self._semaphore = semaphore
         self._held = held
-        self._token = None
+        self._depths: Dict[int, int] = {}
 
     async def __aenter__(self) -> "_ReentrantSemaphoreSlot":
-        if self._held.get():
-            self._token = None
+        try:
+            task_id = id(asyncio.current_task())
+        except RuntimeError:  # no running loop in tests using stubs
+            task_id = 0
+        depth = self._depths.get(task_id, 0)
+        if depth > 0:
+            self._depths[task_id] = depth + 1
             return self
         await self._semaphore.acquire()
-        self._token = self._held.set(True)
+        self._depths[task_id] = 1
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        if self._token is not None:
-            self._held.reset(self._token)
+        try:
+            task_id = id(asyncio.current_task())
+        except RuntimeError:
+            task_id = 0
+        depth = self._depths.get(task_id, 0)
+        if depth > 1:
+            self._depths[task_id] = depth - 1
+        elif depth == 1:
+            del self._depths[task_id]
             self._semaphore.release()
 
 

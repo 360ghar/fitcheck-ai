@@ -57,6 +57,14 @@ from app.services.object_storage import (
 
 logger = get_context_logger(__name__)
 
+# Last successful copy-promotion per temp source key. Two concurrent creates
+# can share one staged tmp object: the first to commit deletes the source
+# while the second is still copying to its own freshly minted destination,
+# so the second copy raises NoSuchKey. The fallback below reuses the
+# already-promoted object instead of failing. Bounded by temp-key cardinality
+# per process lifetime; tmp keys are single-use.
+_PROMOTED_BY_SOURCE: dict = {}
+
 
 # Allowed file extensions
 ALLOWED_IMAGE_EXTENSIONS = {
@@ -1445,6 +1453,20 @@ class StorageService:
                     source_path, new_path, operation="Copy temp image to item"
                 )
             except Exception as e:
+                # Shared-source race: a concurrent create already promoted and
+                # cleaned up this tmp key. Reuse its object instead of failing
+                # with NoSuchKey — same bytes, one extra reference.
+                text = str(e).lower()
+                if ("nosuchkey" in text or "not found" in text or "notfound" in text):
+                    reused = _PROMOTED_BY_SOURCE.get(source_path)
+                    if reused is not None:
+                        logger.info(
+                            "Temp source already promoted by a concurrent create; reusing it",
+                            old_path=source_path,
+                            new_path=new_path,
+                            reused_path=reused.get("storage_path"),
+                        )
+                        return dict(reused)
                 logger.error(
                     "Failed to copy temp image into the item path",
                     old_path=source_path,
@@ -1475,11 +1497,14 @@ class StorageService:
                 error=str(e),
             )
         image_url = await StorageService.get_public_url(new_path)
-        return {
+        promoted = {
             "image_url": image_url,
             "thumbnail_url": image_url,
             "storage_path": new_path,
         }
+        if not delete_source:
+            _PROMOTED_BY_SOURCE[source_path] = dict(promoted)
+        return promoted
 
     @staticmethod
     async def cleanup_temp_images(

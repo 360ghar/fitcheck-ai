@@ -29,7 +29,7 @@ Every user still on the free plan gets a 1-month Pro trial (`plan_type=pro_month
 
 - Script: `backend/scripts/upgrade_free_users_to_pro.py` (self-contained, mirrors
   `grant_free_pro_month.py` / `girlfriend_day_campaign.py`).
-- Audit: `backend/logs/free_users_pro_trial.jsonl` (186 granted + 186 emailed records: 112 from the 08-04 run, 74 from the 08-06 re-run).
+- Audit: `backend/logs/free_users_pro_trial.jsonl` (631 granted + 631 emailed records, one per distinct user: 112 from the 08-04 run, 74 from the 08-06 re-run, 15 from the 09-18 run, plus later runs).
 - Revert after the month: `backend/scripts/revert_expired_pro_trials.py` with
   `AUDIT_FILE=backend/logs/free_users_pro_trial.jsonl`.
 - Prior campaign: `backend/logs/pro_grant.jsonl` (Aug 3 campaign, kept separate).
@@ -68,11 +68,13 @@ DRY_RUN=1 .venv/bin/python scripts/upgrade_free_users_to_pro.py   # preview, no 
 
 ## Deferred debt
 
-- Revert window: the audit file now mixes trial_end values (2026-09-04/09-06 from
-  the August runs, 2026-10-18 from the 2026-09-18 run). Run
-  `revert_expired_pro_trials.py` with `AUDIT_FILE=backend/logs/free_users_pro_trial.jsonl`
-  after 2026-10-18 to catch every expired grant in one pass (it only reverts rows
-  whose `trial_end` has passed AND still matches the audited value).
+- Revert window: the audit file mixes trial_end values (2026-09-04/09-06 from
+  the August runs, 2026-10-18 from the 2026-09-18 run). The August grants are
+  already expired — run the expiry-safe revert for them now, then again after
+  2026-10-18 for the September grants:
+  `AUDIT_FILE=backend/logs/free_users_pro_trial.jsonl python scripts/revert_expired_pro_trials.py`
+  (it only reverts rows whose `trial_end` has passed AND still matches the
+  audited value).
 - Observed (pre-existing, not caused by this campaign): `info@360ghar.com`'s row
   was downgraded from pro trial to free at 2026-08-04T19:01:59Z via the
   "Store purchase expired/refunded; downgraded to free" path in

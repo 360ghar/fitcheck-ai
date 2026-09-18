@@ -92,7 +92,7 @@ def _breaker_cooldown(consecutive_failures: int) -> float:
         CIRCUIT_BREAKER_BASE_COOLDOWN * (2 ** steps_over_threshold),
         CIRCUIT_BREAKER_MAX_COOLDOWN,
     )
-    return cooldown * (0.75 + random.random() * 0.5)
+    return min(cooldown * (0.75 + random.random() * 0.5), CIRCUIT_BREAKER_MAX_COOLDOWN)
 
 
 @dataclass
@@ -107,6 +107,9 @@ class HealthStatus:
     # CIRCUIT_BREAKER_RESET_TIMEOUT for entries written before this field
     # existed (probes, tests, restored state).
     cooldown_seconds: float = 0.0
+    # Overload entries block admission only until this timestamp, independent
+    # of the 60s health TTL and the failure-streak cooldown. 0 = not overload.
+    overload_until: float = 0.0
 
 
 class AIProviderHealthService:
@@ -148,8 +151,17 @@ class AIProviderHealthService:
                 cached = self._health_cache[cache_key]
                 age = time.time() - cached.last_check
 
+                # Overload admission runs before the generic TTL: a 10s
+                # concurrency cooldown must block requests even on a closed
+                # breaker, and must release after 10s even on an open one.
+                if cached.overload_until:
+                    if time.time() < cached.overload_until:
+                        return cached
+                    # Overload window expired: fall through to a fresh
+                    # decision instead of serving the stale cached entry for
+                    # the rest of the 60s TTL.
                 # Return cached if within TTL
-                if age < HEALTH_CHECK_TTL_SECONDS:
+                elif age < HEALTH_CHECK_TTL_SECONDS:
                     return cached
 
                 # Circuit breaker: if too many failures, wait longer before retry
@@ -363,11 +375,12 @@ class AIProviderHealthService:
             if overload:
                 failures = prev.consecutive_failures if prev else 0
                 self._health_cache[cache_key] = HealthStatus(
-                    available=failures < CIRCUIT_BREAKER_THRESHOLD,
+                    available=False,
                     last_check=now,
                     consecutive_failures=failures,
                     cooldown_seconds=OVERLOAD_COOLDOWN_SECONDS,
                     error="Provider overloaded (concurrency limit)",
+                    overload_until=now + OVERLOAD_COOLDOWN_SECONDS,
                 )
                 logger.warning(
                     f"Provider {base_url} rejected a call on its concurrency limit",

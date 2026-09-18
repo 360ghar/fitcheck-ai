@@ -407,6 +407,7 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
             "item_images(image_url,thumbnail_url,storage_path,is_primary,created_at)"
         )
         for columns in (
+            f"id,name,category,created_at,source_image_url,source_image_storage_path,{embed}",
             f"id,name,category,created_at,source_image_url,{embed}",
             f"id,name,category,created_at,{embed}",
             "id,name,category,created_at",
@@ -468,9 +469,9 @@ async def get_user_detail(db: Any, user_id: str) -> Dict[str, Any]:
                     r["images"] = image_entries
                 if cover:
                     r["image_url"] = cover
-                if with_source and r.get("source_image_url"):
+                if with_source and (r.get("source_image_storage_path") or r.get("source_image_url")):
                     source = await fresh_image_url(
-                        r.get("source_image_url"),
+                        r.get("source_image_storage_path") or r.get("source_image_url"),
                         user_id=user_id,
                         operation="admin.get_user.detail.items.source",
                     )

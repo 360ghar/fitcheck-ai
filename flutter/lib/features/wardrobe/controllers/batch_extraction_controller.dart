@@ -78,9 +78,14 @@ class BatchExtractionController extends GetxController {
   /// back to its object identity instead of colliding with a sibling.
   final Map<String, String> _createRequestIds = <String, String>{};
 
+  /// Save-session nonce: temp ids are only unique within one extraction, so
+  /// the idempotency map is scoped per save pass. Incremented on reset and on
+  /// every save so a reused temp id never replays a previous save's row.
+  int _saveSession = 0;
+
   String _requestIdFor(String tempId, Object item) =>
       _createRequestIds.putIfAbsent(
-        requestIdIdentity(tempId, item),
+        's$_saveSession:${requestIdIdentity(tempId, item)}',
         () => newRequestId('item'),
       );
 
@@ -1443,6 +1448,8 @@ class BatchExtractionController extends GetxController {
     }
 
     final savedItems = <ItemModel>[];
+    final seenIds = <String>{};
+    _saveSession++;
     error.value = '';
 
     for (final item in selected) {
@@ -1535,7 +1542,11 @@ class BatchExtractionController extends GetxController {
             '("${item.name}") has no images after all upload strategies',
           );
         }
-        savedItems.add(savedItem);
+        // Idempotent replays return the same committed row: dedupe locally so
+        // one database item never appears twice in the wardrobe list.
+        if (seenIds.add(savedItem.id)) {
+          savedItems.add(savedItem);
+        }
       } catch (e) {
         // A10b-06: record the drop so the review page can report the
         // partial failure instead of claiming everything was saved.
@@ -1558,6 +1569,8 @@ class BatchExtractionController extends GetxController {
   void reset() {
     _sseSubscription?.cancel();
     resetSocialImportState();
+    _createRequestIds.clear();
+    _saveSession++;
     selectedImages.clear();
     extractedItems.clear();
     jobStatus.value = BatchJobStatus.idle;

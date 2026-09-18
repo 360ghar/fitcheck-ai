@@ -312,7 +312,8 @@ async def test_success_clears_the_cooldown():
 @pytest.mark.asyncio
 async def test_record_result_overload_does_not_advance_the_streak():
     """Concurrency rejections are our own fan-out, not provider faults: a burst
-    of them must leave a healthy provider usable."""
+    of them must not advance the failure streak, but they do block admission
+    for the short overload cooldown (evaluated before the 60s health TTL)."""
     svc = AIProviderHealthService()
     await svc.record_result(HOST, ok=False, api_key=API_KEY)
     await svc.record_result(HOST, ok=False, api_key=API_KEY)
@@ -321,8 +322,9 @@ async def test_record_result_overload_does_not_advance_the_streak():
 
     entry = svc._health_cache[_key()]
     assert entry.consecutive_failures == 2, "overloads must not count as failures"
-    assert entry.available is True, "the breaker must stay closed"
+    assert entry.available is False, "overload blocks admission for its cooldown"
     assert entry.cooldown_seconds == pytest.approx(OVERLOAD_COOLDOWN_SECONDS)
+    assert entry.overload_until > entry.last_check
     assert "concurrency" in (entry.error or "").lower()
 
 

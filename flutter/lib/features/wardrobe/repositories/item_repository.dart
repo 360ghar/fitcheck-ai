@@ -121,8 +121,9 @@ class ItemRepository {
   /// Create item with image
   ///
   /// One idempotency key covers the create (and therefore its internal retries)
-  /// for the whole call: the image upload that follows is keyed by the item id,
-  /// so a replayed create can never produce a second item for the same save.
+  /// for the whole call. A retried save replays the committed row; the replay
+  /// already carries its images, so the upload is skipped instead of adding a
+  /// second `item_images` row for the same save.
   Future<ItemModel> createItemWithImage({
     required File image,
     required CreateItemRequest request,
@@ -133,6 +134,13 @@ class ItemRepository {
         request,
         clientRequestId: clientRequestId ?? newRequestId('item'),
       );
+      if (created.itemImages != null && created.itemImages!.isNotEmpty) {
+        return created;
+      }
+      final existing = await getItem(created.id);
+      if (existing.itemImages != null && existing.itemImages!.isNotEmpty) {
+        return existing;
+      }
       await uploadImages(created.id, [image]);
       return getItem(created.id);
     } on DioException catch (e) {

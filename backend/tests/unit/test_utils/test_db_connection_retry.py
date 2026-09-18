@@ -416,9 +416,14 @@ def test_no_retried_plain_inserts_without_explicit_max_retries():
             name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
             if name not in {"execute_with_reconnect", "run_sync_with_reconnect"}:
                 continue
-            kwargs = {kw.arg for kw in node.keywords}
-            if "max_retries" in kwargs:
-                continue  # explicitly opted out of the retry
+            if any(
+                kw.arg == "max_retries"
+                and isinstance(kw.value, ast.Constant)
+                and type(kw.value.value) is int
+                and kw.value.value == 0
+                for kw in node.keywords
+            ):
+                continue  # explicitly opted out of the retry with max_retries=0
             if not node.args or not _contains_insert(node.args[0]):
                 continue
             offenders.append(f"{path.relative_to(app_dir.parent)}:{node.lineno}")

@@ -32,9 +32,9 @@ test.describe('users', () => {
     await expect(page).toHaveURL(/gen_tab=item/)
     await page.getByRole('button', { name: 'Open batch', exact: true }).click()
     await expect(page).toHaveURL(/\/users\/user_3\/generations\/item\/job_1$/)
-    // Title card + extracted-items card (labels also echo in the meta rows).
-    await expect(page.getByText('batch').first()).toBeVisible()
-    await expect(page.getByText('Extracted items').first()).toBeVisible()
+    // Scoped to card headings: both labels also echo in the meta rows.
+    await expect(page.getByRole('heading', { name: 'batch' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Extracted items' })).toBeVisible()
 
     // Back to the detail page for the rest of the journey.
     await page.goBack()

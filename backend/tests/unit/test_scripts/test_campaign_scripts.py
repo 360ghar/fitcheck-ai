@@ -89,6 +89,24 @@ def test_referral_base_url_precedence_and_localhost_guard(monkeypatch):
     assert upgrade._resolve_referral_base_url() == "https://staging.example.org"
 
 
+def test_referral_base_url_rejects_loopback_and_private_hosts(monkeypatch):
+    """SSRF-adjacent guard: non-public base URLs (loopback, unspecified,
+    private LAN) must fall back to the production default, never into links."""
+    monkeypatch.delenv("REFERRAL_BASE_URL", raising=False)
+    for bad in (
+        "http://127.0.0.1:3000",
+        "http://0.0.0.0:3000",
+        "http://[::1]:3000",
+        "http://10.0.0.5:3000",
+        "http://192.168.1.10/",
+        "not-a-url",
+    ):
+        monkeypatch.setenv("FRONTEND_URL", bad)
+        assert upgrade._resolve_referral_base_url() == upgrade.DEFAULT_REFERRAL_BASE_URL
+    monkeypatch.setenv("FRONTEND_URL", "https://fitcheckaiapp.com/")
+    assert upgrade._resolve_referral_base_url() == "https://fitcheckaiapp.com"
+
+
 class _Query:
     def __init__(self, data=None, *, update_payloads=None):
         self.data = data or []

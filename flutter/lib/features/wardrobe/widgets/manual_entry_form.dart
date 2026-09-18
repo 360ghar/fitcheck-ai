@@ -53,7 +53,10 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   /// so a create whose response was lost (or a submit that failed after the
   /// item row committed) replays the committed item instead of adding a second
   /// one. Cleared once the item is saved, so a fresh submit is a fresh item.
+  /// Re-minted when the draft payload changes: retrying an edited draft under
+  /// the old key would replay the stale row and silently discard the edit.
   String? _clientRequestId;
+  String? _lastRequestJson;
 
   // Common color options
   static const List<String> commonColors = [
@@ -119,7 +122,14 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
             : UseCases.normalizeList(selectedUseCases),
       );
 
-      final requestId = _clientRequestId ??= newRequestId('item');
+      final requestId = (() {
+        final payloadJson = request.toJson().toString();
+        if (_clientRequestId == null || _lastRequestJson != payloadJson) {
+          _clientRequestId = newRequestId('item');
+          _lastRequestJson = payloadJson;
+        }
+        return _clientRequestId!;
+      })();
       final created = imageToUse == null
           ? await ItemRepository().createItem(
               request,
@@ -159,6 +169,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
       // Saved: the next submit is a different item and must NOT reuse this key
       // (the backend would replay the row just created).
       _clientRequestId = null;
+      _lastRequestJson = null;
 
       Get.back(); // Close form
       Get.back(); // Close item add page

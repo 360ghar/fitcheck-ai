@@ -63,9 +63,11 @@ Notes:
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import smtplib
+import socket
 import ssl
 import sys
 import time
@@ -74,6 +76,7 @@ from email.message import EmailMessage
 from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from dateutil.relativedelta import relativedelta
@@ -141,19 +144,53 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _is_public_http_host(host: str | None) -> bool:
+    """True when `host` is globally routable: not loopback, unspecified,
+    private-LAN, or otherwise reserved, by literal or by DNS. Anything else
+    (unresolvable, non-IP literal that fails to resolve) is rejected so a
+    developer or intranet URL can never leak into a live email blast."""
+    if not host:
+        return False
+    bare = host.strip().strip("[]").lower()
+    if bare in {"localhost"} or bare.endswith(".localhost"):
+        return False
+    try:
+        return ipaddress.ip_address(bare).is_global
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(bare, None)
+    except OSError:
+        return False
+    if not infos:
+        return False
+    addrs = set()
+    for info in infos:
+        sockaddr = info[4][0] if len(info) > 4 else None
+        if sockaddr:
+            addrs.add(str(sockaddr).split("%")[0])
+    if not addrs:
+        return False
+    try:
+        return all(ipaddress.ip_address(a).is_global for a in addrs)
+    except ValueError:
+        return False
+
+
 def _resolve_referral_base_url() -> str:
     """Base URL for the referral share links.
 
     Precedence: explicit REFERRAL_BASE_URL, then the app's FRONTEND_URL when it
-    points at a real host, then the canonical prod URL. A localhost FRONTEND_URL
-    (the local-dev default) is ignored so a developer environment can never put
-    dead links in a live blast.
+    points at a real host, then the canonical prod URL. A non-public
+    FRONTEND_URL (localhost, loopback / unspecified / private-LAN IPs, or an
+    unresolvable host — the local-dev defaults) is ignored so a developer
+    environment can never put dead links in a live blast.
     """
     explicit = os.environ.get("REFERRAL_BASE_URL", "").strip()
     if explicit:
         return explicit.rstrip("/")
     frontend = os.environ.get("FRONTEND_URL", "").strip()
-    if frontend and "localhost" not in frontend and "127.0.0.1" not in frontend:
+    if frontend and _is_public_http_host(urlparse(frontend).hostname):
         return frontend.rstrip("/")
     return DEFAULT_REFERRAL_BASE_URL
 

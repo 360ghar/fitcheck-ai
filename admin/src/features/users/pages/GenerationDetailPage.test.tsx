@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import type { RouteObject } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
@@ -54,7 +54,7 @@ describe('GenerationDetailPage', () => {
   it('shows the not-found empty state for an unknown kind URL segment', async () => {
     renderViewer('nope')
 
-    expect(await screen.findByText('User not found')).toBeInTheDocument()
+    expect(await screen.findByText('Generation not found')).toBeInTheDocument()
   })
 
   it('lists extracted items for an item generation', async () => {
@@ -62,7 +62,11 @@ describe('GenerationDetailPage', () => {
 
     // Card title + the total_items metadata row share the label
     expect((await screen.findAllByText('Extracted items')).length).toBeGreaterThanOrEqual(1)
-    // Item name appears in the extracted-items list and the meta summary
-    expect(screen.getAllByText('Linen Shirt').length).toBeGreaterThanOrEqual(1)
+    // The item name echoes in the media gallery label: scope to the row.
+    const items = await screen.findAllByText('tops')
+    expect(items.length).toBeGreaterThanOrEqual(1)
+    const row = (items[0] as HTMLElement).closest('li')
+    expect(row).not.toBeNull()
+    expect(within(row as HTMLElement).getByText('Linen Shirt')).toBeInTheDocument()
   })
 })

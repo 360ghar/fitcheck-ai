@@ -993,7 +993,57 @@ async def test_generation_retry_budget_absorbs_a_full_provider_queue():
     assert captured["jitter"] is True
     # Content-policy / non-retryable AIServiceErrors must still fail fast.
     assert captured["should_retry"](AIServiceError("blocked", retryable=False)) is False
-    assert captured["should_retry"](AIServiceError("busy", retryable=True)) is True
+    # Pre-generation overload (concurrency rejection) retries; an ambiguous
+    # post-accept timeout (retryable but no overload signal) must NOT retry
+    # here — the provider has no idempotency key on this path.
+    assert (
+        captured["should_retry"](
+            AIServiceError("Exceeded concurrency limit", retryable=True)
+        )
+        is True
+    )
+    assert (
+        captured["should_retry"](AIServiceError("read timed out", retryable=True))
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_generation_retry_actually_retries_overload_then_succeeds():
+    """The retry budget is exercised, not just asserted: a transient overload
+    fails the first attempt and the real ``with_retry`` runs the second."""
+    from app.utils.retry import with_retry as _real_with_retry
+
+    job = _make_job(["img-1"])
+    job.persistence_db = object()
+    await _register(job)
+    item = DetectedItemData(temp_id="t1", image_id="img-1", category="tops")
+    job.detected_items = [item]
+    agent = MagicMock()
+    agent.generate_product_image = AsyncMock(
+        side_effect=[
+            AIServiceError("Exceeded concurrency limit", retryable=True),
+            _FakeGeneratedImage(),
+        ]
+    )
+    service = BatchExtractionService(user_id="u1", db=None)
+
+    with (
+        patch(
+            "app.services.batch_extraction_service.with_retry",
+            new=_real_with_retry,
+        ),
+        patch("asyncio.sleep", new=AsyncMock()),
+        patch(
+            "app.services.batch_extraction_service.StorageService.upload_temp_generated_image",
+            new=AsyncMock(return_value={"image_url": "https://cdn/gen.webp"}),
+        ),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+    ):
+        result = await service._generate_single_item(job, item, agent, None)
+
+    assert agent.generate_product_image.await_count == 2
+    assert result == "Z2VuZXJhdGVk"
 
 
 # ---------------------------------------------------------------------------

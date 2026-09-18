@@ -16,7 +16,12 @@ interface ItemImage {
 
 function imagesOf(item: JsonRecord): ItemImage[] {
   const raw = item['images']
-  if (!Array.isArray(raw)) return []
+  if (!Array.isArray(raw) || raw.length === 0) {
+    const url = stringValue(item, 'image_url') ?? stringValue(item, 'thumbnail_url')
+    return url
+      ? [{ url, thumbUrl: stringValue(item, 'thumbnail_url') ?? url, isPrimary: true }]
+      : []
+  }
   const entries: ItemImage[] = []
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') continue
@@ -30,6 +35,10 @@ function imagesOf(item: JsonRecord): ItemImage[] {
     })
   }
   return entries
+}
+
+function itemDisplayName(item: JsonRecord): string {
+  return stringValue(item, 'name') ?? stringValue(item, 'title') ?? '—'
 }
 
 /** Uploads grid — one tile per wardrobe item. Tiles open a viewer with every
@@ -59,7 +68,7 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {items.slice(0, 12).map((row, index) => {
             const id = stringValue(row, 'id') ?? `item-${index}`
-            const name = stringValue(row, 'name') ?? stringValue(row, 'title') ?? '—'
+            const name = itemDisplayName(row)
             const category = stringValue(row, 'category') ?? ''
             const image = stringValue(row, 'image_url') ?? stringValue(row, 'thumbnail_url') ?? ''
             return (
@@ -87,7 +96,7 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
         <Dialog open={openItem !== null} onOpenChange={(open) => !open && setOpenItem(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{openItem ? stringValue(openItem, 'name') ?? '—' : ''}</DialogTitle>
+              <DialogTitle>{openItem ? itemDisplayName(openItem) : ''}</DialogTitle>
               <DialogDescription>
                 {openItem ? stringValue(openItem, 'category') ?? '' : ''}
               </DialogDescription>
@@ -111,7 +120,7 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
                             >
                               <img
                                 src={image.thumbUrl || image.url}
-                                alt={stringValue(openItem, 'name') ?? ''}
+                                alt={openItem ? itemDisplayName(openItem) : ''}
                                 className="h-28 w-full object-cover"
                                 loading="lazy"
                               />

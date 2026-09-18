@@ -347,7 +347,10 @@ class ImageGenerationAgent:
         camera instructions at once. Both keep the full body in frame - a
         cropped head or missing feet reads as a broken outfit render.
         """
-        if any(token in (pose or "").lower() for token in ImageGenerationAgent._FACE_AWAY_TOKENS):
+        if re.search(
+            r"\b(?:back|profile|side|rear)\b",
+            (pose or "").lower(),
+        ):
             return (
                 "full body head to toe; keep the requested camera angle exactly - "
                 "do not turn the subject toward the camera; no cropped head or feet"

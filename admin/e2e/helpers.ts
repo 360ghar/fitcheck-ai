@@ -222,7 +222,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
       return respondJson(route, {
         ...userFixtures.generations,
         items: rows.slice(start, start + pageSize),
-        total: userFixtures.generations.total,
+        total: rows.length,
         page: pageNum,
         page_size: pageSize,
       })

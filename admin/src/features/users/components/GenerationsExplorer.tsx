@@ -37,8 +37,10 @@ export function GenerationsExplorer({ userId }: { userId: string }) {
 
   const rawTab = searchParams.get('gen_tab') ?? 'all'
   const tab = (GENERATION_KINDS as readonly string[]).includes(rawTab) ? rawTab : 'all'
-  const status = searchParams.get('gen_status') ?? ''
-  const page = Math.max(Number(searchParams.get('gen_page') ?? '1') || 1, 1)
+  const rawStatus = searchParams.get('gen_status') ?? ''
+  const status = (GENERATION_STATUSES as readonly string[]).includes(rawStatus) ? rawStatus : ''
+  const parsedPage = Number(searchParams.get('gen_page') ?? '1')
+  const page = Number.isInteger(parsedPage) ? Math.max(parsedPage, 1) : 1
 
   const query = useUserGenerationsQuery(userId, {
     kind: tab,
@@ -50,6 +52,7 @@ export function GenerationsExplorer({ userId }: { userId: string }) {
   const items = query.data?.items ?? []
   const total = query.data?.total ?? 0
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1)
+  const outOfRange = page > totalPages && total > 0
 
   const updateParams = (mutate: (next: URLSearchParams) => void) => {
     setSearchParams((prev) => {
@@ -118,7 +121,32 @@ export function GenerationsExplorer({ userId }: { userId: string }) {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <EmptyState title={t('detail.genEmpty')} message={t('detail.genEmptyHint')} className="py-3" />
+          outOfRange ? (
+            <div className="space-y-2 py-3 text-center">
+              <EmptyState title={t('detail.genEmpty')} message={t('detail.genPageOutOfRange', { page })} className="py-1" />
+              <div className="flex items-center justify-center gap-2">
+                {page > 1 ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateParams((next) => next.set('gen_page', String(page - 1)))}
+                  >
+                    <ChevronLeft aria-hidden="true" />
+                    {t('detail.genPrevPage')}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateParams((next) => next.set('gen_page', String(totalPages)))}
+                >
+                  {t('detail.genBackToLastPage', { total: totalPages })}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <EmptyState title={t('detail.genEmpty')} message={t('detail.genEmptyHint')} className="py-3" />
+          )
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">

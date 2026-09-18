@@ -127,6 +127,31 @@ def _close_http_client(http_client: Optional[httpx.Client]) -> None:
         logger.warning("Failed to close superseded Supabase transport: %s", close_error)
 
 
+# Grace period before a retired transport is closed. In-flight requests hold a
+# reference to the old pool; closing it under them raises "client has been
+# closed". Retiring first and closing after the keep-alive window lets them
+# drain. Matches SUPABASE_HTTP_LIMITS.keepalive_expiry.
+_RETIRED_TRANSPORT_GRACE_SECONDS = 30.0
+
+
+def _retire_http_client(http_client: Optional[httpx.Client]) -> None:
+    """Retire a superseded transport; close it after in-flight calls drain.
+
+    Never raise on teardown. The timer thread is a daemon so it cannot block
+    interpreter shutdown; the pool bounds total sockets in the meantime.
+    """
+    if http_client is None:
+        return
+    try:
+        timer = threading.Timer(
+            _RETIRED_TRANSPORT_GRACE_SECONDS, _close_http_client, args=(http_client,)
+        )
+        timer.daemon = True
+        timer.start()
+    except Exception as retire_error:  # pragma: no cover - teardown is best-effort
+        logger.warning("Failed to retire superseded Supabase transport: %s", retire_error)
+
+
 class SupabaseDB:
     """Singleton Supabase client for database operations."""
 
@@ -254,13 +279,15 @@ class SupabaseDB:
                     },
                 )
                 return current
-            # Close the superseded SERVICE transport before dropping the
-            # reference: without this every rebuild leaks one keep-alive pool.
+            # Retire (not close) the superseded SERVICE transport: in-flight
+            # requests may still hold it, and closing under them raises
+            # "client has been closed". The retired pool closes after the
+            # grace window; its sockets stay bounded by keepalive limits.
             # The anon singleton is reset (that is what lets a blip that killed
             # its pool heal) but its transport is NOT closed - see the docstring:
             # anon auth calls are not retried, so closing under them would turn
             # a recoverable blip into a sign-in 500.
-            _close_http_client(cls._service_http)
+            retired_service_http = cls._service_http
             cls._service_instance = None
             cls._service_http = None
             cls._instance = None
@@ -272,6 +299,7 @@ class SupabaseDB:
             )
             cls._last_service_rebuild_at = time.monotonic()
             logger.info("Supabase service client rebuilt (pooled connection recovery)")
+            _retire_http_client(retired_service_http)
             return cls._service_instance
 
 
