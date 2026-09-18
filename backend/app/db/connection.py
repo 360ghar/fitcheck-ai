@@ -279,25 +279,20 @@ class SupabaseDB:
                     },
                 )
                 return current
-            # Retire (not close) the superseded SERVICE transport: in-flight
-            # requests may still hold it, and closing under them raises
-            # "client has been closed". The retired pool closes after the
-            # grace window; its sockets stay bounded by keepalive limits.
-            # The anon transport is retired too (its pool would otherwise leak
-            # one client per rebuild). Retirement is grace-delayed, not
-            # immediate, so in-flight anon auth calls — which do not go
-            # through the retry helper — still drain instead of 500ing.
-            retired_service_http = cls._service_http
-            retired_anon_http = cls._instance_http
-            cls._service_instance = None
-            cls._service_http = None
-            cls._instance = None
-            cls._instance_http = None
+            # Build the replacement BEFORE touching shared state: if the build
+            # raises, the current singleton keeps serving instead of going
+            # unavailable (None) while the saved pools leak unretired.
             if not settings.SUPABASE_URL or not settings.SUPABASE_SECRET_KEY:
                 raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY must be set for service client")
-            cls._service_instance, cls._service_http = _build_supabase_client(
+            new_service_instance, new_service_http = _build_supabase_client(
                 settings.SUPABASE_URL, settings.SUPABASE_SECRET_KEY
             )
+            retired_service_http = cls._service_http
+            retired_anon_http = cls._instance_http
+            cls._service_instance = new_service_instance
+            cls._service_http = new_service_http
+            cls._instance = None
+            cls._instance_http = None
             cls._last_service_rebuild_at = time.monotonic()
             logger.info("Supabase service client rebuilt (pooled connection recovery)")
             _retire_http_client(retired_service_http)

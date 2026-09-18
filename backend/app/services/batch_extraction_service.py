@@ -67,6 +67,15 @@ def _is_pre_generation_retryable(exc: Exception) -> bool:
     # failure can mention them while the response stays ambiguous.
     if "connecterror" in text or "connecttimeout" in text:
         return True
+    # No structured hint: only pre-accept overload rejections may retry. Every
+    # overload-text AIServiceError the provider layer emits derives from a
+    # pre-accept rejection (status-based transient overload or the
+    # concurrency-limited 200 envelope) — except post-status failures, which
+    # carry provider_status (HTTPStatusError path) and may have been accepted
+    # server-side. Message text alone cannot prove otherwise, so fail closed
+    # on those instead of double-billing a lost response.
+    if getattr(exc, "provider_status", None) is not None:
+        return False
     return is_overload
 
 # Hosts whose avatar URLs the extraction pipeline may fetch DIRECTLY with

@@ -236,12 +236,69 @@ async def _claim_event(db: Client, table: str, pk_column: str, pk_value: str, ev
         return query.execute()
 
     claim = await execute_with_reconnect(
-        _claim, db, extra={"operation": "iap_claim_reclaim", "table": table}
+        _claim, db, extra={"operation": "iap_claim_reclaim", "table": table},
+        # Non-idempotent CAS write (same contract as the insert above): a
+        # commit-then-lost-response retry matches zero rows, so the helper
+        # must not retry it into an automatic ACK of an unprocessed event.
+        max_retries=0,
     )
     claim_data = getattr(claim, "data", None)
     if claim_data is not None and not claim_data:
-        # Lost the CAS race to a concurrent retry.
-        return _CLAIM_ACKED
+        # Lost the CAS race — verify before ACKing. Re-read the row: only a
+        # live lease (another worker won) or an already-PROCESSED row is an
+        # ACK. A still-claimable row (failed/pending/stale) gets one fresh
+        # CAS with the current predicate instead of being acknowledged
+        # forever; a second miss is a real failure, so 500 for redelivery.
+        # Residual (same as the insert path): a redelivery of our own
+        # commit-then-lost-response claim lands inside the 5-minute lease and
+        # still ACKs; an ownership token is the durable fix.
+        reread = await execute_with_reconnect(
+            _select, db, extra={"operation": "iap_claim_reread", "table": table}
+        )
+        current = maybe_single_data(reread)
+        if current is None:
+            return _CLAIM_ACKED
+        current_status = current.get("status")
+        if current_status == _WEBHOOK_STATUS_PROCESSED:
+            return _CLAIM_ACKED
+        current_started = parse_utc_datetime(current.get("processing_started_at"))
+        if (
+            current_status == _WEBHOOK_STATUS_PROCESSING
+            and current_started is not None
+            and current_started > utcnow() - timedelta(seconds=_WEBHOOK_LEASE_STALE_SECONDS)
+        ):
+            return _CLAIM_ACKED
+        fresh_started = current.get("processing_started_at")
+        fresh_attempts = int(current.get("attempts") or 0) + 1
+
+        def _reclaim(d: Client):
+            query = (
+                d.table(table)
+                .update({
+                    "status": _WEBHOOK_STATUS_PROCESSING,
+                    "processing_started_at": utcnow_iso(),
+                    "attempts": fresh_attempts,
+                })
+                .eq(pk_column, pk_value)
+            )
+            if fresh_started is not None:
+                query = query.eq("processing_started_at", fresh_started)
+            else:
+                query = query.is_("processing_started_at", "null")
+            return query.execute()
+
+        retry = await execute_with_reconnect(
+            _reclaim, db, extra={"operation": "iap_claim_reclaim_retry", "table": table},
+            max_retries=0,
+        )
+        retry_data = getattr(retry, "data", None)
+        if retry_data is not None and not retry_data:
+            raise HTTPException(status_code=500, detail="Failed to reclaim webhook event")
+        logger.info(
+            "Reprocessing previously failed/stale webhook event (after CAS race)",
+            extra={"table": table, "pk": pk_value, "previous_status": current_status},
+        )
+        return _CLAIM_CLAIMED
     logger.info(
         "Reprocessing previously failed/stale webhook event",
         extra={"table": table, "pk": pk_value, "previous_status": status},
