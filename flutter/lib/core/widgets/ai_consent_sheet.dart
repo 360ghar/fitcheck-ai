@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import '../providers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../constants/app_constants.dart';
 import 'app_ui.dart';
@@ -11,8 +11,11 @@ import 'app_ui.dart';
 /// `false` (or `null`, treated as false) otherwise. The sheet is intentionally
 /// non-dismissible so the user must make an explicit choice.
 Future<bool> showAiConsentSheet({required String featureLabel}) async {
-  final result = await Get.bottomSheet<bool>(
-    _AiConsentSheet(featureLabel: featureLabel),
+  final context = rootNavigatorKey.currentContext;
+  if (context == null) return false;
+  final result = await showModalBottomSheet<bool>(
+    context: context,
+    builder: (_) => _AiConsentSheet(featureLabel: featureLabel),
     isDismissible: false,
     enableDrag: false,
     isScrollControlled: true,
@@ -53,7 +56,7 @@ class _AiConsentSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'AI Image Generation — Data Sharing Notice',
+                          'Sharing photos with an AI service',
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
                                 fontWeight: FontWeight.w700,
@@ -107,7 +110,7 @@ class _AiConsentSheet extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Get.back(result: true),
+                  onPressed: () => Navigator.pop(context, true),
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                   ),
@@ -118,7 +121,7 @@ class _AiConsentSheet extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: TextButton(
-                  onPressed: () => Get.back(result: false),
+                  onPressed: () => Navigator.pop(context, false),
                   child: const Text('Not Now'),
                 ),
               ),

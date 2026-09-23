@@ -19,7 +19,7 @@ FitCheck AI is a monorepo for AI-assisted wardrobe management, outfit generation
 | `backend/` | FastAPI API, services, AI, tests |
 | `frontend/` | React + TypeScript (Vite) web app |
 | `admin/` | Internal admin console (React 19 SPA, server-enforced RBAC) |
-| `flutter/` | Flutter mobile (GetX) |
+| `flutter/` | Flutter mobile (Riverpod + go_router) |
 | `docs/` | Knowledge base (product, design, plans, quality) |
 | `scripts/` | Harness checks (docs + architecture) |
 | `ARCHITECTURE.md` | Domains and allowed dependency edges |

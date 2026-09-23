@@ -1,404 +1,366 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../controllers/photoshoot_controller.dart';
 import '../models/photoshoot_models.dart';
+import '../providers/photoshoot_provider.dart';
+import 'referral_limit_dialog.dart';
 
-/// Step 2: Configure use case and image count
-class PhotoshootConfigureStep extends GetView<PhotoshootController> {
+/// Step 2: style, format and image count.
+class PhotoshootConfigureStep extends ConsumerStatefulWidget {
   const PhotoshootConfigureStep({super.key});
 
   @override
+  ConsumerState<PhotoshootConfigureStep> createState() =>
+      _PhotoshootConfigureStepState();
+}
+
+class _PhotoshootConfigureStepState
+    extends ConsumerState<PhotoshootConfigureStep> {
+  late final TextEditingController _prompt = TextEditingController(
+    text: ref.read(photoshootProvider).customPrompt,
+  );
+
+  @override
+  void dispose() {
+    _prompt.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+    final s = ref.watch(photoshootProvider);
+    final notifier = ref.read(photoshootProvider.notifier);
+    final text = Theme.of(context).textTheme;
+    final tokens = PaperTokens.of(context);
+    // A reset clears the prompt in the state; mirror it in the field.
+    if (s.customPrompt.isEmpty && _prompt.text.isNotEmpty) _prompt.clear();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Use case selection
-          Text(
-            'Choose Your Style',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
+    Widget title(String label) => Padding(
+      padding: const EdgeInsets.only(bottom: AppConstants.spacing12),
+      child: Text(
+        label,
+        style: text.titleMedium?.copyWith(
+          color: tokens.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        title('Style'),
+        _StyleGrid(selected: s.useCase, onSelect: notifier.setUseCase),
+        if (s.useCase == PhotoshootUseCase.custom) ...[
+          const SizedBox(height: AppConstants.spacing16),
+          TextField(
+            controller: _prompt,
+            onChanged: notifier.setCustomPrompt,
+            maxLines: 3,
+            minLines: 2,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Your prompt',
+              hintText: 'Golden hour on a rooftop, linen shirt',
             ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-
-          // Use case grid
-          Obx(() {
-            // Force observable read in Obx scope (itemBuilder runs lazily after)
-            final _ = controller.selectedUseCase.value;
-            return _buildUseCaseGrid(context, tokens);
-          }),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Custom prompt (if custom selected)
-          Obx(() {
-            if (controller.selectedUseCase.value != PhotoshootUseCase.custom) {
-              return const SizedBox.shrink();
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Custom Prompt',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing8),
-                TextField(
-                  controller: controller.customPromptController,
-                  onChanged: controller.setCustomPrompt,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: 'Describe the style you want...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius12,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing24),
-              ],
-            );
-          }),
-
-          // Aspect ratio selection
-          Text(
-            'Image Format',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-
-          Obx(() => _buildAspectRatioSelector(context, tokens)),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Image count slider
-          Text(
-            'Number of Images',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-
-          Obx(() => _buildImageSlider(context, tokens)),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Usage info
-          Obx(() => _buildUsageInfo(context, tokens)),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: controller.previousStep,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                  ),
-                  child: const Text('Back'),
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacing12),
-              Expanded(
-                flex: 2,
-                child: Obx(
-                  () => ElevatedButton(
-                    onPressed: controller.canGenerate
-                        ? controller.nextStep
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(0, 48),
-                    ),
-                    child: Text(
-                      'Generate ${controller.numImages.value} Images',
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildUseCaseGrid(BuildContext context, AppUiTokens tokens) {
-    final useCases = PhotoshootUseCase.values;
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 130,
-        crossAxisSpacing: AppConstants.spacing8,
-        mainAxisSpacing: AppConstants.spacing8,
-        childAspectRatio: 1.1,
-      ),
-      itemCount: useCases.length,
-      itemBuilder: (context, index) {
-        final useCase = useCases[index];
-        return _buildUseCaseCard(context, tokens, useCase);
-      },
-    );
-  }
-
-  Widget _buildUseCaseCard(
-    BuildContext context,
-    AppUiTokens tokens,
-    PhotoshootUseCase useCase,
-  ) {
-    final isSelected = controller.selectedUseCase.value == useCase;
-
-    return InkWell(
-      onTap: () => controller.setUseCase(useCase),
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          border: Border.all(
-            color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
-            width: isSelected ? 2 : 1,
-          ),
-          color: isSelected
-              ? tokens.brandColor.withValues(alpha: 0.1)
-              : tokens.cardColor,
-        ),
-        padding: const EdgeInsets.all(AppConstants.spacing8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        const SizedBox(height: AppConstants.spacing24),
+        title('Format'),
+        _FormatRow(selected: s.aspectRatio, onSelect: notifier.setAspectRatio),
+        const SizedBox(height: AppConstants.spacing24),
+        title('How many'),
+        _CountCard(state: s, onChanged: notifier.setNumImages),
+        const SizedBox(height: AppConstants.spacing12),
+        _UsageLine(state: s, onRetry: notifier.fetchUsage),
+        const SizedBox(height: AppConstants.spacing24),
+        Row(
           children: [
-            Text(useCase.icon, style: const TextStyle(fontSize: 22)),
-            const SizedBox(height: 4),
-            Text(
-              useCase.label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? tokens.brandColor : tokens.textPrimary,
+            TextButton(
+              onPressed: notifier.backToUpload,
+              style: TextButton.styleFrom(minimumSize: const Size(88, 52)),
+              child: const Text('Back'),
+            ),
+            const SizedBox(width: AppConstants.spacing12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: s.photos.isEmpty
+                    ? null
+                    : () => startPhotoshoot(context, ref),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
+                child: Text(
+                  'Create ${s.numImages} '
+                  '${s.numImages == 1 ? 'photo' : 'photos'}',
+                ),
               ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
+}
 
-  Widget _buildImageSlider(BuildContext context, AppUiTokens tokens) {
-    final remaining = controller.remainingToday;
-    final maxImages = controller.effectiveMaxImages;
+class _StyleGrid extends StatelessWidget {
+  const _StyleGrid({required this.selected, required this.onSelect});
 
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  final PhotoshootUseCase selected;
+  final ValueChanged<PhotoshootUseCase> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: AppConstants.spacing12,
+        crossAxisSpacing: AppConstants.spacing12,
+        mainAxisExtent: 84,
+      ),
+      itemCount: PhotoshootUseCase.values.length,
+      itemBuilder: (context, i) {
+        final useCase = PhotoshootUseCase.values[i];
+        final on = useCase == selected;
+        return PaperSurface(
+          onTap: () => onSelect(useCase),
+          semanticLabel: '${useCase.label}${on ? ', selected' : ''}',
+          color: on ? tokens.stock.tint : null,
+          lift: on ? 0.4 : 1,
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.spacing12,
+            AppConstants.spacing12,
+            AppConstants.spacing8,
+            AppConstants.spacing12,
+          ),
+          child: Row(
             children: [
-              Text(
-                '${controller.numImages.value} images',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: tokens.brandColor,
-                ),
-              ),
-              Text(
-                '$remaining remaining today',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // Handle edge case when maxImages == minImages (divisions would be 0)
-          if (maxImages > PhotoshootController.minImages)
-            Slider(
-              value: controller.numImages.value.toDouble(),
-              min: PhotoshootController.minImages.toDouble(),
-              max: maxImages.toDouble(),
-              divisions: maxImages - PhotoshootController.minImages,
-              label: '${controller.numImages.value}',
-              onChanged: (value) => controller.setNumImages(value.round()),
-            )
-          else
-            // When only 1 image is available, show a disabled slider
-            Slider(
-              value: PhotoshootController.minImages.toDouble(),
-              min: PhotoshootController.minImages.toDouble(),
-              max: PhotoshootController.minImages.toDouble(),
-              onChanged: null,
-            ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${PhotoshootController.minImages}',
-                style: TextStyle(fontSize: 12, color: tokens.textMuted),
-              ),
-              Text(
-                '$maxImages',
-                style: TextStyle(fontSize: 12, color: tokens.textMuted),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUsageInfo(BuildContext context, AppUiTokens tokens) {
-    final usage = controller.usage.value;
-    if (usage == null) return const SizedBox.shrink();
-
-    // Check if user is on a pro plan (matches pro_monthly, pro_yearly, etc.)
-    final isPro = RegExp(
-      r'^pro[_-]?',
-      caseSensitive: false,
-    ).hasMatch(usage.planType);
-
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing12),
-      child: Row(
-        children: [
-          Icon(
-            isPro ? Icons.star : Icons.info_outline,
-            color: isPro ? Colors.amber : tokens.textMuted,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              isPro
-                  ? 'Pro: ${usage.remaining} of ${usage.limitToday} images remaining'
-                  : 'Free: ${usage.remaining} of ${usage.limitToday} images remaining',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-            ),
-          ),
-          // Upgrade CTA is hidden when the paywall is disabled (iOS v1,
-          // App Store Guideline 3.1.1 anti-steering). Benign usage text stays.
-          if (!isPro && EnvConfig.paywallEnabled)
-            TextButton(
-              onPressed: () => Get.toNamed(Routes.subscription),
-              child: const Text('Upgrade'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAspectRatioSelector(BuildContext context, AppUiTokens tokens) {
-    final ratios = PhotoshootAspectRatio.values;
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: ratios.map((ratio) {
-          final isSelected = controller.selectedAspectRatio.value == ratio;
-          return Padding(
-            padding: const EdgeInsets.only(right: AppConstants.spacing8),
-            child: InkWell(
-              onTap: () => controller.setAspectRatio(ratio),
-              borderRadius: BorderRadius.circular(AppConstants.radius12),
-              child: Container(
-                width: 72,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing8,
-                  vertical: AppConstants.spacing12,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  border: Border.all(
-                    color: isSelected
-                        ? tokens.brandColor
-                        : tokens.cardBorderColor,
-                    width: isSelected ? 2 : 1,
-                  ),
-                  color: isSelected
-                      ? tokens.brandColor.withValues(alpha: 0.1)
-                      : tokens.cardColor,
-                ),
+              Expanded(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Aspect ratio preview box
-                    _buildAspectRatioPreview(ratio, tokens, isSelected),
-                    const SizedBox(height: 6),
                     Text(
-                      ratio.ratio,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: isSelected
-                            ? tokens.brandColor
-                            : tokens.textPrimary,
+                      useCase.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleSmall?.copyWith(
+                        color: on ? tokens.stock.accent : tokens.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      useCase.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall?.copyWith(
+                        color: tokens.textSecondary,
                       ),
                     ),
                   ],
                 ),
               ),
+              SizedBox(
+                width: 20,
+                child: on
+                    ? Icon(
+                        Icons.check_rounded,
+                        size: 20,
+                        color: tokens.stock.accent,
+                      )
+                    : null,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FormatRow extends StatelessWidget {
+  const _FormatRow({required this.selected, required this.onSelect});
+
+  final PhotoshootAspectRatio selected;
+  final ValueChanged<PhotoshootAspectRatio> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    const box = 28.0;
+    return Row(
+      children: [
+        for (final (i, ratio) in PhotoshootAspectRatio.values.indexed) ...[
+          if (i > 0) const SizedBox(width: AppConstants.spacing8),
+          Expanded(
+            child: Builder(
+              builder: (context) {
+                final on = ratio == selected;
+                final value = ratio.aspectRatioValue;
+                return PaperSurface(
+                  onTap: () => onSelect(ratio),
+                  semanticLabel:
+                      '${ratio.label}, ${ratio.ratio}${on ? ', selected' : ''}',
+                  color: on ? tokens.stock.tint : null,
+                  lift: on ? 0.4 : 1,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppConstants.spacing12,
+                  ),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: box,
+                        child: Center(
+                          child: Container(
+                            width: value >= 1 ? box : box * value,
+                            height: value >= 1 ? box / value : box,
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: on
+                                    ? tokens.stock.accent
+                                    : tokens.textMuted,
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.spacing8),
+                      Text(
+                        ratio.ratio,
+                        style: text.labelMedium?.copyWith(
+                          color: on ? tokens.stock.accent : tokens.textPrimary,
+                          fontWeight: on ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CountCard extends StatelessWidget {
+  const _CountCard({required this.state, required this.onChanged});
+
+  final PhotoshootState state;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    const min = PhotoshootNotifier.minImages;
+    final max = state.effectiveMaxImages;
+    return PaperSurface(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing12,
+        AppConstants.spacing16,
+        AppConstants.spacing4,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '${state.numImages}',
+                style: text.displaySmall?.copyWith(color: tokens.textPrimary),
+              ),
+              const SizedBox(width: AppConstants.spacing8),
+              Expanded(
+                child: Text(
+                  state.numImages == 1 ? 'photo' : 'photos',
+                  style: text.bodyLarge?.copyWith(color: tokens.textSecondary),
+                ),
+              ),
+            ],
+          ),
+          Slider(
+            value: state.numImages.clamp(min, max).toDouble(),
+            min: min.toDouble(),
+            max: (max > min ? max : min + 1).toDouble(),
+            divisions: max > min ? max - min : null,
+            label: '${state.numImages}',
+            onChanged: max > min ? (v) => onChanged(v.round()) : null,
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildAspectRatioPreview(
-    PhotoshootAspectRatio ratio,
-    AppUiTokens tokens,
-    bool isSelected,
-  ) {
-    // Calculate preview dimensions (max 36px in either dimension)
-    const double maxSize = 36.0;
-    double width;
-    double height;
+class _UsageLine extends StatelessWidget {
+  const _UsageLine({required this.state, required this.onRetry});
 
-    if (ratio.aspectRatioValue >= 1) {
-      // Wider than tall
-      width = maxSize;
-      height = maxSize / ratio.aspectRatioValue;
-    } else {
-      // Taller than wide
-      height = maxSize;
-      width = maxSize * ratio.aspectRatioValue;
-    }
+  final PhotoshootState state;
+  final VoidCallback onRetry;
 
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: isSelected ? tokens.brandColor : tokens.textMuted,
-          width: 2,
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final style = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: tokens.textSecondary);
+    final usage = state.usage;
+    if (usage == null && state.usageLoading) {
+      return const SkeletonPulse(
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: SkeletonBox(width: 220, height: 14),
         ),
-        borderRadius: BorderRadius.circular(4),
-        color: isSelected
-            ? tokens.brandColor.withValues(alpha: 0.2)
-            : tokens.cardColor,
-      ),
+      );
+    }
+    if (usage == null) {
+      return Row(
+        children: [
+          Expanded(
+            child: Text("We couldn't check today's limit.", style: style),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      );
+    }
+    final isPro = RegExp(
+      r'^pro',
+      caseSensitive: false,
+    ).hasMatch(usage.planType);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '${isPro ? 'Pro' : 'Free'} plan: ${usage.remaining} of '
+            '${usage.limitToday} left today',
+            style: style,
+          ),
+        ),
+        // Hidden while the paywall is off (App Store 3.1.1).
+        if (!isPro && EnvConfig.paywallEnabled)
+          TextButton(
+            onPressed: () => context.push(Routes.subscription),
+            child: const Text('Upgrade'),
+          ),
+      ],
     );
   }
 }

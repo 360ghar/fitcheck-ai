@@ -1,1194 +1,821 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/state/paged_state.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
-import '../controllers/wardrobe_controller.dart';
-import '../repositories/item_repository.dart';
-import '../../../app/routes/app_routes.dart';
+import '../models/item_model.dart';
+import '../providers/wardrobe_providers.dart';
+import '../widgets/garment_glyph.dart';
 
-/// Wardrobe content without Scaffold wrapper (for IndexedStack in MainShellPage)
-/// Note: FAB is handled by MainShellPage
-class WardrobeContent extends StatefulWidget {
+/// Closet tab. The shell supplies the Scaffold, the add button and the moss
+/// paper stock.
+class WardrobeContent extends ConsumerStatefulWidget {
   const WardrobeContent({super.key});
 
   @override
-  State<WardrobeContent> createState() => _WardrobeContentState();
+  ConsumerState<WardrobeContent> createState() => _WardrobeContentState();
 }
 
-class _WardrobeContentState extends State<WardrobeContent> {
-  final WardrobeController controller = Get.find<WardrobeController>();
-  final ItemRepository _itemRepository = ItemRepository();
+class _WardrobeContentState extends ConsumerState<WardrobeContent> {
+  bool _grid = true;
+  bool _searching = false;
+  final _search = TextEditingController();
+  Timer? _searchDebounce;
+
+  WardrobeNotifier get _wardrobe => ref.read(wardrobeProvider.notifier);
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(
+      AppConstants.searchDebounceDuration,
+      () => ref.read(wardrobeFiltersProvider.notifier).setSearch(value),
+    );
+  }
+
+  void _closeSearch() {
+    _searchDebounce?.cancel();
+    _search.clear();
+    ref.read(wardrobeFiltersProvider.notifier).setSearch('');
+    setState(() => _searching = false);
+  }
+
+  void _open(ItemModel item) {
+    final selection = ref.read(wardrobeSelectionProvider);
+    if (selection.isNotEmpty) {
+      ref.read(wardrobeSelectionProvider.notifier).toggle(item.id);
+    } else {
+      context.push(Routes.item(item.id));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final wardrobe = ref.watch(wardrobeProvider);
+    final filters = ref.watch(wardrobeFiltersProvider);
+    final page = wardrobe.value;
+
     return AppPageBackground(
-      child: SafeArea(
-        child: Obx(
-          () => RefreshIndicator(
-            onRefresh: () => controller.fetchItems(refresh: true),
-            child: InfiniteScrollWrapper(
-              onLoadMore: () => controller.fetchItems(),
-              hasMore: controller.hasMore.value,
-              isLoadingMore: controller.isLoadingMore.value,
-              child: CustomScrollView(
-                slivers: [
-                  // App bar
-                  _buildAppBar(),
-
-                  // Category filter chips
-                  SliverToBoxAdapter(child: _buildCategoryChips()),
-
-                  // Offline / error banner (persistent context, so an offline
-                  // user never sees a misleading "empty closet" state).
-                  Obx(() {
-                    if (controller.error.value.isEmpty ||
-                        controller.isLoading.value) {
-                      return const SliverToBoxAdapter(
-                        child: SizedBox.shrink(),
-                      );
-                    }
-                    return SliverToBoxAdapter(
-                      child: AppErrorBanner(message: controller.error.value),
-                    );
-                  }),
-
-                  // Content
-                  SliverPadding(
-                    // Extra bottom inset so extended FAB + bottom nav don't cover last row
-                    padding: const EdgeInsets.fromLTRB(
-                      AppConstants.spacing16,
-                      AppConstants.spacing16,
-                      AppConstants.spacing16,
-                      AppConstants.spacing16 + 96,
-                    ),
-                    sliver: Obx(() {
-                      if (controller.isLoading.value &&
-                          controller.items.isEmpty) {
-                        return const ShimmerGridLoader(
-                          crossAxisCount: 3,
-                          itemCount: 9,
-                          childAspectRatio: 0.78,
-                        );
-                      }
-
-                      if (controller.filteredItems.isEmpty) {
-                        return _buildEmptyState();
-                      }
-
-                      return controller.viewMode.value == 'grid'
-                          ? _buildItemsGrid()
-                          : _buildItemsList();
-                    }),
-                  ),
-
-                  // Load more indicator
-                  Obx(
-                    () => SliverLoadingMoreIndicator(
-                      isLoading: controller.isLoadingMore.value,
-                    ),
-                  ),
-                ],
+      child: RefreshIndicator(
+        onRefresh: _wardrobe.refresh,
+        child: InfiniteScrollWrapper(
+          onLoadMore: _wardrobe.loadMore,
+          canLoadMore: () {
+            final s = ref.read(wardrobeProvider);
+            return !s.isLoading && (s.value?.canLoadMore ?? false);
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: _header(page, failed: wardrobe.hasError),
               ),
-            ),
+              // The empty and error states carry their own scene.
+              if (!_searching &&
+                  (page == null ? !wardrobe.hasError : !page.isEmpty))
+                const SliverToBoxAdapter(
+                  child: PaperScene(preset: PaperScenes.closet, height: 112),
+                ),
+              SliverToBoxAdapter(child: _CategoryChips(filters: filters)),
+              if (page != null && wardrobe.hasError)
+                SliverToBoxAdapter(
+                  child: AppErrorBanner(
+                    error: wardrobe.error,
+                    onRetry: _wardrobe.refresh,
+                  ),
+                ),
+              ..._content(wardrobe, filters),
+              if (page != null)
+                SliverLoadingMoreIndicator(
+                  isLoading: page.isLoadingMore,
+                  error: page.loadMoreError,
+                  onRetry: _wardrobe.retryLoadMore,
+                ),
+              // Room for the add button over the last row.
+              const SliverToBoxAdapter(child: SizedBox(height: 88)),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildAppBar() {
-    final tokens = AppUiTokens.of(context);
+  List<Widget> _content(
+    AsyncValue<PagedState<ItemModel>> wardrobe,
+    WardrobeFilters filters,
+  ) {
+    const padding = EdgeInsets.fromLTRB(
+      AppConstants.spacing16,
+      AppConstants.spacing8,
+      AppConstants.spacing16,
+      AppConstants.spacing8,
+    );
+    final page = wardrobe.value;
+    if (page == null) {
+      if (wardrobe.hasError) {
+        return [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: AppErrorState(
+              error: wardrobe.error,
+              onRetry: _wardrobe.refresh,
+            ),
+          ),
+        ];
+      }
+      return const [
+        SliverPadding(
+          padding: padding,
+          sliver: SkeletonGridLoader(
+            crossAxisCount: 3,
+            itemCount: 9,
+            childAspectRatio: 0.72,
+          ),
+        ),
+      ];
+    }
+    if (page.isEmpty) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: filters.isFiltered
+              ? AppEmptyState(
+                  scene: PaperScenes.closet,
+                  title: 'No pieces match',
+                  message: 'Try fewer filters or another search.',
+                  actionLabel: 'Clear filters',
+                  onAction: () {
+                    _closeSearch();
+                    ref.read(wardrobeFiltersProvider.notifier).clear();
+                  },
+                )
+              : AppEmptyState(
+                  scene: PaperScenes.closet,
+                  title: 'Your closet is empty',
+                  message:
+                      'Photograph a piece. We tag the colour, fabric '
+                      'and style for you.',
+                  actionLabel: 'Add your first piece',
+                  actionIcon: Icons.add_a_photo_outlined,
+                  onAction: () => context.push(Routes.wardrobeAdd),
+                ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: padding,
+        sliver: _grid
+            ? SliverGrid.builder(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 140,
+                  mainAxisSpacing: AppConstants.spacing12 + 3,
+                  crossAxisSpacing: AppConstants.spacing12,
+                  childAspectRatio: 0.72,
+                ),
+                itemCount: page.items.length,
+                itemBuilder: (context, i) => _ItemTile(
+                  item: page.items[i],
+                  onTap: _open,
+                  onLongPress: _showItemOptions,
+                ),
+              )
+            : SliverList.separated(
+                itemCount: page.items.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(height: AppConstants.spacing12),
+                itemBuilder: (context, i) => _ItemRow(
+                  item: page.items[i],
+                  onTap: _open,
+                  onLongPress: _showItemOptions,
+                ),
+              ),
+      ),
+    ];
+  }
 
-    return SliverAppBar(
-      floating: true,
-      elevation: 0,
-      automaticallyImplyLeading: false,
-      title: Text(
-        'Closet',
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: tokens.textPrimary,
+  Widget _header(PagedState<ItemModel>? page, {required bool failed}) {
+    final tokens = PaperTokens.of(context);
+    final selection = ref.watch(wardrobeSelectionProvider);
+    final text = Theme.of(context).textTheme;
+
+    final Widget title;
+    if (selection.isNotEmpty) {
+      title = Text('${selection.length} selected', style: text.headlineMedium);
+    } else if (_searching) {
+      title = TextField(
+        controller: _search,
+        autofocus: true,
+        textInputAction: TextInputAction.search,
+        onChanged: _onSearchChanged,
+        decoration: const InputDecoration(
+          hintText: 'Search your closet',
+          prefixIcon: Icon(Icons.search_rounded),
+        ),
+      );
+    } else {
+      title = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Closet', style: text.displaySmall?.copyWith(fontSize: 34)),
+          Text(
+            page == null
+                ? (failed ? ' ' : 'Loading your pieces')
+                : page.total == 1
+                ? '1 piece'
+                : '${page.total} pieces',
+            style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+          ),
+        ],
+      );
+    }
+
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.spacing20,
+          AppConstants.spacing12,
+          AppConstants.spacing8,
+          AppConstants.spacing8,
+        ),
+        child: Row(
+          children: [
+            Expanded(child: title),
+            if (selection.isNotEmpty) ...[
+              IconButton(
+                tooltip: 'Delete selected',
+                icon: Icon(Icons.delete_outline_rounded, color: tokens.error),
+                onPressed: _confirmDeleteSelected,
+              ),
+              IconButton(
+                tooltip: 'Cancel selection',
+                icon: const Icon(Icons.close_rounded),
+                onPressed: ref.read(wardrobeSelectionProvider.notifier).clear,
+              ),
+            ] else if (_searching)
+              IconButton(
+                tooltip: 'Close search',
+                icon: const Icon(Icons.close_rounded),
+                onPressed: _closeSearch,
+              )
+            else ...[
+              IconButton(
+                tooltip: 'Search',
+                icon: const Icon(Icons.search_rounded),
+                onPressed: () => setState(() => _searching = true),
+              ),
+              IconButton(
+                tooltip: _grid ? 'Show as list' : 'Show as grid',
+                icon: Icon(
+                  _grid ? Icons.view_agenda_outlined : Icons.grid_view_rounded,
+                ),
+                onPressed: () => setState(() => _grid = !_grid),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'More',
+                icon: const Icon(Icons.tune_rounded),
+                onSelected: (value) => switch (value) {
+                  'filter' => _showFilterSheet(),
+                  'sort' => _showSortSheet(),
+                  _ => context.push(Routes.wardrobeStats),
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'filter', child: Text('Filter')),
+                  PopupMenuItem(value: 'sort', child: Text('Sort')),
+                  PopupMenuItem(value: 'stats', child: Text('Closet stats')),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
-      actions: [
-        Obx(
-          () => controller.selectedIds.isNotEmpty
-              ? IconButton(
-                  tooltip: 'Delete selected',
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _showDeleteConfirmation(),
-                )
-              : Semantics(
-                  label: 'Search closet',
-                  button: true,
-                  child: IconButton(
-                    tooltip: 'Search closet',
-                    icon: const Icon(Icons.search),
-                    onPressed: () => _showSearchDialog(),
-                  ),
-                ),
-        ),
-        Obx(
-          () => controller.selectedIds.isNotEmpty
-              ? TextButton(
-                  onPressed: controller.clearSelection,
-                  child: Text('${controller.selectedCount} selected'),
-                )
-              : IconButton(
-                  tooltip: controller.viewMode.value == 'grid'
-                      ? 'List view'
-                      : 'Grid view',
-                  icon: Icon(
-                    controller.viewMode.value == 'grid'
-                        ? Icons.view_list
-                        : Icons.grid_on,
-                  ),
-                  onPressed: () => controller.setViewMode(
-                    controller.viewMode.value == 'grid' ? 'list' : 'grid',
-                  ),
-                ),
-        ),
-        PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'filter') {
-              _showFilterBottomSheet();
-            } else if (value == 'sort') {
-              _showSortBottomSheet();
-            } else if (value == 'stats') {
-              Get.toNamed(Routes.wardrobeStats);
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'filter',
-              child: Row(
-                children: [
-                  Icon(Icons.filter_list),
-                  SizedBox(width: AppConstants.spacing8),
-                  Text('Filter'),
-                ],
+    );
+  }
+
+  Future<void> _confirmDeleteSelected() async {
+    final count = ref.read(wardrobeSelectionProvider).length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(count == 1 ? 'Delete 1 piece?' : 'Delete $count pieces?'),
+        content: const Text('Outfits that use them lose these pieces.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: PaperTokens.of(context).error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _wardrobe.deleteSelected();
+  }
+
+  Future<void> _showItemOptions(ItemModel item) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppConstants.spacing20,
+                AppConstants.spacing20,
+                AppConstants.spacing20,
+                AppConstants.spacing8,
+              ),
+              child: Text(
+                item.name,
+                style: Theme.of(context).textTheme.headlineSmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const PopupMenuItem(
-              value: 'sort',
-              child: Row(
-                children: [
-                  Icon(Icons.sort),
-                  SizedBox(width: AppConstants.spacing8),
-                  Text('Sort'),
-                ],
+            ListTile(
+              leading: Icon(
+                item.isFavorite
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
               ),
+              title: Text(item.isFavorite ? 'Remove favourite' : 'Favourite'),
+              onTap: () => Navigator.pop(context, 'favorite'),
             ),
-            const PopupMenuItem(
-              value: 'stats',
-              child: Row(
-                children: [
-                  Icon(Icons.insights_outlined),
-                  SizedBox(width: AppConstants.spacing8),
-                  Text('Closet Stats'),
-                ],
+            ListTile(
+              leading: const Icon(Icons.today_outlined),
+              title: const Text('Wore it today'),
+              onTap: () => Navigator.pop(context, 'worn'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.check_circle_outline_rounded),
+              title: const Text('Select'),
+              onTap: () => Navigator.pop(context, 'select'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit'),
+              onTap: () => Navigator.pop(context, 'edit'),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: PaperTokens.of(context).error,
               ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: PaperTokens.of(context).error),
+              ),
+              onTap: () => Navigator.pop(context, 'delete'),
             ),
           ],
         ),
-      ],
+      ),
     );
+    if (!mounted) return;
+    switch (action) {
+      case 'favorite':
+        await _wardrobe.toggleFavorite(item.id);
+      case 'worn':
+        await _wardrobe.markAsWorn(item.id);
+      case 'select':
+        ref.read(wardrobeSelectionProvider.notifier).toggle(item.id);
+      case 'edit':
+        context.push(Routes.itemEdit(item.id));
+      case 'delete':
+        ref.read(wardrobeSelectionProvider.notifier)
+          ..clear()
+          ..toggle(item.id);
+        await _confirmDeleteSelected();
+        if (mounted) ref.read(wardrobeSelectionProvider.notifier).clear();
+    }
   }
 
-  Widget _buildCategoryChips() {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacing16,
-        vertical: AppConstants.spacing8,
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Obx(() {
-          final allSelected = controller.selectedCategories.isEmpty;
-
-          return Row(
-            children: [
-              // "All" chip
-              Padding(
-                padding: const EdgeInsets.only(right: AppConstants.spacing8),
-                child: FilterChip(
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('All'),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: allSelected
-                              ? Colors.white.withValues(alpha: 0.2)
-                              : tokens.textMuted.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '${controller.totalItems.value}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: allSelected
-                                ? Colors.white
-                                : tokens.textMuted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  selected: allSelected,
-                  onSelected: (_) => controller.clearAllFilters(),
-                  selectedColor: tokens.brandColor,
-                  labelStyle: TextStyle(
-                    color: allSelected ? Colors.white : tokens.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  showCheckmark: false,
-                  side: BorderSide(
-                    color: allSelected
-                        ? tokens.brandColor
-                        : tokens.cardBorderColor,
-                  ),
-                ),
-              ),
-              // Category chips
-              ...Category.values.map((category) {
-                final isSelected = controller.selectedCategories.contains(
-                  category,
-                );
-                final count = controller.items
-                    .where((item) => item.category == category)
-                    .length;
-
-                if (count == 0) return const SizedBox.shrink();
-
-                return Padding(
-                  padding: const EdgeInsets.only(right: AppConstants.spacing8),
-                  child: FilterChip(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _getCategoryIcon(category),
-                          size: 14,
-                          color: isSelected
-                              ? Colors.white
-                              : tokens.textSecondary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(category.displayName),
-                        const SizedBox(width: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : tokens.textMuted.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$count',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: isSelected
-                                  ? Colors.white
-                                  : tokens.textMuted,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    selected: isSelected,
-                    onSelected: (_) =>
-                        controller.toggleCategoryFilter(category),
-                    selectedColor: tokens.brandColor,
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : tokens.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    showCheckmark: false,
-                    side: BorderSide(
-                      color: isSelected
-                          ? tokens.brandColor
-                          : tokens.cardBorderColor,
-                    ),
-                  ),
-                );
-              }),
-            ],
+  void _showSortSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => Consumer(
+        builder: (context, ref, _) {
+          final current = ref.watch(
+            wardrobeFiltersProvider.select((f) => f.sort),
           );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildItemsGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 140,
-        mainAxisSpacing: AppConstants.spacing12,
-        crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 0.78,
-      ),
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final item = controller.filteredItems[index];
-        final isSelected = controller.selectedIds.contains(item.id);
-
-        return GestureDetector(
-          onTap: () {
-            if (controller.selectedIds.isNotEmpty) {
-              controller.toggleItemSelection(item);
-            } else {
-              Get.toNamed('/wardrobe/${item.id}');
-            }
-          },
-          onLongPress: () {
-            controller.setSelectedItem(item);
-            _showItemOptions(item);
-          },
-          child: Semantics(
-            label: 'Closet item: ${item.name}',
-            child: _buildItemCard(item, isSelected),
-          ),
-        );
-      }, childCount: controller.filteredItems.length),
-    );
-  }
-
-  Widget _buildItemsList() {
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final item = controller.filteredItems[index];
-        final isSelected = controller.selectedIds.contains(item.id);
-
-        return GestureDetector(
-          onTap: () {
-            if (controller.selectedIds.isNotEmpty) {
-              controller.toggleItemSelection(item);
-            } else {
-              Get.toNamed('/wardrobe/${item.id}');
-            }
-          },
-          onLongPress: () {
-            controller.setSelectedItem(item);
-            _showItemOptions(item);
-          },
-          child: Semantics(
-            label: 'Closet item: ${item.name}',
-            child: _buildListItemCard(item, isSelected),
-          ),
-        );
-      }, childCount: controller.filteredItems.length),
-    );
-  }
-
-  Widget _buildListItemCard(dynamic item, bool isSelected) {
-    final tokens = AppUiTokens.of(context);
-    final hasImages = item.itemImages != null && item.itemImages!.isNotEmpty;
-    final imageUrls = hasImages
-        ? item.itemImages!.map<String>((img) => img.url as String).toList()
-        : <String>[];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppConstants.spacing12),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(
-          color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
-          width: isSelected ? 2 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: tokens.cardShadowColor,
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Item image thumbnail
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(AppConstants.radius16 - 1),
-              bottomLeft: Radius.circular(AppConstants.radius16 - 1),
-            ),
-            child: SizedBox(
-              width: 100,
-              height: 100,
-              child: hasImages
-                  ? AppImage(
-                      imageUrl: imageUrls.first,
-                      fit: BoxFit.cover,
-                      backgroundColor: tokens.isDarkMode
-                          ? Colors.black.withValues(alpha: 0.3)
-                          : Colors.grey.withValues(alpha: 0.1),
-                      enableZoom: controller.selectedIds.isEmpty,
-                      galleryUrls: imageUrls,
-                      memCacheWidth: 200,
-                      memCacheHeight: 200,
-                      errorIcon: _getCategoryIcon(item.category),
-                      // Presigned URLs expire after 1h; on a failed load
-                      // re-mint a fresh URL from the durable storage key.
-                      storagePath: item.itemImages?.first.storagePath,
-                      remintUrl: _itemRepository.remintImageUrl,
-                    )
-                  : _buildPlaceholder(item.category),
-            ),
-          ),
-
-          // Item details
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(AppConstants.spacing12),
+          return SafeArea(
+            child: RadioGroup<WardrobeSort>(
+              groupValue: current,
+              onChanged: (sort) {
+                if (sort != null) {
+                  ref.read(wardrobeFiltersProvider.notifier).setSort(sort);
+                }
+                Navigator.pop(context);
+              },
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    item.name,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppConstants.spacing4),
-                  Row(
-                    children: [
-                      Icon(
-                        _getCategoryIcon(item.category),
-                        size: 14,
-                        color: tokens.textMuted,
+                  Padding(
+                    padding: const EdgeInsets.all(AppConstants.spacing20),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Sort by',
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        item.category.displayName,
-                        style: TextStyle(
-                          color: tokens.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (item.brand != null && item.brand!.isNotEmpty) ...[
-                    const SizedBox(height: AppConstants.spacing4),
-                    Text(
-                      item.brand!,
-                      style: TextStyle(color: tokens.textMuted, fontSize: 12),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
+                  ),
+                  for (final sort in WardrobeSort.values)
+                    RadioListTile<WardrobeSort>(
+                      value: sort,
+                      title: Text(sort.label),
+                    ),
                 ],
               ),
             ),
-          ),
-
-          // Indicators (favorite, selection)
-          Padding(
-            padding: const EdgeInsets.only(right: AppConstants.spacing12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (item.isFavorite)
-                  Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.secondary.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.favorite,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                if (isSelected) ...[
-                  const SizedBox(width: AppConstants.spacing8),
-                  Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing4),
-                    decoration: BoxDecoration(
-                      color: tokens.brandColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildItemCard(dynamic item, bool isSelected) {
-    final tokens = AppUiTokens.of(context);
-    final hasImages = item.itemImages != null && item.itemImages!.isNotEmpty;
-    final imageUrls = hasImages
-        ? item.itemImages!.map<String>((img) => img.url as String).toList()
-        : <String>[];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(
-          color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
-          width: isSelected ? 2 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: tokens.cardShadowColor,
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      // LayoutBuilder bounds the category badge: with the fixed 3-column
-      // grid a card is only ~88-101px wide on narrow phones, and an
-      // unconstrained icon+label row would RenderFlex-overflow (worse under
-      // accessibility font scaling).
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            children: [
-              // Item image using AppImage with BoxFit.contain
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    AppConstants.radius16 - 1,
-                  ),
-                  child: hasImages
-                      ? AppImage(
-                          imageUrl: imageUrls.first,
-                          fit: BoxFit.contain,
-                          backgroundColor: tokens.isDarkMode
-                              ? Colors.black.withValues(alpha: 0.3)
-                              : Colors.grey.withValues(alpha: 0.1),
-                          enableZoom: controller.selectedIds.isEmpty,
-                          galleryUrls: imageUrls,
-                          memCacheWidth: 400,
-                          memCacheHeight: 600,
-                          errorIcon: _getCategoryIcon(item.category),
-                          // Presigned URLs expire after 1h; on a failed load
-                          // re-mint a fresh URL from the durable storage key.
-                          storagePath: item.itemImages?.first.storagePath,
-                          remintUrl: _itemRepository.remintImageUrl,
-                        )
-                      : _buildPlaceholder(item.category),
-                ),
-              ),
-
-              // Category badge
-              Positioned(
-                top: AppConstants.spacing8,
-                left: AppConstants.spacing8,
-                child: Container(
-                  width: constraints.maxWidth - AppConstants.spacing16,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacing8,
-                    vertical: AppConstants.spacing4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tokens.cardColor.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(AppConstants.radius8),
-                    border: Border.all(color: tokens.cardBorderColor),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _getCategoryIcon(item.category),
-                        size: 12,
-                        color: tokens.textMuted,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          item.category.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: tokens.textSecondary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Favorite indicator
-              if (item.isFavorite)
-                Positioned(
-                  top: AppConstants.spacing8,
-                  right: AppConstants.spacing8,
-                  child: Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.secondary.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.favorite,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                ),
-
-              // Selection indicator
-              if (isSelected)
-                Positioned(
-                  top: AppConstants.spacing8,
-                  right: item.isFavorite
-                      ? AppConstants.spacing8 + 30
-                      : AppConstants.spacing8,
-                  child: Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing4),
-                    decoration: BoxDecoration(
-                      color: tokens.brandColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                ),
-
-              // Item name (+ brand) on a clean panel — dense closet look, no heavy gradient
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacing8,
-                    vertical: AppConstants.spacing4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tokens.cardColor.withValues(alpha: 0.92),
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(AppConstants.radius16),
-                      bottomRight: Radius.circular(AppConstants.radius16),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        item.name,
-                        style: TextStyle(
-                          color: tokens.textPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (item.brand != null && item.brand!.isNotEmpty)
-                        Text(
-                          item.brand!,
-                          style: TextStyle(
-                            color: tokens.textMuted,
-                            fontSize: 10,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
           );
         },
       ),
     );
   }
 
-  Widget _buildPlaceholder(Category category) {
-    final tokens = AppUiTokens.of(context);
+  void _showFilterSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => const _FilterSheet(),
+    );
+  }
+}
 
-    return Container(
-      color: tokens.cardColor.withValues(alpha: 0.6),
-      child: Center(
-        child: Icon(
-          _getCategoryIcon(category),
-          size: 48,
-          color: tokens.textMuted,
+class _CategoryChips extends ConsumerWidget {
+  const _CategoryChips({required this.filters});
+
+  final WardrobeFilters filters;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(wardrobeFiltersProvider.notifier);
+    final noCategory = filters.categories.isEmpty && !filters.favoritesOnly;
+    return SizedBox(
+      height: 56,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.spacing16,
+          vertical: AppConstants.spacing8,
         ),
+        children: [
+          _Chip(
+            label: 'All',
+            selected: noCategory,
+            onTap: () {
+              notifier.setFavoritesOnly(false);
+              for (final c in filters.categories) {
+                notifier.toggleCategory(c);
+              }
+            },
+          ),
+          _Chip(
+            label: 'Favourites',
+            selected: filters.favoritesOnly,
+            onTap: () => notifier.setFavoritesOnly(!filters.favoritesOnly),
+          ),
+          for (final c in Category.values)
+            _Chip(
+              label: c.displayName,
+              selected: filters.categories.contains(c),
+              onTap: () => notifier.toggleCategory(c),
+            ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildEmptyState() {
-    final tokens = AppUiTokens.of(context);
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
-    return SliverFillRemaining(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.spacing24),
-          child: AppGlassCard(
-            padding: const EdgeInsets.all(AppConstants.spacing32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: AppConstants.spacing8),
+      child: FilterChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        onSelected: (_) => onTap(),
+      ),
+    );
+  }
+}
+
+/// A closet piece: the photo on a flat paper card with its name below.
+class _ItemTile extends ConsumerWidget {
+  const _ItemTile({
+    required this.item,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final ItemModel item;
+  final void Function(ItemModel) onTap;
+  final void Function(ItemModel) onLongPress;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final selected = ref.watch(
+      wardrobeSelectionProvider.select((s) => s.contains(item.id)),
+    );
+    return PaperSurface(
+      padding: EdgeInsets.zero,
+      grain: false,
+      clipBehavior: Clip.antiAlias,
+      color: selected ? tokens.stock.tint : null,
+      onTap: () => onTap(item),
+      onLongPress: () => onLongPress(item),
+      semanticLabel: '${item.name}${item.isFavorite ? ', favourite' : ''}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                // Animated-style icon container
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.checkroom_outlined,
-                    size: 48,
-                    color: tokens.brandColor,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing24),
-                Text(
-                  'Your closet is empty',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: tokens.textPrimary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppConstants.spacing8),
-                Text(
-                  'Start building your digital closet by adding\nyour first clothing item',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textMuted,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppConstants.spacing24),
-                Semantics(
-                  label: 'Add your first closet item',
-                  button: true,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showAddItemOptions(),
-                    icon: const Icon(Icons.add_a_photo),
-                    label: const Text('Add Your First Item'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppConstants.spacing24,
-                        vertical: AppConstants.spacing16,
-                      ),
+                _ItemImage(item: item),
+                if (selected)
+                  Positioned(
+                    top: AppConstants.spacing4,
+                    right: AppConstants.spacing4,
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      color: tokens.stock.accent,
                     ),
                   ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.spacing8,
+              AppConstants.spacing6,
+              AppConstants.spacing4,
+              AppConstants.spacing6,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
                 ),
-                const SizedBox(height: AppConstants.spacing12),
+                if (item.isFavorite)
+                  Icon(
+                    Icons.favorite_rounded,
+                    size: 14,
+                    color: tokens.stock.accent,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemRow extends ConsumerWidget {
+  const _ItemRow({
+    required this.item,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final ItemModel item;
+  final void Function(ItemModel) onTap;
+  final void Function(ItemModel) onLongPress;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final selected = ref.watch(
+      wardrobeSelectionProvider.select((s) => s.contains(item.id)),
+    );
+    final details = [
+      item.category.displayName,
+      if (item.brand?.isNotEmpty ?? false) item.brand!,
+      if (item.wornCount > 0) 'Worn ${item.wornCount}×',
+    ].join(' · ');
+    return PaperSurface(
+      padding: const EdgeInsets.all(AppConstants.spacing8),
+      grain: false,
+      color: selected ? tokens.stock.tint : null,
+      onTap: () => onTap(item),
+      onLongPress: () => onLongPress(item),
+      semanticLabel: item.name,
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppConstants.radius8),
+            child: SizedBox.square(
+              dimension: 64,
+              child: _ItemImage(item: item),
+            ),
+          ),
+          const SizedBox(width: AppConstants.spacing12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  'Take a photo or upload from gallery',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  item.name,
+                  style: text.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  details,
+                  style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-        ),
+          if (selected)
+            Icon(Icons.check_circle_rounded, color: tokens.stock.accent)
+          else if (item.isFavorite)
+            Icon(Icons.favorite_rounded, size: 18, color: tokens.stock.accent),
+        ],
       ),
     );
   }
+}
 
-  void _showAddItemOptions() {
-    Get.toNamed('/wardrobe/add');
-  }
+class _ItemImage extends ConsumerWidget {
+  const _ItemImage({required this.item});
 
-  void _showFilterBottomSheet() {
-    final tokens = AppUiTokens.of(context);
-    final customUseCaseController = TextEditingController();
+  final ItemModel item;
 
-    Get.bottomSheet(
-      Container(
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-          border: Border.all(color: tokens.cardBorderColor),
-        ),
-        // isScrollControlled + scrollable content fix the audit failure: the
-        // filter stack (~700px of chips + text field + actions) overflows the
-        // default 9/16-height sheet cap. Keyboard insets need no extra padding
-        // here: GetX 4.7.3's GetModalBottomSheetRoute already wraps the sheet
-        // in Padding(viewInsets.bottom) (bottomsheet.dart buildPage), so
-        // padding the insets a second time inside collapses the viewport on
-        // small screens (verified empirically + in GetX source).
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(AppConstants.spacing24),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Filters',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: AppConstants.spacing16),
-                  Text(
-                    'Category',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing8),
-                  Obx(
-                    () => Wrap(
-                      spacing: AppConstants.spacing8,
-                      runSpacing: AppConstants.spacing8,
-                        children: Category.values.map((category) {
-                          final isSelected = controller.selectedCategories
-                              .contains(category);
-                          return FilterChip(
-                            label: Text(category.displayName),
-                            selected: isSelected,
-                            onSelected: (_) =>
-                                controller.toggleCategoryFilter(category),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing16),
-                    Text(
-                      'Use Case',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing8),
-                    Obx(
-                      () => Wrap(
-                        spacing: AppConstants.spacing8,
-                        runSpacing: AppConstants.spacing8,
-                        children: [
-                          ChoiceChip(
-                            label: const Text('All'),
-                            selected:
-                                controller.selectedOccasion.value.isEmpty,
-                            onSelected: (_) =>
-                                controller.setOccasionFilter(''),
-                          ),
-                          ...UseCases.defaults.map((useCase) {
-                            final isSelected =
-                                controller.selectedOccasion.value == useCase;
-                            return ChoiceChip(
-                              label: Text(UseCases.displayLabel(useCase)),
-                              selected: isSelected,
-                              onSelected: (_) =>
-                                  controller.setOccasionFilter(useCase),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: customUseCaseController,
-                            decoration: const InputDecoration(
-                              labelText: 'Custom use case',
-                              hintText: 'e.g., brunch',
-                              border: OutlineInputBorder(),
-                            ),
-                            onSubmitted: (_) {
-                              final value = UseCases.normalize(
-                                customUseCaseController.text,
-                              );
-                              controller.setOccasionFilter(value);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: AppConstants.spacing8),
-                        OutlinedButton(
-                          onPressed: () {
-                            final value = UseCases.normalize(
-                              customUseCaseController.text,
-                            );
-                            controller.setOccasionFilter(value);
-                          },
-                          child: const Text('Set'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppConstants.spacing24),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            controller.clearAllFilters();
-                            Get.back();
-                          },
-                          child: const Text('Clear All'),
-                        ),
-                        const Spacer(),
-                        ElevatedButton(
-                          onPressed: () => Get.back(),
-                          child: const Text('Apply'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      isScrollControlled: true,
-    ).then((_) {
-      // Dispose after the sheet's exit transition finishes: disposing here
-      // immediately trips a debug assert because the closing animation still
-      // rebuilds the TextField (TextEditingController used after being
-      // disposed). The route's reverse animation is ~200ms.
-      Future.delayed(
-        const Duration(milliseconds: 350),
-        customUseCaseController.dispose,
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final images = item.itemImages ?? const [];
+    if (images.isEmpty) {
+      return ColoredBox(
+        color: tokens.stock.tint,
+        child: Center(child: GarmentGlyph(category: item.category, size: 44)),
       );
-    });
-  }
-
-  void _showSortBottomSheet() {
-    final tokens = AppUiTokens.of(context);
-
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-          border: Border.all(color: tokens.cardBorderColor),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: const Text('Newest First'),
-                trailing: controller.sortType.value == 'newest'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  controller.setSortType('newest');
-                  Get.back();
-                },
-              ),
-              ListTile(
-                title: const Text('Oldest First'),
-                trailing: controller.sortType.value == 'oldest'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  controller.setSortType('oldest');
-                  Get.back();
-                },
-              ),
-              ListTile(
-                title: const Text('Name (A-Z)'),
-                trailing: controller.sortType.value == 'name'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  controller.setSortType('name');
-                  Get.back();
-                },
-              ),
-              ListTile(
-                title: const Text('Most Worn'),
-                trailing: controller.sortType.value == 'most_worn'
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () {
-                  controller.setSortType('most_worn');
-                  Get.back();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showSearchDialog() {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Search Closet'),
-        content: TextField(
-          decoration: const InputDecoration(
-            hintText: 'Search by name or brand...',
-          ),
-          onChanged: (value) {
-            controller.searchQuery.value = value;
-          },
-        ),
-        actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Done')),
-        ],
-      ),
-    );
-  }
-
-  void _showItemOptions(dynamic item) {
-    final tokens = AppUiTokens.of(context);
-
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-          border: Border.all(color: tokens.cardBorderColor),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  item.isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: item.isFavorite ? Colors.red : null,
-                ),
-                title: Text(
-                  item.isFavorite
-                      ? 'Remove from Favorites'
-                      : 'Add to Favorites',
-                ),
-                onTap: () {
-                  Get.back();
-                  controller.toggleFavorite(item.id);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Edit'),
-                onTap: () {
-                  Get.back();
-                  Get.toNamed('/wardrobe/${item.id}/edit');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: const Text('Delete'),
-                onTap: () {
-                  Get.back();
-                  _showDeleteConfirmation(itemId: item.id);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteConfirmation({String? itemId}) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Delete Items?'),
-        content: Text(
-          itemId == null
-              ? 'Delete ${controller.selectedCount} items from your closet?'
-              : 'Delete this item from your closet?',
-        ),
-        actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              Get.back();
-              if (itemId == null) {
-                controller.batchDeleteSelected();
-              } else {
-                controller.deleteItem(itemId);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _getCategoryIcon(Category category) {
-    switch (category) {
-      case Category.tops:
-        return Icons.checkroom;
-      case Category.bottoms:
-        return Icons.work;
-      case Category.shoes:
-        return Icons.hiking;
-      case Category.accessories:
-        return Icons.shopping_bag;
-      case Category.outerwear:
-        return Icons.dry_cleaning;
-      case Category.swimwear:
-        return Icons.water_drop;
-      case Category.activewear:
-        return Icons.directions_run;
-      case Category.other:
-        return Icons.help;
     }
+    return AppImage(
+      imageUrl: images.first.url,
+      fit: BoxFit.contain,
+      backgroundColor: tokens.stock.sunk,
+      enableZoom: false,
+      memCacheWidth: 360,
+      storagePath: images.first.storagePath,
+      remintUrl: ref.read(itemRepositoryProvider).remintImageUrl,
+      semanticLabel: item.name,
+    );
+  }
+}
+
+/// Category and use-case filters. Owns its text controller, so it is
+/// disposed with the sheet.
+class _FilterSheet extends ConsumerStatefulWidget {
+  const _FilterSheet();
+
+  @override
+  ConsumerState<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends ConsumerState<_FilterSheet> {
+  final _customUseCase = TextEditingController();
+
+  @override
+  void dispose() {
+    _customUseCase.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filters = ref.watch(wardrobeFiltersProvider);
+    final notifier = ref.read(wardrobeFiltersProvider.notifier);
+    final text = Theme.of(context).textTheme;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppConstants.spacing20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Filter', style: text.headlineSmall),
+              const SizedBox(height: AppConstants.spacing16),
+              Text('Category', style: text.titleSmall),
+              const SizedBox(height: AppConstants.spacing8),
+              Wrap(
+                spacing: AppConstants.spacing8,
+                runSpacing: AppConstants.spacing8,
+                children: [
+                  for (final c in Category.values)
+                    FilterChip(
+                      label: Text(c.displayName),
+                      selected: filters.categories.contains(c),
+                      onSelected: (_) => notifier.toggleCategory(c),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              Text('Use case', style: text.titleSmall),
+              const SizedBox(height: AppConstants.spacing8),
+              Wrap(
+                spacing: AppConstants.spacing8,
+                runSpacing: AppConstants.spacing8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Any'),
+                    selected: filters.occasion.isEmpty,
+                    onSelected: (_) => notifier.setOccasion(''),
+                  ),
+                  for (final useCase in UseCases.defaults)
+                    ChoiceChip(
+                      label: Text(UseCases.displayLabel(useCase)),
+                      selected: filters.occasion == useCase,
+                      onSelected: (_) => notifier.setOccasion(useCase),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacing12),
+              TextField(
+                controller: _customUseCase,
+                textInputAction: TextInputAction.done,
+                onSubmitted: notifier.setOccasion,
+                decoration: InputDecoration(
+                  labelText: 'Other use case',
+                  hintText: 'For example, brunch',
+                  suffixIcon: IconButton(
+                    tooltip: 'Use this',
+                    icon: const Icon(Icons.check_rounded),
+                    onPressed: () => notifier.setOccasion(_customUseCase.text),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      notifier.clear();
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Clear all'),
+                  ),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

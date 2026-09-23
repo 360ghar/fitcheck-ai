@@ -1,787 +1,409 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../controllers/outfit_list_controller.dart';
+import '../../wardrobe/models/item_model.dart';
+import '../../wardrobe/widgets/garment_glyph.dart';
 import '../models/outfit_model.dart';
-import '../repositories/outfit_repository.dart';
-import '../../../core/utils/error_handler.dart';
+import '../providers/outfit_providers.dart';
 
-/// Detail page for a single outfit
-class OutfitDetailPage extends StatefulWidget {
+/// One outfit. Shows the cached list copy at once, then the fresh fetch.
+class OutfitDetailPage extends ConsumerWidget {
+  const OutfitDetailPage({super.key, required this.outfitId});
+
   final String outfitId;
 
-  const OutfitDetailPage({
-    super.key,
-    required this.outfitId,
-  });
-
   @override
-  State<OutfitDetailPage> createState() => _OutfitDetailPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detail = ref.watch(outfitDetailProvider(outfitId));
+    final cached = ref.watch(
+      outfitsProvider.select(
+        (s) => s.value?.items.where((o) => o.id == outfitId).firstOrNull,
+      ),
+    );
+    final outfit = detail.value ?? cached;
+    final refresh = ref.read(outfitDetailProvider(outfitId).notifier).refresh;
+
+    return PaperStockScope(
+      stock: PaperStockId.marigold,
+      child: Scaffold(
+        body: AppPageBackground(
+          child: outfit == null
+              ? (detail.hasError
+                    ? SafeArea(
+                        child: Column(
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: IconButton(
+                                tooltip: 'Back',
+                                icon: const Icon(Icons.arrow_back_rounded),
+                                onPressed: () => Navigator.maybePop(context),
+                              ),
+                            ),
+                            Expanded(
+                              child: AppErrorState(
+                                error: detail.error,
+                                onRetry: refresh,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SafeArea(child: SkeletonDetailPage()))
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(wearHistoryProvider(outfitId));
+                    await refresh();
+                  },
+                  child: _Body(
+                    outfit: outfit,
+                    error: detail.hasError ? detail.error : null,
+                    onRetry: refresh,
+                  ),
+                ),
+        ),
+        bottomNavigationBar: outfit == null ? null : _WornBar(id: outfit.id),
+      ),
+    );
+  }
 }
 
-class _OutfitDetailPageState extends State<OutfitDetailPage> {
-  int _currentImageIndex = 0;
-  late final PageController _pageController;
-  late final OutfitListController _controller;
-  final OutfitRepository _outfitRepository = OutfitRepository();
+class _Body extends ConsumerWidget {
+  const _Body({required this.outfit, required this.onRetry, this.error});
 
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-    _controller = Get.find<OutfitListController>();
-    _loadOutfit();
-  }
+  final OutfitModel outfit;
+  final Object? error;
+  final VoidCallback onRetry;
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadOutfit() async {
-    final outfit =
-        _controller.outfits.firstWhereOrNull((o) => o.id == widget.outfitId);
-    if (outfit == null) {
-      await _controller.fetchOutfitById(widget.outfitId);
-    } else {
-      // Always refresh on open instead of serving the cached model blind:
-      // the API serves short-lived presigned image URLs (1h TTL) minted at
-      // the last list fetch, and the cached model may hold an expired one.
-      // Refreshing replaces the list entry with fresh URLs, so the detail
-      // page — and the card after back navigation — renders current images
-      // instead of a permanently broken tile. Network failures fall back to
-      // the cached model (refreshOutfitById swallows errors).
-      await _controller.refreshOutfitById(widget.outfitId);
+  Future<void> _share(BuildContext context, WidgetRef ref) async {
+    final url = await ref.read(outfitsProvider.notifier).share(outfit.id);
+    if (url == null || !context.mounted) return;
+    final text = 'My outfit "${outfit.name}" on FitCheck AI: $url';
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box == null
+        ? null
+        : box.localToGlobal(Offset.zero) & box.size;
+    final image = outfit.outfitImages?.firstOrNull?.url;
+    if (image != null) {
+      try {
+        // Uses the configured client: auth headers and timeouts apply.
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/outfit_share_${outfit.id}.png');
+        await ApiClient.instance.dio.download(image, file.path);
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: text,
+          sharePositionOrigin: origin,
+        );
+        if (await file.exists()) await file.delete();
+        return;
+      } catch (_) {
+        // Share the link alone when the image download fails.
+      }
     }
+    await Share.share(text, sharePositionOrigin: origin);
   }
 
-  Future<void> _refreshOutfit() async {
-    await _controller.refreshOutfitById(widget.outfitId);
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this outfit?'),
+        content: Text(
+          '"${outfit.name}" is removed. Its pieces stay in your closet.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: PaperTokens.of(context).error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final deleted = await ref.read(outfitsProvider.notifier).delete(outfit.id);
+    if (deleted && context.mounted) Navigator.maybePop(context);
   }
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final busy = ref.watch(
+      outfitsBusyProvider.select((s) => s.contains(outfit.id)),
+    );
+    final images = outfit.outfitImages ?? const [];
+    final pieces = outfit.items ?? const <ItemModel>[];
+    final summary = [
+      if (outfit.style != null) outfit.style!.displayName,
+      if (outfit.season != null) outfit.season!.displayName,
+      '${pieces.isEmpty ? outfit.itemIds.length : pieces.length} pieces',
+      if (outfit.isDraft) 'Draft',
+    ].join(' · ');
 
-    return Scaffold(
-      body: AppPageBackground(
-        child: SafeArea(
-          child: Stack(
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverAppBar(
+          pinned: true,
+          // Grained like the page, so content scrolling under it is hidden
+          // and there is no seam.
+          flexibleSpace: const PaperGrainFill(),
+          actions: [
+            IconButton(
+              tooltip: 'Edit',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () =>
+                  context.push(Routes.outfitEdit(outfit.id)),
+            ),
+            Builder(
+              builder: (buttonContext) => IconButton(
+                tooltip: 'Share',
+                icon: const Icon(Icons.ios_share_rounded),
+                onPressed: () => _share(buttonContext, ref),
+              ),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              onSelected: (value) => value == 'duplicate'
+                  ? ref.read(outfitsProvider.notifier).duplicate(outfit.id)
+                  : _delete(context, ref),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'duplicate',
+                  child: Text('Duplicate'),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(color: PaperTokens.of(context).error),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        if (error != null)
+          SliverToBoxAdapter(
+            child: AppErrorBanner(error: error, onRetry: onRetry),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.all(AppConstants.spacing16),
+          sliver: SliverList.list(
             children: [
-              Obx(() {
-                final outfit = _controller.outfits.firstWhereOrNull((o) => o.id == widget.outfitId);
-
-                // Loading state
-                if (outfit == null && _controller.isFetchingSingle.value) {
-                  return const ShimmerDetailPage();
-                }
-
-                // Error state
-                if (outfit == null && _controller.singleFetchError.isNotEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppConstants.spacing24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.error_outline, size: 64, color: tokens.textMuted),
-                          const SizedBox(height: AppConstants.spacing16),
-                          Text(
-                            'Failed to load outfit',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: tokens.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: AppConstants.spacing8),
-                          Text(
-                            _controller.singleFetchError.value,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: AppConstants.spacing16),
-                          ElevatedButton.icon(
-                            onPressed: () => _controller.fetchOutfitById(widget.outfitId),
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                // Not found state
-                if (outfit == null) {
-                  return Center(
+              PaperSurface(
+                padding: EdgeInsets.zero,
+                clipBehavior: Clip.antiAlias,
+                grain: false,
+                color: tokens.stock.sunk,
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: images.isNotEmpty
+                      ? AppImage(
+                          imageUrl: images.first.url,
+                          fit: BoxFit.contain,
+                          backgroundColor: tokens.stock.sunk,
+                          galleryUrls: [for (final i in images) i.url],
+                          memCacheWidth: 1080,
+                          storagePath: images.first.storagePath,
+                          remintUrl: ref
+                              .read(outfitRepositoryProvider)
+                              .remintImageUrl,
+                          semanticLabel: outfit.name,
+                        )
+                      : _Collage(pieces: pieces),
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.search_off, size: 64, color: tokens.textMuted),
-                        const SizedBox(height: AppConstants.spacing16),
+                        Text(outfit.name, style: text.headlineMedium),
+                        const SizedBox(height: AppConstants.spacing4),
                         Text(
-                          'Outfit not found',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: tokens.textPrimary,
+                          summary,
+                          style: text.bodyMedium?.copyWith(
+                            color: tokens.textSecondary,
                           ),
-                        ),
-                        const SizedBox(height: AppConstants.spacing16),
-                        TextButton.icon(
-                          onPressed: () => Get.back(),
-                          icon: const Icon(Icons.arrow_back),
-                          label: const Text('Go Back'),
                         ),
                       ],
                     ),
-                  );
-                }
-
-                // Success state with RefreshIndicator
-                return RefreshIndicator(
-                  onRefresh: _refreshOutfit,
-                  child: CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      // Image header with carousel
-                      _buildImageHeader(outfit, tokens),
-
-                      // Content
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.all(AppConstants.spacing16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Name and actions
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      outfit.name,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            color: tokens.textPrimary,
-                                          ),
-                                    ),
-                                  ),
-                                  // Favorite button
-                                  Obx(() => _controller.isFavoriting(outfit.id)
-                                      ? const SizedBox(
-                                          width: 28,
-                                          height: 28,
-                                          child: Padding(
-                                            padding: EdgeInsets.all(4),
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          ),
-                                        )
-                                      : IconButton(
-                                          tooltip: outfit.isFavorite
-                                              ? 'Remove from favorites'
-                                              : 'Add to favorites',
-                                          onPressed: () => _controller.toggleFavorite(outfit.id),
-                                          icon: Icon(
-                                            outfit.isFavorite ? Icons.favorite : Icons.favorite_border,
-                                            color: outfit.isFavorite ? Colors.red : null,
-                                            size: 28,
-                                          ),
-                                        ),
-                                  ),
-                                  // More options
-                                  PopupMenuButton<String>(
-                                    onSelected: (value) {
-                                      switch (value) {
-                                        case 'edit':
-                                          Get.toNamed(Routes.outfitEdit.replaceFirst(':id', outfit.id));
-                                          break;
-                                        case 'share':
-                                          _shareOutfit(outfit);
-                                          break;
-                                        case 'duplicate':
-                                          _controller.duplicateOutfit(outfit.id);
-                                          break;
-                                        case 'delete':
-                                          _showDeleteDialog(outfit);
-                                          break;
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.edit),
-                                            SizedBox(width: AppConstants.spacing8),
-                                            Text('Edit'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'share',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.share),
-                                            SizedBox(width: AppConstants.spacing8),
-                                            Text('Share'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'duplicate',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.copy),
-                                            SizedBox(width: AppConstants.spacing8),
-                                            Text('Duplicate'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'delete',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.delete, color: Colors.red),
-                                            SizedBox(width: AppConstants.spacing8),
-                                            Text('Delete', style: TextStyle(color: Colors.red)),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-
-                              if (outfit.description != null) ...[
-                                const SizedBox(height: AppConstants.spacing8),
-                                Text(
-                                  outfit.description!,
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: tokens.textMuted,
-                                      ),
-                                ),
-                              ],
-
-                              const SizedBox(height: AppConstants.spacing16),
-
-                              // Tags row
-                              Wrap(
-                                spacing: AppConstants.spacing8,
-                                runSpacing: AppConstants.spacing8,
-                                children: [
-                                  if (outfit.style != null)
-                                    _buildChip(context, outfit.style!.displayName, tokens),
-                                  if (outfit.season != null)
-                                    _buildChip(context, outfit.season!.displayName, tokens),
-                                  if (outfit.occasion != null)
-                                    _buildChip(context, outfit.occasion!, tokens),
-                                ],
-                              ),
-
-                              const SizedBox(height: AppConstants.spacing24),
-
-                              // Items section
-                              _buildItemsSection(context, outfit, tokens),
-
-                              const SizedBox(height: AppConstants.spacing24),
-
-                              // Stats section
-                              _buildStatsSection(context, outfit, tokens),
-
-                              const SizedBox(height: AppConstants.spacing24),
-
-                              // Wear history section
-                              _buildWearHistorySection(context, outfit, tokens),
-
-                              const SizedBox(height: AppConstants.spacing24),
-
-                              // Information section
-                              _buildInformationSection(context, outfit, tokens),
-
-                              const SizedBox(height: 100), // Space for bottom action bar
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              // Back button
-              Positioned(
-                top: AppConstants.spacing8,
-                left: AppConstants.spacing8,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: tokens.cardColor.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Get.back(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: _buildBottomActionBar(tokens),
-    );
-  }
-
-  Widget _buildImageHeader(OutfitModel outfit, AppUiTokens tokens) {
-    final hasImages = outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty;
-    final imageUrls = hasImages
-        ? outfit.outfitImages!.map((img) => img.url).toList()
-        : <String>[];
-    final hasMultipleImages = imageUrls.length > 1;
-
-    return SliverAppBar(
-      expandedHeight: 350,
-      pinned: false,
-      backgroundColor: Colors.transparent,
-      automaticallyImplyLeading: false,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          color: tokens.isDarkMode
-              ? Colors.black.withValues(alpha: 0.3)
-              : Colors.grey.withValues(alpha: 0.1),
-          child: hasImages
-              ? Stack(
-                  children: [
-                    // Image carousel
-                    PageView.builder(
-                      controller: _pageController,
-                      itemCount: imageUrls.length,
-                      onPageChanged: (index) {
-                        setState(() {
-                          _currentImageIndex = index;
-                        });
-                      },
-                      itemBuilder: (context, index) {
-                        return AppImage(
-                          imageUrl: imageUrls[index],
-                          fit: BoxFit.contain,
-                          backgroundColor: tokens.isDarkMode
-                              ? Colors.black.withValues(alpha: 0.3)
-                              : Colors.grey.withValues(alpha: 0.1),
-                          enableZoom: true,
-                          galleryUrls: imageUrls,
-                          initialGalleryIndex: index,
-                          // Presigned URLs expire after 1h; on a failed load
-                          // re-mint a fresh URL from the durable storage key.
-                          storagePath:
-                              outfit.outfitImages?[index].storagePath,
-                          remintUrl: _outfitRepository.remintImageUrl,
-                        );
-                      },
-                    ),
-                    // Page indicator
-                    if (hasMultipleImages)
-                      Positioned(
-                        bottom: AppConstants.spacing16,
-                        left: 0,
-                        right: 0,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            imageUrls.length,
-                            (index) => Container(
-                              width: 8,
-                              height: 8,
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: index == _currentImageIndex
-                                    ? tokens.brandColor
-                                    : tokens.textMuted.withValues(alpha: 0.5),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                )
-              : Center(
-                  child: Icon(
-                    Icons.checkroom,
-                    size: 64,
-                    color: tokens.textMuted,
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItemsSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens) {
-    final items = outfit.items ?? [];
-    final itemCount = items.isNotEmpty ? items.length : outfit.itemIds.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Items ($itemCount)',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        AppGlassCard(
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 90,
-              mainAxisSpacing: AppConstants.spacing8,
-              crossAxisSpacing: AppConstants.spacing8,
-              childAspectRatio: 0.75,
-            ),
-            itemCount: itemCount,
-            itemBuilder: (context, index) {
-              // Use actual item data if available
-              if (index < items.length) {
-                final item = items[index];
-                final hasImage = item.itemImages != null && item.itemImages!.isNotEmpty;
-                final imageUrl = hasImage ? item.itemImages!.first.url : null;
-
-                return GestureDetector(
-                  onTap: () => Get.toNamed(Routes.wardrobeItemDetail.replaceFirst(':id', item.id)),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: tokens.cardColor.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(AppConstants.radius8),
-                      border: Border.all(color: tokens.cardBorderColor),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: hasImage && imageUrl != null
-                        ? AppImage(
-                            imageUrl: imageUrl,
-                            fit: BoxFit.cover,
-                            enableZoom: false,
-                            // Presigned URLs expire after 1h; on a failed
-                            // load re-mint a fresh URL from the durable
-                            // storage key.
-                            storagePath: item.itemImages?.first.storagePath,
-                            remintUrl: _outfitRepository.remintImageUrl,
-                          )
-                        : Center(
-                            child: Icon(
-                              Icons.checkroom,
-                              color: tokens.textMuted,
-                            ),
-                          ),
-                  ),
-                );
-              }
-
-              // Fallback placeholder for items without data
-              return Container(
-                decoration: BoxDecoration(
-                  color: tokens.cardColor.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(AppConstants.radius8),
-                  border: Border.all(color: tokens.cardBorderColor),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.image,
-                    color: tokens.textMuted,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatsSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Stats',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        AppGlassCard(
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Times Worn',
-                  '${outfit.wornCount}',
-                  Icons.checkroom,
-                  tokens,
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 40,
-                color: tokens.cardBorderColor,
-              ),
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Last Worn',
-                  outfit.lastWornAt != null
-                      ? AppDateUtils.formatRelativeTime(outfit.lastWornAt!)
-                      : 'Never',
-                  Icons.calendar_today,
-                  tokens,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(BuildContext context, String label, String value, IconData icon, AppUiTokens tokens) {
-    return Padding(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        children: [
-          Icon(icon, color: tokens.brandColor, size: 20),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: tokens.textPrimary,
-                ),
-          ),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWearHistorySection(BuildContext context, OutfitModel outfit, AppUiTokens tokens) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Wear History',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-            ),
-            if (outfit.wornCount > 0)
-              Text(
-                '${outfit.wornCount} times',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
-              ),
-          ],
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        Obx(() {
-          final history = _controller.wearHistoryCache[outfit.id] ?? [];
-          final isLoading = _controller.isLoadingWearHistory.value;
-
-          if (outfit.wornCount == 0) {
-            return AppGlassCard(
-              child: Padding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                child: Row(
-                  children: [
-                    Icon(Icons.history, color: tokens.textMuted),
-                    const SizedBox(width: AppConstants.spacing12),
-                    Text(
-                      'No wear history yet',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.textMuted,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          if (isLoading && history.isEmpty) {
-            return const ShimmerCard(height: 120);
-          }
-
-          if (history.isEmpty) {
-            if (_controller.isWearHistoryFailed(outfit.id)) {
-              // A previous fetch failed; do NOT reschedule on rebuild (that
-              // looped forever). Offer a manual retry instead.
-              return AppGlassCard(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppConstants.spacing16),
-                  child: Row(
-                    children: [
-                      Icon(Icons.cloud_off_outlined,
-                          color: tokens.textMuted),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: Text(
-                          'Couldn\'t load wear history.',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: tokens.textMuted,
-                                  ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            _controller.retryWearHistory(outfit.id),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-            // Load history if not cached
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _controller.fetchWearHistory(outfit.id);
-            });
-            return const SizedBox.shrink();
-          }
-
-          return AppGlassCard(
-            child: Column(
-              children: [
-                for (int i = 0; i < history.length && i < 5; i++)
-                  _buildWearHistoryItem(context, history[i], tokens, isLast: i == history.length - 1 || i == 4),
-                if (history.length > 5)
-                  Padding(
-                    padding: const EdgeInsets.all(AppConstants.spacing12),
-                    child: TextButton(
-                      onPressed: () => _showFullWearHistory(context, history, tokens),
-                      child: Text('View all ${history.length} entries'),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildWearHistoryItem(BuildContext context, WearHistoryEntry entry, AppUiTokens tokens, {bool isLast = false}) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppConstants.spacing16,
-            vertical: AppConstants.spacing12,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: tokens.brandColor,
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacing12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      AppDateUtils.formatMonthDayYear(entry.wornAt),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                    Text(
-                      AppDateUtils.formatRelativeTime(entry.wornAt),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.textMuted,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.checkroom, color: tokens.textMuted, size: 16),
-            ],
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, indent: 36, color: tokens.cardBorderColor),
-      ],
-    );
-  }
-
-  void _showFullWearHistory(BuildContext context, List<WearHistoryEntry> history, AppUiTokens tokens) {
-    Get.bottomSheet(
-      Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Full Wear History',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: tokens.textPrimary,
-                        ),
                   ),
                   IconButton(
-                    onPressed: () => Get.back(),
-                    icon: const Icon(Icons.close),
+                    tooltip: outfit.isFavorite
+                        ? 'Remove favourite'
+                        : 'Save to favourites',
+                    onPressed: busy
+                        ? null
+                        : () => ref
+                              .read(outfitsProvider.notifier)
+                              .toggleFavorite(outfit.id),
+                    icon: Icon(
+                      outfit.isFavorite
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: tokens.stock.accent,
+                      size: 28,
+                    ),
                   ),
                 ],
               ),
-            ),
-            Divider(height: 1, color: tokens.cardBorderColor),
-            Expanded(
-              child: ListView.builder(
-                itemCount: history.length,
-                itemBuilder: (context, index) => _buildWearHistoryItem(
-                  context,
-                  history[index],
-                  tokens,
-                  isLast: index == history.length - 1,
+              if (outfit.description?.isNotEmpty ?? false) ...[
+                const SizedBox(height: AppConstants.spacing12),
+                Text(outfit.description!, style: text.bodyLarge),
+              ],
+              if (pieces.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.spacing20),
+                Text('Pieces', style: text.headlineSmall),
+                const SizedBox(height: AppConstants.spacing8),
+                SizedBox(
+                  height: 132,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: pieces.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(width: AppConstants.spacing12),
+                    itemBuilder: (context, i) => _PieceTile(item: pieces[i]),
+                  ),
                 ),
+              ],
+              const SizedBox(height: AppConstants.spacing16),
+              PaperSurface(
+                child: Row(
+                  children: [
+                    _Figure(
+                      value: paperFigure(outfit.wornCount),
+                      label: 'times worn',
+                    ),
+                    _Figure(
+                      value: outfit.lastWornAt == null
+                          ? 'Never'
+                          : AppDateUtils.formatRelativeTime(outfit.lastWornAt!),
+                      label: 'last worn',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing16),
+              _WearHistory(outfit: outfit),
+              const SizedBox(height: AppConstants.spacing24),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Up to four piece photos when the outfit has no image of its own.
+class _Collage extends ConsumerWidget {
+  const _Collage({required this.pieces});
+
+  final List<ItemModel> pieces;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final shown = pieces.take(4).toList();
+    if (shown.isEmpty) {
+      return Center(
+        child: Icon(
+          Icons.style_outlined,
+          size: 64,
+          color: PaperTokens.of(context).textMuted,
+        ),
+      );
+    }
+    return GridView.count(
+      crossAxisCount: shown.length == 1 ? 1 : 2,
+      // Two pieces stand side by side at full height.
+      childAspectRatio: shown.length == 2 ? 0.5 : 1,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(AppConstants.spacing8),
+      mainAxisSpacing: AppConstants.spacing8,
+      crossAxisSpacing: AppConstants.spacing8,
+      children: [for (final p in shown) _PieceImage(item: p)],
+    );
+  }
+}
+
+class _PieceImage extends ConsumerWidget {
+  const _PieceImage({required this.item});
+
+  final ItemModel item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final image = item.itemImages?.firstOrNull;
+    final tokens = PaperTokens.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppConstants.radius8),
+      child: ColoredBox(
+        color: image == null ? tokens.stock.tint : tokens.stock.card,
+        child: image == null
+            ? Center(child: GarmentGlyph(category: item.category, size: 96))
+            : AppImage(
+                imageUrl: image.url,
+                fit: BoxFit.contain,
+                enableZoom: false,
+                memCacheWidth: 360,
+                storagePath: image.storagePath,
+                remintUrl: ref.read(outfitRepositoryProvider).remintImageUrl,
+                semanticLabel: item.name,
+              ),
+      ),
+    );
+  }
+}
+
+class _PieceTile extends StatelessWidget {
+  const _PieceTile({required this.item});
+
+  final ItemModel item;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 100,
+      child: PaperSurface(
+        padding: EdgeInsets.zero,
+        grain: false,
+        clipBehavior: Clip.antiAlias,
+        onTap: () =>
+            context.push(Routes.item(item.id)),
+        semanticLabel: item.name,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _PieceImage(item: item)),
+            Padding(
+              padding: const EdgeInsets.all(AppConstants.spacing6),
+              child: Text(
+                item.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium,
               ),
             ),
           ],
@@ -789,224 +411,149 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
       ),
     );
   }
+}
 
-  Widget _buildInformationSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Information',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        AppGlassCard(
-          child: Column(
-            children: [
-              if (outfit.createdAt != null)
-                _buildDetailRow(context, 'Created', AppDateUtils.formatRelativeTime(outfit.createdAt!), tokens),
-              if (outfit.updatedAt != null)
-                _buildDetailRow(context, 'Updated', AppDateUtils.formatRelativeTime(outfit.updatedAt!), tokens),
-              _buildDetailRow(
-                context,
-                'Status',
-                outfit.isDraft ? 'Draft' : outfit.isPublic ? 'Public' : 'Private',
-                tokens,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+class _Figure extends StatelessWidget {
+  const _Figure({required this.value, required this.label});
 
-  Widget _buildDetailRow(BuildContext context, String label, String value, AppUiTokens tokens) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacing16,
-        vertical: AppConstants.spacing12,
-      ),
-      child: Row(
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textMuted,
-                  ),
-            ),
+          Text(
+            value,
+            style: text.displaySmall?.copyWith(fontSize: 28),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
+          Text(
+            label,
+            style: text.bodySmall?.copyWith(
+              color: PaperTokens.of(context).textSecondary,
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildBottomActionBar(AppUiTokens tokens) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
+class _WearHistory extends ConsumerWidget {
+  const _WearHistory({required this.outfit});
+
+  final OutfitModel outfit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final Widget body;
+    if (outfit.wornCount == 0) {
+      body = Text(
+        'Wear it once and the dates show up here.',
+        style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+      );
+    } else {
+      final history = ref.watch(wearHistoryProvider(outfit.id));
+      body = switch (history) {
+        AsyncValue(:final value?) => Column(
+          children: [
+            for (final entry in value.take(8))
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppConstants.spacing6,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.event_available_outlined,
+                      size: 18,
+                      color: tokens.stock.accent,
+                    ),
+                    const SizedBox(width: AppConstants.spacing12),
+                    Expanded(
+                      child: Text(
+                        AppDateUtils.formatMonthDayYear(entry.wornAt.toLocal()),
+                        style: text.bodyMedium,
+                      ),
+                    ),
+                    if (entry.notes?.isNotEmpty ?? false)
+                      Flexible(
+                        child: Text(
+                          entry.notes!,
+                          style: text.bodySmall?.copyWith(
+                            color: tokens.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        AsyncValue(hasError: true) => Row(
+          children: [
+            Expanded(
+              child: Text(
+                "Couldn't load the dates.",
+                style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+            ),
+            TextButton(
+              onPressed: () => ref.invalidate(wearHistoryProvider(outfit.id)),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+        _ => const SkeletonListLoaderBox(itemCount: 2, hasLeading: false),
+      };
+    }
+    return PaperSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Worn on', style: text.headlineSmall),
+          const SizedBox(height: AppConstants.spacing8),
+          body,
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Obx(() => ElevatedButton.icon(
-          onPressed: _controller.isMarkingWorn(widget.outfitId)
+    );
+  }
+}
+
+class _WornBar extends ConsumerWidget {
+  const _WornBar({required this.id});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final busy = ref.watch(outfitsBusyProvider.select((s) => s.contains(id)));
+    return PaperActionBar(
+      child: SizedBox(
+        height: 52,
+        child: ElevatedButton.icon(
+          onPressed: busy
               ? null
-              : () => _controller.markAsWorn(widget.outfitId),
-          icon: _controller.isMarkingWorn(widget.outfitId)
+              : () => ref.read(outfitsProvider.notifier).markAsWorn(id),
+          icon: busy
               ? const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(Icons.checkroom),
-          label: Text(_controller.isMarkingWorn(widget.outfitId) ? 'Marking...' : 'Mark as Worn'),
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-          ),
-        )),
+              : const Icon(Icons.today_outlined),
+          label: const Text('Wore it today'),
+        ),
       ),
     );
   }
-
-  Widget _buildChip(BuildContext context, String label, AppUiTokens tokens) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacing12,
-        vertical: AppConstants.spacing6,
-      ),
-      decoration: BoxDecoration(
-        color: tokens.brandColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(color: tokens.brandColor.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: tokens.brandColor,
-              fontWeight: FontWeight.w500,
-            ),
-      ),
-    );
-  }
-
-  void _shareOutfit(OutfitModel outfit) async {
-    // Show loading dialog
-    Get.dialog(
-      const Center(child: CircularProgressIndicator()),
-      barrierDismissible: false,
-    );
-
-    try {
-      // Get share URL from API
-      final repository = OutfitRepository();
-      final shareUrl = await repository.shareOutfit(outfit.id);
-
-      // Prepare share text
-      final shareText = 'Check out my outfit "${outfit.name}" on FitCheck AI!\n\n$shareUrl';
-
-      // Check if outfit has images
-      final hasImages = outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty;
-
-      if (hasImages) {
-        final imageUrl = outfit.outfitImages!.first.url;
-
-        try {
-          // Download image to temp file using the configured ApiClient so the
-          // request inherits auth interceptors and timeout settings instead of a
-          // bare Dio() with no timeout and no auth token.
-          final tempDir = await getTemporaryDirectory();
-          final tempFile = File('${tempDir.path}/outfit_share_${outfit.id}.png');
-
-          await ApiClient.instance.dio.download(imageUrl, tempFile.path);
-
-          // Close loading dialog
-          Get.back();
-
-          // Share with image
-          await Share.shareXFiles(
-            [XFile(tempFile.path)],
-            text: shareText,
-            subject: 'Check out my outfit!',
-          );
-
-          // Clean up temp file
-          if (await tempFile.exists()) {
-            await tempFile.delete();
-          }
-        } catch (e) {
-          // Fallback to text-only if image download fails
-          Get.back();
-          await Share.share(shareText, subject: 'Check out my outfit!');
-        }
-      } else {
-        // No image, share text only
-        Get.back();
-        await Share.share(shareText, subject: 'Check out my outfit!');
-      }
-    } catch (e) {
-      Get.back();
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
-    }
-  }
-
-  void _showDeleteDialog(OutfitModel outfit) {
-    final errorColor = Theme.of(Get.context ?? context).colorScheme.error;
-    Get.dialog(
-      Obx(() => AlertDialog(
-        title: const Text('Delete Outfit?'),
-        content: Text('Are you sure you want to delete "${outfit.name}"? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: _controller.isDeleting(outfit.id) ? null : () => Get.back(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: _controller.isDeleting(outfit.id) ? null : () async {
-              try {
-                await _controller.deleteOutfit(outfit.id);
-                Get.back();
-                Get.back();
-              } catch (e) {
-                // Error already shown by controller
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: errorColor,
-            ),
-            child: _controller.isDeleting(outfit.id)
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Delete'),
-          ),
-        ],
-      )),
-      barrierDismissible: false,
-    );
-  }
-
 }

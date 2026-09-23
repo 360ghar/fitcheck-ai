@@ -142,7 +142,7 @@ class ItemRepository {
         return existing;
       }
       await uploadImages(created.id, [image]);
-      return getItem(created.id);
+      return await getItem(created.id);
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -207,7 +207,7 @@ class ItemRepository {
                 data: {'image': itemImageBase64s['$index']},
               );
               // Return refreshed item with image
-              return getItem(item.id);
+              return await getItem(item.id);
             } catch (e) {
               // Return item even if image upload failed
               return item;
@@ -229,7 +229,7 @@ class ItemRepository {
   Future<ItemModel> toggleFavorite(String itemId) async {
     try {
       await _apiClient.post('${ApiConstants.items}/$itemId/favorite');
-      return getItem(itemId);
+      return await getItem(itemId);
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -239,7 +239,7 @@ class ItemRepository {
   Future<ItemModel> markAsWorn(String itemId) async {
     try {
       await _apiClient.post('${ApiConstants.items}/$itemId/wear');
-      return getItem(itemId);
+      return await getItem(itemId);
     } on DioException catch (e) {
       throw handleDioException(e);
     }

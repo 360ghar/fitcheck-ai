@@ -1,21 +1,23 @@
-import 'package:fitcheck_ai/app/routes/app_routes.dart';
 import 'package:fitcheck_ai/core/services/persistence_service.dart';
 import 'package:fitcheck_ai/core/services/referral_redemption_service.dart';
-import 'package:fitcheck_ai/features/auth/controllers/auth_controller.dart';
+import 'package:fitcheck_ai/features/auth/providers/auth_provider.dart';
+import 'package:fitcheck_ai/core/providers.dart' show noRetry;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitcheck_ai/features/auth/models/user_model.dart';
 import 'package:fitcheck_ai/features/auth/services/auth_service.dart';
 import 'package:fitcheck_ai/features/auth/services/referral_service.dart';
 import 'package:fitcheck_ai/features/auth/services/user_initialization_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
+import 'package:fitcheck_ai/core/services/notification_service.dart'
+    show scaffoldMessengerKey;
 import 'package:supabase_flutter/supabase_flutter.dart'
     show AuthResponse, Session, User;
 
 /// Referral durability across signup failure points (RCA 2026-08-04):
 ///
 /// A referral code must never be silently lost when the signup-time
-/// redemption cannot run. AuthController.register now stashes the code via
+/// redemption cannot run. AuthNotifier.register now stashes the code via
 /// ReferralService.setPendingReferralCode when (a) the redemption fails
 /// transiently (missing backend RPC, dead connection) or (b) email
 /// confirmation is required (the redemption cannot run until the account is
@@ -112,25 +114,26 @@ Session _session() => Session(
 void main() {
   late _FakeAuthService authService;
   late _FakeReferralService referralService;
+  late ProviderContainer container;
 
   setUp(() {
-    Get.reset();
     authService = _FakeAuthService();
     referralService = _FakeReferralService();
-    Get.put<AuthService>(authService);
-    Get.put<ReferralService>(referralService);
+    container = ProviderContainer(
+      retry: noRetry,
+      overrides: [
+        authServiceProvider.overrideWithValue(authService),
+        referralServiceProvider.overrideWithValue(referralService),
+      ],
+    );
   });
+  tearDown(() => container.dispose());
 
   Future<void> pumpApp(WidgetTester tester) async {
     await tester.pumpWidget(
-      GetMaterialApp(
+      MaterialApp(
+        scaffoldMessengerKey: scaffoldMessengerKey,
         home: const Scaffold(body: SizedBox()),
-        getPages: [
-          GetPage(
-            name: Routes.home,
-            page: () => const Scaffold(body: SizedBox()),
-          ),
-        ],
       ),
     );
   }
@@ -145,7 +148,7 @@ void main() {
     );
     referralService.redeemResult = false;
 
-    final controller = AuthController();
+    final controller = container.read(authProvider.notifier);
     await controller.register(
       'referral@example.com',
       'aaaaaaaa',
@@ -168,7 +171,7 @@ void main() {
     // stashed for the post-confirmation login.
     authService.registerResponse = AuthResponse(user: _user(), session: null);
 
-    final controller = AuthController();
+    final controller = container.read(authProvider.notifier);
     await controller.register(
       'confirm@example.com',
       'aaaaaaaa',
@@ -188,7 +191,7 @@ void main() {
     );
     referralService.redeemResult = true;
 
-    final controller = AuthController();
+    final controller = container.read(authProvider.notifier);
     await controller.register(
       'ok@example.com',
       'aaaaaaaa',
@@ -210,7 +213,7 @@ void main() {
       );
       await referralService.setPendingReferralCode('FIT-ABC123');
 
-      final controller = AuthController();
+      final controller = container.read(authProvider.notifier);
       await controller.login('confirmed@example.com', 'aaaaaaaa');
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();

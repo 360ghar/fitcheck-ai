@@ -1,515 +1,485 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/widgets/app_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/gamification_model.dart';
-import '../controllers/gamification_controller.dart';
+import '../providers/gamification_providers.dart';
 
-/// Gamification Page
-/// Shows streaks, achievements, and leaderboard
-class GamificationPage extends StatelessWidget {
+/// Streak, achievements and the leaderboard.
+class GamificationPage extends ConsumerWidget {
   const GamificationPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final GamificationController controller = Get.find<GamificationController>();
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(Get.currentRoute);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final streak = ref.watch(streakProvider);
+    final achievements = ref.watch(achievementsProvider);
+    final leaderboard = ref.watch(leaderboardProvider);
 
-    return Scaffold(
-      body: AppPageBackground(
-        child: SafeArea(
+    Future<void> refreshAll() => Future.wait([
+      ref.refresh(streakProvider.future),
+      ref.refresh(achievementsProvider.future),
+      ref.refresh(leaderboardProvider.future),
+    ]).then<void>((_) {}, onError: (_) {});
+
+    final sections = [streak, achievements, leaderboard];
+    final nothingLoaded = sections.every(
+      (s) => !s.hasValue && s.hasError && !s.isLoading,
+    );
+
+    return PaperStockScope(
+      stock: PaperStockId.marigold,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Rewards')),
+        body: AppPageBackground(
           child: RefreshIndicator(
-            onRefresh: () => controller.refreshAll(),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            onRefresh: refreshAll,
+            child: nothingLoaded
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      Text(
-                        'Gamification',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: tokens.textPrimary,
-                            ),
+                      AppErrorState(error: streak.error, onRetry: refreshAll),
+                    ],
+                  )
+                : ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      AppConstants.spacing16,
+                      AppConstants.spacing8,
+                      AppConstants.spacing16,
+                      AppConstants.spacing32 +
+                          MediaQuery.paddingOf(context).bottom,
+                    ),
+                    children: [
+                      _StreakCard(
+                        streak: streak,
+                        onRetry: () => ref.invalidate(streakProvider),
                       ),
-                      IconButton(
-                        onPressed: () => controller.refreshAll(),
-                        icon: const Icon(Icons.refresh),
+                      const SizedBox(height: AppConstants.spacing32),
+                      _Achievements(
+                        achievements: achievements,
+                        onRetry: () => ref.invalidate(achievementsProvider),
+                      ),
+                      const SizedBox(height: AppConstants.spacing32),
+                      _Leaderboard(
+                        leaderboard: leaderboard,
+                        onRetry: () => ref.invalidate(leaderboardProvider),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  Obx(() {
-                    if (!controller.hasError) {
-                      return const SizedBox.shrink();
-                    }
-                    return Column(
-                      children: [
-                        AppGlassCard(
-                          padding: const EdgeInsets.all(AppConstants.spacing16),
-                          child: Row(
-                            children: [
-                              Icon(Icons.error_outline, color: tokens.textMuted),
-                              const SizedBox(width: AppConstants.spacing12),
-                              Expanded(
-                                child: Text(
-                                  controller.error.value,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: tokens.textPrimary,
-                                      ),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: controller.refreshAll,
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppConstants.spacing24),
-                      ],
-                    );
-                  }),
-
-                  // Streak section
-                  Obx(() => _buildStreakSection(context, controller, tokens)),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  // Achievements section
-                  _buildAchievementsSection(context, controller, tokens),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  // Leaderboard section
-                  _buildLeaderboardSection(context, controller, tokens),
-                ],
-              ),
-            ),
           ),
         ),
       ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
     );
   }
+}
 
-  Widget _buildStreakSection(BuildContext context, GamificationController controller, AppUiTokens tokens) {
-    final streak = controller.streak.value;
-    if (streak == null) {
-      if (controller.isLoading.value) {
-        return const ShimmerCard(height: 140);
-      }
-      return AppGlassCard(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        child: Center(
-          child: Text(
-            'No streak data yet',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: tokens.textMuted,
-                ),
-          ),
-        ),
-      );
+/// A section's banner when its refresh failed, or when it has nothing.
+Widget? _sectionError(AsyncValue<Object?> value, VoidCallback onRetry) =>
+    value.hasError && !value.isLoading
+    ? AppErrorBanner(error: value.error, onRetry: onRetry)
+    : null;
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.title, {this.trailing});
+
+  final String title;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing4,
+        0,
+        AppConstants.spacing4,
+        AppConstants.spacing12,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(child: Text(title, style: text.headlineSmall)),
+          if (trailing != null)
+            Text(
+              trailing!,
+              style: text.bodyMedium?.copyWith(
+                color: PaperTokens.of(context).textSecondary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreakCard extends StatelessWidget {
+  const _StreakCard({required this.streak, required this.onRetry});
+
+  final AsyncValue<StreakModel> streak;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = streak.value;
+    final error = _sectionError(streak, onRetry);
+    if (value == null) {
+      return error ??
+          const SkeletonPulse(
+            child: SkeletonBox(
+              height: 148,
+              borderRadius: AppConstants.radius12,
+            ),
+          );
     }
 
-    final currentStreak = streak.currentStreak;
-    final longestStreak = streak.longestStreak;
-    // Null means the backend has no further milestone (streak past max):
-    // hide the progress block instead of fabricating a default target.
-    final nextMilestone = streak.nextMilestone;
-    final progress = nextMilestone == null
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final next = value.nextMilestone;
+    final progress = next == null || next <= 0
         ? null
-        : (currentStreak / nextMilestone).clamp(0.0, 1.0).toDouble();
+        : (value.currentStreak / next).clamp(0.0, 1.0);
+    final daysLeft = next == null ? 0 : next - value.currentStreak;
 
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing20),
-      child: Column(
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ?error,
+        PaperSurface(
+          padding: const EdgeInsets.all(AppConstants.spacing20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.orange.shade400,
-                      Colors.orange.shade600,
-                    ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${value.currentStreak}',
+                    style: text.displayMedium?.copyWith(height: 1),
                   ),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    '$currentStreak',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: AppConstants.spacing4,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'day streak',
+                            style: text.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Best ${value.longestStreak} days',
+                            style: text.bodyMedium?.copyWith(
+                              color: tokens.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(width: AppConstants.spacing16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Current Streak',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing4),
-                    Text(
-                      'Longest: $longestStreak days',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.textMuted,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.local_fire_department,
-                color: Colors.orange.shade600,
-                size: 32,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppConstants.spacing16),
-
-          // Progress to next milestone. Hidden entirely when the backend
-          // reports none (streak past the max milestone) — a fabricated
-          // default target used to mislabel long streaks.
-          if (nextMilestone != null && progress != null)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Progress to $nextMilestone days',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.textMuted,
-                          ),
-                    ),
-                    Text(
-                      '${(progress * 100).toInt()}%',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.brandColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
+              // No milestone left (past the last one): no bar, not a guess.
+              if (progress != null) ...[
+                const SizedBox(height: AppConstants.spacing20),
+                Text(
+                  daysLeft <= 0
+                      ? 'You reached $next days'
+                      : '$daysLeft more ${daysLeft == 1 ? 'day' : 'days'} '
+                            'to $next',
+                  style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
                 ),
                 const SizedBox(height: AppConstants.spacing8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppConstants.radius8),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: tokens.cardColor.withValues(alpha: 0.3),
-                    valueColor: AlwaysStoppedAnimation<Color>(tokens.brandColor),
-                    minHeight: 8,
-                  ),
+                  child: LinearProgressIndicator(value: progress, minHeight: 8),
                 ),
               ],
-            ),
-        ],
-      ),
+            ],
+          ),
+        ),
+      ],
     );
   }
+}
 
-  Widget _buildAchievementsSection(BuildContext context, GamificationController controller, AppUiTokens tokens) {
-    final achievements = controller.achievements;
+class _Achievements extends StatelessWidget {
+  const _Achievements({required this.achievements, required this.onRetry});
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Achievements',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-            ),
-            Obx(() => Text(
-                  '${achievements.where((a) => a.isUnlocked).length} / ${achievements.length}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
-                )),
-          ],
-        ),
+  final AsyncValue<List<AchievementModel>> achievements;
+  final VoidCallback onRetry;
 
-        const SizedBox(height: AppConstants.spacing12),
+  @override
+  Widget build(BuildContext context) {
+    final value = achievements.value;
+    final error = _sectionError(achievements, onRetry);
+    final unlocked = value?.where((a) => a.isUnlocked).length ?? 0;
 
-        Obx(() {
-          if (achievements.isEmpty) {
-            if (controller.isLoading.value) {
-              return ShimmerGridLoaderBox(
-                crossAxisCount: 3,
-                itemCount: 6,
-                childAspectRatio: 1,
-              );
-            }
-            return AppGlassCard(
-              padding: const EdgeInsets.all(AppConstants.spacing24),
-              child: Center(
-                child: Text(
-                  'No achievements yet',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
-                ),
-              ),
-            );
-          }
-
-          return GridView.builder(
+    final Widget body;
+    if (value == null) {
+      body =
+          error ??
+          const SkeletonGridLoaderBox(
+            crossAxisCount: 3,
+            itemCount: 6,
+            childAspectRatio: 0.85,
+          );
+    } else if (value.isEmpty) {
+      body = const AppEmptyState(
+        scene: PaperScenes.outfits,
+        title: 'No achievements yet',
+        message: 'Add pieces and plan outfits to earn your first.',
+      );
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ?error,
+          GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               mainAxisSpacing: AppConstants.spacing12,
               crossAxisSpacing: AppConstants.spacing12,
-              childAspectRatio: 1,
+              childAspectRatio: 0.85,
             ),
-            itemCount: achievements.length,
-            itemBuilder: (context, index) {
-              final achievement = achievements[index];
-              return _buildAchievementCard(context, achievement, tokens);
-            },
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildAchievementCard(BuildContext context, AchievementModel achievement, AppUiTokens tokens) {
-    final isUnlocked = achievement.isUnlocked;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isUnlocked ? tokens.brandColor.withValues(alpha: 0.1) : tokens.cardColor.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppConstants.radius12),
-        border: Border.all(
-          color: isUnlocked ? tokens.brandColor : tokens.cardBorderColor,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            isUnlocked ? _getIconForAchievement(achievement.iconName) : Icons.lock,
-            color: isUnlocked ? tokens.brandColor : tokens.textMuted,
-            size: 32,
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            achievement.name,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(
-            '${achievement.progress}/${achievement.target}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                  fontSize: 10,
-                ),
+            itemCount: value.length,
+            itemBuilder: (context, i) => _AchievementTile(value[i]),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLeaderboardSection(BuildContext context, GamificationController controller, AppUiTokens tokens) {
-    final leaderboard = controller.leaderboard;
+      );
+    }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Leaderboard',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+        _SectionTitle(
+          'Achievements',
+          trailing: value == null || value.isEmpty
+              ? null
+              : '$unlocked of ${value.length}',
         ),
-
-        const SizedBox(height: AppConstants.spacing12),
-
-        Obx(() {
-          if (leaderboard.isEmpty) {
-            return AppGlassCard(
-              padding: const EdgeInsets.all(AppConstants.spacing32),
-              child: Center(
-                child: Text(
-                  'No leaderboard data yet',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textMuted,
-                      ),
-                ),
-              ),
-            );
-          }
-
-          return AppGlassCard(
-            child: ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: leaderboard.length > 10 ? 10 : leaderboard.length,
-              separatorBuilder: (context, index) => Divider(
-                color: tokens.cardBorderColor,
-                height: 1,
-              ),
-              itemBuilder: (context, index) {
-                final entry = leaderboard[index];
-                // Backend-computed global rank wins; index+1 is the fallback
-                // for entries missing a rank (ties/ordering drift otherwise
-                // mislabels medals).
-                final rank =
-                    entry.rank > 0 ? entry.rank : index + 1;
-                return _buildLeaderboardItem(context, entry, rank, tokens);
-              },
-            ),
-          );
-        }),
+        body,
       ],
     );
   }
+}
 
-  Widget _buildLeaderboardItem(BuildContext context, LeaderboardEntry entry, int rank, AppUiTokens tokens) {
-    final isTop3 = rank <= 3;
-    final rankColor = isTop3
-        ? [Colors.amber, Colors.grey, Colors.brown][rank - 1]
-        : tokens.textMuted;
+class _AchievementTile extends StatelessWidget {
+  const _AchievementTile(this.achievement);
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(
+  final AchievementModel achievement;
+
+  static IconData _icon(String? name) => switch (name) {
+    'checkroom' => Icons.checkroom_outlined,
+    'star' => Icons.star_outline_rounded,
+    'favorite' => Icons.favorite_outline_rounded,
+    'emoji_events' => Icons.emoji_events_outlined,
+    'local_fire_department' => Icons.local_fire_department_outlined,
+    'calendar_today' => Icons.calendar_today_outlined,
+    'photo_camera' => Icons.photo_camera_outlined,
+    'style' => Icons.style_outlined,
+    _ => Icons.military_tech_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final unlocked = achievement.isUnlocked;
+    return Semantics(
+      label:
+          '${achievement.name}, '
+          '${unlocked ? 'earned' : 'locked, ${achievement.progress} of ${achievement.target}'}',
+      excludeSemantics: true,
+      child: PaperSurface(
+        lift: unlocked ? 1 : 0,
+        color: unlocked ? null : tokens.stock.sunk,
+        grain: unlocked,
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.spacing8,
+          AppConstants.spacing12,
+          AppConstants.spacing8,
+          AppConstants.spacing8,
+        ),
+        child: Column(
+          children: [
+            Icon(
+              unlocked
+                  ? _icon(achievement.iconName)
+                  : Icons.lock_outline_rounded,
+              size: 32,
+              color: unlocked ? tokens.stock.accent : tokens.textMuted,
+            ),
+            const SizedBox(height: AppConstants.spacing8),
+            Expanded(
+              child: Text(
+                achievement.name,
+                style: text.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: unlocked ? tokens.textPrimary : tokens.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              unlocked
+                  ? 'Earned'
+                  : '${achievement.progress} of ${achievement.target}',
+              style: text.labelSmall?.copyWith(color: tokens.textMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Leaderboard extends StatelessWidget {
+  const _Leaderboard({required this.leaderboard, required this.onRetry});
+
+  final AsyncValue<List<LeaderboardEntry>> leaderboard;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = leaderboard.value;
+    final error = _sectionError(leaderboard, onRetry);
+
+    final Widget body;
+    // Loading is checked before empty: an unloaded board is not an empty one.
+    if (value == null) {
+      body =
+          error ??
+          const SkeletonPulse(
+            child: SkeletonBox(
+              height: 220,
+              borderRadius: AppConstants.radius12,
+            ),
+          );
+    } else if (value.isEmpty) {
+      body = const AppEmptyState(
+        scene: PaperScenes.home,
+        title: 'No one on the board yet',
+        message: 'Plan outfits to earn points and show up here.',
+      );
+    } else {
+      final top = value.take(10).toList();
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ?error,
+          PaperSurface(
+            padding: const EdgeInsets.symmetric(
+              vertical: AppConstants.spacing4,
+            ),
+            child: Column(
+              children: [
+                for (final (i, entry) in top.indexed) ...[
+                  if (i > 0)
+                    const Divider(
+                      height: 1,
+                      indent: AppConstants.spacing16,
+                      endIndent: AppConstants.spacing16,
+                    ),
+                  // The server's rank wins; the position is a fallback.
+                  _LeaderRow(
+                    entry: entry,
+                    rank: entry.rank > 0 ? entry.rank : i + 1,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [const _SectionTitle('Leaderboard'), body],
+    );
+  }
+}
+
+class _LeaderRow extends StatelessWidget {
+  const _LeaderRow({required this.entry, required this.rank});
+
+  final LeaderboardEntry entry;
+  final int rank;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final initial = Text(
+      entry.username.isEmpty ? '?' : entry.username[0].toUpperCase(),
+      style: TextStyle(
+        color: tokens.stock.accent,
+        fontWeight: FontWeight.w700,
+        height: 1,
+      ),
+    );
+    final url = entry.avatarUrl;
+    return Padding(
+      padding: const EdgeInsets.symmetric(
         horizontal: AppConstants.spacing16,
         vertical: AppConstants.spacing8,
       ),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: rankColor.withValues(alpha: 0.2),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Text(
-            '$rank',
-            style: TextStyle(
-              color: rankColor,
-              fontWeight: FontWeight.bold,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Text(
+              '$rank',
+              style: text.headlineSmall?.copyWith(fontSize: 20),
+              textAlign: TextAlign.center,
             ),
           ),
-        ),
-      ),
-      title: Row(
-        children: [
+          const SizedBox(width: AppConstants.spacing12),
           CircleAvatar(
-            backgroundColor: tokens.brandColor,
-            radius: 16,
-            // Empty username must not RangeError on [0] (backend defaults
-            // to 'User' today, but the guard is free).
-            child: entry.avatarUrl != null
+            radius: 18,
+            backgroundColor: tokens.stock.tint,
+            child: url != null && url.isNotEmpty
                 ? ClipOval(
                     child: AppNetworkImage(
-                      entry.avatarUrl!,
-                      width: 32,
-                      height: 32,
+                      url,
+                      width: 36,
+                      height: 36,
+                      cacheWidth: 108,
                       fit: BoxFit.cover,
-                      errorWidget: (_, _, _) => Text(
-                        _initialFor(entry.username),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      errorWidget: (_, _, _) => Center(child: initial),
                     ),
                   )
-                : Text(
-                    _initialFor(entry.username),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                : initial,
           ),
           const SizedBox(width: AppConstants.spacing12),
+          Expanded(
+            child: Text(
+              entry.username,
+              style: text.bodyLarge,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: AppConstants.spacing8),
           Text(
-            entry.username,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
+            '${entry.points} pts',
+            style: text.labelLarge?.copyWith(color: tokens.textSecondary),
           ),
         ],
       ),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppConstants.spacing12,
-          vertical: AppConstants.spacing6,
-        ),
-        decoration: BoxDecoration(
-          color: tokens.brandColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-        ),
-        child: Text(
-          '${entry.points} pts',
-          style: TextStyle(
-            color: tokens.brandColor,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
     );
-  }
-
-  /// First character for an avatar initial; '?' when the name is empty.
-  String _initialFor(String username) =>
-      username.isEmpty ? '?' : username[0].toUpperCase();
-
-  IconData _getIconForAchievement(String? iconName) {
-    switch (iconName) {
-      case 'checkroom':
-        return Icons.checkroom;
-      case 'star':
-        return Icons.star;
-      case 'favorite':
-        return Icons.favorite;
-      case 'emoji_events':
-        return Icons.emoji_events;
-      case 'local_fire_department':
-        return Icons.local_fire_department;
-      case 'calendar_today':
-        return Icons.calendar_today;
-      case 'photo_camera':
-        return Icons.photo_camera;
-      case 'style':
-        return Icons.style;
-      default:
-        return Icons.military_tech;
-    }
   }
 }

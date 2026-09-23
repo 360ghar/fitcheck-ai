@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/widgets/app_ui.dart';
 
 /// Auto-renewing subscription disclosure, rendered directly under the plan
 /// cards.
@@ -39,13 +40,13 @@ class SubscriptionDisclosure extends StatelessWidget {
   String get _billingSentence => isApple
       ? 'Payment is charged to your Apple ID at confirmation of purchase.'
       : 'Payment is charged to your Google Play account at confirmation of '
-          'purchase.';
+            'purchase.';
 
   String get _manageSentence => isApple
       ? 'Manage or cancel any time in Settings › your Apple ID › '
-          'Subscriptions.'
+            'Subscriptions.'
       : 'Manage or cancel any time in Google Play › Payments and '
-          'subscriptions.';
+            'subscriptions.';
 
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
@@ -67,17 +68,16 @@ class SubscriptionDisclosure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Deliberately a step more legible than the page's decorative muted text
-    // (alpha 0.6): this is required disclosure a reviewer has to be able to
-    // read, not a caption.
-    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.75);
-    final bodyStyle = theme.textTheme.bodySmall?.copyWith(
-      color: muted,
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    // textSecondary rather than the muted caption tone: this is required
+    // disclosure a reviewer has to be able to read. Both pass WCAG AA.
+    final bodyStyle = text.bodySmall?.copyWith(
+      color: tokens.textSecondary,
       height: 1.45,
     );
-    final linkStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.primary,
+    final linkStyle = text.bodySmall?.copyWith(
+      color: tokens.stock.accent,
       fontWeight: FontWeight.w600,
     );
 
@@ -94,7 +94,7 @@ class SubscriptionDisclosure extends StatelessWidget {
         ),
         const SizedBox(height: AppConstants.spacing4),
         // Both links must be reachable from the purchase screen itself. Zero
-        // horizontal padding so "Terms of Use" starts on the same left edge as
+        // horizontal padding so "Terms of use" starts on the same left edge as
         // the paragraph above it; minimumSize still holds the 44pt tap target,
         // and the separator carries the gap between them.
         // Spacing rather than a separator glyph: on a narrow screen the two
@@ -110,7 +110,7 @@ class SubscriptionDisclosure extends StatelessWidget {
               child: TextButton(
                 onPressed: () => _openUrl(AppConstants.termsOfServiceUrl),
                 style: _linkButtonStyle(linkStyle),
-                child: const Text('Terms of Use'),
+                child: const Text('Terms of use'),
               ),
             ),
             Semantics(
@@ -119,7 +119,7 @@ class SubscriptionDisclosure extends StatelessWidget {
               child: TextButton(
                 onPressed: () => _openUrl(AppConstants.privacyPolicyUrl),
                 style: _linkButtonStyle(linkStyle),
-                child: const Text('Privacy Policy'),
+                child: const Text('Privacy policy'),
               ),
             ),
           ],

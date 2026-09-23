@@ -1,306 +1,195 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as domain;
-import '../controllers/wardrobe_controller.dart';
 import '../models/item_model.dart';
-import '../repositories/item_repository.dart';
-import '../../../core/utils/error_handler.dart';
+import '../providers/wardrobe_providers.dart';
 
-/// Edit page for a single wardrobe item
-class ItemEditPage extends StatefulWidget {
-  final String itemId;
-
+/// Edits one closet piece. Loads the item first when it is not cached (deep
+/// link, or edit tapped before the list loaded).
+class ItemEditPage extends ConsumerWidget {
   const ItemEditPage({super.key, required this.itemId});
 
+  final String itemId;
+
   @override
-  State<ItemEditPage> createState() => _ItemEditPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detail = ref.watch(itemDetailProvider(itemId));
+    final cached = ref.read(wardrobeProvider.notifier).cached(itemId);
+    final item = detail.value ?? cached;
+
+    return PaperStockScope(
+      stock: PaperStockId.moss,
+      child: item != null
+          ? _EditForm(item: item)
+          : Scaffold(
+              appBar: AppBar(title: const Text('Edit piece')),
+              body: AppPageBackground(
+                child: detail.hasError
+                    ? AppErrorState(
+                        error: detail.error,
+                        onRetry: ref
+                            .read(itemDetailProvider(itemId).notifier)
+                            .refresh,
+                      )
+                    : const SkeletonListLoaderBox(itemCount: 6),
+              ),
+            ),
+    );
+  }
 }
 
-class _ItemEditPageState extends State<ItemEditPage> {
-  final _formKey = GlobalKey<FormState>();
-  final WardrobeController _wardrobeController = Get.find<WardrobeController>();
-  final ItemRepository _itemRepository = ItemRepository();
+class _EditForm extends ConsumerStatefulWidget {
+  const _EditForm({required this.item});
 
-  // Text controllers
-  late TextEditingController _nameController;
-  late TextEditingController _descriptionController;
-  late TextEditingController _brandController;
-  late TextEditingController _sizeController;
-  late TextEditingController _materialController;
-  late TextEditingController _patternController;
-  late TextEditingController _priceController;
-  late TextEditingController _locationController;
-  late TextEditingController _customUseCaseController;
-
-  // Reactive state
-  final Rx<Category> selectedCategory = Category.tops.obs;
-  final Rx<domain.Condition> selectedCondition = domain.Condition.clean.obs;
-  final RxSet<String> selectedColors = <String>{}.obs;
-  final RxSet<String> selectedTags = <String>{}.obs;
-  final RxSet<String> selectedUseCases = <String>{}.obs;
-  final RxBool isSaving = false.obs;
-  final RxList<File> newImages = <File>[].obs;
-  final RxSet<String> imagesToDelete = <String>{}.obs;
-
-  final ImagePicker _imagePicker = ImagePicker();
-
-  // Common color options
-  static const List<String> commonColors = [
-    'Black',
-    'White',
-    'Gray',
-    'Red',
-    'Blue',
-    'Green',
-    'Yellow',
-    'Pink',
-    'Purple',
-    'Orange',
-    'Brown',
-    'Beige',
-    'Navy',
-    'Cream',
-  ];
-
-  ItemModel? _item;
-  bool _loadFailed = false;
+  final ItemModel item;
 
   @override
-  void initState() {
-    super.initState();
-    _item = _wardrobeController.items.firstWhereOrNull(
-      (i) => i.id == widget.itemId,
-    );
-    if (_item != null) {
-      _initializeControllers(_item!);
-    } else {
-      // A10b-04: a deep link or an edit tapped while the wardrobe list was
-      // still loading previously stranded the page on an infinite spinner
-      // (no fetch, no error, no retry). Fetch the single item instead.
-      _loadItem();
+  ConsumerState<_EditForm> createState() => _EditFormState();
+}
+
+class _EditFormState extends ConsumerState<_EditForm> {
+  static const _commonColors = [
+    'Black', 'White', 'Gray', 'Red', 'Blue', 'Green', 'Yellow', //
+    'Pink', 'Purple', 'Orange', 'Brown', 'Beige', 'Navy', 'Cream',
+  ];
+
+  final _formKey = GlobalKey<FormState>();
+  final _picker = ImagePicker();
+  late final _name = TextEditingController(text: widget.item.name);
+  late final _description = TextEditingController(
+    text: widget.item.description ?? '',
+  );
+  late final _brand = TextEditingController(text: widget.item.brand ?? '');
+  late final _size = TextEditingController(text: widget.item.size ?? '');
+  late final _material = TextEditingController(
+    text: widget.item.material ?? '',
+  );
+  late final _pattern = TextEditingController(text: widget.item.pattern ?? '');
+  late final _price = TextEditingController(
+    text: widget.item.price?.toString() ?? '',
+  );
+  late final _location = TextEditingController(
+    text: widget.item.location ?? '',
+  );
+  final _customUseCase = TextEditingController();
+
+  late Category _category = widget.item.category;
+  late domain.Condition _condition = widget.item.condition;
+  late final Set<String> _colors = {...?widget.item.colors};
+  late final Set<String> _useCases = UseCases.normalizeList(
+    widget.item.occasionTags,
+  ).toSet();
+  final List<File> _newImages = [];
+  final Set<String> _imagesToDelete = {};
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    for (final c in [
+      _name, _description, _brand, _size, _material, _pattern, _price, //
+      _location, _customUseCase,
+    ]) {
+      c.dispose();
     }
+    super.dispose();
   }
 
-  Future<void> _loadItem() async {
-    final item = await _wardrobeController.fetchItemById(widget.itemId);
-    if (!mounted) return;
-    if (item != null) {
-      setState(() {
-        _item = item;
-        _loadFailed = false;
-      });
-      _initializeControllers(item);
-    } else {
-      setState(() => _loadFailed = true);
-    }
+  String? _text(TextEditingController c) {
+    final value = c.text.trim();
+    return value.isEmpty ? null : value;
   }
 
-  void _initializeControllers(ItemModel item) {
-    _nameController = TextEditingController(text: item.name);
-    _descriptionController = TextEditingController(
-      text: item.description ?? '',
-    );
-    _brandController = TextEditingController(text: item.brand ?? '');
-    _sizeController = TextEditingController(text: item.size ?? '');
-    _materialController = TextEditingController(text: item.material ?? '');
-    _patternController = TextEditingController(text: item.pattern ?? '');
-    _priceController = TextEditingController(
-      text: item.price?.toString() ?? '',
-    );
-    _locationController = TextEditingController(text: item.location ?? '');
-    _customUseCaseController = TextEditingController();
-
-    selectedCategory.value = item.category;
-    selectedCondition.value = item.condition;
-    if (item.colors != null) selectedColors.addAll(item.colors!);
-    if (item.tags != null) selectedTags.addAll(item.tags!);
-    if (item.occasionTags != null) {
-      selectedUseCases.addAll(UseCases.normalizeList(item.occasionTags));
-    }
-  }
-
-  Future<void> _pickImage() async {
-    // Use pickMultipleMedia to select multiple images at once
-    final List<XFile> images = await _imagePicker.pickMultipleMedia(
-      imageQuality: 85,
-    );
-
-    var addedCount = 0;
-    for (final image in images) {
-      // Only add image files (case-insensitive check)
-      final path = image.path.toLowerCase();
-      if (path.endsWith('.jpg') ||
-          path.endsWith('.jpeg') ||
-          path.endsWith('.png') ||
-          path.endsWith('.webp') ||
-          path.endsWith('.heic') ||
-          path.endsWith('.heif') ||
-          path.endsWith('.bmp') ||
-          path.endsWith('.tif') ||
-          path.endsWith('.tiff')) {
-        newImages.add(File(image.path));
-        addedCount++;
-      }
-    }
-
-    if (addedCount > 0 && mounted) {
-      ErrorHandler.showSuccess('$addedCount image(s) added', title: 'Images Added');
-    }
+  Future<void> _pickFromGallery() async {
+    final images = await _picker.pickMultiImage(imageQuality: 85, limit: 6);
+    if (images.isEmpty || !mounted) return;
+    setState(() => _newImages.addAll([for (final i in images) File(i.path)]));
   }
 
   Future<void> _takePhoto() async {
-    final XFile? image = await _imagePicker.pickImage(
+    final image = await _picker.pickImage(
       source: ImageSource.camera,
       maxWidth: 1920,
       maxHeight: 1920,
       imageQuality: 85,
     );
-
-    if (image != null) {
-      newImages.add(File(image.path));
-    }
+    if (image == null || !mounted) return;
+    setState(() => _newImages.add(File(image.path)));
   }
 
-  void _toggleImageDelete(String imageId) {
-    if (imagesToDelete.contains(imageId)) {
-      imagesToDelete.remove(imageId);
-    } else {
-      imagesToDelete.add(imageId);
-    }
-    imagesToDelete.refresh();
+  void _addCustomUseCase() {
+    final value = UseCases.normalize(_customUseCase.text);
+    if (value.isEmpty) return;
+    setState(() => _useCases.add(value));
+    _customUseCase.clear();
   }
 
-  void _removeNewImage(int index) {
-    newImages.removeAt(index);
-    newImages.refresh();
-  }
-
-  Future<void> _saveChanges() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    isSaving.value = true;
-
+  Future<void> _save() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    final repository = ref.read(itemRepositoryProvider);
+    final id = widget.item.id;
     try {
-      final request = UpdateItemRequest(
-        name: _nameController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        // Always send the category: the backend updates with exclude_unset,
-        // so gating this on another field having changed silently dropped a
-        // category-only edit.
-        category: selectedCategory.value,
-        colors: selectedColors.isEmpty ? null : selectedColors.toList(),
-        brand: _brandController.text.trim().isEmpty
-            ? null
-            : _brandController.text.trim(),
-        size: _sizeController.text.trim().isEmpty
-            ? null
-            : _sizeController.text.trim(),
-        material: _materialController.text.trim().isEmpty
-            ? null
-            : _materialController.text.trim(),
-        pattern: _patternController.text.trim().isEmpty
-            ? null
-            : _patternController.text.trim(),
-        condition: selectedCondition.value,
-        price: _priceController.text.trim().isEmpty
-            ? null
-            : double.tryParse(_priceController.text.trim()),
-        location: _locationController.text.trim().isEmpty
-            ? null
-            : _locationController.text.trim(),
-        tags: selectedTags.isEmpty ? null : selectedTags.toList(),
-        occasionTags: selectedUseCases.isEmpty
-            ? null
-            : UseCases.normalizeList(selectedUseCases),
+      await repository.updateItem(
+        id,
+        UpdateItemRequest(
+          name: _name.text.trim(),
+          description: _text(_description),
+          // Always sent: the backend applies only fields that are present.
+          category: _category,
+          colors: _colors.isEmpty ? null : _colors.toList(),
+          brand: _text(_brand),
+          size: _text(_size),
+          material: _text(_material),
+          pattern: _text(_pattern),
+          condition: _condition,
+          price: double.tryParse(_price.text.trim()),
+          location: _text(_location),
+          occasionTags: _useCases.isEmpty
+              ? null
+              : UseCases.normalizeList(_useCases),
+        ),
       );
-
-      // Update item
-      await _itemRepository.updateItem(widget.itemId, request);
-
-      // Delete images if any
-      for (final imageId in imagesToDelete) {
-        await _itemRepository.deleteItemImage(widget.itemId, imageId);
+      for (final imageId in _imagesToDelete) {
+        await repository.deleteItemImage(id, imageId);
       }
-
-      // Upload new images if any
-      if (newImages.isNotEmpty) {
-        await _itemRepository.uploadImages(widget.itemId, newImages);
+      if (_newImages.isNotEmpty) {
+        await repository.uploadImages(id, _newImages);
       }
-
-      // Refresh wardrobe
-      _wardrobeController.fetchItems(refresh: true);
-
-      Get.back();
-      ErrorHandler.showSuccess('Item updated successfully', title: 'Success');
-    } catch (e) {
-      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
-    } finally {
-      isSaving.value = false;
+      // One fetch picks up the new fields and fresh image URLs.
+      ref.read(wardrobeProvider.notifier).replace(await repository.getItem(id));
+      if (!mounted) return;
+      ErrorHandler.showSuccess('Your changes are saved.', title: 'Saved');
+      Navigator.pop(context);
+    } catch (e, stack) {
+      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      if (mounted) setState(() => _saving = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _brandController.dispose();
-    _sizeController.dispose();
-    _materialController.dispose();
-    _patternController.dispose();
-    _priceController.dispose();
-    _locationController.dispose();
-    _customUseCaseController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    if (_item == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Edit Item')),
-        body: Center(
-          child: _loadFailed
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Could not load this item',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: AppConstants.spacing12),
-                    OutlinedButton(
-                      onPressed: () {
-                        setState(() => _loadFailed = false);
-                        _loadItem();
-                      },
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                )
-              : const CircularProgressIndicator(),
-        ),
-      );
-    }
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    const gap = SizedBox(height: AppConstants.spacing16);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Item'),
-        elevation: 0,
+        title: const Text('Edit piece'),
         actions: [
-          Obx(
-            () => TextButton(
-              onPressed: isSaving.value ? null : _saveChanges,
-              child: isSaving.value
+          Padding(
+            padding: const EdgeInsets.only(right: AppConstants.spacing8),
+            child: TextButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
                   ? const InlineProcessingStatus(
                       phase: ProcessingPhase.processing,
                       processingLabel: 'Saving',
@@ -311,540 +200,350 @@ class _ItemEditPageState extends State<ItemEditPage> {
         ],
       ),
       body: AppPageBackground(
-        child: SafeArea(
-          child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: ListView(
             padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PhotoStrip(
+                existing: widget.item.itemImages ?? const [],
+                toDelete: _imagesToDelete,
+                added: _newImages,
+                onToggleDelete: (id) => setState(
+                  () => _imagesToDelete.contains(id)
+                      ? _imagesToDelete.remove(id)
+                      : _imagesToDelete.add(id),
+                ),
+                onRemoveAdded: (i) => setState(() => _newImages.removeAt(i)),
+                onGallery: _pickFromGallery,
+                onCamera: _takePhoto,
+              ),
+              const SizedBox(height: AppConstants.spacing24),
+              TextFormField(
+                controller: _name,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Name'),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+              ),
+              gap,
+              DropdownButtonFormField<Category>(
+                initialValue: _category,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: [
+                  for (final c in Category.values)
+                    DropdownMenuItem(value: c, child: Text(c.displayName)),
+                ],
+                onChanged: (v) => setState(() => _category = v ?? _category),
+              ),
+              gap,
+              DropdownButtonFormField<domain.Condition>(
+                initialValue: _condition,
+                decoration: const InputDecoration(labelText: 'Condition'),
+                items: [
+                  for (final c in domain.Condition.values)
+                    DropdownMenuItem(value: c, child: Text(c.displayName)),
+                ],
+                onChanged: (v) => setState(() => _condition = v ?? _condition),
+              ),
+              gap,
+              TextFormField(
+                controller: _description,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Description'),
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              Text('Colours', style: text.titleSmall),
+              const SizedBox(height: AppConstants.spacing8),
+              Wrap(
+                spacing: AppConstants.spacing8,
+                runSpacing: AppConstants.spacing8,
                 children: [
-                  // Images section
-                  _buildImagesSection(tokens),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  // Name
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Item Name *',
-                      border: OutlineInputBorder(),
+                  for (final color in {..._commonColors, ..._colors})
+                    FilterChip(
+                      label: Text(color),
+                      selected: _colors.contains(color),
+                      onSelected: (on) => setState(
+                        () => on ? _colors.add(color) : _colors.remove(color),
+                      ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter an item name';
-                      }
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Category
-                  Obx(
-                    () => DropdownButtonFormField<Category>(
-                      initialValue: selectedCategory.value,
-                      decoration: const InputDecoration(
-                        labelText: 'Category *',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: Category.values.map((category) {
-                        return DropdownMenuItem(
-                          value: category,
-                          child: Text(category.displayName),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) selectedCategory.value = value;
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Condition
-                  Obx(
-                    () => DropdownButtonFormField<domain.Condition>(
-                      initialValue: selectedCondition.value,
-                      decoration: const InputDecoration(
-                        labelText: 'Condition *',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: domain.Condition.values.map((condition) {
-                        return DropdownMenuItem(
-                          value: condition,
-                          child: Text(condition.displayName),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) selectedCondition.value = value;
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Description
-                  TextFormField(
-                    controller: _descriptionController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Colors
-                  _buildColorSelector(tokens),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Use cases
-                  _buildUseCaseSelector(tokens),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Brand, Size, Material row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _brandController,
-                          decoration: const InputDecoration(
-                            labelText: 'Brand',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _sizeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Size',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Material & Pattern row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _materialController,
-                          decoration: const InputDecoration(
-                            labelText: 'Material',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _patternController,
-                          decoration: const InputDecoration(
-                            labelText: 'Pattern',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Price & Location row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _priceController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Price',
-                            prefixText: '\$ ',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _locationController,
-                          decoration: const InputDecoration(
-                            labelText: 'Storage Location',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  // Delete button
-                  OutlinedButton.icon(
-                    onPressed: () => _showDeleteConfirmation(),
-                    icon: const Icon(Icons.delete),
-                    label: const Text('Delete Item'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing32),
                 ],
               ),
-            ),
+              const SizedBox(height: AppConstants.spacing20),
+              Text('Use cases', style: text.titleSmall),
+              const SizedBox(height: AppConstants.spacing8),
+              Wrap(
+                spacing: AppConstants.spacing8,
+                runSpacing: AppConstants.spacing8,
+                children: [
+                  for (final useCase in {...UseCases.defaults, ..._useCases})
+                    FilterChip(
+                      label: Text(UseCases.displayLabel(useCase)),
+                      selected: _useCases.contains(useCase),
+                      onSelected: (on) => setState(
+                        () => on
+                            ? _useCases.add(useCase)
+                            : _useCases.remove(useCase),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              TextField(
+                controller: _customUseCase,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _addCustomUseCase(),
+                decoration: InputDecoration(
+                  labelText: 'Add a use case',
+                  hintText: 'For example, brunch',
+                  suffixIcon: IconButton(
+                    tooltip: 'Add',
+                    icon: const Icon(Icons.add_rounded),
+                    onPressed: _addCustomUseCase,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _brand,
+                      decoration: const InputDecoration(labelText: 'Brand'),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _size,
+                      decoration: const InputDecoration(labelText: 'Size'),
+                    ),
+                  ),
+                ],
+              ),
+              gap,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _material,
+                      decoration: const InputDecoration(labelText: 'Material'),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _pattern,
+                      decoration: const InputDecoration(labelText: 'Pattern'),
+                    ),
+                  ),
+                ],
+              ),
+              gap,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _price,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(labelText: 'Price'),
+                      validator: (v) {
+                        final value = v?.trim() ?? '';
+                        if (value.isEmpty) return null;
+                        return double.tryParse(value) == null
+                            ? 'Enter a number'
+                            : null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _location,
+                      decoration: const InputDecoration(labelText: 'Kept in'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacing32),
+              Text(
+                'Delete this piece from the item page.',
+                style: text.bodySmall?.copyWith(color: tokens.textMuted),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppConstants.spacing24),
+            ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildImagesSection(AppUiTokens tokens) {
-    // Null-safe: a photo-less item has null itemImages, and the previous
-    // `a && b || c` precedence let this spread run on a null list as soon as
-    // a new photo was picked.
-    final existingImages = _item?.itemImages ?? const <ItemImage>[];
+class _PhotoStrip extends ConsumerWidget {
+  const _PhotoStrip({
+    required this.existing,
+    required this.toDelete,
+    required this.added,
+    required this.onToggleDelete,
+    required this.onRemoveAdded,
+    required this.onGallery,
+    required this.onCamera,
+  });
+
+  final List<ItemImage> existing;
+  final Set<String> toDelete;
+  final List<File> added;
+  final void Function(String id) onToggleDelete;
+  final void Function(int index) onRemoveAdded;
+  final VoidCallback onGallery;
+  final VoidCallback onCamera;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final remint = ref.read(itemRepositoryProvider).remintImageUrl;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Photos',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            Expanded(child: Text('Photos', style: text.titleSmall)),
+            TextButton.icon(
+              onPressed: onGallery,
+              icon: const Icon(Icons.photo_library_outlined, size: 18),
+              label: const Text('Gallery'),
             ),
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: _pickImage,
-                  icon: const Icon(Icons.photo_library),
-                  label: const Text('Gallery'),
-                ),
-                TextButton.icon(
-                  onPressed: _takePhoto,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Camera'),
-                ),
-              ],
+            TextButton.icon(
+              onPressed: onCamera,
+              icon: const Icon(Icons.photo_camera_outlined, size: 18),
+              label: const Text('Camera'),
             ),
           ],
         ),
-
-        if (existingImages.isNotEmpty || newImages.isNotEmpty)
+        const SizedBox(height: AppConstants.spacing8),
+        if (existing.isEmpty && added.isEmpty)
+          PaperSurface(
+            lift: 0,
+            color: tokens.stock.sunk,
+            child: Text(
+              'No photos yet. Add one from your gallery or camera.',
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+            ),
+          )
+        else
           SizedBox(
-            height: 120,
+            height: 112,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                // Existing images
-                ...existingImages.map((image) {
-                  final isDeleting = imagesToDelete.contains(image.id);
-                  return Padding(
-                    padding: const EdgeInsets.only(
-                      right: AppConstants.spacing8,
+                for (final image in existing)
+                  _Thumb(
+                    removed: toDelete.contains(image.id),
+                    actionTooltip: toDelete.contains(image.id)
+                        ? 'Keep photo'
+                        : 'Remove photo',
+                    actionIcon: toDelete.contains(image.id)
+                        ? Icons.undo_rounded
+                        : Icons.close_rounded,
+                    onAction: () => onToggleDelete(image.id),
+                    child: AppImage(
+                      imageUrl: image.url,
+                      fit: BoxFit.cover,
+                      enableZoom: false,
+                      memCacheWidth: 300,
+                      storagePath: image.storagePath,
+                      remintUrl: remint,
                     ),
-                    child: Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                            AppConstants.radius8,
-                          ),
-                          child: SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: AppImage(
-                              imageUrl: image.url,
-                              fit: BoxFit.contain,
-                              enableZoom: false,
-                              backgroundColor: isDeleting
-                                  ? Colors.black.withValues(alpha: 0.5)
-                                  : null,
-                              // Presigned URLs expire after 1h; on a failed
-                              // load re-mint a fresh URL from the durable
-                              // storage key.
-                              storagePath: image.storagePath,
-                              remintUrl: _itemRepository.remintImageUrl,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: CircleAvatar(
-                            backgroundColor: isDeleting
-                                ? Colors.red
-                                : Colors.white,
-                            child: IconButton(
-                              icon: Icon(
-                                isDeleting ? Icons.close : Icons.delete_outline,
-                                color: isDeleting ? Colors.white : Colors.black,
-                              ),
-                              onPressed: () => _toggleImageDelete(image.id),
-                              constraints: const BoxConstraints(
-                                minWidth: 32,
-                                minHeight: 32,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-
-                // New images
-                ...newImages.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final image = entry.value;
-                  return Padding(
-                    padding: const EdgeInsets.only(
-                      right: AppConstants.spacing8,
-                    ),
-                    child: Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                            AppConstants.radius8,
-                          ),
-                          child: SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: Image.file(image, fit: BoxFit.cover),
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: CircleAvatar(
-                            backgroundColor: Colors.white,
-                            child: IconButton(
-                              icon: const Icon(
-                                Icons.close,
-                                color: Colors.black,
-                              ),
-                              onPressed: () => _removeNewImage(index),
-                              constraints: const BoxConstraints(
-                                minWidth: 32,
-                                minHeight: 32,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 4,
-                          left: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'NEW',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                  ),
+                for (final (i, file) in added.indexed)
+                  _Thumb(
+                    label: 'New',
+                    actionTooltip: 'Remove photo',
+                    actionIcon: Icons.close_rounded,
+                    onAction: () => onRemoveAdded(i),
+                    child: Image.file(file, fit: BoxFit.cover, cacheWidth: 300),
+                  ),
               ],
             ),
           ),
+      ],
+    );
+  }
+}
 
-        // Empty state
-        if ((_item!.itemImages == null || _item!.itemImages!.isEmpty) &&
-            newImages.isEmpty)
-          Container(
-            height: 100,
-            decoration: BoxDecoration(
-              border: Border.all(color: tokens.cardBorderColor),
+class _Thumb extends StatelessWidget {
+  const _Thumb({
+    required this.child,
+    required this.actionIcon,
+    required this.actionTooltip,
+    required this.onAction,
+    this.removed = false,
+    this.label,
+  });
+
+  final Widget child;
+  final IconData actionIcon;
+  final String actionTooltip;
+  final VoidCallback onAction;
+  final bool removed;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: AppConstants.spacing8),
+      child: SizedBox.square(
+        dimension: 104,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
               borderRadius: BorderRadius.circular(AppConstants.radius8),
-            ),
-            child: Center(
-              child: Text(
-                'No photos yet',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
+              child: ColoredBox(
+                color: tokens.stock.sunk,
+                child: removed
+                    ? Center(
+                        child: Text(
+                          'Removed',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      )
+                    : child,
               ),
             ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildColorSelector(AppUiTokens tokens) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Colors',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: tokens.textPrimary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacing8),
-        Wrap(
-          spacing: AppConstants.spacing8,
-          runSpacing: AppConstants.spacing8,
-          children: commonColors.map((color) {
-            final isSelected = selectedColors.contains(color);
-            return FilterChip(
-              label: Text(color),
-              selected: isSelected,
-              onSelected: (selected) {
-                if (selected) {
-                  selectedColors.add(color);
-                } else {
-                  selectedColors.remove(color);
-                }
-                selectedColors.refresh();
-              },
-              selectedColor: tokens.brandColor.withValues(alpha: 0.2),
-              checkmarkColor: tokens.brandColor,
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUseCaseSelector(AppUiTokens tokens) {
-    return Obx(
-      () => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Use Cases',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: tokens.textPrimary,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Wrap(
-            spacing: AppConstants.spacing8,
-            runSpacing: AppConstants.spacing8,
-            children: UseCases.defaults.map((useCase) {
-              final isSelected = selectedUseCases.contains(useCase);
-              return FilterChip(
-                label: Text(UseCases.displayLabel(useCase)),
-                selected: isSelected,
-                onSelected: (selected) {
-                  if (selected) {
-                    selectedUseCases.add(useCase);
-                  } else {
-                    selectedUseCases.remove(useCase);
-                  }
-                  selectedUseCases.refresh();
-                },
-                selectedColor: tokens.brandColor.withValues(alpha: 0.2),
-                checkmarkColor: tokens.brandColor,
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _customUseCaseController,
-                  decoration: const InputDecoration(
-                    labelText: 'Custom use case',
-                    hintText: 'e.g., brunch',
-                    border: OutlineInputBorder(),
+            if (label != null)
+              Positioned(
+                left: AppConstants.spacing6,
+                bottom: AppConstants.spacing6,
+                child: Text(
+                  label!,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    shadows: const [Shadow(blurRadius: 3)],
                   ),
-                  onSubmitted: (_) => _addCustomUseCase(),
                 ),
               ),
-              const SizedBox(width: AppConstants.spacing8),
-              OutlinedButton(
-                onPressed: _addCustomUseCase,
-                child: const Text('Add'),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                tooltip: actionTooltip,
+                onPressed: onAction,
+                style: IconButton.styleFrom(
+                  backgroundColor: tokens.stock.card,
+                  minimumSize: const Size(44, 44),
+                ),
+                icon: Icon(actionIcon, size: 18),
               ),
-            ],
-          ),
-          if (selectedUseCases.isNotEmpty) ...[
-            const SizedBox(height: AppConstants.spacing8),
-            Wrap(
-              spacing: AppConstants.spacing8,
-              runSpacing: AppConstants.spacing8,
-              children: selectedUseCases.map((useCase) {
-                return Chip(
-                  label: Text(UseCases.displayLabel(useCase)),
-                  onDeleted: () {
-                    selectedUseCases.remove(useCase);
-                    selectedUseCases.refresh();
-                  },
-                );
-              }).toList(),
             ),
           ],
-        ],
-      ),
-    );
-  }
-
-  void _addCustomUseCase() {
-    final normalized = UseCases.normalize(_customUseCaseController.text);
-    if (normalized.isEmpty) return;
-    selectedUseCases.add(normalized);
-    selectedUseCases.refresh();
-    _customUseCaseController.clear();
-  }
-
-  void _showDeleteConfirmation() {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Delete Item?'),
-        content: const Text(
-          'This action cannot be undone. The item will be permanently removed from your closet.',
         ),
-        actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              Get.back(); // Close dialog
-              try {
-                await _itemRepository.deleteItem(widget.itemId);
-                _wardrobeController.fetchItems(refresh: true);
-                Get.back(); // Close edit page
-                ErrorHandler.showSuccess('Item removed from your closet', title: 'Deleted');
-              } catch (e) {
-                ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
   }

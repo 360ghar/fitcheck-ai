@@ -7,11 +7,12 @@ import 'package:fitcheck_ai/features/subscription/services/iap_service.dart';
 import 'package:fitcheck_ai/features/subscription/services/purchase_recovery_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
+import 'package:fitcheck_ai/core/services/notification_service.dart'
+    show scaffoldMessengerKey;
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 /// Fake IAP gateway with manually pumped purchase events (same pattern as
-/// the controller tests' FakeIapService).
+/// the paywall tests' FakeIapService).
 class FakeIapService extends IapService {
   FakeIapService({
     bool storeBillingAvailable = true,
@@ -172,24 +173,17 @@ String? _signedInUser() => 'user-1';
 Future<void> _settle() => Future<void>.delayed(Duration.zero);
 
 /// The background drain surfaces verified/terminal outcomes as snackbars,
-/// which need a GetMaterialApp overlay — the same shell the controller tests
+/// which need a GetMaterialApp overlay — the same shell the paywall tests
 /// pump before exercising UI-presenting paths.
 Future<void> _pumpShell(WidgetTester tester) async {
-  await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
+  await tester.pumpWidget(MaterialApp(scaffoldMessengerKey: scaffoldMessengerKey, home: Scaffold()));
   await tester.pump();
 }
 
 /// Drains the snackbar queue so no timer outlives the test.
 Future<void> _drainSnackbars(WidgetTester tester) async {
-  // Let any snackbar fully show and dismiss before closing: a job still
-  // queued has no animation controller to close and closeAllSnackbars
-  // would throw.
   await tester.pump(const Duration(seconds: 6));
-  try {
-    Get.closeAllSnackbars();
-  } catch (_) {
-    // Nothing (or nothing fully shown) to close.
-  }
+  scaffoldMessengerKey.currentState?.clearSnackBars();
   await tester.pumpAndSettle(const Duration(seconds: 1));
 }
 
@@ -200,19 +194,17 @@ void main() {
   late FakeSubscriptionRepository repository;
 
   setUp(() {
-    Get.reset();
     iapService = FakeIapService();
     repository = FakeSubscriptionRepository();
   });
 
   tearDown(() {
     iapService.dispose();
-    Get.reset();
   });
 
   PurchaseRecoveryService buildService({
     String? Function()? currentUserId = _signedInUser,
-    RxBool? isAuthenticated,
+    ValueNotifier<bool>? isAuthenticated,
   }) {
     return PurchaseRecoveryService(
       iapService: iapService,
@@ -381,9 +373,9 @@ void main() {
         // The post-login re-drain toasts on success, so this needs the app
         // shell like the other background-drain tests.
         await _pumpShell(tester);
-        final auth = false.obs;
+        final auth = ValueNotifier(false);
         final service = buildService(isAuthenticated: auth);
-        service.onInit();
+        service.start();
 
         // Signed out at cold start: nothing consumes the redelivery.
         iapService.emit(_purchase());
@@ -410,9 +402,9 @@ void main() {
       tester,
     ) async {
       await _pumpShell(tester);
-      final auth = true.obs;
+      final auth = ValueNotifier(true);
       final service = buildService(isAuthenticated: auth);
-      service.onInit();
+      service.start();
 
       iapService.emit(_purchase());
       await tester.pump();
@@ -440,7 +432,7 @@ void main() {
       await _pumpShell(tester);
       final service = buildService();
       final pageHandled = <PurchaseDetails>[];
-      // Mirrors SubscriptionController: activate a handler that routes
+      // Mirrors PaywallNotifier: activate a handler that routes
       // purchased/restored updates back through verifyAndComplete.
       service.activatePageHandler((updates) {
         for (final details in updates) {

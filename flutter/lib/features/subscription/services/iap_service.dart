@@ -14,7 +14,7 @@ import '../../../core/exceptions/app_exceptions.dart';
 /// still under review, or the Paid Applications agreement is unsigned).
 ///
 /// Shared by [IapService.fetchProducts] (StoreKit surfaces this exact state
-/// as `storekit_no_response`) and the controller's fail-fast checkout so the
+/// as `storekit_no_response`) and the paywall's fail-fast checkout so the
 /// user always sees one consistent sentence. Deliberately not "try again in a
 /// moment": this state persists until the store side is fixed.
 const String kPlanNotAvailableInStoreMessage =
@@ -175,7 +175,7 @@ class IapService {
       );
     } on PlatformException catch (e) {
       // A purchase whose backend verification failed is deliberately left
-      // uncompleted (see SubscriptionController._registerStorePurchase), and
+      // uncompleted (see PurchaseRecoveryService.verifyAndComplete), and
       // StoreKit then refuses a second attempt at the same product until the
       // pending transaction is finished. It resolves itself on relaunch, when
       // the plugin redelivers the unfinished transaction — say so instead of

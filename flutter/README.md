@@ -4,10 +4,10 @@ Flutter mobile app for FitCheck AI.
 
 ## Architecture
 
-- State management and routing via GetX
+- State management via Riverpod, routing via go_router
 - Feature-first modules under `lib/features/`
 - Shared infrastructure in `lib/core/`
-- App-level routes/bindings/themes in `lib/app/`
+- App-level router/routes/themes in `lib/app/`
 
 ## Main Features
 
@@ -57,7 +57,7 @@ Key values:
 ## Project Layout
 
 - `lib/main.dart`: app bootstrap
-- `lib/app/`: routes, bindings, theming
+- `lib/app/`: router, routes, theming
 - `lib/core/`: config, services, network, utils, widgets
 - `lib/features/`: domain feature modules
 

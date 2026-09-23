@@ -1,15 +1,17 @@
 # Flutter
 
-Last updated: 2026-09-13
+Last updated: 2026-09-23
 
-Mobile client under `flutter/` using GetX feature modules.
+Mobile client under `flutter/`. State and dependency injection use Riverpod 3 (no code generation). Routing uses go_router. The paper-cut diorama design system lives in `lib/core/theme/` and `lib/core/widgets/`. The app has no GetX; `test/core/utils/snackbar_policy_test.dart` fails on a `package:get/` import.
 
 ## Commands
 
 ```bash
 cd flutter
 flutter pub get
-flutter test
+flutter analyze
+flutter test                                  # CI runs --exclude-tags golden
+flutter test --tags golden --update-goldens   # screenshot tests, local only
 flutter run \
   --dart-define=API_BASE_URL=http://localhost:8000 \
   --dart-define=SUPABASE_URL=... \
@@ -18,22 +20,74 @@ flutter run \
 
 Env can also load via asset `.env` through `lib/core/config/env_config.dart`. Template: `flutter/.env.example`.
 
+Run `dart format` only on files you create or rewrite. The existing code is not formatted with the current Dart version, so formatting a directory rewraps hundreds of untouched files.
+
 ## Structure
 
 ```text
 lib/
-├── main.dart
-├── app/           # routes, bindings, theme
-├── core/          # config, network, shared services/utils/widgets
-└── features/      # auth, wardrobe, outfits, photoshoot, recommendations, …
+├── main.dart            # parallel startup, UncontrolledProviderScope(appContainer)
+├── app/                 # router.dart (go_router, auth redirect, shell), Routes, AppTheme
+├── core/
+│   ├── providers.dart   # appContainer, noRetry, rootNavigatorKey, sessionUserIdProvider
+│   ├── state/           # PagedState, PagedNotifier, BusyIds, SelectedIds
+│   ├── theme/           # PaperTokens, paperTheme, PaperSlabBorder, DeckleBorder
+│   └── widgets/         # PaperSurface, PaperScene, app states, skeletons, nav
+└── features/<feature>/
+    ├── models/ repositories/     # unchanged API clients
+    ├── providers/                # Riverpod notifiers (the "controllers")
+    ├── views/ widgets/           # ConsumerWidget / ConsumerStatefulWidget
 ```
 
-## Conventions
+## State (Riverpod)
 
-- Feature-first modules under `features/`
-- GetX routes + bindings under `app/`
-- Shared infra only under `core/`
-- Talk to the same FastAPI backend as web (`API_BASE_URL`)
+- **Repositories** are exposed as `Provider((ref) => XRepository())` so tests override them with `overrideWithValue(fake)`.
+- **Screen data** is an `AsyncNotifier` (`.autoDispose` for pushed pages, `.family` for `:id` pages). Session-wide lists (closet, outfits, dashboard) stay alive.
+- **Paged lists** extend `PagedNotifier<T>` (`lib/core/state/paged_state.dart`): `fetchPage(page)` is the only method to write. It gives `refresh()` (keeps items on screen, keeps them and the paging position on failure), `loadMore()`, `retryLoadMore()` and a `loadMoreError`. A rebuild (for example a filter change) drops the results of older requests.
+- **Refresh without blanking**: set `state = const AsyncLoading()` then `state = await AsyncValue.guard(load)`. Riverpod 3.4 carries the previous value into loading and error states set this way.
+- **Mutations** are notifier methods. They show the success or error snackbar through `ErrorHandler` and return a result (`bool` or the new model) or rethrow. Views await them, pop only on success, and never show a second toast. Per-row spinners use a `BusyIds` notifier; `BusyIds.run` also blocks double taps.
+- **Filters** are a separate `Notifier` whose state the list `ref.watch`es in `build`, so one change sends one request.
+- **Automatic retry is off** (`noRetry` on `appContainer` and on test containers). Screens offer an explicit retry; repositories use `RetryHelper` for transient network errors.
+- **Per-user data**: a session-wide provider must `ref.watch(sessionUserIdProvider)` in `build`, so the next account never sees the previous account's data.
+- **Services** (Supabase, network, theme, code push, persistence) are plain singletons (`X.instance`) with `ValueNotifier` fields. Use `listenValue(ref, notifier, onChange)` to react to one inside a provider.
+- **No `ref`**: code outside the widget tree (interceptors, the router redirect) reads providers through `appContainer`. Tests that pump the whole app must use `UncontrolledProviderScope(container: appContainer)`.
+
+## Routing (go_router)
+
+- `lib/app/router.dart` holds the route table. Paths are in `Routes` (`lib/app/routes/app_routes.dart`); build id paths with `Routes.item(id)`, `Routes.itemEdit(id)`, `Routes.outfit(id)`, `Routes.outfitEdit(id)`.
+- `authRedirect` is the only auth guard: splash until the session is restored, guest pages when signed out, the shell when signed in. `/legal` and `/shared/:id` are public. Sign-in and sign-out code does not navigate; the router reacts to the session.
+- The five tabs are a `StatefulShellRoute` (one navigator per tab). Switch tabs with `context.go(Routes.wardrobe)`. Every other page is a top-level route on the root navigator: open it with `context.push(...)`, close it with `Navigator.pop(context, result)`.
+- Dialogs and sheets opened from code without a `BuildContext` use `rootNavigatorKey.currentContext`.
+- Deep linking is off (`FlutterDeepLinkingEnabled` / `flutter_deeplinking_enabled`); `app_links` handles the OAuth and social-import callbacks.
+
+## Screen states
+
+Every screen follows the same order (`AsyncValueView` in `lib/core/widgets/app_states.dart` implements it):
+
+1. Loading with no data: a skeleton (`Skeleton*` widgets), never a bare spinner.
+2. Error with no data: `AppErrorState(error:, onRetry:)`; copy and scene follow the error type (offline, server, not found, auth).
+3. Empty: `AppEmptyState(scene:, title:, message:, actionLabel:, onAction:)`. A filtered list with no matches says "No … match" and offers "Clear filters"; a first-run list offers the first action.
+4. Data, with `AppErrorBanner(error:, onRetry:)` on top when a refresh failed.
+
+Paged lists end with `SliverLoadingMoreIndicator(isLoading:, error:, onRetry:)` inside an `InfiniteScrollWrapper(canLoadMore:)`.
+
+## Design system (paper-cut diorama)
+
+- **Stocks**: five paper stocks (`PaperStockId`: ink = Home, clay = Photoshoot, moss = Closet, marigold = Outfits, stone = More, sheets, dialogs). Each screen is wrapped in the `PaperStockScope` of its feature; the whole Material `ColorScheme` follows the stock. `test/core/theme/paper_tokens_test.dart` enforces WCAG AA for every stock in both modes.
+- **Colour roles**: read `PaperTokens.of(context)` (or `AppUiTokens.of(context)`): `textPrimary/Secondary/Muted`, `stock.page/card/sunk/tint/edge/shadow/accent/onAccent`, `success/warning/error`. Brand red (`tokens.brand`) is only for filled buttons and the FAB, which the theme already styles. Do not use `Colors.*` except white or black over photos.
+- **Surfaces**: `PaperSurface` (alias `AppGlassCard`) is a sheet of paper over a solid offset slab; `onTap` makes it press down. Set `grain: false` when a photo covers it. No blurred shadows, glows or gradients.
+- **Page and bars**: wrap a page body in `AppPageBackground`; its grain runs up under the transparent app bar, so there is no seam. A pinned `SliverAppBar` uses `flexibleSpace: const PaperGrainFill()`. A pinned bottom action goes in `PaperActionBar` (torn top edge), never a bare `SafeArea`.
+- **Type**: display and headline styles use Basteleur (Velvetyne, SIL OFL; `assets/fonts/`). Body text uses the platform font. Use `textTheme.displaySmall` for big figures and tab titles, `headlineSmall` for section titles.
+- **Scenes**: `PaperScene(preset:)` draws layered cut paper with scroll parallax and a slow garment sway. Presets live in `PaperScenes` (`home`, `closet`, `outfits`, `studio`, `offline`, `oops`, `auth`). Use scenes only at signature moments: tab headers, empty and error states, auth, splash.
+- **Icons**: bare icons, never inside a tinted tile. Garment placeholders use `GarmentGlyph(category:)`.
+- **Motion**: never gate content on an animation. All motion respects `MediaQuery.disableAnimations`.
+- **Copy**: sentence case, short, second person. No tracked uppercase labels.
+
+## Testing
+
+- Provider tests: `ProviderContainer(retry: noRetry, overrides: [...])`; add `container.listen(provider, ...)` where the screen would listen, because an invalidated provider rebuilds only while listened.
+- Widget tests of screens with scenes or skeletons: set `MediaQueryData(disableAnimations: true)`, otherwise `pumpAndSettle` never settles.
+- Goldens: `test/visual/visual_harness.dart` (`loadAppFonts`, `pumpPhone`). Tag files `@Tags(['golden'])`.
 
 ## Batch / AI
 
@@ -101,8 +155,8 @@ store binary.
 
 ### In-app surface
 
-`flutter/lib/core/services/code_push_service.dart` is registered in `main.dart`
-(not `InitialBinding`, which runs too late for Sentry). It reads the running patch
+`flutter/lib/core/services/code_push_service.dart` is started in `main.dart`
+before Sentry initializes. It reads the running patch
 number into Sentry's `dist` so a crash can be attributed to the patch that caused
 it, and drives the "restart to apply" prompt. It is fully inert when the updater
 is unavailable, which is every debug build and every `flutter test` run.
@@ -148,8 +202,8 @@ purchase CTA (default on). Social sharing and body profiles live under
 
 ### Gift vouchers
 
-The native gift feature is under features/gifts. It has a GetX binding,
-repository, models, controller, /gifts route, and gift page. The home tab
+The native gift feature is under features/gifts. It has a repository,
+models, providers, a /gifts route (the intent is passed as `extra`) and a gift page. The home tab
 uses the same priority as web: incoming gift, then a free invitation, then
 referral. The form defaults to no occasion. Birthday and anniversary show
 fixed greetings; Other requires a 1–80 character greeting. A private note is

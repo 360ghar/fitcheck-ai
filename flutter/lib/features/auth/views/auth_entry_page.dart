@@ -1,120 +1,46 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/widgets/app_ui.dart';
 import 'widgets/auth_ui.dart';
 
+/// First screen for signed-out users.
 class AuthEntryPage extends StatelessWidget {
   const AuthEntryPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AuthUiTokens.of(context);
-    final screenSize = MediaQuery.of(context).size;
-    final titleSize = (screenSize.width * 0.1).clamp(30.0, 44.0);
-    final bodySize = (screenSize.width * 0.045).clamp(14.0, 18.0);
-
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
     return AuthScaffold(
+      sceneFraction: 0.5,
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AuthHeaderBar(
-            textColor: tokens.textColor,
-            brandColor: tokens.brandColor,
+          const AuthWordmark(size: 44),
+          const SizedBox(height: AppConstants.spacing16),
+          Text(
+            'Every piece you own, styled by AI. Plan outfits, try them on, '
+            'shoot them.',
+            style: text.bodyLarge?.copyWith(color: tokens.textSecondary),
           ),
-          _buildHeroText(
-            titleSize,
-            bodySize,
-            tokens,
+          const Spacer(),
+          const SizedBox(height: AppConstants.spacing24),
+          AuthPrimaryButton(
+            label: 'Create your closet',
+            onPressed: () => context.push(Routes.register),
           ),
-          _buildActionSection(tokens, bodySize),
+          const SizedBox(height: AppConstants.spacing8),
+          TextButton(
+            onPressed: () => context.push(Routes.login),
+            style: TextButton.styleFrom(foregroundColor: tokens.textPrimary),
+            child: const Text('I already have an account'),
+          ),
+          const SizedBox(height: AppConstants.spacing8),
+          const AuthFooterText(),
         ],
       ),
-    );
-  }
-
-  Widget _buildHeroText(
-    double titleSize,
-    double bodySize,
-    AuthUiTokens tokens,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Your AI-Powered\nVirtual Closet',
-          style: TextStyle(
-            fontSize: titleSize,
-            fontWeight: FontWeight.w800,
-            color: tokens.textColor,
-            height: 1.05,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacing16),
-        Text(
-          'Organize your closet, visualize new looks, and master your '
-          'style with high-precision AI guidance built for you.',
-          style: TextStyle(
-            fontSize: bodySize,
-            color: tokens.secondaryTextColor,
-            height: 1.5,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionSection(
-    AuthUiTokens tokens,
-    double bodySize,
-  ) {
-    final buttonPadding = EdgeInsets.symmetric(
-      vertical: bodySize < 16 ? 14 : 16,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ElevatedButton(
-          onPressed: () => Get.toNamed(Routes.register),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: tokens.brandColor,
-            foregroundColor: Colors.white,
-            padding: buttonPadding,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.radius16),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
-          ),
-          child: const Text('Sign Up'),
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        OutlinedButton(
-          onPressed: () => Get.toNamed(Routes.login),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: tokens.textColor,
-            side: BorderSide(color: tokens.textColor.withValues(alpha: 0.65)),
-            padding: buttonPadding,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.radius16),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
-          ),
-          child: const Text('Log In'),
-        ),
-        const SizedBox(height: AppConstants.spacing20),
-        Center(child: AuthFooterText(textColor: tokens.textColor)),
-      ],
     );
   }
 }

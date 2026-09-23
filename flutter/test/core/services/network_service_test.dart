@@ -195,10 +195,7 @@ void main() {
         operation: () async {
           calls++;
           if (calls < 2) {
-            throw const NetworkException(
-              message: 'slow',
-              errorCode: 'TIMEOUT',
-            );
+            throw const NetworkException(message: 'slow', errorCode: 'TIMEOUT');
           }
           return 'ok';
         },
@@ -209,6 +206,30 @@ void main() {
 
       expect(result, 'ok');
       expect(calls, 2);
+    });
+
+    test('does not retry client errors or cancelled requests', () async {
+      for (final error in [
+        const NetworkException(message: 'bad request', statusCode: 400),
+        const NetworkException(
+          message: 'cancelled',
+          errorCode: 'REQUEST_CANCELLED',
+        ),
+      ]) {
+        var calls = 0;
+        await expectLater(
+          RetryHelper.execute<String>(
+            operation: () async {
+              calls++;
+              throw error;
+            },
+            baseDelay: baseDelay,
+            maxDelay: maxDelay,
+          ),
+          throwsA(same(error)),
+        );
+        expect(calls, 1, reason: error.message);
+      }
     });
   });
 }

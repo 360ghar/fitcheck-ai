@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import '../providers.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Lightweight helpers for permission pre-prompts (rationale) and recovery
@@ -37,18 +37,24 @@ class PermissionHelper {
   static Future<void> showDeniedRecovery({
     required String permissionName,
   }) async {
-    await Get.dialog<void>(
-      AlertDialog(
+    final context = rootNavigatorKey.currentContext;
+    if (context == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
         title: Text('$permissionName Access Needed'),
         content: Text(
           'Access to $permissionName is currently denied. Open Settings to '
           'enable it so you can continue.',
         ),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Not Now')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Not Now'),
+          ),
           ElevatedButton(
             onPressed: () async {
-              Get.back();
+              Navigator.pop(context);
               final uri = Uri.parse('app-settings:');
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri);
@@ -58,7 +64,6 @@ class PermissionHelper {
           ),
         ],
       ),
-      barrierDismissible: true,
     );
   }
 
@@ -67,8 +72,12 @@ class PermissionHelper {
     required String title,
     required String message,
   }) async {
-    final result = await Get.dialog<bool>(
-      AlertDialog(
+    final context = rootNavigatorKey.currentContext;
+    if (context == null) return false;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
         title: Row(
           children: [
             Icon(icon),
@@ -79,16 +88,15 @@ class PermissionHelper {
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Get.back(result: false),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Get.back(result: true),
+            onPressed: () => Navigator.pop(context, true),
             child: const Text('Continue'),
           ),
         ],
       ),
-      barrierDismissible: false,
     );
     return result ?? false;
   }

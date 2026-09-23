@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/analytics_service.dart';
@@ -10,9 +9,9 @@ import '../repositories/auth_repository.dart';
 /// Handles all authentication operations — login, register, logout, token
 /// management, and email verification.
 ///
-/// Extracted from [AuthController] as part of FL7 to trim its size and
+/// Extracted from the auth state notifier as part of FL7 to trim its size and
 /// separate concerns.
-class AuthService extends GetxService {
+class AuthService {
   final SupabaseService _supabase = SupabaseService.instance;
   final AuthRepository _authRepository = AuthRepository();
   final Future<bool> Function()? _googleSignInLauncher;
@@ -97,7 +96,7 @@ class AuthService extends GetxService {
   /// Supabase has no "check this password" call and `updateUser` needs only a
   /// valid session, so a sign-in IS the re-auth: it throws `AuthException` for a
   /// wrong password. Used to gate a password change on the current password (see
-  /// `SettingsController.changePassword`) — without it, anyone with an unlocked
+  /// the settings page's password change) — without it, anyone with an unlocked
   /// device or a stolen session could take the account over.
   ///
   /// Deliberately does NOT sync auth state from the response: this is a

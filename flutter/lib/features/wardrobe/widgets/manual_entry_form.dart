@@ -1,756 +1,523 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/request_id.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../models/item_model.dart';
-import '../repositories/item_repository.dart';
-import '../services/wardrobe_sync_service.dart';
-import '../../../core/utils/error_handler.dart';
-import '../../../core/utils/request_id.dart';
+import '../providers/wardrobe_providers.dart';
 
-/// Manual entry form for adding items
-/// Can be used with or without an image
-class ManualEntryForm extends StatefulWidget {
-  final File? imageFile;
+/// Use-case tags: the defaults plus any custom ones, and a field to add one.
+class UseCasePicker extends StatefulWidget {
+  const UseCasePicker({
+    super.key,
+    required this.selected,
+    required this.onToggle,
+    this.helper,
+  });
 
-  const ManualEntryForm({super.key, this.imageFile});
+  final Set<String> selected;
+  final ValueChanged<String> onToggle;
+  final String? helper;
 
   @override
-  State<ManualEntryForm> createState() => _ManualEntryFormState();
+  State<UseCasePicker> createState() => _UseCasePickerState();
 }
 
-class _ManualEntryFormState extends State<ManualEntryForm> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _brandController = TextEditingController();
-  final _sizeController = TextEditingController();
-  final _materialController = TextEditingController();
-  final _patternController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _tagsController = TextEditingController();
-  final _locationController = TextEditingController();
-  final _customUseCaseController = TextEditingController();
-
-  final Rx<Category> selectedCategory = Category.tops.obs;
-  final Rx<domain.Condition> selectedCondition = domain.Condition.clean.obs;
-  final RxSet<String> selectedColors = <String>{}.obs;
-  final RxSet<String> selectedTags = <String>{}.obs;
-  final RxSet<String> selectedUseCases = <String>{}.obs;
-  final RxBool isSaving = false.obs;
-  final RxList<File> additionalImages = <File>[].obs;
-
-  final ImagePicker _imagePicker = ImagePicker();
-
-  /// Idempotency key for this form's create (TD-109).
-  ///
-  /// Minted on the first submit and reused by every retry of that same submit,
-  /// so a create whose response was lost (or a submit that failed after the
-  /// item row committed) replays the committed item instead of adding a second
-  /// one. Cleared once the item is saved, so a fresh submit is a fresh item.
-  /// Re-minted when the draft payload changes: retrying an edited draft under
-  /// the old key would replay the stale row and silently discard the edit.
-  String? _clientRequestId;
-  String? _lastRequestJson;
-
-  // Common color options
-  static const List<String> commonColors = [
-    'Black',
-    'White',
-    'Gray',
-    'Red',
-    'Blue',
-    'Green',
-    'Yellow',
-    'Pink',
-    'Purple',
-    'Orange',
-    'Brown',
-    'Beige',
-    'Navy',
-    'Cream',
-  ];
-
-  void _submitForm() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    isSaving.value = true;
-
-    try {
-      // Use provided image or first additional image
-      final imageToUse =
-          widget.imageFile ??
-          (additionalImages.isNotEmpty ? additionalImages.first : null);
-
-      // A10-02: "Add item details without a photo" is the advertised flow and
-      // the backend supports photo-less items (createItem posts no image) —
-      // the old hard block ("Image Required") contradicted the card copy.
-      final request = CreateItemRequest(
-        name: _nameController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        category: selectedCategory.value,
-        colors: selectedColors.isEmpty ? null : selectedColors.toList(),
-        brand: _brandController.text.trim().isEmpty
-            ? null
-            : _brandController.text.trim(),
-        size: _sizeController.text.trim().isEmpty
-            ? null
-            : _sizeController.text.trim(),
-        material: _materialController.text.trim().isEmpty
-            ? null
-            : _materialController.text.trim(),
-        pattern: _patternController.text.trim().isEmpty
-            ? null
-            : _patternController.text.trim(),
-        condition: selectedCondition.value,
-        price: _priceController.text.trim().isEmpty
-            ? null
-            : double.tryParse(_priceController.text.trim()),
-        location: _locationController.text.trim().isEmpty
-            ? null
-            : _locationController.text.trim(),
-        tags: selectedTags.isEmpty ? null : selectedTags.toList(),
-        occasionTags: selectedUseCases.isEmpty
-            ? null
-            : UseCases.normalizeList(selectedUseCases),
-      );
-
-      final requestId = (() {
-        final payloadJson = request.toJson().toString();
-        if (_clientRequestId == null || _lastRequestJson != payloadJson) {
-          _clientRequestId = newRequestId('item');
-          _lastRequestJson = payloadJson;
-        }
-        return _clientRequestId!;
-      })();
-      final created = imageToUse == null
-          ? await ItemRepository().createItem(
-              request,
-              clientRequestId: requestId,
-            )
-          : await ItemRepository().createItemWithImage(
-              image: imageToUse,
-              request: request,
-              clientRequestId: requestId,
-            );
-
-      // Upload additional images if any (excluding the one already used).
-      // The old `length > 1` guard silently dropped a main image + exactly
-      // ONE extra photo: the UI showed the '+1 more' badge but only the main
-      // image ever uploaded.
-      if (additionalImages.isNotEmpty) {
-        final imagesToUpload = widget.imageFile == null
-            ? additionalImages.skip(1).toList()
-            : additionalImages.toList();
-
-        for (final img in imagesToUpload) {
-          try {
-            await ItemRepository().uploadImages(created.id, [img]);
-          } catch (e) {
-            // Continue uploading other images even if one fails
-          }
-        }
-      }
-
-      // Keep the closet list in sync (FL5 pattern — go through
-      // WardrobeSyncService, not Get.find on the controller directly).
-      final sync = Get.isRegistered<WardrobeSyncService>()
-          ? Get.find<WardrobeSyncService>()
-          : WardrobeSyncService();
-      sync.addItem(created);
-
-      // Saved: the next submit is a different item and must NOT reuse this key
-      // (the backend would replay the row just created).
-      _clientRequestId = null;
-      _lastRequestJson = null;
-
-      Get.back(); // Close form
-      Get.back(); // Close item add page
-      ErrorHandler.showSuccess('"${created.name}" added to your closet', title: 'Success');
-    } catch (e) {
-      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
-    } finally {
-      isSaving.value = false;
-    }
-  }
-
-  Future<void> _pickAdditionalImage() async {
-    // Use pickMultipleMedia to select multiple images at once
-    final List<XFile> images = await _imagePicker.pickMultipleMedia(
-      imageQuality: 85,
-    );
-
-    var addedCount = 0;
-    for (final image in images) {
-      // Only add image files (case-insensitive check)
-      final path = image.path.toLowerCase();
-      if (path.endsWith('.jpg') ||
-          path.endsWith('.jpeg') ||
-          path.endsWith('.png') ||
-          path.endsWith('.webp') ||
-          path.endsWith('.heic') ||
-          path.endsWith('.heif') ||
-          path.endsWith('.bmp') ||
-          path.endsWith('.tif') ||
-          path.endsWith('.tiff')) {
-        additionalImages.add(File(image.path));
-        addedCount++;
-      }
-    }
-
-    if (addedCount > 0 && mounted) {
-      ErrorHandler.showSuccess('$addedCount additional image(s) added', title: 'Images Added');
-    }
-  }
-
-  void _removeAdditionalImage(int index) {
-    additionalImages.removeAt(index);
-  }
+class _UseCasePickerState extends State<UseCasePicker> {
+  final _custom = TextEditingController();
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _brandController.dispose();
-    _sizeController.dispose();
-    _materialController.dispose();
-    _patternController.dispose();
-    _priceController.dispose();
-    _tagsController.dispose();
-    _locationController.dispose();
-    _customUseCaseController.dispose();
+    _custom.dispose();
     super.dispose();
+  }
+
+  void _add() {
+    final value = UseCases.normalize(_custom.text);
+    if (value.isEmpty) return;
+    if (!widget.selected.contains(value)) widget.onToggle(value);
+    _custom.clear();
   }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Item Details'), elevation: 0),
-      body: AppPageBackground(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Image preview
-                  Obx(() => _buildImagePreview(tokens)),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Required fields section
-                  _buildSectionHeader('Required', tokens),
-
-                  const SizedBox(height: AppConstants.spacing8),
-
-                  // Name
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Item Name *',
-                      hintText: 'e.g., Blue Cotton T-Shirt',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter an item name';
-                      }
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Category
-                  Obx(() => _buildCategoryDropdown(tokens)),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Condition
-                  Obx(() => _buildConditionDropdown(tokens)),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  // Optional fields section
-                  _buildSectionHeader('Optional Details', tokens),
-
-                  const SizedBox(height: AppConstants.spacing8),
-
-                  // Description
-                  TextFormField(
-                    controller: _descriptionController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      hintText: 'Add any notes about this item...',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Colors
-                  Obx(() => _buildColorSelector(tokens)),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Use cases
-                  Obx(() => _buildUseCaseSelector(tokens)),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Brand & Size row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _brandController,
-                          decoration: const InputDecoration(
-                            labelText: 'Brand',
-                            hintText: 'e.g., Nike',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _sizeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Size',
-                            hintText: 'e.g., M',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Material & Pattern row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _materialController,
-                          decoration: const InputDecoration(
-                            labelText: 'Material',
-                            hintText: 'e.g., Cotton',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _patternController,
-                          decoration: const InputDecoration(
-                            labelText: 'Pattern',
-                            hintText: 'e.g., Solid',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Price
-                  TextFormField(
-                    controller: _priceController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Price',
-                      hintText: 'e.g., 49.99',
-                      prefixText: '\$ ',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Location
-                  TextFormField(
-                    controller: _locationController,
-                    decoration: const InputDecoration(
-                      labelText: 'Storage Location',
-                      hintText: 'e.g., Closet A, Shelf 2',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  // Save button
-                  Obx(
-                    () => ElevatedButton(
-                      onPressed: isSaving.value ? null : _submitForm,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                      ),
-                      child: isSaving.value
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Save Item'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImagePreview(AppUiTokens tokens) {
-    final hasMainImage = widget.imageFile != null;
-    final hasAdditionalImages = additionalImages.isNotEmpty;
-    // When no main image, the first additional image is shown as preview
-    final extraCount = hasMainImage
-        ? additionalImages.length
-        : (additionalImages.length - 1);
-
-    if (hasMainImage || hasAdditionalImages) {
-      // Build list of all images to display
-      final List<File> allImages = [];
-      if (hasMainImage) allImages.add(widget.imageFile!);
-      allImages.addAll(additionalImages);
-
-      return Column(
-        children: [
-          // Main image preview
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-                child: Image.file(
-                  widget.imageFile ?? additionalImages.first,
-                  width: double.infinity,
-                  height: 200,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              if (extraCount > 0)
-                Positioned(
-                  top: AppConstants.spacing8,
-                  left: AppConstants.spacing8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing8,
-                      vertical: AppConstants.spacing4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: tokens.cardColor.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius12,
-                      ),
-                    ),
-                    child: Text(
-                      '+$extraCount more',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: tokens.textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
-              if (!hasMainImage && allImages.isNotEmpty)
-                Positioned(
-                  top: AppConstants.spacing8,
-                  right: AppConstants.spacing8,
-                  child: CircleAvatar(
-                    backgroundColor: tokens.cardColor,
-                    child: IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => additionalImages.clear(),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-
-          // Show additional images as thumbnails
-          if (hasAdditionalImages && allImages.length > 1)
-            Container(
-              height: 80,
-              margin: const EdgeInsets.only(top: AppConstants.spacing8),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: additionalImages.length,
-                itemBuilder: (context, index) {
-                  return Container(
-                    width: 80,
-                    margin: const EdgeInsets.only(right: AppConstants.spacing8),
-                    child: Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                            AppConstants.radius8,
-                          ),
-                          child: Image.file(
-                            additionalImages[index],
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: GestureDetector(
-                            onTap: () => _removeAdditionalImage(index),
-                            child: Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: tokens.cardColor.withValues(alpha: 0.8),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.close,
-                                size: 16,
-                                color: tokens.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-          // Add more images button
-          const SizedBox(height: AppConstants.spacing8),
-          OutlinedButton.icon(
-            onPressed: _pickAdditionalImage,
-            icon: const Icon(Icons.add_photo_alternate),
-            label: const Text('Add More Photos'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(40),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Upload placeholder
-    return InkWell(
-      onTap: _pickAdditionalImage,
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
-        width: double.infinity,
-        height: 200,
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: tokens.brandColor.withValues(alpha: 0.5),
-            width: 2,
-            style: BorderStyle.solid,
-          ),
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_photo_alternate, size: 48, color: tokens.brandColor),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              'Add Photo (Multiple)',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(color: tokens.brandColor),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, AppUiTokens tokens) {
-    return Padding(
-      padding: const EdgeInsets.only(left: AppConstants.spacing4),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: tokens.textMuted,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryDropdown(AppUiTokens tokens) {
-    return DropdownButtonFormField<Category>(
-      initialValue: selectedCategory.value,
-      decoration: const InputDecoration(
-        labelText: 'Category *',
-        border: OutlineInputBorder(),
-      ),
-      items: Category.values.map((category) {
-        return DropdownMenuItem(
-          value: category,
-          child: Text(category.displayName),
-        );
-      }).toList(),
-      onChanged: (value) {
-        if (value != null) selectedCategory.value = value;
-      },
-    );
-  }
-
-  Widget _buildConditionDropdown(AppUiTokens tokens) {
-    return DropdownButtonFormField<domain.Condition>(
-      initialValue: selectedCondition.value,
-      decoration: const InputDecoration(
-        labelText: 'Condition *',
-        border: OutlineInputBorder(),
-      ),
-      items: domain.Condition.values.map((condition) {
-        return DropdownMenuItem(
-          value: condition,
-          child: Text(condition.displayName),
-        );
-      }).toList(),
-      onChanged: (value) {
-        if (value != null) selectedCondition.value = value;
-      },
-    );
-  }
-
-  Widget _buildColorSelector(AppUiTokens tokens) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Colors',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: tokens.textPrimary,
-            fontWeight: FontWeight.w500,
+        Text('Use cases', style: text.titleSmall),
+        if (widget.helper != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            widget.helper!,
+            style: text.bodySmall?.copyWith(color: tokens.textSecondary),
           ),
-        ),
+        ],
         const SizedBox(height: AppConstants.spacing8),
         Wrap(
           spacing: AppConstants.spacing8,
           runSpacing: AppConstants.spacing8,
-          children: commonColors.map((color) {
-            final isSelected = selectedColors.contains(color);
-            return FilterChip(
-              label: Text(color),
-              selected: isSelected,
-              onSelected: (selected) {
-                if (selected) {
-                  selectedColors.add(color);
-                } else {
-                  selectedColors.remove(color);
-                }
-                selectedColors.refresh();
-              },
-              selectedColor: tokens.brandColor.withValues(alpha: 0.2),
-              checkmarkColor: tokens.brandColor,
-            );
-          }).toList(),
+          children: [
+            for (final useCase in {...UseCases.defaults, ...widget.selected})
+              FilterChip(
+                label: Text(UseCases.displayLabel(useCase)),
+                selected: widget.selected.contains(useCase),
+                onSelected: (_) => widget.onToggle(useCase),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppConstants.spacing8),
+        TextField(
+          controller: _custom,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _add(),
+          decoration: InputDecoration(
+            labelText: 'Add a use case',
+            hintText: 'For example, brunch',
+            suffixIcon: IconButton(
+              tooltip: 'Add use case',
+              icon: const Icon(Icons.add_rounded),
+              onPressed: _add,
+            ),
+          ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildUseCaseSelector(AppUiTokens tokens) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Use Cases',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: tokens.textPrimary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacing8),
-        Wrap(
-          spacing: AppConstants.spacing8,
-          runSpacing: AppConstants.spacing8,
-          children: UseCases.defaults.map((useCase) {
-            final isSelected = selectedUseCases.contains(useCase);
-            return FilterChip(
-              label: Text(UseCases.displayLabel(useCase)),
-              selected: isSelected,
-              onSelected: (selected) {
-                if (selected) {
-                  selectedUseCases.add(useCase);
-                } else {
-                  selectedUseCases.remove(useCase);
-                }
-                selectedUseCases.refresh();
-              },
-              selectedColor: tokens.brandColor.withValues(alpha: 0.2),
-              checkmarkColor: tokens.brandColor,
+/// The add-details form, shown in the add page body. With [image] (a photo
+/// from the add session) the piece is saved with it; more photos can be
+/// added. Closes the add page after a save.
+class ManualEntryForm extends ConsumerStatefulWidget {
+  const ManualEntryForm({super.key, this.image});
+
+  final File? image;
+
+  @override
+  ConsumerState<ManualEntryForm> createState() => _ManualEntryFormState();
+}
+
+class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
+  static const _commonColors = [
+    'Black', 'White', 'Gray', 'Red', 'Blue', 'Green', 'Yellow', //
+    'Pink', 'Purple', 'Orange', 'Brown', 'Beige', 'Navy', 'Cream',
+  ];
+  static const _imageExtensions = {
+    'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'bmp', 'tif', 'tiff', //
+  };
+
+  final _formKey = GlobalKey<FormState>();
+  final _picker = ImagePicker();
+  final _name = TextEditingController();
+  final _description = TextEditingController();
+  final _brand = TextEditingController();
+  final _size = TextEditingController();
+  final _material = TextEditingController();
+  final _pattern = TextEditingController();
+  final _price = TextEditingController();
+  final _location = TextEditingController();
+
+  Category _category = Category.tops;
+  domain.Condition _condition = domain.Condition.clean;
+  final Set<String> _colors = {};
+  final Set<String> _useCases = {};
+  final List<File> _extraImages = [];
+  bool _saving = false;
+
+  /// Idempotency key for this form's create (TD-109): reused by every retry
+  /// of the same draft, minted again when the draft changes.
+  String? _requestId;
+  String? _requestPayload;
+
+  @override
+  void dispose() {
+    for (final c in [
+      _name, _description, _brand, _size, _material, _pattern, _price, //
+      _location,
+    ]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  String? _text(TextEditingController c) {
+    final value = c.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  Future<void> _addPhotos() async {
+    final picked = await _picker.pickMultipleMedia(imageQuality: 85);
+    if (!mounted) return;
+    final images = [
+      for (final f in picked)
+        if (_imageExtensions.contains(f.path.split('.').last.toLowerCase()))
+          File(f.path),
+    ];
+    if (images.isNotEmpty) setState(() => _extraImages.addAll(images));
+  }
+
+  Future<void> _save() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    final repository = ref.read(itemRepositoryProvider);
+    final main = widget.image ?? _extraImages.firstOrNull;
+    final request = CreateItemRequest(
+      name: _name.text.trim(),
+      description: _text(_description),
+      category: _category,
+      colors: _colors.isEmpty ? null : _colors.toList(),
+      brand: _text(_brand),
+      size: _text(_size),
+      material: _text(_material),
+      pattern: _text(_pattern),
+      condition: _condition,
+      price: double.tryParse(_price.text.trim()),
+      location: _text(_location),
+      occasionTags: _useCases.isEmpty
+          ? null
+          : UseCases.normalizeList(_useCases),
+    );
+    final payload = request.toJson().toString();
+    if (_requestId == null || _requestPayload != payload) {
+      _requestId = newRequestId('item');
+      _requestPayload = payload;
+    }
+    try {
+      // A piece without a photo is allowed: the backend supports it.
+      final created = main == null
+          ? await repository.createItem(request, clientRequestId: _requestId)
+          : await repository.createItemWithImage(
+              image: main,
+              request: request,
+              clientRequestId: _requestId,
             );
-          }).toList(),
-        ),
-        const SizedBox(height: AppConstants.spacing8),
+      final extra = widget.image == null ? _extraImages.skip(1) : _extraImages;
+      for (final image in extra) {
+        try {
+          await repository.uploadImages(created.id, [image]);
+        } catch (e, stack) {
+          ErrorHandler.reportError(
+            e,
+            'Extra photo upload failed',
+            stackTrace: stack,
+          );
+        }
+      }
+      if (ref.exists(wardrobeProvider)) {
+        ref.read(wardrobeProvider.notifier).addItems([created]);
+      }
+      _requestId = null;
+      _requestPayload = null;
+      ErrorHandler.showSuccess(
+        '${created.name} is in your closet.',
+        title: 'Saved',
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e, stack) {
+      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    const gap = SizedBox(height: AppConstants.spacing16);
+    final photos = [?widget.image, ..._extraImages];
+
+    return Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppConstants.spacing16,
+                AppConstants.spacing8,
+                AppConstants.spacing16,
+                AppConstants.spacing24,
+              ),
+              children: [
+                Text(
+                  'Only a name is needed. Add the rest now or later.',
+                  style: text.bodyMedium?.copyWith(
+                    color: PaperTokens.of(context).textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing20),
+                _Photos(
+                  photos: photos,
+                  fixedCount: widget.image == null ? 0 : 1,
+                  onAdd: _addPhotos,
+                  onRemove: (i) => setState(() => _extraImages.removeAt(i)),
+                ),
+                const SizedBox(height: AppConstants.spacing24),
+                TextFormField(
+                  controller: _name,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    hintText: 'For example, blue cotton tee',
+                  ),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+                ),
+                gap,
+                DropdownButtonFormField<Category>(
+                  initialValue: _category,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: [
+                    for (final c in Category.values)
+                      DropdownMenuItem(value: c, child: Text(c.displayName)),
+                  ],
+                  onChanged: (v) => setState(() => _category = v ?? _category),
+                ),
+                gap,
+                DropdownButtonFormField<domain.Condition>(
+                  initialValue: _condition,
+                  decoration: const InputDecoration(labelText: 'Condition'),
+                  items: [
+                    for (final c in domain.Condition.values)
+                      DropdownMenuItem(value: c, child: Text(c.displayName)),
+                  ],
+                  onChanged: (v) =>
+                      setState(() => _condition = v ?? _condition),
+                ),
+                gap,
+                TextFormField(
+                  controller: _description,
+                  maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(labelText: 'Notes'),
+                ),
+                const SizedBox(height: AppConstants.spacing20),
+                Text('Colours', style: text.titleSmall),
+                const SizedBox(height: AppConstants.spacing8),
+                Wrap(
+                  spacing: AppConstants.spacing8,
+                  runSpacing: AppConstants.spacing8,
+                  children: [
+                    for (final color in _commonColors)
+                      FilterChip(
+                        label: Text(color),
+                        selected: _colors.contains(color),
+                        onSelected: (on) => setState(
+                          () => on ? _colors.add(color) : _colors.remove(color),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppConstants.spacing20),
+                UseCasePicker(
+                  selected: _useCases,
+                  onToggle: (value) => setState(
+                    () => _useCases.contains(value)
+                        ? _useCases.remove(value)
+                        : _useCases.add(value),
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _brand,
+                        decoration: const InputDecoration(labelText: 'Brand'),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.spacing12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _size,
+                        decoration: const InputDecoration(labelText: 'Size'),
+                      ),
+                    ),
+                  ],
+                ),
+                gap,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _material,
+                        decoration: const InputDecoration(
+                          labelText: 'Material',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.spacing12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _pattern,
+                        decoration: const InputDecoration(labelText: 'Pattern'),
+                      ),
+                    ),
+                  ],
+                ),
+                gap,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _price,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(labelText: 'Price'),
+                        validator: (v) {
+                          final value = v?.trim() ?? '';
+                          if (value.isEmpty) return null;
+                          return double.tryParse(value) == null
+                              ? 'Enter a number'
+                              : null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.spacing12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _location,
+                        decoration: const InputDecoration(labelText: 'Kept in'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          _BottomAction(
+            child: ElevatedButton(
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? 'Saving' : 'Save piece'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Photos extends StatelessWidget {
+  const _Photos({
+    required this.photos,
+    required this.fixedCount,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<File> photos;
+
+  /// Leading photos that cannot be removed here (the add-session photo).
+  final int fixedCount;
+  final VoidCallback onAdd;
+
+  /// Index into the removable photos.
+  final ValueChanged<int> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         Row(
           children: [
-            Expanded(
-              child: TextFormField(
-                controller: _customUseCaseController,
-                decoration: const InputDecoration(
-                  labelText: 'Custom use case',
-                  hintText: 'e.g., brunch',
-                  border: OutlineInputBorder(),
-                ),
-                onFieldSubmitted: (_) => _addCustomUseCase(),
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacing8),
-            OutlinedButton(
-              onPressed: _addCustomUseCase,
-              child: const Text('Add'),
+            Expanded(child: Text('Photos', style: text.titleSmall)),
+            TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
+              label: const Text('Add photos'),
             ),
           ],
         ),
-        if (selectedUseCases.isNotEmpty) ...[
-          const SizedBox(height: AppConstants.spacing8),
-          Wrap(
-            spacing: AppConstants.spacing8,
-            runSpacing: AppConstants.spacing8,
-            children: selectedUseCases.map((useCase) {
-              return Chip(
-                label: Text(UseCases.displayLabel(useCase)),
-                onDeleted: () {
-                  selectedUseCases.remove(useCase);
-                  selectedUseCases.refresh();
-                },
-              );
-            }).toList(),
+        const SizedBox(height: AppConstants.spacing8),
+        if (photos.isEmpty)
+          PaperSurface(
+            lift: 0,
+            color: tokens.stock.sunk,
+            child: Text(
+              'No photo yet. You can save without one.',
+              textAlign: TextAlign.center,
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+            ),
+          )
+        else
+          SizedBox(
+            height: 104,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: photos.length,
+              separatorBuilder: (_, _) =>
+                  const SizedBox(width: AppConstants.spacing8),
+              itemBuilder: (context, i) => SizedBox.square(
+                dimension: 104,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(AppConstants.radius8),
+                      child: ColoredBox(
+                        color: tokens.stock.sunk,
+                        child: Image.file(
+                          photos[i],
+                          fit: BoxFit.cover,
+                          cacheWidth: 312,
+                          errorBuilder: (_, _, _) => Icon(
+                            Icons.image_not_supported_outlined,
+                            color: tokens.textMuted,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (i >= fixedCount)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: IconButton(
+                          tooltip: 'Remove photo',
+                          onPressed: () => onRemove(i - fixedCount),
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            size: 20,
+                            shadows: [
+                              Shadow(color: Colors.black, blurRadius: 4),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ],
       ],
     );
   }
+}
 
-  void _addCustomUseCase() {
-    final normalized = UseCases.normalize(_customUseCaseController.text);
-    if (normalized.isEmpty) return;
-    selectedUseCases.add(normalized);
-    selectedUseCases.refresh();
-    _customUseCaseController.clear();
-  }
+/// A full-width action pinned under a scrolling page body.
+class _BottomAction extends StatelessWidget {
+  const _BottomAction({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => PaperActionBar(
+    child: SizedBox(width: double.infinity, child: child),
+  );
 }

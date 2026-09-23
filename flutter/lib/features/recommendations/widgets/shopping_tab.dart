@@ -1,378 +1,242 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
-import '../controllers/recommendations_controller.dart';
+import '../providers/recommendations_providers.dart';
+import 'recommendation_widgets.dart';
 
-/// Shopping Tab - Get shopping suggestions for wardrobe gaps
-class ShoppingTab extends StatelessWidget {
+/// Pieces worth buying to fill gaps in the closet.
+class ShoppingTab extends ConsumerStatefulWidget {
   const ShoppingTab({super.key});
 
   @override
+  ConsumerState<ShoppingTab> createState() => _ShoppingTabState();
+}
+
+class _ShoppingTabState extends ConsumerState<ShoppingTab>
+    with AutomaticKeepAliveClientMixin {
+  Category? _category;
+  Style? _style;
+  double _budget = 100;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  ShoppingNotifier get _shopping => ref.read(shoppingProvider.notifier);
+
+  void _fetch() => _shopping.fetch(
+    category: _category?.name,
+    style: _style?.name,
+    budget: _budget,
+  );
+
+  @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final RecommendationsController controller = Get.find<RecommendationsController>();
-
-    return Column(
-      children: [
-        // Filters
-        Container(
-          padding: const EdgeInsets.all(AppConstants.spacing16),
-          child: Column(
-            children: [
-              // Category and Style row
-              Row(
-                children: [
-                  Expanded(
-                    child: Obx(() => DropdownButtonFormField<String>(
-                          initialValue: controller.shoppingCategory.value == 'all'
-                              ? null
-                              : controller.shoppingCategory.value,
-                          decoration: InputDecoration(
-                            labelText: 'Category',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConstants.radius12),
-                            ),
-                          ),
-                          items: [
-                            const DropdownMenuItem(value: 'all', child: Text('All Categories')),
-                            ...Category.values.map((cat) {
-                              return DropdownMenuItem(
-                                value: cat.name,
-                                child: Text(cat.displayName),
-                              );
-                            }),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) controller.shoppingCategory.value = value;
-                          },
-                        )),
-                  ),
-                  const SizedBox(width: AppConstants.spacing12),
-                  Expanded(
-                    child: Obx(() => DropdownButtonFormField<String>(
-                          initialValue: controller.shoppingStyle.value == 'all'
-                              ? null
-                              : controller.shoppingStyle.value,
-                          decoration: InputDecoration(
-                            labelText: 'Style',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConstants.radius12),
-                            ),
-                          ),
-                          items: [
-                            const DropdownMenuItem(value: 'all', child: Text('All Styles')),
-                            ...Style.values.map((style) {
-                              return DropdownMenuItem(
-                                value: style.name,
-                                child: Text(style.displayName),
-                              );
-                            }),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) controller.shoppingStyle.value = value;
-                          },
-                        )),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: AppConstants.spacing12),
-
-              // Budget slider
-              Obx(() => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Max Budget',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                          ),
-                          Text(
-                            '\$${controller.shoppingBudget.value.toInt()}',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: tokens.brandColor,
-                                ),
-                          ),
-                        ],
-                      ),
-                      Slider(
-                        value: controller.shoppingBudget.value,
-                        min: 20,
-                        max: 500,
-                        divisions: 24,
-                        label: '\$${controller.shoppingBudget.value.toInt()}',
-                        onChanged: (value) => controller.shoppingBudget.value = value,
-                      ),
-                    ],
-                  )),
-
-              const SizedBox(height: AppConstants.spacing12),
-
-              // Search button
-              SizedBox(
-                width: double.infinity,
-                child: Obx(() => ElevatedButton.icon(
-                      onPressed: controller.isLoadingShopping.value
-                          ? null
-                          : () => controller.fetchShoppingRecommendations(),
-                      icon: controller.isLoadingShopping.value
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.search),
-                      label: Text(
-                        controller.isLoadingShopping.value ? 'Searching...' : 'Get Recommendations',
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(44),
-                      ),
-                    )),
-              ),
-            ],
+    super.build(context);
+    final results = ref.watch(shoppingProvider);
+    return RefreshIndicator(
+      onRefresh: _shopping.retry,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.spacing16,
+              AppConstants.spacing16,
+              AppConstants.spacing16,
+              AppConstants.spacing8,
+            ),
+            sliver: SliverToBoxAdapter(child: _filters(results.isLoading)),
           ),
-        ),
-
-        const SizedBox(height: AppConstants.spacing16),
-
-        // Results
-        Expanded(
-          child: Obx(() {
-            if (controller.isLoadingShopping.value) {
-              return Padding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                child: ShimmerGridLoaderBox(
-                  crossAxisCount: 2,
-                  itemCount: 6,
-                  childAspectRatio: 0.75,
-                ),
-              );
-            }
-
-            if (controller.shoppingError.value.isNotEmpty) {
-              return Center(
-                child: AppGlassCard(
-                  padding: const EdgeInsets.all(AppConstants.spacing24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 48,
-                        color: tokens.textMuted,
-                      ),
-                      const SizedBox(height: AppConstants.spacing12),
-                      Text(
-                        controller.shoppingError.value,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textPrimary,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: AppConstants.spacing12),
-                      TextButton(
-                        onPressed: controller.fetchShoppingRecommendations,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            if (controller.shoppingRecommendations.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.shopping_bag_outlined,
-                      size: 64,
-                      color: tokens.textMuted,
-                    ),
-                    const SizedBox(height: AppConstants.spacing16),
-                    Text(
-                      'Set your filters and search',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                          ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing8),
-                    Text(
-                      'We\'ll suggest items to fill wardrobe gaps',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.textMuted,
-                          ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return GridView.builder(
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: AppConstants.spacing12,
-                crossAxisSpacing: AppConstants.spacing12,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: controller.shoppingRecommendations.length,
-              itemBuilder: (context, index) {
-                final item = controller.shoppingRecommendations[index];
-                return _buildShoppingCard(context, item, tokens);
-              },
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildShoppingCard(
-    BuildContext context,
-    Map<String, dynamic> item,
-    AppUiTokens tokens,
-  ) {
-    final category = item['category']?.toString() ?? 'Unknown';
-    final description = item['description']?.toString();
-    final priorityLabel = item['priority']?.toString() ?? '';
-    final priorityScore = _priorityScore(priorityLabel);
-    final wouldComplete = item['would_complete'] as num?;
-    final estimatedCpw = item['estimated_cpw'] as num?;
-
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Priority badge
-          if (priorityScore > 0)
-            Align(
-              alignment: Alignment.topRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing8,
-                  vertical: AppConstants.spacing4,
-                ),
-                decoration: BoxDecoration(
-                  color: _getPriorityColor(priorityScore),
-                  borderRadius: BorderRadius.circular(AppConstants.radius8),
-                ),
-                child: Text(
-                  _getPriorityLabel(priorityScore),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-
-          // Image placeholder
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radius8),
-              child: Container(
-                color: tokens.cardColor.withValues(alpha: 0.3),
-                child: Icon(
-                  Icons.shopping_bag,
-                  color: tokens.textMuted,
-                  size: 40,
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: AppConstants.spacing8),
-
-          // Name
-          Text(
-            _formatCategory(category),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          if (description != null) ...[
-            const SizedBox(height: AppConstants.spacing4),
-            Text(
-              description,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                  ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-
-          if (wouldComplete != null || estimatedCpw != null) ...[
-            const SizedBox(height: AppConstants.spacing4),
-            Text(
-              _buildFootnote(wouldComplete, estimatedCpw),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.brandColor,
-                  ),
-            ),
-          ],
+          ..._results(results),
         ],
       ),
     );
   }
 
-  int _priorityScore(String priority) {
-    switch (priority.toLowerCase()) {
-      case 'high':
-        return 8;
-      case 'medium':
-        return 5;
-      case 'low':
-        return 2;
-      default:
-        return 0;
+  Widget _filters(bool loading) {
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<Category?>(
+                initialValue: _category,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Any')),
+                  for (final c in Category.values)
+                    DropdownMenuItem(value: c, child: Text(c.displayName)),
+                ],
+                onChanged: (c) => setState(() => _category = c),
+              ),
+            ),
+            const SizedBox(width: AppConstants.spacing12),
+            Expanded(
+              child: DropdownButtonFormField<Style?>(
+                initialValue: _style,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Style'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Any')),
+                  for (final s in Style.values)
+                    DropdownMenuItem(value: s, child: Text(s.displayName)),
+                ],
+                onChanged: (s) => setState(() => _style = s),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppConstants.spacing16),
+        Row(
+          children: [
+            Expanded(child: Text('Budget up to', style: text.bodyLarge)),
+            Text('\$${_budget.round()}', style: text.titleMedium),
+          ],
+        ),
+        Slider(
+          value: _budget,
+          min: 20,
+          max: 500,
+          divisions: 24,
+          label: '\$${_budget.round()}',
+          onChanged: (v) => setState(() => _budget = v),
+        ),
+        const SizedBox(height: AppConstants.spacing8),
+        ElevatedButton(
+          onPressed: loading ? null : _fetch,
+          child: Text(loading ? 'Looking' : 'Find what to buy'),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _results(AsyncValue<List<Map<String, dynamic>>?> results) {
+    if (results.isLoading) {
+      return const [
+        SliverPadding(
+          padding: tabPadding,
+          sliver: SliverToBoxAdapter(
+            child: SkeletonListLoaderBox(itemCount: 3, hasLeading: false),
+          ),
+        ),
+      ];
     }
-  }
-
-  String _formatCategory(String category) {
-    return category
-        .split('_')
-        .map((part) => part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}')
-        .join(' ');
-  }
-
-  String _buildFootnote(num? wouldComplete, num? estimatedCpw) {
-    final parts = <String>[];
-    if (wouldComplete != null) {
-      parts.add('+$wouldComplete outfits');
+    final value = results.value;
+    if (results.hasError && (value == null || value.isEmpty)) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppErrorState(error: results.error, onRetry: _shopping.retry),
+        ),
+      ];
     }
-    if (estimatedCpw != null) {
-      parts.add('\$${estimatedCpw.toStringAsFixed(2)} CPW');
+    if (value == null) {
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppEmptyState(
+            scene: PaperScenes.closet,
+            title: 'Fill the gaps',
+            message:
+                "Set a budget and we'll suggest what your closet is missing.",
+          ),
+        ),
+      ];
     }
-    return parts.join(' | ');
+    if (value.isEmpty) {
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppEmptyState(
+            scene: PaperScenes.closet,
+            title: 'No gaps found',
+            message: 'Try a bigger budget or another category.',
+          ),
+        ),
+      ];
+    }
+    return [
+      if (results.hasError)
+        SliverToBoxAdapter(
+          child: AppErrorBanner(error: results.error, onRetry: _shopping.retry),
+        ),
+      SliverPadding(
+        padding: tabPadding,
+        sliver: SliverList.separated(
+          itemCount: value.length,
+          separatorBuilder: (_, _) =>
+              const SizedBox(height: AppConstants.spacing12),
+          itemBuilder: (context, i) => _GapCard(gap: value[i]),
+        ),
+      ),
+    ];
   }
+}
 
-  Color _getPriorityColor(int priority) {
-    if (priority >= 8) return Colors.red;
-    if (priority >= 5) return Colors.orange;
-    return Colors.green;
-  }
+class _GapCard extends StatelessWidget {
+  const _GapCard({required this.gap});
 
-  String _getPriorityLabel(int priority) {
-    if (priority >= 8) return 'HIGH PRIORITY';
-    if (priority >= 5) return 'MEDIUM';
-    return 'LOW PRIORITY';
+  final Map<String, dynamic> gap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final description = gap['description']?.toString();
+    final priority = gap['priority']?.toString().toLowerCase();
+    final completes = gap['would_complete'] as num?;
+    final cpw = gap['estimated_cpw'] as num?;
+    final footnote = [
+      if (completes != null)
+        completes == 1 ? 'Adds 1 outfit' : 'Adds $completes outfits',
+      if (cpw != null) '\$${cpw.toStringAsFixed(2)} per wear',
+    ].join(' · ');
+    return PaperSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  capitalizeWords(gap['category']?.toString() ?? 'Piece'),
+                  style: text.titleMedium,
+                ),
+              ),
+              if (priority == 'high' ||
+                  priority == 'medium' ||
+                  priority == 'low')
+                Text(
+                  '${capitalizeWords(priority!)} priority',
+                  style: text.labelLarge?.copyWith(
+                    color: priority == 'high'
+                        ? tokens.stock.accent
+                        : tokens.textSecondary,
+                  ),
+                ),
+            ],
+          ),
+          if (description != null && description.isNotEmpty) ...[
+            const SizedBox(height: AppConstants.spacing4),
+            Text(
+              description,
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+            ),
+          ],
+          if (footnote.isNotEmpty) ...[
+            const SizedBox(height: AppConstants.spacing8),
+            Text(footnote, style: text.bodySmall),
+          ],
+        ],
+      ),
+    );
   }
 }

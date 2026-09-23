@@ -1,640 +1,465 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/widgets/app_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../wardrobe/repositories/item_repository.dart';
-import '../controllers/recommendations_controller.dart';
+import '../../wardrobe/providers/wardrobe_providers.dart';
+import '../providers/recommendations_providers.dart';
+import 'recommendation_widgets.dart';
 
-/// Astrology tab - lucky colors and outfit picks
-class AstrologyTab extends StatelessWidget {
+/// Lucky colours for a day and closet picks in them.
+class AstrologyTab extends ConsumerStatefulWidget {
   const AstrologyTab({super.key});
 
-  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
-  // is re-minted from the durable storage key.
-  static final ItemRepository _itemRepository = ItemRepository();
+  @override
+  ConsumerState<AstrologyTab> createState() => _AstrologyTabState();
+}
+
+class _AstrologyTabState extends ConsumerState<AstrologyTab>
+    with AutomaticKeepAliveClientMixin {
+  String _mode = 'daily';
+  DateTime _date = DateTime.now();
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final RecommendationsController controller =
-        Get.find<RecommendationsController>();
+  bool get wantKeepAlive => true;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildFilters(context, controller, tokens),
-          const SizedBox(height: AppConstants.spacing16),
-          Obx(() {
-            if (controller.astrologyError.value.isNotEmpty) {
-              return _buildErrorCard(
-                context,
-                controller.astrologyError.value,
-                tokens,
-              );
-            }
+  AstrologyNotifier get _astrology => ref.read(astrologyProvider.notifier);
 
-            if (controller.isLoadingAstrology.value) {
-              return ShimmerGridLoaderBox(
-                crossAxisCount: 1,
-                itemCount: 3,
-                childAspectRatio: 3.2,
-              );
-            }
-
-            final data = controller.astrologyData.value;
-            if (data == null || data.isEmpty) {
-              return _buildEmptyState(context, tokens);
-            }
-
-            final status = data['status']?.toString() ?? 'ready';
-            if (status == 'profile_required') {
-              return _buildProfileRequiredCard(context, tokens, data);
-            }
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildColorSection(
-                  context: context,
-                  tokens: tokens,
-                  title: 'Lucky Colors',
-                  colors: _asMapList(data['lucky_colors']),
-                ),
-                const SizedBox(height: AppConstants.spacing16),
-                _buildColorSection(
-                  context: context,
-                  tokens: tokens,
-                  title: 'Lower-Priority Colors',
-                  colors: _asMapList(data['avoid_colors']),
-                ),
-                const SizedBox(height: AppConstants.spacing16),
-                _buildWardrobePicks(
-                  context: context,
-                  tokens: tokens,
-                  picks: _asMapList(data['wardrobe_picks']),
-                ),
-                const SizedBox(height: AppConstants.spacing16),
-                _buildSuggestedOutfits(
-                  context: context,
-                  tokens: tokens,
-                  outfits: _asMapList(data['suggested_outfits']),
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilters(
-    BuildContext context,
-    RecommendationsController controller,
-    AppUiTokens tokens,
-  ) {
-    return AppGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Astrology Color Guide',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          Row(
-            children: [
-              Expanded(
-                child: Obx(
-                  () => DropdownButtonFormField<String>(
-                    initialValue: controller.astrologyMode.value,
-                    decoration: const InputDecoration(
-                      labelText: 'Recommendation Type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'daily', child: Text('Daily')),
-                      DropdownMenuItem(
-                        value: 'important_meeting',
-                        child: Text('Important Meeting'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) controller.astrologyMode.value = value;
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          Obx(
-            () => InkWell(
-              onTap: () => _pickDate(context, controller),
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Target Date',
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.calendar_today),
-                ),
-                child: Text(controller.astrologyTargetDate.value),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          SizedBox(
-            width: double.infinity,
-            child: Obx(
-              () => ElevatedButton.icon(
-                onPressed: controller.isLoadingAstrology.value
-                    ? null
-                    : () => controller.fetchAstrologyRecommendations(),
-                icon: controller.isLoadingAstrology.value
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.auto_awesome),
-                label: Text(
-                  controller.isLoadingAstrology.value
-                      ? 'Checking...'
-                      : 'Get Astrology Colors',
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context, AppUiTokens tokens) {
-    return AppGlassCard(
-      child: Column(
-        children: [
-          Icon(Icons.stars_outlined, size: 56, color: tokens.textMuted),
-          const SizedBox(height: AppConstants.spacing12),
-          Text(
-            'Pick a date and get your lucky colors',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: tokens.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            'We will suggest color-first outfit picks from your wardrobe.',
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileRequiredCard(
-    BuildContext context,
-    AppUiTokens tokens,
-    Map<String, dynamic> data,
-  ) {
-    final notes = (data['notes'] is List)
-        ? (data['notes'] as List).map((e) => e.toString()).toList()
-        : const <String>[];
-
-    return AppGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Date of birth needed',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: tokens.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            'Add your date of birth to get astrology recommendations.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-          ),
-          if (notes.isNotEmpty) ...[
-            const SizedBox(height: AppConstants.spacing8),
-            ...notes.map(
-              (note) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  note,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppConstants.spacing12),
-          ElevatedButton(
-            onPressed: () => Get.toNamed(Routes.profileEdit),
-            child: const Text('Complete Profile'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorCard(
-    BuildContext context,
-    String error,
-    AppUiTokens tokens,
-  ) {
-    return AppGlassCard(
-      child: Column(
-        children: [
-          Icon(Icons.error_outline, size: 48, color: tokens.textMuted),
-          const SizedBox(height: AppConstants.spacing12),
-          Text(
-            error,
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: tokens.textPrimary),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColorSection({
-    required BuildContext context,
-    required AppUiTokens tokens,
-    required String title,
-    required List<Map<String, dynamic>> colors,
-  }) {
-    return AppGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          if (colors.isEmpty)
-            Text(
-              'No colors available for this section.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-            )
-          else
-            ...colors.map((color) {
-              final name = color['name']?.toString() ?? 'Unknown';
-              final hex = color['hex']?.toString() ?? '#E5E7EB';
-              final reason = color['reason']?.toString() ?? '';
-              final confidence = _parseConfidence(color['confidence']);
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: AppConstants.spacing8),
-                padding: const EdgeInsets.all(AppConstants.spacing12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: tokens.cardBorderColor),
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: _parseHexColor(hex),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: tokens.cardBorderColor),
-                      ),
-                    ),
-                    const SizedBox(width: AppConstants.spacing12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: tokens.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                          if (reason.isNotEmpty)
-                            Text(
-                              reason,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: tokens.textMuted),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (confidence != null)
-                      Text(
-                        '${(confidence * 100).round()}%',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.brandColor,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWardrobePicks({
-    required BuildContext context,
-    required AppUiTokens tokens,
-    required List<Map<String, dynamic>> picks,
-  }) {
-    return AppGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Wardrobe Picks',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          if (picks.isEmpty)
-            Text(
-              'No matching wardrobe picks yet.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-            )
-          else
-            ...picks.map((group) {
-              final category = group['category']?.toString() ?? 'other';
-              final items = _asMapList(group['items']);
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppConstants.spacing12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing8),
-                    ...items.map((item) {
-                      final name = item['name']?.toString() ?? 'Unknown';
-                      final image = _extractItemImage(item);
-                      final imageUrl = image.url;
-                      return Container(
-                        margin: const EdgeInsets.only(
-                          bottom: AppConstants.spacing8,
-                        ),
-                        padding: const EdgeInsets.all(AppConstants.spacing8),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: tokens.cardBorderColor),
-                          borderRadius: BorderRadius.circular(
-                            AppConstants.radius12,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(
-                                AppConstants.radius8,
-                              ),
-                              child: SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: imageUrl != null
-                                    ? AppNetworkImage(
-                                        imageUrl,
-                                        fit: BoxFit.cover,
-                                        // A derived `_thumb` URL may not exist;
-                                        // retry the full size before showing a
-                                        // broken-image icon.
-                                        fallbackUrl: image.fallback,
-                                        storagePath: image.storagePath,
-                                        remintUrl:
-                                            _itemRepository.remintImageUrl,
-                                        errorWidget: (_, _, _) => const Icon(Icons.broken_image_outlined),
-                                      )
-                                    : Container(
-                                        color: tokens.cardColor.withValues(
-                                          alpha: 0.4,
-                                        ),
-                                        child: Icon(
-                                          Icons.image,
-                                          color: tokens.textMuted,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                            const SizedBox(width: AppConstants.spacing8),
-                            Expanded(
-                              child: Text(
-                                name,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: tokens.textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSuggestedOutfits({
-    required BuildContext context,
-    required AppUiTokens tokens,
-    required List<Map<String, dynamic>> outfits,
-  }) {
-    return AppGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Suggested Outfits',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          if (outfits.isEmpty)
-            Text(
-              'No complete outfit could be assembled.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-            )
-          else
-            ...outfits.map((outfit) {
-              final description =
-                  outfit['description']?.toString() ?? 'Suggested outfit';
-              final matchScore = outfit['match_score'] as num?;
-              final itemIds =
-                  (outfit['item_ids'] as List?)
-                      ?.map((e) => e.toString())
-                      .toList() ??
-                  const <String>[];
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: AppConstants.spacing8),
-                padding: const EdgeInsets.all(AppConstants.spacing12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: tokens.cardBorderColor),
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            description,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: tokens.textPrimary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        ),
-                        if (matchScore != null)
-                          Text(
-                            '${matchScore.round()}',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: tokens.brandColor,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                      ],
-                    ),
-                    if (itemIds.isNotEmpty) ...[
-                      const SizedBox(height: AppConstants.spacing6),
-                      Text(
-                        itemIds.join(' • '),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textMuted,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _pickDate(
-    BuildContext context,
-    RecommendationsController controller,
-  ) async {
-    final current =
-        DateTime.tryParse(controller.astrologyTargetDate.value) ??
-        DateTime.now();
+  Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: current,
+      initialDate: _date,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) {
-      controller.astrologyTargetDate.value = picked
-          .toIso8601String()
-          .split('T')
-          .first;
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final reading = ref.watch(astrologyProvider);
+    return RefreshIndicator(
+      onRefresh: _astrology.retry,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.spacing16,
+              AppConstants.spacing16,
+              AppConstants.spacing16,
+              AppConstants.spacing8,
+            ),
+            sliver: SliverToBoxAdapter(child: _controls(reading.isLoading)),
+          ),
+          ..._results(reading),
+        ],
+      ),
+    );
+  }
+
+  Widget _controls(bool loading) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      SegmentedButton<String>(
+        segments: const [
+          ButtonSegment(value: 'daily', label: Text('Everyday')),
+          ButtonSegment(value: 'important_meeting', label: Text('Big meeting')),
+        ],
+        selected: {_mode},
+        showSelectedIcon: false,
+        onSelectionChanged: (s) => setState(() => _mode = s.first),
+      ),
+      const SizedBox(height: AppConstants.spacing12),
+      InkWell(
+        onTap: _pickDate,
+        borderRadius: BorderRadius.circular(AppConstants.radius12),
+        child: InputDecorator(
+          decoration: const InputDecoration(
+            labelText: 'Day',
+            suffixIcon: Icon(Icons.calendar_today_outlined),
+          ),
+          child: Text(AppDateUtils.formatMonthDayYear(_date)),
+        ),
+      ),
+      const SizedBox(height: AppConstants.spacing12),
+      ElevatedButton(
+        onPressed: loading
+            ? null
+            : () => _astrology.fetch(mode: _mode, date: _date),
+        child: Text(loading ? 'Reading the stars' : 'Get my colours'),
+      ),
+    ],
+  );
+
+  List<Widget> _results(AsyncValue<Map<String, dynamic>?> reading) {
+    if (reading.isLoading) {
+      return [
+        SliverPadding(
+          padding: tabPadding,
+          sliver: SliverList.separated(
+            itemCount: 3,
+            separatorBuilder: (_, _) =>
+                const SizedBox(height: AppConstants.spacing12),
+            itemBuilder: (_, _) => const SkeletonCard(height: 120),
+          ),
+        ),
+      ];
     }
+    final data = reading.value;
+    if (reading.hasError && data == null) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppErrorState(error: reading.error, onRetry: _astrology.retry),
+        ),
+      ];
+    }
+    if (data == null || data.isEmpty) {
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppEmptyState(
+            scene: PaperScenes.home,
+            title: 'Your lucky colours',
+            message: "Pick a day and we'll suggest colours and pieces for it.",
+          ),
+        ),
+      ];
+    }
+    final sections = data['status']?.toString() == 'profile_required'
+        ? [_ProfileRequired(notes: _strings(data['notes']))]
+        : [
+            _ColourSection(
+              title: 'Lucky colours',
+              colours: _maps(data['lucky_colors']),
+            ),
+            _ColourSection(
+              title: 'Colours to go easy on',
+              colours: _maps(data['avoid_colors']),
+            ),
+            _PicksSection(groups: _maps(data['wardrobe_picks'])),
+            _OutfitsSection(outfits: _maps(data['suggested_outfits'])),
+          ];
+    return [
+      if (reading.hasError)
+        SliverToBoxAdapter(
+          child: AppErrorBanner(
+            error: reading.error,
+            onRetry: _astrology.retry,
+          ),
+        ),
+      SliverPadding(
+        padding: tabPadding,
+        sliver: SliverList.separated(
+          itemCount: sections.length,
+          separatorBuilder: (_, _) =>
+              const SizedBox(height: AppConstants.spacing16),
+          itemBuilder: (_, i) => sections[i],
+        ),
+      ),
+    ];
+  }
+}
+
+List<Map<String, dynamic>> _maps(dynamic value) => value is List
+    ? [
+        for (final v in value)
+          if (v is Map) Map<String, dynamic>.from(v),
+      ]
+    : const [];
+
+List<String> _strings(dynamic value) =>
+    value is List ? [for (final v in value) v.toString()] : const [];
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => PaperSurface(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: AppConstants.spacing12),
+        ...children,
+      ],
+    ),
+  );
+}
+
+class _Quiet extends StatelessWidget {
+  const _Quiet(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: PaperTokens.of(context).textSecondary,
+    ),
+  );
+}
+
+class _ProfileRequired extends StatelessWidget {
+  const _ProfileRequired({required this.notes});
+
+  final List<String> notes;
+
+  @override
+  Widget build(BuildContext context) => _Section(
+    title: 'Add your birth date',
+    children: [
+      const _Quiet('We need your date of birth to read your colours.'),
+      for (final note in notes) ...[
+        const SizedBox(height: AppConstants.spacing4),
+        _Quiet(note),
+      ],
+      const SizedBox(height: AppConstants.spacing16),
+      ElevatedButton(
+        onPressed: () => context.push(Routes.profileEdit),
+        child: const Text('Edit profile'),
+      ),
+    ],
+  );
+}
+
+class _ColourSection extends StatelessWidget {
+  const _ColourSection({required this.title, required this.colours});
+
+  final String title;
+  final List<Map<String, dynamic>> colours;
+
+  static Color? _parse(String? hex) {
+    final value = hex?.replaceAll('#', '').trim() ?? '';
+    final parsed = int.tryParse(
+      value.length == 6 ? 'FF$value' : value,
+      radix: 16,
+    );
+    return parsed == null ? null : Color(parsed);
   }
 
-  List<Map<String, dynamic>> _asMapList(dynamic value) {
-    if (value is! List) return const [];
-    return value.whereType<Map<String, dynamic>>().toList();
-  }
+  static double? _confidence(dynamic v) =>
+      v is num ? v.toDouble() : double.tryParse('${v ?? ''}'.trim());
 
-  /// The URL to show, plus the full size to retry if it fails.
-  ///
-  /// Thumbnail-first is right for a 48px tile, but `thumbnail_url` is derived
-  /// from the parent key with no existence check and can 404 while the full-size
-  /// object is healthy (see `AppNetworkImage.fallbackUrl`), so the full size
-  /// comes back as the fallback rather than being discarded.
-  ({String? url, String? fallback, String? storagePath}) _extractItemImage(
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return _Section(
+      title: title,
+      children: [
+        if (colours.isEmpty) const _Quiet('Nothing for this day.'),
+        for (final c in colours)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: AppConstants.spacing6,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // A colour swatch is the data itself, not decoration.
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: _parse(c['hex']?.toString()) ?? tokens.stock.sunk,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: tokens.stock.edge),
+                  ),
+                ),
+                const SizedBox(width: AppConstants.spacing12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        c['name']?.toString() ?? 'Unnamed colour',
+                        style: text.titleSmall,
+                      ),
+                      if ((c['reason']?.toString() ?? '').isNotEmpty)
+                        Text(
+                          c['reason'].toString(),
+                          style: text.bodySmall?.copyWith(
+                            color: tokens.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (_confidence(c['confidence']) case final confidence?)
+                  Padding(
+                    padding: const EdgeInsets.only(left: AppConstants.spacing8),
+                    child: Text(
+                      '${(confidence * 100).round()}%',
+                      style: text.labelLarge?.copyWith(
+                        color: tokens.stock.accent,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _PicksSection extends ConsumerWidget {
+  const _PicksSection({required this.groups});
+
+  final List<Map<String, dynamic>> groups;
+
+  /// Thumbnail first for a small tile, with the full size as the fallback.
+  static ({String? url, String? fallback, String? storagePath}) _image(
     Map<String, dynamic> item,
   ) {
     for (final key in ['images', 'item_images']) {
       final images = item[key];
-      if (images is List && images.isNotEmpty) {
-        final first = images.first;
-        if (first is Map) {
-          final map = Map<String, dynamic>.from(first);
-          final full = map['image_url']?.toString() ?? map['url']?.toString();
-          final thumb = map['thumbnail_url']?.toString();
-          final storagePath = map['storage_path']?.toString();
-          final url = (thumb != null && thumb.isNotEmpty) ? thumb : full;
-          if (url != null && url.isNotEmpty) {
-            return (url: url, fallback: full, storagePath: storagePath);
-          }
+      if (images is List && images.isNotEmpty && images.first is Map) {
+        final m = images.first as Map;
+        final full = m['image_url']?.toString() ?? m['url']?.toString();
+        final thumb = m['thumbnail_url']?.toString();
+        final url = (thumb?.isNotEmpty ?? false) ? thumb : full;
+        if (url != null && url.isNotEmpty) {
+          return (
+            url: url,
+            fallback: full,
+            storagePath: m['storage_path']?.toString(),
+          );
         }
       }
     }
     final flat = item['image_url']?.toString();
-    if (flat != null && flat.isNotEmpty) {
-      return (url: flat, fallback: null, storagePath: null);
-    }
-    return (url: null, fallback: null, storagePath: null);
+    return (
+      url: (flat?.isNotEmpty ?? false) ? flat : null,
+      fallback: null,
+      storagePath: null,
+    );
   }
 
-  Color _parseHexColor(String value) {
-    final normalized = value.replaceAll('#', '').trim();
-    final hex = normalized.length == 6 ? 'FF$normalized' : normalized;
-    final colorInt = int.tryParse(hex, radix: 16);
-    if (colorInt == null) return const Color(0xFFE5E7EB);
-    return Color(colorInt);
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final remint = ref.read(itemRepositoryProvider).remintImageUrl;
+    return _Section(
+      title: 'From your closet',
+      children: [
+        if (groups.isEmpty) const _Quiet('No pieces in these colours yet.'),
+        for (final group in groups) ...[
+          Padding(
+            padding: const EdgeInsets.only(
+              top: AppConstants.spacing4,
+              bottom: AppConstants.spacing8,
+            ),
+            child: Text(
+              capitalizeWords(group['category']?.toString() ?? 'Other'),
+              style: text.titleSmall?.copyWith(color: tokens.textSecondary),
+            ),
+          ),
+          for (final item in _maps(group['items']))
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppConstants.spacing8),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppConstants.radius8),
+                    child: SizedBox.square(
+                      dimension: 48,
+                      child: ColoredBox(
+                        color: tokens.stock.sunk,
+                        child: switch (_image(item)) {
+                          (
+                            url: final url?,
+                            :final fallback,
+                            :final storagePath,
+                          ) =>
+                            AppImage(
+                              imageUrl: url,
+                              fallbackUrl: fallback,
+                              fit: BoxFit.cover,
+                              enableZoom: false,
+                              memCacheWidth: 144,
+                              storagePath: storagePath,
+                              remintUrl: remint,
+                            ),
+                          _ => Icon(
+                            Icons.checkroom_outlined,
+                            color: tokens.textMuted,
+                          ),
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(
+                    child: Text(
+                      item['name']?.toString() ?? 'Unnamed piece',
+                      style: text.bodyLarge,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ],
+    );
   }
+}
 
-  double? _parseConfidence(dynamic value) {
-    if (value == null) return null;
-    if (value is num) return value.toDouble();
-    if (value is String) {
-      return double.tryParse(value.trim());
-    }
-    return null;
+class _OutfitsSection extends StatelessWidget {
+  const _OutfitsSection({required this.outfits});
+
+  final List<Map<String, dynamic>> outfits;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return _Section(
+      title: 'Outfit ideas',
+      children: [
+        if (outfits.isEmpty)
+          const _Quiet('No full outfit in these colours yet.'),
+        for (final o in outfits)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: AppConstants.spacing6,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    o['description']?.toString() ?? 'An outfit idea',
+                    style: text.bodyLarge,
+                  ),
+                ),
+                if (o['match_score'] case final num score)
+                  Padding(
+                    padding: const EdgeInsets.only(left: AppConstants.spacing8),
+                    child: Text(
+                      '${score.round()}% match',
+                      style: text.labelLarge?.copyWith(
+                        color: tokens.stock.accent,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }

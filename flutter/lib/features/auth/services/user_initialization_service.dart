@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:get/get.dart';
 import '../repositories/auth_repository.dart';
 import '../../../core/services/referral_redemption_service.dart';
 import '../../../core/utils/error_handler.dart';
@@ -24,13 +23,13 @@ class ReferralRedemptionResult {
 }
 
 /// Shared initialization logic for user setup that was previously duplicated
-/// across [AuthController] and the subscription feature.
+/// across the auth flow and the subscription feature.
 ///
 /// Extracted as part of FL4 to break the cross-feature import from
 /// auth -> subscription: the subscription repository is injected behind the
 /// core [ReferralRedemptionService] interface, so auth keeps no compile-time
 /// dependency on the subscription feature.
-class UserInitializationService extends GetxService {
+class UserInitializationService {
   final ReferralRedemptionService _subscriptionRepo;
 
   UserInitializationService({

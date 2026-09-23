@@ -62,4 +62,4 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Test
-        run: flutter test
+        run: flutter test --exclude-tags golden

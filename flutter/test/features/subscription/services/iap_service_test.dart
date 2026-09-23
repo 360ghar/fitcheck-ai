@@ -80,39 +80,54 @@ void main() {
   });
 
   group('IapService.fetchProducts', () {
-    test('maps a storekit_no_response lookup failure to a friendly IapException', () async {
-      platform.response = ProductDetailsResponse(
-        productDetails: const [],
-        notFoundIDs: const ['plus_monthly'],
-        error: storekitNoResponseError(),
-      );
+    test(
+      'maps a storekit_no_response lookup failure to a friendly IapException',
+      () async {
+        platform.response = ProductDetailsResponse(
+          productDetails: const [],
+          notFoundIDs: const ['plus_monthly'],
+          error: storekitNoResponseError(),
+        );
 
-      final iap = IapService();
-      await expectLater(
-        iap.fetchProducts({'plus_monthly'}, maxRetries: 1),
-        throwsA(
-          isA<IapException>()
-              .having((e) => e.errorCode, 'errorCode', 'storekit_no_response')
-              // StoreKit 2 surfaces a *successful empty result* as this code:
-              // the store WAS reached and resolved zero of the queried IDs
-              // (App Store Connect setup incomplete). The message must say
-              // "not available yet", never "try again in a moment" — that
-              // state persists until the store side is fixed.
-              .having((e) => e.message, 'message', contains('not available in the store yet'))
-              // The user-visible message must never leak the raw platform
-              // error dump.
-              .having((e) => e.message, 'message', isNot(contains('APError')))
-              .having((e) => e.message, 'message', isNot(contains('StoreKit')))
-              // Telemetry keeps the full raw error for diagnosis.
-              .having((e) => e.details, 'details', contains('storekit_no_response'))
-              .having((e) => e.details, 'details', contains('IAPError'))
-              // Enriched with the queried IDs for fast diagnosis.
-              .having((e) => e.details, 'details', contains('plus_monthly')),
-        ),
-      );
-      // maxRetries: 1 -> one failure then the final failure (2 calls total).
-      expect(platform.queryCalls, 2);
-    });
+        final iap = IapService();
+        await expectLater(
+          iap.fetchProducts({'plus_monthly'}, maxRetries: 1),
+          throwsA(
+            isA<IapException>()
+                .having((e) => e.errorCode, 'errorCode', 'storekit_no_response')
+                // StoreKit 2 surfaces a *successful empty result* as this code:
+                // the store WAS reached and resolved zero of the queried IDs
+                // (App Store Connect setup incomplete). The message must say
+                // "not available yet", never "try again in a moment" — that
+                // state persists until the store side is fixed.
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('not available in the store yet'),
+                )
+                // The user-visible message must never leak the raw platform
+                // error dump.
+                .having((e) => e.message, 'message', isNot(contains('APError')))
+                .having(
+                  (e) => e.message,
+                  'message',
+                  isNot(contains('StoreKit')),
+                )
+                // Telemetry keeps the full raw error for diagnosis.
+                .having(
+                  (e) => e.details,
+                  'details',
+                  contains('storekit_no_response'),
+                )
+                .having((e) => e.details, 'details', contains('IAPError'))
+                // Enriched with the queried IDs for fast diagnosis.
+                .having((e) => e.details, 'details', contains('plus_monthly')),
+          ),
+        );
+        // maxRetries: 1 -> one failure then the final failure (2 calls total).
+        expect(platform.queryCalls, 2);
+      },
+    );
 
     test('a genuine store error keeps the retry-friendly message', () async {
       // Only `storekit_no_response` means "the store answered: zero products".
@@ -134,33 +149,48 @@ void main() {
         iap.fetchProducts({'plus_monthly'}, maxRetries: 1),
         throwsA(
           isA<IapException>()
-              .having((e) => e.errorCode, 'errorCode', 'storekit2_products_error')
-              .having((e) => e.message, 'message', contains('couldn\'t be reached'))
+              .having(
+                (e) => e.errorCode,
+                'errorCode',
+                'storekit2_products_error',
+              )
+              .having(
+                (e) => e.message,
+                'message',
+                contains('couldn\'t be reached'),
+              )
               .having((e) => e.message, 'message', contains('try again'))
-              .having((e) => e.message, 'message', isNot(contains('not available in the store yet'))),
+              .having(
+                (e) => e.message,
+                'message',
+                isNot(contains('not available in the store yet')),
+              ),
         ),
       );
     });
 
-    test('ErrorHandler.extractMessage surfaces only the friendly message', () async {
-      platform.response = ProductDetailsResponse(
-        productDetails: const [],
-        notFoundIDs: const ['plus_monthly'],
-        error: storekitNoResponseError(),
-      );
+    test(
+      'ErrorHandler.extractMessage surfaces only the friendly message',
+      () async {
+        platform.response = ProductDetailsResponse(
+          productDetails: const [],
+          notFoundIDs: const ['plus_monthly'],
+          error: storekitNoResponseError(),
+        );
 
-      final iap = IapService();
-      try {
-        await iap.fetchProducts({'plus_monthly'}, maxRetries: 1);
-        fail('expected IapException');
-      } on IapException catch (e) {
-        final visible = ErrorHandler.extractMessage(e);
-        expect(visible, e.message);
-        expect(visible, isNot(contains('APError')));
-        expect(visible, isNot(contains('StoreKit')));
-        expect(visible, contains('not available in the store yet'));
-      }
-    });
+        final iap = IapService();
+        try {
+          await iap.fetchProducts({'plus_monthly'}, maxRetries: 1);
+          fail('expected IapException');
+        } on IapException catch (e) {
+          final visible = ErrorHandler.extractMessage(e);
+          expect(visible, e.message);
+          expect(visible, isNot(contains('APError')));
+          expect(visible, isNot(contains('StoreKit')));
+          expect(visible, contains('not available in the store yet'));
+        }
+      },
+    );
 
     test('returns product details when the store resolves them', () async {
       platform.response = ProductDetailsResponse(
@@ -192,62 +222,72 @@ void main() {
       expect(platform.queryCalls, 1);
     });
 
-    test('retries then succeeds when the first call errors transiently', () async {
-      // Call 1: storekit_no_response (transient). Call 2: the product resolves.
-      platform.queuedResponses.add(ProductDetailsResponse(
-        productDetails: const [],
-        notFoundIDs: const ['com.fitcheckaiapp.fitcheckai.plus.monthly'],
-        error: storekitNoResponseError(),
-      ));
-      platform.response = ProductDetailsResponse(
-        productDetails: [
-          ProductDetails(
-            id: 'com.fitcheckaiapp.fitcheckai.plus.monthly',
-            title: 'Plus (Monthly)',
-            description: 'Monthly plan',
-            price: r'$9.99',
-            rawPrice: 9.99,
-            currencyCode: 'USD',
+    test(
+      'retries then succeeds when the first call errors transiently',
+      () async {
+        // Call 1: storekit_no_response (transient). Call 2: the product resolves.
+        platform.queuedResponses.add(
+          ProductDetailsResponse(
+            productDetails: const [],
+            notFoundIDs: const ['com.fitcheckaiapp.fitcheckai.plus.monthly'],
+            error: storekitNoResponseError(),
           ),
-        ],
-        notFoundIDs: const [],
-      );
+        );
+        platform.response = ProductDetailsResponse(
+          productDetails: [
+            ProductDetails(
+              id: 'com.fitcheckaiapp.fitcheckai.plus.monthly',
+              title: 'Plus (Monthly)',
+              description: 'Monthly plan',
+              price: r'$9.99',
+              rawPrice: 9.99,
+              currencyCode: 'USD',
+            ),
+          ],
+          notFoundIDs: const [],
+        );
 
-      final iap = IapService();
-      final query = await iap.fetchProducts({
-        'com.fitcheckaiapp.fitcheckai.plus.monthly',
-      }, maxRetries: 2);
+        final iap = IapService();
+        final query = await iap.fetchProducts({
+          'com.fitcheckaiapp.fitcheckai.plus.monthly',
+        }, maxRetries: 2);
 
-      expect(query.products, hasLength(1));
-      expect(
-        query.products.single.id,
-        'com.fitcheckaiapp.fitcheckai.plus.monthly',
-      );
-      // First call errored, second call succeeded.
-      expect(platform.queryCalls, 2);
-    });
+        expect(query.products, hasLength(1));
+        expect(
+          query.products.single.id,
+          'com.fitcheckaiapp.fitcheckai.plus.monthly',
+        );
+        // First call errored, second call succeeded.
+        expect(platform.queryCalls, 2);
+      },
+    );
 
-    test('an empty result (genuine missing product) is returned without retrying', () async {
-      // No error -> the store answered (with zero products). This must not be
-      // retried, so a real "not found" can never be masked as transient.
-      platform.response = ProductDetailsResponse(
-        productDetails: const [],
-        notFoundIDs: const ['com.fitcheckaiapp.fitcheckai.plus.monthly'],
-      );
+    test(
+      'an empty result (genuine missing product) is returned without retrying',
+      () async {
+        // No error -> the store answered (with zero products). This must not be
+        // retried, so a real "not found" can never be masked as transient.
+        platform.response = ProductDetailsResponse(
+          productDetails: const [],
+          notFoundIDs: const ['com.fitcheckaiapp.fitcheckai.plus.monthly'],
+        );
 
-      final iap = IapService();
-      final query = await iap.fetchProducts({
-        'com.fitcheckaiapp.fitcheckai.plus.monthly',
-      });
+        final iap = IapService();
+        final query = await iap.fetchProducts({
+          'com.fitcheckaiapp.fitcheckai.plus.monthly',
+        });
 
-      expect(query.products, isEmpty);
-      // The store answered and did not recognize the ID: this is a setup
-      // problem (product missing in App Store Connect / Play, agreements
-      // unsigned, wrong bundle namespace), not a transient failure, and the
-      // caller must be able to tell the difference.
-      expect(query.notFoundIds, {'com.fitcheckaiapp.fitcheckai.plus.monthly'});
-      expect(platform.queryCalls, 1);
-    });
+        expect(query.products, isEmpty);
+        // The store answered and did not recognize the ID: this is a setup
+        // problem (product missing in App Store Connect / Play, agreements
+        // unsigned, wrong bundle namespace), not a transient failure, and the
+        // caller must be able to tell the difference.
+        expect(query.notFoundIds, {
+          'com.fitcheckaiapp.fitcheckai.plus.monthly',
+        });
+        expect(platform.queryCalls, 1);
+      },
+    );
 
     test('empty identifier sets never touch the platform', () async {
       final iap = IapService();
@@ -267,33 +307,36 @@ void main() {
       currencyCode: 'USD',
     );
 
-    test('Google: the user id is sent obfuscated (sha256), never raw', () async {
-      // Play policy requires the BillingFlow accountId to be one-way
-      // hashed; Google echoes it back in RTDN as
-      // obfuscatedExternalAccountId for backend attribution.
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      try {
-        InAppPurchase.instance;
-        final androidPlatform = FakeInAppPurchasePlatform(
-          response: ProductDetailsResponse(
-            productDetails: const [],
-            notFoundIDs: const [],
-          ),
-        );
-        InAppPurchasePlatform.instance = androidPlatform;
+    test(
+      'Google: the user id is sent obfuscated (sha256), never raw',
+      () async {
+        // Play policy requires the BillingFlow accountId to be one-way
+        // hashed; Google echoes it back in RTDN as
+        // obfuscatedExternalAccountId for backend attribution.
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        try {
+          InAppPurchase.instance;
+          final androidPlatform = FakeInAppPurchasePlatform(
+            response: ProductDetailsResponse(
+              productDetails: const [],
+              notFoundIDs: const [],
+            ),
+          );
+          InAppPurchasePlatform.instance = androidPlatform;
 
-        final iap = IapService();
-        await iap.startPurchase(product, appAccountToken: 'user-uuid-1');
+          final iap = IapService();
+          await iap.startPurchase(product, appAccountToken: 'user-uuid-1');
 
-        expect(
-          androidPlatform.lastPurchaseParam?.applicationUserName,
-          // sha256('user-uuid-1'), hex.
-          '9d08cd99bb60b16d703c96880ac77e1939d744edddb8afe4afed105d8e149a51',
-        );
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
-    });
+          expect(
+            androidPlatform.lastPurchaseParam?.applicationUserName,
+            // sha256('user-uuid-1'), hex.
+            '9d08cd99bb60b16d703c96880ac77e1939d744edddb8afe4afed105d8e149a51',
+          );
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      },
+    );
 
     test('Apple: the raw UUID goes into appAccountToken', () async {
       // StoreKit REQUIRES a UUID in appAccountToken; hashing it would make
@@ -312,7 +355,10 @@ void main() {
         final iap = IapService();
         await iap.startPurchase(product, appAccountToken: 'user-uuid-1');
 
-        expect(iosPlatform.lastPurchaseParam?.applicationUserName, 'user-uuid-1');
+        expect(
+          iosPlatform.lastPurchaseParam?.applicationUserName,
+          'user-uuid-1',
+        );
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

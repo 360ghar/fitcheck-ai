@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/persistence_service.dart';
@@ -17,10 +17,7 @@ class HiddenSharedContentStore {
 
   static const _prefsKey = 'hidden_shared_outfit_ids';
 
-  static PersistenceService get _persistence =>
-      Get.isRegistered<PersistenceService>()
-          ? Get.find<PersistenceService>()
-          : PersistenceService();
+  static PersistenceService get _persistence => PersistenceService.instance;
 
   static Future<bool> isHidden(String shareId) async {
     final list = (await _persistence.getStringList(_prefsKey)) ?? const [];
@@ -38,7 +35,7 @@ class HiddenSharedContentStore {
   }
 }
 
-/// Page for viewing shared outfits (public access)
+/// Public view of a shared outfit, with hide and report (Guideline 1.2).
 class SharedOutfitPage extends StatefulWidget {
   final String shareId;
 
@@ -65,327 +62,200 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
       final outfit = await OutfitRepository().getSharedOutfit(widget.shareId);
       return _SharedLoadResult.ok(outfit);
     } on NotFoundException {
-      // Genuine 404: outfit removed or link invalid. The repository maps
-      // Dio 404s to NotFoundException via handleDioException.
+      // A real 404: the outfit was removed or the link is wrong.
       return const _SharedLoadResult.missing();
-    } catch (_) {
-      // Timeout / no connection / 5xx: transient failure, not a missing
-      // outfit. Surface an error card with Retry instead of a permanent
-      // "Outfit not found".
-      return const _SharedLoadResult.error();
+    } catch (e) {
+      // Timeout, no connection or 5xx: transient, so offer a retry.
+      return _SharedLoadResult.error(e);
     }
   }
 
-  Future<void> _retry() {
-    setState(() {
-      _loadFuture = _load();
-    });
-    return _loadFuture;
-  }
+  void _retry() => setState(() => _loadFuture = _load());
 
   Future<void> _hideContent() async {
-    final confirmed = await Get.dialog<bool>(
-      AlertDialog(
-        title: const Text('Hide this content?'),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hide this outfit?'),
         content: const Text(
-          'This shared outfit will be hidden on this device. '
-          'You can also report it so our team can review and remove it.',
+          'It stays hidden on this device. You can also report it so our '
+          'team can review and remove it.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(result: false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Get.back(result: true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Hide'),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
-
     await HiddenSharedContentStore.hide(widget.shareId);
     if (!mounted) return;
     setState(() {
       _loadFuture = Future.value(const _SharedLoadResult.hidden());
     });
-    ErrorHandler.showInfo('This outfit will no longer be shown on this device.', title: 'Content hidden');
+    ErrorHandler.showInfo(
+      'This outfit will not show on this device again.',
+      title: 'Outfit hidden',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [tokens.brandColor.withValues(alpha: 0.1), tokens.cardColor],
-          ),
+    return PaperStockScope(
+      stock: PaperStockId.marigold,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Shared outfit'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.visibility_off_outlined),
+              tooltip: 'Hide this outfit',
+              onPressed: _hideContent,
+            ),
+            IconButton(
+              icon: const Icon(Icons.flag_outlined),
+              tooltip: 'Report this outfit',
+              onPressed: () => showReportContentSheet(
+                contentType: 'shared outfit',
+                contentId: widget.shareId,
+              ),
+            ),
+            const SizedBox(width: AppConstants.spacing4),
+          ],
         ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              FutureBuilder<_SharedLoadResult>(
-                future: _loadFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final result = snapshot.data;
-                  if (result == null ||
-                      result.status == _SharedStatus.missing) {
-                    return _messageState(
-                      context,
-                      tokens,
-                      icon: Icons.error_outline,
-                      title: 'Outfit not found',
-                      body:
-                          'This outfit may have been removed or the link is invalid',
-                    );
-                  }
-
-                  if (result.status == _SharedStatus.error) {
-                    return _messageState(
-                      context,
-                      tokens,
-                      icon: Icons.cloud_off_outlined,
-                      title: 'Something went wrong',
-                      body:
-                          'We couldn\'t reach the server. Check your '
-                          'connection and try again.',
-                      action: ElevatedButton.icon(
-                        onPressed: _retry,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Retry'),
-                      ),
-                    );
-                  }
-
-                  if (result.status == _SharedStatus.hidden) {
-                    return _messageState(
-                      context,
-                      tokens,
-                      icon: Icons.visibility_off_outlined,
-                      title: 'Content hidden',
-                      body:
-                          'You hid this shared outfit on this device. '
-                          'If it was objectionable, report it via Legal → '
-                          'Report a Problem or email ${AppConstants.supportEmail}.',
-                    );
-                  }
-
-                  final outfit = result.outfit!;
-                  final name = outfit.name;
-                  final description = outfit.description;
-                  final images = <String>[
-                    ...?outfit.outfitImages?.where((u) => u.isNotEmpty),
-                    ...outfit.itemImages.where((u) => u.isNotEmpty),
-                  ];
-
-                  return CustomScrollView(
-                    slivers: [
-                      SliverAppBar(
-                        expandedHeight: 400,
-                        pinned: true,
-                        backgroundColor: Colors.transparent,
-                        flexibleSpace: FlexibleSpaceBar(
-                          background: images.isNotEmpty
-                              ? AppImage(
-                                  imageUrl: images.first,
-                                  fit: BoxFit.contain,
-                                  enableZoom: true,
-                                  galleryUrls: images,
-                                  // A10b-10: share URLs are short-lived
-                                  // presigned links minted per load; a
-                                  // long-open page must re-mint instead of
-                                  // showing a permanent error tile.
-                                  storagePath: outfit.outfitStoragePath,
-                                  remintUrl: (storagePath) async {
-                                    try {
-                                      final fresh = await OutfitRepository()
-                                          .getSharedOutfit(widget.shareId);
-                                      return fresh.outfitImages?.firstOrNull;
-                                    } catch (_) {
-                                      return null;
-                                    }
-                                  },
-                                )
-                              : Container(
-                                  color: tokens.cardColor,
-                                  child: Icon(
-                                    Icons.checkroom,
-                                    size: 64,
-                                    color: tokens.textMuted,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Container(
-                          padding: const EdgeInsets.all(AppConstants.spacing24),
-                          decoration: BoxDecoration(
-                            color: tokens.cardColor,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(AppConstants.radius24),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              if (description != null &&
-                                  description.isNotEmpty) ...[
-                                const SizedBox(height: AppConstants.spacing8),
-                                Text(
-                                  description,
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(color: tokens.textMuted),
-                                ),
-                              ],
-                              const SizedBox(height: AppConstants.spacing24),
-                              AppGlassCard(
-                                padding: const EdgeInsets.all(
-                                  AppConstants.spacing16,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Text(
-                                      'Like this look?',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                    const SizedBox(
-                                      height: AppConstants.spacing12,
-                                    ),
-                                    ElevatedButton.icon(
-                                      onPressed: () =>
-                                          Get.offAllNamed(Routes.login),
-                                      icon: const Icon(Icons.checkroom),
-                                      label: const Text('Get FitCheck AI'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: AppConstants.spacing48),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              // Back button
-              Positioned(
-                top: AppConstants.spacing8,
-                left: AppConstants.spacing8,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: tokens.cardColor.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: 'Back',
-                    onPressed: () => Get.back(),
-                  ),
+        body: AppPageBackground(
+          child: FutureBuilder<_SharedLoadResult>(
+            future: _loadFuture,
+            builder: (context, snapshot) {
+              final result = snapshot.data;
+              if (snapshot.connectionState != ConnectionState.done ||
+                  result == null) {
+                return const SkeletonDetailPage();
+              }
+              return switch (result.status) {
+                _SharedStatus.missing => const AppEmptyState(
+                  scene: PaperScenes.oops,
+                  title: "This outfit isn't here anymore",
+                  message: 'It may have been removed, or the link is wrong.',
                 ),
-              ),
-              // Report + hide (Apple Guideline 1.2)
-              Positioned(
-                top: AppConstants.spacing8,
-                right: AppConstants.spacing8,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: tokens.cardColor.withValues(alpha: 0.9),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.visibility_off_outlined),
-                        tooltip: 'Hide this content',
-                        onPressed: _hideContent,
-                      ),
-                    ),
-                    const SizedBox(width: AppConstants.spacing8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: tokens.cardColor.withValues(alpha: 0.9),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.flag_outlined),
-                        tooltip: 'Report this outfit',
-                        onPressed: () => showReportContentSheet(
-                          contentType: 'shared outfit',
-                          contentId: widget.shareId,
-                        ),
-                      ),
-                    ),
-                  ],
+                _SharedStatus.error => AppErrorState(
+                  error: result.error,
+                  onRetry: _retry,
                 ),
-              ),
-            ],
+                _SharedStatus.hidden => const AppEmptyState(
+                  scene: PaperScenes.outfits,
+                  title: 'You hid this outfit',
+                  message:
+                      'If it was objectionable, report it from Privacy and '
+                      'terms or email ${AppConstants.supportEmail}.',
+                ),
+                _SharedStatus.ok => _SharedOutfitView(
+                  outfit: result.outfit!,
+                  shareId: widget.shareId,
+                ),
+              };
+            },
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _messageState(
-    BuildContext context,
-    AppUiTokens tokens, {
-    required IconData icon,
-    required String title,
-    required String body,
-    Widget? action,
-  }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 64, color: tokens.textMuted),
-            const SizedBox(height: AppConstants.spacing16),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(color: tokens.textPrimary),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              body,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: tokens.textMuted),
-              textAlign: TextAlign.center,
-            ),
-            if (action != null) ...[
-              const SizedBox(height: AppConstants.spacing24),
-              action,
-            ],
-          ],
-        ),
+class _SharedOutfitView extends StatelessWidget {
+  const _SharedOutfitView({required this.outfit, required this.shareId});
+
+  final SharedOutfitModel outfit;
+  final String shareId;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final description = outfit.description;
+    final images = <String>[
+      ...?outfit.outfitImages?.where((u) => u.isNotEmpty),
+      ...outfit.itemImages.where((u) => u.isNotEmpty),
+    ];
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing8,
+        AppConstants.spacing16,
+        AppConstants.spacing32 + MediaQuery.paddingOf(context).bottom,
       ),
+      children: [
+        PaperSurface(
+          padding: EdgeInsets.zero,
+          grain: images.isEmpty,
+          clipBehavior: Clip.antiAlias,
+          child: AspectRatio(
+            aspectRatio: 4 / 5,
+            child: images.isEmpty
+                ? Center(
+                    child: Icon(
+                      Icons.checkroom_outlined,
+                      size: 64,
+                      color: tokens.textMuted,
+                    ),
+                  )
+                : AppImage(
+                    imageUrl: images.first,
+                    fit: BoxFit.contain,
+                    enableZoom: true,
+                    galleryUrls: images,
+                    // Share URLs are short-lived presigned links; a page left
+                    // open re-mints instead of showing a broken image.
+                    storagePath: outfit.outfitStoragePath,
+                    remintUrl: (storagePath) async {
+                      try {
+                        final fresh = await OutfitRepository().getSharedOutfit(
+                          shareId,
+                        );
+                        return fresh.outfitImages?.firstOrNull;
+                      } catch (_) {
+                        return null;
+                      }
+                    },
+                  ),
+          ),
+        ),
+        const SizedBox(height: AppConstants.spacing20),
+        Text(outfit.name, style: text.displaySmall?.copyWith(fontSize: 32)),
+        if (description != null && description.isNotEmpty) ...[
+          const SizedBox(height: AppConstants.spacing8),
+          Text(
+            description,
+            style: text.bodyLarge?.copyWith(color: tokens.textSecondary),
+          ),
+        ],
+        const SizedBox(height: AppConstants.spacing24),
+        PaperSurface(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Like this look?', style: text.headlineSmall),
+              const SizedBox(height: AppConstants.spacing4),
+              Text(
+                'Build outfits like it from your own closet.',
+                style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+              const SizedBox(height: AppConstants.spacing16),
+              ElevatedButton(
+                onPressed: () => context.go(Routes.login),
+                child: const Text('Get FitCheck AI'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -395,15 +265,17 @@ enum _SharedStatus { ok, missing, hidden, error }
 class _SharedLoadResult {
   final _SharedStatus status;
   final SharedOutfitModel? outfit;
+  final Object? error;
 
-  const _SharedLoadResult._(this.status, this.outfit);
+  const _SharedLoadResult._(this.status, {this.outfit, this.error});
 
   const _SharedLoadResult.ok(SharedOutfitModel outfit)
-      : this._(_SharedStatus.ok, outfit);
+    : this._(_SharedStatus.ok, outfit: outfit);
 
-  const _SharedLoadResult.missing() : this._(_SharedStatus.missing, null);
+  const _SharedLoadResult.missing() : this._(_SharedStatus.missing);
 
-  const _SharedLoadResult.hidden() : this._(_SharedStatus.hidden, null);
+  const _SharedLoadResult.hidden() : this._(_SharedStatus.hidden);
 
-  const _SharedLoadResult.error() : this._(_SharedStatus.error, null);
+  const _SharedLoadResult.error(Object error)
+    : this._(_SharedStatus.error, error: error);
 }

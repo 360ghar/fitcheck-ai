@@ -17,11 +17,11 @@ class Routes {
   static const wardrobeBatchAddSocial = '/wardrobe/batch-add-social';
   static const wardrobeBatchProgress = '/wardrobe/batch-progress';
   static const wardrobeBatchReview = '/wardrobe/batch-review';
-  static const wardrobeItemDetail = '/wardrobe/:id';
-  static const wardrobeItemEdit = '/wardrobe/:id/edit';
+  static String item(String id) => '/wardrobe/$id';
+  static String itemEdit(String id) => '/wardrobe/edit/$id';
   static const outfits = '/outfits';
-  static const outfitDetail = '/outfits/:id';
-  static const outfitEdit = '/outfits/:id/edit';
+  static String outfit(String id) => '/outfits/$id';
+  static String outfitEdit(String id) => '/outfits/edit/$id';
   static const outfitBuilder = '/outfits/build';
   static const calendar = '/calendar';
   static const recommendations = '/recommendations';
@@ -41,5 +41,8 @@ class Routes {
   static const legal = '/legal';
   static const feedback = '/feedback';
   static const sharedOutfit = '/shared/:id';
+
+  /// Shell tab roots, in bottom-bar order.
+  static const tabs = [home, photoshoot, wardrobe, outfits, more];
   static const outfitCollections = '/outfits/collections';
 }

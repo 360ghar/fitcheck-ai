@@ -1,601 +1,425 @@
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_ui.dart';
-import '../../../domain/enums/style.dart';
-import '../../../domain/enums/season.dart';
-import '../controllers/outfit_list_controller.dart';
-import '../models/outfit_model.dart';
-import '../repositories/outfit_repository.dart';
-import '../../../core/utils/error_handler.dart';
 
-/// Edit page for an existing outfit
-class OutfitEditPage extends StatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/error_handler.dart';
+import '../../../core/widgets/app_ui.dart';
+import '../../../domain/enums/season.dart';
+import '../../../domain/enums/style.dart';
+import '../models/outfit_model.dart';
+import '../providers/outfit_providers.dart';
+
+/// Edits one outfit's details and photos.
+class OutfitEditPage extends ConsumerWidget {
+  const OutfitEditPage({super.key, required this.outfitId});
+
   final String outfitId;
 
-  const OutfitEditPage({
-    super.key,
-    required this.outfitId,
-  });
-
   @override
-  State<OutfitEditPage> createState() => _OutfitEditPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detail = ref.watch(outfitDetailProvider(outfitId));
+    final outfit =
+        detail.value ?? ref.read(outfitsProvider.notifier).cached(outfitId);
+
+    return PaperStockScope(
+      stock: PaperStockId.marigold,
+      child: outfit != null
+          ? _EditForm(outfit: outfit)
+          : Scaffold(
+              appBar: AppBar(title: const Text('Edit outfit')),
+              body: AppPageBackground(
+                child: detail.hasError
+                    ? AppErrorState(
+                        error: detail.error,
+                        onRetry: ref
+                            .read(outfitDetailProvider(outfitId).notifier)
+                            .refresh,
+                      )
+                    : const SkeletonListLoaderBox(itemCount: 6),
+              ),
+            ),
+    );
+  }
 }
 
-class _OutfitEditPageState extends State<OutfitEditPage> {
-  final _formKey = GlobalKey<FormState>();
-  final OutfitListController _outfitsController = Get.find<OutfitListController>();
-  final OutfitRepository _outfitRepository = OutfitRepository();
+class _EditForm extends ConsumerStatefulWidget {
+  const _EditForm({required this.outfit});
 
-  // Always initialized so dispose is safe even if load fails / user pops early
-  late final TextEditingController _nameController = TextEditingController();
-  late final TextEditingController _descriptionController = TextEditingController();
-  late final TextEditingController _tagsController = TextEditingController();
-
-  final Rx<Style?> selectedStyle = Rx<Style?>(null);
-  final Rx<Season?> selectedSeason = Rx<Season?>(null);
-  final RxString selectedOccasion = ''.obs;
-  final RxBool isFavorite = false.obs;
-  final RxBool isDraft = false.obs;
-  final RxBool isPublic = false.obs;
-  final RxBool isSaving = false.obs;
-  final RxBool isLoadingOutfit = true.obs;
-  final RxString loadError = ''.obs;
-  final RxList<File> newImages = <File>[].obs;
-  final RxSet<String> imagesToDelete = <String>{}.obs;
-
-  final ImagePicker _imagePicker = ImagePicker();
-
-  OutfitModel? _outfit;
-
-  // Occasion options
-  static const List<String> occasions = [
-    'casual', 'formal', 'business', 'sporty', 'date night',
-    'party', 'wedding', 'interview', 'weekend', 'travel'
-  ];
+  final OutfitModel outfit;
 
   @override
-  void initState() {
-    super.initState();
-    _loadOutfit();
+  ConsumerState<_EditForm> createState() => _EditFormState();
+}
+
+class _EditFormState extends ConsumerState<_EditForm> {
+  static const _occasions = [
+    'casual', 'formal', 'business', 'sporty', 'date night', //
+    'party', 'wedding', 'interview', 'weekend', 'travel',
+  ];
+
+  final _formKey = GlobalKey<FormState>();
+  late final _name = TextEditingController(text: widget.outfit.name);
+  late final _description = TextEditingController(
+    text: widget.outfit.description ?? '',
+  );
+  late final _tags = TextEditingController(
+    text: widget.outfit.tags?.join(', ') ?? '',
+  );
+  late Style? _style = widget.outfit.style;
+  late Season? _season = widget.outfit.season;
+
+  /// A value created on the web may not be in [_occasions]; it is kept and
+  /// shown as an extra option.
+  late String? _occasion = (widget.outfit.occasion?.isEmpty ?? true)
+      ? null
+      : widget.outfit.occasion;
+  late bool _favorite = widget.outfit.isFavorite;
+  late bool _draft = widget.outfit.isDraft;
+  late bool _public = widget.outfit.isPublic;
+  final List<File> _newImages = [];
+  final Set<String> _imagesToDelete = {};
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _description.dispose();
+    _tags.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadOutfit() async {
-    isLoadingOutfit.value = true;
-    loadError.value = '';
-    try {
-      // The API serves short-lived presigned image URLs (1h TTL) minted at
-      // the last fetch, so a cached outfit may hold an expired URL. Refresh
-      // it server-side when cached (failures fall back to the cached model);
-      // fetchOutfitById then returns the fresh model.
-      final cachedIndex = _outfitsController.outfits.indexWhere(
-        (o) => o.id == widget.outfitId,
-      );
-      if (cachedIndex != -1) {
-        await _outfitsController.refreshOutfitById(widget.outfitId);
-      }
-      final outfit = await _outfitsController.fetchOutfitById(widget.outfitId);
-      if (!mounted) return;
-      if (outfit == null) {
-        loadError.value = 'Outfit not found';
-        return;
-      }
-      _outfit = outfit;
-      _applyOutfitToForm(outfit);
-    } catch (e) {
-      if (!mounted) return;
-      loadError.value = ErrorHandler.extractMessage(e);
-    } finally {
-      if (mounted) {
-        isLoadingOutfit.value = false;
-      }
-    }
-  }
-
-  void _applyOutfitToForm(OutfitModel outfit) {
-    _nameController.text = outfit.name;
-    _descriptionController.text = outfit.description ?? '';
-    _tagsController.text = outfit.tags?.join(', ') ?? '';
-    selectedStyle.value = outfit.style;
-    selectedSeason.value = outfit.season;
-    selectedOccasion.value = outfit.occasion ?? '';
-    isFavorite.value = outfit.isFavorite;
-    isDraft.value = outfit.isDraft;
-    isPublic.value = outfit.isPublic;
-  }
-
-  Future<void> _pickImage() async {
-    final XFile? image = await _imagePicker.pickImage(
+  Future<void> _addPhoto() async {
+    final image = await ImagePicker().pickImage(
       source: ImageSource.gallery,
       maxWidth: 1920,
       maxHeight: 1920,
       imageQuality: 85,
     );
-
-    if (image != null) {
-      newImages.add(File(image.path));
+    if (image != null && mounted) {
+      setState(() => _newImages.add(File(image.path)));
     }
   }
 
-  void _removeNewImage(int index) {
-    newImages.removeAt(index);
-    newImages.refresh();
-  }
-
-  void _toggleImageDelete(String imageId) {
-    if (imagesToDelete.contains(imageId)) {
-      imagesToDelete.remove(imageId);
-    } else {
-      imagesToDelete.add(imageId);
-    }
-    imagesToDelete.refresh();
-  }
-
-  Future<void> _saveChanges() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    isSaving.value = true;
-
+  Future<void> _save() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    final id = widget.outfit.id;
+    final repository = ref.read(outfitRepositoryProvider);
+    final description = _description.text.trim();
+    final tags = [
+      for (final t in _tags.text.split(','))
+        if (t.trim().isNotEmpty) t.trim(),
+    ];
     try {
-      final request = UpdateOutfitRequest(
-        name: _nameController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        style: selectedStyle.value,
-        season: selectedSeason.value,
-        occasion: selectedOccasion.value.isEmpty ? null : selectedOccasion.value,
-        tags: _tagsController.text.trim().isEmpty
-            ? null
-            : _tagsController.text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList(),
-        isFavorite: isFavorite.value,
-        isDraft: isDraft.value,
-        isPublic: isPublic.value,
-      );
-
-      await _outfitsController.updateOutfit(widget.outfitId, request);
-
-      // Handle image deletions
-      for (final imageId in imagesToDelete) {
-        await _outfitRepository.deleteOutfitImage(widget.outfitId, imageId);
-      }
-
-      // Upload new images
-      if (newImages.isNotEmpty) {
-        await _outfitRepository.uploadImages(
-          widget.outfitId,
-          newImages.toList(),
-        );
-      }
-
-      _outfitsController.fetchOutfits(refresh: true);
-
-      Get.back();
-      ErrorHandler.showSuccess('Outfit updated successfully', title: 'Success');
-    } catch (e) {
-      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
-    } finally {
-      isSaving.value = false;
+      await ref
+          .read(outfitsProvider.notifier)
+          .save(
+            id,
+            UpdateOutfitRequest(
+              name: _name.text.trim(),
+              description: description.isEmpty ? null : description,
+              style: _style,
+              season: _season,
+              occasion: _occasion,
+              tags: tags.isEmpty ? null : tags,
+              isFavorite: _favorite,
+              isDraft: _draft,
+              isPublic: _public,
+            ),
+          );
+    } catch (_) {
+      // `save` showed the error; keep the form open.
+      if (mounted) setState(() => _saving = false);
+      return;
     }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _tagsController.dispose();
-    super.dispose();
+    if (_imagesToDelete.isNotEmpty || _newImages.isNotEmpty) {
+      try {
+        for (final imageId in _imagesToDelete) {
+          await repository.deleteOutfitImage(id, imageId);
+        }
+        if (_newImages.isNotEmpty) {
+          await repository.uploadImages(id, _newImages);
+        }
+        ref
+            .read(outfitsProvider.notifier)
+            .replace(await repository.getOutfit(id));
+      } catch (e, stack) {
+        ErrorHandler.showError(
+          e,
+          title: 'Details saved, photos not',
+          stackTrace: stack,
+        );
+        if (mounted) setState(() => _saving = false);
+        return;
+      }
+    }
+    if (!mounted) return;
+    ErrorHandler.showSuccess('Your changes are saved.', title: 'Saved');
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Obx(() {
-      if (isLoadingOutfit.value) {
-        return Scaffold(
-          appBar: AppBar(title: const Text('Edit Outfit')),
-          body: const Center(child: CircularProgressIndicator()),
-        );
-      }
-
-      if (_outfit == null || loadError.value.isNotEmpty) {
-        return Scaffold(
-          appBar: AppBar(title: const Text('Edit Outfit')),
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppConstants.spacing24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    loadError.value.isNotEmpty
-                        ? loadError.value
-                        : 'Outfit not found',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppConstants.spacing16),
-                  ElevatedButton(
-                    onPressed: () => Get.back(),
-                    child: const Text('Go back'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }
-
-      return _buildEditor(context, tokens);
-    });
-  }
-
-  Widget _buildEditor(BuildContext context, AppUiTokens tokens) {
-    if (_outfit == null) {
-      return const SizedBox.shrink();
-    }
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final images = widget.outfit.outfitImages ?? const [];
+    final occasions = {..._occasions, ?_occasion}.toList();
+    const gap = SizedBox(height: AppConstants.spacing16);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Outfit'),
-        elevation: 0,
+        title: const Text('Edit outfit'),
         actions: [
-          Obx(() => TextButton(
-                onPressed: isSaving.value ? null : _saveChanges,
-                child: isSaving.value
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
-              )),
+          Padding(
+            padding: const EdgeInsets.only(right: AppConstants.spacing8),
+            child: TextButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const InlineProcessingStatus(
+                      phase: ProcessingPhase.processing,
+                      processingLabel: 'Saving',
+                    )
+                  : const Text('Save'),
+            ),
+          ),
         ],
       ),
       body: AppPageBackground(
-        child: SafeArea(
-          child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: ListView(
             padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                  // Images section
-                  _buildImagesSection(tokens),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  // Name
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Outfit Name *',
-                      border: OutlineInputBorder(),
+                  Expanded(child: Text('Photos', style: text.titleSmall)),
+                  TextButton.icon(
+                    onPressed: _addPhoto,
+                    icon: const Icon(
+                      Icons.add_photo_alternate_outlined,
+                      size: 18,
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter an outfit name';
-                      }
-                      return null;
-                    },
+                    label: const Text('Add photo'),
                   ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Description
-                  TextFormField(
-                    controller: _descriptionController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Style & Season row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Obx(() => DropdownButtonFormField<Style>(
-                              initialValue: selectedStyle.value,
-                              decoration: const InputDecoration(
-                                labelText: 'Style',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: Style.values.map((style) {
-                                return DropdownMenuItem(
-                                  value: style,
-                                  child: Text(style.displayName),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                selectedStyle.value = value;
-                              },
-                            )),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: Obx(() => DropdownButtonFormField<Season>(
-                              initialValue: selectedSeason.value,
-                              decoration: const InputDecoration(
-                                labelText: 'Season',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: Season.values.map((season) {
-                                return DropdownMenuItem(
-                                  value: season,
-                                  child: Text(season.displayName),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                selectedSeason.value = value;
-                              },
-                            )),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Occasion
-                  Obx(() => DropdownButtonFormField<String>(
-                        initialValue: selectedOccasion.value.isEmpty ? null : selectedOccasion.value,
-                        decoration: const InputDecoration(
-                          labelText: 'Occasion',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: occasions.map((occasion) {
-                          return DropdownMenuItem(
-                            value: occasion,
-                            child: Text(occasion.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ')),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) selectedOccasion.value = value;
-                        },
-                      )),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Tags
-                  TextFormField(
-                    controller: _tagsController,
-                    decoration: const InputDecoration(
-                      labelText: 'Tags (comma separated)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing24),
-
-                  // Toggles section
-                  AppGlassCard(
-                    child: Column(
-                      children: [
-                        Obx(() => SwitchListTile(
-                              title: const Text('Favorite'),
-                              subtitle: const Text('Add to your favorites'),
-                              value: isFavorite.value,
-                              onChanged: (value) => isFavorite.value = value,
-                            )),
-                        const Divider(),
-                        Obx(() => SwitchListTile(
-                              title: const Text('Draft'),
-                              subtitle: const Text('Save as draft (not visible in main list)'),
-                              value: isDraft.value,
-                              onChanged: (value) => isDraft.value = value,
-                            )),
-                        const Divider(),
-                        Obx(() => SwitchListTile(
-                              title: const Text('Public'),
-                              subtitle: const Text('Allow sharing with public link'),
-                              value: isPublic.value,
-                              onChanged: (value) => isPublic.value = value,
-                            )),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing32),
-
-                  // Delete button
-                  OutlinedButton.icon(
-                    onPressed: () => _showDeleteConfirmation(),
-                    icon: const Icon(Icons.delete),
-                    label: const Text('Delete Outfit'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-
-                  const SizedBox(height: AppConstants.spacing32),
                 ],
               ),
-            ),
+              const SizedBox(height: AppConstants.spacing8),
+              if (images.isEmpty && _newImages.isEmpty)
+                PaperSurface(
+                  lift: 0,
+                  color: tokens.stock.sunk,
+                  child: Text(
+                    'No photos yet. The outfit shows its pieces instead.',
+                    style: text.bodyMedium?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 112,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      for (final image in images)
+                        _Thumb(
+                          removed: _imagesToDelete.contains(image.id),
+                          onAction: () => setState(
+                            () => _imagesToDelete.contains(image.id)
+                                ? _imagesToDelete.remove(image.id)
+                                : _imagesToDelete.add(image.id),
+                          ),
+                          child: AppImage(
+                            imageUrl: image.url,
+                            fit: BoxFit.cover,
+                            enableZoom: false,
+                            memCacheWidth: 300,
+                            storagePath: image.storagePath,
+                            remintUrl: ref
+                                .read(outfitRepositoryProvider)
+                                .remintImageUrl,
+                          ),
+                        ),
+                      for (final (i, file) in _newImages.indexed)
+                        _Thumb(
+                          onAction: () =>
+                              setState(() => _newImages.removeAt(i)),
+                          child: Image.file(
+                            file,
+                            fit: BoxFit.cover,
+                            cacheWidth: 300,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: AppConstants.spacing24),
+              TextFormField(
+                controller: _name,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Name'),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+              ),
+              gap,
+              TextFormField(
+                controller: _description,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Description'),
+              ),
+              gap,
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<Style>(
+                      initialValue: _style,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Style'),
+                      items: [
+                        for (final s in Style.values)
+                          DropdownMenuItem(
+                            value: s,
+                            child: Text(s.displayName),
+                          ),
+                      ],
+                      onChanged: (v) => setState(() => _style = v),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(
+                    child: DropdownButtonFormField<Season>(
+                      initialValue: _season,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Season'),
+                      items: [
+                        for (final s in Season.values)
+                          DropdownMenuItem(
+                            value: s,
+                            child: Text(s.displayName),
+                          ),
+                      ],
+                      onChanged: (v) => setState(() => _season = v),
+                    ),
+                  ),
+                ],
+              ),
+              gap,
+              DropdownButtonFormField<String?>(
+                initialValue: _occasion,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Occasion'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('None')),
+                  for (final o in occasions)
+                    DropdownMenuItem(
+                      value: o,
+                      child: Text(o[0].toUpperCase() + o.substring(1)),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _occasion = v),
+              ),
+              gap,
+              TextFormField(
+                controller: _tags,
+                decoration: const InputDecoration(
+                  labelText: 'Tags',
+                  helperText: 'Separate with commas',
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              PaperSurface(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      title: const Text('Favourite'),
+                      value: _favorite,
+                      onChanged: (v) => setState(() => _favorite = v),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Draft'),
+                      subtitle: const Text('Hidden from your main list'),
+                      value: _draft,
+                      onChanged: (v) => setState(() => _draft = v),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Public'),
+                      subtitle: const Text('Anyone with the link can see it'),
+                      value: _public,
+                      onChanged: (v) => setState(() => _public = v),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing24),
+              Text(
+                'Delete this outfit from its detail page.',
+                style: text.bodySmall?.copyWith(color: tokens.textMuted),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppConstants.spacing24),
+            ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildImagesSection(AppUiTokens tokens) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+class _Thumb extends StatelessWidget {
+  const _Thumb({
+    required this.child,
+    required this.onAction,
+    this.removed = false,
+  });
+
+  final Widget child;
+  final VoidCallback onAction;
+  final bool removed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: AppConstants.spacing8),
+      child: SizedBox.square(
+        dimension: 104,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            Text(
-              'Photos',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radius8),
+              child: ColoredBox(
+                color: tokens.stock.sunk,
+                child: removed
+                    ? Center(
+                        child: Text(
+                          'Removed',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      )
+                    : child,
+              ),
             ),
-            TextButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.add_photo_alternate),
-              label: const Text('Add Photo'),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                tooltip: removed ? 'Keep photo' : 'Remove photo',
+                onPressed: onAction,
+                style: IconButton.styleFrom(backgroundColor: tokens.stock.card),
+                icon: Icon(
+                  removed ? Icons.undo_rounded : Icons.close_rounded,
+                  size: 18,
+                ),
+              ),
             ),
           ],
         ),
-
-        if (_outfit!.outfitImages != null && _outfit!.outfitImages!.isNotEmpty || newImages.isNotEmpty)
-          SizedBox(
-            height: 120,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                // Existing images
-                ..._outfit!.outfitImages!.map((image) {
-                  final isDeleting = imagesToDelete.contains(image.id);
-                  return Padding(
-                    padding: const EdgeInsets.only(right: AppConstants.spacing8),
-                    child: Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
-                          child: SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: AppImage(
-                              imageUrl: image.url,
-                              fit: BoxFit.contain,
-                              enableZoom: false,
-                              backgroundColor: isDeleting
-                                  ? Colors.black.withValues(alpha: 0.5)
-                                  : null,
-                              // Presigned URLs expire after 1h; on a failed
-                              // load re-mint a fresh URL from the durable
-                              // storage key.
-                              storagePath: image.storagePath,
-                              remintUrl: _outfitRepository.remintImageUrl,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: CircleAvatar(
-                            backgroundColor: isDeleting ? Colors.red : Colors.white,
-                            child: IconButton(
-                              icon: Icon(
-                                isDeleting ? Icons.close : Icons.delete_outline,
-                                color: isDeleting ? Colors.white : Colors.black,
-                                size: 16,
-                              ),
-                              onPressed: () => _toggleImageDelete(image.id),
-                              constraints: const BoxConstraints(
-                                minWidth: 28,
-                                minHeight: 28,
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-
-                // New images
-                ...newImages.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final image = entry.value;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: AppConstants.spacing8),
-                    child: Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
-                          child: Image.file(
-                            image,
-                            width: 100,
-                            height: 100,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: CircleAvatar(
-                            backgroundColor: Colors.white,
-                            child: IconButton(
-                              icon: const Icon(Icons.close, color: Colors.black, size: 16),
-                              onPressed: () => _removeNewImage(index),
-                              constraints: const BoxConstraints(
-                                minWidth: 28,
-                                minHeight: 28,
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 4,
-                          left: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'NEW',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  void _showDeleteConfirmation() {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Delete Outfit?'),
-        content: const Text('This action cannot be undone. The outfit will be permanently removed.'),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Get.back();
-              try {
-                await _outfitsController.deleteOutfit(widget.outfitId);
-                Get.back(); // Close edit page
-                ErrorHandler.showSuccess('Outfit removed successfully', title: 'Deleted');
-              } catch (e) {
-                ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
   }

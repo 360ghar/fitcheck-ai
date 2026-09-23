@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:get/get.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/env_config.dart';
@@ -12,7 +11,7 @@ import 'secure_local_storage.dart';
 
 /// Supabase configuration and service
 /// Manages Supabase client initialization and authentication state
-class SupabaseService extends GetxService {
+class SupabaseService {
   SupabaseService._internal();
   static final SupabaseService _instance = SupabaseService._internal();
   static SupabaseService get instance => _instance;
@@ -23,9 +22,9 @@ class SupabaseService extends GetxService {
   SupabaseClient get client => _client;
 
   /// Get current auth state
-  Rxn<User> currentUser = Rxn<User>();
-  final RxBool isAuthenticated = false.obs;
-  final RxBool isInitialized = false.obs;
+  final currentUser = ValueNotifier<User?>(null);
+  final isAuthenticated = ValueNotifier<bool>(false);
+  final isInitialized = ValueNotifier<bool>(false);
 
   /// Get the GoTrue client for auth operations
   GoTrueClient get auth => _client.auth;
@@ -77,29 +76,36 @@ class SupabaseService extends GetxService {
     _client = Supabase.instance.client;
 
     // Set up auth state listener
-    _client.auth.onAuthStateChange.listen((data) {
-      final AuthChangeEvent event = data.event;
-      final Session? session = data.session;
+    _client.auth.onAuthStateChange.listen(
+      (data) {
+        final AuthChangeEvent event = data.event;
+        final Session? session = data.session;
 
-      if (event == AuthChangeEvent.signedIn && session != null) {
-        currentUser.value = session.user;
-        isAuthenticated.value = true;
-      } else if (event == AuthChangeEvent.signedOut) {
-        currentUser.value = null;
-        isAuthenticated.value = false;
-        AnalyticsService.instance.reset();
-      } else if (event == AuthChangeEvent.tokenRefreshed && session != null) {
-        currentUser.value = session.user;
-      } else if (event == AuthChangeEvent.initialSession) {
-        if (session != null) {
+        if (event == AuthChangeEvent.signedIn && session != null) {
           currentUser.value = session.user;
           isAuthenticated.value = true;
-        } else {
+        } else if (event == AuthChangeEvent.signedOut) {
           currentUser.value = null;
           isAuthenticated.value = false;
+          AnalyticsService.instance.reset();
+        } else if (event == AuthChangeEvent.tokenRefreshed && session != null) {
+          currentUser.value = session.user;
+        } else if (event == AuthChangeEvent.initialSession) {
+          if (session != null) {
+            currentUser.value = session.user;
+            isAuthenticated.value = true;
+          } else {
+            currentUser.value = null;
+            isAuthenticated.value = false;
+          }
         }
-      }
-    });
+      },
+      onError: (Object e) {
+        // gotrue emits background refresh failures (for example, offline)
+        // on this stream. The session is kept, so this is not an app error.
+        if (kDebugMode) debugPrint('Auth state stream error: $e');
+      },
+    );
 
     isInitialized.value = true;
     return this;
@@ -256,8 +262,15 @@ class SupabaseService extends GetxService {
   }
 
   /// Sign out current user
+  /// gotrue clears the local session before it calls the server, and the
+  /// server call can then fail (for example, offline). The user is signed
+  /// out locally in that case, so the error is not rethrown.
   Future<void> signOut() async {
-    await _client.auth.signOut();
+    try {
+      await _client.auth.signOut();
+    } on AuthException {
+      if (currentSession != null) rethrow;
+    }
   }
 
   /// Send password reset email

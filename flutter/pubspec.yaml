@@ -1,7 +1,7 @@
 name: fitcheck_ai
 description: "AI Wardrobe Organizer & Outfit Planner - Virtual Closet with AI Try-On, Photoshoot Generator & Style Recommendations"
 publish_to: 'none'
-version: 1.0.5+10
+version: 1.1.0+11
 
 environment:
   sdk: ^3.9.2
@@ -11,8 +11,7 @@ dependencies:
     sdk: flutter
 
   # State Management & Dependency Injection
-  get: ^4.6.6
-
+  flutter_riverpod: ^3.4.1
   # HTTP & Networking
   dio: ^5.7.0
   http: ^1.2.2
@@ -21,7 +20,6 @@ dependencies:
   url_launcher: ^6.3.1
 
   # UI Components
-  shimmer: ^3.0.0
   cached_network_image: ^3.3.1
   # Cache manager type used by CachedNetworkImage (direct dep so AppImage can
   # expose an injectable BaseCacheManager for tests)
@@ -67,6 +65,7 @@ dependencies:
   freezed_annotation: ^3.1.0
   json_annotation: ^4.9.0
   in_app_purchase: ^3.3.0
+  go_router: ^18.0.1
 
 dev_dependencies:
   flutter_test:
@@ -100,7 +99,19 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/animations/
+    - assets/textures/
     - shorebird.yaml
+
+  # Basteleur by Keussel (Velvetyne), SIL OFL 1.1 - see
+  # assets/fonts/Basteleur-OFL.txt. Display and headline type only; body
+  # text uses the platform font.
+  fonts:
+    - family: Basteleur
+      fonts:
+        - asset: assets/fonts/Basteleur-Moonlight.otf
+          weight: 400
+        - asset: assets/fonts/Basteleur-Bold.otf
+          weight: 700
 
 flutter_launcher_icons:
   android: true

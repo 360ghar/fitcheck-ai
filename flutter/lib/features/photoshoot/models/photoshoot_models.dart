@@ -44,51 +44,34 @@ extension PhotoshootUseCaseExtension on PhotoshootUseCase {
   String get label {
     switch (this) {
       case PhotoshootUseCase.linkedin:
-        return 'LinkedIn Profile';
+        return 'LinkedIn';
       case PhotoshootUseCase.datingApp:
-        return 'Dating App';
+        return 'Dating app';
       case PhotoshootUseCase.modelPortfolio:
-        return 'Model Portfolio';
+        return 'Portfolio';
       case PhotoshootUseCase.instagram:
-        return 'Instagram Content';
+        return 'Instagram';
       case PhotoshootUseCase.aesthetic:
         return 'Aesthetic';
       case PhotoshootUseCase.custom:
-        return 'Custom Prompt';
+        return 'Your own prompt';
     }
   }
 
   String get description {
     switch (this) {
       case PhotoshootUseCase.linkedin:
-        return 'Professional headshots for business profiles';
+        return 'Sharp headshots for work';
       case PhotoshootUseCase.datingApp:
-        return 'Casual, approachable photos for dating profiles';
+        return 'Relaxed, warm and natural';
       case PhotoshootUseCase.modelPortfolio:
-        return 'High-fashion editorial style shots';
+        return 'Editorial, high-fashion looks';
       case PhotoshootUseCase.instagram:
-        return 'Trendy lifestyle and aesthetic content';
+        return 'Lifestyle shots for your feed';
       case PhotoshootUseCase.aesthetic:
-        return 'Artistic and visually striking photos';
+        return 'Moody, artistic frames';
       case PhotoshootUseCase.custom:
-        return 'Write your own prompt for unique results';
-    }
-  }
-
-  String get icon {
-    switch (this) {
-      case PhotoshootUseCase.linkedin:
-        return '💼';
-      case PhotoshootUseCase.datingApp:
-        return '💕';
-      case PhotoshootUseCase.modelPortfolio:
-        return '📸';
-      case PhotoshootUseCase.instagram:
-        return '✨';
-      case PhotoshootUseCase.aesthetic:
-        return '🎭';
-      case PhotoshootUseCase.custom:
-        return '🎨';
+        return 'Describe the look you want';
     }
   }
 }
@@ -134,9 +117,9 @@ extension PhotoshootAspectRatioExtension on PhotoshootAspectRatio {
       case PhotoshootAspectRatio.landscape:
         return 'Landscape';
       case PhotoshootAspectRatio.portrait34:
-        return 'Portrait 3:4';
+        return 'Tall';
       case PhotoshootAspectRatio.landscape43:
-        return 'Landscape 4:3';
+        return 'Wide';
     }
   }
 
@@ -192,6 +175,7 @@ abstract class GeneratedImage with _$GeneratedImage {
     required int index,
     @JsonKey(name: 'image_url') String? imageUrl,
     @JsonKey(name: 'image_base64') String? imageBase64,
+
     /// Human scene label from the backend ("Sunlit cafe, seated upper body")
     @JsonKey(name: 'label') String? label,
   }) = _GeneratedImage;

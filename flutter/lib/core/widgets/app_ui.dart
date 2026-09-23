@@ -1,81 +1,63 @@
 import 'package:flutter/material.dart';
-import '../constants/app_core_colors.dart';
 import '../constants/app_constants.dart';
+import 'paper.dart';
 
-// Export image widgets for convenience
 export 'app_image.dart';
 export 'app_image_viewer.dart';
-
-// Export offline/error banner
-export 'app_error_banner.dart';
-
-// Export shimmer/skeleton widgets
-export 'shimmer_widgets.dart';
-
-// Export inline processing status (spinner + phase text for buttons)
-export 'inline_processing_status.dart';
-
-// Export infinite scroll wrapper
+export 'app_states.dart';
 export 'infinite_scroll_wrapper.dart';
+export 'inline_processing_status.dart';
+export 'paper.dart';
+export 'paper_scene.dart';
+export 'skeletons.dart';
 
+/// Colour shortcuts for feature code. Reads [PaperTokens] for the current
+/// paper stock, so the same call site follows the stock of its screen.
 class AppUiTokens {
-  AppUiTokens._({
-    required this.isDarkMode,
-    required this.textPrimary,
-    required this.textSecondary,
-    required this.textMuted,
-    required this.cardColor,
-    required this.cardBorderColor,
-    required this.cardShadowColor,
-    required this.navBackground,
-    required this.navBorder,
-    required this.brandColor,
-  });
+  AppUiTokens._(this.paper, this.isDarkMode);
 
+  factory AppUiTokens.of(BuildContext context) => AppUiTokens._(
+    PaperTokens.of(context),
+    Theme.of(context).brightness == Brightness.dark,
+  );
+
+  final PaperTokens paper;
   final bool isDarkMode;
-  final Color textPrimary;
-  final Color textSecondary;
-  final Color textMuted;
-  final Color cardColor;
-  final Color cardBorderColor;
-  final Color cardShadowColor;
-  final Color navBackground;
-  final Color navBorder;
-  final Color brandColor;
 
-  factory AppUiTokens.of(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-    final textPrimary = theme.colorScheme.onSurface;
-    final textSecondary = theme.colorScheme.onSurfaceVariant;
-    final textMuted = textSecondary.withValues(alpha: isDarkMode ? 0.7 : 0.65);
-    final brandColor = theme.colorScheme.primary;
+  PaperStock get stock => paper.stock;
 
-    final cardColor = isDarkMode
-        ? AppCoreColors.surfaceDark
-        : AppCoreColors.surfaceLight;
-    final cardBorderColor = isDarkMode
-        ? AppCoreColors.borderDark
-        : AppCoreColors.borderLight;
-    final cardShadowColor = Colors.transparent;
-    final navBackground = cardColor;
-    final navBorder = cardBorderColor;
+  Color get textPrimary => paper.textPrimary;
+  Color get textSecondary => paper.textSecondary;
+  Color get textMuted => paper.textMuted;
 
-    return AppUiTokens._(
-      isDarkMode: isDarkMode,
-      textPrimary: textPrimary,
-      textSecondary: textSecondary,
-      textMuted: textMuted,
-      cardColor: cardColor,
-      cardBorderColor: cardBorderColor,
-      cardShadowColor: cardShadowColor,
-      navBackground: navBackground,
-      navBorder: navBorder,
-      brandColor: brandColor,
-    );
-  }
+  /// Raised surface.
+  Color get cardColor => stock.card;
+  Color get cardBorderColor => stock.edge;
+
+  /// Kept for old call sites; surfaces use a solid slab, not a blur.
+  Color get cardShadowColor => Colors.transparent;
+  Color get navBackground => stock.card;
+  Color get navBorder => stock.edge;
+
+  /// Tonal accent of the current stock. Brand red is [brand].
+  Color get brandColor => stock.accent;
+  Color get accent => stock.accent;
+  Color get onAccent => stock.onAccent;
+  Color get tint => stock.tint;
+  Color get sunk => stock.sunk;
+  Color get page => stock.page;
+
+  /// Primary-action red.
+  Color get brand => paper.brand;
+  Color get onBrand => paper.onBrand;
+
+  Color get success => paper.success;
+  Color get warning => paper.warning;
+  Color get error => paper.error;
 }
 
+/// Page background in the current stock with paper grain, content capped at
+/// [AppConstants.maxContentWidth] on tablets.
 class AppPageBackground extends StatelessWidget {
   const AppPageBackground({super.key, required this.child, this.padding});
 
@@ -84,58 +66,39 @@ class AppPageBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      color: tokens.isDarkMode
-          ? AppCoreColors.backgroundDark
-          : AppCoreColors.backgroundLight,
-      // Phone layouts are unchanged (phones are already narrower than
-      // maxContentWidth) while tablets / desktop web are capped at a readable
-      // content width. Align top-center preserves existing top-aligned scroll
-      // behavior; scrollables still fill the available width.
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: AppConstants.maxContentWidth,
-          ),
-          child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+    final stock = PaperTokens.of(context).stock;
+    final decoration = BoxDecoration(
+      color: stock.page,
+      image: paperGrain(context),
+    );
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // Runs up under the transparent app bar to the top of the screen, so
+        // the grain has no seam where the bar ends.
+        Positioned(
+          top: -(MediaQuery.paddingOf(context).top + kToolbarHeight * 2),
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: DecoratedBox(decoration: decoration),
         ),
-      ),
+        Positioned.fill(child: _content()),
+      ],
     );
   }
+
+  Widget _content() => Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: AppConstants.maxContentWidth),
+      child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+    ),
+  );
 }
 
-class AppGlassCard extends StatelessWidget {
-  const AppGlassCard({
-    super.key,
-    required this.child,
-    this.padding,
-    this.borderRadius,
-  });
-
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-  final double? borderRadius;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      padding: padding ?? const EdgeInsets.all(AppConstants.spacing16),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(
-          borderRadius ?? AppConstants.radius16,
-        ),
-        border: Border.all(color: tokens.cardBorderColor),
-      ),
-      child: child,
-    );
-  }
-}
+/// Former name of [PaperSurface]; same constructor.
+typedef AppGlassCard = PaperSurface;
 
 class AppSectionHeader extends StatelessWidget {
   const AppSectionHeader({

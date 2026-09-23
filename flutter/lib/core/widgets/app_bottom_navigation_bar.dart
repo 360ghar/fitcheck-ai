@@ -1,159 +1,132 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import '../../core/constants/app_constants.dart';
 import '../../app/routes/app_routes.dart';
-import 'app_ui.dart';
+import 'paper.dart';
 
-/// Reusable bottom navigation bar for main app pages
+/// Bottom navigation: a torn strip of the active tab's paper with a paper
+/// chip that slides under the selected tab.
 class AppBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
 
-  /// Optional callback for tab changes. If provided, navigation is handled
-  /// by the parent (MainShellPage). If null, uses Get.offAllNamed().
-  final void Function(int index)? onTabChanged;
+  /// Called with the tapped tab, including the open one.
+  final void Function(int index) onTabChanged;
 
   const AppBottomNavigationBar({
     super.key,
     required this.currentIndex,
-    this.onTabChanged,
+    required this.onTabChanged,
   });
 
-  // Bottom navigation items
+  /// Height of the bar above the bottom safe-area inset.
+  static const double barHeight = 72;
+
   static const List<NavigationItem> navigationItems = [
     NavigationItem(
-      icon: Icons.home,
-      activeIcon: Icons.home,
+      icon: Icons.home_outlined,
+      activeIcon: Icons.home_rounded,
       label: 'Home',
       route: Routes.home,
     ),
     NavigationItem(
-      icon: Icons.camera_enhance,
-      activeIcon: Icons.camera_enhance,
+      icon: Icons.camera_outlined,
+      activeIcon: Icons.camera_rounded,
       label: 'Photoshoot',
       route: Routes.photoshoot,
     ),
     NavigationItem(
-      icon: Icons.checkroom,
-      activeIcon: Icons.checkroom,
+      icon: Icons.checkroom_outlined,
+      activeIcon: Icons.checkroom_rounded,
       label: 'Closet',
       route: Routes.wardrobe,
     ),
     NavigationItem(
-      icon: Icons.auto_awesome,
+      icon: Icons.auto_awesome_outlined,
       activeIcon: Icons.auto_awesome,
       label: 'Outfits',
       route: Routes.outfits,
     ),
     NavigationItem(
-      icon: Icons.more_horiz,
-      activeIcon: Icons.more_horiz,
+      icon: Icons.grid_view_outlined,
+      activeIcon: Icons.grid_view_rounded,
       label: 'More',
       route: Routes.more,
     ),
   ];
 
-  void _onTabTapped(int index) {
-    // If already on this tab, don't do anything
-    if (currentIndex == index) {
-      return;
-    }
-
-    // Use callback if provided (IndexedStack mode in MainShellPage)
-    if (onTabChanged != null) {
-      onTabChanged!(index);
-      return;
-    }
-
-    // Fallback to navigation (for pages outside the shell like "More" submenu)
-    final route = navigationItems[index].route;
-    if (Get.currentRoute != route) {
-      Get.offAllNamed(route);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+    return PaperStockScope(
+      stock: tabStocks[currentIndex],
+      child: Builder(builder: _buildBar),
+    );
+  }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+  Widget _buildBar(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final stock = tokens.stock;
+    final count = navigationItems.length;
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 240);
+    final label = Theme.of(context).textTheme.labelSmall;
+
+    return AnimatedContainer(
+      duration: duration,
+      curve: Curves.easeOut,
+      decoration: ShapeDecoration(
+        color: stock.card,
+        image: paperGrain(context),
+        shape: const DeckleBorder(edge: PaperEdge.top, radius: 0, amplitude: 2),
+        shadows: [BoxShadow(color: stock.shadow, offset: const Offset(0, -2))],
+      ),
       child: SafeArea(
         top: false,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: tokens.navBackground,
-            borderRadius: BorderRadius.circular(AppConstants.radius24),
-            border: Border.all(color: tokens.navBorder),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.spacing8,
+            AppConstants.spacing12,
+            AppConstants.spacing8,
+            AppConstants.spacing4,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: navigationItems.asMap().entries.map((entry) {
-              final index = entry.key;
-              final item = entry.value;
-              final isSelected = currentIndex == index;
-
-              return Expanded(
-                child: Semantics(
-                  label: item.label,
-                  button: true,
-                  selected: isSelected,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _onTabTapped(index),
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius16,
+          child: SizedBox(
+            height: barHeight - AppConstants.spacing16,
+            child: Stack(
+              children: [
+                AnimatedAlign(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment(-1 + 2 * currentIndex / (count - 1), 0),
+                  child: FractionallySizedBox(
+                    widthFactor: 1 / count,
+                    heightFactor: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.spacing4,
                       ),
-                      child: AnimatedContainer(
-                        duration: AppConstants.animationDurationShort,
-                        curve: Curves.easeInOut,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? tokens.brandColor.withValues(alpha: 0.14)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(
-                            AppConstants.radius16,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isSelected ? item.activeIcon : item.icon,
-                              size: 22,
-                              color: isSelected
-                                  ? tokens.brandColor
-                                  : tokens.textSecondary,
-                            ),
-                            const SizedBox(height: 4),
-                            // Scale the label down on narrow surfaces
-                            // (~320px) instead of letting "Photoshoot" wrap
-                            // or clip inside its ~53px-wide Expanded slot.
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                item.label,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.w500,
-                                  color: isSelected
-                                      ? tokens.brandColor
-                                      : tokens.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: PaperSurface(
+                        color: stock.tint,
+                        grain: false,
+                        padding: EdgeInsets.zero,
+                        child: const SizedBox.expand(),
                       ),
                     ),
                   ),
                 ),
-              );
-            }).toList(),
+                Row(
+                  children: [
+                    for (final (index, item) in navigationItems.indexed)
+                      Expanded(
+                        child: _NavTab(
+                          item: item,
+                          selected: index == currentIndex,
+                          labelStyle: label,
+                          onTap: () => onTabChanged(index),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -187,6 +160,56 @@ class AppBottomNavigationBar extends StatelessWidget {
       }
     }
     return 0;
+  }
+}
+
+class _NavTab extends StatelessWidget {
+  const _NavTab({
+    required this.item,
+    required this.selected,
+    required this.labelStyle,
+    required this.onTap,
+  });
+
+  final NavigationItem item;
+  final bool selected;
+  final TextStyle? labelStyle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final color = selected ? tokens.stock.accent : tokens.textSecondary;
+    return Semantics(
+      label: item.label,
+      button: true,
+      selected: selected,
+      excludeSemantics: true,
+      child: InkResponse(
+        onTap: onTap,
+        containedInkWell: true,
+        highlightShape: BoxShape.rectangle,
+        borderRadius: BorderRadius.circular(AppConstants.radius12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(selected ? item.activeIcon : item.icon, size: 24, color: color),
+            const SizedBox(height: AppConstants.spacing4),
+            // Scales down on ~320px screens so "Photoshoot" never wraps.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                item.label,
+                style: labelStyle?.copyWith(
+                  color: color,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

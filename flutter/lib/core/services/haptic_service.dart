@@ -1,9 +1,8 @@
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
 
 /// Service for providing haptic feedback throughout the app
 /// Enhances user experience with tactile feedback for interactions
-class HapticService extends GetxService {
+class HapticService {
   HapticService._internal();
   static final HapticService _instance = HapticService._internal();
   static HapticService get instance => _instance;

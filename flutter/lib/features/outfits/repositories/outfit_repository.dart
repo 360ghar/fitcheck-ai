@@ -108,7 +108,7 @@ class OutfitRepository {
   Future<OutfitModel> toggleFavorite(String outfitId) async {
     try {
       await _apiClient.post('${ApiConstants.outfits}/$outfitId/favorite');
-      return getOutfit(outfitId);
+      return await getOutfit(outfitId);
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -118,7 +118,7 @@ class OutfitRepository {
   Future<OutfitModel> markAsWorn(String outfitId) async {
     try {
       await _apiClient.post('${ApiConstants.outfits}/$outfitId/wear');
-      return getOutfit(outfitId);
+      return await getOutfit(outfitId);
     } on DioException catch (e) {
       throw handleDioException(e);
     }
