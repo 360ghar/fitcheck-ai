@@ -122,7 +122,7 @@ env:
   # Keep in lock-step with .github/workflows/build-apk.yml,
   # .github/workflows/flutter-ci.yml, .github/workflows/shorebird-patch-ios.yml
   # and flutter/scripts/_shorebird_common.sh.
-  FLUTTER_VERSION: '3.44.6'
+  FLUTTER_VERSION: '3.47.5'
   # Authenticates the Shorebird CLI. Absent on forks (and before the secret is
   # provisioned). When absent, the auth check is skipped and the unsigned
   # validation path degrades to a warning: every `shorebird` command needs a

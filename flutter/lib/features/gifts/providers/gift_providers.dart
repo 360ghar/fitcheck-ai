@@ -27,8 +27,27 @@ final giftBusyProvider = NotifierProvider<BusyIds, Set<String>>(BusyIds.new);
 GiftDashboardSummary? liveGiftSummary(AsyncValue<GiftDashboardSummary?> v) =>
     v.hasError ? null : v.value;
 
+/// [liveGiftSummary] for views, plus the account check: Riverpod keeps the
+/// previous value on screen while the session user's reload runs, so a value
+/// whose owner is no longer the session user must not be exposed during that
+/// window. Null owner and null session (no signed-in user context) match.
+final liveGiftSummaryProvider = Provider<GiftDashboardSummary?>((ref) {
+  final summary = liveGiftSummary(ref.watch(giftProvider));
+  if (summary == null) return null;
+  final owner = ref.watch(giftProvider.notifier).valueOwner;
+  return owner == ref.watch(sessionUserIdProvider) ? summary : null;
+});
+
 class GiftNotifier extends AsyncNotifier<GiftDashboardSummary?> {
   static const createKey = 'create';
+
+  /// The session user that produced the current value. Set only when a load
+  /// for that user commits; [liveGiftSummaryProvider] refuses a value whose
+  /// owner is no longer the session user.
+  String? _valueOwner;
+  String? get valueOwner => _valueOwner;
+
+  int _generation = 0;
 
   GiftRepository get _repository => ref.read(giftRepositoryProvider);
 
@@ -40,14 +59,26 @@ class GiftNotifier extends AsyncNotifier<GiftDashboardSummary?> {
   }
 
   Future<GiftDashboardSummary?> _load() async {
-    if (!EnvConfig.giftVouchersEnabled) return null;
-    return _repository.getSummary();
+    final uid = ref.read(sessionUserIdProvider);
+    if (!EnvConfig.giftVouchersEnabled) {
+      _valueOwner = uid;
+      return null;
+    }
+    final summary = await _repository.getSummary();
+    if (ref.mounted && uid == ref.read(sessionUserIdProvider)) {
+      _valueOwner = uid;
+    }
+    return summary;
   }
 
   /// Reloads and keeps the current summary on screen while it runs.
+  /// Completions commit in order: a slower older GET cannot overwrite a
+  /// newer post-claim summary.
   Future<void> refresh() async {
+    final generation = ++_generation;
     state = const AsyncLoading();
-    state = await AsyncValue.guard(_load);
+    final next = await AsyncValue.guard(_load);
+    if (generation == _generation && ref.mounted) state = next;
   }
 
   /// Creates a free named invitation. [clientRequestId] makes a retry after

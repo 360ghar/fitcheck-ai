@@ -287,7 +287,9 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
   final _formKey = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.profile?.name);
   late final _height = TextEditingController(
-    text: widget.profile?.heightCm.toStringAsFixed(0),
+    // toString(), not toStringAsFixed(0): a fractional height must not be
+    // silently rounded the moment the form opens.
+    text: widget.profile?.heightCm.toString(),
   );
   late final _weight = TextEditingController(
     text: widget.profile?.weightKg.toString(),

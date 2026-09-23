@@ -185,6 +185,15 @@ class OutfitsNotifier extends PagedNotifier<OutfitModel> {
       try {
         final updated = await _repository.toggleFavorite(id);
         replace(updated);
+        // In a favourites-only result an unfavourited outfit no longer
+        // matches: drop the row and correct the total instead of leaving a
+        // non-favourite visible with an inflated count.
+        if (_filters.favoritesOnly && !updated.isFavorite) {
+          updateItems(
+            (items) => [for (final o in items) if (o.id != id) o],
+            totalDelta: -1,
+          );
+        }
         ErrorHandler.showInfo(
           updated.isFavorite
               ? 'Saved to favourites'

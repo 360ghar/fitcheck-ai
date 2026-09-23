@@ -56,8 +56,13 @@ class DashboardNotifier extends AsyncNotifier<DashboardSnapshot> {
   /// Riverpod carries the previous value into loading and error states set
   /// here, so the screen never blanks.
   Future<void> refresh() async {
+    final uid = ref.read(sessionUserIdProvider);
     state = const AsyncLoading();
-    state = await AsyncValue.guard(_load);
+    final next = await AsyncValue.guard(_load);
+    // A refresh started for one account must not publish its result into
+    // another account's session (or into a disposed provider).
+    if (!ref.mounted || uid != ref.read(sessionUserIdProvider)) return;
+    state = next;
   }
 }
 

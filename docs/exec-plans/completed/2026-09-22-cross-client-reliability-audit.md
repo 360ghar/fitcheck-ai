@@ -36,7 +36,7 @@ Audit the public web app, admin console, Flutter client, and FastAPI backend for
 | 2026-09-22 | Found admin navigation tests failing because jsdom AbortSignals were incompatible with Node Request; fixed the shared test environment and restored coverage of filters, pagination, auth redirects, and editor navigation. |
 | 2026-09-22 | Hardened the web gamification page with content skeletons, friendly error copy, and stale/unmounted request guards; added focused regression tests. |
 | 2026-09-22 | Reviewed Flutter loading/error patterns and ran the available harness; the container has no Flutter executable, so mobile runtime verification remains an environment limitation. |
-| 2026-09-22 | Backend suite collected and ran 4,306 tests with explicit non-production settings: 4,302 passed, 4 skipped, with two pre-existing failures (async RPC call-order assertion and environment-sensitive matte performance budget). |
+| 2026-09-22 | Backend suite collected 4,308 tests with explicit non-production settings: 4,302 passed, 4 skipped, 2 pre-existing failures (async RPC call-order assertion and environment-sensitive matte performance budget). Re-run 2026-09-23: 4,304 passed, 4 skipped, 0 failed — both failures are flaky/host-dependent and are tracked as TD-115 and TD-116. |
 
 ## Decision log
 
@@ -50,13 +50,14 @@ Audit the public web app, admin console, Flutter client, and FastAPI backend for
 
 ```bash
 ./scripts/check_all.sh
-cd frontend && npm run build
-cd admin && npm run typecheck && npm run build && npm run check:schema
+(cd frontend && npm run build)
+(cd admin && npm run typecheck && npm run build && npm run check:schema)
 ```
 
 ## Deferred debt
 
 Items pushed to `docs/exec-plans/tech-debt-tracker.md`:
-- No new tracker item. Existing harness gaps remain: Flutter is unavailable in this container; backend performance timing is host-sensitive; hosted Supabase and paid provider behavior require integration environments.
-- Follow-up: make the dashboard-trends RPC-order test assert the RPC set (or explicitly serialize the implementation) rather than relying on concurrent task scheduling order.
-- Follow-up: calibrate the background-removal performance gate on the supported Python/runtime runner; this host measured ~579 ms against a 400 ms ceiling.
+- TD-115: make the dashboard-trends RPC-order test assert the RPC set (or explicitly serialize the implementation) rather than relying on concurrent task scheduling order.
+- TD-116: calibrate the background-removal performance gate on the supported Python/runtime runner; this host measured ~579 ms against a 400 ms ceiling.
+
+Environment limits (not tracker items): Flutter is unavailable in this container; backend performance timing is host-sensitive; hosted Supabase and paid provider behavior require integration environments.

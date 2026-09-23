@@ -497,6 +497,50 @@ class _WearHistory extends ConsumerWidget {
                   ],
                 ),
               ),
+            // The first eight are a preview, not the whole history.
+            if (value.length > 8)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('Wear history'),
+                      content: SizedBox(
+                        width: double.maxFinite,
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            for (final entry in value)
+                              ListTile(
+                                dense: true,
+                                leading: const Icon(
+                                  Icons.event_available_outlined,
+                                  size: 18,
+                                ),
+                                title: Text(
+                                  AppDateUtils.formatMonthDayYear(
+                                    entry.wornAt.toLocal(),
+                                  ),
+                                ),
+                                subtitle: (entry.notes?.isNotEmpty ?? false)
+                                    ? Text(entry.notes!)
+                                    : null,
+                              ),
+                          ],
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  child: Text('Show all ${value.length}'),
+                ),
+              ),
           ],
         ),
         AsyncValue(hasError: true) => Row(

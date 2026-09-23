@@ -28,7 +28,7 @@ set -euo pipefail
 # cut a NEW store release - the Flutter version of a release can never be
 # changed by a patch.
 # ---------------------------------------------------------------------------
-SHOREBIRD_FLUTTER_VERSION='3.44.6'
+SHOREBIRD_FLUTTER_VERSION='3.47.5'
 
 # ---------------------------------------------------------------------------
 # Build flags forwarded to `flutter build` after the `--` separator.

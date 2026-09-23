@@ -170,6 +170,11 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     final repository = ref.read(itemRepositoryProvider);
+    // Captured before the awaits: backing out of this form disposes its ref,
+    // and a post-await ref access would throw after the item was created.
+    final wardrobe = ref.exists(wardrobeProvider)
+        ? ref.read(wardrobeProvider.notifier)
+        : null;
     final main = widget.image ?? _extraImages.firstOrNull;
     final request = CreateItemRequest(
       name: _name.text.trim(),
@@ -213,9 +218,7 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
           );
         }
       }
-      if (ref.exists(wardrobeProvider)) {
-        ref.read(wardrobeProvider.notifier).addItems([created]);
-      }
+      wardrobe?.addItems([created]);
       _requestId = null;
       _requestPayload = null;
       ErrorHandler.showSuccess(

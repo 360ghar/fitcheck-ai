@@ -93,10 +93,14 @@ class BodyProfilesNotifier extends AsyncNotifier<List<BodyProfileModel>> {
       try {
         await _repository.deleteBodyProfile(id);
         if (ref.mounted) {
+          final current = state.value ?? const <BodyProfileModel>[];
           state = AsyncData([
-            for (final p in state.value ?? const <BodyProfileModel>[])
+            for (final p in current)
               if (p.id != id) p,
           ]);
+          // When the default was deleted the API promotes the newest
+          // remaining profile; reload so the local flags match the server.
+          if (current.any((p) => p.id == id && p.isDefault)) await refresh();
         }
         ErrorHandler.showSuccess('Body profile deleted.', title: 'Deleted');
       } catch (e, stack) {

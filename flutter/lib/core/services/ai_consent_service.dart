@@ -58,6 +58,14 @@ class AiConsentService {
   Future<void> setConsented() async {
     final uid = _userId();
     if (uid == null) return;
+    await _setConsentedFor(uid);
+  }
+
+  /// Records consent for [uid], the user captured when the consent sheet was
+  /// shown. If the account changed while the sheet was open, nothing is
+  /// written: one user's acceptance must never be recorded for another.
+  Future<void> _setConsentedFor(String uid) async {
+    if (_userId() != uid) return;
     _cachedFor = uid;
     _consented = true;
     try {
@@ -74,11 +82,13 @@ class AiConsentService {
   /// true, on decline it returns false (caller must abort the AI action).
   Future<bool> ensureConsent({required String featureLabel}) async {
     if (await hasConsented()) return true;
+    final uid = _userId();
+    if (uid == null) return false;
 
     final accepted = await showAiConsentSheet(featureLabel: featureLabel);
-    if (accepted) {
-      await setConsented();
-    }
-    return accepted;
+    if (!accepted) return false;
+    if (_userId() != uid) return false; // account changed while the sheet ran
+    await _setConsentedFor(uid);
+    return true;
   }
 }

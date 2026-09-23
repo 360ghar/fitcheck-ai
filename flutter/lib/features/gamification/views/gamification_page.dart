@@ -232,10 +232,17 @@ class _Achievements extends StatelessWidget {
             childAspectRatio: 0.85,
           );
     } else if (value.isEmpty) {
-      body = const AppEmptyState(
-        scene: PaperScenes.outfits,
-        title: 'No achievements yet',
-        message: 'Add pieces and plan outfits to earn your first.',
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // A retained empty list can still carry a failed refresh: show it.
+          ?error,
+          const AppEmptyState(
+            scene: PaperScenes.outfits,
+            title: 'No achievements yet',
+            message: 'Add pieces and plan outfits to earn your first.',
+          ),
+        ],
       );
     } else {
       body = Column(
@@ -369,10 +376,17 @@ class _Leaderboard extends StatelessWidget {
             ),
           );
     } else if (value.isEmpty) {
-      body = const AppEmptyState(
-        scene: PaperScenes.home,
-        title: 'No one on the board yet',
-        message: 'Plan outfits to earn points and show up here.',
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // A retained empty list can still carry a failed refresh: show it.
+          ?error,
+          const AppEmptyState(
+            scene: PaperScenes.home,
+            title: 'No one on the board yet',
+            message: 'Plan outfits to earn points and show up here.',
+          ),
+        ],
       );
     } else {
       final top = value.take(10).toList();

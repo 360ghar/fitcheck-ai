@@ -91,6 +91,36 @@ class _EditFormState extends ConsumerState<_EditForm> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant _EditForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final prev = oldWidget.outfit;
+    final next = widget.outfit;
+    if (next.id != prev.id) {
+      // Never carry one outfit's pending edits into another's form.
+      _newImages.clear();
+      _imagesToDelete.clear();
+    }
+    // Fresh detail arrives after the cached copy the form started from.
+    // Sync only fields the user has not edited, so Save cannot overwrite
+    // newer server values with stale ones nor clobber in-progress edits.
+    void sync(TextEditingController c, String was, String now) {
+      if (c.text == was) c.text = now;
+    }
+
+    sync(_name, prev.name, next.name);
+    sync(_description, prev.description ?? '', next.description ?? '');
+    sync(_tags, prev.tags?.join(', ') ?? '', next.tags?.join(', ') ?? '');
+    if (_style == prev.style) _style = next.style;
+    if (_season == prev.season) _season = next.season;
+    final prevOccasion = (prev.occasion?.isEmpty ?? true) ? null : prev.occasion;
+    final nextOccasion = (next.occasion?.isEmpty ?? true) ? null : next.occasion;
+    if (_occasion == prevOccasion) _occasion = nextOccasion;
+    if (_favorite == prev.isFavorite) _favorite = next.isFavorite;
+    if (_draft == prev.isDraft) _draft = next.isDraft;
+    if (_public == prev.isPublic) _public = next.isPublic;
+  }
+
   Future<void> _addPhoto() async {
     final image = await ImagePicker().pickImage(
       source: ImageSource.gallery,

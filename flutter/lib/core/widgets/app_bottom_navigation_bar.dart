@@ -185,6 +185,9 @@ class _NavTab extends StatelessWidget {
       button: true,
       selected: selected,
       excludeSemantics: true,
+      // excludeSemantics drops the InkResponse's tap action: without this
+      // the node is announced as a button screen readers cannot activate.
+      onTap: onTap,
       child: InkResponse(
         onTap: onTap,
         containedInkWell: true,

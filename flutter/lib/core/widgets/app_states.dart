@@ -118,14 +118,31 @@ AppErrorKind classifyError(Object? error) {
     };
   }
   if (error is NetworkException) {
-    return switch (error.errorCode) {
-      'NO_CONNECTION' || 'TIMEOUT' => AppErrorKind.offline,
-      _ => AppErrorKind.server,
-    };
+    switch (error.errorCode) {
+      case 'NO_CONNECTION':
+      case 'TIMEOUT':
+        return AppErrorKind.offline;
+      default:
+        // A rejected request (4xx) is not a server outage: classify it by
+        // status so the copy does not blame the server or the session.
+        final status = error.statusCode;
+        if (status != null && status >= 400 && status < 500) {
+          if (status == 401) return AppErrorKind.auth;
+          if (status == 404) return AppErrorKind.notFound;
+          return AppErrorKind.other;
+        }
+        return AppErrorKind.server;
+    }
   }
   if (error is ServerException) return AppErrorKind.server;
   if (error is NotFoundException) return AppErrorKind.notFound;
-  if (error is AuthException) return AppErrorKind.auth;
+  if (error is AuthException) {
+    // 403 is a permission problem, not an expired session: telling the
+    // user to sign in again would not help.
+    return error.errorCode == 'FORBIDDEN'
+        ? AppErrorKind.other
+        : AppErrorKind.auth;
+  }
   return AppErrorKind.other;
 }
 
@@ -236,12 +253,16 @@ class AppErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
-    final offline = classifyError(error ?? message) == AppErrorKind.offline;
+    final kind = classifyError(error ?? message);
     final text =
         message ??
-        (offline
-            ? "You're offline. Showing what we have."
-            : ErrorHandler.extractMessage(error));
+        switch (kind) {
+          AppErrorKind.offline => "You're offline. Showing what we have.",
+          // Server failures can carry raw backend response text; users get
+          // stable copy, the diagnostic stays in the logs.
+          AppErrorKind.server => "Couldn't refresh. Showing what we have.",
+          _ => ErrorHandler.extractMessage(error),
+        };
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppConstants.spacing16,
@@ -262,7 +283,9 @@ class AppErrorBanner extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              offline ? Icons.cloud_off_outlined : Icons.error_outline_rounded,
+              kind == AppErrorKind.offline
+                  ? Icons.cloud_off_outlined
+                  : Icons.error_outline_rounded,
               size: 20,
               color: tokens.textSecondary,
             ),

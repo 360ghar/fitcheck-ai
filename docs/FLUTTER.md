@@ -136,7 +136,7 @@ store binary.
 
 ### Three settings that must stay in lock-step
 
-- **Flutter `3.44.6`** lives in `.github/workflows/build-apk.yml`,
+- **Flutter `3.47.5`** lives in `.github/workflows/build-apk.yml`,
   `.github/workflows/build-ios.yml`, `.github/workflows/flutter-ci.yml`,
   `.github/workflows/shorebird-patch-ios.yml`, and
   `flutter/scripts/_shorebird_common.sh`. Shorebird defaults to a *newer* version,

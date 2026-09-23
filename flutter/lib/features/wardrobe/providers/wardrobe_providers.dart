@@ -309,7 +309,18 @@ class ItemDetailNotifier extends AsyncNotifier<ItemModel> {
   final String id;
 
   @override
-  Future<ItemModel> build() => ref.read(itemRepositoryProvider).getItem(id);
+  Future<ItemModel> build() async {
+    final item = await ref.read(itemRepositoryProvider).getItem(id);
+    // The list copy keeps stale models and expired presigned URLs unless it
+    // is synchronized here; refresh() covers pull-to-refresh, this covers
+    // simply opening the detail.
+    if (ref.mounted) {
+      ref.read(wardrobeProvider.notifier).updateItems(
+        (items) => [for (final i in items) i.id == item.id ? item : i],
+      );
+    }
+    return item;
+  }
 
   void set(ItemModel item) => state = AsyncData(item);
 

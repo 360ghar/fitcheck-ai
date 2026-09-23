@@ -98,7 +98,7 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
       );
     } else {
       final gift = ref.watch(giftProvider);
-      final summary = liveGiftSummary(gift);
+      final summary = ref.watch(liveGiftSummaryProvider);
       final bottom = MediaQuery.paddingOf(context).bottom;
       final padding = EdgeInsets.fromLTRB(
         AppConstants.spacing16,

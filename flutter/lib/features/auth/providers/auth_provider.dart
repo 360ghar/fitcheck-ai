@@ -131,10 +131,16 @@ class AuthNotifier extends Notifier<AuthState> {
   /// retried on the next [refreshUser].
   Future<void> _loadUser({User? supabaseUser}) async {
     try {
+      final forUser = supabaseUser ?? _supabase.currentUser.value;
       final loaded = await _authService.loadUserData(
         supabaseUser: supabaseUser,
       );
-      if (loaded != null && ref.mounted) state = state.copyWith(user: loaded);
+      if (loaded == null || !ref.mounted) return;
+      // A load that finishes after sign-out or an account switch must not
+      // repopulate the previous account's profile.
+      final sessionUid = _supabase.currentUser.value?.id;
+      if (sessionUid == null || forUser?.id != sessionUid) return;
+      state = state.copyWith(user: loaded);
     } catch (e, stack) {
       ErrorHandler.reportError(e, 'Profile load failed', stackTrace: stack);
     }

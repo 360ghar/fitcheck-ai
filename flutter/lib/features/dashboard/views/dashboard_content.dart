@@ -221,7 +221,7 @@ class _DashboardContentState extends ConsumerState<DashboardContent> {
     // Do not briefly surface referral before the first gift lookup resolves.
     // A failed lookup falls back to referral.
     if (!gift.hasValue && !gift.hasError) return const SizedBox.shrink();
-    final currentSummary = liveGiftSummary(gift);
+    final currentSummary = ref.watch(liveGiftSummaryProvider);
 
     final incoming = currentSummary?.incomingGift;
     if (incoming != null) {

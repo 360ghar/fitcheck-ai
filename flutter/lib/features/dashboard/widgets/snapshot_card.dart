@@ -155,6 +155,9 @@ class _Figure extends StatelessWidget {
         button: true,
         label: '${value ?? 'No'} $label',
         excludeSemantics: true,
+        // excludeSemantics drops the InkWell's tap action: without this the
+        // node is announced as a button screen readers cannot activate.
+        onTap: onTap,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppConstants.radius12),

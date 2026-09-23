@@ -183,7 +183,12 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
             title: 'Add pieces first',
             message: 'Outfits are made from the pieces in your closet.',
             actionLabel: 'Add a piece',
-            onAction: () => context.push(Routes.wardrobeAdd),
+            onAction: () async {
+              await context.push(Routes.wardrobeAdd);
+              // The picker caches one result per builder session; without a
+              // refresh the piece just added stays invisible.
+              if (context.mounted) ref.invalidate(builderPickerItemsProvider);
+            },
           ),
         ),
       ],

@@ -7,6 +7,7 @@ import '../../../domain/enums/style.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../../wardrobe/providers/wardrobe_providers.dart';
 import '../models/outfit_model.dart';
+import '../repositories/outfit_repository.dart';
 import 'outfit_providers.dart';
 
 /// Every closet piece for the picker, up to [maxPages] pages of 100. Loaded
@@ -97,11 +98,17 @@ class OutfitBuilderNotifier extends Notifier<OutfitDraft> {
   void setName(String value) => state = state.copyWith(name: value);
   void setDescription(String value) =>
       state = state.copyWith(description: value);
-  void setStyle(Style value) => state = state.copyWith(style: value);
+  void setStyle(Style value) => state = state.copyWith(
+    style: value,
+    // The preview no longer matches the style.
+    previewUrl: () => null,
+  );
   void setSeason(Season value) => state = state.copyWith(season: value);
 
   Future<void> generatePreview() async {
     if (state.pieces.isEmpty || state.generating) return;
+    final inputIds = [for (final p in state.pieces) p.id];
+    final inputStyle = state.style;
     state = state.copyWith(generating: true);
     try {
       final result = await ref
@@ -125,6 +132,13 @@ class OutfitBuilderNotifier extends Notifier<OutfitDraft> {
             background: 'studio white',
           );
       if (!ref.mounted) return;
+      // The draft can change while the request runs (pieces toggled, style
+      // switched): a result for the old inputs must not replace a newer
+      // preview or re-add a cleared one.
+      final currentIds = [for (final p in state.pieces) p.id];
+      if (state.style != inputStyle || !listEquals(currentIds, inputIds)) {
+        return;
+      }
       // On a storage failure the backend sends an EMPTY url plus base64.
       final url = result.imageUrl ?? '';
       state = state.copyWith(
@@ -162,6 +176,9 @@ class OutfitBuilderNotifier extends Notifier<OutfitDraft> {
     }
     state = state.copyWith(saving: true);
     final repository = ref.read(outfitRepositoryProvider);
+    // Snapshot the preview with the create request: edits made while the
+    // request runs must not change which image is uploaded.
+    final preview = state.previewUrl;
     try {
       final outfit = await repository.createOutfit(
         CreateOutfitRequest(
@@ -175,7 +192,11 @@ class OutfitBuilderNotifier extends Notifier<OutfitDraft> {
           tags: const [],
         ),
       );
-      await _uploadPreview(outfit.id);
+      // The server has the outfit even if this notifier was disposed while
+      // awaiting (user left the builder): skip ref work, never report a
+      // created outfit as unsaved.
+      if (!ref.mounted) return outfit;
+      await _uploadPreview(repository, outfit.id, preview);
       if (ref.exists(outfitsProvider)) {
         ref.read(outfitsProvider.notifier).add(outfit);
       }
@@ -189,13 +210,15 @@ class OutfitBuilderNotifier extends Notifier<OutfitDraft> {
     }
   }
 
-  /// Uploads the preview as the outfit's primary image. A data URI uploads
+  /// Uploads [preview] as the outfit's primary image. A data URI uploads
   /// its bytes; a URL is downloaded and re-uploaded. A failure never fails
   /// the save: it is reported, and the outfit keeps its piece images.
-  Future<void> _uploadPreview(String outfitId) async {
-    final preview = state.previewUrl;
+  Future<void> _uploadPreview(
+    OutfitRepository repository,
+    String outfitId,
+    String? preview,
+  ) async {
     if (preview == null || preview.isEmpty) return;
-    final repository = ref.read(outfitRepositoryProvider);
     OutfitImage? uploaded;
     try {
       uploaded = preview.startsWith('data:image/')

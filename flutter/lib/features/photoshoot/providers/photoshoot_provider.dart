@@ -803,6 +803,13 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
       return;
     }
     if (!ref.mounted) return;
+    // Recheck after the consent await: another tap (or a slot change) can
+    // slip in while the sheet is open, and both would start a paid retry.
+    if (state.retryingIndex != null ||
+        !state.failedIndices.contains(index) ||
+        state.photos.isEmpty) {
+      return;
+    }
     state = state.copyWith(retryingIndex: index);
     try {
       final result = await _repo.generateSync(

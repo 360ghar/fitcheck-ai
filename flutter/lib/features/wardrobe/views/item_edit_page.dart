@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -103,6 +104,45 @@ class _EditFormState extends ConsumerState<_EditForm> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant _EditForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final prev = oldWidget.item;
+    final next = widget.item;
+    if (next.id != prev.id) {
+      // Never carry one piece's pending edits into another's form.
+      _newImages.clear();
+      _imagesToDelete.clear();
+    }
+    // Fresh detail arrives after the cached copy the form started from.
+    // Sync only fields the user has not edited, so Save cannot overwrite
+    // newer server values with stale ones nor clobber in-progress edits.
+    void sync(TextEditingController c, String was, String now) {
+      if (c.text == was) c.text = now;
+    }
+
+    sync(_name, prev.name, next.name);
+    sync(_description, prev.description ?? '', next.description ?? '');
+    sync(_brand, prev.brand ?? '', next.brand ?? '');
+    sync(_size, prev.size ?? '', next.size ?? '');
+    sync(_material, prev.material ?? '', next.material ?? '');
+    sync(_pattern, prev.pattern ?? '', next.pattern ?? '');
+    sync(_price, prev.price?.toString() ?? '', next.price?.toString() ?? '');
+    sync(_location, prev.location ?? '', next.location ?? '');
+    if (_category == prev.category) _category = next.category;
+    if (_condition == prev.condition) _condition = next.condition;
+    if (setEquals(_colors, {...?prev.colors})) {
+      _colors
+        ..clear()
+        ..addAll(next.colors ?? const <String>[]);
+    }
+    if (setEquals(_useCases, UseCases.normalizeList(prev.occasionTags).toSet())) {
+      _useCases
+        ..clear()
+        ..addAll(UseCases.normalizeList(next.occasionTags));
+    }
+  }
+
   String? _text(TextEditingController c) {
     final value = c.text.trim();
     return value.isEmpty ? null : value;
@@ -158,6 +198,15 @@ class _EditFormState extends ConsumerState<_EditForm> {
               : UseCases.normalizeList(_useCases),
         ),
       );
+    } catch (e, stack) {
+      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      if (mounted) setState(() => _saving = false);
+      return;
+    }
+    // The edit itself is committed. Anything from here is best-effort: a
+    // failure must not report "Not saved" and invite a retry that would
+    // re-run the already-applied image deletions.
+    try {
       for (final imageId in _imagesToDelete) {
         await repository.deleteItemImage(id, imageId);
       }
@@ -165,14 +214,24 @@ class _EditFormState extends ConsumerState<_EditForm> {
         await repository.uploadImages(id, _newImages);
       }
       // One fetch picks up the new fields and fresh image URLs.
-      ref.read(wardrobeProvider.notifier).replace(await repository.getItem(id));
-      if (!mounted) return;
-      ErrorHandler.showSuccess('Your changes are saved.', title: 'Saved');
-      Navigator.pop(context);
+      final fresh = await repository.getItem(id);
+      if (mounted) {
+        ref.read(wardrobeProvider.notifier).replace(fresh);
+      }
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        ErrorHandler.showError(
+          e,
+          title: 'Saved — photos may be out of date',
+          stackTrace: stack,
+        );
+        Navigator.pop(context);
+      }
+      return;
     }
+    if (!mounted) return;
+    ErrorHandler.showSuccess('Your changes are saved.', title: 'Saved');
+    Navigator.pop(context);
   }
 
   @override

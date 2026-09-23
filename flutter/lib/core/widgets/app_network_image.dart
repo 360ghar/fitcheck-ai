@@ -137,7 +137,9 @@ int? decodeWidthFor(
 ) {
   final logical =
       width ?? (constraints.maxWidth.isFinite ? constraints.maxWidth : null);
-  if (logical == null || logical <= 0) return null;
+  // isFinite also rejects the `double.infinity` widths callers pass to mean
+  // "fill the row" — round() would throw on infinity during build.
+  if (logical == null || !logical.isFinite || logical <= 0) return null;
   return (logical * MediaQuery.devicePixelRatioOf(context)).round();
 }
 

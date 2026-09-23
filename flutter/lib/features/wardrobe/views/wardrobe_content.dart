@@ -53,6 +53,14 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
     setState(() => _searching = false);
   }
 
+  /// Clears every filter, including the search text kept in this widget's
+  /// own controller (the filters notifier never sees it directly).
+  void _clearAllFilters() {
+    _searchDebounce?.cancel();
+    _search.clear();
+    ref.read(wardrobeFiltersProvider.notifier).clear();
+  }
+
   void _open(ItemModel item) {
     final selection = ref.read(wardrobeSelectionProvider);
     if (selection.isNotEmpty) {
@@ -89,7 +97,12 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
                 const SliverToBoxAdapter(
                   child: PaperScene(preset: PaperScenes.closet, height: 112),
                 ),
-              SliverToBoxAdapter(child: _CategoryChips(filters: filters)),
+              SliverToBoxAdapter(
+                child: _CategoryChips(
+                  filters: filters,
+                  onClearAll: _clearAllFilters,
+                ),
+              ),
               if (page != null && wardrobe.hasError)
                 SliverToBoxAdapter(
                   child: AppErrorBanner(
@@ -465,14 +478,17 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
 }
 
 class _CategoryChips extends ConsumerWidget {
-  const _CategoryChips({required this.filters});
+  const _CategoryChips({required this.filters, required this.onClearAll});
 
   final WardrobeFilters filters;
+
+  /// Clears the whole filter state (not just categories) and syncs the
+  /// search field owned by the page.
+  final VoidCallback onClearAll;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(wardrobeFiltersProvider.notifier);
-    final noCategory = filters.categories.isEmpty && !filters.favoritesOnly;
     return SizedBox(
       height: 56,
       child: ListView(
@@ -484,13 +500,8 @@ class _CategoryChips extends ConsumerWidget {
         children: [
           _Chip(
             label: 'All',
-            selected: noCategory,
-            onTap: () {
-              notifier.setFavoritesOnly(false);
-              for (final c in filters.categories) {
-                notifier.toggleCategory(c);
-              }
-            },
+            selected: !filters.isFiltered,
+            onTap: onClearAll,
           ),
           _Chip(
             label: 'Favourites',

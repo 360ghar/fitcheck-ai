@@ -181,6 +181,10 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
   bool _starting = false;
   bool _decoupledToReview = false;
   bool _reconciling = false;
+
+  /// Bumped by [reset] and on dispose so an extraction start still in
+  /// flight knows it was abandoned and cancels itself server-side.
+  int _generation = 0;
   final Map<String, DetectedItemData> _extracted = {};
 
   /// Idempotency keys per detected piece (TD-109). A re-tapped Save sends
@@ -192,7 +196,10 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
 
   @override
   ItemAddState build() {
-    ref.onDispose(_stopJob);
+    ref.onDispose(() {
+      _generation++;
+      _stopJob();
+    });
     return const ItemAddState();
   }
 
@@ -212,11 +219,13 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
   Future<void> processImage(File image) async {
     if (_starting || state.processing || state.generating) return;
     _starting = true;
+    final generation = _generation;
+    final repository = ref.read(itemRepositoryProvider);
     try {
       if (!await ref.read(aiConsentGateProvider)('AI Wardrobe Extraction')) {
         return;
       }
-      if (!ref.mounted) return;
+      if (!ref.mounted || generation != _generation) return;
       _stopJob();
       _extracted.clear();
       _createRequestIds.clear();
@@ -230,9 +239,17 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
         useCases: state.useCases,
       );
 
-      final job = await ref
-          .read(itemRepositoryProvider)
-          .extractItemsFromImageAsync(image);
+      final job = await repository.extractItemsFromImageAsync(image);
+      if (generation != _generation) {
+        // Reset, cancelled, or disposed while the start request was in
+        // flight: the job exists server-side but nobody is watching it.
+        try {
+          await repository.cancelSingleExtraction(job.jobId);
+        } catch (_) {
+          // Best effort; nothing is listening either way.
+        }
+        return;
+      }
       if (!ref.mounted) return;
       final jobId = job.jobId;
       _jobId = jobId;
@@ -760,6 +777,7 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
 
   /// Back to the start. Stops the job and forgets the photo.
   void reset() {
+    _generation++; // any start still in flight must cancel itself
     _stopJob();
     _extracted.clear();
     _createRequestIds.clear();
