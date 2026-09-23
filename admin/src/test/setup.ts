@@ -1,3 +1,5 @@
+import { transferableAbortController } from 'node:util'
+
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest'
@@ -19,6 +21,18 @@ expect.extend(axeMatchers)
 
 // Deterministic date formatters: run tests in UTC.
 process.env.TZ = 'UTC'
+
+// React Router's data router constructs a Request for every navigation.
+// jsdom installs a DOM-realm AbortController, but Node's native Request
+// (undici) rejects that realm's signal. Use Node's controller factory so URL
+// filters, pagination, redirects, and route transitions exercise their real
+// code paths instead of failing with a cross-realm RequestInit TypeError.
+class NodeAbortController {
+  constructor() {
+    return transferableAbortController()
+  }
+}
+vi.stubGlobal('AbortController', NodeAbortController)
 
 // matchMedia — used by next-themes and sonner. Stubbed via stubGlobal so
 // `restoreMocks: true` (which resets vi.fn implementations before each test)
