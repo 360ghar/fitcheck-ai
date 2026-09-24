@@ -1,0 +1,10 @@
+{
+  "name": "fitcheck-ai-railway-iac",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Railway Infrastructure as Code evaluation scope (railway/iac SDK only)",
+  "dependencies": {
+    "railway": "3.11.0"
+  }
+}

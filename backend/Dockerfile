@@ -56,7 +56,7 @@ USER appuser
 EXPOSE 8000
 
 # Run the application (supports Railway's $PORT)
-# Railway's healthcheck is configured in railway.json
+# Railway's healthcheck is configured in .railway/railway.ts
 # --proxy-headers --forwarded-allow-ips='*': the container is only ever
 # reachable through Railway's edge proxy (never directly from the internet),
 # so the proxy is the sole possible TCP peer. NOTE (A5-01): uvicorn resolves

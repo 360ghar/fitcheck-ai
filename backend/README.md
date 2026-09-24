@@ -86,21 +86,18 @@ PYTHONPATH=. pytest
 
 ## Railway (production deploy)
 
-This monorepo keeps Railway config under `backend/`, not the repo root:
+Backend deploys via Railway Infrastructure as Code (`.railway/railway.ts`,
+backend service only). Config as Code (`railway.json`) is deprecated and
+removed — a service cannot be managed by both systems, and Railway stopped
+reading `railway.json`/`railway.toml` for new services on 2026-08-28.
 
-- Config file: `backend/railway.json`
+- IaC file: `.railway/railway.ts` (GitHub source `backend/`, Dockerfile build)
 - Dockerfile: `backend/Dockerfile`
-- Healthcheck: `GET /health` (see `railway.json`)
+- Healthcheck: `GET /health` (300s timeout, restart `ON_FAILURE` x10 — see IaC file)
+- Variables stay dashboard-managed (`preserve()` in the IaC file, values never in git)
 
-Railway **Config-as-Code does not follow Root Directory**. Set service settings to:
-
-| Setting | Value |
-|---------|--------|
-| Root Directory | `/backend` |
-| Config as Code | `/backend/railway.json` |
-| Watch Paths (optional) | `/backend/**` |
-
-If Config as Code is left as `railway.json`, Railway looks at the **repo root** and fails with `service config at 'railway.json' not found` even though `backend/railway.json` exists.
+Plan/apply flow and CI behavior: see `.railway/README.md`. After migrating,
+Service > Settings > Config File Path must be empty in the dashboard.
 
 Required env vars on the service (no defaults): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`.
 
