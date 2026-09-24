@@ -32,8 +32,12 @@ describe('GamificationPage reliability states', () => {
     vi.mocked(getStreak).mockReturnValue(new Promise(() => undefined))
     render(<MemoryRouter><GamificationPage /></MemoryRouter>)
 
-    expect(screen.getByLabelText('Loading streak')).toBeInTheDocument()
-    expect(screen.getByLabelText('Loading achievements')).toBeInTheDocument()
+    expect(
+      screen.getByRole('status', { name: 'Loading streak' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('status', { name: 'Loading achievements' }),
+    ).toBeInTheDocument()
   })
 
   it('does not expose a raw backend error in the retry state', async () => {
