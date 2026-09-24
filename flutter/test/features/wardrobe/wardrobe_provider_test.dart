@@ -136,6 +136,8 @@ void main() {
     await notifier().loadMore();
 
     await notifier().refresh();
+    // Refresh is fire-and-forget; observe the rebuild from outside.
+    await expectLater(container.read(wardrobeProvider.future), throwsException);
 
     final state = container.read(wardrobeProvider);
     expect(state.hasError, isTrue);

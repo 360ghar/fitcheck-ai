@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import GamificationPage from './GamificationPage'
 import { getAchievements, getLeaderboard, getStreak } from '@/api/gamification'
+import { logger } from '@/lib/logger'
 
 vi.mock('@/api/gamification', () => ({
   getStreak: vi.fn(),
@@ -41,11 +42,30 @@ describe('GamificationPage reliability states', () => {
   })
 
   it('does not expose a raw backend error in the retry state', async () => {
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined)
     vi.mocked(getStreak).mockRejectedValue(new Error('relation reward_ledger does not exist'))
     render(<MemoryRouter><GamificationPage /></MemoryRouter>)
 
     expect(await screen.findByText(/couldn't load your rewards right now/i)).toBeInTheDocument()
     expect(screen.queryByText(/reward_ledger/i)).not.toBeInTheDocument()
+    // The diagnostic is preserved in telemetry even though it never renders.
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Gamification load failed',
+      expect.objectContaining({ message: 'relation reward_ledger does not exist' }),
+    )
+    errorSpy.mockRestore()
+  })
+
+  it('keeps the live region mounted and announces the loaded result', async () => {
+    render(<MemoryRouter><GamificationPage /></MemoryRouter>)
+
+    expect(await screen.findByText(/day streak/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('status', { name: 'Streak loaded' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('status', { name: 'Achievements loaded' }),
+    ).toBeInTheDocument()
   })
 
   it('renders the loaded content after the requests resolve', async () => {

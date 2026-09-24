@@ -180,7 +180,9 @@ class AppErrorState extends StatelessWidget {
       ),
       AppErrorKind.other => (
         'Something went wrong',
-        ErrorHandler.extractMessage(error),
+        // Unlisted client errors can carry raw backend response text;
+        // users get stable copy, the diagnostic stays in the logs.
+        'Please try again. If it keeps happening, contact support.',
         PaperScenes.oops,
       ),
     };
@@ -261,6 +263,9 @@ class AppErrorBanner extends StatelessWidget {
           // Server failures can carry raw backend response text; users get
           // stable copy, the diagnostic stays in the logs.
           AppErrorKind.server => "Couldn't refresh. Showing what we have.",
+          // Same for unlisted client errors: a 4xx body must never render
+          // verbatim.
+          AppErrorKind.other => "Couldn't refresh. Showing what we have.",
           _ => ErrorHandler.extractMessage(error),
         };
     return Padding(

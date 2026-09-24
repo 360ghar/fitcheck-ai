@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../providers/wardrobe_providers.dart';
@@ -22,6 +23,11 @@ class WardrobeStatsPage extends ConsumerWidget {
       stock: PaperStockId.moss,
       child: Scaffold(
         appBar: AppBar(title: const Text('Closet stats')),
+        // Root-navigator page: restore the shell tabs below the content.
+        bottomNavigationBar: AppBottomNavigationBar.shellBar(
+          context,
+          Routes.wardrobeStats,
+        ),
         body: AppPageBackground(
           child: RefreshIndicator(
             onRefresh: () => refresh().catchError((_) => <String, dynamic>{}),

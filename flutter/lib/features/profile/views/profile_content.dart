@@ -22,7 +22,7 @@ class ProfileContent extends ConsumerWidget {
   final bool showHeader;
 
   Future<void> _refresh(WidgetRef ref) => Future.wait([
-    ref.read(dashboardProvider.notifier).refresh(),
+    ref.refresh(dashboardProvider.future).then<void>((_) {}, onError: (_) {}),
     ref.read(authProvider.notifier).refreshUser(),
   ]);
 

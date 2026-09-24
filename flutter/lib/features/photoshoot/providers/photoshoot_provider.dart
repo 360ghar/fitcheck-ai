@@ -811,6 +811,10 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
       return;
     }
     state = state.copyWith(retryingIndex: index);
+    // The session this retry belongs to: a reset + new shoot started while
+    // the request is pending must not have its slots rewritten by this
+    // stale response.
+    final sessionId = state.sessionId;
     try {
       final result = await _repo.generateSync(
         photos: await _encodePhotos(state.photos),
@@ -822,6 +826,11 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
         aspectRatio: state.aspectRatio,
       );
       if (!ref.mounted) return;
+      if (state.sessionId != sessionId ||
+          state.retryingIndex != index ||
+          !state.failedIndices.contains(index)) {
+        return;
+      }
       if (result.images.isEmpty) {
         throw Exception('No replacement image came back.');
       }
@@ -845,7 +854,12 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     } catch (e, stack) {
       ErrorHandler.showError(e, title: 'Retry failed', stackTrace: stack);
     } finally {
-      if (ref.mounted) state = state.copyWith(retryingIndex: null);
+      // Only clear our own attempt: a newer session's retry flag is not ours.
+      if (ref.mounted &&
+          state.sessionId == sessionId &&
+          state.retryingIndex == index) {
+        state = state.copyWith(retryingIndex: null);
+      }
     }
   }
 

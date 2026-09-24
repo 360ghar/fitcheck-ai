@@ -84,7 +84,7 @@ class _FakeReferralService extends ReferralService {
   }
 
   @override
-  Future<void> handleOAuthCallback() async {
+  Future<void> handleOAuthCallback({bool profileVerified = true}) async {
     oauthCallbackCalls++;
     if (stashedCodes.isEmpty) return;
     final code = stashedCodes.last;

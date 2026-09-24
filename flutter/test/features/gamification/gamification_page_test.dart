@@ -37,8 +37,21 @@ class _Repo extends GamificationRepository {
   }
 }
 
-Future<void> _pump(WidgetTester tester, _Repo repo) async {
-  await tester.pumpWidget(
+/// Achievements load empty first, then fail on demand, so a refresh can
+/// fail while retaining an empty list.
+class _ToggleAchievementsRepo extends _Repo {
+  _ToggleAchievementsRepo() : super(leaderboard: const []);
+
+  bool failAchievements = false;
+
+  @override
+  Future<List<AchievementModel>> getAchievements() async {
+    if (failAchievements) throw Exception('offline');
+    return const [];
+  }
+}
+
+Future<void> _pump(WidgetTester tester, _Repo repo) async {  await tester.pumpWidget(
     ProviderScope(
       retry: noRetry,
       overrides: [gamificationRepositoryProvider.overrideWithValue(repo)],
@@ -84,5 +97,42 @@ void main() {
 
     expect(find.byType(AppErrorState), findsOneWidget);
     expect(find.text('Try again'), findsOneWidget);
+  });
+
+  testWidgets('a failed refresh on an empty list keeps the banner and the empty state', (
+    tester,
+  ) async {
+    final repo = _ToggleAchievementsRepo();
+    final container = ProviderContainer(
+      retry: noRetry,
+      overrides: [gamificationRepositoryProvider.overrideWithValue(repo)],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: true),
+            child: GamificationPage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.scrollUntilVisible(
+      find.text('No achievements yet'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    repo.failAchievements = true;
+    container.invalidate(achievementsProvider);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('No achievements yet'), findsOneWidget);
+    expect(find.byType(AppErrorBanner), findsOneWidget);
   });
 }

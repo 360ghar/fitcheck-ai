@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getAchievements, getLeaderboard, getStreak } from '@/api/gamification'
 import type { AchievementsData, LeaderboardData, LeaderboardEntryData, StreakData, UserRankData } from '@/api/gamification'
 import { Leaderboard } from '@/components/gamification'
+import { logger } from '@/lib/logger'
 import { useAuthStore } from '@/stores/authStore'
 
 export default function GamificationPage() {
@@ -46,10 +47,11 @@ export default function GamificationPage() {
       setAchievements(achievementsRes)
       setLeaderboard(leaderboardRes.entries)
       setUserRank(leaderboardRes.user_rank ?? null)
-    } catch {
+    } catch (err) {
       if (requestId !== requestIdRef.current) return
       // API diagnostics can contain provider or database details. The client
       // keeps those in telemetry and presents stable, actionable copy here.
+      logger.error('Gamification load failed', err)
       setLoadError('We couldn\'t load your rewards right now. Check your connection and try again.')
       setStreak(null)
       setAchievements(null)
@@ -114,12 +116,15 @@ export default function GamificationPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* The status region stays mounted so screen readers hear both
+                the loading announcement and the loaded result. */}
+            <div className="space-y-3" role="status" aria-label={isLoading ? 'Loading streak' : 'Streak loaded'}>
             {isLoading ? (
-              <div className="space-y-3" role="status" aria-label="Loading streak">
+              <>
                 <Skeleton className="h-9 w-28" />
                 <Skeleton className="h-4 w-36" />
                 <Skeleton className="h-2 w-full" />
-              </div>
+              </>
             ) : (streak?.current_streak ?? 0) === 0 && (streak?.longest_streak ?? 0) === 0 ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
@@ -147,6 +152,7 @@ export default function GamificationPage() {
                 )}
               </>
             )}
+            </div>
           </CardContent>
         </Card>
 
@@ -158,15 +164,17 @@ export default function GamificationPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Same persistent live region as the streak card above. */}
+            <div className="space-y-3" role="status" aria-label={isLoading ? 'Loading achievements' : 'Achievements loaded'}>
             {isLoading ? (
-              <div className="space-y-3" role="status" aria-label="Loading achievements">
+              <>
                 <div className="flex gap-2">
                   <Skeleton className="h-6 w-20 rounded-full" />
                   <Skeleton className="h-6 w-24 rounded-full" />
                 </div>
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
-              </div>
+              </>
             ) : (
               <>
                 <div className="flex gap-2">
@@ -229,6 +237,7 @@ export default function GamificationPage() {
                 </div>
               </>
             )}
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -91,6 +91,11 @@ class AuthNotifier extends Notifier<AuthState> {
 
   String? get currentUserEmail => _supabase.currentUserEmail;
 
+  /// True when the session email is confirmed. Referral redemption needs it:
+  /// a 403 for an unverified profile means "not yet", not a dead code.
+  bool get _emailVerified =>
+      _supabase.currentUser.value?.emailConfirmedAt != null;
+
   /// Raw session user (carries the auth `provider` in `appMetadata`).
   User? get currentUser => _supabase.currentUser.value;
 
@@ -105,7 +110,7 @@ class AuthNotifier extends Notifier<AuthState> {
     // restores and OAuth deep-link returns, which have no explicit flow.
     if (_credentialFlowDriving) return;
     await _loadUser();
-    await _referrals.handleOAuthCallback();
+    await _referrals.handleOAuthCallback(profileVerified: _emailVerified);
   }
 
   /// Restores the stored session. Concurrent callers share one run.
@@ -186,7 +191,7 @@ class AuthNotifier extends Notifier<AuthState> {
         await _loadUser(supabaseUser: user);
         // Email-confirmed signups resume here, so redeem a pending referral
         // before a later sign-out can clear it.
-        await _referrals.handleOAuthCallback();
+        await _referrals.handleOAuthCallback(profileVerified: _emailVerified);
         _authService.trackLogin('email');
         final name = state.user?.fullName ?? state.user?.email;
         ErrorHandler.showInfo(
@@ -276,7 +281,7 @@ class AuthNotifier extends Notifier<AuthState> {
         final user = response.user;
         if (user == null) throw Exception('Apple sign-in failed.');
         await _loadUser(supabaseUser: user);
-        await _referrals.handleOAuthCallback();
+        await _referrals.handleOAuthCallback(profileVerified: _emailVerified);
         _authService.trackLogin('apple');
       } on SignInWithAppleAuthorizationException catch (e, stack) {
         if (e.code == AuthorizationErrorCode.canceled) return;

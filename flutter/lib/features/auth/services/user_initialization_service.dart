@@ -17,7 +17,11 @@ class ReferralRedemptionResult {
   final ReferralRedemptionStatus status;
   final Object? error;
 
-  const ReferralRedemptionResult(this.status, {this.error});
+  /// HTTP status behind a definitive rejection, when known. A 403 for an
+  /// unverified profile is retryable after confirmation, not a dead code.
+  final int? statusCode;
+
+  const ReferralRedemptionResult(this.status, {this.error, this.statusCode});
 
   bool get isSuccess => status == ReferralRedemptionStatus.success;
 }
@@ -70,6 +74,7 @@ class UserInitializationService {
         return ReferralRedemptionResult(
           ReferralRedemptionStatus.definitiveRejection,
           error: e,
+          statusCode: statusCode,
         );
       }
       return ReferralRedemptionResult(
@@ -84,6 +89,7 @@ class UserInitializationService {
         return ReferralRedemptionResult(
           ReferralRedemptionStatus.definitiveRejection,
           error: e,
+          statusCode: statusCode,
         );
       }
       return ReferralRedemptionResult(

@@ -79,7 +79,9 @@ void main() {
     final repo = FakeFeedbackRepository()..failTickets = true;
     await _pump(tester, repo);
 
-    expect(find.text('support unavailable'), findsOneWidget);
+    // The banner shows stable copy, never the raw backend diagnostic.
+    expect(find.text("Couldn't refresh. Showing what we have."), findsOneWidget);
+    expect(find.text('support unavailable'), findsNothing);
     expect(find.text('Retry'), findsOneWidget);
   });
 

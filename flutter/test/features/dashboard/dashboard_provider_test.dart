@@ -75,6 +75,11 @@ void main() {
 
     repository.fail = true;
     await container.read(dashboardProvider.notifier).refresh();
+    // Refresh is fire-and-forget; observe the rebuild from outside.
+    await expectLater(
+      container.read(dashboardProvider.future),
+      throwsException,
+    );
 
     final state = container.read(dashboardProvider);
     expect(state.hasError, isTrue);

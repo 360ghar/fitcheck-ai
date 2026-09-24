@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../app/routes/app_routes.dart';
 import 'paper.dart';
@@ -132,6 +133,14 @@ class AppBottomNavigationBar extends StatelessWidget {
       ),
     );
   }
+
+  /// Bottom bar for root-navigator pages that cover the shell tabs.
+  /// Tapping a tab leaves the page for that tab's route.
+  static Widget shellBar(BuildContext context, String route) =>
+      AppBottomNavigationBar(
+        currentIndex: getIndexForRoute(route),
+        onTabChanged: (i) => context.go(navigationItems[i].route),
+      );
 
   /// Get the current index based on the current route
   static int getIndexForRoute(String route) {

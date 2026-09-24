@@ -6,6 +6,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../outfits/providers/outfit_providers.dart';
 import '../models/calendar_connection_model.dart';
@@ -47,8 +48,7 @@ class CalendarPage extends ConsumerWidget {
       stock: PaperStockId.clay,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Calendar'),
-          actions: [
+          title: const Text('Calendar'),          actions: [
             IconButton(
               tooltip: 'Go to today',
               icon: const Icon(Icons.today_outlined),
@@ -78,6 +78,11 @@ class CalendarPage extends ConsumerWidget {
                 icon: const Icon(Icons.add_rounded),
                 label: const Text('Add event'),
               ),
+        // Root-navigator page: restore the shell tabs below the content.
+        bottomNavigationBar: AppBottomNavigationBar.shellBar(
+          context,
+          Routes.calendar,
+        ),
         body: AppPageBackground(
           child: RefreshIndicator(
             onRefresh: notifier.refresh,

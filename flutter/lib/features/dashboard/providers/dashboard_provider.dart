@@ -14,8 +14,20 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>(
 /// Hour-of-day behind the home greeting. A seam so golden screenshots pin
 /// one bucket instead of failing whenever the wall clock rolls over.
 final dashboardGreetingHourProvider = Provider<int>(
-  (_) => DateTime.now().hour,
+  (ref) => ref.watch(_hourTickProvider).value?.hour ?? DateTime.now().hour,
 );
+
+/// Emits the current time, then re-emits at each hour boundary so a cached
+/// greeting never goes stale while the app stays open.
+final _hourTickProvider = StreamProvider<DateTime>((ref) async* {
+  yield DateTime.now();
+  while (true) {
+    final now = DateTime.now();
+    final nextHour = DateTime(now.year, now.month, now.day, now.hour + 1);
+    await Future.delayed(nextHour.difference(now));
+    yield DateTime.now();
+  }
+});
 
 /// Dashboard data plus the optional streak.
 @immutable
@@ -62,13 +74,11 @@ class DashboardNotifier extends AsyncNotifier<DashboardSnapshot> {
   /// Riverpod carries the previous value into loading and error states set
   /// here, so the screen never blanks.
   Future<void> refresh() async {
-    final uid = ref.read(sessionUserIdProvider);
-    state = const AsyncLoading();
-    final next = await AsyncValue.guard(_load);
-    // A refresh started for one account must not publish its result into
-    // another account's session (or into a disposed provider).
-    if (!ref.mounted || uid != ref.read(sessionUserIdProvider)) return;
-    state = next;
+    // A rebuild (not a manual state write) so Riverpod carries the previous
+    // snapshot into loading and error states; the screen never blanks, and
+    // a refresh started for one account cannot publish into another
+    // account's session because build() re-reads the session id.
+    ref.invalidateSelf();
   }
 }
 

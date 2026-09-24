@@ -30,7 +30,9 @@ class DashboardContent extends ConsumerStatefulWidget {
 class _DashboardContentState extends ConsumerState<DashboardContent> {
   Future<void> _refresh() async {
     await Future.wait([
-      ref.read(dashboardProvider.notifier).refresh(),
+      ref
+          .refresh(dashboardProvider.future)
+          .then<void>((_) {}, onError: (_) {}),
       if (EnvConfig.giftVouchersEnabled)
         ref.read(giftProvider.notifier).refresh(),
     ]);

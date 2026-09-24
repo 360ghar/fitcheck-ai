@@ -506,6 +506,9 @@ class _WearHistory extends ConsumerWidget {
                     context: context,
                     builder: (dialogContext) => AlertDialog(
                       title: const Text('Wear history'),
+                      // Long histories must scroll inside the dialog instead
+                      // of pushing the Close action off-screen.
+                      scrollable: true,
                       content: SizedBox(
                         width: double.maxFinite,
                         child: ListView(

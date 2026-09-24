@@ -144,6 +144,8 @@ void main() {
       await outfits().loadMore();
 
       await outfits().refresh();
+      // Refresh is fire-and-forget; observe the rebuild from outside.
+      await expectLater(container.read(outfitsProvider.future), throwsException);
 
       final state = container.read(outfitsProvider);
       expect(state.hasError, isTrue);

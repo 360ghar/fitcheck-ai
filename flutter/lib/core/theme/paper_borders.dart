@@ -152,8 +152,12 @@ class DeckleBorder extends OutlinedBorder {
     final rng = math.Random(seed);
     final path = Path();
     final torn = <Offset>[];
-    for (var x = rect.left + r; x < rect.right - r; x += step) {
-      torn.add(Offset(x, rng.nextDouble() * amplitude));
+    // A zero or negative step would loop forever at paint time and freeze
+    // the UI isolate; fall back to a straight edge instead.
+    if (step > 0) {
+      for (var x = rect.left + r; x < rect.right - r; x += step) {
+        torn.add(Offset(x, rng.nextDouble() * amplitude));
+      }
     }
     torn.add(Offset(rect.right - r, 0));
 

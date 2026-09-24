@@ -23,16 +23,19 @@ expect.extend(axeMatchers)
 process.env.TZ = 'UTC'
 
 // React Router's data router constructs a Request for every navigation.
-// jsdom installs a DOM-realm AbortController, but Node's native Request
-// (undici) rejects that realm's signal. Use Node's controller factory so URL
-// filters, pagination, redirects, and route transitions exercise their real
-// code paths instead of failing with a cross-realm RequestInit TypeError.
-class NodeAbortController {
-  constructor() {
-    return transferableAbortController()
-  }
-}
+// jsdom installs DOM-realm AbortController/AbortSignal, but Node's native
+// Request (undici) rejects that realm's signals — including ones from
+// `AbortSignal.timeout()` / `AbortSignal.abort()`. Grab the Node-realm
+// classes through node:util so both creation paths and `instanceof` checks
+// stay consistent with undici.
+const seedController = transferableAbortController()
+const NodeAbortController =
+  seedController.constructor as typeof AbortController
+const NodeAbortSignal = Object.getPrototypeOf(
+  seedController.signal,
+) as typeof AbortSignal
 vi.stubGlobal('AbortController', NodeAbortController)
+vi.stubGlobal('AbortSignal', NodeAbortSignal)
 
 // matchMedia — used by next-themes and sonner. Stubbed via stubGlobal so
 // `restoreMocks: true` (which resets vi.fn implementations before each test)

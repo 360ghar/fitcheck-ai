@@ -78,7 +78,9 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
 
     return AppPageBackground(
       child: RefreshIndicator(
-        onRefresh: _wardrobe.refresh,
+        onRefresh: () => ref
+            .refresh(wardrobeProvider.future)
+            .then<void>((_) {}, onError: (_) {}),
         child: InfiniteScrollWrapper(
           onLoadMore: _wardrobe.loadMore,
           canLoadMore: () {

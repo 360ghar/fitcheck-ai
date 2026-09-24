@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/gamification_model.dart';
@@ -32,6 +34,11 @@ class GamificationPage extends ConsumerWidget {
       stock: PaperStockId.marigold,
       child: Scaffold(
         appBar: AppBar(title: const Text('Rewards')),
+        // Root-navigator page: restore the shell tabs below the content.
+        bottomNavigationBar: AppBottomNavigationBar.shellBar(
+          context,
+          Routes.gamification,
+        ),
         body: AppPageBackground(
           child: RefreshIndicator(
             onRefresh: refreshAll,

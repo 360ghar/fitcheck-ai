@@ -299,8 +299,11 @@ class OutfitDetailNotifier extends AsyncNotifier<OutfitModel> {
   final String id;
 
   @override
-  Future<OutfitModel> build() =>
-      ref.read(outfitRepositoryProvider).getOutfit(id);
+  Future<OutfitModel> build() {
+    // A mounted detail screen must not keep the previous account's outfit.
+    ref.watch(sessionUserIdProvider);
+    return ref.read(outfitRepositoryProvider).getOutfit(id);
+  }
 
   void set(OutfitModel outfit) => state = AsyncData(outfit);
 
@@ -313,7 +316,10 @@ class OutfitDetailNotifier extends AsyncNotifier<OutfitModel> {
 /// Wear history for one outfit.
 final wearHistoryProvider = FutureProvider.autoDispose
     .family<List<WearHistoryEntry>, String>(
-      (ref, id) => ref.read(outfitRepositoryProvider).getWearHistory(id),
+      (ref, id) {
+        ref.watch(sessionUserIdProvider);
+        return ref.read(outfitRepositoryProvider).getWearHistory(id);
+      },
     );
 
 /// Outfit collections. The server returns loosely typed maps.
@@ -327,7 +333,10 @@ class CollectionsNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   OutfitRepository get _repository => ref.read(outfitRepositoryProvider);
 
   @override
-  Future<List<Map<String, dynamic>>> build() => _repository.getCollections();
+  Future<List<Map<String, dynamic>>> build() {
+    ref.watch(sessionUserIdProvider);
+    return _repository.getCollections();
+  }
 
   Future<void> refresh() async {
     state = const AsyncLoading();

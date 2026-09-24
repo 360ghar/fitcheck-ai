@@ -91,10 +91,11 @@ abstract class PagedNotifier<T> extends AsyncNotifier<PagedState<T>> {
   }
 
   Future<void> refresh() async {
-    final generation = ++_generation;
-    state = const AsyncLoading();
-    final next = await AsyncValue.guard(_firstPage);
-    if (generation == _generation && ref.mounted) state = next;
+    // A newer refresh cancels an in-flight load-more below.
+    ++_generation;
+    // A rebuild (not a manual state write) so Riverpod keeps the current
+    // items on screen while loading and retains them on failure.
+    ref.invalidateSelf();
   }
 
   Future<void> loadMore() async {
