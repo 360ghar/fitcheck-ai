@@ -91,6 +91,9 @@ void main() {
           dark: dark,
           overrides: [
             dashboardRepositoryProvider.overrideWithValue(repo),
+            // Goldens were captured in the evening; pin the greeting bucket
+            // so the wall clock can't flip the screenshot text.
+            dashboardGreetingHourProvider.overrideWithValue(18),
             giftRepositoryProvider.overrideWithValue(
               FakeGiftRepository(
                 summary: const GiftDashboardSummary(

@@ -11,6 +11,12 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>(
   (ref) => DashboardRepository(),
 );
 
+/// Hour-of-day behind the home greeting. A seam so golden screenshots pin
+/// one bucket instead of failing whenever the wall clock rolls over.
+final dashboardGreetingHourProvider = Provider<int>(
+  (_) => DateTime.now().hour,
+);
+
 /// Dashboard data plus the optional streak.
 @immutable
 class DashboardSnapshot {

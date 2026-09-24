@@ -266,7 +266,7 @@ class _DashboardContentState extends ConsumerState<DashboardContent> {
   }
 
   String _getGreeting() {
-    final hour = DateTime.now().hour;
+    final hour = ref.watch(dashboardGreetingHourProvider);
     if (hour < 12) return 'morning';
     if (hour < 17) return 'afternoon';
     return 'evening';

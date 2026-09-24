@@ -89,10 +89,12 @@ class CalendarEventsNotifier extends AsyncNotifier<List<CalendarEventModel>> {
         endDate: DateTime(month.year, month.month + 1, 0, 23, 59, 59),
       );
 
-  /// Reloads and keeps the current events on screen while it runs.
+  /// Reloads and keeps the current events on screen while it runs. A bare
+  /// `AsyncLoading` here would blank the calendar into skeletons, so the
+  /// previous data stays put until the reload lands (and survives a failure
+  /// through copyWithPrevious, which shows the error banner alongside it).
   Future<void> refresh() async {
     final month = ref.read(calendarMonthProvider);
-    state = const AsyncLoading();
     final next = await AsyncValue.guard(() => _load(month));
     if (ref.mounted && month == ref.read(calendarMonthProvider)) state = next;
   }
