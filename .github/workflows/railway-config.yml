@@ -1,0 +1,154 @@
+name: Railway config
+
+# Plans Infrastructure as Code on PRs touching `.railway/**`, applies the
+# reviewed plan when the PR merges, and applies direct pushes to `main`.
+# Needs the `RAILWAY_TOKEN` repo secret (a project token scoped to the
+# target environment).
+#
+# Direct pushes apply NON-destructively: `railway config apply --yes`
+# without `--confirm-destructive` fails instead of deleting services or
+# variables, so an unreviewed push cannot remove resources. To apply a
+# destructive change, run `railway config apply` locally and confirm.
+#
+# CLI is pinned so plan/apply stay reproducible; bump the pin deliberately.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - ".railway/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".railway/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+  id-token: write
+
+concurrency:
+  group: railway-config-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # The action installs repository dependencies itself when a root
+      # package.json/package-lock.json exists; this repo has neither at the
+      # root, so the SDK is installed into `.railway/` (where the CLI
+      # resolves `railway/iac` from while evaluating the authoring file).
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install IaC SDK
+        run: npm ci --prefix .railway --no-audit --no-fund
+
+      - name: Plan Railway changes
+        uses: railwayapp/config@9e17d413dbe219f19d62538d9c06b5dbb5e9abf8 # v1.2.0
+        with:
+          command: plan
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
+          cli-version: "5.62.1"
+
+  apply:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install IaC SDK
+        run: npm ci --prefix .railway --no-audit --no-fund
+
+      - name: Apply reviewed plan
+        uses: railwayapp/config@9e17d413dbe219f19d62538d9c06b5dbb5e9abf8 # v1.2.0
+        with:
+          command: apply
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
+          cli-version: "5.62.1"
+
+  # Merging a PR also fires a `push` event for the merge commit, so this job
+  # skips any commit that belongs to a merged PR — the `apply` job above owns
+  # those and applies the plan a human reviewed on the PR.
+  push-apply:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Detect direct push
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MERGED=""
+          if ! MERGED="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+            --jq '[.[] | select(.merged_at != null)] | length' 2>/dev/null)"; then
+            # A transient API failure must not silently skip a real direct
+            # push. Assuming "direct" is safe: if this was actually a PR
+            # merge, Railway rejects the duplicate apply as a stale plan.
+            echo "::warning::Could not look up merged PRs for $GITHUB_SHA; assuming direct push."
+            MERGED=0
+          fi
+          MERGED="${MERGED//[^0-9]/}"
+          MERGED="${MERGED:-0}"
+          if [ "$MERGED" -gt 0 ]; then
+            echo "direct=false" >> "$GITHUB_OUTPUT"
+            echo "Commit $GITHUB_SHA belongs to a merged PR; the apply job owns it."
+          else
+            echo "direct=true" >> "$GITHUB_OUTPUT"
+            echo "Direct push to main; applying."
+          fi
+
+      - name: Set up Node
+        if: steps.detect.outputs.direct == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install IaC SDK
+        if: steps.detect.outputs.direct == 'true'
+        run: npm ci --prefix .railway --no-audit --no-fund
+
+      - name: Install Railway CLI
+        if: steps.detect.outputs.direct == 'true'
+        run: npm install -g "@railway/cli@5.62.1"
+
+      - name: Plan (log only)
+        if: steps.detect.outputs.direct == 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway config plan
+
+      - name: Apply
+        if: steps.detect.outputs.direct == 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          # No --confirm-destructive: destructive changes fail here and need a
+          # local `railway config apply` with an explicit confirmation.
+          railway config apply --yes
