@@ -55,6 +55,7 @@ void main() {
       ]);
       await tester.pump();
       await tester.pump();
+      expect(find.text('Shirt'), findsOneWidget);
       final loaded = layout();
       expect(loaded.crossAxisCount, loading.crossAxisCount);
       expect(loaded.childCrossAxisExtent, loading.childCrossAxisExtent);

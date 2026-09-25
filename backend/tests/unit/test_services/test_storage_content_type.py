@@ -151,23 +151,28 @@ async def test_move_image_uses_server_side_copy_and_delete():
 
 
 @pytest.mark.asyncio
-async def test_upload_file_honours_a_custom_cache_control():
+@pytest.mark.parametrize("cache_control", [None, "60"])
+async def test_upload_file_shares_cache_control_with_thumbnail(cache_control):
     backend = FakeS3Backend()
     with patch("app.services.storage_service.get_storage_backend", return_value=backend):
         await StorageService.upload_file(
             db=MagicMock(),
-            file_data=PNG_MAGIC,
-            file_path="u/x.png",
-            content_type="image/png",
+            file_data=_webp_bytes(),
+            file_path="u/items/x.webp",
+            content_type="image/webp",
             bucket="items",
             upsert=True,
-            cache_control="60",
+            cache_control=cache_control,
         )
 
-    call = backend.upload_calls[-1]
-    assert call["cache_control"] == "60"
-    assert call["key"] == "u/x.png"
-    assert call["content_type"] == "image/png"
+    assert len(backend.upload_calls) == 2
+    parent, thumb = backend.upload_calls
+    assert parent["cache_control"] == thumb["cache_control"] == (
+        cache_control or DEFAULT_CACHE_CONTROL
+    )
+    assert parent["key"] == "u/items/x.webp"
+    assert thumb["key"] == StorageService.thumb_key_for(parent["key"])
+    assert parent["content_type"] == thumb["content_type"] == "image/webp"
 
 
 @pytest.mark.asyncio
