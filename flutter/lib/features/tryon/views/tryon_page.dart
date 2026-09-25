@@ -1,539 +1,526 @@
-import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/widgets/app_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
-import '../controllers/tryon_controller.dart';
+import '../providers/tryon_provider.dart';
 
-/// Try-On Page - Virtual try-on feature
-/// Allows users to upload clothing and visualize it on their avatar
-class TryOnPage extends StatelessWidget {
+String _sentence(String s) =>
+    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+/// Virtual try-on: one garment photo on the user's own photo.
+class TryOnPage extends ConsumerWidget {
   const TryOnPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final TryOnController controller = Get.find<TryOnController>();
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
-      Get.currentRoute,
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(tryOnProvider);
+    final notifier = ref.read(tryOnProvider.notifier);
 
-    return Scaffold(
-      body: AppPageBackground(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header
-                Text(
-                  'Virtual Try-On',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-
-                const SizedBox(height: AppConstants.spacing8),
-
-                Text(
-                  'See how clothes look on you',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-                ),
-
-                const SizedBox(height: AppConstants.spacing24),
-
-                Obx(() {
-                  if (controller.error.value.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    children: [
-                      AppGlassCard(
-                        padding: const EdgeInsets.all(AppConstants.spacing16),
-                        child: Text(
-                          controller.error.value,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: tokens.textMuted),
-                        ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing16),
-                    ],
-                  );
-                }),
-
-                // Avatar upload section
-                _buildAvatarSection(context, controller, tokens),
-
-                const SizedBox(height: AppConstants.spacing24),
-
-                // Clothing upload section
-                _buildClothingSection(context, controller, tokens),
-
-                const SizedBox(height: AppConstants.spacing24),
-
-                // Options section
-                _buildOptionsSection(context, controller, tokens),
-
-                const SizedBox(height: AppConstants.spacing24),
-
-                // Preview/Result section
-                _buildPreviewSection(context, controller, tokens),
-
-                const SizedBox(height: AppConstants.spacing32),
-
-                // Generate button
-                Obx(
-                  () => ElevatedButton.icon(
-                    onPressed:
-                        controller.isGenerating.value ||
-                            controller.clothingImage.value == null
-                        ? null
-                        : () => controller.generateTryOn(),
-                    icon: controller.isGenerating.value
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.auto_awesome),
-                    label: Text(
-                      controller.isGenerating.value
-                          ? 'Generating...'
-                          : 'Generate Try-On',
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                  ),
-                ),
-
-                Obx(() {
-                  if (controller.generatedImageUrl.value.isNotEmpty ||
-                      controller.generatedImageBase64.value.isNotEmpty) {
-                    return Column(
-                      children: [
-                        const SizedBox(height: AppConstants.spacing16),
-                        OutlinedButton.icon(
-                          onPressed: controller.downloadResult,
-                          icon: const Icon(Icons.download),
-                          label: const Text('Download'),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-                  return const SizedBox.shrink();
-                }),
-              ],
+    return PaperStockScope(
+      stock: PaperStockId.clay,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Virtual try-on')),
+        body: AppPageBackground(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.spacing16,
+              AppConstants.spacing8,
+              AppConstants.spacing16,
+              AppConstants.spacing24,
             ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
-    );
-  }
-
-  Widget _buildAvatarSection(
-    BuildContext context,
-    TryOnController controller,
-    AppUiTokens tokens,
-  ) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Your Avatar',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          Row(
-            children: [
-              Obx(() {
-                final avatarPath = controller.userAvatarUrl.value;
-                final hasAvatar = avatarPath.isNotEmpty;
-                final isRemote = avatarPath.startsWith('http');
-                return Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: hasAvatar
-                      ? ClipOval(
-                          child: isRemote
-                              ? AppNetworkImage(
-                                  avatarPath,
-                                  fit: BoxFit.cover,
-                                  errorWidget: (_, _, _) =>
-                                      const Icon(Icons.person),
-                                )
-                              : Image.file(File(avatarPath), fit: BoxFit.cover),
-                        )
-                      : Icon(Icons.person, size: 40, color: tokens.brandColor),
-                );
-              }),
-              const SizedBox(width: AppConstants.spacing16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Upload a full-body photo',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                    ),
-                    const SizedBox(height: AppConstants.spacing8),
-                    Obx(
-                      () => ElevatedButton.icon(
-                        onPressed: controller.isUploadingAvatar.value
-                            ? null
-                            : () => controller.uploadUserAvatar(),
-                        icon: controller.isUploadingAvatar.value
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.camera_alt),
-                        label: Text(
-                          controller.isUploadingAvatar.value
-                              ? 'Uploading...'
-                              : 'Upload Avatar',
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(36),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            children: const [
+              _AvatarCard(),
+              SizedBox(height: AppConstants.spacing16),
+              _GarmentCard(),
+              SizedBox(height: AppConstants.spacing16),
+              _OptionsCard(),
+              SizedBox(height: AppConstants.spacing16),
+              _ResultCard(),
             ],
           ),
-        ],
+        ),
+        bottomNavigationBar: _BottomBar(
+          canGenerate: s.garment != null && !s.generating,
+          generating: s.generating,
+          hasResult: s.hasResult,
+          onGenerate: notifier.generate,
+          onSave: notifier.downloadResult,
+        ),
       ),
     );
   }
+}
 
-  Widget _buildClothingSection(
-    BuildContext context,
-    TryOnController controller,
-    AppUiTokens tokens,
-  ) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+class _Title extends StatelessWidget {
+  const _Title(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+      color: PaperTokens.of(context).textPrimary,
+      fontWeight: FontWeight.w600,
+    ),
+  );
+}
+
+class _AvatarCard extends ConsumerWidget {
+  const _AvatarCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final avatar = ref.watch(tryOnAvatarProvider);
+    final notifier = ref.read(tryOnAvatarProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final value = avatar.value;
+
+    Widget body;
+    if (value == null && avatar.hasError) {
+      body = Row(
         children: [
-          Text(
-            'Clothing Item',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
+          Icon(Icons.cloud_off_outlined, color: tokens.textSecondary),
+          const SizedBox(width: AppConstants.spacing12),
+          Expanded(
+            child: Text(
+              "We couldn't load your photo.",
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           ),
-          const SizedBox(height: AppConstants.spacing12),
-          Obx(() {
-            final image = controller.clothingImage.value;
-            if (image == null) {
-              return Row(
+          TextButton(onPressed: notifier.refresh, child: const Text('Retry')),
+        ],
+      );
+    } else if (value == null) {
+      body = const SkeletonPulse(
+        child: Row(
+          children: [
+            SkeletonBox(width: 72, height: 96),
+            SizedBox(width: AppConstants.spacing16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: _buildUploadOption(
-                      context: context,
-                      icon: Icons.photo_library,
-                      label: 'Gallery',
-                      onTap: controller.pickClothingImage,
-                      tokens: tokens,
-                    ),
-                  ),
-                  const SizedBox(width: AppConstants.spacing12),
-                  Expanded(
-                    child: _buildUploadOption(
-                      context: context,
-                      icon: Icons.camera_alt,
-                      label: 'Camera',
-                      onTap: controller.pickClothingFromCamera,
-                      tokens: tokens,
-                    ),
-                  ),
+                  SkeletonBox(width: 160, height: 14),
+                  SizedBox(height: AppConstants.spacing12),
+                  SkeletonBox(width: 110, height: 14),
                 ],
-              );
-            }
-
-            return Column(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  child: Image.file(
-                    image,
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                OutlinedButton.icon(
-                  onPressed: controller.reset,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Change Image'),
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUploadOption({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required AppUiTokens tokens,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
-        padding: const EdgeInsets.all(AppConstants.spacing16),
-        decoration: BoxDecoration(
-          border: Border.all(color: tokens.cardBorderColor),
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: tokens.brandColor),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOptionsSection(
-    BuildContext context,
-    TryOnController controller,
-    AppUiTokens tokens,
-  ) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Options',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing16),
-
-          // Style dropdown
-          Obx(
-            () => DropdownButtonFormField<String>(
-              initialValue: controller.selectedStyle.value,
-              decoration: InputDecoration(
-                labelText: 'Style',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                ),
-              ),
-              items: TryOnController.styles.map((style) {
-                return DropdownMenuItem(
-                  value: style,
-                  child: Text(
-                    style
-                        .split(' ')
-                        .map((s) => s[0].toUpperCase() + s.substring(1))
-                        .join(' '),
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) controller.selectedStyle.value = value;
-              },
-            ),
-          ),
-
-          const SizedBox(height: AppConstants.spacing12),
-
-          // Background dropdown
-          Obx(
-            () => DropdownButtonFormField<String>(
-              initialValue: controller.selectedBackground.value,
-              decoration: InputDecoration(
-                labelText: 'Background',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                ),
-              ),
-              items: TryOnController.backgrounds.map((bg) {
-                return DropdownMenuItem(
-                  value: bg,
-                  child: Text(
-                    bg
-                        .split(' ')
-                        .map((s) => s[0].toUpperCase() + s.substring(1))
-                        .join(' '),
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) controller.selectedBackground.value = value;
-              },
-            ),
-          ),
-
-          const SizedBox(height: AppConstants.spacing12),
-
-          // Pose dropdown
-          Obx(
-            () => DropdownButtonFormField<String>(
-              initialValue: controller.selectedPose.value,
-              decoration: InputDecoration(
-                labelText: 'Pose',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                ),
-              ),
-              items: TryOnController.poses.map((pose) {
-                return DropdownMenuItem(
-                  value: pose,
-                  child: Text(
-                    pose
-                        .split(' ')
-                        .map((s) => s[0].toUpperCase() + s.substring(1))
-                        .join(' '),
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) controller.selectedPose.value = value;
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreviewSection(
-    BuildContext context,
-    TryOnController controller,
-    AppUiTokens tokens,
-  ) {
-    return Obx(() {
-      if (controller.generatedImageUrl.value.isEmpty &&
-          controller.generatedImageBase64.value.isEmpty) {
-        return AppGlassCard(
-          padding: const EdgeInsets.all(AppConstants.spacing32),
-          child: Column(
-            children: [
-              Icon(Icons.image_outlined, size: 64, color: tokens.textMuted),
-              const SizedBox(height: AppConstants.spacing16),
-              Text(
-                'Generated image will appear here',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: tokens.textMuted),
-              ),
-            ],
-          ),
-        );
-      }
-
-      if (controller.generatedImageUrl.value.isEmpty &&
-          controller.generatedImageBase64.value.isNotEmpty) {
-        return AppGlassCard(
-          padding: const EdgeInsets.all(AppConstants.spacing8),
-          child: Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-                child: Image.memory(
-                  base64Decode(controller.generatedImageBase64.value),
-                  fit: BoxFit.cover,
-                ),
-              ),
-              _buildReportBadge(context),
-            ],
-          ),
-        );
-      }
-
-      return AppGlassCard(
-        padding: const EdgeInsets.all(AppConstants.spacing8),
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radius12),
-              child: AppNetworkImage(
-                controller.generatedImageUrl.value,
-                fit: BoxFit.cover,
-                errorWidget: (_, _, _) => const Center(
-                  child: Icon(Icons.broken_image_outlined, size: 48),
-                ),
               ),
             ),
-            _buildReportBadge(context),
           ],
         ),
       );
-    });
-  }
-
-  /// Small overlay button so users can report a generated try-on result
-  /// (Apple Guideline 1.2).
-  Widget _buildReportBadge(BuildContext context) {
-    final controller = Get.find<TryOnController>();
-    return Positioned(
-      top: AppConstants.spacing8,
-      right: AppConstants.spacing8,
-      child: Material(
-        color: Colors.black54,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () {
-            final url = controller.generatedImageUrl.value;
-            showReportContentSheet(
-              contentType: 'AI try-on image',
-              contentId: url.isNotEmpty ? url : 'tryon-result',
-            );
-          },
-          child: const Padding(
-            padding: EdgeInsets.all(6),
-            child: Icon(Icons.flag_outlined, color: Colors.white, size: 16),
+    } else {
+      final path = value.pendingPath;
+      final url = value.url;
+      final Widget? image = path != null
+          ? Image.file(File(path), fit: BoxFit.cover)
+          : url != null
+          ? AppNetworkImage(
+              url,
+              fit: BoxFit.cover,
+              cacheWidth: 216,
+              errorWidget: (_, _, _) => const _AvatarPlaceholder(),
+            )
+          : null;
+      body = Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppConstants.radius8),
+            child: SizedBox(
+              width: 72,
+              height: 96,
+              child: image ?? const _AvatarPlaceholder(),
+            ),
           ),
+          const SizedBox(width: AppConstants.spacing16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value.isUploading
+                      ? 'Uploading your photo'
+                      : url == null
+                      ? 'Add a full-body photo of yourself'
+                      : 'A full-body photo works best',
+                  style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+                ),
+                const SizedBox(height: AppConstants.spacing4),
+                TextButton.icon(
+                  onPressed: value.isUploading ? null : notifier.upload,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.only(
+                      right: AppConstants.spacing8,
+                    ),
+                  ),
+                  icon: value.isUploading
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.photo_camera_outlined, size: 20),
+                  label: Text(url == null ? 'Add photo' : 'Change photo'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return PaperSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _Title('Your photo'),
+          const SizedBox(height: AppConstants.spacing12),
+          body,
+        ],
+      ),
+    );
+  }
+}
+
+class _AvatarPlaceholder extends StatelessWidget {
+  const _AvatarPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    return ColoredBox(
+      color: tokens.stock.sunk,
+      child: Icon(
+        Icons.person_outline_rounded,
+        size: 36,
+        color: tokens.textMuted,
+      ),
+    );
+  }
+}
+
+class _GarmentCard extends ConsumerWidget {
+  const _GarmentCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final garment = ref.watch(tryOnProvider.select((s) => s.garment));
+    final generating = ref.watch(tryOnProvider.select((s) => s.generating));
+    final notifier = ref.read(tryOnProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    return PaperSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _Title('Garment'),
+          const SizedBox(height: AppConstants.spacing12),
+          if (garment == null)
+            PaperSurface(
+              onTap: notifier.pickGarment,
+              semanticLabel: 'Choose a garment photo',
+              lift: 0,
+              color: tokens.stock.sunk,
+              padding: const EdgeInsets.symmetric(
+                vertical: AppConstants.spacing24,
+                horizontal: AppConstants.spacing16,
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.checkroom_rounded,
+                    size: 32,
+                    color: tokens.stock.accent,
+                  ),
+                  const SizedBox(height: AppConstants.spacing8),
+                  Text(
+                    'Choose one garment photo',
+                    textAlign: TextAlign.center,
+                    style: text.bodyMedium?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'A flat lay or a hanger shot works best',
+                    textAlign: TextAlign.center,
+                    style: text.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radius8),
+              child: ColoredBox(
+                color: tokens.stock.sunk,
+                child: Image.file(
+                  garment,
+                  height: 220,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          const SizedBox(height: AppConstants.spacing8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: generating ? null : notifier.pickGarment,
+                icon: const Icon(Icons.photo_library_outlined, size: 20),
+                label: Text(garment == null ? 'Gallery' : 'Change'),
+              ),
+              TextButton.icon(
+                onPressed: generating ? null : notifier.pickGarmentFromCamera,
+                icon: const Icon(Icons.photo_camera_outlined, size: 20),
+                label: const Text('Camera'),
+              ),
+              if (garment != null)
+                TextButton(
+                  onPressed: generating
+                      ? null
+                      : () => notifier.setGarment(null),
+                  child: const Text('Remove'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionsCard extends ConsumerWidget {
+  const _OptionsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(tryOnProvider);
+    final notifier = ref.read(tryOnProvider.notifier);
+
+    Widget dropdown(
+      String label,
+      String value,
+      List<String> options,
+      ValueChanged<String> onChanged,
+    ) => DropdownButtonFormField<String>(
+      // A new key rebuilds the field when the value changes elsewhere.
+      key: ValueKey('$label-$value'),
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label),
+      items: [
+        for (final o in options)
+          DropdownMenuItem(value: o, child: Text(_sentence(o))),
+      ],
+      onChanged: s.generating
+          ? null
+          : (v) {
+              if (v != null) onChanged(v);
+            },
+    );
+
+    return PaperSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _Title('Look'),
+          const SizedBox(height: AppConstants.spacing16),
+          dropdown('Style', s.style, TryOnNotifier.styles, notifier.setStyle),
+          const SizedBox(height: AppConstants.spacing12),
+          dropdown(
+            'Background',
+            s.background,
+            TryOnNotifier.backgrounds,
+            notifier.setBackground,
+          ),
+          const SizedBox(height: AppConstants.spacing12),
+          dropdown('Pose', s.pose, TryOnNotifier.poses, notifier.setPose),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultCard extends ConsumerWidget {
+  const _ResultCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(tryOnProvider);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    if (s.generating) {
+      return PaperSurface(
+        child: Column(
+          children: [
+            const SkeletonPulse(
+              child: AspectRatio(
+                aspectRatio: 3 / 4,
+                child: SkeletonBox(borderRadius: AppConstants.radius8),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacing12),
+            Text(
+              'Dressing you up. This takes about half a minute.',
+              textAlign: TextAlign.center,
+              style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+            ),
+          ],
         ),
+      );
+    }
+
+    if (!s.hasResult) {
+      return PaperSurface(
+        lift: 0,
+        color: tokens.stock.sunk,
+        padding: const EdgeInsets.symmetric(
+          vertical: AppConstants.spacing32,
+          horizontal: AppConstants.spacing16,
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.image_outlined, size: 32, color: tokens.textMuted),
+            const SizedBox(height: AppConstants.spacing8),
+            Text(
+              'Your try-on appears here',
+              textAlign: TextAlign.center,
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final bytes = s.resultBytes;
+    final Widget image = s.resultUrl != null
+        ? AppNetworkImage(
+            s.resultUrl!,
+            fit: BoxFit.cover,
+            errorWidget: (_, _, _) => bytes != null
+                ? Image.memory(bytes, fit: BoxFit.cover)
+                : const _BrokenResult(),
+          )
+        : Image.memory(
+            bytes!,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, _, _) => const _BrokenResult(),
+          );
+
+    return PaperSurface(
+      padding: EdgeInsets.zero,
+      grain: false,
+      clipBehavior: Clip.antiAlias,
+      child: AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            image,
+            // Apple Guideline 1.2: generated images must be reportable.
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                tooltip: 'Report image',
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                onPressed: () => showReportContentSheet(
+                  contentType: 'AI try-on image',
+                  contentId: s.resultUrl ?? 'tryon-result',
+                ),
+                icon: const Icon(
+                  Icons.flag_outlined,
+                  size: 20,
+                  color: Colors.white,
+                  shadows: [
+                    Shadow(color: Colors.black87, offset: Offset(0.5, 1)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BrokenResult extends StatelessWidget {
+  const _BrokenResult();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    return ColoredBox(
+      color: tokens.stock.sunk,
+      child: Icon(
+        Icons.broken_image_outlined,
+        size: 32,
+        color: tokens.textMuted,
+      ),
+    );
+  }
+}
+
+class _BottomBar extends StatelessWidget {
+  const _BottomBar({
+    required this.canGenerate,
+    required this.generating,
+    required this.hasResult,
+    required this.onGenerate,
+    required this.onSave,
+  });
+
+  final bool canGenerate;
+  final bool generating;
+  final bool hasResult;
+  final VoidCallback onGenerate;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return PaperActionBar(
+      child: Row(
+        children: [
+          if (hasResult && !generating) ...[
+            TextButton.icon(
+              onPressed: onSave,
+              style: TextButton.styleFrom(minimumSize: const Size(0, 52)),
+              icon: const Icon(Icons.download_rounded, size: 20),
+              label: const Text('Save'),
+            ),
+            const SizedBox(width: AppConstants.spacing8),
+          ],
+          Expanded(
+            child: ElevatedButton(
+              onPressed: canGenerate ? onGenerate : null,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
+              child: Text(
+                generating
+                    ? 'Creating'
+                    : hasResult
+                    ? 'Try again'
+                    : 'Create try-on',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

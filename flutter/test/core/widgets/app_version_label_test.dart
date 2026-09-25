@@ -2,7 +2,6 @@ import 'package:fitcheck_ai/core/services/code_push_service.dart';
 import 'package:fitcheck_ai/core/widgets/app_version_label.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// The Profile dialog shipped a hardcoded "Version 1.0.0" for three releases.
@@ -16,11 +15,11 @@ CodePushService _offlineCodePush() =>
     CodePushService(updaterFactory: () => throw StateError('no engine'));
 
 void main() {
+  tearDown(() => CodePushService.instance = CodePushService());
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   Widget host() => const MaterialApp(home: Scaffold(body: AppVersionLabel()));
-
-  tearDown(Get.reset);
 
   testWidgets('shows a placeholder before the platform read resolves',
       (tester) async {
@@ -34,7 +33,7 @@ void main() {
 
     await tester.pumpWidget(host());
     // First frame only - the FutureBuilder has not completed yet.
-    expect(find.text('—'), findsOneWidget);
+    expect(find.text('–'), findsOneWidget);
 
     await tester.pumpAndSettle();
   });
@@ -85,7 +84,8 @@ void main() {
 
     // A patch leaves version and build untouched, so this segment is the only
     // in-app evidence that a hotfix landed.
-    final service = Get.put(_offlineCodePush());
+    final service = _offlineCodePush();
+    CodePushService.instance = service;
     service.currentPatchNumber.value = 3;
 
     await tester.pumpWidget(host());
@@ -103,7 +103,7 @@ void main() {
       buildSignature: '',
     );
 
-    Get.put(_offlineCodePush());
+    CodePushService.instance = _offlineCodePush();
 
     await tester.pumpWidget(host());
     await tester.pumpAndSettle();
@@ -111,21 +111,4 @@ void main() {
     expect(find.text('1.0.4 (9)'), findsOneWidget);
   });
 
-  testWidgets('works when CodePushService is not registered', (tester) async {
-    // Widget tests and any screen pumped without InitialBinding land here.
-    PackageInfo.setMockInitialValues(
-      appName: 'FitCheck AI',
-      packageName: 'com.fitcheckaiapp.fitcheckai',
-      version: '1.0.4',
-      buildNumber: '9',
-      buildSignature: '',
-    );
-
-    expect(Get.isRegistered<CodePushService>(), isFalse);
-
-    await tester.pumpWidget(host());
-    await tester.pumpAndSettle();
-
-    expect(find.text('1.0.4 (9)'), findsOneWidget);
-  });
 }

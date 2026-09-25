@@ -1,0 +1,4 @@
+tags:
+  # Screenshot tests. Rendering differs between macOS and Linux, so CI skips
+  # them; run locally with `flutter test --tags golden`.
+  golden:

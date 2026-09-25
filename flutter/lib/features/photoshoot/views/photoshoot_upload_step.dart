@@ -1,263 +1,223 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../controllers/photoshoot_controller.dart';
+import '../providers/photoshoot_provider.dart';
 
-/// Step 1: Photo upload
-class PhotoshootUploadStep extends GetView<PhotoshootController> {
+/// Step 1: up to four photos of the user.
+class PhotoshootUploadStep extends ConsumerWidget {
   const PhotoshootUploadStep({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final photos = ref.watch(photoshootProvider.select((s) => s.photos));
+    final notifier = ref.read(photoshootProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final full = photos.length >= PhotoshootNotifier.maxPhotos;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Photo upload area - conditional based on selection
-          Obx(() {
-            final photos = controller.selectedPhotos;
-            if (photos.isEmpty) {
-              return _buildUploadPlaceholder(context, tokens);
-            }
-            return _buildPhotoPreview(context, tokens);
-          }),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Add photo buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: controller.pickPhotos,
-                  icon: const Icon(Icons.photo_library),
-                  label: const Text('Gallery'),
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacing12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: controller.pickFromCamera,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Camera'),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppConstants.spacing16),
-
-          // Tips
-          AppGlassCard(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (photos.isEmpty)
+          PaperSurface(
+            onTap: notifier.pickPhotos,
+            semanticLabel: 'Add photos from your gallery',
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spacing24,
+              vertical: AppConstants.spacing32,
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.lightbulb, color: tokens.brandColor, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Tips for best results',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
-                          ),
-                    ),
-                  ],
+                Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 40,
+                  color: tokens.stock.accent,
                 ),
-                const SizedBox(height: 8),
-                _buildTip(context, tokens, '• Clear, well-lit face photos'),
-                _buildTip(context, tokens, '• Multiple angles work better'),
-                _buildTip(context, tokens, '• Avoid sunglasses or face obstructions'),
-                _buildTip(context, tokens, '• Higher quality = better results'),
+                const SizedBox(height: AppConstants.spacing12),
+                Text(
+                  'Add 1 to 4 photos of yourself',
+                  style: text.titleMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppConstants.spacing4),
+                Text(
+                  'Tap to choose from your gallery',
+                  style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
-          ),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Next button
-          Obx(() => ElevatedButton(
-                onPressed:
-                    controller.selectedPhotos.isNotEmpty ? controller.nextStep : null,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
-                child: Text(
-                  controller.selectedPhotos.isEmpty
-                      ? 'Add Photos to Continue'
-                      : 'Continue (${controller.selectedPhotos.length} photos)',
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-
-  /// Compact upload placeholder shown when no photos selected
-  Widget _buildUploadPlaceholder(BuildContext context, AppUiTokens tokens) {
-    return InkWell(
-      onTap: controller.pickPhotos,
-      borderRadius: BorderRadius.circular(AppConstants.radius16),
-      child: Container(
-        height: 160,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-          border: Border.all(
-            color: tokens.textMuted.withValues(alpha: 0.3),
-            width: 2,
-          ),
-          color: tokens.cardColor.withValues(alpha: 0.5),
-        ),
-        child: Column(
+          )
+        else
+          _Thumbnails(photos: photos, canAdd: !full),
+        const SizedBox(height: AppConstants.spacing8),
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.add_photo_alternate_outlined,
-              size: 48,
-              color: tokens.textMuted,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Upload 1-4 photos',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: tokens.textMuted,
-                    fontWeight: FontWeight.w500,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Tap to select from gallery',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted.withValues(alpha: 0.7),
-                  ),
+            if (photos.isNotEmpty)
+              TextButton.icon(
+                onPressed: full ? null : notifier.pickPhotos,
+                icon: const Icon(Icons.photo_library_outlined, size: 20),
+                label: const Text('Gallery'),
+              ),
+            TextButton.icon(
+              onPressed: full ? null : notifier.pickFromCamera,
+              icon: const Icon(Icons.photo_camera_outlined, size: 20),
+              label: const Text('Use camera'),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: AppConstants.spacing16),
+        const _Tips(),
+        const SizedBox(height: AppConstants.spacing24),
+        ElevatedButton(
+          onPressed: photos.isEmpty ? null : notifier.goToConfigure,
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+          ),
+          child: Text(
+            photos.isEmpty
+                ? 'Add a photo to continue'
+                : 'Continue with ${photos.length} '
+                      '${photos.length == 1 ? 'photo' : 'photos'}',
+          ),
+        ),
+      ],
     );
   }
+}
 
-  /// Horizontal photo preview shown when photos are selected
-  Widget _buildPhotoPreview(BuildContext context, AppUiTokens tokens) {
-    final photos = controller.selectedPhotos;
-    final canAddMore = photos.length < PhotoshootController.maxPhotos;
+class _Thumbnails extends ConsumerWidget {
+  const _Thumbnails({required this.photos, required this.canAdd});
 
+  final List<File> photos;
+  final bool canAdd;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(photoshootProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Count indicator
         Text(
-          '${photos.length}/${PhotoshootController.maxPhotos} photos',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: tokens.textMuted,
-              ),
+          '${photos.length} of ${PhotoshootNotifier.maxPhotos} photos',
+          style: text.bodySmall?.copyWith(color: tokens.textSecondary),
         ),
-        const SizedBox(height: 8),
-        // Horizontal scrollable thumbnails
-        SizedBox(
-          height: 100,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: photos.length + (canAddMore ? 1 : 0),
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              if (index < photos.length) {
-                return _buildThumbnail(context, tokens, photos[index], index);
-              }
-              return _buildAddMoreTile(context, tokens);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Individual photo thumbnail with remove button
-  Widget _buildThumbnail(
-    BuildContext context,
-    AppUiTokens tokens,
-    File photo,
-    int index,
-  ) {
-    return Stack(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          child: Image.file(
-            photo,
-            width: 100,
-            height: 100,
-            fit: BoxFit.cover,
-          ),
-        ),
-        Positioned(
-          top: 0,
-          right: 0,
-          child: Material(
-            color: Colors.transparent,
-            child: IconButton(
-              tooltip: 'Remove photo',
-              onPressed: () => controller.removePhoto(index),
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              padding: EdgeInsets.zero,
-              icon: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.close, color: Colors.white, size: 16),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Add more photos tile
-  Widget _buildAddMoreTile(BuildContext context, AppUiTokens tokens) {
-    return InkWell(
-      onTap: controller.pickPhotos,
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
-        width: 100,
-        height: 100,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          border: Border.all(color: tokens.cardBorderColor),
-          color: tokens.cardColor,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        const SizedBox(height: AppConstants.spacing8),
+        GridView.count(
+          crossAxisCount: 4,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: AppConstants.spacing12,
+          crossAxisSpacing: AppConstants.spacing12,
           children: [
-            Icon(Icons.add, color: tokens.textMuted, size: 28),
-            const SizedBox(height: 4),
-            Text(
-              'Add',
-              style: TextStyle(fontSize: 12, color: tokens.textMuted),
-            ),
+            for (final (i, photo) in photos.indexed)
+              PaperSurface(
+                padding: EdgeInsets.zero,
+                grain: false,
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(photo, fit: BoxFit.cover, cacheWidth: 240),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        tooltip: 'Remove photo ${i + 1}',
+                        onPressed: () => notifier.removePhoto(i),
+                        constraints: const BoxConstraints(
+                          minWidth: 44,
+                          minHeight: 44,
+                        ),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black87,
+                              offset: Offset(0.5, 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (canAdd)
+              PaperSurface(
+                onTap: notifier.pickPhotos,
+                semanticLabel: 'Add another photo',
+                padding: EdgeInsets.zero,
+                color: tokens.stock.sunk,
+                lift: 0,
+                child: Center(
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 28,
+                    color: tokens.stock.accent,
+                  ),
+                ),
+              ),
           ],
         ),
-      ),
+      ],
     );
   }
+}
 
-  Widget _buildTip(BuildContext context, AppUiTokens tokens, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: tokens.textMuted,
+class _Tips extends StatelessWidget {
+  const _Tips();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return PaperSurface(
+      lift: 0,
+      color: tokens.stock.tint,
+      padding: const EdgeInsets.all(AppConstants.spacing16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.lightbulb_outline_rounded,
+            size: 20,
+            color: tokens.stock.accent,
+          ),
+          const SizedBox(width: AppConstants.spacing12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'For the best results',
+                  style: text.titleSmall?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing4),
+                Text(
+                  'Use clear, well-lit photos of your face from a few angles. '
+                  'Skip sunglasses and hats.',
+                  style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+                ),
+              ],
             ),
+          ),
+        ],
       ),
     );
   }

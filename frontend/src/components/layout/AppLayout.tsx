@@ -19,6 +19,7 @@ import { JobPill } from '@/components/jobs'
 import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
+import { Logo } from '@/components/brand/Logo'
 import { useUserRefresh } from '@/hooks/useUserRefresh'
 
 function AppLayoutContent() {
@@ -38,10 +39,9 @@ function AppLayoutContent() {
         <div className="absolute left-[calc(var(--safe-area-left)+0.5rem)]">
           <SidebarMobileTrigger />
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-foreground">FitCheck</span>
-          <span className="text-lg font-semibold text-primary">AI</span>
-        </div>
+        <Link to="/dashboard">
+          <Logo markSize={32} wordmarkClassName="text-lg" />
+        </Link>
         <Button asChild size="icon" className="absolute right-[calc(var(--safe-area-right)+0.5rem)]" aria-label="Add to wardrobe">
           <Link to="/wardrobe?action=add"><Plus className="h-4 w-4" /></Link>
         </Button>

@@ -1,231 +1,226 @@
 import 'package:flutter/material.dart';
+
+import 'google_mark.dart';
 import 'package:flutter/services.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/widgets/app_ui.dart';
 
-class AuthUiTokens {
-  AuthUiTokens._({
-    required this.isDarkMode,
-    required this.textColor,
-    required this.secondaryTextColor,
-    required this.brandColor,
-    required this.overlayGradient,
-    required this.cardColor,
-    required this.cardBorderColor,
-    required this.fieldFillColor,
-    required this.fieldBorderColor,
-    required this.fieldHintColor,
-    required this.fieldIconColor,
+/// Shared frame for the sign-in screens: a paper landscape across the top of
+/// the screen, the form on the page below it.
+class AuthScaffold extends StatelessWidget {
+  const AuthScaffold({
+    super.key,
+    required this.child,
+    this.sceneFraction = 0.34,
+    this.showBack = false,
   });
 
-  final bool isDarkMode;
-  final Color textColor;
-  final Color secondaryTextColor;
-  final Color brandColor;
-  final LinearGradient overlayGradient;
-  final Color cardColor;
-  final Color cardBorderColor;
-  final Color fieldFillColor;
-  final Color fieldBorderColor;
-  final Color fieldHintColor;
-  final Color fieldIconColor;
-
-  factory AuthUiTokens.of(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDarkMode ? Colors.white : Colors.black;
-    final secondaryTextColor = textColor.withValues(alpha: isDarkMode ? 0.78 : 0.68);
-    final brandColor = Theme.of(context).colorScheme.primary;
-    final overlayGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: isDarkMode
-          ? [
-              Colors.black.withValues(alpha: 0.35),
-              Colors.black.withValues(alpha: 0.65),
-              Colors.black.withValues(alpha: 0.9),
-            ]
-          : [
-              Colors.white.withValues(alpha: 0.25),
-              Colors.white.withValues(alpha: 0.55),
-              Colors.white.withValues(alpha: 0.75),
-            ],
-    );
-    final cardColor = isDarkMode
-        ? Colors.black.withValues(alpha: 0.48)
-        : Colors.white.withValues(alpha: 0.85);
-    final cardBorderColor = textColor.withValues(alpha: isDarkMode ? 0.18 : 0.12);
-    final fieldFillColor = isDarkMode
-        ? Colors.white.withValues(alpha: 0.08)
-        : Colors.black.withValues(alpha: 0.05);
-    final fieldBorderColor = textColor.withValues(alpha: isDarkMode ? 0.25 : 0.2);
-    final fieldHintColor = textColor.withValues(alpha: isDarkMode ? 0.55 : 0.5);
-    final fieldIconColor = textColor.withValues(alpha: isDarkMode ? 0.7 : 0.6);
-
-    return AuthUiTokens._(
-      isDarkMode: isDarkMode,
-      textColor: textColor,
-      secondaryTextColor: secondaryTextColor,
-      brandColor: brandColor,
-      overlayGradient: overlayGradient,
-      cardColor: cardColor,
-      cardBorderColor: cardBorderColor,
-      fieldFillColor: fieldFillColor,
-      fieldBorderColor: fieldBorderColor,
-      fieldHintColor: fieldHintColor,
-      fieldIconColor: fieldIconColor,
-    );
-  }
-}
-
-class AuthScaffold extends StatelessWidget {
-  const AuthScaffold({super.key, required this.child, this.padding});
-
   final Widget child;
-  final EdgeInsetsGeometry? padding;
 
-  static const String backgroundImage = 'assets/images/auth_background.jpg';
+  /// Height of the scene band as a fraction of the screen height.
+  final double sceneFraction;
+
+  /// Shows a back button over the scene.
+  final bool showBack;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AuthUiTokens.of(context);
-    final screenSize = MediaQuery.of(context).size;
-    final horizontalPadding = screenSize.width < 360
-        ? AppConstants.spacing16
-        : AppConstants.spacing24;
-    final resolvedPadding =
-        padding ??
-        EdgeInsets.symmetric(
-          horizontal: horizontalPadding,
-          vertical: AppConstants.spacing24,
-        );
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              backgroundImage,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(gradient: tokens.overlayGradient),
-            ),
-          ),
-          AnnotatedRegion<SystemUiOverlayStyle>(
-            value:
-                (tokens.isDarkMode
-                        ? SystemUiOverlayStyle.light
-                        : SystemUiOverlayStyle.dark)
-                    .copyWith(
-                      statusBarColor: Colors.transparent,
-                      systemNavigationBarColor: tokens.isDarkMode
-                          ? Colors.black
-                          : Colors.white,
-                      statusBarIconBrightness: tokens.isDarkMode
-                          ? Brightness.light
-                          : Brightness.dark,
-                      systemNavigationBarIconBrightness: tokens.isDarkMode
-                          ? Brightness.light
-                          : Brightness.dark,
-                    ),
-            child: SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight,
+    return PaperStockScope(
+      stock: PaperStockId.ink,
+      child: Builder(
+        builder: (context) {
+          final tokens = PaperTokens.of(context);
+          final dark = Theme.of(context).brightness == Brightness.dark;
+          final size = MediaQuery.sizeOf(context);
+          // The back button gets its own row above the scene, clear of the
+          // garments on the line.
+          final sceneTop =
+              MediaQuery.paddingOf(context).top +
+              (showBack ? kMinInteractiveDimension + AppConstants.spacing8 : 0);
+          final band = size.height * sceneFraction + sceneTop;
+          final gutter = size.width < 360
+              ? AppConstants.spacing16
+              : AppConstants.spacing24;
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: dark
+                ? SystemUiOverlayStyle.light
+                : SystemUiOverlayStyle.dark,
+            child: Scaffold(
+              backgroundColor: tokens.stock.page,
+              body: DecoratedBox(
+                decoration: BoxDecoration(image: paperGrain(context)),
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: band,
+                        child: Stack(
+                          children: [
+                            // Starts below the status bar so the garments
+                            // never sit under the clock.
+                            Positioned.fill(
+                              top: sceneTop,
+                              child: const PaperScene(
+                                preset: PaperScenes.auth,
+                                height: null,
+                              ),
+                            ),
+                            if (showBack)
+                              SafeArea(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(
+                                    AppConstants.spacing4,
+                                  ),
+                                  child: IconButton(
+                                    tooltip: 'Back',
+                                    icon: const Icon(Icons.arrow_back_rounded),
+                                    onPressed: () =>
+                                        Navigator.maybePop(context),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                      child: Padding(padding: resolvedPadding, child: child),
                     ),
-                  );
-                },
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            gutter,
+                            AppConstants.spacing8,
+                            gutter,
+                            AppConstants.spacing16,
+                          ),
+                          child: child,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 }
 
-class AuthHeaderBar extends StatelessWidget {
-  const AuthHeaderBar({
-    super.key,
-    required this.textColor,
-    required this.brandColor,
-    this.trailing,
-  });
+/// Screen title and one line of help under it.
+class AuthHeading extends StatelessWidget {
+  const AuthHeading({super.key, required this.title, required this.subtitle});
 
-  final Color textColor;
-  final Color brandColor;
-  final Widget? trailing;
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: brandColor,
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-          ),
-          child: const Icon(
-            Icons.checkroom_outlined,
-            color: Colors.white,
-            size: 22,
+        Text(title, style: text.headlineMedium),
+        const SizedBox(height: AppConstants.spacing8),
+        Text(
+          subtitle,
+          style: text.bodyLarge?.copyWith(
+            color: PaperTokens.of(context).textSecondary,
           ),
         ),
-        const SizedBox(width: AppConstants.spacing12),
-        Expanded(
-          child: Text(
-            'FitCheck AI',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-            ),
-          ),
-        ),
-        if (trailing != null) trailing!,
       ],
     );
   }
 }
 
-class AuthGlassCard extends StatelessWidget {
-  const AuthGlassCard({super.key, required this.child, this.padding});
-
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
+/// "or" between the email form and the social sign-in buttons.
+class AuthDivider extends StatelessWidget {
+  const AuthDivider({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AuthUiTokens.of(context);
-    return Container(
-      padding: padding ?? const EdgeInsets.all(AppConstants.spacing20),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(AppConstants.radius24),
-        border: Border.all(color: tokens.cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: tokens.isDarkMode ? 0.35 : 0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
+    final tokens = PaperTokens.of(context);
+    return Text(
+      'or',
+      textAlign: TextAlign.center,
+      style: Theme.of(
+        context,
+      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+    );
+  }
+}
+
+/// Neutral "Continue with Google" button in the paper card style.
+class GoogleSignInButton extends StatelessWidget {
+  const GoogleSignInButton({
+    super.key,
+    required this.onPressed,
+    this.isLoading = false,
+  });
+
+  final VoidCallback onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    return SizedBox(
+      height: 52,
+      child: OutlinedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: OutlinedButton.styleFrom(foregroundColor: tokens.textPrimary),
+        child: isLoading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GoogleMark(),
+                  SizedBox(width: AppConstants.spacing12),
+                  Text('Continue with Google'),
+                ],
+              ),
       ),
-      child: child,
+    );
+  }
+}
+
+/// Filled primary action with an inline spinner while [isLoading].
+class AuthPrimaryButton extends StatelessWidget {
+  const AuthPrimaryButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.isLoading = false,
+  });
+
+  final String label;
+
+  /// Null disables the button.
+  final VoidCallback? onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : onPressed,
+        child: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(label),
+      ),
     );
   }
 }
@@ -252,14 +247,14 @@ class AppleSignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AuthUiTokens.of(context);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     if (isLoading) {
       return Container(
         height: _buttonHeight,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: tokens.isDarkMode ? Colors.white : Colors.black,
+          color: isDarkMode ? Colors.white : Colors.black,
           borderRadius: BorderRadius.circular(AppConstants.radius16),
         ),
         child: SizedBox(
@@ -268,7 +263,7 @@ class AppleSignInButton extends StatelessWidget {
           child: CircularProgressIndicator(
             strokeWidth: 2,
             valueColor: AlwaysStoppedAnimation<Color>(
-              tokens.isDarkMode ? Colors.black : Colors.white,
+              isDarkMode ? Colors.black : Colors.white,
             ),
           ),
         ),
@@ -279,19 +274,17 @@ class AppleSignInButton extends StatelessWidget {
       onPressed: onPressed,
       height: _buttonHeight,
       borderRadius: BorderRadius.circular(AppConstants.radius16),
-      style: tokens.isDarkMode
+      style: isDarkMode
           ? SignInWithAppleButtonStyle.white
           : SignInWithAppleButtonStyle.black,
     );
   }
 }
 
+/// Privacy and terms links.
 class AuthFooterText extends StatelessWidget {
-  const AuthFooterText({super.key, required this.textColor});
+  const AuthFooterText({super.key});
 
-  final Color textColor;
-
-  // Aliases of the single source of truth in AppConstants.
   static const String privacyPolicyUrl = AppConstants.privacyPolicyUrl;
   static const String termsOfServiceUrl = AppConstants.termsOfServiceUrl;
 
@@ -304,88 +297,49 @@ class AuthFooterText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final linkStyle = TextStyle(
-      color: textColor.withValues(alpha: 0.65),
-      fontSize: 12,
-      letterSpacing: 1.2,
-      fontWeight: FontWeight.w500,
+    final tokens = PaperTokens.of(context);
+    final style = TextButton.styleFrom(
+      foregroundColor: tokens.textSecondary,
+      textStyle: Theme.of(context).textTheme.bodySmall,
     );
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Semantics(
-          button: true,
-          label: 'Privacy policy',
-          child: TextButton(
-            onPressed: () => _openUrl(privacyPolicyUrl),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(48, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-              foregroundColor: textColor.withValues(alpha: 0.65),
-              textStyle: linkStyle,
-            ),
-            child: const Text('PRIVACY POLICY'),
-          ),
+        TextButton(
+          style: style,
+          onPressed: () => _openUrl(privacyPolicyUrl),
+          child: const Text('Privacy policy'),
         ),
-        Text('  |  ', style: linkStyle),
-        Semantics(
-          button: true,
-          label: 'Terms of service',
-          child: TextButton(
-            onPressed: () => _openUrl(termsOfServiceUrl),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(48, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-              foregroundColor: textColor.withValues(alpha: 0.65),
-              textStyle: linkStyle,
-            ),
-            child: const Text('TERMS OF SERVICE'),
-          ),
+        Text('·', style: TextStyle(color: tokens.textMuted)),
+        TextButton(
+          style: style,
+          onPressed: () => _openUrl(termsOfServiceUrl),
+          child: const Text('Terms of service'),
         ),
       ],
     );
   }
 }
 
+/// Input decoration for the sign-in forms. Colours come from the theme.
 class AuthFormStyles {
   AuthFormStyles._();
 
   static InputDecoration inputDecoration({
-    required BuildContext context,
     required String label,
-    required String hint,
     required IconData icon,
+    String? hint,
     Widget? suffixIcon,
-  }) {
-    final tokens = AuthUiTokens.of(context);
-    final errorColor = Theme.of(context).colorScheme.error;
-
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      labelStyle: TextStyle(color: tokens.textColor.withValues(alpha: 0.7)),
-      hintStyle: TextStyle(color: tokens.fieldHintColor),
-      filled: true,
-      fillColor: tokens.fieldFillColor,
-      prefixIcon: Icon(icon, color: tokens.fieldIconColor),
-      suffixIcon: suffixIcon,
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        borderSide: BorderSide(color: tokens.fieldBorderColor),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        borderSide: BorderSide(color: tokens.brandColor, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        borderSide: BorderSide(color: errorColor),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        borderSide: BorderSide(color: errorColor, width: 1.5),
-      ),
-    );
-  }
+  }) => InputDecoration(
+    labelText: label,
+    hintText: hint,
+    prefixIcon: Icon(icon),
+    suffixIcon: suffixIcon,
+  );
 }
+
+final _email = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+/// A loose shape check. The auth server does the real validation.
+bool isValidEmail(String value) => _email.hasMatch(value);

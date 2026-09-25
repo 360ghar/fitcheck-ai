@@ -1,378 +1,221 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../controllers/item_add_controller.dart';
+import '../providers/item_add_provider.dart';
 import '../widgets/ai_extraction_widget.dart';
 import '../widgets/manual_entry_form.dart';
 
-/// Page for adding new items to wardrobe
-/// Supports: Camera capture, Gallery pick, Manual entry
-class ItemAddPage extends StatefulWidget {
+enum _AddView { start, manual, processing, results, failure }
+
+_AddView _viewOf(ItemAddState s) {
+  if (s.manualEntry) return _AddView.manual;
+  if (s.image == null) return _AddView.start;
+  if (s.processing || s.generating) return _AddView.processing;
+  if (s.items.isNotEmpty) return _AddView.results;
+  if (s.failure != null) return _AddView.failure;
+  return _AddView.start;
+}
+
+/// Adds one piece from a photo (scanned by AI) or by hand. Each page owns
+/// its own session state.
+class ItemAddPage extends ConsumerStatefulWidget {
   const ItemAddPage({super.key});
 
   @override
-  State<ItemAddPage> createState() => _ItemAddPageState();
+  ConsumerState<ItemAddPage> createState() => _ItemAddPageState();
 }
 
-class _ItemAddPageState extends State<ItemAddPage> {
-  final ItemAddController controller = Get.put(ItemAddController());
-  final ImagePicker _imagePicker = ImagePicker();
+class _ItemAddPageState extends ConsumerState<ItemAddPage> {
+  final int _session = newItemAddSession();
+  final _picker = ImagePicker();
 
-  @override
-  void dispose() {
-    Get.delete<ItemAddController>();
-    super.dispose();
-  }
-
-  Future<void> _pickFromGallery() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
+  Future<void> _pick(ImageSource source) async {
+    final image = await _picker.pickImage(
+      source: source,
       maxWidth: 1920,
       maxHeight: 1920,
       imageQuality: 85,
     );
-
-    if (image != null && mounted) {
-      controller.processImage(File(image.path));
-    }
-  }
-
-  Future<void> _pickFromCamera() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
-
-    if (image != null && mounted) {
-      controller.processImage(File(image.path));
-    }
-  }
-
-  void _showManualEntry() {
-    Get.to(() => const ManualEntryForm());
+    if (image == null || !mounted) return;
+    ref.read(itemAddProvider(_session).notifier).processImage(File(image.path));
   }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+    final provider = itemAddProvider(_session);
+    final view = ref.watch(provider.select(_viewOf));
+    final notifier = ref.read(provider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Item'), elevation: 0),
-      body: AppPageBackground(
-        child: SafeArea(
-          child: Obx(() {
-            // "Enter Manually" takes precedence: the user explicitly chose to
-            // skip AI, so the manual form must appear even while a photo is
-            // selected. (Previously the AI branch below required
-            // selectedImage == null, so the manual form never showed when a
-            // photo was picked — a dead-end loop on the AI screen.)
-            if (controller.showManualEntry.value) {
-              return ManualEntryForm(
-                imageFile: controller.selectedImage.value,
-              );
-            }
+    final body = switch (view) {
+      _AddView.start => _StartOptions(
+        onCamera: () => _pick(ImageSource.camera),
+        onGallery: () => _pick(ImageSource.gallery),
+        onManual: notifier.openManualEntry,
+      ),
+      _AddView.manual => ManualEntryForm(image: ref.read(provider).image),
+      _AddView.processing => ExtractionProcessingView(session: _session),
+      _AddView.results => ExtractionResultsView(session: _session),
+      _AddView.failure => ExtractionFailureView(session: _session),
+    };
 
-            // Show AI extraction when processing or when we have results to display
-            if (controller.selectedImage.value != null &&
-                (controller.isProcessing.value ||
-                    controller.isSaving.value ||
-                    controller.isGeneratingImages.value ||
-                    (controller.extractionResult.value != null &&
-                        controller.extractionResult.value!.items.isNotEmpty) ||
-                    controller.generatedItems.isNotEmpty)) {
-              return AIExtractionWidget(
-                imageFile: controller.selectedImage.value!,
-                extractionResult: controller.extractionResult.value,
-                isProcessing: controller.isProcessing.value,
-                isSaving: controller.isSaving.value,
-                isGeneratingImages: controller.isGeneratingImages.value,
-                generationProgress: controller.generationProgress.value,
-                currentGenerationStatus:
-                    controller.currentGenerationStatus.value,
-                onRetake: () => controller.reset(),
-                onSaveExtracted: (items) =>
-                    controller.saveExtractedItems(items),
-                onSaveGenerated: () => controller.saveGeneratedItems(),
-                onManualEntry: () => controller.proceedToManualEntry(),
-              );
-            }
-
-            // Show initial options
-            return _buildInitialOptions(tokens);
-          }),
+    return PaperStockScope(
+      stock: PaperStockId.moss,
+      child: PopScope(
+        // Back from the details form returns to the previous step.
+        canPop: view != _AddView.manual,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) notifier.closeManualEntry();
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(switch (view) {
+              _AddView.manual => 'Add details',
+              _AddView.processing => 'Scanning',
+              _AddView.results => 'Review pieces',
+              _ => 'Add a piece',
+            }),
+          ),
+          body: AppPageBackground(child: SafeArea(top: false, child: body)),
         ),
       ),
     );
   }
+}
 
-  Widget _buildInitialOptions(AppUiTokens tokens) {
+class _StartOptions extends StatelessWidget {
+  const _StartOptions({
+    required this.onCamera,
+    required this.onGallery,
+    required this.onManual,
+  });
+
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+  final VoidCallback onManual;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
     return ListView(
-      padding: const EdgeInsets.all(AppConstants.spacing24),
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing16,
+        AppConstants.spacing16,
+        AppConstants.spacing32,
+      ),
       children: [
-        const SizedBox(height: AppConstants.spacing24),
-
-        // Header
-        Text(
-          'Add to Your Closet',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: tokens.textPrimary,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: AppConstants.spacing8),
-        Text(
-          'Choose how you want to add your item',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-          textAlign: TextAlign.center,
-        ),
-
-        const SizedBox(height: AppConstants.spacing32),
-
-        // Camera Option
-        AppGlassCard(
+        PaperSurface(
           padding: const EdgeInsets.all(AppConstants.spacing20),
-          child: InkWell(
-            onTap: _pickFromCamera,
-            borderRadius: BorderRadius.circular(AppConstants.radius16),
-            child: Column(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.camera_alt,
-                    size: 32,
-                    color: tokens.brandColor,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                Text(
-                  'Take Photo',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  'Use your camera to capture the item',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: AppConstants.spacing16),
-
-        // Gallery Option
-        AppGlassCard(
-          padding: const EdgeInsets.all(AppConstants.spacing20),
-          child: InkWell(
-            onTap: _pickFromGallery,
-            borderRadius: BorderRadius.circular(AppConstants.radius16),
-            child: Column(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.photo_library,
-                    size: 32,
-                    color: tokens.brandColor,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                Text(
-                  'Choose from Gallery',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  'Select an existing photo from your device',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: AppConstants.spacing16),
-
-        // Manual Entry Option
-        AppGlassCard(
-          padding: const EdgeInsets.all(AppConstants.spacing20),
-          child: InkWell(
-            onTap: _showManualEntry,
-            borderRadius: BorderRadius.circular(AppConstants.radius16),
-            child: Column(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.edit, size: 32, color: tokens.brandColor),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                Text(
-                  'Enter Manually',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  'Add item details without a photo',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: AppConstants.spacing16),
-
-        // Batch Upload Option
-        AppGlassCard(
-          padding: const EdgeInsets.all(AppConstants.spacing20),
-          child: InkWell(
-            onTap: () => Get.toNamed(Routes.wardrobeBatchAdd),
-            borderRadius: BorderRadius.circular(AppConstants.radius16),
-            child: Column(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.collections_outlined,
-                    size: 32,
-                    color: tokens.brandColor,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                Text(
-                  'Batch Upload',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  'Add multiple items at once (up to 50 photos)',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: AppConstants.spacing16),
-
-        // Import from Social Option
-        AppGlassCard(
-          padding: const EdgeInsets.all(AppConstants.spacing20),
-          child: InkWell(
-            onTap: () => Get.toNamed(Routes.wardrobeBatchAddSocial),
-            borderRadius: BorderRadius.circular(AppConstants.radius16),
-            child: Column(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.link, size: 32, color: tokens.brandColor),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                Text(
-                  'Import from Social',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  'Import photos from Instagram or Facebook profile',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: AppConstants.spacing24),
-
-        // Info text
-        Container(
-          padding: const EdgeInsets.all(AppConstants.spacing12),
-          decoration: BoxDecoration(
-            color: tokens.brandColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-          ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.lightbulb_outline, color: tokens.brandColor, size: 20),
-              const SizedBox(width: AppConstants.spacing12),
-              Expanded(
-                child: Text(
-                  'AI will automatically detect items from your photo',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.brandColor),
-                ),
+              Text('Snap a piece', style: text.headlineMedium),
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                'We find every piece in the photo and make a clean studio shot of each.',
+                style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              ElevatedButton.icon(
+                onPressed: onCamera,
+                icon: const Icon(Icons.photo_camera_outlined, size: 20),
+                label: const Text('Take a photo'),
+              ),
+              const SizedBox(height: AppConstants.spacing4),
+              TextButton.icon(
+                onPressed: onGallery,
+                icon: const Icon(Icons.photo_library_outlined, size: 20),
+                label: const Text('Choose from gallery'),
               ),
             ],
           ),
         ),
-        const SizedBox(height: AppConstants.spacing12),
+        const SizedBox(height: AppConstants.spacing24),
+        Padding(
+          padding: const EdgeInsets.only(left: AppConstants.spacing4),
+          child: Text('Other ways to add', style: text.titleSmall),
+        ),
+        const SizedBox(height: AppConstants.spacing8),
+        _OptionRow(
+          icon: Icons.collections_outlined,
+          title: 'Add several photos',
+          subtitle: 'Up to 50 at once',
+          onTap: () => context.push(Routes.wardrobeBatchAdd),
+        ),
+        _OptionRow(
+          icon: Icons.link_rounded,
+          title: 'Import from a profile',
+          subtitle: 'Instagram or Facebook',
+          onTap: () => context.push(Routes.wardrobeBatchAddSocial),
+        ),
+        _OptionRow(
+          icon: Icons.edit_note_rounded,
+          title: 'Enter details yourself',
+          subtitle: 'No photo needed',
+          onTap: onManual,
+        ),
       ],
+    );
+  }
+}
+
+class _OptionRow extends StatelessWidget {
+  const _OptionRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppConstants.spacing8),
+      child: PaperSurface(
+        onTap: onTap,
+        lift: 0.6,
+        semanticLabel: title,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.spacing16,
+          vertical: AppConstants.spacing12,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: tokens.stock.accent),
+            const SizedBox(width: AppConstants.spacing16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: text.titleSmall),
+                  Text(
+                    subtitle,
+                    style: text.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: tokens.textMuted),
+          ],
+        ),
+      ),
     );
   }
 }

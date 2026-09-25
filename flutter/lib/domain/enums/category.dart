@@ -32,6 +32,9 @@ enum Category {
 
   String get value => name;
 
+  /// Value sent to the API (lowercase enum name).
+  String get apiValue => name.toLowerCase();
+
   static Category fromString(String value) {
     return Category.values.firstWhere(
       (e) => e.value == value,

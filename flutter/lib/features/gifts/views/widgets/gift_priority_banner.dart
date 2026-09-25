@@ -4,6 +4,8 @@ import '../../../../../core/constants/app_constants.dart';
 import '../../../../../core/widgets/app_ui.dart';
 import '../../models/gift_models.dart';
 
+/// Home banner for an incoming gift or a free invitation, on the same torn
+/// marigold strip as the referral banner it replaces.
 class GiftPriorityBanner extends StatelessWidget {
   const GiftPriorityBanner({
     super.key,
@@ -22,9 +24,10 @@ class GiftPriorityBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
     final hasIncoming = priority == GiftDashboardPriority.incoming;
-    final incomingGreeting = hasIncoming
+    final greeting = hasIncoming
         ? giftOccasionGreeting(incoming!.occasion, incoming!.occasionGreeting)
         : null;
     final title = hasIncoming
@@ -32,54 +35,45 @@ class GiftPriorityBanner extends StatelessWidget {
               ? '$incomingCount gifts are waiting for you'
               : 'A gift is waiting for you'
         : 'Send a free ${_term(allowance!.durationMonths)} invitation';
+    final remaining = allowance?.remainingCount ?? 0;
     final body = hasIncoming
         ? incomingCount > 1
-              ? 'Open your gift inbox to review and claim them with your verified email.'
-              : '${incomingGreeting == null ? '' : '$incomingGreeting · '}${incoming!.fromName} sent you ${_term(incoming!.durationMonths)} of FitCheck Pro.'
-        : '${allowance!.remainingCount} free ${_term(allowance!.durationMonths)} invitation${allowance!.remainingCount == 1 ? '' : 's'} available.';
+              ? 'Open your gifts to claim them with your verified email.'
+              : '${greeting == null ? '' : '$greeting. '}${incoming!.fromName} '
+                    'sent you ${_term(incoming!.durationMonths)} of FitCheck Pro.'
+        : '$remaining free ${_term(allowance!.durationMonths)} '
+              'invitation${remaining == 1 ? '' : 's'} left.';
 
-    return AppGlassCard(
-      child: Row(
+    return PaperSurface(
+      stock: PaperStockId.marigold,
+      color: tokens.marigold.tint,
+      deckle: PaperEdge.bottom,
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing16,
+        AppConstants.spacing16,
+        AppConstants.spacing12,
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(AppConstants.spacing8),
-            decoration: BoxDecoration(
-              color: tokens.brandColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppConstants.radius12),
-            ),
-            child: Icon(
-              hasIncoming ? Icons.card_giftcard : Icons.auto_awesome,
-              color: tokens.brandColor,
-            ),
+          Text(title, style: text.headlineSmall?.copyWith(fontSize: 22)),
+          const SizedBox(height: AppConstants.spacing4),
+          Text(
+            body,
+            style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
-          const SizedBox(width: AppConstants.spacing12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  body,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                FilledButton.icon(
-                  onPressed: onOpen,
-                  icon: const Icon(Icons.arrow_forward, size: 18),
-                  label: Text(hasIncoming ? 'Open gifts' : 'Send invitation'),
-                ),
-              ],
+          const SizedBox(height: AppConstants.spacing8),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: tokens.marigold.accent,
             ),
+            onPressed: onOpen,
+            icon: Icon(
+              hasIncoming ? Icons.card_giftcard_outlined : Icons.send_outlined,
+              size: 18,
+            ),
+            label: Text(hasIncoming ? 'Open gifts' : 'Send invitation'),
           ),
         ],
       ),

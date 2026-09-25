@@ -3,56 +3,53 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/config/env_config.dart';
 import 'core/services/analytics_service.dart';
+import 'core/providers.dart';
 import 'core/services/code_push_service.dart';
+import 'core/services/notification_service.dart';
 import 'core/services/supabase_service.dart';
-import 'core/services/persistence_service.dart';
 import 'core/services/theme_service.dart';
-import 'core/services/route_observer.dart';
-import 'core/utils/error_handler.dart';
 import 'core/utils/image_utils.dart';
 import 'app/themes/app_theme.dart';
-import 'app/routes/app_pages.dart';
-import 'app/routes/app_routes.dart';
-import 'app/bindings/initial_binding.dart';
+import 'app/router.dart';
+import 'core/network/api_client.dart';
+import 'features/onboarding/intro_seen_provider.dart';
+import 'features/subscription/providers/subscription_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await EnvConfig.load();
 
-  await SupabaseService.instance.init();
-  await AnalyticsService.instance.init();
+  final themeService = ThemeService.instance;
+  // The patch number reaches the Sentry options below. The read is local,
+  // time-bounded and falls back to null.
+  final codePushService = CodePushService.instance..start();
+
+  // Independent startup work runs in parallel. The theme is awaited so the
+  // first frame never flashes the default theme before the saved one.
+  final startup = await Future.wait<Object?>([
+    SupabaseService.instance.init(),
+    AnalyticsService.instance.init(),
+    themeService.ready,
+    codePushService.loadCurrentPatch(),
+    PackageInfo.fromPlatform(),
+    appContainer.read(introSeenProvider.notifier).load(),
+  ]);
+  final packageInfo = startup[4]! as PackageInfo;
+  ApiClient.instance.initialize();
+  // App-lifetime purchase recovery: owns the store stream, so a purchase
+  // whose backend verification failed is verified even when the paywall
+  // never opens (Android has no webhook account linkage without it).
+  appContainer.read(purchaseRecoveryServiceProvider);
 
   // Best-effort cleanup of stale generated thumbnails (fire-and-forget; the
   // method swallows its own errors and must never delay startup).
   unawaited(ImageUtils.pruneThumbnails());
-
-  // PersistenceService must be registered before ThemeService (and any other
-  // service that reads cached prefs in onInit), since ThemeService.onInit
-  // calls Get.find<PersistenceService>().
-  Get.put(PersistenceService());
-
-  // Must be registered before FitCheckApp builds GetMaterialApp, since its
-  // themeMode argument reads Get.find<ThemeService>() eagerly - InitialBinding
-  // runs too late (inside GetMaterialApp's own initState).
-  final themeService = Get.put(ThemeService());
-  // Block until the persisted theme is read so the first frame never renders
-  // the default light theme for a moment before switching to the user's saved
-  // dark theme. (ThemeService.onInit kicks off the async load; ready resolves
-  // when it lands.)
-  await themeService.ready;
-
-  // Shorebird code push. Registered here rather than in InitialBinding because
-  // InitialBinding only runs inside GetMaterialApp's initState - far too late
-  // for the patch number to reach the Sentry options below. The read is local,
-  // timeout-bounded, and degrades to null, so it cannot stall startup.
-  final codePushService = Get.put(CodePushService());
-  await codePushService.loadCurrentPatch();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -80,19 +77,16 @@ void main() async {
   // and PlatformDispatcher.onError integrations that capture the SAME errors
   // this handler forwards to. Routing them through captureToSentry as well
   // would double-report every framework/platform error. So those two paths
-  // only record telemetry and preserve default presentation; the zone guard in
-  // the appRunner below keeps captureToSentry because Sentry's outer
-  // runZonedGuarded can never see errors the inner zone already consumed.
+  // only record telemetry and preserve default presentation. No
+  // runZonedGuarded: PlatformDispatcher.onError already receives uncaught
+  // async errors, and a zone around runApp caused a zone-mismatch warning.
 
   // Capture framework errors (widget build, layout, gesture, animation).
   // Without this, FlutterError details are only printed in debug mode and
   // never reach PostHog telemetry in release builds. (Sentry's own
   // FlutterErrorIntegration captures these when Sentry is enabled.)
   FlutterError.onError = (FlutterErrorDetails details) {
-    AnalyticsService.instance.recordError(
-      details.exception,
-      details.stack,
-    );
+    AnalyticsService.instance.recordError(details.exception, details.stack);
     // Preserve default behaviour: dump full details in debug, minimal in
     // release, so developer ergonomics don't regress.
     FlutterError.presentError(details);
@@ -105,43 +99,27 @@ void main() async {
     return true;
   };
 
-  if (sentryEnabled) {
-    // Read the real version+build from the app bundle instead of a hardcoded
-    // string, so it can't silently drift out of sync with pubspec.yaml on
-    // the next release.
-    final packageInfo = await PackageInfo.fromPlatform();
-    await SentryFlutter.init(
-      (options) {
-        options.dsn = sentryDsn;
-        options.tracesSampleRate = 1.0;
-        options.environment = kDebugMode ? 'development' : 'production';
-        options.release = '${packageInfo.packageName}@${packageInfo.version}+${packageInfo.buildNumber}';
-        // A Shorebird patch ships new Dart code under an UNCHANGED version and
-        // build number, so `release` alone cannot tell a crash in patch 3 from
-        // one in the original store build. `dist` is Sentry's own
-        // "distribution within a release" field and is exactly this. Null on an
-        // unpatched build, which Sentry treats as "no distribution".
-        options.dist = codePushService.currentPatchNumber.value?.toString();
-        options.debug = kDebugMode;
-      },
-      appRunner: () {
-        runZonedGuarded(
-          () => runApp(const FitCheckApp()),
-          (error, stack) {
-            AnalyticsService.instance.recordError(error, stack);
-            ErrorHandler.captureToSentry(error, stackTrace: stack);
-          },
-        );
-      },
-    );
-  } else {
-    runZonedGuarded(
-      () => runApp(const FitCheckApp()),
-      (error, stack) {
-        AnalyticsService.instance.recordError(error, stack);
-      },
-    );
+  final app = UncontrolledProviderScope(
+    container: appContainer,
+    child: const FitCheckApp(),
+  );
+  if (!sentryEnabled) {
+    runApp(app);
+    return;
   }
+  await SentryFlutter.init((options) {
+    options.dsn = sentryDsn;
+    options.tracesSampleRate = kDebugMode ? 1.0 : 0.2;
+    options.environment = kDebugMode ? 'development' : 'production';
+    options.release =
+        '${packageInfo.packageName}@${packageInfo.version}+${packageInfo.buildNumber}';
+    // A Shorebird patch ships new Dart code under an UNCHANGED version and
+    // build number, so `release` alone cannot tell a crash in patch 3 from
+    // one in the original store build. `dist` is Sentry's own
+    // "distribution within a release" field. Null on an unpatched build.
+    options.dist = codePushService.currentPatchNumber.value?.toString();
+    options.debug = kDebugMode;
+  }, appRunner: () => runApp(app));
 }
 
 class FitCheckApp extends StatelessWidget {
@@ -149,28 +127,18 @@ class FitCheckApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Defensive: guarantees ThemeService (and its PersistenceService dep)
-    // exist even if this widget is ever pumped without main() having run
-    // first (e.g. widget tests), since initialBinding below only registers
-    // dependencies after this build() call returns.
-    if (!Get.isRegistered<PersistenceService>()) {
-      Get.put(PersistenceService());
-    }
-    if (!Get.isRegistered<ThemeService>()) {
-      Get.put(ThemeService());
-    }
-    return GetMaterialApp(
-      title: 'Fit Check AI',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: Get.find<ThemeService>().currentThemeMode,
-      initialBinding: InitialBinding(),
-      getPages: AppPages.routes,
-      initialRoute: Routes.splash,
-      defaultTransition: Transition.cupertino,
-      transitionDuration: const Duration(milliseconds: 300),
-      navigatorObservers: [AppRouteObserver()],
+    final theme = ThemeService.instance;
+    return ValueListenableBuilder(
+      valueListenable: theme.themeMode,
+      builder: (context, _, _) => MaterialApp.router(
+        title: 'Fit Check AI',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: theme.currentThemeMode,
+        routerConfig: appRouter,
+        scaffoldMessengerKey: scaffoldMessengerKey,
+      ),
     );
   }
 }

@@ -9,7 +9,7 @@
  *    `border-ink` plus an ink check disc. The border is `border-2` in BOTH
  *    states (transparent when unselected), so selecting a tile changes its
  *    colour and nothing else — no 2px reflow, no jitter down the rail.
- * 2. Every tile is `w-28` with a FIXED `h-28` image box and a single-line
+ * 2. Every tile is `w-24` with a FIXED `h-24` image box and a single-line
  *    truncated name, so the tiles are identical in height and every rail's
  *    bottom edge lands on the same line. Ragged parallel rows are a tell.
  * 3. Each scroller gets `-mx-4 px-4 pr-8`, so the last tile is never shaved by
@@ -132,8 +132,8 @@ export function OutfitItemRails({
               <Skeleton className="h-3 w-24" />
               <div className="mt-sm flex gap-sm overflow-hidden">
                 {[0, 1, 2, 3, 4].map((tile) => (
-                  <div key={tile} className="w-28 shrink-0">
-                    <Skeleton className="h-28 w-28 rounded-md" />
+                  <div key={tile} className="w-24 shrink-0">
+                    <Skeleton className="h-24 w-24 rounded-md" />
                     <Skeleton className="mt-xxs h-3 w-20" />
                   </div>
                 ))}
@@ -179,7 +179,7 @@ export function OutfitItemRails({
                       disabled={disabled}
                       aria-pressed={isSelected}
                       className={cn(
-                        'relative w-28 shrink-0 snap-start overflow-hidden rounded-md text-left',
+                        'relative w-24 shrink-0 snap-start overflow-hidden rounded-md text-left',
                         // border-2 in both states: the box never changes size,
                         // only its colour, so a rail cannot twitch on select.
                         'border-2 transition-colors',
@@ -191,7 +191,7 @@ export function OutfitItemRails({
                       )}
                     >
                       {/* Fixed height: this is what aligns every rail. */}
-                      <div className="h-28 w-full overflow-hidden rounded-sm bg-card">
+                      <div className="h-24 w-full overflow-hidden rounded-sm bg-card">
                         {item.image_url ? (
                           <img
                             src={item.image_url}

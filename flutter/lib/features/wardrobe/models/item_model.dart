@@ -40,6 +40,17 @@ abstract class ItemModel with _$ItemModel {
       _$ItemModelFromJson(json);
 }
 
+extension ItemModelImages on ItemModel {
+  /// The primary image, else the first one. The API does not order images.
+  ItemImage? get primaryImage {
+    final images = itemImages ?? const <ItemImage>[];
+    for (final image in images) {
+      if (image.isPrimary) return image;
+    }
+    return images.isEmpty ? null : images.first;
+  }
+}
+
 /// Item image model
 @freezed
 abstract class ItemImage with _$ItemImage {

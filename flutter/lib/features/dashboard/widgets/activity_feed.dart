@@ -1,149 +1,109 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../app/routes/app_routes.dart';
-import '../controllers/dashboard_controller.dart';
-import '../models/dashboard_models.dart';
 import '../../wardrobe/repositories/item_repository.dart';
+import '../models/dashboard_models.dart';
 
-/// Activity feed section showing recent user activity
+/// Latest additions to the closet and outfits.
 class ActivityFeed extends StatelessWidget {
-  const ActivityFeed({super.key});
+  const ActivityFeed({super.key, required this.activities});
 
-  @override
-  Widget build(BuildContext context) {
-    final controller = Get.find<DashboardController>();
-    final tokens = AppUiTokens.of(context);
+  final List<DashboardActivity> activities;
 
-    return Obx(() {
-      final activities = controller.dashboard.value?.recentActivity ?? [];
-
-      return AppGlassCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AppSectionHeader(
-              title: 'Recent Activity',
-              subtitle: 'Your latest style moments',
-              trailing: TextButton(
-                onPressed: () => Get.toNamed(Routes.outfits),
-                child: const Text('See all'),
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            if (activities.isEmpty)
-              Text(
-                'Start adding items or outfits to see activity here.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
-              ),
-            if (activities.isNotEmpty)
-              Column(
-                children: activities
-                    .map((activity) => _ActivityRow(activity: activity))
-                    .toList(),
-              ),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-class _ActivityRow extends StatelessWidget {
-  final DashboardActivity activity;
-
-  // Presigned image URLs expire after 1h; on a failed load a fresh URL is
-  // re-minted from the durable storage key.
   static final ItemRepository _itemRepository = ItemRepository();
 
-  const _ActivityRow({required this.activity});
-
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final icon = _activityIcon(activity.type);
-    final hasImage = _nonEmpty(activity.imageUrl) != null;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing8),
-      child: Row(
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return PaperSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (hasImage)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radius12),
-              child: AppImage(
-                // Prefer the small variant for a 44px row; the full size is
-                // retried once if the thumb object does not exist.
-                imageUrl:
-                    _nonEmpty(activity.thumbnailUrl) ?? activity.imageUrl,
-                fallbackUrl: activity.imageUrl,
-                fit: BoxFit.cover,
-                width: 44,
-                height: 44,
-                enableZoom: false,
-                errorIcon: icon,
-                storagePath: activity.storagePath,
-                remintUrl: _itemRepository.remintImageUrl,
-              ),
+          Text('Recently', style: text.headlineSmall),
+          const SizedBox(height: AppConstants.spacing8),
+          if (activities.isEmpty)
+            Text(
+              'New pieces and outfits show up here.',
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             )
           else
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: tokens.brandColor.withValues(alpha: 0.12),
-              ),
-              child: Icon(icon, size: 18, color: tokens.brandColor),
-            ),
-          const SizedBox(width: AppConstants.spacing12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  activity.description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _formatTimestamp(activity.timestamp),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
-                ),
-              ],
-            ),
-          ),
+            for (final activity in activities.take(6))
+              _ActivityRow(activity: activity),
         ],
       ),
     );
   }
+}
 
-  IconData _activityIcon(String type) {
-    switch (type) {
-      case 'outfit_created':
-        return Icons.auto_awesome;
-      case 'item_created':
-      default:
-        return Icons.checkroom;
-    }
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow({required this.activity});
+
+  final DashboardActivity activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final icon = activity.type == 'outfit_created'
+        ? Icons.style_outlined
+        : Icons.checkroom_outlined;
+    final image = (activity.imageUrl?.isNotEmpty ?? false)
+        ? activity.imageUrl
+        : null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing8),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppConstants.radius8),
+            child: SizedBox.square(
+              dimension: 44,
+              child: ColoredBox(
+                color: tokens.stock.sunk,
+                child: image == null
+                    ? Icon(icon, size: 20, color: tokens.textSecondary)
+                    : AppImage(
+                        imageUrl: (activity.thumbnailUrl?.isNotEmpty ?? false)
+                            ? activity.thumbnailUrl
+                            : image,
+                        fallbackUrl: image,
+                        // Item cutouts are cropped tight, so cover would cut
+                        // their edges; outfit looks are photos.
+                        fit: activity.type == 'outfit_created'
+                            ? BoxFit.cover
+                            : BoxFit.contain,
+                        width: 44,
+                        height: 44,
+                        memCacheWidth: 132,
+                        enableZoom: false,
+                        errorIcon: icon,
+                        storagePath: activity.storagePath,
+                        remintUrl: ActivityFeed._itemRepository.remintImageUrl,
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppConstants.spacing12),
+          Expanded(
+            child: Text(
+              activity.description,
+              style: text.bodyMedium,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (activity.timestamp case final at?)
+            Padding(
+              padding: const EdgeInsets.only(left: AppConstants.spacing8),
+              child: Text(
+                AppDateUtils.formatRelativeTime(at.toLocal()),
+                style: text.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
+            ),
+        ],
+      ),
+    );
   }
-
-  String _formatTimestamp(DateTime? timestamp) {
-    if (timestamp == null) return '';
-    final local = timestamp.toLocal();
-    return '${local.month}/${local.day}';
-  }
-
-  /// Empty strings count as absent — clients fall back only on EMPTY,
-  /// never on a 404 (see `AppNetworkImage.fallbackUrl`).
-  String? _nonEmpty(String? value) =>
-      value == null || value.isEmpty ? null : value;
 }

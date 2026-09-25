@@ -1,706 +1,363 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
-import '../../../domain/enums/category.dart';
-import '../controllers/wardrobe_controller.dart';
-import '../repositories/item_repository.dart';
 import '../models/item_model.dart';
+import '../providers/wardrobe_providers.dart';
+import '../widgets/garment_glyph.dart';
 
-/// Detail page for a single wardrobe item
-class ItemDetailPage extends StatefulWidget {
-  final String itemId;
-
+/// One closet piece. Shows the cached list copy at once, then the fresh
+/// fetch (image URLs are presigned and expire).
+class ItemDetailPage extends ConsumerWidget {
   const ItemDetailPage({super.key, required this.itemId});
 
+  final String itemId;
+
   @override
-  State<ItemDetailPage> createState() => _ItemDetailPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detail = ref.watch(itemDetailProvider(itemId));
+    final cached = ref.watch(
+      wardrobeProvider.select(
+        (s) => s.value?.items.where((i) => i.id == itemId).firstOrNull,
+      ),
+    );
+    final item = detail.value ?? cached;
+    final refresh = ref.read(itemDetailProvider(itemId).notifier).refresh;
+
+    return PaperStockScope(
+      stock: PaperStockId.moss,
+      child: Scaffold(
+        body: AppPageBackground(
+          child: item == null
+              ? (detail.hasError
+                    ? SafeArea(
+                        child: Column(
+                          children: [
+                            const _BackRow(),
+                            Expanded(
+                              child: AppErrorState(
+                                error: detail.error,
+                                onRetry: refresh,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SafeArea(child: SkeletonDetailPage()))
+              : RefreshIndicator(
+                  onRefresh: refresh,
+                  child: _DetailBody(
+                    item: item,
+                    error: detail.hasError ? detail.error : null,
+                    onRetry: refresh,
+                  ),
+                ),
+        ),
+        bottomNavigationBar: item == null ? null : _WornBar(item: item),
+      ),
+    );
+  }
 }
 
-class _ItemDetailPageState extends State<ItemDetailPage> {
-  final ItemRepository _itemRepository = ItemRepository();
+class _BackRow extends StatelessWidget {
+  const _BackRow();
 
   @override
-  void initState() {
-    super.initState();
-    _loadItem();
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: IconButton(
+      tooltip: 'Back',
+      icon: const Icon(Icons.arrow_back_rounded),
+      onPressed: () => Navigator.maybePop(context),
+    ),
+  );
+}
+
+class _DetailBody extends ConsumerWidget {
+  const _DetailBody({required this.item, required this.onRetry, this.error});
+
+  final ItemModel item;
+  final Object? error;
+  final VoidCallback onRetry;
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this piece?'),
+        content: const Text('Outfits that use it lose this piece.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: PaperTokens.of(context).error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final deleted = await ref.read(wardrobeProvider.notifier).deleteItem(item.id);
+    if (deleted && context.mounted) Navigator.maybePop(context);
   }
 
-  /// If the item is not already on the loaded closet page (deep link, or an
-  /// item on a later page), fetch it so we never strand the user on an
-  /// infinite shimmer. When it IS cached, still refresh it from the server:
-  /// the API serves short-lived presigned image URLs (1h TTL) minted at the
-  /// last list fetch, so the cached model may hold an expired URL. Network
-  /// failures fall back to the cached model (refreshItemById swallows
-  /// errors).
-  Future<void> _loadItem() async {
-    final controller = Get.find<WardrobeController>();
-    final item = controller.items.firstWhereOrNull(
-      (i) => i.id == widget.itemId,
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final busy = ref.watch(
+      wardrobeBusyProvider.select((s) => s.contains(item.id)),
     );
-    if (item == null) {
-      await controller.fetchItemById(widget.itemId);
-    } else {
-      await controller.refreshItemById(widget.itemId);
-    }
+    final images = item.itemImages ?? const [];
+    final summary = [
+      item.category.displayName,
+      item.condition.displayName,
+      if (item.brand?.isNotEmpty ?? false) item.brand!,
+      if (item.size?.isNotEmpty ?? false) 'Size ${item.size}',
+    ].join(' · ');
+    final details = <(String, String)>[
+      if (item.colors?.isNotEmpty ?? false) ('Colours', item.colors!.join(', ')),
+      if (item.material?.isNotEmpty ?? false) ('Material', item.material!),
+      if (item.pattern?.isNotEmpty ?? false) ('Pattern', item.pattern!),
+      if (item.occasionTags?.isNotEmpty ?? false)
+        ('Use cases', item.occasionTags!.map(UseCases.displayLabel).join(', ')),
+      if (item.location?.isNotEmpty ?? false) ('Kept in', item.location!),
+      if (item.price != null) ('Price', item.price!.toStringAsFixed(2)),
+      if (item.purchaseDate != null)
+        ('Bought', AppDateUtils.formatMonthDayYear(item.purchaseDate!)),
+      if (item.tags?.isNotEmpty ?? false) ('Tags', item.tags!.join(', ')),
+      if (item.createdAt != null)
+        ('Added', AppDateUtils.formatRelativeTime(item.createdAt!)),
+    ];
+
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverAppBar(
+          pinned: true,
+          // Grained like the page, so content scrolling under it is hidden
+          // and there is no seam.
+          flexibleSpace: const PaperGrainFill(),
+          actions: [
+            IconButton(
+              tooltip: 'Edit',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => context.push(
+                Routes.itemEdit(item.id),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Delete',
+              icon: const Icon(Icons.delete_outline_rounded),
+              onPressed: () => _delete(context, ref),
+            ),
+          ],
+        ),
+        if (error != null)
+          SliverToBoxAdapter(
+            child: AppErrorBanner(error: error, onRetry: onRetry),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.all(AppConstants.spacing16),
+          sliver: SliverList.list(
+            children: [
+              PaperSurface(
+                padding: EdgeInsets.zero,
+                clipBehavior: Clip.antiAlias,
+                grain: false,
+                color: tokens.stock.sunk,
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: images.isEmpty
+                      ? Center(
+                          child: GarmentGlyph(
+                            category: item.category,
+                            size: 120,
+                          ),
+                        )
+                      : AppImage(
+                          imageUrl: images.first.url,
+                          fit: BoxFit.contain,
+                          backgroundColor: tokens.stock.sunk,
+                          galleryUrls: [for (final i in images) i.url],
+                          memCacheWidth: 1080,
+                          storagePath: images.first.storagePath,
+                          remintUrl: ref
+                              .read(itemRepositoryProvider)
+                              .remintImageUrl,
+                          semanticLabel: item.name,
+                        ),
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.name, style: text.headlineMedium),
+                        const SizedBox(height: AppConstants.spacing4),
+                        Text(
+                          summary,
+                          style: text.bodyMedium?.copyWith(
+                            color: tokens.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: item.isFavorite
+                        ? 'Remove favourite'
+                        : 'Add to favourites',
+                    onPressed: busy
+                        ? null
+                        : () => ref
+                              .read(wardrobeProvider.notifier)
+                              .toggleFavorite(item.id),
+                    icon: Icon(
+                      item.isFavorite
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: tokens.stock.accent,
+                      size: 28,
+                    ),
+                  ),
+                ],
+              ),
+              if (item.description?.isNotEmpty ?? false) ...[
+                const SizedBox(height: AppConstants.spacing12),
+                Text(item.description!, style: text.bodyLarge),
+              ],
+              const SizedBox(height: AppConstants.spacing20),
+              PaperSurface(
+                child: Row(
+                  children: [
+                    _Figure(value: paperFigure(item.wornCount), label: 'times worn'),
+                    _Figure(
+                      value: item.lastWornAt == null
+                          ? 'Never'
+                          : AppDateUtils.formatRelativeTime(item.lastWornAt!),
+                      label: 'last worn',
+                    ),
+                  ],
+                ),
+              ),
+              if (details.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.spacing16),
+                PaperSurface(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing16,
+                    vertical: AppConstants.spacing8,
+                  ),
+                  child: Column(
+                    children: [
+                      for (final (label, value) in details)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppConstants.spacing8,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 104,
+                                child: Text(
+                                  label,
+                                  style: text.bodyMedium?.copyWith(
+                                    color: tokens.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(value, style: text.bodyMedium),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppConstants.spacing24),
+            ],
+          ),
+        ),
+      ],
+    );
   }
+}
+
+class _Figure extends StatelessWidget {
+  const _Figure({required this.value, required this.label});
+
+  final String value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final String itemId = widget.itemId;
-    final WardrobeController wardrobeController =
-        Get.find<WardrobeController>();
-
-    return Scaffold(
-      body: AppPageBackground(
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Content
-              Obx(() {
-                final item = wardrobeController.items.firstWhereOrNull(
-                      (i) => i.id == itemId,
-                    ) ??
-                    // A10b-09: with a server-side filter active the fetched
-                    // item is held in `fetchedItem` instead of being merged
-                    // into the paged list; render it here so a deep link to
-                    // an item beyond the loaded page leaves the detail
-                    // shimmer instead of spinning forever.
-                    (wardrobeController.fetchedItem.value?.id == itemId
-                        ? wardrobeController.fetchedItem.value
-                        : null);
-
-                if (item == null &&
-                    wardrobeController.itemFetchError.value.isNotEmpty) {
-                  return _buildItemError(wardrobeController, tokens);
-                }
-
-                if (item == null) {
-                  return const ShimmerDetailPage();
-                }
-
-                return CustomScrollView(
-                  slivers: [
-                    // Image header
-                    _buildImageHeader(item, tokens),
-
-                    // Content
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppConstants.spacing16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Name and favorite
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    item.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          color: tokens.textPrimary,
-                                        ),
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: item.isFavorite
-                                      ? 'Remove from favorites'
-                                      : 'Add to favorites',
-                                  onPressed:
-                                      wardrobeController.isFavoriting(item.id)
-                                      ? null
-                                      : () => wardrobeController.toggleFavorite(
-                                          item.id,
-                                        ),
-                                  icon: wardrobeController.isFavoriting(item.id)
-                                      ? const SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Icon(
-                                          item.isFavorite
-                                              ? Icons.favorite
-                                              : Icons.favorite_border,
-                                          color: item.isFavorite
-                                              ? Colors.red
-                                              : null,
-                                          size: 28,
-                                        ),
-                                ),
-                              ],
-                            ),
-
-                            if (item.description != null) ...[
-                              const SizedBox(height: AppConstants.spacing8),
-                              Text(
-                                item.description!,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: tokens.textMuted),
-                              ),
-                            ],
-
-                            const SizedBox(height: AppConstants.spacing16),
-
-                            // Category and condition
-                            Wrap(
-                              spacing: AppConstants.spacing8,
-                              runSpacing: AppConstants.spacing8,
-                              children: [
-                                _buildChip(
-                                  context,
-                                  item.category.displayName,
-                                  tokens,
-                                ),
-                                _buildChip(
-                                  context,
-                                  item.condition.displayName,
-                                  tokens,
-                                ),
-                                if (item.brand != null)
-                                  _buildChip(context, item.brand!, tokens),
-                                if (item.size != null)
-                                  _buildChip(
-                                    context,
-                                    'Size: ${item.size!}',
-                                    tokens,
-                                  ),
-                              ],
-                            ),
-
-                            if (item.colors != null &&
-                                item.colors!.isNotEmpty) ...[
-                              const SizedBox(height: AppConstants.spacing16),
-                              Text(
-                                'Colors',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: tokens.textPrimary,
-                                    ),
-                              ),
-                              const SizedBox(height: AppConstants.spacing8),
-                              Wrap(
-                                spacing: AppConstants.spacing8,
-                                runSpacing: AppConstants.spacing8,
-                                children: item.colors!
-                                    .map(
-                                      (color) =>
-                                          _buildChip(context, color, tokens),
-                                    )
-                                    .toList(),
-                              ),
-                            ],
-
-                            if (item.occasionTags != null &&
-                                item.occasionTags!.isNotEmpty) ...[
-                              const SizedBox(height: AppConstants.spacing16),
-                              Text(
-                                'Use Cases',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: tokens.textPrimary,
-                                    ),
-                              ),
-                              const SizedBox(height: AppConstants.spacing8),
-                              Wrap(
-                                spacing: AppConstants.spacing8,
-                                runSpacing: AppConstants.spacing8,
-                                children: item.occasionTags!
-                                    .map(
-                                      (tag) => _buildChip(
-                                        context,
-                                        UseCases.displayLabel(tag),
-                                        tokens,
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ],
-
-                            const SizedBox(height: AppConstants.spacing24),
-
-                            // Details section
-                            _buildDetailsSection(context, item, tokens),
-
-                            const SizedBox(height: AppConstants.spacing24),
-
-                            // Stats section
-                            _buildStatsSection(
-                              context,
-                              item,
-                              tokens,
-                              wardrobeController,
-                            ),
-
-                            const SizedBox(height: AppConstants.spacing24),
-
-                            // Tags section
-                            if (item.tags != null && item.tags!.isNotEmpty) ...[
-                              Text(
-                                'Tags',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: tokens.textPrimary,
-                                    ),
-                              ),
-                              const SizedBox(height: AppConstants.spacing8),
-                              Wrap(
-                                spacing: AppConstants.spacing8,
-                                runSpacing: AppConstants.spacing8,
-                                children: item.tags!.map((tag) {
-                                  return Chip(
-                                    label: Text(tag),
-                                    backgroundColor: tokens.brandColor
-                                        .withValues(alpha: 0.1),
-                                    labelStyle: TextStyle(
-                                      color: tokens.brandColor,
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                              const SizedBox(height: AppConstants.spacing24),
-                            ],
-
-                            // Metadata
-                            _buildMetadataSection(context, item, tokens),
-
-                            const SizedBox(
-                              height: 100,
-                            ), // Space for bottom actions
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }),
-
-              // Back button
-              Positioned(
-                top: AppConstants.spacing8,
-                left: AppConstants.spacing8,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: tokens.cardColor.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Get.back(),
-                  ),
-                ),
-              ),
-
-              // Bottom action bar
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _buildBottomActionBar(context, tokens),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItemError(
-    WardrobeController wardrobeController,
-    AppUiTokens tokens,
-  ) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: tokens.textMuted),
-            const SizedBox(height: AppConstants.spacing16),
-            Text(
-              'Failed to load item',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: tokens.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              wardrobeController.itemFetchError.value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: tokens.textMuted,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-            ElevatedButton.icon(
-              onPressed: () {
-                wardrobeController.itemFetchError.value = '';
-                _loadItem();
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageHeader(ItemModel item, AppUiTokens tokens) {
-    final hasImages = item.itemImages != null && item.itemImages!.isNotEmpty;
-    final imageUrls = hasImages
-        ? item.itemImages!.map((img) => img.url).toList()
-        : <String>[];
-
-    return SliverAppBar(
-      expandedHeight: 350,
-      pinned: false,
-      backgroundColor: Colors.transparent,
-      automaticallyImplyLeading: false,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          color: tokens.isDarkMode
-              ? Colors.black.withValues(alpha: 0.3)
-              : Colors.grey.withValues(alpha: 0.1),
-          child: hasImages
-              ? AppImage(
-                  imageUrl: imageUrls.first,
-                  fit: BoxFit.contain,
-                  backgroundColor: tokens.isDarkMode
-                      ? Colors.black.withValues(alpha: 0.3)
-                      : Colors.grey.withValues(alpha: 0.1),
-                  enableZoom: true,
-                  galleryUrls: imageUrls,
-                  errorIcon: _getCategoryIcon(item.category),
-                  // Presigned URLs expire after 1h; on a failed load re-mint
-                  // a fresh URL from the durable storage key.
-                  storagePath: item.itemImages?.first.storagePath,
-                  remintUrl: _itemRepository.remintImageUrl,
-                )
-              : Center(
-                  child: Icon(
-                    _getCategoryIcon(item.category),
-                    size: 64,
-                    color: tokens.textMuted,
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailsSection(
-    BuildContext context,
-    ItemModel item,
-    AppUiTokens tokens,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Details',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: tokens.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        AppGlassCard(
-          child: Column(
-            children: [
-              if (item.material != null)
-                _buildDetailRow(context, 'Material', item.material!, tokens),
-              if (item.pattern != null)
-                _buildDetailRow(context, 'Pattern', item.pattern!, tokens),
-              if (item.location != null)
-                _buildDetailRow(context, 'Location', item.location!, tokens),
-              if (item.price != null)
-                _buildDetailRow(
-                  context,
-                  'Price',
-                  '\$${item.price!.toStringAsFixed(2)}',
-                  tokens,
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailRow(
-    BuildContext context,
-    String label,
-    String value,
-    AppUiTokens tokens,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacing16,
-        vertical: AppConstants.spacing12,
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsSection(
-    BuildContext context,
-    ItemModel item,
-    AppUiTokens tokens,
-    WardrobeController controller,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Usage Stats',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: tokens.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        AppGlassCard(
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Times Worn',
-                  '${item.wornCount}',
-                  Icons.checkroom,
-                  tokens,
-                ),
-              ),
-              Container(width: 1, height: 40, color: tokens.cardBorderColor),
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Last Worn',
-                  item.lastWornAt != null
-                      ? AppDateUtils.formatRelativeTime(item.lastWornAt!)
-                      : 'Never',
-                  Icons.calendar_today,
-                  tokens,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(
-    BuildContext context,
-    String label,
-    String value,
-    IconData icon,
-    AppUiTokens tokens,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
+    final text = Theme.of(context).textTheme;
+    return Expanded(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: tokens.brandColor, size: 20),
-          const SizedBox(height: AppConstants.spacing8),
           Text(
             value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
+            style: text.displaySmall?.copyWith(fontSize: 28),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           Text(
             label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            style: text.bodySmall?.copyWith(
+              color: PaperTokens.of(context).textSecondary,
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildMetadataSection(
-    BuildContext context,
-    ItemModel item,
-    AppUiTokens tokens,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Information',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: tokens.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        AppGlassCard(
-          child: Column(
-            children: [
-              if (item.purchaseDate != null)
-                _buildDetailRow(
-                  context,
-                  'Purchased',
-                  AppDateUtils.formatRelativeTime(item.purchaseDate!),
-                  tokens,
-                ),
-              if (item.createdAt != null)
-                _buildDetailRow(
-                  context,
-                  'Added',
-                  AppDateUtils.formatRelativeTime(item.createdAt!),
-                  tokens,
-                ),
-              if (item.updatedAt != null)
-                _buildDetailRow(
-                  context,
-                  'Updated',
-                  AppDateUtils.formatRelativeTime(item.updatedAt!),
-                  tokens,
-                ),
-            ],
-          ),
-        ),
-      ],
+class _WornBar extends ConsumerWidget {
+  const _WornBar({required this.item});
+
+  final ItemModel item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final busy = ref.watch(
+      wardrobeBusyProvider.select((s) => s.contains(item.id)),
     );
-  }
-
-  Widget _buildBottomActionBar(BuildContext context, AppUiTokens tokens) {
-    final WardrobeController controller = Get.find<WardrobeController>();
-
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  // Navigate to edit page
-                  Get.toNamed(
-                    Routes.wardrobeItemEdit.replaceFirst(':id', widget.itemId),
-                  );
-                },
-                icon: const Icon(Icons.edit),
-                label: const Text('Edit'),
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacing12),
-            Expanded(
-              child: Obx(
-                () => ElevatedButton.icon(
-                  onPressed: controller.isMarkingWorn(widget.itemId)
-                      ? null
-                      : () => controller.markAsWorn(widget.itemId),
-                  icon: controller.isMarkingWorn(widget.itemId)
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.checkroom),
-                  label: Text(
-                    controller.isMarkingWorn(widget.itemId)
-                        ? 'Marking...'
-                        : 'Mark Worn',
-                  ),
-                ),
-              ),
-            ),
-          ],
+    return PaperActionBar(
+      child: SizedBox(
+        height: 52,
+        child: ElevatedButton.icon(
+          onPressed: busy
+              ? null
+              : () => ref.read(wardrobeProvider.notifier).markAsWorn(item.id),
+          icon: busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.today_outlined),
+          label: const Text('Wore it today'),
         ),
       ),
     );
-  }
-
-  Widget _buildChip(BuildContext context, String label, AppUiTokens tokens) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacing12,
-        vertical: AppConstants.spacing6,
-      ),
-      decoration: BoxDecoration(
-        color: tokens.brandColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(color: tokens.brandColor.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: tokens.brandColor,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  IconData _getCategoryIcon(Category category) {
-    switch (category) {
-      case Category.tops:
-        return Icons.checkroom;
-      case Category.bottoms:
-        return Icons.work;
-      case Category.shoes:
-        return Icons.hiking;
-      case Category.accessories:
-        return Icons.shopping_bag;
-      case Category.outerwear:
-        return Icons.dry_cleaning;
-      case Category.swimwear:
-        return Icons.water_drop;
-      case Category.activewear:
-        return Icons.directions_run;
-      case Category.other:
-        return Icons.help;
-    }
   }
 }

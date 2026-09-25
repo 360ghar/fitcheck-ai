@@ -1,988 +1,936 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../outfits/controllers/outfit_list_controller.dart';
-import '../controllers/calendar_controller.dart';
-import '../models/calendar_event_model.dart';
+import '../../outfits/providers/outfit_providers.dart';
 import '../models/calendar_connection_model.dart';
-import '../../../core/utils/error_handler.dart';
+import '../models/calendar_event_model.dart';
+import '../providers/calendar_providers.dart';
 
-/// Calendar page - full implementation with event management
-class CalendarPage extends StatefulWidget {
+const _weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const _weekdayNames = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+/// "Wednesday, Sep 23".
+String _dayTitle(DateTime d) {
+  final date = AppDateUtils.formatMonthDayYear(d);
+  return '${_weekdayNames[d.weekday - 1]}, ${date.substring(0, date.lastIndexOf(','))}';
+}
+
+/// Month grid, the chosen day's events, and event editing.
+class CalendarPage extends ConsumerWidget {
   const CalendarPage({super.key});
 
   @override
-  State<CalendarPage> createState() => _CalendarPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final events = ref.watch(calendarEventsProvider);
+    final day = ref.watch(calendarSelectedDayProvider);
+    final notifier = ref.read(calendarEventsProvider.notifier);
+    // A month change keeps the old month's events until the new ones land;
+    // they must not show on the new month's days.
+    final current = events.isReloading ? null : events.value;
+    final byDay = eventsByDay(current ?? const []);
+
+    return PaperStockScope(
+      stock: PaperStockId.clay,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Calendar'),
+          actions: [
+            IconButton(
+              tooltip: 'Go to today',
+              icon: const Icon(Icons.today_outlined),
+              onPressed: () {
+                final now = DateTime.now();
+                ref.read(calendarMonthProvider.notifier).show(now);
+                ref.read(calendarSelectedDayProvider.notifier).select(now);
+              },
+            ),
+            IconButton(
+              tooltip: 'Connect a calendar',
+              icon: const Icon(Icons.link_rounded),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => const _ConnectSheet(),
+              ),
+            ),
+          ],
+        ),
+        // Hidden while the error state owns the screen, so its retry stays
+        // clear of the button.
+        floatingActionButton: current == null && events.hasError
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: () => _editEvent(context, day: day),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add event'),
+              ),
+        // Root-navigator page: restore the shell tabs below the content.
+        bottomNavigationBar: AppBottomNavigationBar.shellBar(
+          context,
+          Routes.calendar,
+        ),
+        body: AppPageBackground(
+          child: RefreshIndicator(
+            onRefresh: notifier.refresh,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppConstants.spacing16,
+                    AppConstants.spacing8,
+                    AppConstants.spacing16,
+                    AppConstants.spacing20,
+                  ),
+                  sliver: SliverToBoxAdapter(child: _MonthCard(byDay: byDay)),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppConstants.spacing20,
+                    0,
+                    AppConstants.spacing20,
+                    AppConstants.spacing12,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Text(
+                      _dayTitle(day),
+                      style: Theme.of(context).textTheme.headlineSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                ..._events(
+                  context,
+                  ref,
+                  events,
+                  current,
+                  byDay[day] ?? const [],
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 96)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _events(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<List<CalendarEventModel>> events,
+    List<CalendarEventModel>? current,
+    List<CalendarEventModel> dayEvents,
+  ) {
+    void retry() => ref.invalidate(calendarEventsProvider);
+    if (current == null) {
+      if (events.hasError && !events.isLoading) {
+        return [
+          SliverToBoxAdapter(
+            child: AppErrorState(error: events.error, onRetry: retry),
+          ),
+        ];
+      }
+      return const [
+        SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: AppConstants.spacing8),
+          sliver: SliverToBoxAdapter(
+            child: SkeletonListLoaderBox(itemCount: 3, hasLeading: false),
+          ),
+        ),
+      ];
+    }
+    return [
+      if (events.hasError)
+        SliverToBoxAdapter(
+          child: AppErrorBanner(
+            error: events.error,
+            onRetry: ref.read(calendarEventsProvider.notifier).refresh,
+          ),
+        ),
+      if (dayEvents.isEmpty)
+        const SliverToBoxAdapter(
+          child: AppEmptyState(
+            scene: PaperScenes.studio,
+            title: 'Nothing planned',
+            message: 'Add an event and plan what to wear.',
+          ),
+        )
+      else
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConstants.spacing16,
+          ),
+          sliver: SliverList.separated(
+            itemCount: dayEvents.length,
+            separatorBuilder: (_, _) =>
+                const SizedBox(height: AppConstants.spacing12),
+            itemBuilder: (context, i) => _EventRow(event: dayEvents[i]),
+          ),
+        ),
+    ];
+  }
 }
 
-class _CalendarPageState extends State<CalendarPage> {
-  late final CalendarController controller;
+Future<void> _editEvent(
+  BuildContext context, {
+  DateTime? day,
+  CalendarEventModel? event,
+}) => showDialog<void>(
+  context: context,
+  builder: (_) => _EventDialog(day: day, event: event),
+);
+
+class _MonthCard extends ConsumerWidget {
+  const _MonthCard({required this.byDay});
+
+  final Map<DateTime, List<CalendarEventModel>> byDay;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final month = ref.watch(calendarMonthProvider);
+    final selected = ref.watch(calendarSelectedDayProvider);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final leading = DateTime(month.year, month.month).weekday % 7;
+    final days = DateTime(month.year, month.month + 1, 0).day;
+    final weeks = ((leading + days) / 7).ceil();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    void go(int delta) {
+      final target = DateTime(month.year, month.month + delta);
+      ref.read(calendarMonthProvider.notifier).show(target);
+      final sameMonth =
+          target.year == today.year && target.month == today.month;
+      ref
+          .read(calendarSelectedDayProvider.notifier)
+          .select(sameMonth ? today : target);
+    }
+
+    return PaperSurface(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing8,
+        AppConstants.spacing8,
+        AppConstants.spacing8,
+        AppConstants.spacing12,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Previous month',
+                icon: const Icon(Icons.chevron_left_rounded),
+                onPressed: () => go(-1),
+              ),
+              Expanded(
+                child: Text(
+                  AppDateUtils.formatMonthYear(month),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.displaySmall?.copyWith(fontSize: 28),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Next month',
+                icon: const Icon(Icons.chevron_right_rounded),
+                onPressed: () => go(1),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppConstants.spacing8),
+          ExcludeSemantics(
+            child: Row(
+              children: [
+                for (final w in _weekdays)
+                  Expanded(
+                    child: Text(
+                      w,
+                      textAlign: TextAlign.center,
+                      style: text.bodySmall?.copyWith(color: tokens.textMuted),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppConstants.spacing4),
+          for (var w = 0; w < weeks; w++)
+            Row(
+              children: [
+                for (var d = 0; d < 7; d++)
+                  Expanded(
+                    child: switch (w * 7 + d - leading + 1) {
+                      final n when n < 1 || n > days => const SizedBox(
+                        height: _DayCell.height,
+                      ),
+                      final n => _DayCell(
+                        date: DateTime(month.year, month.month, n),
+                        selected:
+                            selected == DateTime(month.year, month.month, n),
+                        today: today == DateTime(month.year, month.month, n),
+                        events:
+                            byDay[DateTime(month.year, month.month, n)]
+                                ?.length ??
+                            0,
+                      ),
+                    },
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayCell extends ConsumerWidget {
+  const _DayCell({
+    required this.date,
+    required this.selected,
+    required this.today,
+    required this.events,
+  });
+
+  static const height = 50.0;
+  static const _disc = 38.0;
+
+  final DateTime date;
+  final bool selected;
+  final bool today;
+  final int events;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final label = [
+      _dayTitle(date),
+      if (today) 'today',
+      if (events == 1) '1 event' else if (events > 1) '$events events',
+    ].join(', ');
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () =>
+            ref.read(calendarSelectedDayProvider.notifier).select(date),
+        child: SizedBox(
+          height: height,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: _disc,
+                height: _disc,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? tokens.stock.accent : null,
+                  border: today
+                      ? Border.all(color: tokens.stock.accent, width: 1.5)
+                      : null,
+                ),
+                child: Text(
+                  '${date.day}',
+                  style: text.bodyLarge?.copyWith(
+                    height: 1,
+                    color: selected
+                        ? tokens.stock.onAccent
+                        : today
+                        ? tokens.stock.accent
+                        : tokens.textPrimary,
+                    fontWeight: selected || today
+                        ? FontWeight.w700
+                        : FontWeight.w400,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+              // A quiet bar under days with events: wider for busier days.
+              Container(
+                width: events == 0 ? 0 : (events == 1 ? 10 : 18),
+                height: 3,
+                decoration: BoxDecoration(
+                  color: tokens.stock.accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EventRow extends ConsumerWidget {
+  const _EventRow({required this.event});
+
+  final CalendarEventModel event;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final busy = ref.watch(calendarBusyProvider).contains(event.id);
+    final notifier = ref.read(calendarEventsProvider.notifier);
+    final hasOutfit = event.outfitId != null;
+    final time = event.isAllDay
+        ? 'All day'
+        : '${AppDateUtils.formatTimeOnly(event.startTime)} to '
+              '${AppDateUtils.formatTimeOnly(event.endTime)}';
+
+    return PaperSurface(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing12,
+        AppConstants.spacing4,
+        AppConstants.spacing12,
+      ),
+      onTap: () => _editEvent(context, event: event),
+      semanticLabel:
+          '${event.title}, $time${hasOutfit ? ', outfit linked' : ''}',
+      child: Row(
+        children: [
+          SizedBox(
+            width: 56,
+            child: ExcludeSemantics(
+              child: event.isAllDay
+                  ? Text('All day', style: text.titleSmall)
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppDateUtils.formatTimeOnly(event.startTime),
+                          style: text.titleSmall,
+                        ),
+                        Text(
+                          AppDateUtils.formatTimeOnly(event.endTime),
+                          style: text.bodySmall?.copyWith(
+                            color: tokens.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(width: AppConstants.spacing12),
+          Expanded(
+            child: ExcludeSemantics(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    style: text.titleMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (event.location?.isNotEmpty ?? false)
+                    Text(
+                      event.location!,
+                      style: text.bodySmall?.copyWith(
+                        color: tokens.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (hasOutfit)
+            Padding(
+              padding: const EdgeInsets.only(left: AppConstants.spacing8),
+              child: Icon(
+                Icons.checkroom_outlined,
+                size: 20,
+                color: tokens.stock.accent,
+                semanticLabel: 'Outfit linked',
+              ),
+            ),
+          if (busy)
+            const SizedBox(
+              width: 48,
+              height: 48,
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            PopupMenuButton<String>(
+              tooltip: 'Event options',
+              icon: const Icon(Icons.more_vert_rounded),
+              onSelected: (action) async {
+                switch (action) {
+                  case 'edit':
+                    await _editEvent(context, event: event);
+                  case 'link':
+                    final outfitId = await showModalBottomSheet<String>(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      builder: (_) => const FractionallySizedBox(
+                        heightFactor: 0.7,
+                        child: _LinkOutfitSheet(),
+                      ),
+                    );
+                    if (outfitId != null) {
+                      await notifier.linkOutfit(event.id, outfitId);
+                    }
+                  case 'unlink':
+                    await notifier.removeOutfit(event.id);
+                  case 'delete':
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Delete this event?'),
+                        content: Text('"${event.title}" will be removed.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: PaperTokens.of(context).error,
+                            ),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) await notifier.delete(event.id);
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(
+                  value: 'link',
+                  child: Text(hasOutfit ? 'Change outfit' : 'Link an outfit'),
+                ),
+                if (hasOutfit)
+                  const PopupMenuItem(
+                    value: 'unlink',
+                    child: Text('Remove outfit'),
+                  ),
+                const PopupMenuItem(value: 'delete', child: Text('Delete')),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Create or edit an event. Owns its text controllers, closes only after a
+/// successful save and ignores a second tap while saving.
+class _EventDialog extends ConsumerStatefulWidget {
+  const _EventDialog({this.day, this.event});
+
+  final DateTime? day;
+  final CalendarEventModel? event;
+
+  @override
+  ConsumerState<_EventDialog> createState() => _EventDialogState();
+}
+
+class _EventDialogState extends ConsumerState<_EventDialog> {
+  late final _title = TextEditingController(text: widget.event?.title);
+  late final _location = TextEditingController(text: widget.event?.location);
+  late final _description = TextEditingController(
+    text: widget.event?.description,
+  );
+  late DateTime _start;
+  late DateTime _end;
+  late bool _allDay = widget.event?.isAllDay ?? false;
+  bool _saving = false;
+  String? _titleError;
+  String? _timeError;
 
   @override
   void initState() {
     super.initState();
-    // Initialize controller after the widget is fully created. The controller
-    // fetches the focused month in its own onInit; fetching here as well only
-    // duplicated the request (the first response was discarded by the
-    // generation guard).
-    controller = Get.find<CalendarController>();
+    final event = widget.event;
+    if (event != null) {
+      // Event times are UTC instants; edit the local wall-clock time.
+      _start = event.startTime.toLocal();
+      _end = event.endTime.toLocal();
+    } else {
+      final d = widget.day ?? DateTime.now();
+      _start = DateTime(d.year, d.month, d.day, 9);
+      _end = DateTime(d.year, d.month, d.day, 10);
+    }
   }
 
   @override
+  void dispose() {
+    _title.dispose();
+    _location.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pick({required bool start}) async {
+    final initial = start ? _start : _end;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null || !mounted) return;
+    final picked = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    setState(() {
+      if (start) {
+        _start = picked;
+      } else {
+        _end = picked;
+      }
+      _timeError = null;
+    });
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final title = _title.text.trim();
+    setState(() {
+      _titleError = title.isEmpty ? 'Add a title' : null;
+      _timeError = !_allDay && !_end.isAfter(_start)
+          ? 'End after the start time'
+          : null;
+    });
+    if (_titleError != null || _timeError != null) return;
+
+    setState(() => _saving = true);
+    final notifier = ref.read(calendarEventsProvider.notifier);
+    final event = widget.event;
+    final saved = event == null
+        ? await notifier.create(
+            title: title,
+            startTime: _start,
+            endTime: _end,
+            location: _location.text.trim().isEmpty
+                ? null
+                : _location.text.trim(),
+            description: _description.text.trim().isEmpty
+                ? null
+                : _description.text.trim(),
+            isAllDay: _allDay,
+          )
+        : await notifier.edit(
+            event.id,
+            title: title,
+            startTime: _start,
+            endTime: _end,
+            // '' clears the field; null would keep the old value.
+            location: _location.text.trim(),
+            description: _description.text.trim(),
+            isAllDay: _allDay,
+          );
+    if (!mounted) return;
+    if (saved != null) {
+      Navigator.pop(context);
+    } else {
+      setState(() => _saving = false);
+    }
+  }
+
+  Widget _timeTile(String label, DateTime value, {required bool start}) =>
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(label),
+        trailing: Text(
+          '${AppDateUtils.formatMonthDayYear(value)}  '
+          '${AppDateUtils.formatTimeOnly(value)}',
+        ),
+        onTap: _saving ? null : () => _pick(start: start),
+      );
+
+  @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(Get.currentRoute);
-
-    return Scaffold(
-      body: AppPageBackground(
-        child: SafeArea(
-          child: RefreshIndicator(
-            onRefresh: () => controller.fetchEventsForMonth(controller.focusedDate.value),
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                _buildAppBar(),
-                SliverPadding(
-                  padding: const EdgeInsets.all(AppConstants.spacing16),
-                  sliver: _buildContent(),
+    final tokens = PaperTokens.of(context);
+    return PopScope(
+      canPop: !_saving,
+      child: AlertDialog(
+        title: Text(widget.event == null ? 'New event' : 'Edit event'),
+        scrollable: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _title,
+              autofocus: widget.event == null,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                labelText: 'Title',
+                errorText: _titleError,
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('All day'),
+              value: _allDay,
+              onChanged: _saving
+                  ? null
+                  : (v) => setState(() {
+                      _allDay = v;
+                      _timeError = null;
+                    }),
+            ),
+            if (!_allDay) ...[
+              _timeTile('Starts', _start, start: true),
+              _timeTile('Ends', _end, start: false),
+              if (_timeError != null)
+                Text(
+                  _timeError!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.error),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEventDialog(),
-        child: const Icon(Icons.add),
-      ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
-    );
-  }
-
-  Widget _buildAppBar() {
-    final tokens = AppUiTokens.of(context);
-
-    return SliverAppBar(
-      floating: true,
-      elevation: 0,
-      title: Text(
-        'Calendar',
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
-      ),
-      actions: [
-        Obx(() => !controller.hasConnectedCalendar
-            ? IconButton(
-                icon: const Icon(Icons.link),
-                onPressed: () => _showConnectCalendarSheet(),
-                tooltip: 'Connect Calendar',
-              )
-            : const SizedBox.shrink()),
-        IconButton(
-          icon: const Icon(Icons.today),
-          onPressed: () {
-            // Jump both the month grid and the selected day to today, so the
-            // button visibly works from any displayed month.
-            final now = DateTime.now();
-            controller.selectDate(now);
-            controller.changeFocusedDate(now);
-          },
-          tooltip: 'Go to Today',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContent() {
-    return SliverList(
-      delegate: SliverChildListDelegate([
-        _buildCalendar(),
-        const SizedBox(height: AppConstants.spacing24),
-        _buildEventsList(),
-      ]),
-    );
-  }
-
-  Widget _buildCalendar() {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(0),
-      child: _buildMonthView(),
-    );
-  }
-
-  Widget _buildMonthView() {
-    return Obx(() {
-      final focusedMonth = controller.focusedDate.value;
-      final selectedDate = controller.selectedDate.value;
-
-      return Column(
-        children: [
-          // Month navigation header
-          _buildMonthHeader(focusedMonth),
-
-          // Weekday headers
-          _buildWeekdayHeaders(),
-
-          // Calendar grid
-          _buildCalendarGrid(focusedMonth, selectedDate),
-        ],
-      );
-    });
-  }
-
-  Widget _buildMonthHeader(DateTime focusedMonth) {
-    return Padding(
-      padding: const EdgeInsets.all(AppConstants.spacing12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: () {
-              final newDate = DateTime(focusedMonth.year, focusedMonth.month - 1);
-              controller.changeFocusedDate(newDate);
-            },
-          ),
-          Text(
-            AppDateUtils.formatMonthYear(focusedMonth),
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: () {
-              final newDate = DateTime(focusedMonth.year, focusedMonth.month + 1);
-              controller.changeFocusedDate(newDate);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWeekdayHeaders() {
-    final weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing8),
-      child: Row(
-        children: weekdays.map((day) {
-          return Expanded(
-            child: Center(
-              child: Text(
-                day,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildCalendarGrid(DateTime focusedMonth, DateTime selectedDate) {
-    final firstDayOfMonth = DateTime(focusedMonth.year, focusedMonth.month, 1);
-    final lastDayOfMonth = DateTime(focusedMonth.year, focusedMonth.month + 1, 0);
-    final firstWeekday = firstDayOfMonth.weekday % 7; // 0 = Sunday
-
-    final daysInMonth = lastDayOfMonth.day;
-    final daysBeforeMonth = firstWeekday;
-    final totalCells = ((daysBeforeMonth + daysInMonth) / 7).ceil() * 7;
-
-    return Obx(() {
-      return Padding(
-        padding: const EdgeInsets.all(AppConstants.spacing8),
-        child: Column(
-          children: List.generate((totalCells / 7).ceil(), (weekIndex) {
-            return Row(
-              children: List.generate(7, (dayIndex) {
-                final cellIndex = weekIndex * 7 + dayIndex;
-                final dayNumber = cellIndex - daysBeforeMonth + 1;
-
-                if (dayNumber < 1 || dayNumber > daysInMonth) {
-                  return const Expanded(child: SizedBox(height: 40));
-                }
-
-                final date = DateTime(focusedMonth.year, focusedMonth.month, dayNumber);
-                final dateKey = DateTime(date.year, date.month, date.day);
-                final hasEvents = controller.eventsByDate.containsKey(dateKey);
-                final isSelected = AppDateUtils.isSameDay(date, selectedDate);
-                final isToday = AppDateUtils.isSameDay(date, DateTime.now());
-
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => controller.selectDate(date),
-                    child: Container(
-                      height: 40,
-                      margin: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : isToday
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppConstants.radius8),
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Text(
-                            dayNumber.toString(),
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : isToday
-                                      ? Theme.of(context).colorScheme.onPrimaryContainer
-                                      : Theme.of(context).colorScheme.onSurface,
-                              fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.normal,
-                            ),
-                          ),
-                          if (hasEvents)
-                            Positioned(
-                              bottom: 2,
-                              child: Container(
-                                width: 4,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? Theme.of(context).colorScheme.onPrimary
-                                      : Theme.of(context).colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            );
-          }),
-        ),
-      );
-    });
-  }
-
-  Widget _buildEventsList() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Obx so the header tracks day selection — it reads
-        // controller.selectedDate.value, which only Obx can observe.
-        Obx(
-          () => Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Events for ${AppDateUtils.formatDate(controller.selectedDate.value)}',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              TextButton.icon(
-                onPressed: () => _showAddEventDialog(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add'),
-              ),
             ],
-          ),
+            const SizedBox(height: AppConstants.spacing12),
+            TextField(
+              controller: _location,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Place (optional)'),
+            ),
+            const SizedBox(height: AppConstants.spacing12),
+            TextField(
+              controller: _description,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Notes (optional)'),
+            ),
+          ],
         ),
-        const SizedBox(height: AppConstants.spacing12),
-        Obx(() {
-          if (controller.isLoadingEvents.value) {
-            return Column(
-              children: const [
-                ShimmerListTile(hasLeading: true, hasSubtitle: true),
-                SizedBox(height: AppConstants.spacing8),
-                ShimmerListTile(hasLeading: true, hasSubtitle: true),
-                SizedBox(height: AppConstants.spacing8),
-                ShimmerListTile(hasLeading: true, hasSubtitle: true),
-              ],
-            );
-          }
-
-          if (controller.hasError) {
-            return _buildErrorState();
-          }
-
-          if (controller.selectedDateEvents.isEmpty) {
-            return _buildEmptyState();
-          }
-
-          return Column(
-            children: controller.selectedDateEvents.map((event) => _buildEventCard(event)).toList(),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildEventCard(CalendarEventModel event) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppConstants.spacing12),
-      child: AppGlassCard(
-        padding: const EdgeInsets.all(0),
-        child: ListTile(
-          contentPadding: const EdgeInsets.all(AppConstants.spacing12),
-          leading: Container(
-            width: 4,
-            decoration: BoxDecoration(
-              color: event.outfitId != null
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.outlineVariant,
-              borderRadius: BorderRadius.circular(AppConstants.radius8),
-            ),
-          ),
-          title: Text(event.title),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(_formatTime(event.startTime, event.endTime)),
-              if (event.location != null) Text(event.location!),
-            ],
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (event.outfitId != null)
-                Icon(
-                  Icons.checkroom,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 20,
-                ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  switch (value) {
-                    case 'edit':
-                      _showEditEventDialog(event);
-                      break;
-                    case 'link_outfit':
-                      _showLinkOutfitSheet(event);
-                      break;
-                    case 'unlink_outfit':
-                      controller.removeOutfit(event.id);
-                      break;
-                    case 'delete':
-                      _showDeleteConfirmDialog(event);
-                      break;
-                  }
-                },
-                itemBuilder: (context) {
-                  final items = <PopupMenuEntry<String>>[
-                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    const PopupMenuItem(value: 'link_outfit', child: Text('Link Outfit')),
-                  ];
-                  if (event.outfitId != null) {
-                    items.add(const PopupMenuItem(value: 'unlink_outfit', child: Text('Unlink Outfit')));
-                  }
-                  items.add(const PopupMenuItem(value: 'delete', child: Text('Delete')));
-                  return items;
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorState() {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing32),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: Theme.of(context).colorScheme.error,
-          ),
-          const SizedBox(height: AppConstants.spacing16),
-          Text(
-            'Failed to load events',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            controller.error.value.replaceAll('Exception: ', ''),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppConstants.spacing16),
-          ElevatedButton.icon(
-            onPressed: () {
-              controller.clearError();
-              controller.fetchEventsForMonth(controller.selectedDate.value);
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing32),
-      decoration: BoxDecoration(
-        color: tokens.cardColor.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(color: tokens.cardBorderColor),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.event,
-            size: 48,
-            color: tokens.textMuted,
-          ),
-          const SizedBox(height: AppConstants.spacing16),
-          Text(
-            'No events for this day',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            'Tap + to add a new event',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddEventDialog() {
-    final titleController = TextEditingController();
-    final locationController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    void disposeControllers() {
-      titleController.dispose();
-      locationController.dispose();
-      descriptionController.dispose();
-    }
-
-    DateTime startTime = DateTime(
-      controller.selectedDate.value.year,
-      controller.selectedDate.value.month,
-      controller.selectedDate.value.day,
-      9,
-    );
-    DateTime endTime = DateTime(
-      controller.selectedDate.value.year,
-      controller.selectedDate.value.month,
-      controller.selectedDate.value.day,
-      10,
-    );
-    bool isAllDay = false;
-
-    Get.dialog(
-      PopScope(
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) {
-            disposeControllers();
-          }
-        },
-        child: StatefulBuilder(
-          builder: (context, setDialogState) {
-            // Lift the dialog above the keyboard: AlertDialog does not pad
-            // viewInsets itself, so the Create/Save actions can be covered on
-            // small screens. Content is already scrollable.
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: AlertDialog(
-            title: const Text('Add Event'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Title',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing12),
-                  ListTile(
-                    title: const Text('All Day'),
-                    trailing: Switch(
-                      value: isAllDay,
-                      onChanged: (value) => setDialogState(() => isAllDay = value),
-                    ),
-                  ),
-                  if (!isAllDay) ...[
-                    ListTile(
-                      title: const Text('Start Time'),
-                      trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: startTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          if (!context.mounted) return;
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.fromDateTime(startTime),
-                          );
-                          if (time != null) {
-                            setDialogState(() {
-                              startTime = DateTime(
-                                  picked.year, picked.month, picked.day, time.hour, time.minute);
-                            });
-                          }
-                        }
-                      },
-                    ),
-                    ListTile(
-                      title: const Text('End Time'),
-                      trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: endTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          if (!context.mounted) return;
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.fromDateTime(endTime),
-                          );
-                          if (time != null) {
-                            setDialogState(() {
-                              endTime = DateTime(
-                                  picked.year, picked.month, picked.day, time.hour, time.minute);
-                            });
-                          }
-                        }
-                      },
-                    ),
-                  ],
-                  TextField(
-                    controller: locationController,
-                    decoration: const InputDecoration(
-                      labelText: 'Location (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing12),
-                  TextField(
-                    controller: descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              Obx(() => TextButton(
-                onPressed: controller.isCreatingEvent.value ? null : () => Get.back(),
-                child: const Text('Cancel'),
-              )),
-              Obx(() => ElevatedButton(
-                onPressed: controller.isCreatingEvent.value ? null : () {
-                  if (titleController.text.isEmpty) {
-                    ErrorHandler.showValidation('Please enter a title', title: 'Error');
-                    return;
-                  }
-                  if (!isAllDay && !endTime.isAfter(startTime)) {
-                    ErrorHandler.showValidation('End time must be after start time', title: 'Error');
-                    return;
-                  }
-                  controller.createEvent(
-                    title: titleController.text,
-                    startTime: startTime,
-                    endTime: endTime,
-                    location: locationController.text.isEmpty ? null : locationController.text,
-                    description: descriptionController.text.isEmpty ? null : descriptionController.text,
-                    isAllDay: isAllDay,
-                  );
-                },
-                child: controller.isCreatingEvent.value
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Create'),
-              )),
-            ],
-              ),
-          );
-        },
-      )),
-    );
-  }
-
-  void _showEditEventDialog(CalendarEventModel event) {
-    final titleController = TextEditingController(text: event.title);
-    final locationController = TextEditingController(text: event.location ?? '');
-    final descriptionController = TextEditingController(text: event.description ?? '');
-
-    void disposeControllers() {
-      titleController.dispose();
-      locationController.dispose();
-      descriptionController.dispose();
-    }
-
-    // A10b-05: seed from the LOCAL wall-clock time. Event times travel as
-    // UTC instants (A10b-01), so the raw value's hour is UTC; TimeOfDay must
-    // reflect the hour the calendar grid shows, and the date must be editable
-    // (the old dialog had no date picker at all).
-    DateTime startTime = event.startTime.toLocal();
-    DateTime endTime = event.endTime.toLocal();
-    bool isAllDay = event.isAllDay;
-
-    Get.dialog(
-      PopScope(
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) {
-            disposeControllers();
-          }
-        },
-        child: StatefulBuilder(
-          builder: (context, setDialogState) {
-            // Lift the dialog above the keyboard (same fix as the Add dialog).
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: AlertDialog(
-            title: const Text('Edit Event'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Title',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing12),
-                  ListTile(
-                    title: const Text('All Day'),
-                    trailing: Switch(
-                      value: isAllDay,
-                      onChanged: (value) => setDialogState(() => isAllDay = value),
-                    ),
-                  ),
-                  if (!isAllDay) ...[
-                    ListTile(
-                      title: const Text('Start Time'),
-                      trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
-                      onTap: () async {
-                        // A10b-05: date + time, mirroring the Add dialog —
-                        // the old edit dialog only offered a time picker, so
-                        // an event's date could never be changed.
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: startTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          if (!context.mounted) return;
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.fromDateTime(startTime),
-                          );
-                          if (time != null) {
-                            setDialogState(() {
-                              startTime = DateTime(
-                                  picked.year, picked.month, picked.day, time.hour, time.minute);
-                            });
-                          }
-                        }
-                      },
-                    ),
-                    ListTile(
-                      title: const Text('End Time'),
-                      trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: endTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          if (!context.mounted) return;
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.fromDateTime(endTime),
-                          );
-                          if (time != null) {
-                            setDialogState(() {
-                              endTime = DateTime(
-                                  picked.year, picked.month, picked.day, time.hour, time.minute);
-                            });
-                          }
-                        }
-                      },
-                    ),
-                  ],
-                  TextField(
-                    controller: locationController,
-                    decoration: const InputDecoration(
-                      labelText: 'Location (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing12),
-                  TextField(
-                    controller: descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              Obx(() => TextButton(
-                onPressed: controller.isUpdatingEvent.value ? null : () => Get.back(),
-                child: const Text('Cancel'),
-              )),
-              Obx(() => ElevatedButton(
-                onPressed: controller.isUpdatingEvent.value ? null : () {
-                  if (titleController.text.isEmpty) {
-                    ErrorHandler.showValidation('Please enter a title', title: 'Error');
-                    return;
-                  }
-                  if (!isAllDay && !endTime.isAfter(startTime)) {
-                    ErrorHandler.showValidation('End time must be after start time', title: 'Error');
-                    return;
-                  }
-                  controller.updateEvent(
-                    event.id,
-                    title: titleController.text,
-                    startTime: startTime,
-                    endTime: endTime,
-                    // Pass '' (not null) when cleared: null means "not
-                    // provided" in the update payload, so a cleared
-                    // location/description could never overwrite the old
-                    // value. The backend stores '' for present keys.
-                    location: locationController.text,
-                    description: descriptionController.text,
-                    isAllDay: isAllDay,
-                  );
-                },
-                child: controller.isUpdatingEvent.value
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
-              )),
-            ],
-              ),
-          );
-        },
-      )),
-    );
-  }
-
-  void _showDeleteConfirmDialog(CalendarEventModel event) {
-    Get.dialog(
-      Obx(() => AlertDialog(
-        title: const Text('Delete Event?'),
-        content: Text('Are you sure you want to delete "${event.title}"?'),
         actions: [
           TextButton(
-            onPressed: controller.isDeletingEvent(event.id) ? null : () => Get.back(),
+            onPressed: _saving ? null : () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: controller.isDeletingEvent(event.id) ? null : () => controller.deleteEvent(event.id),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
-            ),
-            child: controller.isDeletingEvent(event.id)
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Delete'),
+          TextButton(
+            onPressed: _saving ? null : _save,
+            child: Text(_saving ? 'Saving' : 'Save'),
           ),
         ],
-      )),
-      barrierDismissible: false,
-    );
-  }
-
-  void _showConnectCalendarSheet() {
-    final tokens = AppUiTokens.of(context);
-
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-          border: Border.all(color: tokens.cardBorderColor),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Connect Calendar',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: AppConstants.spacing24),
-              _buildCalendarProviderTile(
-                icon: Icons.calendar_today,
-                name: 'Google Calendar',
-                provider: CalendarProvider.google,
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              _buildCalendarProviderTile(
-                icon: Icons.apple,
-                name: 'Apple Calendar',
-                provider: CalendarProvider.apple,
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              _buildCalendarProviderTile(
-                icon: Icons.calendar_view_month,
-                name: 'Outlook Calendar',
-                provider: CalendarProvider.outlook,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
+}
 
-  Widget _buildCalendarProviderTile({
-    required IconData icon,
-    required String name,
-    required CalendarProvider provider,
-  }) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(name),
-      subtitle: const Text('Coming soon'),
-      trailing: const Icon(Icons.schedule),
-      onTap: () {
-        Get.back();
-        controller.connectCalendar(provider);
-      },
-    );
-  }
+/// Picks one outfit; pops with its id.
+class _LinkOutfitSheet extends ConsumerWidget {
+  const _LinkOutfitSheet();
 
-  Future<void> _showLinkOutfitSheet(CalendarEventModel event) async {
-    OutfitListController? outfitController;
-    if (Get.isRegistered<OutfitListController>()) {
-      outfitController = Get.find<OutfitListController>();
-    }
-
-    if (outfitController == null) {
-      ErrorHandler.showInfo('Open the Outfits tab once, then try linking again.', title: 'Outfits unavailable');
-      return;
-    }
-
-    if (outfitController.outfits.isEmpty) {
-      await outfitController.fetchOutfits(refresh: true);
-    }
-
-    if (!mounted) return;
-
-    if (outfitController.outfits.isEmpty) {
-      ErrorHandler.showInfo('Create an outfit first, then link it to this event.', title: 'No outfits');
-      return;
-    }
-
-    final tokens = AppUiTokens.of(context);
-    final maxHeight = MediaQuery.of(context).size.height * 0.6;
-    await Get.bottomSheet(
-      Container(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final outfits = ref.watch(outfitsProvider);
+    final tokens = PaperTokens.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.spacing20,
+            AppConstants.spacing20,
+            AppConstants.spacing20,
+            AppConstants.spacing8,
+          ),
+          child: Text(
+            'Link an outfit',
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              child: Text(
-                'Link outfit to event',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
+        Expanded(
+          child: switch (outfits) {
+            AsyncValue(:final value?) when value.items.isEmpty => AppEmptyState(
+              scene: PaperScenes.outfits,
+              title: 'No outfits yet',
+              message: 'Build an outfit, then link it to this event.',
+              actionLabel: 'Build an outfit',
+              onAction: () {
+                Navigator.pop(context);
+                context.push(Routes.outfitBuilder);
+              },
             ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: outfitController.outfits.length,
-                itemBuilder: (context, index) {
-                  final outfit = outfitController!.outfits[index];
-                  return ListTile(
-                    leading: const Icon(Icons.checkroom),
-                    title: Text(outfit.name),
-                    subtitle: outfit.style != null
-                        ? Text(outfit.style!.name)
-                        : null,
-                    onTap: () async {
-                      Get.back();
-                      await controller.linkOutfit(event.id, outfit.id);
-                    },
-                  );
-                },
+            AsyncValue(:final value?) => ListView.builder(
+              padding: const EdgeInsets.only(bottom: AppConstants.spacing16),
+              itemCount: value.items.length,
+              itemBuilder: (context, i) {
+                final outfit = value.items[i];
+                return ListTile(
+                  minTileHeight: 56,
+                  leading: Icon(
+                    Icons.checkroom_outlined,
+                    color: tokens.textSecondary,
+                  ),
+                  title: Text(
+                    outfit.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: outfit.style == null
+                      ? null
+                      : Text(outfit.style!.displayName),
+                  onTap: () => Navigator.pop(context, outfit.id),
+                );
+              },
+            ),
+            AsyncValue(:final error?) => AppErrorState(
+              error: error,
+              onRetry: ref.read(outfitsProvider.notifier).refresh,
+            ),
+            _ => const SkeletonListLoaderBox(itemCount: 4, hasLeading: false),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// Connected calendars and the ones that can be connected later.
+class _ConnectSheet extends ConsumerWidget {
+  const _ConnectSheet();
+
+  static const _options = [
+    (CalendarProvider.google, 'Google Calendar', Icons.event_outlined),
+    (CalendarProvider.apple, 'Apple Calendar', Icons.apple),
+    (CalendarProvider.outlook, 'Outlook', Icons.mail_outline_rounded),
+  ];
+
+  static String _name(CalendarProvider p) => switch (p) {
+    CalendarProvider.google => 'Google Calendar',
+    CalendarProvider.apple => 'Apple Calendar',
+    CalendarProvider.outlook => 'Outlook',
+    CalendarProvider.local => 'This app',
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final connections = ref.watch(calendarConnectionsProvider);
+    final busy = ref.watch(calendarBusyProvider);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final connected = [
+      for (final c in connections.value ?? const <CalendarConnectionModel>[])
+        if (c.isConnected) c,
+    ];
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppConstants.spacing20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Calendars', style: text.headlineSmall),
+            const SizedBox(height: AppConstants.spacing4),
+            Text(
+              'Events you add here stay in FitCheck.',
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+            ),
+            const SizedBox(height: AppConstants.spacing16),
+            if (connections.hasError && !connections.hasValue)
+              AppErrorBanner(
+                error: connections.error,
+                onRetry: () => ref.invalidate(calendarConnectionsProvider),
+              )
+            else if (connections.isLoading && !connections.hasValue)
+              const SkeletonListLoaderBox(itemCount: 1, hasLeading: false),
+            if (connected.isNotEmpty) ...[
+              PaperSurface(
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppConstants.spacing4,
+                ),
+                child: Column(
+                  children: [
+                    for (final c in connected)
+                      ListTile(
+                        title: Text(c.displayName ?? _name(c.provider)),
+                        subtitle: c.email.isEmpty ? null : Text(c.email),
+                        trailing: busy.contains(c.id)
+                            ? const SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : TextButton(
+                                onPressed: () => ref
+                                    .read(calendarConnectionsProvider.notifier)
+                                    .disconnect(c.id),
+                                child: const Text('Disconnect'),
+                              ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing16),
+            ],
+            PaperSurface(
+              padding: const EdgeInsets.symmetric(
+                vertical: AppConstants.spacing4,
+              ),
+              child: Column(
+                children: [
+                  for (final (provider, name, icon) in _options)
+                    ListTile(
+                      leading: Icon(icon, color: tokens.textSecondary),
+                      title: Text(name),
+                      subtitle: const Text('Not available yet'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        ErrorHandler.showInfo(
+                          'Syncing with ${_name(provider)} is not available '
+                          'yet. You can still add events here.',
+                          title: 'Not available yet',
+                        );
+                      },
+                    ),
+                ],
               ),
             ),
           ],
         ),
       ),
-      isScrollControlled: true,
     );
-  }
-
-  String _formatTime(DateTime start, DateTime end) {
-    return '${AppDateUtils.formatTimeOnly(start)} - ${AppDateUtils.formatTimeOnly(end)}';
   }
 }

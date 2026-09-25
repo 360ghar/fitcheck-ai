@@ -5,6 +5,23 @@ All notable changes to the FitCheck AI Flutter app will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0+13] - 2026-09-25
+
+### Added
+
+- A paper-style mobile interface with new app icons, launch screens, and a short introduction.
+- Account setup for new users to choose their styles and occasions.
+
+### Changed
+
+- Denser wardrobe grids show cropped garment images with more space for each item.
+- Screens keep existing content visible during refresh and provide clearer loading and retry states.
+
+### Fixed
+
+- Account switches and late network responses no longer show data from an earlier session.
+- Outfit planning, photoshoot retries, and subscription and sign-in flows have stronger recovery paths.
+
 ## [1.0.5+10] - 2026-08-08
 
 First store release with the Shorebird engine: this and every future release

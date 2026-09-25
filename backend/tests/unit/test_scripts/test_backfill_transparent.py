@@ -17,6 +17,7 @@ none of this touches Supabase or the network.
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
 import sys
@@ -166,8 +167,9 @@ class TestVersionStamp:
 # the write decision -- the most important assertion in this file
 # --------------------------------------------------------------------------- #
 class TestWriteDecision:
-    def test_only_a_successful_matte_uploads(self):
+    def test_only_a_successful_matte_or_crop_uploads(self):
         assert bf.should_upload(bf.ACTION_MATTED) is True
+        assert bf.should_upload(bf.ACTION_CROPPED) is True
 
     @pytest.mark.parametrize(
         "action",
@@ -182,6 +184,7 @@ class TestWriteDecision:
         "status,expected",
         [
             ("matted", bf.ACTION_MATTED),
+            ("cropped", bf.ACTION_CROPPED),
             ("skipped_no_background", bf.ACTION_SKIPPED),
             ("rejected_ate_subject", bf.ACTION_REJECTED),
             ("rejected_center_transparent", bf.ACTION_REJECTED),
@@ -265,7 +268,7 @@ class TestUploadArgs:
 
 
 class _FakeStorage:
-    """Async stand-in for S3StorageBackend (process_row uses asyncio.run)."""
+    """Async stand-in for S3StorageBackend."""
 
     def __init__(self, original=b"source", download_error=None, upload_error=None):
         self.original = original
@@ -332,7 +335,21 @@ def _matte_result(status, width=100, height=80):
     )
 
 
+def _process(db, row, table="item_images"):
+    return asyncio.run(bf.process_row(db, bf.TABLE_SPECS[table], row, _cfg()))
+
+
 class TestProcessRowFailures:
+    @pytest.fixture(autouse=True)
+    def _thumbs_ok(self, monkeypatch):
+        self.thumbs = []
+
+        async def refresh(storage, key, data, *, cache_control):
+            self.thumbs.append(key)
+            return True
+
+        monkeypatch.setattr(bf, "refresh_thumbnail", refresh)
+
     def _row(self):
         return {"id": "row-1", "storage_path": "user-1/item.jpg", "width": None, "height": None}
 
@@ -341,7 +358,7 @@ class TestProcessRowFailures:
         db = _FakeDb()
         monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
 
-        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+        record = _process(db, self._row())
 
         assert record["action"] == bf.ACTION_ERROR
         assert record["decoded"] is False
@@ -352,11 +369,11 @@ class TestProcessRowFailures:
         storage = _FakeStorage()
         db = _FakeDb()
         monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
-        monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_, **__: _matte_result(
             bf.STATUS_REJECTED_ATE_SUBJECT, width=100, height=80
         ))
 
-        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+        record = _process(db, self._row())
 
         assert record["action"] == bf.ACTION_REJECTED
         assert record["decoded"] is True
@@ -367,9 +384,9 @@ class TestProcessRowFailures:
         storage = _FakeStorage(upload_error=RuntimeError("storage down"))
         db = _FakeDb()
         monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
-        monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_MATTED))
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_, **__: _matte_result(bf.STATUS_MATTED))
 
-        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+        record = _process(db, self._row())
 
         assert record["action"] == bf.ACTION_ERROR
         assert record["decoded"] is True
@@ -379,9 +396,9 @@ class TestProcessRowFailures:
         storage = _FakeStorage()
         db = _FakeDb()
         monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
-        monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_ERROR))
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_, **__: _matte_result(bf.STATUS_ERROR))
 
-        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+        record = _process(db, self._row())
 
         assert record["action"] == bf.ACTION_ERROR
         assert record["decoded"] is False
@@ -391,13 +408,123 @@ class TestProcessRowFailures:
         db = _FakeDb()
         db.update_error = RuntimeError("database down")
         monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
-        monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_MATTED))
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_, **__: _matte_result(bf.STATUS_MATTED))
 
-        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+        record = _process(db, self._row())
 
         assert record["action"] == bf.ACTION_ERROR
         assert record["decoded"] is True
         assert len(storage.uploads) == 1
+
+    def test_crop_writes_thumb_then_main_object(self, monkeypatch):
+        storage = _FakeStorage()
+        db = _FakeDb()
+        order = []
+
+        async def refresh(storage_, key, data, *, cache_control):
+            order.append(("thumb", data))
+            return True
+
+        original_upload = storage.upload
+
+        async def upload(**kwargs):
+            order.append(("main", kwargs["data"]))
+            await original_upload(**kwargs)
+
+        storage.upload = upload
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
+        monkeypatch.setattr(bf, "refresh_thumbnail", refresh)
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_, **__: _matte_result(
+            bf.STATUS_CROPPED, width=60, height=70
+        ))
+
+        record = _process(db, self._row())
+
+        assert record["action"] == bf.ACTION_CROPPED
+        assert order == [("thumb", b"matted"), ("main", b"matted")]
+        assert db.updated == [{"width": 60, "height": 70}]
+
+    def test_thumb_failure_is_retryable_and_leaves_main_untouched(self, monkeypatch):
+        storage = _FakeStorage()
+        db = _FakeDb()
+
+        async def refresh(storage_, key, data, *, cache_control):
+            return False
+
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
+        monkeypatch.setattr(bf, "refresh_thumbnail", refresh)
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_, **__: _matte_result(bf.STATUS_MATTED))
+
+        record = _process(db, self._row())
+
+        assert record["action"] == bf.ACTION_ERROR
+        assert record["status"] == "thumb_failed"
+        assert not storage.uploads
+        assert not db.updated
+
+    @pytest.mark.parametrize("table,crop", [("item_images", True), ("outfit_images", False)])
+    def test_only_item_images_are_cropped(self, monkeypatch, table, crop):
+        storage = _FakeStorage()
+        seen = {}
+
+        def matte(*_, **kwargs):
+            seen.update(kwargs)
+            return _matte_result(bf.STATUS_SKIPPED_NO_BACKGROUND)
+
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
+        monkeypatch.setattr(bf, "remove_white_background", matte)
+
+        _process(_FakeDb(), self._row(), table=table)
+
+        assert seen == {"crop": crop}
+
+
+class TestRunPool:
+    def test_bounds_concurrency_and_reports_every_row(self):
+        in_flight = peak = 0
+        seen = []
+
+        async def work(row):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await asyncio.sleep(0)
+            in_flight -= 1
+            return row
+
+        asyncio.run(bf.run_pool(list(range(10)), 3, work, seen.append))
+
+        assert sorted(seen) == list(range(10))
+        assert peak == 3
+
+
+class TestRefreshThumbnail:
+    def test_main_and_thumbnail_use_configured_cache_ttl(self, monkeypatch):
+        import io
+
+        from PIL import Image
+
+        encoded = io.BytesIO()
+        Image.new("RGBA", (32, 32), (255, 0, 0, 255)).save(encoded, format="PNG")
+        storage = _FakeStorage()
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
+        monkeypatch.setattr(
+            bf, "remove_white_background",
+            lambda *_, **__: _matte_result(bf.STATUS_CROPPED)._replace(
+                image_bytes=encoded.getvalue()
+            ),
+        )
+        record = _process(
+            _FakeDb(), {"id": "row-1", "storage_path": "u1/items/abc.png"}
+        )
+        assert record["action"] == bf.ACTION_CROPPED
+        assert len(storage.uploads) == 2
+        assert [upload["cache_control"] for upload in storage.uploads] == ["60", "60"]
+
+    def test_non_canonical_key_needs_no_thumb(self):
+        assert asyncio.run(bf.refresh_thumbnail(
+            _FakeStorage(), "tmp/preview.png", b"x", cache_control=60
+        )) is True
 
 
 # --------------------------------------------------------------------------- #
@@ -424,11 +551,14 @@ class TestAudit:
         path = tmp_path / "audit.jsonl"
         self._write(path, [
             {"row_id": "matted-1", "action": bf.ACTION_MATTED},
+            {"row_id": "cropped-1", "action": bf.ACTION_CROPPED},
             {"row_id": "skipped-1", "action": bf.ACTION_SKIPPED},
             {"row_id": "rejected-1", "action": bf.ACTION_REJECTED},
             {"row_id": "unresolvable-1", "action": bf.ACTION_UNRESOLVABLE},
         ])
-        assert bf.load_audit(path) == {"matted-1", "skipped-1", "rejected-1", "unresolvable-1"}
+        assert bf.load_audit(path) == {
+            "matted-1", "cropped-1", "skipped-1", "rejected-1", "unresolvable-1"
+        }
 
     def test_error_rows_stay_retryable(self, tmp_path):
         path = tmp_path / "audit.jsonl"

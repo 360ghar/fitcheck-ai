@@ -1,710 +1,351 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_ui.dart';
-import '../../../domain/constants/use_cases.dart';
-import '../controllers/batch_extraction_controller.dart';
-import '../widgets/extracted_item_card.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/widgets/app_ui.dart';
+import '../providers/batch_extraction_provider.dart';
+import '../widgets/ai_extraction_widget.dart'
+    show PersonGroupList, personGroups;
+import '../widgets/extracted_item_card.dart';
+import '../widgets/manual_entry_form.dart' show UseCasePicker;
 
-/// Page for reviewing and saving extracted items
-class BatchItemReviewPage extends GetView<BatchExtractionController> {
+/// Review the pieces found in a batch and save the chosen ones.
+class BatchItemReviewPage extends ConsumerWidget {
   const BatchItemReviewPage({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+  /// Leaves the flow. Popping every route disposes the session.
+  static void _exitFlow(BuildContext context, WidgetRef ref) =>
+      Navigator.of(context).popUntil((route) => route.isFirst);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Review Items'),
-        elevation: 0,
+  Future<void> _save(BuildContext context, WidgetRef ref) async {
+    final notifier = ref.read(batchExtractionProvider.notifier);
+    final saved = await notifier.saveSelectedItems();
+    if (!context.mounted) return;
+    final failures = ref.read(batchExtractionProvider).saveFailures;
+    if (failures.isEmpty && saved.isNotEmpty) {
+      ErrorHandler.showSuccess(
+        saved.length == 1
+            ? '1 piece is in your closet.'
+            : '${saved.length} pieces are in your closet.',
+        title: 'Saved',
+      );
+      _exitFlow(context, ref);
+    } else if (failures.isNotEmpty && saved.isEmpty) {
+      ErrorHandler.showError(
+        'Nothing was saved. Try again.',
+        title: 'Not saved',
+      );
+    }
+    // A partial save stays on the page: the banner names what is left.
+  }
+
+  Future<void> _confirmDiscard(BuildContext context, WidgetRef ref) async {
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard these pieces?'),
+        content: const Text('Nothing from this batch is saved.'),
         actions: [
-          Obx(() {
-            final allSelected =
-                controller.extractedItems.isNotEmpty &&
-                controller.extractedItems.every(
-                  (item) => item.includeInWardrobe,
-                );
-            return TextButton(
-              onPressed: allSelected
-                  ? controller.deselectAllItems
-                  : controller.selectAllItems,
-              child: Text(
-                allSelected ? 'Deselect All' : 'Select All',
-                style: TextStyle(color: tokens.brandColor),
-              ),
-            );
-          }),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: PaperTokens.of(context).error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard'),
+          ),
         ],
       ),
-      body: AppPageBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Summary + person chips + use-case selector share one bounded
-              // scroll region: the Wraps can grow to 4-5 rows and, on short
-              // screens, would otherwise crowd the grid out. The bottom action
-              // bar below stays pinned.
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height * 0.35,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildSummaryHeader(context, tokens),
-                      _buildPersonControls(context, tokens),
-                      _buildUseCaseSelector(context, tokens),
-                    ],
+    );
+    if (discard == true && context.mounted) _exitFlow(context, ref);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (empty, saving, allIncluded) = ref.watch(
+      batchExtractionProvider.select(
+        (s) => (
+          s.items.isEmpty,
+          s.saving,
+          s.items.isNotEmpty &&
+              s.items.every((i) => i.includeInWardrobe && i.isSelected),
+        ),
+      ),
+    );
+    final notifier = ref.read(batchExtractionProvider.notifier);
+
+    return PaperStockScope(
+      stock: PaperStockId.moss,
+      child: PopScope(
+        canPop: !saving,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Review pieces'),
+            actions: [
+              if (!empty)
+                Padding(
+                  padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                  child: TextButton(
+                    onPressed: saving
+                        ? null
+                        : () => notifier.setAllIncluded(!allIncluded),
+                    child: Text(allIncluded ? 'Skip all' : 'Include all'),
                   ),
                 ),
-              ),
-
-              // Items grid
-              Expanded(
-                child: Obx(() {
-                  if (controller.extractedItems.isEmpty) {
-                    return _buildEmptyState(context, tokens);
-                  }
-                  return _buildItemsGrid(context, tokens);
-                }),
-              ),
-
-              // Bottom action bar
-              _buildBottomBar(context, tokens),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUseCaseSelector(BuildContext context, AppUiTokens tokens) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing16,
-        0,
-        AppConstants.spacing16,
-        AppConstants.spacing12,
-      ),
-      child: Obx(
-        () => Container(
-          padding: const EdgeInsets.all(AppConstants.spacing12),
-          decoration: BoxDecoration(
-            color: tokens.cardColor,
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: tokens.cardBorderColor),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Use Cases (applied to all saved items)',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              Wrap(
-                spacing: AppConstants.spacing8,
-                runSpacing: AppConstants.spacing8,
-                children: UseCases.defaults.map((useCase) {
-                  final isSelected = controller.selectedUseCases.contains(
-                    useCase,
-                  );
-                  return FilterChip(
-                    label: Text(UseCases.displayLabel(useCase)),
-                    selected: isSelected,
-                    onSelected: (_) => controller.toggleUseCase(useCase),
-                    selectedColor: tokens.brandColor.withValues(alpha: 0.2),
-                    checkmarkColor: tokens.brandColor,
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              Wrap(
-                spacing: AppConstants.spacing8,
-                runSpacing: AppConstants.spacing8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () => _showCustomUseCaseDialog(context, tokens),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Custom'),
-                  ),
-                  ...controller.selectedUseCases
-                      .where((value) => !UseCases.defaults.contains(value))
-                      .map(
-                        (value) => Chip(
-                          label: Text(UseCases.displayLabel(value)),
-                          onDeleted: () => controller.removeUseCase(value),
-                        ),
-                      ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryHeader(BuildContext context, AppUiTokens tokens) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Obx(() {
-        final total = controller.extractedItems.length;
-        final selected = controller.selectedItemCount;
-        final imagesCount = controller.selectedImages.length;
-
-        return Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$total items from $imagesCount images',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$selected selected to save',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                  ),
-                ],
-              ),
-            ),
-            // Info icon
-            IconButton(
-              onPressed: () => _showInfoDialog(context, tokens),
-              icon: Icon(Icons.info_outline, color: tokens.textMuted),
-            ),
-          ],
-        );
-      }),
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context, AppUiTokens tokens) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.checkroom_outlined, size: 64, color: tokens.textMuted),
-            const SizedBox(height: AppConstants.spacing16),
-            Text(
-              'No Items Detected',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              'We couldn\'t find any clothing items in your images. Try again with different photos.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppConstants.spacing24),
-            ElevatedButton(
-              onPressed: () {
-                controller.reset();
-                Get.back();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: tokens.brandColor,
-              ),
-              child: const Text('Try Again'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPersonControls(BuildContext context, AppUiTokens tokens) {
-    return Obx(() {
-      final groups = <String, _PersonGroup>{};
-
-      for (final item in controller.extractedItems) {
-        final key = item.personId ?? 'unassigned';
-        final current = groups[key];
-        final inferredLabel = item.personLabel?.trim().isNotEmpty == true
-            ? item.personLabel!.trim()
-            : (item.isCurrentUserPerson ? 'You' : 'Person');
-
-        if (current == null) {
-          groups[key] = _PersonGroup(
-            key: key,
-            label: inferredLabel,
-            isCurrentUser: item.isCurrentUserPerson,
-            total: 1,
-            included: item.includeInWardrobe ? 1 : 0,
-          );
-        } else {
-          groups[key] = current.copyWith(
-            label: current.label.isEmpty ? inferredLabel : current.label,
-            isCurrentUser: current.isCurrentUser || item.isCurrentUserPerson,
-            total: current.total + 1,
-            included: current.included + (item.includeInWardrobe ? 1 : 0),
-          );
-        }
-      }
-
-      if (groups.isEmpty) {
-        return const SizedBox.shrink();
-      }
-
-      final chips = groups.values.toList();
-
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppConstants.spacing16,
-          0,
-          AppConstants.spacing16,
-          AppConstants.spacing12,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(AppConstants.spacing12),
-          decoration: BoxDecoration(
-            color: tokens.cardColor,
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: tokens.cardBorderColor),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'People in photo',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              Wrap(
-                spacing: AppConstants.spacing8,
-                runSpacing: AppConstants.spacing8,
-                children: chips.map((group) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing8,
-                      vertical: AppConstants.spacing6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: tokens.navBackground,
-                      borderRadius: BorderRadius.circular(AppConstants.radius8),
-                      border: Border.all(color: tokens.navBorder),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+          body: AppPageBackground(
+            child: SafeArea(
+              top: false,
+              child: empty
+                  ? AppEmptyState(
+                      scene: PaperScenes.closet,
+                      title: 'No pieces found',
+                      message: 'We found no clothes in these photos.',
+                      actionLabel: 'Choose other photos',
+                      onAction: () {
+                        notifier.reset();
+                        Navigator.pop(context);
+                      },
+                    )
+                  : Column(
                       children: [
-                        Text(
-                          '${group.label}${group.isCurrentUser ? ' (You)' : ''}',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: tokens.textPrimary,
-                                fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: CustomScrollView(
+                            slivers: [
+                              SliverToBoxAdapter(
+                                child: _SaveFailures(
+                                  onRetry: () => _save(context, ref),
+                                ),
                               ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${group.included}/${group.total}',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: tokens.textMuted),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () =>
-                              controller.setPersonInclusion(group.key, true),
-                          child: Text(
-                            'Include',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: tokens.brandColor,
-                                  fontWeight: FontWeight.w600,
+                              const SliverPadding(
+                                padding: EdgeInsets.fromLTRB(
+                                  AppConstants.spacing16,
+                                  AppConstants.spacing8,
+                                  AppConstants.spacing16,
+                                  0,
                                 ),
+                                sliver: SliverToBoxAdapter(child: _Summary()),
+                              ),
+                              const SliverToBoxAdapter(child: _People()),
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: AppConstants.spacing16),
+                              ),
+                              const _Grid(),
+                              SliverPadding(
+                                padding: const EdgeInsets.all(
+                                  AppConstants.spacing16,
+                                ),
+                                sliver: SliverToBoxAdapter(
+                                  child: PaperSurface(
+                                    child: Consumer(
+                                      builder: (context, ref, _) =>
+                                          UseCasePicker(
+                                            selected: ref.watch(
+                                              batchExtractionProvider.select(
+                                                (s) => s.useCases,
+                                              ),
+                                            ),
+                                            onToggle: notifier.toggleUseCase,
+                                            helper:
+                                                'Added to every piece you save.',
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () =>
-                              controller.setPersonInclusion(group.key, false),
-                          child: Text(
-                            'Exclude',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: tokens.textMuted,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
+                        _SaveBar(
+                          onSave: () => _save(context, ref),
+                          onDiscard: () => _confirmDiscard(context, ref),
                         ),
                       ],
                     ),
-                  );
-                }).toList(),
-              ),
-            ],
+            ),
           ),
         ),
-      );
-    });
-  }
-
-  Widget _buildItemsGrid(BuildContext context, AppUiTokens tokens) {
-    return Obx(
-      () => GridView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 190,
-          crossAxisSpacing: AppConstants.spacing12,
-          mainAxisSpacing: AppConstants.spacing12,
-          childAspectRatio: 0.65,
-        ),
-        itemCount: controller.extractedItems.length,
-        itemBuilder: (context, index) {
-          final item = controller.extractedItems[index];
-
-          // Find source image path
-          final sourceImage = controller.selectedImages.firstWhereOrNull(
-            (img) => img.id == item.sourceImageId,
-          );
-
-          return ExtractedItemCard(
-            item: item,
-            sourceImagePath: sourceImage?.filePath ?? '',
-            isSelected: item.isSelected,
-            onToggleSelection: () => controller.toggleItemInclude(item.id),
-            onRemove: () => _removeItem(context, tokens, item.id),
-          );
-        },
       ),
     );
   }
+}
 
-  Widget _buildBottomBar(BuildContext context, AppUiTokens tokens) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      decoration: BoxDecoration(
-        color: tokens.navBackground,
-        border: Border(top: BorderSide(color: tokens.navBorder)),
-      ),
-      child: Obx(() {
-        final selectedCount = controller.selectedItemCount;
-        final hasSelection = selectedCount > 0;
+class _SaveFailures extends ConsumerWidget {
+  const _SaveFailures({required this.onRetry});
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Save button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: hasSelection
-                    ? () => _saveItems(context, tokens)
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppConstants.spacing16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
-                ),
-                child: Text(
-                  hasSelection
-                      ? 'Save $selectedCount ${selectedCount == 1 ? 'Item' : 'Items'}'
-                      : 'Select Items to Save',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
+  final VoidCallback onRetry;
 
-            const SizedBox(height: AppConstants.spacing8),
-
-            // Cancel button
-            TextButton(
-              onPressed: () => _showDiscardConfirmation(context, tokens),
-              child: Text(
-                'Discard All',
-                style: TextStyle(color: tokens.textMuted),
-              ),
-            ),
-          ],
-        );
-      }),
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final failures = ref.watch(
+      batchExtractionProvider.select((s) => s.saveFailures),
+    );
+    if (failures.isEmpty) return const SizedBox.shrink();
+    return AppErrorBanner(
+      message: 'Not saved yet: ${failures.join(', ')}.',
+      onRetry: onRetry,
     );
   }
+}
 
-  void _removeItem(BuildContext context, AppUiTokens tokens, String itemId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: tokens.cardColor,
-        title: Text(
-          'Remove Item?',
-          style: TextStyle(color: tokens.textPrimary),
-        ),
-        content: Text(
-          'This item will not be saved to your closet.',
-          style: TextStyle(color: tokens.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: tokens.textMuted)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              controller.extractedItems.removeWhere(
-                (item) => item.id == itemId,
-              );
-            },
-            child: const Text('Remove', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+class _Summary extends ConsumerWidget {
+  const _Summary();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (total, photos, selected) = ref.watch(
+      batchExtractionProvider.select(
+        (s) => (s.items.length, s.images.length, s.selectedItemCount),
       ),
     );
-  }
-
-  Future<void> _saveItems(BuildContext context, AppUiTokens tokens) async {
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: tokens.cardColor,
-        content: Row(
-          children: [
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(tokens.brandColor),
-            ),
-            const SizedBox(width: AppConstants.spacing16),
-            Text(
-              'Saving items...',
-              style: TextStyle(color: tokens.textPrimary),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final savedItems = await controller.saveSelectedItems();
-      if (!context.mounted) return;
-      Navigator.pop(context); // Close loading dialog
-
-      if (savedItems.isNotEmpty) {
-        // A10b-06: partial success must not read as full success — per-item
-        // failures are collected by the controller and reported by name.
-        final failed = controller.saveFailures;
-        if (failed.isEmpty) {
-          ErrorHandler.showSuccess('${savedItems.length} items added to your closet', title: 'Success');
-        } else {
-          ErrorHandler.showWarning(
-            '${savedItems.length} of ${savedItems.length + failed.length} items were saved. '
-            'Could not save: ${failed.join(', ')}',
-            title: 'Some items failed',
-          );
-        }
-
-        controller.reset();
-        Get.until((route) => route.isFirst);
-      } else {
-        ErrorHandler.showError('Failed to save items. Please try again.', title: 'Error');
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      Navigator.pop(context); // Close loading dialog
-      ErrorHandler.showError('Failed to save items: $e', title: 'Error');
-    }
-  }
-
-  void _showDiscardConfirmation(BuildContext context, AppUiTokens tokens) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: tokens.cardColor,
-        title: Text(
-          'Discard All Items?',
-          style: TextStyle(color: tokens.textPrimary),
-        ),
-        content: Text(
-          'All detected items will be discarded. This action cannot be undone.',
-          style: TextStyle(color: tokens.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: tokens.textMuted)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              controller.reset();
-              Get.until((route) => route.isFirst);
-            },
-            child: const Text('Discard', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showInfoDialog(BuildContext context, AppUiTokens tokens) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: tokens.cardColor,
-        title: Text(
-          'Review Your Items',
-          style: TextStyle(color: tokens.textPrimary),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoRow(
-              context,
-              tokens,
-              Icons.check_box,
-              'Select items you want to save',
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              context,
-              tokens,
-              Icons.close,
-              'Remove items you don\'t need',
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              context,
-              tokens,
-              Icons.save,
-              'Save selected items to your closet',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Got it', style: TextStyle(color: tokens.brandColor)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCustomUseCaseDialog(BuildContext context, AppUiTokens tokens) {
-    final inputController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: tokens.cardColor,
-        title: Text(
-          'Add Custom Use Case',
-          style: TextStyle(color: tokens.textPrimary),
-        ),
-        content: TextField(
-          controller: inputController,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'e.g., brunch',
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (_) {
-            final value = UseCases.normalize(inputController.text);
-            if (value.isNotEmpty) {
-              controller.addUseCase(value);
-            }
-            Navigator.pop(context);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: tokens.textMuted)),
-          ),
-          TextButton(
-            onPressed: () {
-              final value = UseCases.normalize(inputController.text);
-              if (value.isNotEmpty) {
-                controller.addUseCase(value);
-              }
-              Navigator.pop(context);
-            },
-            child: Text('Add', style: TextStyle(color: tokens.brandColor)),
-          ),
-        ],
-      ),
-    ).then((_) => inputController.dispose());
-  }
-
-  Widget _buildInfoRow(
-    BuildContext context,
-    AppUiTokens tokens,
-    IconData icon,
-    String text,
-  ) {
-    return Row(
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: tokens.brandColor),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(text, style: TextStyle(color: tokens.textSecondary)),
+        Text(
+          '$total ${total == 1 ? 'piece' : 'pieces'} from $photos ${photos == 1 ? 'photo' : 'photos'}',
+          style: text.headlineSmall,
+        ),
+        const SizedBox(height: AppConstants.spacing4),
+        Text(
+          '$selected chosen. Tap a piece to skip it.',
+          style: text.bodyMedium?.copyWith(
+            color: PaperTokens.of(context).textSecondary,
+          ),
         ),
       ],
     );
   }
 }
 
-class _PersonGroup {
-  final String key;
-  final String label;
-  final bool isCurrentUser;
-  final int total;
-  final int included;
+class _People extends ConsumerWidget {
+  const _People();
 
-  const _PersonGroup({
-    required this.key,
-    required this.label,
-    required this.isCurrentUser,
-    required this.total,
-    required this.included,
-  });
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = ref.watch(batchExtractionProvider.select((s) => s.items));
+    final groups = personGroups([
+      for (final i in items)
+        (
+          key: i.personId ?? 'unassigned',
+          label: i.personLabel,
+          you: i.isCurrentUserPerson,
+          included: i.includeInWardrobe,
+        ),
+    ]);
+    if (groups.length < 2) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing16,
+        AppConstants.spacing16,
+        0,
+      ),
+      child: PersonGroupList(
+        groups: groups,
+        onSet: ref.read(batchExtractionProvider.notifier).setPersonInclusion,
+      ),
+    );
+  }
+}
 
-  _PersonGroup copyWith({
-    String? label,
-    bool? isCurrentUser,
-    int? total,
-    int? included,
-  }) {
-    return _PersonGroup(
-      key: key,
-      label: label ?? this.label,
-      isCurrentUser: isCurrentUser ?? this.isCurrentUser,
-      total: total ?? this.total,
-      included: included ?? this.included,
+class _Grid extends ConsumerWidget {
+  const _Grid();
+
+  Future<void> _remove(BuildContext context, WidgetRef ref, String id) async {
+    final remove = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove this piece?'),
+        content: const Text('It is not saved to your closet.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: PaperTokens.of(context).error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (remove == true) {
+      ref.read(batchExtractionProvider.notifier).removeItem(id);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (items, images) = ref.watch(
+      batchExtractionProvider.select((s) => (s.items, s.images)),
+    );
+    final paths = {for (final i in images) i.id: i.filePath};
+    final notifier = ref.read(batchExtractionProvider.notifier);
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+      sliver: SliverGrid.builder(
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 200,
+          crossAxisSpacing: AppConstants.spacing12,
+          mainAxisSpacing: AppConstants.spacing12,
+          mainAxisExtent: 288,
+        ),
+        itemCount: items.length,
+        itemBuilder: (context, i) {
+          final item = items[i];
+          return ExtractedItemCard(
+            item: item,
+            sourceImagePath: paths[item.sourceImageId] ?? '',
+            onToggleSelection: () => notifier.toggleItemInclude(item.id),
+            onRemove: () => _remove(context, ref, item.id),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SaveBar extends ConsumerWidget {
+  const _SaveBar({required this.onSave, required this.onDiscard});
+
+  final VoidCallback onSave;
+  final VoidCallback onDiscard;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (count, saving) = ref.watch(
+      batchExtractionProvider.select((s) => (s.selectedItemCount, s.saving)),
+    );
+    return PaperActionBar(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ElevatedButton(
+            onPressed: saving || count == 0 ? null : onSave,
+            child: Text(
+              saving
+                  ? 'Saving $count ${count == 1 ? 'piece' : 'pieces'}'
+                  : count == 0
+                  ? 'Choose pieces to save'
+                  : 'Save $count ${count == 1 ? 'piece' : 'pieces'}',
+            ),
+          ),
+          TextButton(
+            onPressed: saving ? null : onDiscard,
+            child: const Text('Discard all'),
+          ),
+        ],
+      ),
     );
   }
 }

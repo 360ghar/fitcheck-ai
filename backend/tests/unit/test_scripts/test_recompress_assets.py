@@ -292,6 +292,7 @@ async def test_run_apply_reencodes_and_backfills_thumbs(script, tmp_path):
     parent = next(u for u in backend.uploads if u["key"] == reencode_key)
     assert parent["content_type"] == "image/webp"
     assert parent["cache_control"] == "60"
+    assert all(upload["cache_control"] == "60" for upload in backend.uploads)
     assert len(parent["data"]) < len(_photo_jpeg())
 
     # Audit: every processed key recorded; terminal actions resume-skip.
@@ -324,7 +325,7 @@ async def test_run_apply_thumb_failure_records_error_not_terminal(
     backend = _FakeBackend({key: _photo_jpeg()})
     _patch_backend(script, backend)
 
-    async def _failing_thumb(backend, storage_path, file_data):
+    async def _failing_thumb(backend, storage_path, file_data, *, cache_control):
         return False
 
     monkeypatch.setattr(script.StorageService, "_upload_thumbnail", _failing_thumb)

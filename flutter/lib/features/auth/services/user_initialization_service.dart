@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:get/get.dart';
 import '../repositories/auth_repository.dart';
 import '../../../core/services/referral_redemption_service.dart';
 import '../../../core/utils/error_handler.dart';
@@ -18,19 +17,23 @@ class ReferralRedemptionResult {
   final ReferralRedemptionStatus status;
   final Object? error;
 
-  const ReferralRedemptionResult(this.status, {this.error});
+  /// HTTP status behind a definitive rejection, when known. A 403 for an
+  /// unverified profile is retryable after confirmation, not a dead code.
+  final int? statusCode;
+
+  const ReferralRedemptionResult(this.status, {this.error, this.statusCode});
 
   bool get isSuccess => status == ReferralRedemptionStatus.success;
 }
 
 /// Shared initialization logic for user setup that was previously duplicated
-/// across [AuthController] and the subscription feature.
+/// across the auth flow and the subscription feature.
 ///
 /// Extracted as part of FL4 to break the cross-feature import from
 /// auth -> subscription: the subscription repository is injected behind the
 /// core [ReferralRedemptionService] interface, so auth keeps no compile-time
 /// dependency on the subscription feature.
-class UserInitializationService extends GetxService {
+class UserInitializationService {
   final ReferralRedemptionService _subscriptionRepo;
 
   UserInitializationService({
@@ -71,6 +74,7 @@ class UserInitializationService extends GetxService {
         return ReferralRedemptionResult(
           ReferralRedemptionStatus.definitiveRejection,
           error: e,
+          statusCode: statusCode,
         );
       }
       return ReferralRedemptionResult(
@@ -85,6 +89,7 @@ class UserInitializationService extends GetxService {
         return ReferralRedemptionResult(
           ReferralRedemptionStatus.definitiveRejection,
           error: e,
+          statusCode: statusCode,
         );
       }
       return ReferralRedemptionResult(

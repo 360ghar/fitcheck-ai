@@ -88,7 +88,7 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
                 className="overflow-hidden rounded-md border border-border text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {image ? (
-                  <img src={image} alt={name} className="h-20 w-full object-cover" loading="lazy" />
+                  <img src={image} alt={name} className="h-20 w-full object-contain" loading="lazy" />
                 ) : (
                   <span className="block h-20 w-full bg-surface-card" />
                 )}
@@ -131,7 +131,7 @@ export function ItemsGrid({ items }: { items: JsonRecord[] }) {
                               <img
                                 src={image.thumbUrl || image.url}
                                 alt={openItem ? itemDisplayName(openItem) : ''}
-                                className="h-28 w-full object-cover"
+                                className="h-28 w-full object-contain"
                                 loading="lazy"
                               />
                               {image.isPrimary ? (

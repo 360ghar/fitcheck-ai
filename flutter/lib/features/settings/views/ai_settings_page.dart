@@ -1,239 +1,269 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
-import '../../../core/widgets/app_ui.dart';
-import '../controllers/ai_settings_controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class AiSettingsPage extends StatefulWidget {
+import '../../../core/constants/app_constants.dart';
+import '../../../core/widgets/app_ui.dart';
+import '../models/ai_settings_model.dart';
+import '../providers/ai_settings_provider.dart';
+
+/// Bring-your-own AI provider settings.
+class AiSettingsPage extends ConsumerWidget {
   const AiSettingsPage({super.key});
 
   @override
-  State<AiSettingsPage> createState() => _AiSettingsPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(aiSettingsProvider);
+    final notifier = ref.read(aiSettingsProvider.notifier);
+
+    final Widget body;
+    if (settings.value case final value?) {
+      body = _AiSettingsForm(
+        initial: value,
+        banner: settings.hasError && !settings.isLoading
+            ? AppErrorBanner(error: settings.error, onRetry: notifier.refresh)
+            : null,
+      );
+    } else if (settings.hasError && !settings.isLoading) {
+      body = AppErrorState(error: settings.error, onRetry: notifier.refresh);
+    } else {
+      body = ListView(
+        padding: const EdgeInsets.all(AppConstants.spacing16),
+        children: const [
+          SkeletonPulse(
+            child: Column(
+              children: [
+                SkeletonBox(height: 120, borderRadius: AppConstants.radius12),
+                SizedBox(height: AppConstants.spacing16),
+                SkeletonBox(height: 320, borderRadius: AppConstants.radius12),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return PaperStockScope(
+      stock: PaperStockId.stone,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('AI provider')),
+        body: AppPageBackground(child: body),
+      ),
+    );
+  }
 }
 
-class _AiSettingsPageState extends State<AiSettingsPage> {
-  late final AiSettingsController controller;
+class _AiSettingsForm extends ConsumerStatefulWidget {
+  const _AiSettingsForm({required this.initial, this.banner});
+
+  /// Settings when the form first opens. Later changes (after a save) are
+  /// read from the provider.
+  final AiSettingsModel initial;
+  final Widget? banner;
+
+  @override
+  ConsumerState<_AiSettingsForm> createState() => _AiSettingsFormState();
+}
+
+class _AiSettingsFormState extends ConsumerState<_AiSettingsForm> {
+  final _apiUrl = TextEditingController();
+  final _apiKey = TextEditingController();
+  final _chatModel = TextEditingController();
+  final _visionModel = TextEditingController();
+  final _imageModel = TextEditingController();
+  late String _provider = widget.initial.defaultProvider.isNotEmpty
+      ? widget.initial.defaultProvider
+      : 'custom';
+  bool _saving = false;
+  bool _testing = false;
 
   @override
   void initState() {
     super.initState();
-    controller = Get.find<AiSettingsController>();
+    _load(widget.initial);
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_apiUrl, _apiKey, _chatModel, _visionModel, _imageModel]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _load(AiSettingsModel settings) {
+    final config = settings.providerConfigs[_provider];
+    _apiUrl.text = normalizeApiUrl(config?.apiUrl ?? '');
+    _chatModel.text = config?.model ?? '';
+    _visionModel.text = config?.visionModel ?? '';
+    _imageModel.text = config?.imageGenModel ?? '';
+    // The saved key is never sent back; the field is for a new key only.
+    _apiKey.clear();
+  }
+
+  AiSettingsModel get _current =>
+      ref.read(aiSettingsProvider).value ?? widget.initial;
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final saved = await ref
+        .read(aiSettingsProvider.notifier)
+        .save(
+          provider: _provider,
+          apiUrl: _apiUrl.text,
+          apiKey: _apiKey.text,
+          chatModel: _chatModel.text,
+          visionModel: _visionModel.text,
+          imageModel: _imageModel.text,
+        );
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      if (saved) _load(_current);
+    });
+  }
+
+  Future<void> _test() async {
+    setState(() => _testing = true);
+    await ref
+        .read(aiSettingsProvider.notifier)
+        .test(
+          provider: _provider,
+          apiUrl: _apiUrl.text,
+          apiKey: _apiKey.text,
+          chatModel: _chatModel.text,
+        );
+    if (mounted) setState(() => _testing = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(Get.currentRoute);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final keySet = _current.providerConfigs[_provider]?.apiKeySet ?? false;
+    const gap = SizedBox(height: AppConstants.spacing12);
+    final note = text.bodySmall?.copyWith(color: tokens.textMuted);
 
-    return Scaffold(
-      body: AppPageBackground(
-        child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              _buildAppBar(context),
-              SliverPadding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                sliver: Obx(() => _buildContent(context)),
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing8,
+        AppConstants.spacing16,
+        AppConstants.spacing32 + MediaQuery.paddingOf(context).bottom,
+      ),
+      children: [
+        ?widget.banner,
+        PaperSurface(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Provider', style: text.headlineSmall),
+              const SizedBox(height: AppConstants.spacing12),
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                // The tint alone barely shows on dark paper; the tonal accent does.
+                style: SegmentedButton.styleFrom(
+                  selectedBackgroundColor: PaperTokens.of(context).stock.accent,
+                  selectedForegroundColor: PaperTokens.of(
+                    context,
+                  ).stock.onAccent,
+                ),
+                segments: const [
+                  ButtonSegment(value: 'custom', label: Text('Custom')),
+                  ButtonSegment(value: 'openai', label: Text('OpenAI')),
+                ],
+                selected: {_provider},
+                onSelectionChanged: (s) => setState(() {
+                  _provider = s.first;
+                  _load(_current);
+                }),
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                'Use a public URL the server can reach. Localhost does not '
+                'work from our servers.',
+                style: note,
               ),
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
-    );
-  }
-
-  Widget _buildAppBar(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return SliverAppBar(
-      floating: true,
-      elevation: 0,
-      title: Text(
-        'AI Settings',
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
-      ),
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    if (controller.isLoading.value && controller.settings.value == null) {
-      return const SliverFillRemaining(
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    return SliverList(
-      delegate: SliverChildListDelegate([
-        _buildProviderSection(context),
-        const SizedBox(height: AppConstants.spacing24),
-        _buildConfigSection(context),
-        const SizedBox(height: AppConstants.spacing24),
-        _buildActionsSection(),
-      ]),
-    );
-  }
-
-  Widget _buildProviderSection(BuildContext context) {
-    return _buildSection(
-      title: 'Provider',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          DropdownButtonFormField<String>(
-            initialValue: controller.selectedProvider.value,
-            decoration: const InputDecoration(
-              labelText: 'Default Provider',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'custom', child: Text('Custom')),
-              DropdownMenuItem(value: 'openai', child: Text('OpenAI')),
+        const SizedBox(height: AppConstants.spacing16),
+        PaperSurface(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Connection', style: text.headlineSmall),
+              const SizedBox(height: AppConstants.spacing12),
+              TextField(
+                controller: _apiUrl,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: 'API URL',
+                  hintText: 'https://your-proxy.example.com/v1',
+                ),
+              ),
+              gap,
+              TextField(
+                controller: _apiKey,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'API key',
+                  hintText: keySet ? 'Saved. Leave blank to keep it.' : null,
+                ),
+              ),
+              gap,
+              TextField(
+                controller: _chatModel,
+                decoration: const InputDecoration(labelText: 'Chat model'),
+              ),
+              gap,
+              TextField(
+                controller: _visionModel,
+                decoration: const InputDecoration(
+                  labelText: 'Vision model (optional)',
+                ),
+              ),
+              gap,
+              TextField(
+                controller: _imageModel,
+                decoration: const InputDecoration(
+                  labelText: 'Image model (optional)',
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                'Image generation needs OpenAI-compatible chat completions '
+                'with response_modalities.',
+                style: note,
+              ),
             ],
-            onChanged: (value) {
-              if (value != null) {
-                controller.selectProvider(value);
-              }
-            },
           ),
-          const SizedBox(height: AppConstants.spacing12),
-          Text(
-            'Use a public URL reachable from the backend. Localhost URLs will not work for deployed servers.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppUiTokens.of(context).textMuted,
-                ),
+        ),
+        const SizedBox(height: AppConstants.spacing24),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConfigSection(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final keyHint = controller.apiKeySet
-        ? 'API key already set (leave blank to keep)'
-        : 'Enter API key';
-
-    return _buildSection(
-      title: 'Configuration',
-      child: Column(
-        children: [
-          TextField(
-            controller: controller.apiUrlController,
-            decoration: const InputDecoration(
-              labelText: 'API URL',
-              hintText: 'https://your-proxy.example.com/v1',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          TextField(
-            controller: controller.apiKeyController,
-            decoration: InputDecoration(
-              labelText: 'API Key',
-              hintText: keyHint,
-              border: const OutlineInputBorder(),
-            ),
-            obscureText: true,
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          TextField(
-            controller: controller.chatModelController,
-            decoration: const InputDecoration(
-              labelText: 'Chat Model',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          TextField(
-            controller: controller.visionModelController,
-            decoration: const InputDecoration(
-              labelText: 'Vision Model (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          TextField(
-            controller: controller.imageModelController,
-            decoration: const InputDecoration(
-              labelText: 'Image Model (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            'For image generation, your provider must support OpenAI-compatible chat completions with response_modalities.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionsSection() {
-    return _buildSection(
-      title: 'Actions',
-      child: Column(
-        children: [
-          Obx(() {
-            return ElevatedButton(
-              onPressed: controller.isTesting.value
-                  ? null
-                  : () => controller.testProvider(),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
-              child: controller.isTesting.value
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Test Connection'),
-            );
-          }),
-          const SizedBox(height: AppConstants.spacing12),
-          Obx(() {
-            return OutlinedButton(
-              onPressed: controller.isSaving.value
-                  ? null
-                  : () => controller.saveSettings(),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
-              child: controller.isSaving.value
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Save Settings'),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSection({
-    required String title,
-    required Widget child,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppSectionHeader(title: title),
+          child: _saving ? const _Spinner() : const Text('Save'),
+        ),
         const SizedBox(height: AppConstants.spacing8),
-        AppGlassCard(
-          padding: const EdgeInsets.all(AppConstants.spacing16),
-          child: child,
+        TextButton(
+          onPressed: _testing ? null : _test,
+          style: TextButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+          child: _testing ? const _Spinner() : const Text('Test connection'),
         ),
       ],
     );
   }
+}
+
+class _Spinner extends StatelessWidget {
+  const _Spinner();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: 18,
+    height: 18,
+    child: CircularProgressIndicator(strokeWidth: 2),
+  );
 }

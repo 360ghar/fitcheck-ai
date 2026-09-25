@@ -122,7 +122,7 @@ env:
   # Keep in lock-step with .github/workflows/build-apk.yml,
   # .github/workflows/flutter-ci.yml, .github/workflows/shorebird-patch-ios.yml
   # and flutter/scripts/_shorebird_common.sh.
-  FLUTTER_VERSION: '3.44.6'
+  FLUTTER_VERSION: '3.47.5'
   # Authenticates the Shorebird CLI. Absent on forks (and before the secret is
   # provisioned). When absent, the auth check is skipped and the unsigned
   # validation path degrades to a warning: every `shorebird` command needs a
@@ -150,6 +150,34 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # GitHub does not allow `secrets.*` in step `if:` expressions. Read the
+      # secrets in one step and expose only availability flags to later steps.
+      - name: Check release credentials
+        id: credentials
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          if [ -n "$SHOREBIRD_TOKEN" ]; then
+            echo "shorebird=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$APPLE_CERT_P12_BASE64" ] && [ -n "$APPLE_CERT_PASSWORD" ] \
+            && [ -n "$APPLE_PROVISIONING_PROFILE_BASE64" ]; then
+            echo "signing=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$SENTRY_AUTH_TOKEN" ]; then
+            echo "sentry=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$APP_STORE_CONNECT_KEY_ID" ] && [ -n "$APP_STORE_CONNECT_ISSUER_ID" ] \
+            && [ -n "$APP_STORE_CONNECT_API_KEY_BASE64" ]; then
+            echo "app_store=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # App Store Connect rejects IPAs whose MinimumOSVersion is below 15.0
       # (enforced starting Spring 2027). Fail fast here so a non-compliant
@@ -192,7 +220,7 @@ jobs:
       # secret itself so a fork with an empty-string secret gets the same
       # treatment as a fork with no secret at all.
       - name: Verify Shorebird authentication
-        if: ${{ secrets.SHOREBIRD_TOKEN != '' }}
+        if: ${{ steps.credentials.outputs.shorebird == 'true' }}
         run: |
           set -euo pipefail
           shorebird account whoami
@@ -224,7 +252,7 @@ jobs:
       # ----------------------------------------------------------------------
       - name: Import code signing assets
         id: signing
-        if: ${{ secrets.APPLE_CERT_P12_BASE64 != '' && secrets.APPLE_PROVISIONING_PROFILE_BASE64 != '' }}
+        if: ${{ steps.credentials.outputs.signing == 'true' }}
         env:
           APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
           APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
@@ -396,7 +424,7 @@ jobs:
       # ----------------------------------------------------------------------
       - name: Upload dSYMs to Sentry
         continue-on-error: true
-        if: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
+        if: ${{ steps.credentials.outputs.sentry == 'true' }}
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
@@ -440,7 +468,7 @@ jobs:
         if: >-
           steps.signing.outputs.signed == 'true' &&
           steps.outputs.outputs.ipa_path != '' &&
-          secrets.APP_STORE_CONNECT_API_KEY_BASE64 != '' &&
+          steps.credentials.outputs.app_store == 'true' &&
           (github.event_name != 'workflow_dispatch' || inputs.upload_to_testflight)
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}

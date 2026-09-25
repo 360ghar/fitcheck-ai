@@ -277,7 +277,8 @@ async def process_key(
             # thumb must record an ERROR (retryable) rather than a terminal
             # action: resume would otherwise skip the key with no thumb.
             thumb_ok = await StorageService._upload_thumbnail(  # noqa: SLF001 - script-only
-                backend, key, new_bytes if new_bytes is not None else data
+                backend, key, new_bytes if new_bytes is not None else data,
+                cache_control=REWRITE_CACHE_CONTROL,
             )
         if thumb_needed and not thumb_ok:
             record = make_record(

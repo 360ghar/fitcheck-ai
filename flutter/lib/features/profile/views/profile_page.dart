@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
+
+import '../../../core/widgets/paper.dart';
 import 'profile_content.dart';
 
-/// Pushed `/profile` route. The same content is the "More" tab in
-/// MainShellPage; this wrapper only adds a Scaffold and its own navbar.
+/// Pushed `/profile` route. The shell shows the same content as the More
+/// tab; this wrapper adds an app bar with a back button.
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: const ProfileContent(),
-      bottomNavigationBar: AppBottomNavigationBar(
-        currentIndex: AppBottomNavigationBar.getIndexForRoute(Get.currentRoute),
+    return PaperStockScope(
+      stock: PaperStockId.stone,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('More')),
+        body: const ProfileContent(showHeader: false),
       ),
     );
   }

@@ -1,327 +1,272 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/widgets/app_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../wardrobe/models/item_model.dart';
-import '../../wardrobe/repositories/item_repository.dart';
-import '../controllers/recommendations_controller.dart';
+import '../../../domain/enums/category.dart';
+import '../providers/recommendations_providers.dart';
+import 'recommendation_widgets.dart';
 
-/// Weather-Based Tab - Get recommendations based on weather
-class WeatherBasedTab extends StatelessWidget {
+/// Today's weather for a city and the closet pieces that suit it.
+class WeatherBasedTab extends ConsumerStatefulWidget {
   const WeatherBasedTab({super.key});
 
-  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
-  // is re-minted from the durable storage key.
-  static final ItemRepository _itemRepository = ItemRepository();
+  @override
+  ConsumerState<WeatherBasedTab> createState() => _WeatherBasedTabState();
+}
+
+class _WeatherBasedTabState extends ConsumerState<WeatherBasedTab>
+    with AutomaticKeepAliveClientMixin {
+  final _city = TextEditingController();
+
+  @override
+  bool get wantKeepAlive => true;
+
+  WeatherNotifier get _weather => ref.read(weatherProvider.notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    // Show the saved city in the field, so the user sees what was searched.
+    ref.listenManual(weatherSetupProvider, (_, next) {
+      final saved = next.value?.location ?? '';
+      if (_city.text.isEmpty && saved.isNotEmpty) _city.text = saved;
+    }, fireImmediately: true);
+  }
+
+  @override
+  void dispose() {
+    _city.dispose();
+    super.dispose();
+  }
+
+  void _search() {
+    FocusScope.of(context).unfocus();
+    _weather.search(_city.text);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final RecommendationsController controller = Get.find<RecommendationsController>();
+    super.build(context);
+    final weather = ref.watch(weatherProvider);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: AppConstants.spacing16),
-      child: Column(
-        children: [
-          // Location input
-          Padding(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller.weatherLocationInput,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => controller.fetchWeatherRecommendations(),
-                    onChanged: (value) => controller.weatherLocation.value = value,
-                    decoration: InputDecoration(
-                      labelText: 'Your Location',
-                      hintText: 'Enter city name',
-                      filled: true,
-                      fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                      prefixIcon: const Icon(Icons.location_on),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppConstants.radius12),
-                        borderSide: BorderSide.none,
+    return RefreshIndicator(
+      onRefresh: _weather.retry,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.spacing16,
+              AppConstants.spacing16,
+              AppConstants.spacing16,
+              AppConstants.spacing8,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _city,
+                      textInputAction: TextInputAction.search,
+                      textCapitalization: TextCapitalization.words,
+                      onSubmitted: (_) => _search(),
+                      decoration: const InputDecoration(
+                        labelText: 'City',
+                        prefixIcon: Icon(Icons.location_on_outlined),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: AppConstants.spacing12),
-                Obx(() => ElevatedButton(
-                      onPressed: controller.isLoadingWeather.value
-                          ? null
-                          : () => controller.fetchWeatherRecommendations(),
-                      child: controller.isLoadingWeather.value
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Get Recs'),
-                    )),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: AppConstants.spacing16),
-
-          // Weather display
-          Obx(() {
-            if (controller.weatherError.value.isNotEmpty) {
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                decoration: BoxDecoration(
-                  color: tokens.cardColor.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  border: Border.all(color: tokens.cardBorderColor),
-                ),
-                child: Text(
-                  controller.weatherError.value,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              );
-            }
-
-            final weather = controller.weatherData.value;
-            if (weather == null || weather.isEmpty) {
-              return const SizedBox.shrink();
-            }
-
-            final condition = weather['condition']?.toString() ?? 'Unknown';
-            final icon = _getWeatherIcon(condition);
-
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    tokens.brandColor.withValues(alpha: 0.1),
-                    tokens.brandColor.withValues(alpha: 0.05),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-              ),
-              child: Row(
-                children: [
-                  Icon(icon, size: 48, color: tokens.brandColor),
-                  const SizedBox(width: AppConstants.spacing16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        controller.weatherDisplayTemperature,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      Text(
-                        condition.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' '),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    controller.weatherLocation.value,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                  const SizedBox(width: AppConstants.spacing12),
+                  ElevatedButton(
+                    onPressed: weather.isLoading ? null : _search,
+                    child: const Text('Check'),
                   ),
                 ],
               ),
-            );
-          }),
-
-          const SizedBox(height: AppConstants.spacing16),
-
-          // Recommended categories
-          Obx(() {
-            if (controller.preferredCategories.isEmpty) {
-              return const SizedBox.shrink();
-            }
-
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-              child: Wrap(
-                spacing: AppConstants.spacing8,
-                children: controller.preferredCategories.map((cat) {
-                  return Chip(
-                    label: Text(cat.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ')),
-                    backgroundColor: tokens.brandColor.withValues(alpha: 0.1),
-                  );
-                }).toList(),
-              ),
-            );
-          }),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Recommendations
-          Obx(() {
-            if (controller.isLoadingWeather.value) {
-              return Padding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                child: ShimmerGridLoaderBox(
-                  crossAxisCount: 2,
-                  itemCount: 4,
-                  childAspectRatio: 0.75,
-                ),
-              );
-            }
-
-            if (controller.weatherError.value.isNotEmpty) {
-              return const SizedBox.shrink();
-            }
-
-            if (controller.weatherData.value == null || controller.weatherData.value!.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.wb_sunny_outlined,
-                      size: 64,
-                      color: tokens.textMuted,
-                    ),
-                    const SizedBox(height: AppConstants.spacing16),
-                    Text(
-                      'Enter your location',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: AppConstants.spacing8),
-                    Text(
-                      'We\'ll suggest items based on the weather',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.textMuted,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            if (controller.weatherRecommendations.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.search_off,
-                      size: 64,
-                      color: tokens.textMuted,
-                    ),
-                    const SizedBox(height: AppConstants.spacing16),
-                    Text(
-                      'No items match this weather',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: AppConstants.spacing12,
-                crossAxisSpacing: AppConstants.spacing12,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: controller.weatherRecommendations.length,
-              itemBuilder: (context, index) {
-                final item = controller.weatherRecommendations[index];
-                return _buildItemCard(context, item, tokens, controller);
-              },
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildItemCard(
-    BuildContext context,
-    ItemModel item,
-    AppUiTokens tokens,
-    RecommendationsController controller,
-  ) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Image
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radius8),
-              child: item.itemImages != null && item.itemImages!.isNotEmpty
-                  ? AppNetworkImage(
-                  item.itemImages!.first.url,
-                  fit: BoxFit.cover,
-                  storagePath: item.itemImages!.first.storagePath,
-                  remintUrl: _itemRepository.remintImageUrl,
-                  errorWidget: (_, _, _) => const Icon(Icons.broken_image_outlined),
-                )
-                  : Container(
-                      color: tokens.cardColor.withValues(alpha: 0.5),
-                      child: Icon(
-                        Icons.image,
-                        color: tokens.textMuted,
-                      ),
-                    ),
             ),
           ),
-          const SizedBox(height: AppConstants.spacing8),
-          // Name
-          Text(
-            item.name,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          // Category
-          Text(
-            item.category.displayName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
-          ),
+          ..._results(weather),
         ],
       ),
     );
   }
 
-  IconData _getWeatherIcon(String condition) {
-    final lower = condition.toLowerCase();
-    if (lower.contains('sunny') || lower.contains('clear')) return Icons.wb_sunny;
-    if (lower.contains('cloud')) return Icons.cloud;
-    if (lower.contains('rain')) return Icons.water_drop;
-    if (lower.contains('snow')) return Icons.ac_unit;
-    if (lower.contains('storm')) return Icons.thunderstorm;
-    if (lower.contains('fog') || lower.contains('mist')) return Icons.cloud;
-    return Icons.wb_sunny;
+  List<Widget> _results(AsyncValue<WeatherReport?> weather) {
+    if (weather.isLoading) {
+      return [
+        SliverPadding(
+          padding: tabPadding,
+          sliver: SliverList.list(
+            children: const [
+              SkeletonCard(height: 150),
+              SizedBox(height: AppConstants.spacing16),
+              SkeletonGridLoaderBox(itemCount: 2, childAspectRatio: 0.78),
+            ],
+          ),
+        ),
+      ];
+    }
+    final report = weather.value;
+    if (weather.hasError && report == null) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppErrorState(error: weather.error, onRetry: _weather.retry),
+        ),
+      ];
+    }
+    if (report == null) {
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppEmptyState(
+            scene: PaperScenes.home,
+            title: "What's the weather?",
+            message: 'Enter your city to get picks for today.',
+          ),
+        ),
+      ];
+    }
+    final text = Theme.of(context).textTheme;
+    final tokens = PaperTokens.of(context);
+    return [
+      if (weather.hasError)
+        SliverToBoxAdapter(
+          child: AppErrorBanner(error: weather.error, onRetry: _weather.retry),
+        ),
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.spacing16,
+          AppConstants.spacing8,
+          AppConstants.spacing16,
+          AppConstants.spacing20,
+        ),
+        sliver: SliverToBoxAdapter(child: _WeatherCard(report: report)),
+      ),
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing20),
+        sliver: SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Wear today', style: text.headlineSmall),
+              const SizedBox(height: AppConstants.spacing4),
+              Text(
+                [
+                  for (final c in report.categories)
+                    Category.values.asNameMap()[c]?.displayName ??
+                        capitalizeWords(c),
+                ].join(' · '),
+                style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ),
+      if (report.items.isEmpty)
+        SliverPadding(
+          padding: tabPadding,
+          sliver: SliverToBoxAdapter(
+            child: Text(
+              'No pieces in your closet for this weather yet.',
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+            ),
+          ),
+        )
+      else
+        SliverPadding(
+          padding: tabPadding,
+          sliver: SliverGrid.builder(
+            gridDelegate: pieceGridDelegate,
+            itemCount: report.items.length,
+            itemBuilder: (context, i) => PieceCard.item(report.items[i]),
+          ),
+        ),
+    ];
+  }
+}
+
+class _WeatherCard extends StatelessWidget {
+  const _WeatherCard({required this.report});
+
+  final WeatherReport report;
+
+  static IconData _icon(String condition) {
+    final c = condition.toLowerCase();
+    if (c.contains('storm') || c.contains('thunder')) {
+      return Icons.thunderstorm_outlined;
+    }
+    if (c.contains('snow')) return Icons.ac_unit_rounded;
+    if (c.contains('rain') || c.contains('drizzle')) {
+      return Icons.water_drop_outlined;
+    }
+    if (c.contains('cloud') || c.contains('fog') || c.contains('mist')) {
+      return Icons.cloud_outlined;
+    }
+    return Icons.wb_sunny_outlined;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final condition = capitalizeWords(report.condition);
+    // 0° is a real reading, so only an unknown value shows a dash.
+    final figure = report.displayTemperature?.toString() ?? '–';
+    return PaperSurface(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing20,
+        AppConstants.spacing16,
+        AppConstants.spacing20,
+        AppConstants.spacing20,
+      ),
+      semanticLabel:
+          '${report.displayTemperature ?? 'Unknown'} ${report.unitLabel}, '
+          '$condition in ${report.location}',
+      child: ExcludeSemantics(
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        figure,
+                        style: text.displayLarge?.copyWith(height: 1.1),
+                      ),
+                      const SizedBox(width: AppConstants.spacing4),
+                      Text(
+                        report.unitLabel,
+                        style: text.headlineSmall?.copyWith(
+                          color: tokens.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (condition.isNotEmpty)
+                    Text(condition, style: text.titleMedium),
+                  const SizedBox(height: AppConstants.spacing4),
+                  Text(
+                    report.location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodyMedium?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppConstants.spacing12),
+            Icon(_icon(report.condition), size: 56, color: tokens.stock.accent),
+          ],
+        ),
+      ),
+    );
   }
 }

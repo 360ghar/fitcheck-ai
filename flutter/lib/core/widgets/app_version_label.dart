@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../services/code_push_service.dart';
@@ -50,19 +49,16 @@ class _AppVersionLabelState extends State<AppVersionLabel> {
     }
   }
 
-  int? get _patchNumber {
-    if (!Get.isRegistered<CodePushService>()) return null;
-    return Get.find<CodePushService>().currentPatchNumber.value;
-  }
+  int? get _patchNumber => CodePushService.instance.currentPatchNumber.value;
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<String?>(
       future: _version,
       builder: (context, snapshot) {
-        // An em dash while pending or on failure - never a stale literal, and
+        // A dash while pending or on failure - never a stale literal, and
         // never a layout jump between the two states.
-        final version = snapshot.data ?? '—';
+        final version = snapshot.data ?? '–';
         final patch = snapshot.hasData ? _patchNumber : null;
         final text = patch == null ? version : '$version  ·  patch $patch';
 

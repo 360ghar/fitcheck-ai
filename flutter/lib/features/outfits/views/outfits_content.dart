@@ -1,379 +1,117 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_ui.dart';
-import '../../../domain/enums/style.dart';
-import '../../../domain/enums/season.dart';
-import '../controllers/outfit_list_controller.dart';
-import '../controllers/outfit_generation_controller.dart';
-import '../repositories/outfit_repository.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../app/routes/app_routes.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/state/paged_state.dart';
+import '../../../core/widgets/app_ui.dart';
+import '../../../domain/enums/season.dart';
+import '../../../domain/enums/style.dart';
+import '../../wardrobe/models/item_model.dart';
+import '../../wardrobe/widgets/garment_glyph.dart';
+import '../models/outfit_model.dart';
+import '../providers/outfit_providers.dart';
 import 'outfit_detail_page.dart';
 
-/// Outfits content without Scaffold wrapper (for IndexedStack in MainShellPage)
-/// Note: FAB is handled by MainShellPage
-class OutfitsContent extends StatefulWidget {
+/// Outfits tab. The shell supplies the Scaffold, the create button and the
+/// marigold paper stock.
+class OutfitsContent extends ConsumerStatefulWidget {
   const OutfitsContent({super.key});
 
   @override
-  State<OutfitsContent> createState() => _OutfitsContentState();
+  ConsumerState<OutfitsContent> createState() => _OutfitsContentState();
 }
 
-class _OutfitsContentState extends State<OutfitsContent> {
-  final OutfitListController controller = Get.find<OutfitListController>();
-  final OutfitGenerationController generationController = Get.find<OutfitGenerationController>();
-  final OutfitRepository _outfitRepository = OutfitRepository();
+class _OutfitsContentState extends ConsumerState<OutfitsContent> {
+  bool _searching = false;
+  final _search = TextEditingController();
+  Timer? _searchDebounce;
+
+  OutfitsNotifier get _outfits => ref.read(outfitsProvider.notifier);
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(
+      AppConstants.searchDebounceDuration,
+      () => ref.read(outfitFiltersProvider.notifier).setSearch(value),
+    );
+  }
+
+  void _closeSearch() {
+    _searchDebounce?.cancel();
+    _search.clear();
+    ref.read(outfitFiltersProvider.notifier).setSearch('');
+    setState(() => _searching = false);
+  }
+
+  /// Opens the outfit in a tall sheet over the grid.
+  void _openDetail(OutfitModel outfit) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.94,
+        child: OutfitDetailPage(outfitId: outfit.id),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final outfits = ref.watch(outfitsProvider);
+    final filters = ref.watch(outfitFiltersProvider);
+    final page = outfits.value;
+    final showScene =
+        !_searching && (page == null ? !outfits.hasError : !page.isEmpty);
+
     return AppPageBackground(
-      child: SafeArea(
-        child: Obx(() => RefreshIndicator(
-              onRefresh: () => controller.fetchOutfits(refresh: true),
-              child: InfiniteScrollWrapper(
-                onLoadMore: () => controller.fetchOutfits(),
-                hasMore: controller.hasMore.value,
-                isLoadingMore: controller.isLoadingMore.value,
-                child: CustomScrollView(
-                  slivers: [
-                    _buildAppBar(),
-                    // Offline / error banner (persistent context, so an offline
-                    // user never sees a misleading "No outfits yet" state).
-                    Obx(() {
-                      if (controller.error.value.isEmpty ||
-                          controller.isLoading.value) {
-                        return const SliverToBoxAdapter(
-                          child: SizedBox.shrink(),
-                        );
-                      }
-                      return SliverToBoxAdapter(
-                        child: AppErrorBanner(message: controller.error.value),
-                      );
-                    }),
-                    // Extra bottom inset so extended FAB + bottom nav don't cover last row
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppConstants.spacing16,
-                        AppConstants.spacing16,
-                        AppConstants.spacing16,
-                        AppConstants.spacing16 + 96,
-                      ),
-                      sliver: Obx(() {
-                        if (controller.isLoading.value && controller.outfits.isEmpty) {
-                          return const ShimmerGridLoader(
-                            crossAxisCount: 2,
-                            itemCount: 6,
-                            childAspectRatio: 0.85,
-                          );
-                        }
-
-                        if (controller.filteredOutfits.isEmpty) {
-                          return _buildEmptyState();
-                        }
-
-                        return _buildOutfitsGrid();
-                      }),
-                    ),
-                    // Load more indicator
-                    Obx(() => SliverLoadingMoreIndicator(
-                          isLoading: controller.isLoadingMore.value,
-                        )),
-                  ],
-                ),
-              ),
-            )),
-      ),
-    );
-  }
-
-  Widget _buildAppBar() {
-    final tokens = AppUiTokens.of(context);
-
-    return SliverAppBar(
-      floating: true,
-      elevation: 0,
-      automaticallyImplyLeading: false,
-      title: Text(
-        'Outfits',
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
-      ),
-      actions: [
-        Semantics(
-          label: 'Search outfits',
-          button: true,
-          child: IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _showSearchDialog(),
-          ),
-        ),
-        PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'filter') {
-              _showFilterBottomSheet();
-            } else if (value == 'favorites') {
-              controller.favoritesOnly.toggle();
-            } else if (value == 'collections') {
-              Get.toNamed(Routes.outfitCollections);
-            }
+      child: RefreshIndicator(
+        onRefresh: () => ref
+            .refresh(outfitsProvider.future)
+            .then<void>((_) {}, onError: (_) {}),
+        child: InfiniteScrollWrapper(
+          onLoadMore: _outfits.loadMore,
+          canLoadMore: () {
+            final s = ref.read(outfitsProvider);
+            return !s.isLoading && (s.value?.canLoadMore ?? false);
           },
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 'favorites',
-              child: Row(
-                children: [
-                  Obx(() => Icon(
-                    controller.favoritesOnly.value
-                        ? Icons.favorite
-                        : Icons.favorite_border,
-                  )),
-                  const SizedBox(width: AppConstants.spacing8),
-                  const Text('Favorites Only'),
-                ],
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: _header(page, failed: outfits.hasError),
               ),
-            ),
-            const PopupMenuItem(
-              value: 'filter',
-              child: Row(
-                children: [
-                  Icon(Icons.filter_list),
-                  SizedBox(width: AppConstants.spacing8),
-                  Text('Filter'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'collections',
-              child: Row(
-                children: [
-                  Icon(Icons.folder_outlined),
-                  SizedBox(width: AppConstants.spacing8),
-                  Text('Collections'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOutfitsGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 190,
-        mainAxisSpacing: AppConstants.spacing12,
-        crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 0.85,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final outfit = controller.filteredOutfits[index];
-          return _buildOutfitCard(outfit);
-        },
-        childCount: controller.filteredOutfits.length,
-      ),
-    );
-  }
-
-  Widget _buildOutfitCard(dynamic outfit) {
-    final tokens = AppUiTokens.of(context);
-    final hasImages = outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty;
-    final imageUrls = hasImages
-        ? outfit.outfitImages!.map<String>((img) => img.url as String).toList()
-        : <String>[];
-
-    return GestureDetector(
-      onTap: () => _openOutfitDetailModal(outfit),
-      onLongPress: () => _showOutfitDetail(outfit),
-      child: Semantics(
-        label: 'Outfit: ${outfit.name}',
-        child: Container(
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-          border: Border.all(
-            color: tokens.cardBorderColor,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: tokens.cardShadowColor,
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Outfit image/items preview using AppImage
-            Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radius16 - 1),
-                child: hasImages
-                    ? AppImage(
-                        imageUrl: imageUrls.first,
-                        fit: BoxFit.contain,
-                        backgroundColor: tokens.isDarkMode
-                            ? Colors.black.withValues(alpha: 0.3)
-                            : Colors.grey.withValues(alpha: 0.1),
-                        enableZoom: false,
-                        galleryUrls: imageUrls,
-                        // Presigned URLs expire after 1h; on a failed load
-                        // re-mint a fresh URL from the durable storage key.
-                        storagePath: outfit.outfitImages?.first.storagePath,
-                        remintUrl: _outfitRepository.remintImageUrl,
-                      )
-                    : _buildPlaceholder(),
-              ),
-            ),
-
-            // Favorite indicator
-            if (outfit.isFavorite)
-              Positioned(
-                top: AppConstants.spacing8,
-                right: AppConstants.spacing8,
-                child: Container(
-                  padding: const EdgeInsets.all(AppConstants.spacing4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.favorite,
-                    color: Colors.white,
-                    size: 14,
+              if (showScene)
+                const SliverToBoxAdapter(
+                  child: PaperScene(preset: PaperScenes.outfits, height: 112),
+                ),
+              SliverToBoxAdapter(child: _FilterChips(filters: filters)),
+              if (page != null && outfits.hasError)
+                SliverToBoxAdapter(
+                  child: AppErrorBanner(
+                    error: outfits.error,
+                    onRetry: _outfits.refresh,
                   ),
                 ),
-              ),
-
-            // Draft indicator
-            if (outfit.isDraft)
-              Positioned(
-                top: AppConstants.spacing8,
-                left: AppConstants.spacing8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacing8,
-                    vertical: AppConstants.spacing4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(AppConstants.radius8),
-                  ),
-                  child: Text(
-                    'Draft',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+              ..._content(outfits, filters),
+              if (page != null)
+                SliverLoadingMoreIndicator(
+                  isLoading: page.isLoadingMore,
+                  error: page.loadMoreError,
+                  onRetry: _outfits.retryLoadMore,
                 ),
-              ),
-
-            // Outfit info at bottom
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(AppConstants.spacing12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.8),
-                    ],
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(AppConstants.radius16),
-                    bottomRight: Radius.circular(AppConstants.radius16),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      outfit.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (outfit.style != null)
-                      Text(
-                        outfit.style!.displayName,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      ),
-    );
-  }
-
-  Widget _buildPlaceholder() {
-    final tokens = AppUiTokens.of(context);
-
-    return Container(
-      color: tokens.cardColor.withValues(alpha: 0.6),
-      child: const Center(
-        child: Icon(Icons.image, size: 48, color: Colors.white54),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    final tokens = AppUiTokens.of(context);
-
-    return SliverFillRemaining(
-      child: Center(
-        child: AppGlassCard(
-          padding: const EdgeInsets.all(AppConstants.spacing24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.auto_awesome,
-                size: 64,
-                color: tokens.textMuted,
-              ),
-              const SizedBox(height: AppConstants.spacing16),
-              Text(
-                'No outfits yet',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: tokens.textPrimary,
-                    ),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              Text(
-                'Create your first outfit from your closet',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: tokens.textMuted,
-                    ),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 88)),
             ],
           ),
         ),
@@ -381,214 +119,502 @@ class _OutfitsContentState extends State<OutfitsContent> {
     );
   }
 
-  void _showSearchDialog() {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Search Outfits'),
-        content: TextField(
-          decoration: const InputDecoration(
-            hintText: 'Search by name or style...',
+  List<Widget> _content(
+    AsyncValue<PagedState<OutfitModel>> outfits,
+    OutfitFilters filters,
+  ) {
+    const padding = EdgeInsets.fromLTRB(
+      AppConstants.spacing16,
+      AppConstants.spacing8,
+      AppConstants.spacing16,
+      AppConstants.spacing8,
+    );
+    final page = outfits.value;
+    if (page == null) {
+      if (outfits.hasError) {
+        return [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: AppErrorState(
+              error: outfits.error,
+              onRetry: _outfits.refresh,
+            ),
           ),
-          onChanged: (value) {
-            controller.searchQuery.value = value;
-          },
+        ];
+      }
+      return const [
+        SliverPadding(
+          padding: padding,
+          sliver: SkeletonGridLoader(itemCount: 6, childAspectRatio: 0.8),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Done'),
+      ];
+    }
+    if (page.isEmpty) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: filters.isFiltered
+              ? AppEmptyState(
+                  scene: PaperScenes.outfits,
+                  title: 'No outfits match',
+                  message: 'Try fewer filters or another search.',
+                  actionLabel: 'Clear filters',
+                  onAction: () {
+                    _closeSearch();
+                    ref.read(outfitFiltersProvider.notifier).clear();
+                  },
+                )
+              : AppEmptyState(
+                  scene: PaperScenes.outfits,
+                  title: 'No outfits yet',
+                  message: 'Pair pieces from your closet and save the look.',
+                  actionLabel: 'Build an outfit',
+                  actionIcon: Icons.style_outlined,
+                  onAction: () => context.push(Routes.outfitBuilder),
+                ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: padding,
+        sliver: SliverGrid.builder(
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 220,
+            mainAxisSpacing: AppConstants.spacing12 + 3,
+            crossAxisSpacing: AppConstants.spacing12,
+            childAspectRatio: 0.8,
           ),
-        ],
+          itemCount: page.items.length,
+          itemBuilder: (context, i) => _OutfitCard(
+            outfit: page.items[i],
+            onTap: _openDetail,
+            onLongPress: _showOptions,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _header(PagedState<OutfitModel>? page, {required bool failed}) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final Widget title = _searching
+        ? TextField(
+            controller: _search,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onChanged: _onSearchChanged,
+            decoration: const InputDecoration(
+              hintText: 'Search your outfits',
+              prefixIcon: Icon(Icons.search_rounded),
+            ),
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Outfits', style: text.displaySmall?.copyWith(fontSize: 34)),
+              Text(
+                page == null
+                    ? (failed ? ' ' : 'Loading your outfits')
+                    : page.total == 1
+                    ? '1 outfit'
+                    : '${page.total} outfits',
+                style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+            ],
+          );
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.spacing20,
+          AppConstants.spacing12,
+          AppConstants.spacing8,
+          AppConstants.spacing8,
+        ),
+        child: Row(
+          children: [
+            Expanded(child: title),
+            if (_searching)
+              IconButton(
+                tooltip: 'Close search',
+                icon: const Icon(Icons.close_rounded),
+                onPressed: _closeSearch,
+              )
+            else ...[
+              IconButton(
+                tooltip: 'Search',
+                icon: const Icon(Icons.search_rounded),
+                onPressed: () => setState(() => _searching = true),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'More',
+                icon: const Icon(Icons.tune_rounded),
+                onSelected: (value) => value == 'filter'
+                    ? showModalBottomSheet<void>(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (_) => const _FilterSheet(),
+                      )
+                    : context.push(Routes.outfitCollections),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'filter',
+                    child: Text('Style and season'),
+                  ),
+                  PopupMenuItem(
+                    value: 'collections',
+                    child: Text('Collections'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 
-  void _showFilterBottomSheet() {
-    final tokens = AppUiTokens.of(context);
-
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-          border: Border.all(color: tokens.cardBorderColor),
+  Future<void> _showOptions(OutfitModel outfit) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppConstants.spacing20,
+                AppConstants.spacing20,
+                AppConstants.spacing20,
+                AppConstants.spacing8,
+              ),
+              child: Text(
+                outfit.name,
+                style: Theme.of(context).textTheme.headlineSmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                outfit.isFavorite
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+              ),
+              title: Text(outfit.isFavorite ? 'Remove favourite' : 'Favourite'),
+              onTap: () => Navigator.pop(context, 'favorite'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit'),
+              onTap: () => Navigator.pop(context, 'edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_all_outlined),
+              title: const Text('Duplicate'),
+              onTap: () => Navigator.pop(context, 'duplicate'),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: PaperTokens.of(context).error,
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: PaperTokens.of(context).error),
+              ),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+    );
+    if (!mounted) return;
+    switch (action) {
+      case 'favorite':
+        await _outfits.toggleFavorite(outfit.id);
+      case 'edit':
+        context.push(Routes.outfitEdit(outfit.id));
+      case 'duplicate':
+        await _outfits.duplicate(outfit.id);
+      case 'delete':
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete this outfit?'),
+            content: const Text('Its pieces stay in your closet.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: PaperTokens.of(context).error,
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true) await _outfits.delete(outfit.id);
+    }
+  }
+}
+
+class _FilterChips extends ConsumerWidget {
+  const _FilterChips({required this.filters});
+
+  final OutfitFilters filters;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(outfitFiltersProvider.notifier);
+    Widget chip(String label, bool selected, VoidCallback onTap) => Padding(
+      padding: const EdgeInsets.only(right: AppConstants.spacing8),
+      child: FilterChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        onSelected: (_) => onTap(),
+      ),
+    );
+    return SizedBox(
+      height: 56,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.spacing16,
+          vertical: AppConstants.spacing8,
+        ),
+        children: [
+          chip(
+            'All',
+            filters.styles.isEmpty &&
+                filters.seasons.isEmpty &&
+                !filters.favoritesOnly &&
+                !filters.draftsOnly,
+            notifier.clearChips,
+          ),
+          chip(
+            'Favourites',
+            filters.favoritesOnly,
+            () => notifier.setFavoritesOnly(!filters.favoritesOnly),
+          ),
+          chip(
+            'Drafts',
+            filters.draftsOnly,
+            () => notifier.setDraftsOnly(!filters.draftsOnly),
+          ),
+          for (final s in Style.values)
+            chip(
+              s.displayName,
+              filters.styles.contains(s),
+              () => notifier.toggleStyle(s),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OutfitCard extends ConsumerWidget {
+  const _OutfitCard({
+    required this.outfit,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final OutfitModel outfit;
+  final void Function(OutfitModel) onTap;
+  final void Function(OutfitModel) onLongPress;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final image = outfit.outfitImages?.firstOrNull;
+    final pieces = outfit.items ?? const <ItemModel>[];
+    final details = [
+      if (outfit.style != null) outfit.style!.displayName,
+      if (outfit.isDraft) 'Draft',
+    ].join(' · ');
+
+    return PaperSurface(
+      padding: EdgeInsets.zero,
+      grain: false,
+      clipBehavior: Clip.antiAlias,
+      onTap: () => onTap(outfit),
+      onLongPress: () => onLongPress(outfit),
+      semanticLabel: '${outfit.name}${outfit.isFavorite ? ', favourite' : ''}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ColoredBox(
+              color: tokens.stock.sunk,
+              child: image != null
+                  ? AppImage(
+                      imageUrl: image.url,
+                      fit: BoxFit.contain,
+                      enableZoom: false,
+                      memCacheWidth: 480,
+                      backgroundColor: tokens.stock.sunk,
+                      storagePath: image.storagePath,
+                      remintUrl: ref
+                          .read(outfitRepositoryProvider)
+                          .remintImageUrl,
+                      semanticLabel: outfit.name,
+                    )
+                  : _MiniCollage(pieces: pieces),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.spacing12,
+              AppConstants.spacing8,
+              AppConstants.spacing8,
+              AppConstants.spacing8,
+            ),
+            child: Row(
               children: [
-                Text(
-                  'Filter by Style',
-                  style: Theme.of(context).textTheme.titleMedium,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        outfit.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleSmall,
+                      ),
+                      if (details.isNotEmpty)
+                        Text(
+                          details,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: tokens.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: AppConstants.spacing16),
-                Obx(() => Wrap(
-                      spacing: AppConstants.spacing8,
-                      runSpacing: AppConstants.spacing8,
-                      children: Style.values.map((style) {
-                        return FilterChip(
-                          label: Text(style.displayName),
-                          selected: controller.selectedStyles.contains(style),
-                          onSelected: (selected) {
-                            if (selected) {
-                              controller.selectedStyles.add(style);
-                            } else {
-                              controller.selectedStyles.remove(style);
-                            }
-                          },
-                        );
-                      }).toList(),
-                    )),
-                const SizedBox(height: AppConstants.spacing24),
-                Text(
-                  'Filter by Season',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: AppConstants.spacing16),
-                Obx(() => Wrap(
-                      spacing: AppConstants.spacing8,
-                      runSpacing: AppConstants.spacing8,
-                      children: Season.values.map((season) {
-                        return FilterChip(
-                          label: Text(season.displayName),
-                          selected: controller.selectedSeasons.contains(season),
-                          onSelected: (selected) {
-                            if (selected) {
-                              controller.selectedSeasons.add(season);
-                            } else {
-                              controller.selectedSeasons.remove(season);
-                            }
-                          },
-                        );
-                      }).toList(),
-                    )),
-                const SizedBox(height: AppConstants.spacing24),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => controller.clearAllFilters(),
-                      child: const Text('Clear All'),
-                    ),
-                    const Spacer(),
-                    ElevatedButton(
-                      onPressed: () => Get.back(),
-                      child: const Text('Apply'),
-                    ),
-                  ],
-                ),
+                if (outfit.isFavorite)
+                  Icon(
+                    Icons.favorite_rounded,
+                    size: 16,
+                    color: tokens.stock.accent,
+                  ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  /// Opens the outfit in a modal sheet (reference video UX) instead of pushing
-  /// a full-screen route. Long-press still surfaces the quick-actions sheet.
-  void _openOutfitDetailModal(dynamic outfit) {
-    final tokens = AppUiTokens.of(context);
-    Get.bottomSheet(
-      ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppConstants.radius24),
-        ),
-        child: SizedBox(
-          height: Get.height * 0.9,
-          child: OutfitDetailPage(outfitId: outfit.id as String),
-        ),
-      ),
-      isScrollControlled: true,
-      backgroundColor: tokens.cardColor,
-    );
-  }
-
-  void _showOutfitDetail(dynamic outfit) {
-    final tokens = AppUiTokens.of(context);
-
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-          border: Border.all(color: tokens.cardBorderColor),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  outfit.isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: outfit.isFavorite ? Colors.red : null,
-                ),
-                title: Text(outfit.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'),
-                onTap: () {
-                  Get.back();
-                  controller.toggleFavorite(outfit.id);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Edit'),
-                onTap: () {
-                  Get.back();
-                  Get.toNamed('/outfits/${outfit.id}/edit');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.share),
-                title: const Text('Share'),
-                onTap: () {
-                  Get.back();
-                  generationController.shareOutfit(outfit.id);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: const Text('Delete'),
-                onTap: () {
-                  Get.back();
-                  _showDeleteConfirmation(outfit.id);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteConfirmation(String outfitId) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Delete Outfit?'),
-        content: const Text('This outfit will be removed from your collection.'),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Get.back();
-              controller.deleteOutfit(outfitId);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
-            ),
-            child: const Text('Delete'),
-          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Garment glyphs for an outfit without its own image.
+class _MiniCollage extends StatelessWidget {
+  const _MiniCollage({required this.pieces});
+
+  final List<ItemModel> pieces;
+
+  @override
+  Widget build(BuildContext context) {
+    if (pieces.isEmpty) {
+      return Center(
+        child: Icon(
+          Icons.style_outlined,
+          size: 40,
+          color: PaperTokens.of(context).textMuted,
+        ),
+      );
+    }
+    return Center(
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: AppConstants.spacing8,
+        runSpacing: AppConstants.spacing8,
+        children: [
+          for (final p in pieces.take(4))
+            GarmentGlyph(category: p.category, size: 40),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterSheet extends ConsumerWidget {
+  const _FilterSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filters = ref.watch(outfitFiltersProvider);
+    final notifier = ref.read(outfitFiltersProvider.notifier);
+    final text = Theme.of(context).textTheme;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppConstants.spacing20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Style and season', style: text.headlineSmall),
+            const SizedBox(height: AppConstants.spacing16),
+            Text('Style', style: text.titleSmall),
+            const SizedBox(height: AppConstants.spacing8),
+            Wrap(
+              spacing: AppConstants.spacing8,
+              runSpacing: AppConstants.spacing8,
+              children: [
+                for (final s in Style.values)
+                  FilterChip(
+                    label: Text(s.displayName),
+                    selected: filters.styles.contains(s),
+                    onSelected: (_) => notifier.toggleStyle(s),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppConstants.spacing20),
+            Text('Season', style: text.titleSmall),
+            const SizedBox(height: AppConstants.spacing8),
+            Wrap(
+              spacing: AppConstants.spacing8,
+              runSpacing: AppConstants.spacing8,
+              children: [
+                for (final s in Season.values)
+                  FilterChip(
+                    label: Text(s.displayName),
+                    selected: filters.seasons.contains(s),
+                    onSelected: (_) => notifier.toggleSeason(s),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppConstants.spacing20),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () {
+                    notifier.clear();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Clear all'),
+                ),
+                const Spacer(),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

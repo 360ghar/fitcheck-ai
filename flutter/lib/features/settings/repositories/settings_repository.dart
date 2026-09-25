@@ -21,13 +21,31 @@ class SettingsRepository {
 
   /// Update user preferences
   Future<UserPreferencesModel> updatePreferences(UserPreferencesModel preferences) async {
+    return _putPreferences(preferences.toJson());
+  }
+
+  /// Save only the style choices from the first-run setup. The full
+  /// [updatePreferences] body would also send the app-only fields, so setup
+  /// sends its two keys through the same PUT helper instead.
+  Future<void> updateStyleChoices({
+    required List<String> styles,
+    required List<String> occasions,
+  }) async {
+    await _putPreferences(
+      {'preferred_styles': styles, 'preferred_occasions': occasions},
+    );
+  }
+
+  /// One PUT for the preferences endpoint: single URL, envelope and mapping.
+  Future<UserPreferencesModel> _putPreferences(Map<String, dynamic> data) async {
     try {
       final response = await _apiClient.put(
         '${ApiConstants.users}/preferences',
-        data: preferences.toJson(),
+        data: data,
       );
-      final data = _extractPreferenceData(response.data);
-      return UserPreferencesModel.fromJson(data);
+      return UserPreferencesModel.fromJson(
+        _extractPreferenceData(response.data),
+      );
     } on DioException catch (e) {
       throw handleDioException(e);
     }

@@ -12,6 +12,7 @@ save_generated_image, and the factory function.
 Pure unit tests: the AI service is an AsyncMock and no network is touched.
 """
 
+import base64
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -171,6 +172,31 @@ async def test_matte_non_matted_status_returns_original():
     ):
         result = await ImageGenerationAgent._matte(generated, context="product image")
     assert result is generated
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("crop", [True, False])
+async def test_matte_forwards_crop_to_the_matte(crop):
+    """Product images pass crop=True; the flat-lay default stays full-frame."""
+    generated = GeneratedImage("ZmFrZQ==", "p", "m", "prov")
+    with patch(
+        "app.agents.image_generation_agent.remove_white_background",
+        return_value=_matted_result(),
+    ) as matte:
+        await ImageGenerationAgent._matte(generated, context="product image", crop=crop)
+    assert matte.call_args.kwargs == {"crop": crop}
+
+
+@pytest.mark.asyncio
+async def test_matte_keeps_cropped_transparent_product_bytes():
+    """An existing alpha channel still gets the product crop applied."""
+    generated = GeneratedImage("ZmFrZQ==", "p", "m", "prov")
+    cropped = _matted_result()._replace(status="cropped", image_bytes=b"cropped-bytes")
+    with patch(
+        "app.agents.image_generation_agent.remove_white_background", return_value=cropped,
+    ):
+        result = await ImageGenerationAgent._matte(generated, context="product image", crop=True)
+    assert base64.b64decode(result.image_base64) == b"cropped-bytes"
 
 
 # =============================================================================

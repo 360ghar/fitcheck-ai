@@ -1,68 +1,75 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../widgets/ai_consent_sheet.dart';
 import 'persistence_service.dart';
+import 'supabase_service.dart';
+
+final aiConsentServiceProvider = Provider<AiConsentService>(
+  (ref) => AiConsentService(),
+);
 
 /// Service that records and gates the user's consent to sharing their photos
 /// with a third-party AI provider (OpenAI) for image generation.
 ///
 /// Required for Apple App Store Guideline 5.1.2(i): explicit permission must be
 /// obtained before sharing user data with third parties. Consent is captured
-/// once at the first AI-feature use and persisted locally via
-/// [PersistenceService] (modeled on [ThemeService]).
-class AiConsentService extends GetxController {
-  /// Versioned key so we can re-prompt if the disclosure materially changes.
-  /// Restored from the pre-DI-refactor value (`fitcheck_ai_consent_v1`) so
-  /// users who granted consent before that change keep it (a mangled key
-  /// silently re-prompted them and, worse, re-consented under a garbage key).
-  static const String _consentKey = 'fitcheck_ai_consent_v1';
+/// once per user at the first AI-feature use and persisted locally via
+/// [PersistenceService].
+class AiConsentService {
+  AiConsentService({String? Function()? userId, PersistenceService? persistence})
+    : _userId =
+          userId ?? (() => SupabaseService.instance.currentSession?.user.id),
+      _persistence = persistence ?? PersistenceService.instance;
 
-  PersistenceService get _persistence => Get.find<PersistenceService>();
+  /// Versioned key prefix, so a material disclosure change can re-prompt.
+  /// Consent is stored per user: another account that signs in on the same
+  /// device must give its own consent (App Store Guideline 5.1.2(i)).
+  static const String _consentKeyPrefix = 'fitcheck_ai_consent_v1';
 
-  /// Cached in-memory value to avoid repeated disk reads. `false` is cached
-  /// too: consent can only change in-process via [setConsented] (which updates
-  /// the cache), so a cached false is authoritative and re-reading disk on
-  /// every call while the user hasn't consented yet buys nothing.
+  final String? Function() _userId;
+
+  final PersistenceService _persistence;
+
+  /// In-memory cache for the user in [_cachedFor]. Consent changes only
+  /// through [setConsented], so the cache stays correct until the user
+  /// changes.
+  String? _cachedFor;
   bool _consented = false;
 
-  @override
-  void onInit() {
-    super.onInit();
-    _loadCachedConsent();
-  }
+  String _keyFor(String uid) => '$_consentKeyPrefix:$uid';
 
-  Future<void> _loadCachedConsent() async {
-    try {
-      _consented = (await _persistence.getBool(_consentKey)) ?? false;
-    } catch (e) {
-      debugPrint('Failed to load AI consent: $e');
-    }
-  }
-
-  /// Returns true if the user has previously granted consent.
+  /// Returns true if the signed-in user has previously granted consent.
   Future<bool> hasConsented() async {
-    if (_consented) return true;
-    // First call only: seed the cache from disk, then answer from memory until
-    // a mutation changes it.
+    final uid = _userId();
+    if (uid == null) return false;
+    if (uid == _cachedFor) return _consented;
+    var consented = false;
     try {
-      final stored = await _persistence.getBool(_consentKey);
-      if (stored != null) {
-        _consented = stored;
-        return _consented;
-      }
+      consented = (await _persistence.getBool(_keyFor(uid))) ?? false;
     } catch (e) {
       debugPrint('Failed to read AI consent: $e');
     }
-    // Key absent (or read failed): treat as not-consented and remember it so
-    // subsequent calls skip the disk entirely.
-    return _consented;
+    _cachedFor = uid;
+    _consented = consented;
+    return consented;
   }
 
-  /// Persists that the user has granted consent.
+  /// Persists that the signed-in user has granted consent.
   Future<void> setConsented() async {
+    final uid = _userId();
+    if (uid == null) return;
+    await _setConsentedFor(uid);
+  }
+
+  /// Records consent for [uid], the user captured when the consent sheet was
+  /// shown. If the account changed while the sheet was open, nothing is
+  /// written: one user's acceptance must never be recorded for another.
+  Future<void> _setConsentedFor(String uid) async {
+    if (_userId() != uid) return;
+    _cachedFor = uid;
     _consented = true;
     try {
-      await _persistence.setBool(_consentKey, true);
+      await _persistence.setBool(_keyFor(uid), true);
     } catch (e) {
       debugPrint('Failed to persist AI consent: $e');
     }
@@ -75,11 +82,13 @@ class AiConsentService extends GetxController {
   /// true, on decline it returns false (caller must abort the AI action).
   Future<bool> ensureConsent({required String featureLabel}) async {
     if (await hasConsented()) return true;
+    final uid = _userId();
+    if (uid == null) return false;
 
     final accepted = await showAiConsentSheet(featureLabel: featureLabel);
-    if (accepted) {
-      await setConsented();
-    }
-    return accepted;
+    if (!accepted) return false;
+    if (_userId() != uid) return false; // account changed while the sheet ran
+    await _setConsentedFor(uid);
+    return true;
   }
 }

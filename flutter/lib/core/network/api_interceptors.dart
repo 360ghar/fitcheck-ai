@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:get/get.dart' as getx;
-import '../../app/routes/app_routes.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 import '../constants/api_constants.dart';
 import '../services/supabase_service.dart';
 import '../widgets/app_network_image.dart' show urlAcceptsAuthToken;
@@ -11,10 +10,7 @@ class AuthInterceptor extends Interceptor {
   final SupabaseService _supabase = SupabaseService.instance;
 
   @override
-  void onRequest(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-  ) {
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     // Skip auth for public endpoints and for URLs that must NOT carry the
     // bearer token (A9-01): presigned S3/R2 URLs reject any second auth
     // mechanism ("Only one auth mechanism allowed") and third-party hosts
@@ -58,6 +54,13 @@ class TokenRefreshInterceptor extends Interceptor {
 
   TokenRefreshInterceptor(this._dio);
 
+  /// True only when the refresh token itself is rejected. A network failure
+  /// (`AuthRetryableFetchException`) keeps the session, so the user is not
+  /// signed out for a dropped connection.
+  static bool isDeadSession(Object error) =>
+      error is supa.AuthApiException ||
+      error is supa.AuthSessionMissingException;
+
   /// Marks a retried request so a second 401 on the replayed request does not
   /// start another refresh (which would loop: refresh -> fetch -> 401 ->
   /// refresh...). The original 401 then propagates to the caller, which is the
@@ -83,16 +86,19 @@ class TokenRefreshInterceptor extends Interceptor {
         refresh = _refreshFuture;
         await refresh;
       } catch (e) {
-        if (identical(_refreshFuture, refresh)) _refreshFuture = null;
-        // Only a FAILED REFRESH is a session problem. Sign out and land on
-        // splash so a dead session cannot loop here.
+        final owner = identical(_refreshFuture, refresh);
+        if (owner) _refreshFuture = null;
         if (kDebugMode) {
           debugPrint('Token refresh failed: $e');
         }
-        try {
-          await _supabase.signOut();
-        } catch (_) {}
-        getx.Get.offAllNamed(Routes.splash);
+        // Racing 401s share one refresh future, so only its owner signs out.
+        // This gives one sign-out for N parallel requests; the router then
+        // leaves the signed-in pages.
+        if (owner && isDeadSession(e)) {
+          try {
+            await _supabase.signOut();
+          } catch (_) {}
+        }
         return handler.next(err);
       }
       if (identical(_refreshFuture, refresh)) _refreshFuture = null;

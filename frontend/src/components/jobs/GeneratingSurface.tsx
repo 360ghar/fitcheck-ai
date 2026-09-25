@@ -19,6 +19,11 @@ export interface GeneratingSurfaceProps {
   previewUrls?: string[]
   /** Optional caption under previews */
   previewLabel?: string
+  /**
+   * `contain` for item cutouts (cropped tight to the item, so `cover` cuts
+   * their edges); `cover` (default) for photos.
+   */
+  previewFit?: 'cover' | 'contain'
   /** Show spinner ring */
   isActive?: boolean
   onCancel?: () => void
@@ -33,6 +38,7 @@ export function GeneratingSurface({
   progress,
   previewUrls,
   previewLabel,
+  previewFit = 'cover',
   isActive = true,
   onCancel,
   onBackground,
@@ -70,7 +76,7 @@ export function GeneratingSurface({
                 <img
                   src={url}
                   alt=""
-                  className="w-full h-full object-cover"
+                  className={cn('w-full h-full', previewFit === 'contain' ? 'object-contain' : 'object-cover')}
                   loading="lazy"
                   decoding="async"
                 />
