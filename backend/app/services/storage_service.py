@@ -228,6 +228,8 @@ class StorageService:
         backend,
         storage_path: str,
         file_data: bytes,
+        *,
+        cache_control: str = DEFAULT_CACHE_CONTROL,
     ) -> bool:
         """Create the ``_thumb`` sibling object for an uploaded image.
 
@@ -237,7 +239,8 @@ class StorageService:
         is canonical so that, once ops has flipped ``THUMBNAILS_BACKFILLED``,
         the read path can emit ``thumbnail_url`` without per-object existence
         checks. CPU-bound Pillow work runs on the bounded image executor.
-        Returns True when the thumb object was written.
+        Returns True when the thumb object was written. ``cache_control`` can
+        override the normal upload TTL during an in-place backfill.
 
         Always WebP, always ``image/webp`` (see THUMB_EXTENSION): transparency
         survives, and the key/bytes/Content-Type cannot disagree.
@@ -276,7 +279,7 @@ class StorageService:
                 key=thumb_key,
                 data=thumb,
                 content_type=THUMB_CONTENT_TYPE,
-                cache_control=DEFAULT_CACHE_CONTROL,
+                cache_control=cache_control,
             )
             return True
         except Exception as e:

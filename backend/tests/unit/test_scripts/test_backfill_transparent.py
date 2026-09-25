@@ -344,7 +344,7 @@ class TestProcessRowFailures:
     def _thumbs_ok(self, monkeypatch):
         self.thumbs = []
 
-        async def refresh(storage, key, data):
+        async def refresh(storage, key, data, *, cache_control):
             self.thumbs.append(key)
             return True
 
@@ -421,7 +421,7 @@ class TestProcessRowFailures:
         db = _FakeDb()
         order = []
 
-        async def refresh(storage_, key, data):
+        async def refresh(storage_, key, data, *, cache_control):
             order.append(("thumb", data))
             return True
 
@@ -448,7 +448,7 @@ class TestProcessRowFailures:
         storage = _FakeStorage()
         db = _FakeDb()
 
-        async def refresh(storage_, key, data):
+        async def refresh(storage_, key, data, *, cache_control):
             return False
 
         monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
@@ -499,8 +499,32 @@ class TestRunPool:
 
 
 class TestRefreshThumbnail:
+    def test_main_and_thumbnail_use_configured_cache_ttl(self, monkeypatch):
+        import io
+
+        from PIL import Image
+
+        encoded = io.BytesIO()
+        Image.new("RGBA", (32, 32), (255, 0, 0, 255)).save(encoded, format="PNG")
+        storage = _FakeStorage()
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
+        monkeypatch.setattr(
+            bf, "remove_white_background",
+            lambda *_, **__: _matte_result(bf.STATUS_CROPPED)._replace(
+                image_bytes=encoded.getvalue()
+            ),
+        )
+        record = _process(
+            _FakeDb(), {"id": "row-1", "storage_path": "u1/items/abc.png"}
+        )
+        assert record["action"] == bf.ACTION_CROPPED
+        assert len(storage.uploads) == 2
+        assert [upload["cache_control"] for upload in storage.uploads] == ["60", "60"]
+
     def test_non_canonical_key_needs_no_thumb(self):
-        assert asyncio.run(bf.refresh_thumbnail(_FakeStorage(), "tmp/preview.png", b"x")) is True
+        assert asyncio.run(bf.refresh_thumbnail(
+            _FakeStorage(), "tmp/preview.png", b"x", cache_control=60
+        )) is True
 
 
 # --------------------------------------------------------------------------- #

@@ -175,6 +175,12 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
 
   List<Widget> _picker(AsyncValue<List<ItemModel>> picker, OutfitDraft draft) {
     const padding = EdgeInsets.symmetric(horizontal: AppConstants.spacing16);
+    const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: 90,
+      mainAxisSpacing: AppConstants.spacing8,
+      crossAxisSpacing: AppConstants.spacing8,
+      childAspectRatio: 0.72,
+    );
     return switch (picker) {
       AsyncValue(:final value?) when value.isEmpty => [
         SliverToBoxAdapter(
@@ -222,13 +228,7 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
           SliverPadding(
             padding: padding,
             sliver: SliverGrid.builder(
-              // Cropped item cutouts: 4 columns on a phone.
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 90,
-                mainAxisSpacing: AppConstants.spacing8,
-                crossAxisSpacing: AppConstants.spacing8,
-                childAspectRatio: 0.72,
-              ),
+              gridDelegate: gridDelegate,
               itemCount: shown.length,
               itemBuilder: (context, i) => _PickTile(
                 item: shown[i],
@@ -246,13 +246,15 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
           ),
         ),
       ],
-      _ => const [
+      _ => [
         SliverPadding(
           padding: padding,
-          sliver: SkeletonGridLoader(
-            crossAxisCount: 4,
-            itemCount: 12,
-            childAspectRatio: 0.72,
+          sliver: SkeletonPulse(
+            child: SliverGrid.builder(
+              gridDelegate: gridDelegate,
+              itemCount: 12,
+              itemBuilder: (context, index) => const SkeletonGridItem(),
+            ),
           ),
         ),
       ],

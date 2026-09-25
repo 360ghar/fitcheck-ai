@@ -46,9 +46,9 @@ Item cutouts are cropped to the item plus a small transparent pad, the matte and
 ## Verification
 
 ```bash
-cd backend && source .venv/bin/activate && ruff check . && pytest
-cd frontend && npm run lint && npm test && npm run build
-cd flutter && flutter test
+(cd backend && source .venv/bin/activate && ruff check . && pytest)
+(cd frontend && npm run lint && npm test && npm run build)
+(cd flutter && flutter test)
 ./scripts/check_all.sh
 ```
 

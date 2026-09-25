@@ -37,7 +37,7 @@ describe('useColumnCount', () => {
     [1024, 5, 'lg is 5'],
     [1280, 6, 'xl is 6'],
     [1536, 7, '2xl is 7'],
-  ])('returns %i columns at %ipx (%s)', (width, expected) => {
+  ])('at %ipx returns %i columns (%s)', (width, expected) => {
     stubViewport(width)
     const { result } = renderHook(() => useColumnCount())
     expect(result.current).toBe(expected)
@@ -47,7 +47,7 @@ describe('useColumnCount', () => {
     [1024, 2, 'lg split is 2'],
     [1280, 3, 'xl split is 3'],
     [1536, 4, '2xl split is 4'],
-  ])('with the detail pane open returns %i columns at %ipx (%s)', (width, expected) => {
+  ])('with the detail pane open at %ipx returns %i columns (%s)', (width, expected) => {
     stubViewport(width)
     const { result } = renderHook(() => useColumnCount({ isDetailOpen: true }))
     expect(result.current).toBe(expected)
@@ -61,7 +61,7 @@ describe('useColumnCount', () => {
     [1024, 7, 'lg is 7'],
     [1280, 8, 'xl is 8'],
     [1536, 9, '2xl is 9'],
-  ])('dense (item cutouts) returns %i columns at %ipx (%s)', (width, expected) => {
+  ])('dense (item cutouts) at %ipx returns %i columns (%s)', (width, expected) => {
     stubViewport(width)
     const { result } = renderHook(() => useColumnCount({ dense: true }))
     expect(result.current).toBe(expected)
@@ -71,7 +71,7 @@ describe('useColumnCount', () => {
     [1024, 4, 'lg dense split is 4'],
     [1280, 5, 'xl dense split is 5'],
     [1536, 6, '2xl dense split is 6'],
-  ])('dense with the detail pane open returns %i columns at %ipx (%s)', (width, expected) => {
+  ])('dense with the detail pane open at %ipx returns %i columns (%s)', (width, expected) => {
     stubViewport(width)
     const { result } = renderHook(() => useColumnCount({ dense: true, isDetailOpen: true }))
     expect(result.current).toBe(expected)

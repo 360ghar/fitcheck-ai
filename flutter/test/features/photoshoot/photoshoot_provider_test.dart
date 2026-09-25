@@ -286,13 +286,17 @@ void main() {
           );
           await _settle(150);
           expect(state().failedIndices, [1]);
-          final retry = notifier().retryFailedSlot(1);
-          await repo.retryStarted.future;
-          if (reset) notifier().reset();
-          repo.retryResult.completeError(Exception('late retry failure'));
-          await retry;
         });
-        await tester.pump();
+        // Let the partial-success snackbar appear before retrying, so the
+        // failure must wait for its dismissal animation.
+        await tester.pumpAndSettle();
+        expect(find.text('Partly done'), findsOneWidget);
+        final retry = notifier().retryFailedSlot(1);
+        await repo.retryStarted.future;
+        if (reset) notifier().reset();
+        repo.retryResult.completeError(Exception('late retry failure'));
+        await retry;
+        await tester.pumpAndSettle();
         expect(
           find.text('Retry failed'),
           reset ? findsNothing : findsOneWidget,

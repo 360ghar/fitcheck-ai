@@ -785,7 +785,9 @@ class Config(NamedTuple):
     version: int
 
 
-async def refresh_thumbnail(storage: Any, key: str, data: bytes) -> bool:
+async def refresh_thumbnail(
+    storage: Any, key: str, data: bytes, *, cache_control: int
+) -> bool:
     """Rewrite the `_thumb` sibling from `data`. True when done or not needed.
 
     Non-canonical keys have no thumb (`thumb_key_for` is None), so there is
@@ -794,7 +796,9 @@ async def refresh_thumbnail(storage: Any, key: str, data: bytes) -> bool:
     """
     if not StorageService.thumb_key_for(key):
         return True
-    return await StorageService._upload_thumbnail(storage, key, data)
+    return await StorageService._upload_thumbnail(
+        storage, key, data, cache_control=str(cache_control)
+    )
 
 
 async def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> dict[str, Any]:
@@ -869,7 +873,9 @@ async def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config
     if should_upload(action):
         # Thumb FIRST: see docstring section 2. A failure here leaves the main
         # object untouched, so the whole row stays retryable.
-        if not await refresh_thumbnail(storage, key, result.image_bytes):
+        if not await refresh_thumbnail(
+            storage, key, result.image_bytes, cache_control=cfg.cache_control
+        ):
             record["action"] = ACTION_ERROR
             record["status"] = "thumb_failed"
             return record

@@ -218,8 +218,9 @@ STATUS_ERROR = "error"
 class MatteResult(NamedTuple):
     """Outcome of one matte attempt.
 
-    On any status other than `matted`, `image_bytes` is the UNMODIFIED input and
-    `content_type` is the sniffed type of those original bytes.
+    `matted` and `cropped` return transformed `image_bytes` and their output
+    `content_type`. Every other status returns the UNMODIFIED input bytes and
+    the sniffed content type of that input.
     """
 
     image_bytes: bytes
