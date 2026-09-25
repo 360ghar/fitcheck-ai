@@ -38,6 +38,7 @@ from app.services.ai_provider_service import AIProviderService, ChatMessage
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
 from app.utils.background_removal import (
+    STATUS_CROPPED,
     STATUS_MATTED,
     MatteResult,
     remove_white_background,
@@ -241,7 +242,9 @@ class ImageGenerationAgent:
         return payload
 
     @staticmethod
-    async def _matte(generated: "GeneratedImage", *, context: str) -> "GeneratedImage":
+    async def _matte(
+        generated: "GeneratedImage", *, context: str, crop: bool = False
+    ) -> "GeneratedImage":
         """Cut the white backdrop out of a freshly generated image.
 
         Wired at EXACTLY TWO call sites - the `generate_product_image` return and
@@ -252,14 +255,20 @@ class ImageGenerationAgent:
         the guards would NOT catch it (a full-body figure lands ~0.70-0.80
         transparent, under MAX_TRANSPARENT_FRACTION, so bad hair would ship).
 
-        Runs on the bounded image executor: the matte is ~110ms of GIL-held C
+        Runs on the bounded image executor: the matte is ~70-90ms of GIL-held C
         work and must not sit on the event loop while a batch SSE stream is
         being served. Never raises - on any failure the original image is
         returned untouched.
+
+        `crop=True` (product images only) trims the cutout to the item plus a
+        small pad so grid tiles show the item, not an empty field. The
+        flat-lay stays full-frame: outfit tiles use `object-cover`.
         """
         def _run() -> tuple[str, MatteResult]:
-            result = remove_white_background(base64.b64decode(generated.image_base64))
-            if result.status != STATUS_MATTED:
+            result = remove_white_background(
+                base64.b64decode(generated.image_base64), crop=crop
+            )
+            if result.status not in {STATUS_MATTED, STATUS_CROPPED}:
                 return generated.image_base64, result
             return base64.b64encode(result.image_bytes).decode("utf-8"), result
 
@@ -285,7 +294,7 @@ class ImageGenerationAgent:
             base64_len_after=len(image_base64),
         )
 
-        if result.status != STATUS_MATTED:
+        if result.status not in {STATUS_MATTED, STATUS_CROPPED}:
             return generated
 
         return GeneratedImage(
@@ -917,7 +926,11 @@ Specs:
 {PRODUCT_TEXT_ONLY_NEGATIVES}""".strip()
 
         generated = await self._generate_image(prompt, reference_image=reference_image)
-        return await self._matte(generated, context="product image") if matte_requested else generated
+        return (
+            await self._matte(generated, context="product image", crop=True)
+            if matte_requested
+            else generated
+        )
 
     async def generate_flat_lay(
         self,

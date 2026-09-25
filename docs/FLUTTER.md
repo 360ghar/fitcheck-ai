@@ -46,7 +46,7 @@ lib/
 - **Paged lists** extend `PagedNotifier<T>` (`lib/core/state/paged_state.dart`): `fetchPage(page)` is the only method to write. It gives `refresh()` (keeps items on screen, keeps them and the paging position on failure), `loadMore()`, `retryLoadMore()` and a `loadMoreError`. A rebuild (for example a filter change) drops the results of older requests.
 - **Refresh without blanking**: set `state = const AsyncLoading()` then `state = await AsyncValue.guard(load)`. Riverpod 3.4 carries the previous value into loading and error states set this way.
 - **Mutations** are notifier methods. They show the success or error snackbar through `ErrorHandler` and return a result (`bool` or the new model) or rethrow. Views await them, pop only on success, and never show a second toast. Per-row spinners use a `BusyIds` notifier; `BusyIds.run` also blocks double taps.
-- **Closet rows** group the single `WardrobeNotifier` fetch client-side by category, in dressing order. Mutations patch the list once and rows follow; there is one request per open, not one per row.
+- **Closet rows** group the single `WardrobeNotifier` fetch client-side by category, in dressing order. Mutations patch the list once and rows follow; the initial page loads once for all rows, and more pages load on demand as the user scrolls.
 - **Filters** are a separate `Notifier` whose state the list `ref.watch`es in `build`, so one change sends one request.
 - **Automatic retry is off** (`noRetry` on `appContainer` and on test containers). Screens offer an explicit retry; repositories use `RetryHelper` for transient network errors.
 - **Per-user data**: a session-wide provider must `ref.watch(sessionUserIdProvider)` in `build`, so the next account never sees the previous account's data.
@@ -58,7 +58,7 @@ lib/
 - `lib/app/router.dart` holds the route table. Paths are in `Routes` (`lib/app/routes/app_routes.dart`); build id paths with `Routes.item(id)`, `Routes.itemEdit(id)`, `Routes.outfit(id)`, `Routes.outfitEdit(id)`.
 - `authRedirect` is the only auth guard: splash until the session is restored, guest pages when signed out, the shell when signed in. `/legal` and `/shared/:id` are public. Sign-in and sign-out code does not navigate; the router reacts to the session.
 - First launch: signed-out users see `/intro` (three paper sheets, `lib/features/onboarding/intro_page.dart`) once, then `/onboarding`. The seen flag is `introSeenProvider`, loaded in `main()` before the first frame.
-- First-run setup: the shell pushes `/welcome` (`setup_page.dart`) once for an account younger than 7 days with no preferred styles (`setup_gate.dart`; same rule as the web `/welcome`).
+- First-run setup: the shell pushes `/welcome` (`setup_page.dart`) for an account aged 0 to less than 7 days with no preferred styles and no local completion flag (`setup_gate.dart`). The flag is per account on this device; setup can appear again on another device. Web uses missing gender instead of styles.
 - The five tabs are a `StatefulShellRoute` (one navigator per tab). Switch tabs with `context.go(Routes.wardrobe)`. Every other page is a top-level route on the root navigator: open it with `context.push(...)`, close it with `Navigator.pop(context, result)`.
 - Dialogs and sheets opened from code without a `BuildContext` use `rootNavigatorKey.currentContext`.
 - Deep linking is off (`FlutterDeepLinkingEnabled` / `flutter_deeplinking_enabled`); `app_links` handles the OAuth and social-import callbacks.
@@ -81,7 +81,7 @@ Paged lists end with `SliverLoadingMoreIndicator(isLoading:, error:, onRetry:)` 
 - **Surfaces**: `PaperSurface` (alias `AppGlassCard`) is a sheet of paper over a solid offset slab; `onTap` makes it press down. Set `grain: false` when a photo covers it. No blurred shadows, glows or gradients.
 - **Page and bars**: wrap a page body in `AppPageBackground`; its grain runs up under the transparent app bar, so there is no seam. A pinned `SliverAppBar` uses `flexibleSpace: const PaperGrainFill()`. A pinned bottom action goes in `PaperActionBar` (torn top edge), never a bare `SafeArea`.
 - **Type**: display and headline styles use Basteleur (Velvetyne, SIL OFL; `assets/fonts/`). Body text uses the platform font. Use `textTheme.displaySmall` for big figures and tab titles, `headlineSmall` for section titles.
-- **Scenes**: `PaperScene(preset:)` draws layered cut paper with scroll parallax and a slow garment sway. Presets live in `PaperScenes` (`home`, `closet`, `outfits`, `studio`, `offline`, `oops`, `auth`). Pass `grain: false` and a transparent `background` when the parent already lays grain, so no band shows at the scene edge. Use scenes only at signature moments: tab headers, empty and error states, auth, splash.
+- **Scenes**: `PaperScene(preset:)` draws layered cut paper with scroll parallax and a slow garment sway. Presets live in `PaperScenes` (`home`, `closet`, `outfits`, `studio`, `offline`, `oops`, `auth`). Pass `grain: false` and a transparent `background` only when an ancestor paints grain in the foreground over the scene. Grain behind the scene cannot texture solid garment shapes. Use scenes only at signature moments: tab headers, empty and error states, auth, splash.
 - **Icons**: bare icons, never inside a tinted tile. Garment placeholders use `GarmentGlyph(category:)`.
 - **Motion**: never gate content on an animation. All motion respects `MediaQuery.disableAnimations`.
 - **Copy**: sentence case, short, second person. No tracked uppercase labels.
@@ -99,6 +99,7 @@ Prefer backend batch extract JSON base64 start endpoint from Flutter; SSE for pr
 ## CI
 
 - `.github/workflows/flutter-ci.yml`
+- Android uses Gradle 8.14, Android Gradle Plugin 8.11.1, and Kotlin 2.2.20 to meet the Flutter 3.47.5 minimum versions.
 - Mobile build workflows for APK/iOS under `.github/workflows/`
 
 ## Code push (Shorebird)

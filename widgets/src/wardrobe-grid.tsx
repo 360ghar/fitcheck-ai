@@ -46,7 +46,7 @@ function App() {
             return (
               <figure className="card" key={item.id ?? index} style={{ margin: 0 }}>
                 {imageUrl ? (
-                  <img className="thumb" src={imageUrl} alt={item.name ?? "item"} loading="lazy" />
+                  <img className="thumb thumb-contain" src={imageUrl} alt={item.name ?? "item"} loading="lazy" />
                 ) : (
                   <div className="thumb" aria-hidden="true" />
                 )}

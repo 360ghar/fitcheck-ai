@@ -135,6 +135,33 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('an edited piece moves from the Tops shelf to Bottoms', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pumpCloset(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(WardrobeContent)),
+      );
+      expect(
+        tester.getCenter(find.bySemanticsLabel('Piece t1')).dy,
+        tester.getCenter(find.bySemanticsLabel('Piece t2')).dy,
+      );
+      container
+          .read(wardrobeProvider.notifier)
+          .replace(piece('t1', Category.bottoms));
+      await tester.pump();
+      expect(find.text('Tops  1'), findsOneWidget);
+      expect(find.text('Bottoms  2'), findsOneWidget);
+      final movedY = tester.getCenter(find.bySemanticsLabel('Piece t1')).dy;
+      expect(movedY, tester.getCenter(find.bySemanticsLabel('Piece b1')).dy);
+      expect(
+        movedY,
+        greaterThan(tester.getCenter(find.bySemanticsLabel('Piece t2')).dy),
+      );
+      semantics.dispose();
+    });
+
     testWidgets('a category chip shows the grid of matches', (tester) async {
       await pumpCloset(tester);
       await tester.tap(find.widgetWithText(FilterChip, 'Tops'));

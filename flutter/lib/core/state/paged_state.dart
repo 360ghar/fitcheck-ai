@@ -93,6 +93,10 @@ abstract class PagedNotifier<T> extends AsyncNotifier<PagedState<T>> {
   Future<void> refresh() async {
     // A newer refresh cancels an in-flight load-more below.
     ++_generation;
+    final current = state.value;
+    if (current != null && current.isLoadingMore) {
+      state = AsyncData(current.copyWith(isLoadingMore: false));
+    }
     // A rebuild (not a manual state write) so Riverpod keeps the current
     // items on screen while loading and retains them on failure.
     ref.invalidateSelf();
@@ -137,7 +141,10 @@ abstract class PagedNotifier<T> extends AsyncNotifier<PagedState<T>> {
   }
 
   /// Applies [change] to the loaded items without a request.
-  void updateItems(List<T> Function(List<T> items) change, {int totalDelta = 0}) {
+  void updateItems(
+    List<T> Function(List<T> items) change, {
+    int totalDelta = 0,
+  }) {
     final current = state.value;
     if (current == null) return;
     state = AsyncData(
@@ -177,9 +184,8 @@ class SelectedIds extends Notifier<Set<String>> {
     return const {};
   }
 
-  void toggle(String id) => state = state.contains(id)
-      ? ({...state}..remove(id))
-      : {...state, id};
+  void toggle(String id) =>
+      state = state.contains(id) ? ({...state}..remove(id)) : {...state, id};
 
   void clear() => state = const {};
 }

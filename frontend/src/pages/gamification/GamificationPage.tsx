@@ -48,10 +48,10 @@ export default function GamificationPage() {
       setLeaderboard(leaderboardRes.entries)
       setUserRank(leaderboardRes.user_rank ?? null)
     } catch (err) {
-      if (requestId !== requestIdRef.current) return
       // API diagnostics can contain provider or database details. The client
       // keeps those in telemetry and presents stable, actionable copy here.
       logger.error('Gamification load failed', err)
+      if (requestId !== requestIdRef.current) return
       setLoadError('We couldn\'t load your rewards right now. Check your connection and try again.')
       setStreak(null)
       setAchievements(null)

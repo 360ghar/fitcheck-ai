@@ -222,10 +222,11 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
           SliverPadding(
             padding: padding,
             sliver: SliverGrid.builder(
+              // Cropped item cutouts: 4 columns on a phone.
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 130,
-                mainAxisSpacing: AppConstants.spacing12 + 3,
-                crossAxisSpacing: AppConstants.spacing12,
+                maxCrossAxisExtent: 90,
+                mainAxisSpacing: AppConstants.spacing8,
+                crossAxisSpacing: AppConstants.spacing8,
                 childAspectRatio: 0.72,
               ),
               itemCount: shown.length,
@@ -249,8 +250,8 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
         SliverPadding(
           padding: padding,
           sliver: SkeletonGridLoader(
-            crossAxisCount: 3,
-            itemCount: 9,
+            crossAxisCount: 4,
+            itemCount: 12,
             childAspectRatio: 0.72,
           ),
         ),

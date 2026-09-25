@@ -4,6 +4,7 @@ import 'package:fitcheck_ai/features/dashboard/repositories/dashboard_repository
 import 'package:fitcheck_ai/core/providers.dart' show noRetry;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 
 class FakeDashboardRepository extends DashboardRepository {
   bool failStreak = false;
@@ -48,6 +49,33 @@ class _FailingRepository extends FakeDashboardRepository {
 }
 
 void main() {
+  testWidgets('greeting cancels its hour timer when the consumer unmounts', (
+    tester,
+  ) async {
+    final container = ProviderContainer(retry: noRetry);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: Consumer(
+          builder: (context, ref, child) {
+            final hour = ref.watch(dashboardGreetingHourProvider);
+            return Text('$hour', textDirection: TextDirection.ltr);
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('${DateTime.now().hour}'), findsOneWidget);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(container: container, child: const SizedBox()),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(container.exists(dashboardGreetingHourProvider), isFalse);
+    container.dispose();
+    // flutter_test also rejects any pending Timer at the end of this test.
+  });
+
   ProviderContainer containerWith(DashboardRepository repository) {
     final container = ProviderContainer(
       retry: noRetry,
@@ -58,7 +86,9 @@ void main() {
   }
 
   test('dashboard loads when the optional streak fails', () async {
-    final container = containerWith(FakeDashboardRepository()..failStreak = true);
+    final container = containerWith(
+      FakeDashboardRepository()..failStreak = true,
+    );
 
     final snapshot = await container.read(dashboardProvider.future);
 

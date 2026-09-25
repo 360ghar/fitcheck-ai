@@ -34,22 +34,23 @@ THE FAILURE MODE IS "SOME WHITE ITEMS KEEP THEIR WHITE BACKGROUND", NEVER
 failure the ORIGINAL bytes are returned untouched.
 
 PERFORMANCE
-A full-resolution `ImageDraw.floodfill` is a Python loop holding the GIL and
-measures ~562ms on a 1024x1024 image; at AI_GENERATION_CONCURRENCY=30 that is
-~17s of serialized CPU stalling the batch SSE loop. So the near-white test runs
-at full resolution in C (`ImageChops` + `.point()` LUTs) and the flood fill -
-needed only for CONNECTIVITY - runs on a 256px copy whose result is upscaled
-and re-intersected with the full-res mask.
+A full-resolution flood fill is a Python loop holding the GIL and measures
+~562ms on a 1024x1024 image; at AI_GENERATION_CONCURRENCY=30 that is ~17s of
+serialized CPU stalling the batch SSE loop. So the near-white test runs at
+full resolution in C (`ImageChops` + `.point()` LUTs) and the flood fill -
+needed only for CONNECTIVITY - runs on a 256px copy (`_flood_from_border`, a
+bytearray walk) whose result is upscaled and re-intersected with the full-res
+mask. Binary dilations use a box blur (`_dilate`), not a rank filter, and
+everything after the guards runs on the kept bbox plus CROP_WORK_MARGIN_PX,
+not the whole frame.
 
-Measured on a 1024x1024 generated product shot (Apple M-series, Pillow 11,
-mean of 10): decode + backdrop estimate + near-white + coarse flood + guards +
-edge/shadow/despill + WebP encode = ~190ms total (see the timing test's printed
-breakdown for current numbers). Everything here is GIL-held C work, so callers
+Measured on the 1024x1024 test product shot (Apple M-series, Pillow 11, best
+of 10): 217ms before those three changes, 86ms now at full frame, 69ms with
+`crop=True` (smaller encode). Everything here is GIL-held C work, so callers
 MUST run it off the event loop via the bounded `run_image_op` executor; the
-extra rank-filter passes (speckle open, shadow dilate, despill mins) are the
-knobs if this ever needs to be cheaper. Peak transient memory is bounded: at
-most ~3 full-res RGB buffers during the despill composite plus a handful of
-1-byte-per-pixel L masks (~40MB worst case at MATTE_MAX_EDGE=1536, freed by
+despill MinFilter and the WebP encode are the remaining big costs. Peak
+transient memory is bounded: at most ~3 full-res RGB buffers during the
+despill composite plus a handful of 1-byte-per-pixel L masks (~40MB worst case at MATTE_MAX_EDGE=1536, freed by
 refcount the moment each stage finishes). No numpy, no temp files.
 """
 
@@ -57,7 +58,7 @@ import base64
 import io
 from typing import NamedTuple, Optional
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 # Imported for format detection ONLY. Do not reach for anything else in that
 # module from here - see this file's header.
@@ -187,7 +188,27 @@ MATTE_MAX_EDGE = 1536
 MATTE_FORMAT = "webp"
 MATTE_WEBP_QUALITY = 85
 
+# --- Crop to content (item cutouts only; see remove_white_background) ---
+
+# Transparent pad kept around the content box, as a fraction of the box's long
+# edge, never less than CROP_MIN_PAD_PX. Keeps the feathered edge and a faint
+# contact shadow inside the frame, and gives the item a little air in a tile.
+CROP_PAD_RATIO = 0.03
+CROP_MIN_PAD_PX = 8
+# Alpha below this is feather noise, not content, for the bbox.
+CROP_ALPHA_FLOOR = 8
+# An already-transparent image is re-cropped only when that removes at least
+# this share of its area. A cropped image re-fed lands under it, so a re-run is
+# a no-op instead of a re-encode.
+CROP_MIN_GAIN = 0.05
+# The alpha/despill/encode stages run on the kept bbox grown by this margin
+# instead of the whole frame. It must exceed the shadow zone (~12px) and every
+# filter reach (despill ~6px, band 2px, feather ~2px), so the result inside
+# the box is the same as a full-frame run.
+CROP_WORK_MARGIN_PX = 24
+
 STATUS_MATTED = "matted"
+STATUS_CROPPED = "cropped"
 STATUS_SKIPPED_NO_BACKGROUND = "skipped_no_background"
 STATUS_REJECTED_ATE_SUBJECT = "rejected_ate_subject"
 STATUS_REJECTED_CENTER_TRANSPARENT = "rejected_center_transparent"
@@ -239,6 +260,67 @@ def matte_extension() -> str:
 def _binarize(mask: Image.Image, threshold: int) -> Image.Image:
     """Threshold an L-mode image to 0/255 via a 256-entry LUT (C speed)."""
     return mask.point(lambda v: 255 if v >= threshold else 0, mode="L")
+
+
+def _dilate(mask: Image.Image, size: int) -> Image.Image:
+    """Binary dilation of a 0/255 mask by a size x size square.
+
+    Same pixels as `mask.filter(MaxFilter(size))`, but a box blur is O(1) per
+    pixel where a rank filter is O(size^2): 2ms versus 34ms at 1024px for
+    size=5. Any set pixel in the window leaves a non-zero mean, so
+    thresholding at 1 is exact. Only valid on binary masks.
+    """
+    return _binarize(mask.filter(ImageFilter.BoxBlur(size // 2)), 1)
+
+
+def _crop_pad(box: tuple[int, int, int, int]) -> int:
+    """Transparent pad for a content box (see CROP_PAD_RATIO)."""
+    long_edge = max(box[2] - box[0], box[3] - box[1])
+    return max(CROP_MIN_PAD_PX, int(round(CROP_PAD_RATIO * long_edge)))
+
+
+def _grow_box(
+    box: tuple[int, int, int, int], margin: int, size: tuple[int, int]
+) -> tuple[int, int, int, int]:
+    """`box` grown by `margin` on every side, clamped to an image of `size`."""
+    left, top, right, bottom = box
+    return (
+        max(0, left - margin),
+        max(0, top - margin),
+        min(size[0], right + margin),
+        min(size[1], bottom + margin),
+    )
+
+
+def _content_box(alpha: Image.Image) -> Optional[tuple[int, int, int, int]]:
+    """Bbox of alpha >= CROP_ALPHA_FLOOR plus its pad, or None when empty.
+
+    Every opaque pixel counts, so a garment is never cut.
+    """
+    # ponytail: one stray opaque speck far from the item widens the box (a
+    # safe miss: less crop, never a cut). If backfill audits show many items
+    # barely shrinking, drop tiny components before the bbox.
+    box = _binarize(alpha, CROP_ALPHA_FLOOR).getbbox()
+    if box is None:
+        return None
+    return _grow_box(box, _crop_pad(box), alpha.size)
+
+
+def _crop_existing_alpha(rgba: Image.Image) -> Optional[Image.Image]:
+    """Crop an already-transparent image to its content, or None to keep it.
+
+    None when there is no content at all, or when the crop would remove less
+    than CROP_MIN_GAIN of the area - which is what makes a re-run on cropped
+    output a no-op.
+    """
+    box = _content_box(rgba.getchannel("A"))
+    if box is None:
+        return None
+    width, height = rgba.size
+    area = (box[2] - box[0]) * (box[3] - box[1])
+    if area > (1.0 - CROP_MIN_GAIN) * width * height:
+        return None
+    return rgba.crop(box)
 
 
 def _percentile(hist: list[int], total: int, quantile: float) -> int:
@@ -332,6 +414,53 @@ def _near_white_candidate(
     return ImageChops.multiply(bright, neutral), min_ch, neutral
 
 
+def _flood_from_border(mask: Image.Image) -> Image.Image:
+    """255 where a set pixel of a binary mask is 4-connected to the frame edge.
+
+    Every set pixel on the edge seeds the flood, so a garment touching one side
+    of the frame does not block seeding along it. Exact, no tolerance - all
+    the tolerance lives in _near_white_candidate, where it is auditable. Same
+    output as `ImageDraw.floodfill` on a 1px-padded copy, ~3x faster (8ms vs
+    28ms at 256px): that one calls a Python colour-diff per neighbour, this is
+    a flat stack walk over a bytearray.
+    """
+    width, height = mask.size
+    total = width * height
+    src = mask.tobytes()
+    out = bytearray(total)
+    last_col = width - 1
+    edge = (
+        list(range(width))
+        + list(range(total - width, total))
+        + list(range(0, total, width))
+        + list(range(last_col, total, width))
+    )
+    stack = []
+    for i in edge:
+        if src[i] and not out[i]:
+            out[i] = 255
+            stack.append(i)
+    pop, push = stack.pop, stack.append
+    while stack:
+        i = pop()
+        x = i % width
+        if x and src[i - 1] and not out[i - 1]:
+            out[i - 1] = 255
+            push(i - 1)
+        if x != last_col and src[i + 1] and not out[i + 1]:
+            out[i + 1] = 255
+            push(i + 1)
+        j = i - width
+        if j >= 0 and src[j] and not out[j]:
+            out[j] = 255
+            push(j)
+        j = i + width
+        if j < total and src[j] and not out[j]:
+            out[j] = 255
+            push(j)
+    return Image.frombytes("L", (width, height), bytes(out))
+
+
 def _border_connected(candidate: Image.Image) -> tuple[Image.Image, Image.Image, Image.Image]:
     """(full-res border-connected mask, coarse search zone, coarse bg halo).
 
@@ -358,27 +487,17 @@ def _border_connected(candidate: Image.Image) -> tuple[Image.Image, Image.Image,
     small = _binarize(small, COARSE_SOLID_THRESHOLD)
     small = small.filter(ImageFilter.MinFilter(3))
 
-    # Pad a 1px white border FIRST. Without it a garment touching the frame
-    # edge blocks seeding along that whole side.
-    padded = Image.new("L", (coarse_w + 2, coarse_h + 2), 255)
-    padded.paste(small, (1, 1))
+    reached = _flood_from_border(small)
     del small
-    # thresh=0 on a binary mask is exact - all the tolerance lives in
-    # _near_white_candidate, where it is auditable.
-    ImageDraw.floodfill(padded, (0, 0), 128, thresh=0)
 
-    reached = padded.crop((1, 1, coarse_w + 1, coarse_h + 1))
-    del padded
-    reached = reached.point(lambda v: 255 if v == 128 else 0, mode="L")
-
-    zone = reached.filter(ImageFilter.MaxFilter(SHADOW_ZONE_COARSE_PX))
+    zone = _dilate(reached, SHADOW_ZONE_COARSE_PX)
     zone = zone.resize((width, height), Image.BILINEAR)
     zone = _binarize(zone, 1)
 
     # Background-side despill halo: a SMALLER dilate of the same flood (~2
     # coarse px ~ 8 full px). Upsampled coarse edges are soft, which is fine -
     # the halo is intersected with the sharp full-res keep dilate below.
-    bg_halo = reached.filter(ImageFilter.MaxFilter(5))
+    bg_halo = _dilate(reached, 5)
     bg_halo = bg_halo.resize((width, height), Image.BILINEAR)
     bg_halo = _binarize(bg_halo, 1)
 
@@ -452,7 +571,7 @@ def _build_alpha(
     keep = ImageChops.invert(background)
 
     # The 2px ring of KEPT pixels that touch background.
-    halo = background.filter(ImageFilter.MaxFilter(EDGE_BAND_PX))
+    halo = _dilate(background, EDGE_BAND_PX)
     band = ImageChops.multiply(halo, keep)
     del halo
 
@@ -509,16 +628,18 @@ def _build_alpha(
     del alpha, shadow_alpha, shadow_mask, band, zone
     alpha = feathered_in
 
+    # One 2px keep dilate serves both the re-clamp and the despill zone
+    # (EDGE_BAND_PX is 5, the same kernel the despill zone needs).
+    dil_keep = _dilate(keep, EDGE_BAND_PX)
+    del keep
     alpha = alpha.filter(ImageFilter.GaussianBlur(FEATHER_RADIUS))
-    alpha = ImageChops.darker(alpha, keep.filter(ImageFilter.MaxFilter(EDGE_BAND_PX)))
+    alpha = ImageChops.darker(alpha, dil_keep)
 
     # Despill zone: wide on the BACKGROUND side, narrow on KEEP. The fringe
     # lives on background-side semi pixels, which the razor mask + halo do NOT
     # cover (they stop at the mask edge). bg_halo is the coarse-dilated flood
     # (~8 full px reach, microseconds at 256px); intersect with the sharp
     # full-res keep dilate so deep-interior garment stays untouched.
-    dil_keep = keep.filter(ImageFilter.MaxFilter(5))
-    del keep
     despill_mask = ImageChops.multiply(bg_halo, dil_keep)
     del bg_halo, dil_keep
     return alpha, despill_mask
@@ -559,15 +680,31 @@ def _existing_alpha_fraction(img: Image.Image) -> float:
     return (total - histogram[255]) / total
 
 
+def _encode(rgba: Image.Image) -> bytes:
+    """Encode matte output in MATTE_FORMAT."""
+    buffer = io.BytesIO()
+    rgba.save(buffer, format=MATTE_FORMAT.upper(), quality=MATTE_WEBP_QUALITY)
+    return buffer.getvalue()
+
+
 # =============================================================================
 # PUBLIC API
 # =============================================================================
 
 
 def remove_white_background(
-    image_bytes: bytes, filename: Optional[str] = None
+    image_bytes: bytes, filename: Optional[str] = None, *, crop: bool = False
 ) -> MatteResult:
     """Cut a flat white backdrop out of `image_bytes`, returning a MatteResult.
+
+    `crop=True` also trims the output to its content plus a small transparent
+    pad (CROP_PAD_RATIO), so a grid tile shows the item instead of a 1024px
+    field of nothing. Item cutouts only: an outfit look stays full-frame
+    because outfit tiles use `object-cover` for their (opaque) model shots, and
+    a tight flat-lay under `cover` would lose its top and bottom. With
+    `crop=True`, already-transparent input is cropped the same way and
+    reported as `cropped` (or `skipped_no_background` when it is already
+    tight), which is what lets the backfill trim the previously matted corpus.
 
     NEVER raises - mirrors `downscale_base64_image`'s best-effort convention.
     Any failure, and any guard rejection, returns the input bytes unmodified
@@ -600,18 +737,31 @@ def remove_white_background(
         with Image.open(io.BytesIO(image_bytes)) as opened:
             already_transparent = _existing_alpha_fraction(opened)
             oriented = ImageOps.exif_transpose(opened)
+
+            if already_transparent >= MIN_TRANSPARENT_FRACTION:
+                if crop:
+                    cropped = _crop_existing_alpha(oriented.convert("RGBA"))
+                    if cropped is not None:
+                        return MatteResult(
+                            image_bytes=_encode(cropped),
+                            content_type=matte_content_type(),
+                            status=STATUS_CROPPED,
+                            transparent_fraction=already_transparent,
+                            center_opacity=1.0,
+                            width=cropped.size[0],
+                            height=cropped.size[1],
+                        )
+                return _unchanged(
+                    STATUS_SKIPPED_NO_BACKGROUND,
+                    transparent=already_transparent,
+                    size=oriented.size,
+                )
+
             rgb = oriented.convert("RGB")
             original_size = rgb.size
             if max(rgb.size) > MATTE_MAX_EDGE:
                 rgb.thumbnail((MATTE_MAX_EDGE, MATTE_MAX_EDGE))
-            processing_size = rgb.size
-
-            if already_transparent >= MIN_TRANSPARENT_FRACTION:
-                return _unchanged(
-                    STATUS_SKIPPED_NO_BACKGROUND,
-                    transparent=already_transparent,
-                    size=original_size,
-                )
+            frame_size = rgb.size
 
             backdrop = _estimate_backdrop(rgb)
             candidate, min_ch, neutral = _near_white_candidate(
@@ -661,27 +811,43 @@ def remove_white_background(
                     original_size,
                 )
 
+            # The guards needed the whole frame; nothing after them does. Run
+            # alpha, despill and encode on the kept bbox plus a margin wider
+            # than every filter's reach: ~75% of a product shot is backdrop,
+            # and outside this box the alpha is 0 anyway.
+            keep_box = ImageChops.invert(background).getbbox() or (0, 0, *frame_size)
+            margin = max(CROP_WORK_MARGIN_PX, _crop_pad(keep_box))
+            work_box = _grow_box(keep_box, margin, frame_size)
+            background, min_ch, neutral, zone, bg_halo, rgb = (
+                image.crop(work_box)
+                for image in (background, min_ch, neutral, zone, bg_halo, rgb)
+            )
+
             alpha, despill_mask = _build_alpha(background, min_ch, neutral, zone, bg_halo, backdrop)
             del background, min_ch, neutral, zone, bg_halo
             rgb = _despill_rgb(rgb, despill_mask)
             del despill_mask
             rgb.putalpha(alpha)
+
+            if crop:
+                content_box = _content_box(alpha)
+                if content_box is not None:
+                    rgb = rgb.crop(content_box)
+            else:
+                # Full frame back. RGB under alpha 0 stays white, as before.
+                canvas = Image.new("RGBA", frame_size, (255, 255, 255, 0))
+                canvas.paste(rgb, work_box[:2])
+                rgb = canvas
             del alpha
-            buffer = io.BytesIO()
-            rgb.save(
-                buffer,
-                format=MATTE_FORMAT.upper(),
-                quality=MATTE_WEBP_QUALITY,
-            )
 
             return MatteResult(
-                image_bytes=buffer.getvalue(),
+                image_bytes=_encode(rgb),
                 content_type=matte_content_type(),
                 status=STATUS_MATTED,
                 transparent_fraction=transparent_fraction,
                 center_opacity=center_opacity,
-                width=processing_size[0],
-                height=processing_size[1],
+                width=rgb.size[0],
+                height=rgb.size[1],
             )
     except Exception:
         # Best-effort: the caller keeps the image it already had.

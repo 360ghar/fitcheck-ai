@@ -12,8 +12,8 @@ bool isNewAccountForSetup({
   DateTime? now,
 }) {
   if (done || createdAt == null) return false;
-  return (now ?? DateTime.now()).difference(createdAt) <
-      const Duration(days: 7);
+  final age = (now ?? DateTime.now()).difference(createdAt);
+  return !age.isNegative && age < const Duration(days: 7);
 }
 
 /// One setup rule shared by web and mobile: a new account (7-day window,
@@ -28,9 +28,7 @@ bool shouldShowSetup({
   required bool done,
   DateTime? now,
 }) {
-  if (done || createdAt == null) return false;
-  if ((now ?? DateTime.now()).difference(createdAt) >=
-      const Duration(days: 7)) {
+  if (!isNewAccountForSetup(createdAt: createdAt, done: done, now: now)) {
     return false;
   }
   if (gender != null && gender.isEmpty) return true;

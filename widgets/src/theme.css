@@ -44,6 +44,8 @@ body {
   display: block;
   background: var(--border);
 }
+/* Item cutouts are cropped tight to the item; cover would cut their edges. */
+.thumb-contain { object-fit: contain; background: var(--card); }
 .card-body { padding: 8px 10px 10px; }
 .title { font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meta { color: var(--muted); font-size: 12px; margin: 2px 0 0; text-transform: capitalize; }

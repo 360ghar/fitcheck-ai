@@ -130,7 +130,8 @@ export function shouldShowSetup({
 }: SetupGateInput): boolean {
   if (done) return false
   const created = Date.parse(createdAt ?? '')
-  if (!Number.isFinite(created) || now - created >= SETUP_WINDOW_MS) return false
+  const age = now - created
+  if (!Number.isFinite(age) || age < 0 || age >= SETUP_WINDOW_MS) return false
   if (gender !== undefined && !gender) return true
   if (styles !== undefined && (styles ?? []).length === 0) return true
   return false

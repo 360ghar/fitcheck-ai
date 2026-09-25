@@ -4,8 +4,8 @@
  * accounts here once (see needsSetup in lib/activation.ts).
  */
 
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import SEO from '@/components/seo/SEO'
 import { Logo } from '@/components/brand/Logo'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ import { markSetupDone } from '@/lib/activation'
 import { OCCASION_SUGGESTIONS, STYLE_SUGGESTIONS } from '@/lib/style-options'
 import { cn } from '@/lib/utils'
 import type { Gender } from '@/types'
+import { getSafeReturnTo } from './auth/authRedirect'
 
 const STEPS = [
   { id: 'who', label: 'You' },
@@ -39,34 +40,35 @@ function toggle(list: string[], value: string): string[] {
 
 interface OptionProps {
   label: string
+  value: Gender
   selected: boolean
   onSelect: () => void
-  role?: 'radio'
 }
 
-/**
- * A large radio card. Only used for the gender step: FilterChip covers the
- * toggle grids below, but it cannot report radio semantics (aria-checked),
- * so the radiogroup keeps its own control.
- */
-function Option({ label, selected, onSelect, role }: OptionProps) {
+/** Native radio cards provide arrow navigation and one tab stop per group. */
+function Option({ label, value, selected, onSelect }: OptionProps) {
   return (
-    <button
-      type="button"
-      role={role}
-      aria-pressed={role ? undefined : selected}
-      aria-checked={role ? selected : undefined}
-      onClick={onSelect}
-      className={cn(
-        'min-h-[44px] rounded-md border px-4 py-2.5 text-left text-sm font-semibold transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        selected
-          ? 'border-foreground bg-foreground text-background'
-          : 'border-border bg-card text-foreground hover:border-foreground/40',
-      )}
-    >
-      {label}
-    </button>
+    <label className="relative cursor-pointer">
+      <input
+        type="radio"
+        name="gender"
+        value={value}
+        checked={selected}
+        onChange={onSelect}
+        className="peer sr-only"
+      />
+      <span
+        className={cn(
+          'block min-h-[44px] rounded-md border px-4 py-2.5 text-left text-sm font-semibold transition-colors',
+          'peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2',
+          selected
+            ? 'border-foreground bg-foreground text-background'
+            : 'border-border bg-card text-foreground hover:border-foreground/40',
+        )}
+      >
+        {label}
+      </span>
+    </label>
   )
 }
 
@@ -94,6 +96,12 @@ function StepShell({ titleId, title, description, children, footer }: StepShellP
 
 export default function WelcomePage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const requested = getSafeReturnTo(new URLSearchParams(location.search).get('returnTo'))
+  const requestedPath = requested?.split(/[?#]/)[0]
+  const returnTo = requestedPath && requestedPath !== '/welcome' && !requestedPath.startsWith('/auth/')
+    ? requested : undefined
+  const preferencesEdited = useRef(false)
   const user = useCurrentUser()
   const setUser = useAuthStore((s) => s.setUser)
   const [step, setStep] = useState<StepId>('who')
@@ -106,7 +114,7 @@ export default function WelcomePage() {
     let cancelled = false
     getUserPreferences()
       .then((prefs) => {
-        if (cancelled) return
+        if (cancelled || preferencesEdited.current) return
         setStyles(prefs.preferred_styles ?? [])
         setOccasions(prefs.preferred_occasions ?? [])
       })
@@ -118,7 +126,7 @@ export default function WelcomePage() {
     }
   }, [user?.id])
 
-  const finish = (to: string) => {
+  const finish = (to = returnTo ?? '/dashboard') => {
     markSetupDone(user?.id)
     navigate(to, { replace: true })
   }
@@ -154,7 +162,7 @@ export default function WelcomePage() {
       <SEO title="Welcome | FitCheck AI" noIndex={true} />
       <header className="mx-auto flex w-full max-w-xl items-center justify-between">
         <Logo markSize={36} wordmarkClassName="text-lg" />
-        <Button variant="ghost" onClick={() => finish('/dashboard')}>
+        <Button variant="ghost" onClick={() => finish()}>
           Skip setup
         </Button>
       </header>
@@ -182,7 +190,7 @@ export default function WelcomePage() {
               {GENDERS.map((g) => (
                 <Option
                   key={g.value}
-                  role="radio"
+                  value={g.value}
                   label={g.label}
                   selected={gender === g.value}
                   onSelect={() => setGender(g.value)}
@@ -217,7 +225,7 @@ export default function WelcomePage() {
             </h2>
             <div role="group" aria-labelledby="welcome-styles" className="mt-3 flex flex-wrap gap-2">
               {STYLE_SUGGESTIONS.map((s) => (
-                <FilterChip key={s} active={styles.includes(s)} onClick={() => setStyles(toggle(styles, s))}>
+                <FilterChip key={s} active={styles.includes(s)} onClick={() => { preferencesEdited.current = true; setStyles(toggle(styles, s)) }}>
                   {s}
                 </FilterChip>
               ))}
@@ -230,7 +238,7 @@ export default function WelcomePage() {
                 <FilterChip
                   key={o}
                   active={occasions.includes(o)}
-                  onClick={() => setOccasions(toggle(occasions, o))}
+                  onClick={() => { preferencesEdited.current = true; setOccasions(toggle(occasions, o)) }}
                 >
                   {o}
                 </FilterChip>
@@ -246,7 +254,7 @@ export default function WelcomePage() {
             description="Photograph a few clothes, or a pile of them. Each piece is cut out and filed for you."
             footer={
               <>
-                <Button variant="ghost" onClick={() => finish('/dashboard')}>
+                <Button variant="ghost" onClick={() => finish()}>
                   Later
                 </Button>
                 <Button onClick={() => finish('/wardrobe?action=add')} className="min-w-[8rem]">

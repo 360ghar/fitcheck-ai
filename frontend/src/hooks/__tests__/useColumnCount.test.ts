@@ -53,6 +53,30 @@ describe('useColumnCount', () => {
     expect(result.current).toBe(expected)
   })
 
+  it.each([
+    [320, 4, 'small phone is 4'],
+    [390, 4, 'large phone is 4'],
+    [767, 4, 'just below md is 4'],
+    [768, 6, 'md is 6'],
+    [1024, 7, 'lg is 7'],
+    [1280, 8, 'xl is 8'],
+    [1536, 9, '2xl is 9'],
+  ])('dense (item cutouts) returns %i columns at %ipx (%s)', (width, expected) => {
+    stubViewport(width)
+    const { result } = renderHook(() => useColumnCount({ dense: true }))
+    expect(result.current).toBe(expected)
+  })
+
+  it.each([
+    [1024, 4, 'lg dense split is 4'],
+    [1280, 5, 'xl dense split is 5'],
+    [1536, 6, '2xl dense split is 6'],
+  ])('dense with the detail pane open returns %i columns at %ipx (%s)', (width, expected) => {
+    stubViewport(width)
+    const { result } = renderHook(() => useColumnCount({ dense: true, isDetailOpen: true }))
+    expect(result.current).toBe(expected)
+  })
+
   it('ignores the split table below lg (md-band uses forced list rows instead)', () => {
     stubViewport(768)
     const { result } = renderHook(() => useColumnCount({ isDetailOpen: true }))

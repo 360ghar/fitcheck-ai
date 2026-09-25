@@ -10,6 +10,9 @@ import 'package:fitcheck_ai/features/photoshoot/providers/photoshoot_provider.da
 import 'package:fitcheck_ai/features/photoshoot/repositories/photoshoot_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:fitcheck_ai/core/services/notification_service.dart'
+    show scaffoldMessengerKey;
 
 class FakeAiConsentService extends AiConsentService {
   @override
@@ -23,6 +26,8 @@ class FakePhotoshootRepository extends PhotoshootRepository {
     jobId: 'job-1',
     status: 'pending',
   );
+  late final retryStarted = Completer<void>();
+  late final retryResult = Completer<PhotoshootResult>();
   Object? startError;
   Object? cancelError;
   Object? usageError;
@@ -55,6 +60,18 @@ class FakePhotoshootRepository extends PhotoshootRepository {
 
   @override
   Stream<ServerSentEvent> subscribeToEvents(String jobId) => events.stream;
+
+  @override
+  Future<PhotoshootResult> generateSync({
+    required List<String> photos,
+    required PhotoshootUseCase useCase,
+    String? customPrompt,
+    int numImages = 1,
+    PhotoshootAspectRatio aspectRatio = PhotoshootAspectRatio.square,
+  }) {
+    retryStarted.complete();
+    return retryResult.future;
+  }
 
   @override
   Future<void> cancelJob(String jobId) async {
@@ -227,6 +244,65 @@ void main() {
     expect(state().isGenerating, isTrue);
     expect(repo.statusCalls, ['job-1']);
   });
+
+  for (final reset in [false, true]) {
+    testWidgets(
+      'retry failure reports only in its original flow (reset: $reset)',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            scaffoldMessengerKey: scaffoldMessengerKey,
+            home: const Scaffold(body: SizedBox()),
+          ),
+        );
+        await tester.runAsync(() async {
+          await startJob();
+          repo.statusToReturn = const PhotoshootJobStatusResponse(
+            jobId: 'job-1',
+            status: 'complete',
+            generatedCount: 1,
+            totalCount: 2,
+            images: [
+              GeneratedImage(
+                id: 'img_1',
+                index: 0,
+                imageUrl: 'https://cdn.example/1.png',
+              ),
+            ],
+            failedIndices: [1],
+            failedCount: 1,
+            partialSuccess: true,
+          );
+          repo.events.add(
+            const ServerSentEvent(
+              type: 'job_complete',
+              data: {
+                'session_id': 'ps_1',
+                'failed_count': 1,
+                'failed_indices': [1],
+                'partial_success': true,
+              },
+            ),
+          );
+          await _settle(150);
+          expect(state().failedIndices, [1]);
+          final retry = notifier().retryFailedSlot(1);
+          await repo.retryStarted.future;
+          if (reset) notifier().reset();
+          repo.retryResult.completeError(Exception('late retry failure'));
+          await retry;
+        });
+        await tester.pump();
+        expect(
+          find.text('Retry failed'),
+          reset ? findsNothing : findsOneWidget,
+        );
+        expect(state().retryingIndex, isNull);
+        if (reset) expect(state().step, PhotoshootStep.upload);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
 
   test('a failed cancel keeps the running job on screen', () async {
     await startJob();

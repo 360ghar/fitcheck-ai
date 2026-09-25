@@ -153,7 +153,7 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
   ) {
     const padding = EdgeInsets.fromLTRB(
       AppConstants.spacing16,
-      AppConstants.spacing8,
+      AppConstants.spacing4,
       AppConstants.spacing16,
       AppConstants.spacing8,
     );
@@ -174,8 +174,8 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
         SliverPadding(
           padding: padding,
           sliver: SkeletonGridLoader(
-            crossAxisCount: 3,
-            itemCount: 9,
+            crossAxisCount: 4,
+            itemCount: 12,
             childAspectRatio: 0.72,
           ),
         ),
@@ -215,10 +215,13 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
         padding: padding,
         sliver: _view == _ClosetView.grid || _view == _ClosetView.rows
             ? SliverGrid.builder(
+                // Item cutouts are cropped to the item plus a small pad
+                // (backend `crop=True`), so a narrow tile still shows the
+                // whole garment: 4 columns on a phone, 8 on a tablet.
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 140,
-                  mainAxisSpacing: AppConstants.spacing12 + 3,
-                  crossAxisSpacing: AppConstants.spacing12,
+                  maxCrossAxisExtent: 96,
+                  mainAxisSpacing: AppConstants.spacing8,
+                  crossAxisSpacing: AppConstants.spacing8,
                   childAspectRatio: 0.72,
                 ),
                 itemCount: page.items.length,
@@ -644,10 +647,10 @@ class _ItemTile extends ConsumerWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppConstants.spacing8,
               AppConstants.spacing6,
               AppConstants.spacing4,
-              AppConstants.spacing6,
+              AppConstants.spacing4,
+              AppConstants.spacing4,
             ),
             child: Row(
               children: [
@@ -656,13 +659,13 @@ class _ItemTile extends ConsumerWidget {
                     item.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium,
+                    style: Theme.of(context).textTheme.labelSmall,
                   ),
                 ),
                 if (item.isFavorite)
                   Icon(
                     Icons.favorite_rounded,
-                    size: 14,
+                    size: 12,
                     color: tokens.stock.accent,
                   ),
               ],
@@ -773,9 +776,9 @@ class _ItemImage extends ConsumerWidget {
 
 /// Closet row sizes. At 390pt wide the 4th piece shows about 22pt at the
 /// right edge, so the row reads as scrollable.
-const _shelfPieceWidth = 104.0;
-const _shelfHeight = 128.0;
-const _shelfGap = AppConstants.spacing12;
+const _shelfPieceWidth = 80.0;
+const _shelfHeight = 100.0;
+const _shelfGap = AppConstants.spacing8;
 const _shelfGutter = AppConstants.spacing20;
 
 /// One category: its name and count, then its pieces in a horizontal row.

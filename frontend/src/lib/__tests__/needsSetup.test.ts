@@ -6,6 +6,9 @@ const day = 24 * 60 * 60 * 1000
 const created = (daysAgo: number) => new Date(NOW - daysAgo * day).toISOString()
 
 describe('needsSetup', () => {
+  it('does not show setup for future dates', () => {
+    expect(needsSetup({ gender: null, created_at: created(-1) }, false, NOW)).toBe(false)
+  })
   it('sends a new account without a gender to setup', () => {
     expect(needsSetup({ gender: null, created_at: created(0) }, false, NOW)).toBe(true)
   })

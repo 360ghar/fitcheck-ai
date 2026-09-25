@@ -69,7 +69,11 @@ class _ActivityRow extends StatelessWidget {
                             ? activity.thumbnailUrl
                             : image,
                         fallbackUrl: image,
-                        fit: BoxFit.cover,
+                        // Item cutouts are cropped tight, so cover would cut
+                        // their edges; outfit looks are photos.
+                        fit: activity.type == 'outfit_created'
+                            ? BoxFit.cover
+                            : BoxFit.contain,
                         width: 44,
                         height: 44,
                         memCacheWidth: 132,

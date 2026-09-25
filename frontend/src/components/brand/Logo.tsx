@@ -57,12 +57,13 @@ interface LogoProps {
 
 export function Logo({ markSize = 32, compact = false, className, wordmarkClassName }: LogoProps) {
   return (
-    <span className={cn('flex items-center gap-2', className)}>
+    <span className={cn('flex items-center gap-2 transition-[gap] duration-200 motion-reduce:transition-none', compact && 'gap-0', className)}>
       <BrandMark size={markSize} />
       <span
         className={cn(
           'whitespace-nowrap font-semibold tracking-tight text-foreground',
-          compact && 'sr-only',
+          'overflow-hidden transition-[max-width,opacity] duration-200 motion-reduce:transition-none',
+          compact ? 'max-w-0 opacity-0' : 'max-w-48 opacity-100',
           wordmarkClassName,
         )}
       >

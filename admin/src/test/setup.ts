@@ -31,9 +31,7 @@ process.env.TZ = 'UTC'
 const seedController = transferableAbortController()
 const NodeAbortController =
   seedController.constructor as typeof AbortController
-const NodeAbortSignal = Object.getPrototypeOf(
-  seedController.signal,
-) as typeof AbortSignal
+const NodeAbortSignal = seedController.signal.constructor as typeof AbortSignal
 vi.stubGlobal('AbortController', NodeAbortController)
 vi.stubGlobal('AbortSignal', NodeAbortSignal)
 

@@ -259,12 +259,10 @@ class _SetupPageState extends ConsumerState<SetupPage> {
         multi(_occasions, onboardingOccasionNames),
       ],
       _ => [
-        // The page already carries the grain; the scene sits on it.
+        // Scene grain must cover the solid garment shapes as well.
         const PaperScene(
           preset: PaperScenes.closet,
           parallax: 0,
-          background: Colors.transparent,
-          grain: false,
         ),
       ],
     };

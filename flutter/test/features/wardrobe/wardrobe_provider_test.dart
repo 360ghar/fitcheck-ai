@@ -90,8 +90,9 @@ void main() {
   }
 
   WardrobeNotifier notifier() => container.read(wardrobeProvider.notifier);
-  List<String> ids() =>
-      [for (final i in container.read(wardrobeProvider).value!.items) i.id];
+  List<String> ids() => [
+    for (final i in container.read(wardrobeProvider).value!.items) i.id,
+  ];
 
   test('a filter change refetches, and a stale response is dropped', () async {
     final slow = Completer<ItemsListResponse>();
@@ -145,24 +146,58 @@ void main() {
     expect(state.value!.nextPage, 3);
   });
 
-  test('a failed load-more keeps items, stops, and retries on demand', () async {
-    repo.responses
-      ..add(() async => page(['a'], hasMore: true, total: 2))
-      ..add(() async => throw serverError)
-      ..add(() async => page(['b'], total: 2));
-    await start();
+  test(
+    'a failed refresh clears an interrupted load-more and permits retry',
+    () async {
+      final slow = Completer<ItemsListResponse>();
+      repo.responses
+        ..add(() async => page(['a'], hasMore: true, total: 3))
+        ..add(() => slow.future)
+        ..add(() async => throw serverError)
+        ..add(() async => page(['b'], total: 2));
+      await start();
+      final pending = notifier().loadMore();
+      expect(container.read(wardrobeProvider).value!.isLoadingMore, isTrue);
 
-    await notifier().loadMore();
-    var state = container.read(wardrobeProvider).value!;
-    expect(state.loadMoreError, isNotNull);
-    expect(state.canLoadMore, isFalse);
-    expect(ids(), ['a']);
+      await notifier().refresh();
+      await expectLater(
+        container.read(wardrobeProvider.future),
+        throwsException,
+      );
+      slow.complete(page(['stale']));
+      await pending;
 
-    await notifier().retryLoadMore();
-    state = container.read(wardrobeProvider).value!;
-    expect(state.loadMoreError, isNull);
-    expect(ids(), ['a', 'b']);
-  });
+      final state = container.read(wardrobeProvider).value!;
+      expect(state.isLoadingMore, isFalse);
+      expect(state.canLoadMore, isTrue);
+      expect(state.nextPage, 2);
+      expect(ids(), ['a']);
+      await notifier().loadMore();
+      expect(ids(), ['a', 'b']);
+    },
+  );
+
+  test(
+    'a failed load-more keeps items, stops, and retries on demand',
+    () async {
+      repo.responses
+        ..add(() async => page(['a'], hasMore: true, total: 2))
+        ..add(() async => throw serverError)
+        ..add(() async => page(['b'], total: 2));
+      await start();
+
+      await notifier().loadMore();
+      var state = container.read(wardrobeProvider).value!;
+      expect(state.loadMoreError, isNotNull);
+      expect(state.canLoadMore, isFalse);
+      expect(ids(), ['a']);
+
+      await notifier().retryLoadMore();
+      state = container.read(wardrobeProvider).value!;
+      expect(state.loadMoreError, isNull);
+      expect(ids(), ['a', 'b']);
+    },
+  );
 
   test('delete removes the item; a failed delete keeps it', () async {
     repo.responses.add(() async => page(['a', 'b']));

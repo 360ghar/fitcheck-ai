@@ -10,8 +10,8 @@ describe('Logo', () => {
   })
 
   it('keeps the name readable when compact', () => {
-    render(<Logo compact />)
-    expect(screen.getByText('FitCheck')).toHaveClass('sr-only')
+    render(<a href="/dashboard"><Logo compact /></a>)
+    expect(screen.getByRole('link')).toHaveAccessibleName('FitCheck AI')
   })
 
   it('gives each mark its own path id', () => {

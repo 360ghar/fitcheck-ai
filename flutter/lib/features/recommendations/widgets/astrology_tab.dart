@@ -386,7 +386,9 @@ class _PicksSection extends ConsumerWidget {
                             AppImage(
                               imageUrl: url,
                               fallbackUrl: fallback,
-                              fit: BoxFit.cover,
+                              // Contain: item cutouts are cropped tight, so
+                              // cover would cut the garment's edges off.
+                              fit: BoxFit.contain,
                               enableZoom: false,
                               memCacheWidth: 144,
                               storagePath: storagePath,

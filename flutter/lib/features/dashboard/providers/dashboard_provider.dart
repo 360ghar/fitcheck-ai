@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,20 +15,28 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>(
 
 /// Hour-of-day behind the home greeting. A seam so golden screenshots pin
 /// one bucket instead of failing whenever the wall clock rolls over.
-final dashboardGreetingHourProvider = Provider<int>(
+final dashboardGreetingHourProvider = Provider.autoDispose<int>(
   (ref) => ref.watch(_hourTickProvider).value?.hour ?? DateTime.now().hour,
 );
 
 /// Emits the current time, then re-emits at each hour boundary so a cached
 /// greeting never goes stale while the app stays open.
-final _hourTickProvider = StreamProvider<DateTime>((ref) async* {
-  yield DateTime.now();
-  while (true) {
+final _hourTickProvider = StreamProvider.autoDispose<DateTime>((ref) {
+  final ticks = StreamController<DateTime>();
+  Timer? timer;
+  void tick() {
     final now = DateTime.now();
+    ticks.add(now);
     final nextHour = DateTime(now.year, now.month, now.day, now.hour + 1);
-    await Future.delayed(nextHour.difference(now));
-    yield DateTime.now();
+    timer = Timer(nextHour.difference(now), tick);
   }
+
+  ref.onDispose(() {
+    timer?.cancel();
+    unawaited(ticks.close());
+  });
+  tick();
+  return ticks.stream;
 });
 
 /// Dashboard data plus the optional streak.

@@ -24,10 +24,13 @@ import pytest
 from PIL import Image, ImageDraw
 
 from app.utils.background_removal import (
+    CROP_ALPHA_FLOOR,
+    CROP_MIN_PAD_PX,
     MATTE_WEBP_QUALITY,
     MAX_TRANSPARENT_FRACTION,
     MIN_CENTER_OPACITY,
     MIN_TRANSPARENT_FRACTION,
+    STATUS_CROPPED,
     STATUS_ERROR,
     STATUS_MATTED,
     STATUS_REJECTED_ATE_SUBJECT,
@@ -396,6 +399,64 @@ def test_rerunning_on_already_transparent_output_is_idempotent(fmt):
     assert second.status == STATUS_SKIPPED_NO_BACKGROUND
     assert second.image_bytes == transparent_source
     assert second.content_type == f"image/{fmt.lower()}"
+
+
+# =============================================================================
+# Crop to content (item cutouts)
+# =============================================================================
+
+# Garment extent including sleeves: x 180-844, y 180-844 (see _draw_garment).
+GARMENT_EXTENT = 844 - 180
+
+
+def _alpha_margins(data: bytes) -> tuple[tuple[int, int], tuple[int, int, int, int]]:
+    """(size, (left, top, right, bottom) transparent margin) of a matte."""
+    with Image.open(io.BytesIO(data)) as img:
+        alpha = img.getchannel("A")
+        box = alpha.point(lambda v: 255 if v >= CROP_ALPHA_FLOOR else 0).getbbox()
+        width, height = img.size
+    return (width, height), (box[0], box[1], width - box[2], height - box[3])
+
+
+def test_crop_trims_to_the_garment_plus_a_small_pad():
+    result = remove_white_background(_dark_garment_on_white(), crop=True)
+
+    assert result.status == STATUS_MATTED
+    (width, height), margins = _alpha_margins(result.image_bytes)
+    assert (result.width, result.height) == (width, height)
+    # Nothing of the garment was cut: the whole extent is still there...
+    assert width >= GARMENT_EXTENT and height >= GARMENT_EXTENT
+    # ...and the empty field is gone, apart from the pad on every side.
+    assert width < 800 and height < 800
+    for margin in margins:
+        assert CROP_MIN_PAD_PX - 2 <= margin <= 40, margins
+
+
+def test_cropped_output_refed_is_skipped_byte_identical():
+    first = remove_white_background(_dark_garment_on_white(), crop=True)
+    second = remove_white_background(first.image_bytes, crop=True)
+
+    assert second.status == STATUS_SKIPPED_NO_BACKGROUND
+    assert second.image_bytes == first.image_bytes
+
+
+def test_without_crop_the_full_frame_is_kept():
+    result = remove_white_background(_dark_garment_on_white())
+
+    assert result.status == STATUS_MATTED
+    with Image.open(io.BytesIO(result.image_bytes)) as img:
+        assert img.size == SIZE
+
+
+def test_already_transparent_full_frame_input_is_cropped():
+    """The backfill case: a cutout matted before cropping existed."""
+    full_frame = remove_white_background(_dark_garment_on_white())
+    result = remove_white_background(full_frame.image_bytes, crop=True)
+
+    assert result.status == STATUS_CROPPED
+    assert result.content_type == matte_content_type()
+    (width, height), _ = _alpha_margins(result.image_bytes)
+    assert GARMENT_EXTENT <= width < 800 and GARMENT_EXTENT <= height < 800
 
 
 def test_matte_is_fast_enough_for_the_generation_concurrency_budget():

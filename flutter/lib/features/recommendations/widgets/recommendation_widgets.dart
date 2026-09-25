@@ -96,11 +96,13 @@ class _PiecePickerSheet extends ConsumerWidget {
                 AppConstants.spacing16,
                 AppConstants.spacing24,
               ),
+              // Cropped item cutouts: 4 columns on a phone. The taller
+              // ratio keeps a near-square image above the two text lines.
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 140,
-                mainAxisSpacing: AppConstants.spacing12 + 3,
-                crossAxisSpacing: AppConstants.spacing12,
-                childAspectRatio: 0.78,
+                maxCrossAxisExtent: 104,
+                mainAxisSpacing: AppConstants.spacing8,
+                crossAxisSpacing: AppConstants.spacing8,
+                childAspectRatio: 0.62,
               ),
               itemCount: value.length,
               itemBuilder: (context, i) {

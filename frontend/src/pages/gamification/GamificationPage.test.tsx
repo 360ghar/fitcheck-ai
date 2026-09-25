@@ -77,6 +77,20 @@ describe('GamificationPage reliability states', () => {
     expect(screen.queryByLabelText('Loading streak')).not.toBeInTheDocument()
   })
 
+  it('logs a stale failure without replacing the current result', async () => {
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined)
+    let rejectFirst!: (error: Error) => void
+    vi.mocked(getStreak).mockReturnValueOnce(new Promise((_, reject) => { rejectFirst = reject }))
+    render(<StrictMode><MemoryRouter><GamificationPage /></MemoryRouter></StrictMode>)
+    expect(await screen.findByText('Best: 4 days')).toBeInTheDocument()
+    const error = new Error('late backend failure')
+    await act(async () => { rejectFirst(error) })
+    expect(errorSpy).toHaveBeenCalledWith('Gamification load failed', error)
+    expect(screen.getByText('Best: 4 days')).toBeInTheDocument()
+    expect(screen.queryByText(/couldn't load/)).not.toBeInTheDocument()
+    errorSpy.mockRestore()
+  })
+
   it('keeps the newer StrictMode load when the first load settles later', async () => {
     let resolveFirst!: (value: typeof streak) => void
     const first = new Promise<typeof streak>((resolve) => {

@@ -48,7 +48,8 @@ class CalendarPage extends ConsumerWidget {
       stock: PaperStockId.clay,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Calendar'),          actions: [
+          title: const Text('Calendar'),
+          actions: [
             IconButton(
               tooltip: 'Go to today',
               icon: const Icon(Icons.today_outlined),

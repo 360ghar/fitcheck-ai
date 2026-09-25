@@ -55,17 +55,16 @@ class PaperSlabBorder extends RoundedRectangleBorder {
     return super.lerpTo(b, t);
   }
 
-  static PaperSlabBorder _lerp(PaperSlabBorder a, PaperSlabBorder b, double t) =>
-      PaperSlabBorder(
-        side: BorderSide.lerp(a.side, b.side, t),
-        borderRadius: BorderRadiusGeometry.lerp(
-          a.borderRadius,
-          b.borderRadius,
-          t,
-        )!,
-        slab: Color.lerp(a.slab, b.slab, t)!,
-        depth: lerpDouble(a.depth, b.depth, t)!,
-      );
+  static PaperSlabBorder _lerp(
+    PaperSlabBorder a,
+    PaperSlabBorder b,
+    double t,
+  ) => PaperSlabBorder(
+    side: BorderSide.lerp(a.side, b.side, t),
+    borderRadius: BorderRadiusGeometry.lerp(a.borderRadius, b.borderRadius, t)!,
+    slab: Color.lerp(a.slab, b.slab, t)!,
+    depth: lerpDouble(a.depth, b.depth, t)!,
+  );
 
   @override
   void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
@@ -152,18 +151,26 @@ class DeckleBorder extends OutlinedBorder {
     final rng = math.Random(seed);
     final path = Path();
     final torn = <Offset>[];
-    // A zero or negative step would loop forever at paint time and freeze
-    // the UI isolate; fall back to a straight edge instead.
-    if (step > 0) {
-      for (var x = rect.left + r; x < rect.right - r; x += step) {
+    // Bound the paint work even for subpixel steps or very wide surfaces.
+    // An increment can round back to x at large coordinates: stop there.
+    if (step.isFinite && step > 0) {
+      final end = rect.right - r;
+      final spacing = math.max(step, (end - (rect.left + r)) / 2048);
+      for (var x = rect.left + r; x < end && torn.length < 2048;) {
         torn.add(Offset(x, rng.nextDouble() * amplitude));
+        final next = x + spacing;
+        if (next <= x) break;
+        x = next;
       }
     }
     torn.add(Offset(rect.right - r, 0));
 
     // Top edge, left to right.
     path.moveTo(rect.left, rect.top + r);
-    path.arcToPoint(Offset(rect.left + r, rect.top), radius: Radius.circular(r));
+    path.arcToPoint(
+      Offset(rect.left + r, rect.top),
+      radius: Radius.circular(r),
+    );
     if (edge == PaperEdge.top) {
       for (final p in torn) {
         path.lineTo(p.dx, rect.top + p.dy);
@@ -171,7 +178,10 @@ class DeckleBorder extends OutlinedBorder {
     } else {
       path.lineTo(rect.right - r, rect.top);
     }
-    path.arcToPoint(Offset(rect.right, rect.top + r), radius: Radius.circular(r));
+    path.arcToPoint(
+      Offset(rect.right, rect.top + r),
+      radius: Radius.circular(r),
+    );
 
     // Right edge, then bottom edge right to left.
     path.lineTo(rect.right, rect.bottom - r);

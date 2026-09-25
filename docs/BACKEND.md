@@ -394,10 +394,11 @@ No provider we use can return an alpha channel (`_generate_image_via_images_api`
 
 | Path | Matted? |
 |------|---------|
-| `generate_product_image` | yes |
-| `generate_outfit` flat-lay branch (incl. `generate_flat_lay`, `include_model=False`) | yes |
+| `generate_product_image` | yes, and **cropped** to the item plus a ~3% transparent pad (`crop=True`) |
+| `generate_outfit` flat-lay branch (incl. `generate_flat_lay`, `include_model=False`) | yes, full-frame (outfit tiles use `object-cover`; a tight flat-lay would lose its top and bottom) |
 | `generate_outfit` avatar branch, generic-model branch, `generate_try_on` | **no** — a threshold matte cannot cut hair, and the guards do not catch it (a full-body figure lands ~0.70–0.80 transparent, under `MAX_TRANSPARENT_FRACTION`) |
 
+- Crop rule (`CROP_*` constants): bbox of alpha ≥ 8, grown by `max(8px, 3% of the long edge)`, clamped to the frame. Tiles show the item instead of a 1024px empty field, so clients render cutouts `object-contain` / `BoxFit.contain` and never `cover`. With `crop=True`, already-transparent input is cropped the same way (`cropped`) or left alone when already tight (`skipped_no_background`), so a re-run is a no-op.
 - `background="transparent"` means "render on a matte-optimal flat white, then cut the alpha server-side". It resolves to the **same** prompt fragment as `"white"` / `"studio white"` via `_resolve_background`, which is why no client change was needed. `"gray"` / `"gradient"` stay honest: they fail the matte's first guard and keep their opaque original.
 - Three guards; any failure returns the **original bytes unmodified**: no white backdrop found (`skipped_no_background`), matte ate the subject (`rejected_ate_subject`), centre of frame went transparent (`rejected_center_transparent`). Grep `Background matte finished` for `status` / `transparent_fraction` / `center_opacity`.
 - `app/utils/image_processing.py` is the deliberate **inverse** and must stay that way: it flattens alpha onto white and encodes JPEG for the MODEL. A matted item image downloaded back as a garment reference is flattened there, which is exactly the "clean isolated garment on white" the reference prompts ask for.
@@ -405,7 +406,7 @@ No provider we use can return an alpha channel (`_generate_image_via_images_api`
 
 #### Backfilling the existing corpus
 
-Images generated before the matte landed are still opaque JPEGs on white. `backend/scripts/backfill_transparent_backgrounds.py` re-mattes them **in place** — same storage key, `upsert=true`, `content-type: image/webp` — so `image_url` and `thumbnail_url` never change and no denormalised copy or shared link goes stale. Read the module docstring before running it; the extension deliberately ends up disagreeing with the bytes, and that is not a defect to "fix".
+Images generated before the matte landed are opaque JPEGs on white; item images matted before the crop landed are full-frame. `backend/scripts/backfill_transparent_backgrounds.py` re-mattes and (for `item_images` only) re-crops them **in place** — same storage key, `content-type: image/webp` — so `image_url` and `thumbnail_url` never change and no denormalised copy or shared link goes stale. The `{stem}_thumb.webp` sibling is re-encoded from the new bytes and uploaded **before** the main object, so a thumb failure leaves the row fully retryable. All IO runs on one event loop (`CONCURRENCY` rows in flight, Pillow on the bounded image executor). Read the module docstring before running it; the extension deliberately ends up disagreeing with the bytes, and that is not a defect to "fix".
 
 Targets `item_images` and `outfit_images WHERE generation_type='ai'` only. Never `items.source_image_url` (the original photo has a real background), never `social_import_items` (temporary review-queue objects), never `outfit_generations.image_urls` (denormalised copies that stay valid for free).
 
@@ -420,7 +421,7 @@ CONCURRENCY=8 python scripts/backfill_transparent_backgrounds.py
 TABLES=outfit_images python scripts/backfill_transparent_backgrounds.py       # expect most to be skipped by G1: they are model shots
 ```
 
-A JSONL audit (`backend/logs/transparent_backfill.jsonl`) makes the run resumable — rows with a terminal action are skipped, `error` rows stay retryable. A rejected or skipped matte writes **nothing**: no upload, no DB patch. If more than 10% of decoded images are rejected the script says so loudly and names `WHITE_MIN_CHANNEL` — that is the signal the generation prompts drifted from what the algorithm assumes, and it is worth stopping for.
+A JSONL audit (`backend/logs/transparent_backfill_v2.jsonl`; `_v2` because rows the pre-crop run marked terminal must be visited again) makes the run resumable — rows with a terminal action are skipped, `error` rows stay retryable. A rejected or skipped matte writes **nothing**: no upload, no DB patch. If more than 10% of decoded images are rejected the script says so loudly and names `WHITE_MIN_CHANNEL` — that is the signal the generation prompts drifted from what the algorithm assumes, and it is worth stopping for.
 
 ### Photoshoot generation
 1. `POST /api/v1/photoshoot/generate` (async) creates a `PhotoshootJob` and returns `job_id` (202); the pipeline runs in the background and streams SSE on `/{job_id}/events`. `sync=true` remains as a legacy compatibility path (TD-019 closed for the web app 2026-08-03).

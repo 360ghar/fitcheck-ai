@@ -113,7 +113,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       done: isSetupDone(setupUser?.id),
     })
   ) {
-    return <Navigate to="/welcome" replace />
+    const returnTo = getSafeReturnTo(location.pathname + location.search + location.hash)
+    const target = returnTo ? `/welcome?returnTo=${encodeURIComponent(returnTo)}` : '/welcome'
+    return <Navigate to={target} replace />
   }
 
   return <>{children}</>

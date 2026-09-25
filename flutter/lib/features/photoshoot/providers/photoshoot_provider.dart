@@ -388,9 +388,9 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     if (s.numImages > s.remainingToday) return PhotoshootStart.limitReached;
 
     // Third-party AI consent (Apple 5.1.2(i)) before any photo is read.
-    if (!await ref.read(aiConsentServiceProvider).ensureConsent(
-      featureLabel: 'AI Photoshoot',
-    )) {
+    if (!await ref
+        .read(aiConsentServiceProvider)
+        .ensureConsent(featureLabel: 'AI Photoshoot')) {
       return PhotoshootStart.notStarted;
     }
     if (!ref.mounted || state.isGenerating) return PhotoshootStart.notStarted;
@@ -797,9 +797,9 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
         s.photos.isEmpty) {
       return;
     }
-    if (!await ref.read(aiConsentServiceProvider).ensureConsent(
-      featureLabel: 'AI Photoshoot',
-    )) {
+    if (!await ref
+        .read(aiConsentServiceProvider)
+        .ensureConsent(featureLabel: 'AI Photoshoot')) {
       return;
     }
     if (!ref.mounted) return;
@@ -852,6 +852,12 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
         title: 'Replaced',
       );
     } catch (e, stack) {
+      if (!ref.mounted ||
+          state.sessionId != sessionId ||
+          state.retryingIndex != index ||
+          !state.failedIndices.contains(index)) {
+        return;
+      }
       ErrorHandler.showError(e, title: 'Retry failed', stackTrace: stack);
     } finally {
       // Only clear our own attempt: a newer session's retry flag is not ours.

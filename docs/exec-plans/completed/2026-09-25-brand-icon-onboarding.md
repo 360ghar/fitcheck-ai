@@ -57,9 +57,9 @@ post-signup setup (gender, styles and occasions, first item).
 
 ```bash
 ./scripts/render_brand_assets.sh
-cd frontend && npm run lint && npm test && npm run build
-cd admin && npm run lint && npm run typecheck && npm test
-cd flutter && flutter test && flutter test --tags golden
+(cd frontend && npm run lint && npm test && npm run build)
+(cd admin && npm run lint && npm run typecheck && npm test)
+(cd flutter && flutter test && flutter test --tags golden)
 ./scripts/check_all.sh
 ```
 

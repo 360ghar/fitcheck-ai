@@ -59,8 +59,9 @@ class PaperScene extends StatefulWidget {
 
   final PaperScenePreset preset;
 
-  /// Paints the paper grain over the scene. Turn it off when the parent
-  /// already lays grain across the scene and the page around it.
+  /// Paints grain over the scene. Turn it off only when an ancestor paints
+  /// grain in the foreground, over both the scene and the surrounding page.
+  /// Also set background to Colors.transparent to keep that page visible.
   final bool grain;
 
   /// Sky colour behind the layers. Defaults to the stock's page colour, so

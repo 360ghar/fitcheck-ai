@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-Backfill alpha transparency onto the existing generated-image corpus.
+Backfill alpha transparency, and the crop to content, onto the existing
+generated-image corpus.
 
 `app/utils/background_removal.py` cuts the flat white studio backdrop out of
-newly generated item and flat-lay images. Every image generated BEFORE that
-landed is still an opaque JPEG on white. This script re-mattes those objects
-in place so the historical corpus matches new writes.
+newly generated item and flat-lay images, and crops item cutouts to the item
+plus a small pad. Images generated before either landed are opaque JPEGs on
+white, or full-frame transparent WebPs. This script re-mattes and re-crops
+those objects in place so the historical corpus matches new writes. Only
+`item_images` are cropped; outfit looks stay full-frame (outfit tiles use
+`object-cover`).
 
     cd backend && source .venv/bin/activate
     DRY_RUN=1 python scripts/backfill_transparent_backgrounds.py
@@ -26,18 +30,21 @@ READ THIS BEFORE YOU "FIX" ANYTHING HERE
    would churn every URL in the product to fix a cosmetic mismatch nobody can
    see. Do not do it.
 
-2) `thumbnail_url` IS NOT REGENERATED.
-   A real thumbnail needs a NEW storage key, which is exactly the URL churn
-   above; it would also double the runtime and orphan the old object forever,
-   because every delete path in the app tracks only `storage_path`. The right
-   long-term fix is Supabase's `render/image` transform endpoint
-   (`/storage/v1/render/image/public/<bucket>/<key>?width=...`), which resizes
-   on read and needs zero new keys. Out of scope here.
+2) THE `_thumb` SIBLING IS REWRITTEN, ITS URL IS NOT.
+   Every canonical key has a deterministic `{stem}_thumb.webp` sibling
+   (`StorageService.thumb_key_for`), and grid tiles read it. On a rewrite the
+   thumb is re-encoded from the NEW bytes and uploaded BEFORE the main object.
+   That order matters: if the main object went first and the thumb failed, a
+   retry would find an already-tight image, skip it, and never fix the thumb.
+   Thumb first means a failure leaves the main object untouched and the whole
+   row retryable.
 
 3) ON A GUARD REJECTION THIS SCRIPT DOES NOTHING AT ALL.
    No upload, no CDN invalidation, no wasted storage write. `skipped_*` is the
    "this image needs no work" fast path (a user photo, a scene shot, an
-   already-transparent object), NOT a failure. Expect a large skip rate on
+   already-transparent object that is already cropped tight), NOT a failure.
+   On `item_images` an already-transparent object with a wide empty margin is
+   NOT skipped: it is cropped (`cropped`) and rewritten. Expect a large skip rate on
    `outfit_images`: most of those are model shots, which are deliberately never
    matted (a Pillow threshold cannot cut hair) and so land on `skipped_*`.
 
@@ -135,9 +142,10 @@ Optional:
     PAGE_SIZE=500                       # DB page size
     LIMIT=0                             # 0 = unbounded, per table
     ONLY_USER_ID=                       # restrict to one user's images
-    CONCURRENCY=8                       # download+matte+upload worker threads
+    CONCURRENCY=8                       # rows in flight (download/upload overlap)
+    IMAGE_PROCESS_WORKERS=4             # parallel mattes (app setting); raise to the core count for a big run
     THROTTLE_MS=0                       # per-worker sleep after each image
-    AUDIT_FILE=backend/logs/transparent_backfill.jsonl
+    AUDIT_FILE=backend/logs/transparent_backfill_v2.jsonl
     CACHE_CONTROL=60                    # seconds, stamped on every re-upload
     BUST_CACHE=0                        # 1 = append ?v=<epoch> to the URLs
     UPDATE_DIMENSIONS=1                 # write real width/height (see below)
@@ -150,9 +158,16 @@ so backfilling them fixes a real CLS bug for free. They are written even on
 skipped and rejected rows - we decoded those too and the dimensions are correct
 regardless of whether the matte applied.
 
-RESUME: one JSONL line per image. On startup every `row_id` whose last recorded
-action is terminal (`matted` / `skipped` / `rejected` / `unresolvable`) is
-skipped; `error` stays retryable. Safe to Ctrl-C or lose the host mid-run.
+RESUME: one JSONL line per image, written as each row finishes. On startup
+every `row_id` whose last recorded action is terminal (`matted` / `cropped` /
+`skipped` / `rejected` / `unresolvable`) is skipped; `error` stays retryable.
+Safe to Ctrl-C or lose the host mid-run. The default file is `_v2` because the
+crop landed after the first run: rows that run marked terminal must be visited
+again. The v1 file is history only.
+
+ONE EVENT LOOP: the S3 backend is a process-wide aioboto3 client bound to the
+loop that first used it, so all IO runs on a single `asyncio.run`, with
+CONCURRENCY workers and the Pillow work on the bounded image executor.
 """
 from __future__ import annotations
 
@@ -161,9 +176,7 @@ import json
 import os
 import statistics
 import sys
-import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, NamedTuple, Optional
@@ -181,6 +194,7 @@ from supabase import create_client
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.utils.background_removal import (  # noqa: E402
+    STATUS_CROPPED,
     STATUS_ERROR,
     STATUS_MATTED,
     STATUS_REJECTED_ATE_SUBJECT,
@@ -194,13 +208,16 @@ from app.utils.background_removal import (  # noqa: E402
 # same `S3StorageBackend` the app uses. The DB client (supabase-py) is still
 # used for the row listing / metadata patch — the DB stays on Supabase; only
 # file storage moved.
-from app.services.object_storage import get_storage_backend  # noqa: E402
+from app.services.object_storage import close_storage_backend, get_storage_backend  # noqa: E402
+from app.services.storage_service import StorageService  # noqa: E402
+from app.core.image_executor import run_image_op  # noqa: E402
 from app.core.storage_keys import key_from_path  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # audit actions
 # --------------------------------------------------------------------------- #
 ACTION_MATTED = "matted"
+ACTION_CROPPED = "cropped"
 ACTION_SKIPPED = "skipped"
 ACTION_REJECTED = "rejected"
 ACTION_ERROR = "error"
@@ -209,10 +226,17 @@ ACTION_UNRESOLVABLE = "unresolvable"
 # An image whose last audit line carries one of these is never revisited.
 # `error` is deliberately absent: a transient download failure must be retried
 # on the next run, and re-running the matte on a row is harmless anyway.
-TERMINAL_ACTIONS = frozenset({ACTION_MATTED, ACTION_SKIPPED, ACTION_REJECTED, ACTION_UNRESOLVABLE})
+TERMINAL_ACTIONS = frozenset(
+    {ACTION_MATTED, ACTION_CROPPED, ACTION_SKIPPED, ACTION_REJECTED, ACTION_UNRESOLVABLE}
+)
+# Outcomes that produced new bytes.
+WRITE_ACTIONS = frozenset({ACTION_MATTED, ACTION_CROPPED})
+# Outcomes that prove the image was decoded (the reject-ratio denominator).
+DECODED_ACTIONS = WRITE_ACTIONS | {ACTION_SKIPPED, ACTION_REJECTED}
 
 _STATUS_TO_ACTION = {
     STATUS_MATTED: ACTION_MATTED,
+    STATUS_CROPPED: ACTION_CROPPED,
     STATUS_SKIPPED_NO_BACKGROUND: ACTION_SKIPPED,
     STATUS_REJECTED_ATE_SUBJECT: ACTION_REJECTED,
     STATUS_REJECTED_CENTER_TRANSPARENT: ACTION_REJECTED,
@@ -239,14 +263,19 @@ class TableSpec(NamedTuple):
     parent_fk: str
     # Column filter applied to every query, e.g. {"generation_type": "ai"}.
     row_filter: dict[str, str]
+    # Crop the cutout to its content. Items only: outfit tiles use
+    # `object-cover`, which would cut the top and bottom off a tight flat-lay.
+    crop: bool
 
 
 TABLE_SPECS: dict[str, TableSpec] = {
     # Primary target: product shots generated on a white studio backdrop.
-    "item_images": TableSpec("item_images", "items", "item_id", {}),
+    "item_images": TableSpec("item_images", "items", "item_id", {}, crop=True),
     # Secondary: only AI-generated looks. Most are model shots and will land on
     # `skipped_no_background` (G1) - that is the designed outcome, not a bug.
-    "outfit_images": TableSpec("outfit_images", "outfits", "outfit_id", {"generation_type": "ai"}),
+    "outfit_images": TableSpec(
+        "outfit_images", "outfits", "outfit_id", {"generation_type": "ai"}, crop=False
+    ),
 }
 
 # Explicitly NOT targets, so nobody adds them later without reading why:
@@ -369,12 +398,12 @@ def action_for_status(status: str) -> str:
 
 
 def should_upload(action: str) -> bool:
-    """Only a successful matte produces new bytes worth writing.
+    """Only a successful matte or crop produces new bytes worth writing.
 
     Rewriting identical bytes on a skip or a rejection would burn a storage
     write and a CDN invalidation for exactly zero visible change.
     """
-    return action == ACTION_MATTED
+    return action in WRITE_ACTIONS
 
 
 def upload_args(content_type: str, cache_control: int) -> tuple[str, str]:
@@ -410,7 +439,7 @@ def build_row_update(
         if row.get("width") != result.width or row.get("height") != result.height:
             update["width"] = result.width
             update["height"] = result.height
-    if bust_cache and result.status == STATUS_MATTED:
+    if bust_cache and action_for_status(result.status) in WRITE_ACTIONS:
         update["image_url"] = with_version(row.get("image_url"), version)
         if row.get("thumbnail_url"):
             update["thumbnail_url"] = with_version(row.get("thumbnail_url"), version)
@@ -501,7 +530,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         status = rec.get("status") or ""
         if status:
             statuses[status] = statuses.get(status, 0) + 1
-        if action == ACTION_MATTED:
+        if action in WRITE_ACTIONS:
             before += int(rec.get("bytes_before") or 0)
             after += int(rec.get("bytes_after") or 0)
 
@@ -514,7 +543,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         if rec.get("decoded") is True
         or (
             "decoded" not in rec
-            and rec.get("action") in {ACTION_MATTED, ACTION_SKIPPED, ACTION_REJECTED}
+            and rec.get("action") in DECODED_ACTIONS
         )
     )
     rejected = actions.get(ACTION_REJECTED, 0)
@@ -544,7 +573,9 @@ def render_summary(summary: dict[str, Any]) -> str:
     """Human summary table plus the retune warning when rejects run high."""
     lines = ["", "=" * 64, "SUMMARY", "=" * 64]
     lines.append(f"  images seen           : {summary['total']}")
-    for action in (ACTION_MATTED, ACTION_SKIPPED, ACTION_REJECTED, ACTION_ERROR, ACTION_UNRESOLVABLE):
+    for action in (
+        ACTION_MATTED, ACTION_CROPPED, ACTION_SKIPPED, ACTION_REJECTED, ACTION_ERROR, ACTION_UNRESOLVABLE
+    ):
         count = summary["actions"].get(action, 0)
         share = (count / summary["total"] * 100.0) if summary["total"] else 0.0
         lines.append(f"    {action:<18}: {count:>6}  ({share:5.1f}%)")
@@ -556,8 +587,8 @@ def render_summary(summary: dict[str, Any]) -> str:
             lines.append(f"    {status:<32}: {count:>6}")
 
     lines.append("")
-    lines.append(f"  bytes before (matted) : {_fmt_bytes(summary['bytes_before'])}")
-    lines.append(f"  bytes after  (matted) : {_fmt_bytes(summary['bytes_after'])}")
+    lines.append(f"  bytes before (written): {_fmt_bytes(summary['bytes_before'])}")
+    lines.append(f"  bytes after  (written): {_fmt_bytes(summary['bytes_after'])}")
     lines.append(f"  storage delta         : {_fmt_bytes(summary['bytes_delta'])}")
 
     if summary["reject_ratio"] > REJECT_WARN_RATIO:
@@ -633,21 +664,21 @@ def render_dry_run_report(records: list[dict[str, Any]], corpus_total: Optional[
         label = f"{low}-{high}KB" if high < (1 << 30) else f"{low}KB+"
         lines.append(f"    {label:<12}: {count:>4}  {'#' * count}")
 
-    matted = [r for r in records if r.get("action") == ACTION_MATTED]
+    matted = [r for r in records if r.get("action") in WRITE_ACTIONS]
     lines.append("")
     if matted:
         before = sum(int(r.get("bytes_before") or 0) for r in matted)
         after = sum(int(r.get("bytes_after") or 0) for r in matted)
         delta_per_matted = (after - before) / len(matted)
         matte_rate = len(matted) / len(records)
-        lines.append(f"  would matte           : {len(matted)}/{len(records)} ({matte_rate * 100:.1f}%)")
+        lines.append(f"  would rewrite         : {len(matted)}/{len(records)} ({matte_rate * 100:.1f}%)")
         lines.append(f"  sampled bytes         : {_fmt_bytes(before)} -> {_fmt_bytes(after)}")
-        lines.append(f"  mean delta per matte  : {_fmt_bytes(int(delta_per_matted))}")
+        lines.append(f"  mean delta per write  : {_fmt_bytes(int(delta_per_matted))}")
         if corpus_total is not None:
             projected = int(delta_per_matted * matte_rate * corpus_total)
             lines.append(f"  PROJECTED corpus delta: {_fmt_bytes(projected)} over {corpus_total} row(s)")
     else:
-        lines.append("  would matte           : 0 - the guards reject or skip every sampled image.")
+        lines.append("  would rewrite         : 0 - the guards reject or skip every sampled image.")
 
     summary = summarize(records)
     if summary["reject_ratio"] > REJECT_WARN_RATIO:
@@ -754,8 +785,20 @@ class Config(NamedTuple):
     version: int
 
 
-def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> dict[str, Any]:
-    """Download, matte, and (unless dry-run or non-matted) overwrite in place.
+async def refresh_thumbnail(storage: Any, key: str, data: bytes) -> bool:
+    """Rewrite the `_thumb` sibling from `data`. True when done or not needed.
+
+    Non-canonical keys have no thumb (`thumb_key_for` is None), so there is
+    nothing to refresh. `_upload_thumbnail` never raises; False means no thumb
+    was written.
+    """
+    if not StorageService.thumb_key_for(key):
+        return True
+    return await StorageService._upload_thumbnail(storage, key, data)
+
+
+async def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> dict[str, Any]:
+    """Download, matte/crop, and (unless dry-run or unchanged) overwrite in place.
 
     Returns the audit record. Never raises: a per-image failure is logged as
     `error` and stays retryable on the next run.
@@ -779,7 +822,7 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
         # bypasses any CDN, so we always matte the authoritative bytes and never
         # a stale cached copy. S3 read-after-write is strongly consistent, so the
         # bytes here are the latest write.
-        original = asyncio.run(storage.download(key))
+        original = await storage.download(key)
     except Exception as exc:
         return make_record(
             table=spec.table,
@@ -789,8 +832,21 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
             status=f"download_failed: {exc}"[:200],
             decoded=False,
         )
+    try:
+        # GIL-held Pillow work goes to the bounded executor so downloads and
+        # uploads for other rows keep moving. remove_white_background never
+        # raises; this covers a broken executor.
+        result = await run_image_op(remove_white_background, original, key, crop=spec.crop)
+    except Exception as exc:
+        return make_record(
+            table=spec.table,
+            row_id=row_id,
+            storage_path=key,
+            action=ACTION_ERROR,
+            status=f"matte_failed: {exc}"[:200],
+            decoded=False,
+        )
 
-    result = remove_white_background(original, key)
     action = action_for_status(result.status)
     record = make_record(
         table=spec.table,
@@ -800,17 +856,23 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
         status=result.status,
         result=result,
         bytes_before=len(original),
-        bytes_after=len(result.image_bytes) if action == ACTION_MATTED else len(original),
+        bytes_after=len(result.image_bytes) if should_upload(action) else len(original),
         # remove_white_background is best-effort and returns STATUS_ERROR when
         # Pillow cannot decode the bytes. Only its successful/guarded outcomes
         # prove that an image was actually decoded for rejection metrics.
-        decoded=action in {ACTION_MATTED, ACTION_SKIPPED, ACTION_REJECTED},
+        decoded=action in DECODED_ACTIONS,
     )
 
     if cfg.dry_run:
         return record
 
     if should_upload(action):
+        # Thumb FIRST: see docstring section 2. A failure here leaves the main
+        # object untouched, so the whole row stays retryable.
+        if not await refresh_thumbnail(storage, key, result.image_bytes):
+            record["action"] = ACTION_ERROR
+            record["status"] = "thumb_failed"
+            return record
         try:
             content_type, cache_control = upload_args(
                 result.content_type, cfg.cache_control
@@ -818,13 +880,11 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
             # S3 put_object overwrites the existing key by default. The matte
             # may have changed the content type (opaque JPEG -> transparent
             # WebP); the new type is sniffed from the bytes by the matte result.
-            asyncio.run(
-                storage.upload(
-                    key=key,
-                    data=result.image_bytes,
-                    content_type=content_type,
-                    cache_control=cache_control,
-                )
+            await storage.upload(
+                key=key,
+                data=result.image_bytes,
+                content_type=content_type,
+                cache_control=cache_control,
             )
         except Exception as exc:
             record["action"] = ACTION_ERROR
@@ -840,7 +900,10 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
     )
     if update:
         try:
-            db.table(spec.table).update(update).eq("id", row_id).execute()
+            # supabase-py is synchronous; keep it off the event loop.
+            await asyncio.to_thread(
+                lambda: db.table(spec.table).update(update).eq("id", row_id).execute()
+            )
         except Exception as exc:
             # The bytes are already correct; only the metadata patch failed.
             # Keep it retryable so the next run finishes the job.
@@ -848,14 +911,35 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
             record["status"] = f"row_update_failed: {exc}"[:200]
 
     if cfg.throttle_ms > 0:
-        time.sleep(cfg.throttle_ms / 1000.0)
+        await asyncio.sleep(cfg.throttle_ms / 1000.0)
     return record
+
+
+async def run_pool(
+    rows: list[dict[str, Any]],
+    concurrency: int,
+    work: Any,
+    on_record: Any,
+) -> None:
+    """Run `work(row)` over `rows` with `concurrency` workers on one loop.
+
+    Workers share one iterator, so at most `concurrency` rows are in flight and
+    no task is created per row (a whole corpus fits without a task per image).
+    `on_record` sees each record as its row finishes.
+    """
+    it = iter(rows)
+
+    async def worker() -> None:
+        for row in it:
+            on_record(await work(row))
+
+    await asyncio.gather(*(worker() for _ in range(max(1, concurrency))))
 
 
 # --------------------------------------------------------------------------- #
 # main
 # --------------------------------------------------------------------------- #
-def main() -> int:
+async def _amain() -> int:
     supabase_url = _env("SUPABASE_URL", required=True).rstrip("/")
     supabase_key = _env("SUPABASE_SECRET_KEY", required=True)
 
@@ -875,7 +959,7 @@ def main() -> int:
     only_user_id = _env("ONLY_USER_ID", "").strip()
     concurrency = max(1, _env_int("CONCURRENCY", 8))
     dry_run_sample = max(1, _env_int("DRY_RUN_SAMPLE", 20))
-    audit_path = Path(_env("AUDIT_FILE", "backend/logs/transparent_backfill.jsonl"))
+    audit_path = Path(_env("AUDIT_FILE", "backend/logs/transparent_backfill_v2.jsonl"))
 
     cfg = Config(
         dry_run=dry_run,
@@ -905,7 +989,6 @@ def main() -> int:
     if not dry_run:
         print(f"audit: {len(done)} image(s) already terminal, will be skipped")
 
-    audit_lock = threading.Lock()
     all_records: list[dict[str, Any]] = []
     corpus_total = 0
 
@@ -936,17 +1019,25 @@ def main() -> int:
         if not pending:
             continue
 
-        processed = 0
-        with ThreadPoolExecutor(max_workers=concurrency) as pool:
-            for record in pool.map(lambda r: process_row(db, spec, r, cfg), pending):
-                all_records.append(record)
-                if not dry_run:
-                    with audit_lock:
-                        append_audit(audit_path, record)
-                processed += 1
-                if processed % 25 == 0:
-                    print(f"  [{name}] {processed}/{len(pending)}")
-        print(f"  [{name}] {processed}/{len(pending)} done")
+        before = len(all_records)
+
+        def on_record(
+            record: dict[str, Any], name: str = name, total: int = len(pending), before: int = before
+        ) -> None:
+            all_records.append(record)
+            if not dry_run:
+                append_audit(audit_path, record)
+            processed = len(all_records) - before
+            if processed % 25 == 0:
+                print(f"  [{name}] {processed}/{total}")
+
+        await run_pool(
+            pending,
+            concurrency,
+            lambda r, spec=spec: process_row(db, spec, r, cfg),
+            on_record,
+        )
+        print(f"  [{name}] {len(all_records) - before}/{len(pending)} done")
 
     if dry_run:
         print(render_dry_run_report(all_records, corpus_total or None))
@@ -959,6 +1050,17 @@ def main() -> int:
     if errors:
         print(f"{errors} image(s) errored and remain retryable; re-run to finish.", file=sys.stderr)
     return 1 if errors else 0
+
+
+def main() -> int:
+    """Sync entrypoint: every row runs on this one loop (see ONE EVENT LOOP)."""
+    async def _run() -> int:
+        try:
+            return await _amain()
+        finally:
+            await close_storage_backend()
+
+    return asyncio.run(_run())
 
 
 if __name__ == "__main__":
