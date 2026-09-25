@@ -53,10 +53,15 @@ class PaperScene extends StatefulWidget {
     this.height = 200,
     this.parallax = 0.35,
     this.background,
+    this.grain = true,
     this.child,
   });
 
   final PaperScenePreset preset;
+
+  /// Paints the paper grain over the scene. Turn it off when the parent
+  /// already lays grain across the scene and the page around it.
+  final bool grain;
 
   /// Sky colour behind the layers. Defaults to the stock's page colour, so
   /// the scene and the page around it carry one even grain with no seam.
@@ -104,7 +109,7 @@ class _PaperSceneState extends State<PaperScene>
     final animate = !MediaQuery.disableAnimationsOf(context);
     final scroll = animate ? Scrollable.maybeOf(context)?.position : null;
     final swaying = animate && layers.any((l) => l.sway != 0);
-    final grain = paperGrain(context);
+    final grain = widget.grain ? paperGrain(context) : null;
 
     final scene = RepaintBoundary(
       child: CustomPaint(

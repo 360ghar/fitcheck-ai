@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Shirt, Mail, Phone } from 'lucide-react'
+import { Mail, Phone } from 'lucide-react'
+import { Logo } from '@/components/brand/Logo'
 
 import { trackLandingCta } from '@/lib/analytics'
 import { scrollToSectionId } from '@/lib/scroll'
@@ -77,12 +78,7 @@ export default function Footer() {
         <div className="mb-10 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-6">
           <div className="col-span-2 lg:col-span-2">
             <Link to="/" className="mb-4 flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary shadow-pressed">
-                <Shirt className="h-4 w-4 text-primary-foreground" aria-hidden="true" />
-              </div>
-              <span className="text-lg font-semibold tracking-tight text-foreground">
-                FitCheck<span className="font-normal text-muted-foreground"> AI</span>
-              </span>
+              <Logo markSize={36} wordmarkClassName="text-lg" />
             </Link>
             <p className="max-w-xs text-sm leading-relaxed">
               Photograph your clothes. Get outfits that fit the day. A quieter way to use what you own.

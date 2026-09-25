@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useIsAuthenticated, useHasHydrated } from './stores/authStore'
+import { useIsAuthenticated, useHasHydrated, useCurrentUser } from './stores/authStore'
 import { getSafeReturnTo } from './pages/auth/authRedirect'
+import { isSetupDone, shouldShowSetup } from './lib/activation'
 import { memo, lazy, Suspense } from 'react'
 
 // Analytics
@@ -51,6 +52,7 @@ const OutfitCreatePage = lazy(() => import('./pages/outfits/OutfitCreatePage'))
 const RecommendationsPage = lazy(() => import('./pages/recommendations/RecommendationsPage'))
 const ProfilePage = lazy(() => import('./pages/settings/ProfilePage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const WelcomePage = lazy(() => import('./pages/WelcomePage'))
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
 // Gamification is flag-gated. The ternary is not belt-and-braces — it is what
 // actually removes the code. Gating only the <Route> below leaves this
@@ -82,6 +84,7 @@ function LoadingSpinner() {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useIsAuthenticated()
   const hasHydrated = useHasHydrated()
+  const setupUser = useCurrentUser()
   const location = useLocation()
 
   // Wait for hydration before making auth decisions
@@ -98,6 +101,19 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       ? `/auth/login?returnTo=${encodeURIComponent(returnTo)}`
       : '/auth/login'
     return <Navigate to={target} replace />
+  }
+
+  // First-run setup: a new account goes to /welcome once, before any app
+  // page mounts or fetches. /welcome itself is exempt so setup can render.
+  if (
+    location.pathname !== '/welcome' &&
+    shouldShowSetup({
+      createdAt: setupUser?.created_at,
+      gender: setupUser?.gender,
+      done: isSetupDone(setupUser?.id),
+    })
+  ) {
+    return <Navigate to="/welcome" replace />
   }
 
   return <>{children}</>
@@ -212,6 +228,16 @@ function App() {
           <Route path="/gift/:publicId" element={<GiftClaimPage />} />
           {/* MCP/ChatGPT OAuth bridge: public, self-contained */}
           <Route path="/oauth/bridge" element={<OAuthBridgePage />} />
+
+          {/* First-run setup: protected, outside the app shell */}
+          <Route
+            path="/welcome"
+            element={
+              <ProtectedRoute>
+                <WelcomePage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Main app routes - protected */}
           <Route

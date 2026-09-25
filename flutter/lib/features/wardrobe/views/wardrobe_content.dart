@@ -23,8 +23,24 @@ class WardrobeContent extends ConsumerStatefulWidget {
   ConsumerState<WardrobeContent> createState() => _WardrobeContentState();
 }
 
+/// How the closet shows its pieces. Rows is the default; a filter or a
+/// search always shows the flat grid or list of matches.
+enum _ClosetView { rows, grid, list }
+
+/// Row order: the order a user dresses in, then the rest.
+const _shelfOrder = [
+  Category.tops,
+  Category.bottoms,
+  Category.accessories,
+  Category.shoes,
+  Category.outerwear,
+  Category.activewear,
+  Category.swimwear,
+  Category.other,
+];
+
 class _WardrobeContentState extends ConsumerState<WardrobeContent> {
-  bool _grid = true;
+  _ClosetView _view = _ClosetView.rows;
   bool _searching = false;
   final _search = TextEditingController();
   Timer? _searchDebounce;
@@ -69,6 +85,9 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
       context.push(Routes.item(item.id));
     }
   }
+
+  bool _showRows(WardrobeFilters filters) =>
+      _view == _ClosetView.rows && !filters.isFiltered;
 
   @override
   Widget build(BuildContext context) {
@@ -190,10 +209,11 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
         ),
       ];
     }
+    if (_showRows(filters)) return [_shelves(page)];
     return [
       SliverPadding(
         padding: padding,
-        sliver: _grid
+        sliver: _view == _ClosetView.grid || _view == _ClosetView.rows
             ? SliverGrid.builder(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 140,
@@ -220,6 +240,26 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
               ),
       ),
     ];
+  }
+
+  /// One horizontal row per category that has pieces, grouped from the
+  /// single closet fetch. Every loaded row renders at once.
+  Widget _shelves(PagedState<ItemModel> page) {
+    final byCategory = <Category, List<ItemModel>>{};
+    for (final item in page.items) {
+      (byCategory[item.category] ??= []).add(item);
+    }
+    return SliverList.list(children: [
+      for (final category in _shelfOrder)
+        if (byCategory[category] case final items? when items.isNotEmpty)
+          _Shelf(
+            key: ValueKey(category),
+            category: category,
+            items: items,
+            onTap: _open,
+            onLongPress: _showItemOptions,
+          ),
+    ]);
   }
 
   Widget _header(PagedState<ItemModel>? page, {required bool failed}) {
@@ -295,11 +335,20 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
                 onPressed: () => setState(() => _searching = true),
               ),
               IconButton(
-                tooltip: _grid ? 'Show as list' : 'Show as grid',
-                icon: Icon(
-                  _grid ? Icons.view_agenda_outlined : Icons.grid_view_rounded,
+                tooltip: switch (_view) {
+                  _ClosetView.rows => 'Show as grid',
+                  _ClosetView.grid => 'Show as list',
+                  _ClosetView.list => 'Show as rows',
+                },
+                icon: Icon(switch (_view) {
+                  _ClosetView.rows => Icons.grid_view_rounded,
+                  _ClosetView.grid => Icons.view_agenda_outlined,
+                  _ClosetView.list => Icons.view_day_outlined,
+                }),
+                onPressed: () => setState(
+                  () => _view = _ClosetView
+                      .values[(_view.index + 1) % _ClosetView.values.length],
                 ),
-                onPressed: () => setState(() => _grid = !_grid),
               ),
               PopupMenuButton<String>(
                 tooltip: 'More',
@@ -702,22 +751,213 @@ class _ItemImage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = PaperTokens.of(context);
-    final images = item.itemImages ?? const [];
-    if (images.isEmpty) {
+    final image = item.primaryImage;
+    if (image == null) {
       return ColoredBox(
         color: tokens.stock.tint,
         child: Center(child: GarmentGlyph(category: item.category, size: 44)),
       );
     }
     return AppImage(
-      imageUrl: images.first.url,
+      imageUrl: image.url,
       fit: BoxFit.contain,
       backgroundColor: tokens.stock.sunk,
       enableZoom: false,
       memCacheWidth: 360,
-      storagePath: images.first.storagePath,
+      storagePath: image.storagePath,
       remintUrl: ref.read(itemRepositoryProvider).remintImageUrl,
       semanticLabel: item.name,
+    );
+  }
+}
+
+/// Closet row sizes. At 390pt wide the 4th piece shows about 22pt at the
+/// right edge, so the row reads as scrollable.
+const _shelfPieceWidth = 104.0;
+const _shelfHeight = 128.0;
+const _shelfGap = AppConstants.spacing12;
+const _shelfGutter = AppConstants.spacing20;
+
+/// One category: its name and count, then its pieces in a horizontal row.
+class _Shelf extends StatelessWidget {
+  const _Shelf({
+    super.key,
+    required this.category,
+    required this.items,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final Category category;
+  final List<ItemModel> items;
+  final void Function(ItemModel) onTap;
+  final void Function(ItemModel) onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppConstants.spacing16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ShelfHeader(category: category, count: items.length),
+          SizedBox(
+            height: _shelfHeight,
+            child: ListView.separated(
+              // Keeps the row's offset when it scrolls off screen and back.
+              key: PageStorageKey('closet-row-${category.name}'),
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: _shelfGutter),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: _shelfGap),
+              itemBuilder: (context, i) => _ShelfPiece(
+                key: ValueKey(items[i].id),
+                item: items[i],
+                onTap: onTap,
+                onLongPress: onLongPress,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A row title: category name plus the pieces shown.
+class _ShelfHeader extends StatelessWidget {
+  const _ShelfHeader({required this.category, required this.count});
+
+  final Category category;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        _shelfGutter,
+        AppConstants.spacing8,
+        _shelfGutter,
+        AppConstants.spacing8,
+      ),
+      child: Text.rich(
+        TextSpan(
+          text: category.displayName,
+          children: [
+            TextSpan(
+              text: '  $count',
+              style: TextStyle(color: tokens.textSecondary),
+            ),
+          ],
+        ),
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+    );
+  }
+}
+
+/// A closet piece in a row: only the image. No card, border or name.
+class _ShelfPiece extends ConsumerStatefulWidget {
+  const _ShelfPiece({
+    super.key,
+    required this.item,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final ItemModel item;
+  final void Function(ItemModel) onTap;
+  final void Function(ItemModel) onLongPress;
+
+  @override
+  ConsumerState<_ShelfPiece> createState() => _ShelfPieceState();
+}
+
+class _ShelfPieceState extends ConsumerState<_ShelfPiece> {
+  bool _pressed = false;
+
+  void _press(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final tokens = PaperTokens.of(context);
+    final selected = ref.watch(
+      wardrobeSelectionProvider.select((s) => s.contains(item.id)),
+    );
+    final still = MediaQuery.disableAnimationsOf(context);
+    final image = item.primaryImage;
+    final glyph = Center(
+      child: GarmentGlyph(category: item.category, size: 72),
+    );
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: item.name,
+      // The gesture detector's own actions are excluded with its subtree.
+      excludeSemantics: true,
+      onTap: () => widget.onTap(item),
+      onLongPress: () => widget.onLongPress(item),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _press(true),
+        onTapUp: (_) => _press(false),
+        onTapCancel: () => _press(false),
+        onTap: () => widget.onTap(item),
+        onLongPress: () {
+          _press(false);
+          widget.onLongPress(item);
+        },
+        child: SizedBox(
+          width: _shelfPieceWidth,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              AnimatedScale(
+                scale: _pressed && !still ? 0.96 : 1,
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                child: AnimatedOpacity(
+                  opacity: selected ? 0.55 : 1,
+                  duration: still
+                      ? Duration.zero
+                      : const Duration(milliseconds: 120),
+                  child: image == null
+                      ? glyph
+                      : AppImage(
+                          imageUrl: image.url,
+                          fit: BoxFit.contain,
+                          backgroundColor: Colors.transparent,
+                          enableZoom: false,
+                          memCacheWidth: 312,
+                          storagePath: image.storagePath,
+                          remintUrl: ref
+                              .read(itemRepositoryProvider)
+                              .remintImageUrl,
+                          placeholder: const SkeletonBox(
+                            borderRadius: AppConstants.radius12,
+                          ),
+                          errorWidget: glyph,
+                          semanticLabel: item.name,
+                        ),
+                ),
+              ),
+              if (selected)
+                Positioned(
+                  top: AppConstants.spacing4,
+                  right: AppConstants.spacing4,
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: tokens.stock.accent,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

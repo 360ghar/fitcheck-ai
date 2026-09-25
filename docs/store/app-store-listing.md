@@ -166,9 +166,10 @@ corners (Apple applies the mask automatically). The repository asset is already 
 | Asset | Dimensions | Color | Alpha | Verdict |
 |---|---|---|---|---|
 | `flutter/assets/icons/app_icon.png` | 1024×1024 | 8-bit RGB | **No alpha** | **Ready to upload as-is** |
-| `Fitcheck Media/App_Icon/Fitcheck_Icon.jpeg` | 1600×1600 | JPEG | n/a | Source/marketing asset; not used directly for ASC upload |
 
 Use `flutter/assets/icons/app_icon.png` directly. Do not add transparency or pre-rounded corners.
+The icon (the layered paper tees, 2026-09-25) is rendered from `docs/brand/app-icon.svg` by
+`scripts/render_brand_assets.sh`; see `docs/brand/README.md`.
 
 ---
 

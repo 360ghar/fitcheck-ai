@@ -59,13 +59,16 @@ Future<void> pumpPhone(
       ),
     ),
   );
-  // Precache the grain texture, then let images and first frames land.
+  // Precache the grain texture and the brand mark, then let images and
+  // first frames land.
   await tester.runAsync(() async {
     final ctx = tester.element(find.byWidget(child));
-    await precacheImage(
-      const AssetImage('assets/textures/paper_grain.png'),
-      ctx,
-    );
+    for (final asset in [
+      'assets/textures/paper_grain.png',
+      'assets/images/brand_mark.png',
+    ]) {
+      await precacheImage(AssetImage(asset), ctx);
+    }
   });
   await tester.pump(settle);
 }

@@ -1,7 +1,7 @@
 # Design
 
 Status: draft  
-Last updated: 2026-09-13
+Last updated: 2026-09-25
 
 Visual and interaction direction for FitCheck web (and guidance for mobile parity).
 
@@ -24,10 +24,18 @@ in `docs/exec-plans/active/clay-rebuild.md` and tokenized in
 - **Radii:** 12px controls (`rounded-md`), 24px feature cards
   (`rounded-2xl`/`3xl`), 32px sections (`rounded-[2rem]`), 40px page containers
   (`rounded-[2.5rem]`).
-- **Type:** Inter + Manrope; display up to `clamp(3.5rem, 8vw, 5rem)`,
+- **Type:** Inter + Manrope (self-hosted, `@font-face` in `frontend/src/index.css`); display up to `clamp(3.5rem, 8vw, 5rem)`,
   tracking −0.03em, weight ≤600.
 
 Token details and contrast tables live in `frontend/DESIGN.md`.
+
+## Brand mark (2026-09-25)
+
+One mark for every surface: three paper tees fanned from the hem, the front
+collar cut as a check. Masters, colours and rules are in
+`docs/brand/README.md`. Web (clay) and mobile (paper diorama) keep separate
+visual systems; only the mark, the favicon and the app icon are shared. Set
+the mark bare, never on a tile.
 
 ## Foundations
 

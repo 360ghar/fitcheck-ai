@@ -18,7 +18,7 @@ class AuthEntryPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AuthWordmark(size: 44),
+          const BrandWordmark(size: 40),
           const SizedBox(height: AppConstants.spacing16),
           Text(
             'Every piece you own, styled by AI. Plan outfits, try them on, '

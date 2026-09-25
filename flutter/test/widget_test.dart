@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('App starts and leaves the splash for onboarding', (
+  testWidgets('App starts and leaves the splash for the intro', (
     tester,
   ) async {
     // Same container as main(): route guards read it directly.
@@ -22,6 +22,7 @@ void main() {
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 500));
     }
-    expect(find.text('Create your closet'), findsOneWidget);
+    // A first launch shows the intro sheets before the sign-in entry.
+    expect(find.text('Snap your closet once.'), findsOneWidget);
   });
 }

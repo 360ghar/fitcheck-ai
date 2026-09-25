@@ -175,7 +175,7 @@ class WardrobeNotifier extends PagedNotifier<ItemModel> {
         search: f.search.isEmpty ? null : f.search,
         categories: f.categories.isEmpty
             ? null
-            : [for (final c in f.categories) c.name.toLowerCase()],
+            : [for (final c in f.categories) c.apiValue],
         colors: f.colors.isEmpty ? null : f.colors.toList(),
         occasion: f.occasion.isEmpty ? null : f.occasion,
         conditions: f.conditions.isEmpty
@@ -201,6 +201,7 @@ class WardrobeNotifier extends PagedNotifier<ItemModel> {
   }
 
   /// Replaces [item] wherever it is shown: the list and an open detail page.
+  /// Rows group the list client-side, so they follow without syncing.
   void replace(ItemModel item) {
     updateItems((items) => [for (final i in items) i.id == item.id ? item : i]);
     if (ref.exists(itemDetailProvider(item.id))) {

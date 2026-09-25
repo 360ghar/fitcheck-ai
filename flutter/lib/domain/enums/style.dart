@@ -56,3 +56,30 @@ enum Style {
 
   static List<String> get allNames => Style.values.map((e) => e.displayName).toList();
 }
+
+/// Curated first-run choices. A subset of [Style] plus Classic and Elegant,
+/// kept identical to the web (frontend/src/lib/style-options.ts) so both
+/// platforms offer the same onboarding options.
+const onboardingStyleNames = [
+  'Casual',
+  'Formal',
+  'Business',
+  'Streetwear',
+  'Minimalist',
+  'Sporty',
+  'Bohemian',
+  'Classic',
+  'Elegant',
+];
+
+/// Curated first-run occasions, same list as the web.
+const onboardingOccasionNames = [
+  'Work',
+  'Date night',
+  'Travel',
+  'Wedding',
+  'Gym',
+  'Weekend',
+  'Party',
+  'Interview',
+];

@@ -7,6 +7,7 @@ export const SEO_CONFIG = {
   defaultDescription:
     'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web and Android.',
   defaultOgImage: 'https://fitcheckaiapp.com/og-default.jpg',
+  logoImage: 'https://fitcheckaiapp.com/icon-512.png',
   locale: 'en_US',
   themeColor: '#e60023',
   twitterHandle: '@FitCheckAI',

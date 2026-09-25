@@ -510,7 +510,7 @@ class _PieceImage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = PaperTokens.of(context);
-    final image = item.itemImages?.firstOrNull;
+    final image = item.primaryImage;
     return ColoredBox(
       color: tokens.stock.sunk,
       child: image == null

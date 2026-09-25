@@ -100,6 +100,12 @@ filters). Stale data + failed refresh = `AppErrorBanner` with Retry.
   sheets.
 - Grids leave 3px extra run spacing for the paper slab.
 - Content is capped at 720px on tablets (`AppPageBackground`).
+- Closet rows (the default Closet view): one horizontal row per category in
+  dressing order (tops, bottoms, accessories, shoes, then the rest). A row is
+  the category name plus its count in secondary text, then the bare item
+  images: no card, border, background or name. Cells are 104×128 with a 12px
+  gap and a 20px gutter, so the 4th piece peeks at the right edge of a 390pt
+  phone. A filter or a search shows the grid of matches instead.
 
 ## 07 — Motion
 

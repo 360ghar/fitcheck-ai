@@ -355,7 +355,7 @@ class _PieceImage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final image = item.itemImages?.firstOrNull;
+    final image = item.primaryImage;
     final tokens = PaperTokens.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppConstants.radius8),

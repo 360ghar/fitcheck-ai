@@ -37,6 +37,9 @@ import '../features/social/views/shared_outfit_page.dart';
 import '../features/splash/splash_page.dart';
 import '../features/subscription/views/referral_page.dart';
 import '../features/subscription/views/subscription_page.dart';
+import '../features/onboarding/intro_page.dart';
+import '../features/onboarding/intro_seen_provider.dart';
+import '../features/onboarding/setup_page.dart';
 import '../features/tryon/views/tryon_page.dart';
 import '../features/wardrobe/views/batch_extraction_progress_page.dart';
 import '../features/wardrobe/views/batch_image_selector_page.dart';
@@ -52,6 +55,7 @@ export 'package:go_router/go_router.dart';
 export 'routes/app_routes.dart';
 
 const _guestRoutes = {
+  Routes.intro,
   Routes.onboarding,
   Routes.login,
   Routes.register,
@@ -77,8 +81,12 @@ String? authRedirect(ProviderContainer container, String path) {
         ? Routes.home
         : null;
   }
-  if (path == Routes.splash) return Routes.onboarding;
-  return _guestRoutes.contains(path) ? null : Routes.onboarding;
+  // First launch shows the intro sheets once, then the sign-in entry.
+  final entry = container.read(introSeenProvider)
+      ? Routes.onboarding
+      : Routes.intro;
+  if (path == Routes.splash) return entry;
+  return _guestRoutes.contains(path) ? null : entry;
 }
 
 GoRoute _page(String path, Widget Function(GoRouterState state) build) =>
@@ -113,6 +121,7 @@ GoRouter buildRouter({ProviderContainer? container}) {
     observers: [_ScreenTracker()],
     routes: [
       GoRoute(path: Routes.splash, builder: (_, _) => const SplashPage()),
+      GoRoute(path: Routes.intro, builder: (_, _) => const IntroPage()),
       GoRoute(
         path: Routes.onboarding,
         builder: (_, _) => const AuthEntryPage(),
@@ -146,6 +155,7 @@ GoRouter buildRouter({ProviderContainer? container}) {
       ),
       // Pages open over the shell on the root navigator. Static paths come
       // before `:id`: the first match wins.
+      _page(Routes.welcome, (_) => const SetupPage()),
       _page(Routes.wardrobeAdd, (_) => const ItemAddPage()),
       _page(Routes.wardrobeBatchAdd, (_) => const BatchImageSelectorPage()),
       _page(

@@ -109,7 +109,7 @@ export function LoginPage() {
     <div className="flex min-h-dvh items-center justify-center bg-soft-surface px-4 py-12">
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <img src="/favicon.svg" alt="" className="size-12" aria-hidden="true" />
+          <img src="/brand-mark.svg" alt="" className="h-12 w-auto" aria-hidden="true" />
           <h1 className="text-2xl font-bold tracking-tight text-ink">{t('login.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('login.subtitle')}</p>
         </div>

@@ -17,6 +17,7 @@ import 'core/utils/image_utils.dart';
 import 'app/themes/app_theme.dart';
 import 'app/router.dart';
 import 'core/network/api_client.dart';
+import 'features/onboarding/intro_seen_provider.dart';
 import 'features/subscription/providers/subscription_providers.dart';
 
 void main() async {
@@ -37,6 +38,7 @@ void main() async {
     themeService.ready,
     codePushService.loadCurrentPatch(),
     PackageInfo.fromPlatform(),
+    appContainer.read(introSeenProvider.notifier).load(),
   ]);
   final packageInfo = startup[4]! as PackageInfo;
   ApiClient.instance.initialize();

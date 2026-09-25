@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/widgets/app_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../auth/providers/auth_provider.dart';
@@ -53,30 +54,27 @@ class _SplashPageState extends ConsumerState<SplashPage> {
                 preset: PaperScenes.auth,
                 height: null,
                 parallax: 0,
-                child: SafeArea(
-                  child: Align(
-                    alignment: const Alignment(0, -0.3),
-                    child: Semantics(
-                      label: 'FitCheck AI',
-                      header: true,
-                      excludeSemantics: true,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              const TextSpan(text: 'FitCheck'),
-                              TextSpan(
-                                text: ' ai',
-                                style: TextStyle(color: tokens.stock.accent),
-                              ),
-                            ],
+                // The mark sits at the screen centre at the native launch
+                // image's size, so the hand-off does not jump.
+                child: Column(
+                  children: [
+                    const Spacer(),
+                    const BrandMark(width: 160),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppConstants.spacing24,
                           ),
-                          style: display,
+                          child: BrandWordmark(
+                            size: display?.fontSize ?? 44,
+                            showMark: false,
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),

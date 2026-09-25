@@ -25,6 +25,7 @@ final _items = [
     ('Linen tote', Category.accessories),
     ('Navy swim shorts', Category.swimwear),
     ('Running tee', Category.activewear),
+    ('Striped breton top', Category.tops),
   ].indexed)
     ItemModel(
       id: 'i$i',
@@ -60,9 +61,13 @@ class _Repo extends ItemRepository {
     String? sortOrder,
   }) async {
     if (fail) throw const SocketException('offline');
+    final matches = [
+      for (final i in items)
+        if (categories == null || categories.contains(i.category.name)) i,
+    ];
     return ItemsListResponse(
-      items: items,
-      total: items.length,
+      items: matches,
+      total: matches.length,
       page: 1,
       limit: 20,
       hasMore: false,
@@ -102,6 +107,23 @@ void main() {
       });
     }
   }
+
+  testWidgets('closet_grid_light', (tester) async {
+    await pumpPhone(
+      tester,
+      const PaperStockScope(
+        stock: PaperStockId.moss,
+        child: Scaffold(body: WardrobeContent()),
+      ),
+      overrides: [itemRepositoryProvider.overrideWithValue(_Repo(_items))],
+    );
+    await tester.tap(find.byTooltip('Show as grid'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/closet_grid_light.png'),
+    );
+  });
 
   testWidgets('item_detail_light', (tester) async {
     await pumpPhone(

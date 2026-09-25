@@ -3,7 +3,9 @@ class Routes {
   Routes._();
 
   static const splash = '/';
+  static const intro = '/intro';
   static const onboarding = '/onboarding';
+  static const welcome = '/welcome';
   static const login = '/login';
   static const register = '/register';
   static const forgotPassword = '/forgot-password';

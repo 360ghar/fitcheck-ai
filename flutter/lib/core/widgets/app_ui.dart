@@ -5,6 +5,7 @@ import 'paper.dart';
 export 'app_image.dart';
 export 'app_image_viewer.dart';
 export 'app_states.dart';
+export 'brand.dart';
 export 'infinite_scroll_wrapper.dart';
 export 'inline_processing_status.dart';
 export 'paper.dart';

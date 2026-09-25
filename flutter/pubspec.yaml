@@ -1,7 +1,7 @@
 name: fitcheck_ai
 description: "AI Wardrobe Organizer & Outfit Planner - Virtual Closet with AI Try-On, Photoshoot Generator & Style Recommendations"
 publish_to: 'none'
-version: 1.1.0+11
+version: 1.1.1+12
 
 environment:
   sdk: ^3.9.2
@@ -97,7 +97,6 @@ flutter:
   assets:
     - .env
     - assets/images/
-    - assets/icons/
     - assets/animations/
     - assets/textures/
     - shorebird.yaml
@@ -119,10 +118,11 @@ flutter_launcher_icons:
   web:
     generate: true
     image_path: "assets/icons/app_icon.png"
-    background_color: "#FF6B6B"
-    theme_color: "#FF6B6B"
+    background_color: "#E3E9F1"
+    theme_color: "#E00016"
   image_path: "assets/icons/app_icon.png"
   min_sdk_android: 21
-  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_background: "#E3E9F1"
   adaptive_icon_foreground: "assets/icons/app_icon_foreground.png"
+  adaptive_icon_monochrome: "assets/icons/app_icon_monochrome.png"
   remove_alpha_ios: true

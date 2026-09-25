@@ -111,37 +111,6 @@ class AuthScaffold extends StatelessWidget {
   }
 }
 
-/// The FitCheck wordmark set in the display face.
-class AuthWordmark extends StatelessWidget {
-  const AuthWordmark({super.key, this.size = 22});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = PaperTokens.of(context);
-    return Semantics(
-      label: 'FitCheck AI',
-      header: true,
-      excludeSemantics: true,
-      child: Text.rich(
-        TextSpan(
-          children: [
-            const TextSpan(text: 'FitCheck'),
-            TextSpan(
-              text: ' ai',
-              style: TextStyle(color: tokens.stock.accent),
-            ),
-          ],
-        ),
-        style: Theme.of(
-          context,
-        ).textTheme.displaySmall?.copyWith(fontSize: size, height: 1),
-      ),
-    );
-  }
-}
-
 /// Screen title and one line of help under it.
 class AuthHeading extends StatelessWidget {
   const AuthHeading({super.key, required this.title, required this.subtitle});
@@ -233,7 +202,9 @@ class AuthPrimaryButton extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onPressed;
+
+  /// Null disables the button.
+  final VoidCallback? onPressed;
   final bool isLoading;
 
   @override

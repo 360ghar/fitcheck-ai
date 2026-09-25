@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="-9.5 10.5 120 88.7">
+  <title>FitCheck AI</title>
+  <!-- Three paper tees fanned from the hem. The collar cut is a check mark. -->
+  <defs>
+    <path id="tee" d="M36 18 L45 31 L67 18 L77 19.5 L93 35 L83 46.5 L74.5 40.5 L73 86 L27 86 L25.5 40.5 L17 46.5 L7 35 L23 19.5 Z" stroke-linejoin="round" stroke-width="1.4"/>
+  </defs>
+  <g>
+    <g transform="rotate(-13 50 92)">
+      <use xlink:href="#tee" transform="translate(1.6 2.8)" fill="#1B2E47" stroke="#1B2E47"/>
+      <use xlink:href="#tee" fill="#2E4A6E" stroke="#2E4A6E"/>
+    </g>
+    <g transform="rotate(13 50 92)">
+      <use xlink:href="#tee" transform="translate(1.6 2.8)" fill="#6E510C" stroke="#6E510C"/>
+      <use xlink:href="#tee" fill="#F2C75C" stroke="#F2C75C"/>
+    </g>
+    <use xlink:href="#tee" transform="translate(1.6 2.8)" fill="#9E0010" stroke="#9E0010"/>
+    <use xlink:href="#tee" fill="#E00016" stroke="#E00016"/>
+  </g>
+</svg>
