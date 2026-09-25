@@ -1,6 +1,6 @@
 # Backend
 
-Last updated: 2026-09-18
+Last updated: 2026-09-25
 
 Deep guide for the FastAPI app under `backend/`. Architecture layers: root `ARCHITECTURE.md`. Package-local agent entry: `backend/CLAUDE.md` (thin pointer here).
 
