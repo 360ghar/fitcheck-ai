@@ -1,14 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="4.3 6.9 93 93">
-  <title>FitCheck AI</title>
-  <!-- Front tee and its slab only: for 32px and smaller. -->
-  <style>
-    .slab { fill: #9E0010; stroke: #9E0010; }
-    .sheet { fill: #E00016; stroke: #E00016; }
-    @media (prefers-color-scheme: dark) {
-      .slab { fill: #7A000C; stroke: #7A000C; }
-      .sheet { fill: #FF3B47; stroke: #FF3B47; }
-    }
-  </style>
-  <path class="slab" transform="translate(1.6 2.8)" stroke-linejoin="round" stroke-width="1.4" d="M36 18 L45 31 L67 18 L77 19.5 L93 35 L83 46.5 L74.5 40.5 L73 86 L27 86 L25.5 40.5 L17 46.5 L7 35 L23 19.5 Z"/>
-  <path class="sheet" stroke-linejoin="round" stroke-width="1.4" d="M36 18 L45 31 L67 18 L77 19.5 L93 35 L83 46.5 L74.5 40.5 L73 86 L27 86 L25.5 40.5 L17 46.5 L7 35 L23 19.5 Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="240 225 800 800">
+  <title>FitCheck AI — Facet F</title>
+  <style>.stem,.top{fill:#078675}.crease{fill:#065B50}.arm{fill:#39B99A}@media(prefers-color-scheme:dark){.stem,.top{fill:#30C3A5}.crease{fill:#159E85}.arm{fill:#92E9D0}}</style>
+  <g id="facet-f">
+    <path d="M376 367 C385 359 395 370 411 378 L543 444 V1003 Q543 1018 529 1018 H400 Q363 1018 363 982 V389 Q363 376 376 367Z" class="stem" />
+    <path d="M376 367 L470 266 Q483 252 502 252 H901 Q917 252 917 268 V379 Q917 392 907 402 L871 437 Q863 445 851 445 H543 L411 378 Q387 360 376 367Z" class="top" />
+    <path d="M543 594 L654 722 L543 770Z" class="crease" />
+    <path d="M543 594 L576 570 Q591 558 610 558 H844 Q860 558 860 574 V662 Q860 678 849 689 L829 709 Q816 722 798 722 H654Z" class="arm" />
+  </g>
 </svg>

@@ -5,6 +5,13 @@ All notable changes to the FitCheck AI Flutter app will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0+14] - 2026-09-25
+
+### Changed
+
+- Use the jade Facet F icon across app launchers, launch screens, and in-app branding.
+- Prepare build 14 for version 1.2.0; retain the features and fixes listed below.
+
 ## [1.2.0+13] - 2026-09-25
 
 ### Added

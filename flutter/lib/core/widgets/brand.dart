@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'paper.dart';
 
-/// The brand mark: three paper tees fanned from the hem. Drawn bare, never
-/// on a tile. Rendered from docs/brand/mark.svg by
+/// The jade folded F. Drawn bare, never on a tile.
+/// Rendered from docs/brand/mark.svg by
 /// scripts/render_brand_assets.sh.
 class BrandMark extends StatelessWidget {
   const BrandMark({super.key, required this.width});
@@ -10,7 +10,7 @@ class BrandMark extends StatelessWidget {
   final double width;
 
   /// Width / height of the rendered mark.
-  static const aspectRatio = 480 / 355;
+  static const aspectRatio = 1.0;
 
   @override
   Widget build(BuildContext context) => Image.asset(
@@ -58,7 +58,7 @@ class BrandWordmark extends StatelessWidget {
             ? Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  BrandMark(width: size * 1.5),
+                  BrandMark(width: size * 1.1),
                   SizedBox(width: size * 0.3),
                   text,
                 ],

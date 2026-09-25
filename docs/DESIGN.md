@@ -31,11 +31,11 @@ Token details and contrast tables live in `frontend/DESIGN.md`.
 
 ## Brand mark (2026-09-25)
 
-One mark for every surface: three paper tees fanned from the hem, the front
-collar cut as a check. Masters, colours and rules are in
-`docs/brand/README.md`. Web (clay) and mobile (paper diorama) keep separate
-visual systems; only the mark, the favicon and the app icon are shared. Set
-the mark bare, never on a tile.
+One mark for every surface: Facet F, a jade folded F with a mint middle arm.
+The approved reference, vector master, colours and export rules are in
+`docs/brand/README.md`. Web and mobile retain their own visual systems;
+the mark is shared. In-app logos are transparent. Installed app icons use a
+dark ink background with the platform's corner mask.
 
 ## Foundations
 

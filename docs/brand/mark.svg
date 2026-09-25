@@ -1,19 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="-9.5 10.5 120 88.7">
-  <title>FitCheck AI</title>
-  <!-- Three paper tees fanned from the hem. The collar cut is a check mark. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="240 225 800 800">
+  <title>FitCheck AI — Facet F</title>
   <defs>
-    <path id="tee" d="M36 18 L45 31 L67 18 L77 19.5 L93 35 L83 46.5 L74.5 40.5 L73 86 L27 86 L25.5 40.5 L17 46.5 L7 35 L23 19.5 Z" stroke-linejoin="round" stroke-width="1.4"/>
+    <linearGradient id="stem-fill" x1="365" y1="700" x2="555" y2="655" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#079B86"/><stop offset=".62" stop-color="#087F70"/><stop offset="1" stop-color="#064F47"/>
+    </linearGradient>
+    <linearGradient id="top-fill" x1="459" y1="265" x2="851" y2="449" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10A18C"/><stop offset=".55" stop-color="#159983"/><stop offset="1" stop-color="#078675"/>
+    </linearGradient>
+    <linearGradient id="crease-fill" x1="542" y1="630" x2="649" y2="727" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#119983"/><stop offset="1" stop-color="#04594F"/>
+    </linearGradient>
+    <linearGradient id="arm-fill" x1="568" y1="584" x2="821" y2="716" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#74DEC0"/><stop offset=".58" stop-color="#8AE8D0"/><stop offset="1" stop-color="#71DBC2"/>
+    </linearGradient>
   </defs>
-  <g>
-    <g transform="rotate(-13 50 92)">
-      <use xlink:href="#tee" transform="translate(1.6 2.8)" fill="#1B2E47" stroke="#1B2E47"/>
-      <use xlink:href="#tee" fill="#2E4A6E" stroke="#2E4A6E"/>
-    </g>
-    <g transform="rotate(13 50 92)">
-      <use xlink:href="#tee" transform="translate(1.6 2.8)" fill="#6E510C" stroke="#6E510C"/>
-      <use xlink:href="#tee" fill="#F2C75C" stroke="#F2C75C"/>
-    </g>
-    <use xlink:href="#tee" transform="translate(1.6 2.8)" fill="#9E0010" stroke="#9E0010"/>
-    <use xlink:href="#tee" fill="#E00016" stroke="#E00016"/>
+  <g id="facet-f">
+    <path id="stem" fill="url(#stem-fill)" d="M376 367 C385 359 395 370 411 378 L543 444 V1003 Q543 1018 529 1018 H400 Q363 1018 363 982 V389 Q363 376 376 367Z"/>
+    <path id="top" fill="url(#top-fill)" d="M376 367 L470 266 Q483 252 502 252 H901 Q917 252 917 268 V379 Q917 392 907 402 L871 437 Q863 445 851 445 H543 L411 378 Q387 360 376 367Z"/>
+    <path id="crease" fill="url(#crease-fill)" d="M543 594 L654 722 L543 770Z"/>
+    <path id="arm" fill="url(#arm-fill)" d="M543 594 L576 570 Q591 558 610 558 H844 Q860 558 860 574 V662 Q860 678 849 689 L829 709 Q816 722 798 722 H654Z"/>
   </g>
 </svg>

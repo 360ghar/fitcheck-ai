@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-09-25 (TD-030–TD-118)
+Last updated: 2026-09-25 (TD-030–TD-119)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
@@ -131,6 +131,7 @@ Last updated: 2026-09-25 (TD-030–TD-118)
 | TD-116 | Background-removal performance gate uncalibrated outside the reference runner | low | backend | The matte background-removal perf test enforces a 400 ms ceiling; the audit host measured ~579 ms, so the gate fails on host-sensitive timing (pre-existing failure noted in the cross-client reliability audit). Fix: calibrate on the supported runner or make the budget configurable with a documented baseline. Deferred 2026-09-22 (reliability audit). **2026-09-25:** the matte is ~2.5x faster (217ms to 86ms on the reference M-series host, compact item cutouts plan); re-measure on the audit host before recalibrating. |
 | TD-117 | First-run setup "done" flag is per device | low | web/mobile | `/welcome` (web) and `SetupPage` (mobile) store the skip/finish flag locally (`fitcheck_setup_done_<userId>`), so a new account that skips on one device sees setup once on the other within its first 7 days. Fix: a `setup_completed_at` column on the user row, read by both gates. Deferred 2026-09-25 (brand + onboarding plan). |
 | TD-118 | Mobile `UserModel` has no `gender` | low | mobile | The mobile setup gate cannot read gender, so it gates on empty preferred styles instead of the web's gender check. Add `gender` to `UserModel` (freezed regen) and align the two gates. Deferred 2026-09-25. |
+| TD-119 | IndexNow postbuild ping returns HTTP 422 | low | web | Observed during the 2026-09-25 Facet F production build: submitted URL set does not match the verified key location. Build and prerender pass; search-engine notification fails. Align canonical host, submitted URLs, and key location in frontend/scripts/ping-indexnow.mjs. |
 
 ## Process
 
