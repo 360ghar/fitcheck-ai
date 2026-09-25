@@ -1,9 +1,8 @@
-Welcome to FitCheck AI 1.0.5!
+What's new in FitCheck AI 1.2:
 
-- Unlock Plus or Pro with in-app purchase — monthly or yearly, right in the app
-- Redeem promo codes for free months of Plus or Pro
-- Faster AI photoshoot generation for studio-quality headshots
-- Instant over-the-air updates, so improvements reach you sooner
-- Export or delete your account and data anytime from Settings
+- A fresh paper-style design with simpler navigation and clearer loading states.
+- A short setup for new members to choose styles and occasions.
+- More clothes on each wardrobe screen, with cleaner item photos.
+- Better recovery when a request fails or you switch accounts.
 
-Thanks for using FitCheck AI — tell us what you'd like to see next!
+Thanks for using FitCheck AI.
