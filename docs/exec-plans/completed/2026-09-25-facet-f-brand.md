@@ -45,8 +45,11 @@ were inspected. Export dimensions, opacity, and mask-safe areas passed checks.
 - docs/brand/README.md
 - docs/exec-plans/active/2026-09-25-ios-1-2-release.md
 - docs/exec-plans/completed/2026-09-25-ten-icon-concepts.md
+- docs/exec-plans/completed/2026-09-25-ios-build-14-upload.md
 
 2026-09-25: The 1024 App Store source has no alpha. IndexNow postbuild ping
 returned 422; recorded separately as TD-119. The iOS release build was stopped
-during Xcode compilation after the user requested only changes and a commit.
-No new IPA was completed or uploaded. Website deployment did not run.
+during Xcode compilation after the user requested only changes and a commit;
+no IPA came from that attempt. Build 14 was built and uploaded later, see
+docs/exec-plans/completed/2026-09-25-ios-build-14-upload.md. Website
+deployment did not run.

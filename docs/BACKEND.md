@@ -1,6 +1,6 @@
 # Backend
 
-Last updated: 2026-09-25
+Last updated: 2026-09-30
 
 Deep guide for the FastAPI app under `backend/`. Architecture layers: root `ARCHITECTURE.md`. Package-local agent entry: `backend/CLAUDE.md` (thin pointer here).
 
@@ -90,7 +90,8 @@ reconnect-protected delete), `feedback_service.py`, `promo_service.py`,
   already deleted and answer a 503 no retry can clear. `POST
   /items/batch-from-extraction` (2026-09-26) saves a whole extraction review
   in one call: `{job_id?, items: [{temp_id, item: ItemCreate}]}` (1–50
-  entries) → `{saved: [{temp_id, item}], failed: [{temp_id, error}], message}`.
+  entries) → 201 `{data: {saved: [{temp_id, item}], failed: [{temp_id, error}]},
+  message}`.
   Each entry runs the same create core sequentially (upsert-on-PK ids,
   `client_request_id` replay, COPY-promote of owned keys, rollback on
   failure); per-entry failures are isolated, a missing schema fails the whole

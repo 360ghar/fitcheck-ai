@@ -52,4 +52,4 @@ None. Production vector reconstruction follows user selection and is outside thi
 The user selected concept 03 (Facet F) before the comparison gallery was built.
 All ten generated images were saved in output/icon-concepts/. The gallery is
 no longer needed. Implementation is recorded in
-completed/2026-09-25-facet-f-brand.md.
+docs/exec-plans/completed/2026-09-25-facet-f-brand.md.

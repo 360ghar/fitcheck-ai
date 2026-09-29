@@ -1,6 +1,6 @@
 # Flutter
 
-Last updated: 2026-09-25
+Last updated: 2026-09-30
 
 Mobile client under `flutter/`. State and dependency injection use Riverpod 3 (no code generation). Routing uses go_router. The paper-cut diorama design system lives in `lib/core/theme/` and `lib/core/widgets/`. The app has no GetX; `test/core/utils/snackbar_policy_test.dart` fails on a `package:get/` import.
 
@@ -101,13 +101,14 @@ Prefer backend batch extract JSON base64 start endpoint from Flutter; SSE for pr
 Long scans outlive their page. The app-scoped `extractionJobsProvider`
 (`features/wardrobe/providers/extraction_jobs_provider.dart`) owns one SSE
 broadcast per job: pages attach on open and detach on pop, so leaving never
-stops the server job. Tracks persist as JSON (photo mapping included, 20-job
-cap, 7-day TTL); on restore, jobs found terminal notify through
+stops the server job. Tracks persist as JSON (photo mapping included). Only terminal
+jobs are capped at 20 and pruned after 7 days; active jobs are never
+pruned. On restore, jobs found terminal notify through
 `JobNotifications` (`flutter_local_notifications`, `extraction_jobs` channel)
 because Dart cannot run while the process is dead. The wardrobe tab shows an
 `ActiveJobBanner`; `/wardrobe/jobs` lists recent jobs with Resume/Review/
-Retry/Stop. Progress pages accept `extra: {'resumeJobId': ...}` and rebuild
-from the status snapshot. Review saves go through
+Retry/Stop. Progress pages (and the add page) accept `extra: jobId`
+(a String) and rebuild from the status snapshot. Review saves go through
 `ItemRepository.saveBatch` → `POST /items/batch-from-extraction` (studio URLs
 promote server-side, distinct source photos stage once), with a legacy
 sequential fallback when the backend predates the route
