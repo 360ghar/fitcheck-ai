@@ -27,8 +27,11 @@
           stored = null;
         }
         var theme = stored;
+        // Light is the product default for new users; `system` only applies
+        // when explicitly stored. Keep this fallback in step with
+        // ThemeProvider's `defaultTheme` in src/app/providers.tsx.
         if (theme !== 'light' && theme !== 'dark' && theme !== 'system') {
-          theme = 'system';
+          theme = 'light';
         }
         var resolved =
           theme === 'system'

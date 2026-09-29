@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/batch_extraction_models.dart';
+import 'bounding_box_painter.dart';
 
 /// A thin progress track. The fill keeps round caps at every value (it never
 /// narrows below its own height), and it eases between values unless the
@@ -93,15 +94,7 @@ class ExtractionProgressCard extends StatelessWidget {
               dimension: 56,
               child: ColoredBox(
                 color: tokens.stock.sunk,
-                child: Image.file(
-                  File(image.filePath),
-                  fit: BoxFit.cover,
-                  cacheWidth: 168,
-                  errorBuilder: (_, _, _) => Icon(
-                    Icons.image_not_supported_outlined,
-                    color: tokens.textMuted,
-                  ),
-                ),
+                child: _Thumbnail(image: image),
               ),
             ),
           ),
@@ -179,4 +172,39 @@ class ExtractionProgressCard extends StatelessWidget {
       color: tokens.error,
     ),
   };
+}
+
+/// Photo thumbnail with detected-piece boxes overlaid as soon as the scan
+/// reports them for this photo.
+class _Thumbnail extends StatelessWidget {
+  const _Thumbnail({required this.image});
+
+  final BatchImage image;
+
+  @override
+  Widget build(BuildContext context) {
+    final photo = Image.file(
+      File(image.filePath),
+      fit: BoxFit.cover,
+      cacheWidth: 168,
+      errorBuilder: (_, _, _) => Icon(
+        Icons.image_not_supported_outlined,
+        color: PaperTokens.of(context).textMuted,
+      ),
+    );
+    final boxes = [
+      for (final item in image.extractedItems)
+        if (item.boundingBox != null)
+          {...item.boundingBox!, 'label': item.name},
+    ];
+    if (boxes.isEmpty) return photo;
+    return BoundingBoxOverlay(
+      boundingBoxes: boxes,
+      strokeWidth: 1.5,
+      showLabels: false,
+      color: PaperTokens.of(context).stock.accent,
+      imageFilePath: image.filePath,
+      child: photo,
+    );
+  }
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../models/batch_extraction_models.dart';
 import '../providers/batch_extraction_provider.dart';
 import '../widgets/ai_extraction_widget.dart'
     show PersonGroupList, personGroups;
@@ -117,6 +118,9 @@ class BatchItemReviewPage extends ConsumerWidget {
                         Expanded(
                           child: CustomScrollView(
                             slivers: [
+                              const SliverToBoxAdapter(
+                                child: _StillGeneratingBanner(),
+                              ),
                               SliverToBoxAdapter(
                                 child: _SaveFailures(
                                   onRetry: () => _save(context, ref),
@@ -175,8 +179,65 @@ class BatchItemReviewPage extends ConsumerWidget {
   }
 }
 
-class _SaveFailures extends ConsumerWidget {
-  const _SaveFailures({required this.onRetry});
+/// Shown while the scan still runs behind the review: pending pieces keep
+/// arriving, and leaving never stops the job (the registry owns it).
+class _StillGeneratingBanner extends ConsumerWidget {
+  const _StillGeneratingBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (processing, pending) = ref.watch(
+      batchExtractionProvider.select(
+        (s) => (
+          s.isProcessing,
+          s.items
+              .where((i) => i.status != BatchItemStatus.generated)
+              .length,
+        ),
+      ),
+    );
+    if (!processing || pending <= 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing8,
+        AppConstants.spacing16,
+        0,
+      ),
+      child: PaperSurface(
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.spacing16,
+          AppConstants.spacing12,
+          AppConstants.spacing16,
+          AppConstants.spacing12,
+        ),
+        child: Row(
+          children: [
+            SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: PaperTokens.of(context).stock.accent,
+                strokeCap: StrokeCap.round,
+              ),
+            ),
+            const SizedBox(width: AppConstants.spacing12),
+            Expanded(
+              child: Text(
+                pending == 1
+                    ? '1 more studio photo on the way. You can save what is ready, or leave — we will let you know.'
+                    : '$pending more studio photos on the way. You can save what is ready, or leave — we will let you know.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SaveFailures extends ConsumerWidget {  const _SaveFailures({required this.onRetry});
 
   final VoidCallback onRetry;
 

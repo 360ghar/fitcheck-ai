@@ -10,6 +10,11 @@ import 'package:fitcheck_ai/features/wardrobe/models/batch_extraction_models.dar
 import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/social_import_models.dart';
 import 'package:fitcheck_ai/features/wardrobe/providers/batch_extraction_provider.dart';
+import 'package:fitcheck_ai/features/wardrobe/providers/extraction_jobs_provider.dart'
+    show
+        extractionJobsDocsDirProvider,
+        extractionJobsPersistenceProvider,
+        extractionJobsProvider;
 import 'package:fitcheck_ai/features/wardrobe/providers/wardrobe_providers.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/batch_extraction_repository.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/item_repository.dart';
@@ -164,6 +169,25 @@ class FakeItemRepository extends ItemRepository {
   Future<List<ItemImage>> Function(String itemId, List<File> images)?
   onUploadFiles;
 
+  /// Entries posted to the batch route, one list per call.
+  final List<List<SaveEntryInput>> saveBatchCalls = [];
+
+  /// Batch route behavior. Unset means the backend predates the route
+  /// ([BatchSaveUnsupported]), so saves take the legacy sequential path that
+  /// the image-strategy tests pin.
+  Future<BatchSaveResult> Function(List<SaveEntryInput> entries)? onSaveBatch;
+
+  @override
+  Future<BatchSaveResult> saveBatch({
+    String? jobId,
+    required List<SaveEntryInput> entries,
+  }) async {
+    saveBatchCalls.add(entries);
+    final hook = onSaveBatch;
+    if (hook == null) throw BatchSaveUnsupported();
+    return hook(entries);
+  }
+
   @override
   Future<ItemModel> createItem(
     CreateItemRequest request, {
@@ -269,6 +293,12 @@ BatchExtractedItem generatedItem({
       ),
       aiConsentGateProvider.overrideWithValue((_) async => true),
       persistenceServiceProvider.overrideWithValue(
+        InMemoryPersistenceService(),
+      ),
+      extractionJobsDocsDirProvider.overrideWithValue(
+        () async => throw StateError('no documents directory in unit tests'),
+      ),
+      extractionJobsPersistenceProvider.overrideWithValue(
         InMemoryPersistenceService(),
       ),
       socialCallbackLinksProvider.overrideWithValue(const Stream<Uri>.empty()),
@@ -444,7 +474,8 @@ void main() {
       'the synthetic SSE error event keeps error empty while recovery '
       'polling runs',
       (tester) async {
-        final events = StreamController<SSEEvent>();
+        // Broadcast: the registry resubscribes after the stream drops.
+        final events = StreamController<SSEEvent>.broadcast();
         var polls = 0;
         final repo = FakeBatchExtractionRepository()
           ..onSubscribeToEvents = ((_) => events.stream)
@@ -457,6 +488,11 @@ void main() {
             );
           };
         final h = host(batch: repo);
+        // The page listens to the registry's broadcast, so the job must be
+        // tracked there; the registry owns `events` and forwards it.
+        await h.container
+            .read(extractionJobsProvider.notifier)
+            .trackBatch(jobId: 'job-1', label: '1 photo', sourcePaths: const []);
         h.notifier.debugSetState(const BatchState(jobId: 'job-1'));
         h.notifier.subscribeToEventsForTesting('job-1');
 
@@ -812,6 +848,85 @@ void main() {
       expect(repo.createRequestIds, hasLength(3));
       expect(repo.createRequestIds[2], repo.createRequestIds[1]);
       expect(repo.createRequestIds[0], isNot(repo.createRequestIds[1]));
+    });
+  });
+
+  group('BatchExtractionNotifier.saveSelectedItems batch route', () {
+    ItemModel savedRow(String id, String name) => ItemModel(
+      id: id,
+      userId: 'user-1',
+      name: name,
+      category: Category.tops,
+      condition: Condition.clean,
+    );
+
+    test('same-named pieces are matched by temp_id, so the failed one is '
+        'retried, not dropped', () async {
+      var failT1 = true;
+      final repo = FakeItemRepository()
+        ..onSaveBatch = (entries) async {
+          final saved = <SavedPiece>[];
+          final failed = <BatchSaveFailure>[];
+          for (final e in entries) {
+            if (e.tempId == 't1' && failT1) {
+              failed.add(BatchSaveFailure(tempId: 't1', message: 'boom'));
+            } else {
+              saved.add((
+                tempId: e.tempId,
+                item: savedRow('item-${e.tempId}', 'Sneakers'),
+              ));
+            }
+          }
+          return BatchSaveResult(saved: saved, failed: failed);
+        };
+      final h = host(items: repo);
+      h.notifier.debugSetState(
+        BatchState(
+          items: [
+            generatedItem(
+              id: 't1',
+              name: 'Sneakers',
+              generatedImageUrl: 'https://cdn.example.com/1.png',
+            ),
+            generatedItem(
+              id: 't2',
+              name: 'Sneakers',
+              generatedImageUrl: 'https://cdn.example.com/2.png',
+            ),
+          ],
+        ),
+      );
+
+      final first = await h.notifier.saveSelectedItems();
+      expect(first, hasLength(1));
+      expect(read(h.container).items.map((i) => i.id), ['t1']);
+
+      failT1 = false;
+      final second = await h.notifier.saveSelectedItems();
+
+      expect([for (final e in repo.saveBatchCalls.last) e.tempId], ['t1']);
+      expect(second, hasLength(1));
+      expect(read(h.container).saveFailures, isEmpty);
+    });
+
+    test('an unexpected throw releases the saving lock', () async {
+      final repo = FakeItemRepository()
+        ..onSaveBatch = (_) async => throw StateError('boom');
+      final h = host(items: repo);
+      h.notifier.debugSetState(
+        BatchState(
+          items: [
+            generatedItem(
+              id: 't1',
+              generatedImageUrl: 'https://cdn.example.com/1.png',
+            ),
+          ],
+        ),
+      );
+
+      await expectLater(h.notifier.saveSelectedItems(), throwsStateError);
+
+      expect(read(h.container).saving, isFalse);
     });
   });
 }

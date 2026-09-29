@@ -7,10 +7,12 @@ import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../models/item_model.dart';
 import '../providers/item_add_provider.dart';
+import 'bounding_box_painter.dart';
 import 'extracted_item_card.dart' show GeneratedImage;
 import 'extraction_progress_card.dart' show PaperProgressTrack;
 import 'garment_glyph.dart';
@@ -19,30 +21,50 @@ import 'manual_entry_form.dart' show UseCasePicker;
 // The single-photo extraction views. Each part watches only the fields it
 // shows, so a progress event does not rebuild the piece grid.
 
-/// The photo being scanned.
+/// The photo being scanned, with detected-piece boxes overlaid as soon as
+/// the scan reports them.
 class ExtractionPhoto extends StatelessWidget {
-  const ExtractionPhoto({super.key, required this.image, this.height = 220});
+  const ExtractionPhoto({
+    super.key,
+    required this.image,
+    this.height = 220,
+    this.boxes = const [],
+  });
 
   final File image;
   final double height;
 
+  /// Bounding boxes (`{x, y, width, height}` + `label`) painted over the
+  /// photo. Empty while nothing is detected yet.
+  final List<Map<String, dynamic>> boxes;
+
   @override
-  Widget build(BuildContext context) => PaperSurface(
-    padding: EdgeInsets.zero,
-    clipBehavior: Clip.antiAlias,
-    grain: false,
-    color: PaperTokens.of(context).stock.sunk,
-    child: SizedBox(
-      height: height,
-      width: double.infinity,
-      child: Image.file(
-        image,
-        fit: BoxFit.cover,
-        cacheWidth: 1080,
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+  Widget build(BuildContext context) {
+    final photo = PaperSurface(
+      padding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      grain: false,
+      color: PaperTokens.of(context).stock.sunk,
+      child: SizedBox(
+        height: height,
+        width: double.infinity,
+        child: Image.file(
+          image,
+          fit: BoxFit.cover,
+          cacheWidth: 1080,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        ),
       ),
-    ),
-  );
+    );
+    if (boxes.isEmpty) return photo;
+    final tokens = PaperTokens.of(context);
+    return BoundingBoxOverlay(
+      boundingBoxes: boxes,
+      color: tokens.stock.accent,
+      imageFilePath: image.path,
+      child: photo,
+    );
+  }
 }
 
 /// Upload, analysis and (before any piece is shown) studio-photo progress.
@@ -65,6 +87,9 @@ class ExtractionProcessingView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final provider = itemAddProvider(session);
     final image = ref.watch(provider.select((s) => s.image));
+    final boxes = ref.watch(
+      provider.select((s) => s.itemBoxes.values.toList()),
+    );
     final (phase, progress, secondsLeft) = ref.watch(
       provider.select((s) => (s.phase, s.progress, s.secondsLeft)),
     );
@@ -75,7 +100,7 @@ class ExtractionProcessingView extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(AppConstants.spacing16),
       children: [
-        if (image != null) ExtractionPhoto(image: image),
+        if (image != null) ExtractionPhoto(image: image, boxes: boxes),
         const SizedBox(height: AppConstants.spacing24),
         Text(title, style: text.headlineSmall),
         const SizedBox(height: AppConstants.spacing4),
@@ -102,6 +127,22 @@ class ExtractionProcessingView extends ConsumerWidget {
         ),
         if (phase == 'generating') _PieceStatusList(session: session),
         const SizedBox(height: AppConstants.spacing24),
+        // Leaving never stops the scan: the registry owns the job and the
+        // shade notifies when it finishes. Back does the same; this button
+        // makes the capability discoverable.
+        Center(
+          child: TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              ErrorHandler.showInfo(
+                'Still working. We will let you know when your pieces are ready.',
+                title: 'Running in background',
+              );
+            },
+            icon: const Icon(Icons.notifications_active_rounded, size: 20),
+            label: const Text('Send to background'),
+          ),
+        ),
         Center(
           child: TextButton(
             onPressed: ref.read(provider.notifier).cancelExtraction,
@@ -172,6 +213,9 @@ class ExtractionResultsView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final provider = itemAddProvider(session);
     final image = ref.watch(provider.select((s) => s.image));
+    final boxes = ref.watch(
+      provider.select((s) => s.itemBoxes.values.toList()),
+    );
     final failure = ref.watch(provider.select((s) => s.failure));
     final notifier = ref.read(provider.notifier);
 
@@ -180,6 +224,9 @@ class ExtractionResultsView extends ConsumerWidget {
         Expanded(
           child: CustomScrollView(
             slivers: [
+              SliverToBoxAdapter(
+                child: StillGeneratingBanner(session: session),
+              ),
               if (failure != null)
                 SliverToBoxAdapter(
                   child: AppErrorBanner(
@@ -197,7 +244,7 @@ class ExtractionResultsView extends ConsumerWidget {
                 sliver: SliverList.list(
                   children: [
                     if (image != null)
-                      ExtractionPhoto(image: image, height: 160),
+                      ExtractionPhoto(image: image, height: 160, boxes: boxes),
                     const SizedBox(height: AppConstants.spacing20),
                     _ResultsHeader(session: session),
                     _PeopleControls(session: session),
@@ -527,6 +574,71 @@ class _PieceCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Banner shown atop the review grid while studio photos still generate.
+/// Leaving is safe: the scan continues in the background and notifies.
+class StillGeneratingBanner extends ConsumerWidget {
+  const StillGeneratingBanner({super.key, required this.session});
+
+  final int session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pending = ref.watch(
+      itemAddProvider(
+        session,
+      ).select((s) => s.itemStatus.values.any((v) => v == 'pending')),
+    );
+    if (!pending) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing8,
+        AppConstants.spacing16,
+        0,
+      ),
+      child: PaperSurface(
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.spacing16,
+          AppConstants.spacing12,
+          AppConstants.spacing8,
+          AppConstants.spacing12,
+        ),
+        child: Row(
+          children: [
+            SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: PaperTokens.of(context).stock.accent,
+                strokeCap: StrokeCap.round,
+              ),
+            ),
+            const SizedBox(width: AppConstants.spacing12),
+            Expanded(
+              child: Text(
+                'Studio photos still on their way. You can leave — we will let you know.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: PaperTokens.of(context).textSecondary,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                ErrorHandler.showInfo(
+                  'Still working. We will let you know when your pieces are ready.',
+                  title: 'Running in background',
+                );
+              },
+              child: const Text('Leave'),
+            ),
+          ],
+        ),
       ),
     );
   }

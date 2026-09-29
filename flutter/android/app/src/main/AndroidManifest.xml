@@ -20,6 +20,9 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
 
+    <!-- POST_NOTIFICATIONS: Android 13+ runtime permission for extraction-done alerts -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Camera feature optional - allows install on tablets without cameras -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />

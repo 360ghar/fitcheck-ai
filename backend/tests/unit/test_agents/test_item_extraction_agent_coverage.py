@@ -82,18 +82,16 @@ def _payload(items, people=None, **overrides):
 
 
 @pytest.fixture
-def format_safe_single_prompt(monkeypatch):
-    """App bug workaround: SINGLE_ITEM_EXTRACTION_PROMPT contains unescaped
-    JSON braces, so ``.format(category_hint=...)`` raises KeyError on every
-    call before the try block (reported, not fixed here). Patching the module
-    constant with a format-safe template lets the function body be tested.
-    """
-    monkeypatch.setattr(
-        _item_agent_module,
-        "SINGLE_ITEM_EXTRACTION_PROMPT",
-        "Analyze this clothing image and describe the single item shown."
-        "{category_hint}\n\nReturn JSON only.",
+def format_safe_single_prompt():
+    """Kept for existing test signatures; the real prompt now formats safely."""
+
+
+def test_single_item_prompt_formats():
+    prompt = _item_agent_module.SINGLE_ITEM_EXTRACTION_PROMPT.format(
+        category_hint=" hint",
+        description_rules=_item_agent_module.SINGLE_ITEM_DESCRIPTION_RULES,
     )
+    assert '"category": "tops"' in prompt and "hint" in prompt
 
 
 # =============================================================================
@@ -416,13 +414,13 @@ async def test_extract_single_item_empty_response_returns_empty(format_safe_sing
 
 
 @pytest.mark.asyncio
-async def test_extract_single_item_unparseable_response_returns_raw_text(format_safe_single_prompt):
+async def test_extract_single_item_unparseable_response_drops_raw_text(format_safe_single_prompt):
     result = await _agent(text="no json").extract_single_item(image_base64="img")
     assert result == {
         "category": "other",
         "colors": [],
         "confidence": 0,
-        "description": "no json",
+        "description": None,
     }
 
 

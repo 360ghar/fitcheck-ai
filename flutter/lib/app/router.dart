@@ -44,6 +44,7 @@ import '../features/tryon/views/tryon_page.dart';
 import '../features/wardrobe/views/batch_extraction_progress_page.dart';
 import '../features/wardrobe/views/batch_image_selector_page.dart';
 import '../features/wardrobe/views/batch_item_review_page.dart';
+import '../features/wardrobe/views/extraction_jobs_page.dart';
 import '../features/wardrobe/views/item_add_page.dart';
 import '../features/wardrobe/views/item_detail_page.dart';
 import '../features/wardrobe/views/item_edit_page.dart';
@@ -156,7 +157,11 @@ GoRouter buildRouter({ProviderContainer? container}) {
       // Pages open over the shell on the root navigator. Static paths come
       // before `:id`: the first match wins.
       _page(Routes.welcome, (_) => const SetupPage()),
-      _page(Routes.wardrobeAdd, (_) => const ItemAddPage()),
+      _page(
+        Routes.wardrobeAdd,
+        (s) => ItemAddPage(resumeJobId: s.extra as String?),
+      ),
+      _page(Routes.wardrobeJobs, (_) => const ExtractionJobsPage()),
       _page(Routes.wardrobeBatchAdd, (_) => const BatchImageSelectorPage()),
       _page(
         Routes.wardrobeBatchAddSocial,
@@ -164,7 +169,7 @@ GoRouter buildRouter({ProviderContainer? container}) {
       ),
       _page(
         Routes.wardrobeBatchProgress,
-        (_) => const BatchExtractionProgressPage(),
+        (s) => BatchExtractionProgressPage(resumeJobId: s.extra as String?),
       ),
       _page(Routes.wardrobeBatchReview, (_) => const BatchItemReviewPage()),
       _page(Routes.wardrobeStats, (_) => const WardrobeStatsPage()),

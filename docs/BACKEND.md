@@ -87,7 +87,16 @@ reconnect-protected delete), `feedback_service.py`, `promo_service.py`,
   item-add / batch-save / manual-entry paths, which mint it once per item and
   reuse it across retries (TD-109). Without a key, a retry after a committed
   create can duplicate the item, or re-promote a `tmp/` source the server
-  already deleted and answer a 503 no retry can clear.
+  already deleted and answer a 503 no retry can clear. `POST
+  /items/batch-from-extraction` (2026-09-26) saves a whole extraction review
+  in one call: `{job_id?, items: [{temp_id, item: ItemCreate}]}` (1–50
+  entries) → `{saved: [{temp_id, item}], failed: [{temp_id, error}], message}`.
+  Each entry runs the same create core sequentially (upsert-on-PK ids,
+  `client_request_id` replay, COPY-promote of owned keys, rollback on
+  failure); per-entry failures are isolated, a missing schema fails the whole
+  call, and an empty list is a 422. Created by `item_save_service`
+  (`app/services/item_save_service.py`), which owns the create core so routes
+  stay thin.
   Structured PostgREST
   responses (`APIError`) are retried only when the `code` is a bare gateway
   HTTP status (429/500/502/503/520/521/522/524 — a non-PostgREST-JSON 5xx/429
@@ -109,6 +118,11 @@ reconnect-protected delete), `feedback_service.py`, `promo_service.py`,
 - Migrations: `backend/db/supabase/migrations/` (baseline `001_full_schema.sql`).
 - Generated overview: `docs/generated/db-schema.md`.
 - Model notes: `docs/references/data-models.md`.
+  Sibling entries cut from one photo share one staged `tmp/` source: the batch
+  defers tmp deletion (`create_item_core(defer_temp_cleanup=...)`) and deletes
+  each distinct key once after the last entry, so the save no longer depends on
+  the per-process `_PROMOTED_BY_SOURCE` cache. Entries run sequentially, so a
+  50-entry batch is bounded by per-item copy, thumbnail and embedding time.
 
 Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`,
 `user_ai_settings`, `items`, `item_images`, `outfits`, `outfit_images`,

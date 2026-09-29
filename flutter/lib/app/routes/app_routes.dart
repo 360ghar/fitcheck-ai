@@ -19,6 +19,7 @@ class Routes {
   static const wardrobeBatchAddSocial = '/wardrobe/batch-add-social';
   static const wardrobeBatchProgress = '/wardrobe/batch-progress';
   static const wardrobeBatchReview = '/wardrobe/batch-review';
+  static const wardrobeJobs = '/wardrobe/jobs';
   static String item(String id) => '/wardrobe/$id';
   static String itemEdit(String id) => '/wardrobe/edit/$id';
   static const outfits = '/outfits';

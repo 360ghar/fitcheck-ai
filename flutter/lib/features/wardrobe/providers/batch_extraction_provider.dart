@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/ai_consent_service.dart';
+import '../../../core/services/job_notifications.dart';
 import '../../../core/services/persistence_service.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/image_utils.dart';
@@ -17,7 +18,9 @@ import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
 import '../models/social_import_models.dart';
 import '../repositories/batch_extraction_repository.dart';
+import '../repositories/item_repository.dart';
 import '../repositories/social_import_repository.dart';
+import 'extraction_jobs_provider.dart';
 import 'wardrobe_providers.dart';
 
 // Dependencies of the add flows, as providers so tests can override them.
@@ -264,6 +267,10 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
 
   StreamSubscription<SSEEvent>? _sse;
   StreamSubscription<SocialImportSSEEvent>? _socialSse;
+
+  /// Registry job this session is attached to (null when idle). Field-based
+  /// so dispose can detach without touching state.
+  String? _attachedJobId;
   bool _pollingJob = false;
   bool _pollingSocial = false;
 
@@ -284,14 +291,18 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
   /// Scraper credentials, held only while a 2FA code is pending.
   ({String username, String password})? _pendingLogin;
 
+  /// Captured in [build]: Riverpod forbids `ref.read` inside `onDispose`.
+  ExtractionJobsNotifier? _jobs;
+
   @override
   BatchState build() {
+    _jobs = ref.read(extractionJobsProvider.notifier);
     final links = ref
         .read(socialCallbackLinksProvider)
         .listen(_handleSocialOAuthUri, onError: (Object _) {});
     ref.onDispose(() {
       links.cancel();
-      _sse?.cancel();
+      _detachJob();
       _socialSse?.cancel();
       _pendingLogin = null;
     });
@@ -434,6 +445,17 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
       );
       if (!_alive) return;
       state = state.copyWith(jobId: response.jobId);
+      // Hand stream ownership to the app-scoped registry: leaving the flow
+      // no longer strands the job. Shade permission is requested in context.
+      final jobs = ref.read(extractionJobsProvider.notifier);
+      await jobs.trackBatch(
+        jobId: response.jobId,
+        label: '${images.length} ${images.length == 1 ? 'photo' : 'photos'}',
+        sourcePaths: [for (final image in images) image.filePath],
+        imageIds: [for (final image in images) image.id],
+      );
+      unawaited(JobNotifications.instance.requestPermissions());
+      if (!_alive) return;
       _subscribeToEvents(response.jobId);
     } catch (e, stack) {
       ErrorHandler.reportError(
@@ -463,25 +485,111 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
   @visibleForTesting
   void subscribeToEventsForTesting(String id) => _subscribeToEvents(id);
 
+  /// Reattaches this session to a registry-owned job (jobs list, shade
+  /// notification, or post-restart resume). Rebuilds the photo cards from
+  /// the persisted photo mapping, folds the status snapshot, then listens
+  /// live. Does nothing while another job runs here.
+  Future<void> attachToJob(String jobId) async {
+    if (_starting || state.isProcessing || state.jobId.isNotEmpty) return;
+    if (jobId.isEmpty || !_alive) return;
+    final tracked = ref.read(extractionJobsProvider).job(jobId);
+    if (tracked == null) return;
+    final images = <BatchImage>[
+      for (var i = 0; i < tracked.sourcePaths.length; i++)
+        BatchImage(
+          id: tracked.sourceIds.length > i
+              ? tracked.sourceIds[i]
+              : ImageUtils.generateImageId(),
+          filePath: tracked.sourcePaths[i],
+          status: BatchImageStatus.extracting,
+        ),
+    ];
+    state = state.copyWith(
+      images: images,
+      status: BatchJobStatus.extracting,
+      jobId: jobId,
+      error: '',
+    );
+    try {
+      final status = await _batchRepo.getJobStatus(jobId);
+      if (!_alive || state.jobId != jobId) return;
+      final detected = status.detectedItems ?? const [];
+      state = state.copyWith(
+        extractedCount: status.extractedCount,
+        generatedCount: status.generatedCount,
+        failedCount: status.failedCount + status.generationFailedCount,
+        currentBatch: status.currentBatch,
+        totalBatches: status.totalBatches,
+        totalItems: detected.length,
+        items: detected,
+        images: [
+          for (final image in images)
+            image.copyWith(
+              status: detected.any((item) => item.sourceImageId == image.id)
+                  ? BatchImageStatus.extracted
+                  : image.status,
+              extractedItems: [
+                for (final item in detected)
+                  if (item.sourceImageId == image.id) item,
+              ],
+            ),
+        ],
+        status: switch (status.status) {
+          'completed' => BatchJobStatus.complete,
+          'failed' => BatchJobStatus.failed,
+          'cancelled' => BatchJobStatus.cancelled,
+          'generating' => BatchJobStatus.generating,
+          _ => BatchJobStatus.extracting,
+        },
+        error: status.error ?? '',
+      );
+    } catch (_) {
+      // Snapshot failed (offline): the live stream still catches up.
+    }
+    if (!_alive || state.jobId != jobId) return;
+    _subscribeToEvents(jobId);
+  }
+
   void _subscribeToEvents(String id) {
     _sse?.cancel();
-    _sse = _batchRepo
-        .subscribeToEvents(id)
-        .listen(
-          (event) => _onEvent(id, event),
-          onError: (Object e) => pollJobStatus(id),
-          onDone: () {
-            // A clean close is not always a terminal event (proxy timeouts):
-            // reconcile against the server.
-            if (_alive &&
-                id == state.jobId &&
-                !state.isComplete &&
-                !state.isFailed &&
-                !state.isCancelled) {
-              pollJobStatus(id);
-            }
-          },
-        );
+    _sse = null;
+    final jobs = ref.read(extractionJobsProvider.notifier);
+    jobs.attach(id);
+    _attachedJobId = id;
+    final events = jobs.events(id);
+    if (events == null) {
+      // Stream already gone (terminal while away): snapshot instead.
+      jobs.detach(id);
+      _attachedJobId = null;
+      pollJobStatus(id);
+      return;
+    }
+    _sse = events.listen(
+      (event) => _onEvent(id, event),
+      onError: (Object e) => pollJobStatus(id),
+      onDone: () {
+        // The registry closes the broadcast on cancel/forget: only resume
+        // polling when the job is still marked active.
+        if (_alive &&
+            id == state.jobId &&
+            !state.isComplete &&
+            !state.isFailed &&
+            !state.isCancelled &&
+            ref.read(extractionJobsProvider).isActive(id)) {
+          pollJobStatus(id);
+        }
+      },
+    );
+  }
+
+  /// Detaches from the registry job without stopping it (page pop, session
+  /// dispose, job reset). The server job and its broadcast keep running.
+  void _detachJob() {
+    _sse?.cancel();
+    _sse = null;
+    final attached = _attachedJobId;
+    _attachedJobId = null;
+    if (attached != null && attached.isNotEmpty) _jobs?.detach(attached);
   }
 
   void _onEvent(String id, SSEEvent event) {
@@ -550,9 +658,10 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
       case 'job_cancelled':
         state = state.copyWith(status: BatchJobStatus.cancelled);
         _sse?.cancel();
-      // 'error' is the SSE service's synthetic retry-exhausted event. The
-      // stream closes right after it and onDone starts recovery polling, so
-      // it is not a job failure and must not show one.
+      case 'error':
+        // The registry's synthetic stream-failure event: fall back to
+        // polling instead of stranding the progress page.
+        pollJobStatus(id);
     }
   }
 
@@ -718,7 +827,7 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
     resetJob();
     if (id.isEmpty) return;
     try {
-      await _batchRepo.cancelJob(id);
+      await ref.read(extractionJobsProvider.notifier).cancel(id);
     } catch (e, stack) {
       ErrorHandler.showError(e, title: 'Not cancelled', stackTrace: stack);
     }
@@ -776,9 +885,13 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
     state = state.copyWith(useCases: {...state.useCases, value});
   }
 
-  /// Saves the selected pieces. Pieces an earlier save already added are
-  /// skipped; a piece that failed keeps its idempotency key, so a retry
-  /// replays a create whose response was lost instead of duplicating it.
+  /// Saves the selected pieces in ONE batch call: studio URLs promote
+  /// server-side (no download/re-upload), and each distinct source photo is
+  /// staged once for every piece still waiting on its studio render.
+  /// Pieces an earlier save already added are skipped; a piece that failed
+  /// keeps its idempotency key, so a retry replays a create whose response
+  /// was lost instead of duplicating it. Falls back to the legacy
+  /// sequential save when the backend predates the batch route.
   /// Returns the pieces added by this call. A call while saving does nothing.
   Future<List<ItemModel>> saveSelectedItems() async {
     if (state.saving) return const [];
@@ -796,24 +909,146 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
         ? null
         : UseCases.normalizeList(state.useCases);
     final images = state.images;
+    var saved = const <ItemModel>[];
+    var failures = const <String>[];
+    try {
+      // In-memory base64 / data-URI studio renders cannot promote
+      // server-side: their bytes must go up from the client, so they ride
+      // the legacy path in the same call. Everything else saves in one batch.
+      final batchable = <BatchExtractedItem>[];
+      final legacyOnly = <BatchExtractedItem>[];
+      for (final item in selected) {
+        final url = item.generatedImageUrl;
+        if ((url != null && url.startsWith('data:')) ||
+            (item.generatedImageBase64 != null &&
+                _promotableUrl(url) == null)) {
+          legacyOnly.add(item);
+        } else {
+          batchable.add(item);
+        }
+      }
+      final entries = [
+        for (final item in batchable)
+          SaveEntryInput(
+            tempId: item.id,
+            request: _requestFor(item, occasionTags),
+            clientRequestId: _requestIdFor(item.id, item),
+            imageUrl: _promotableUrl(item.generatedImageUrl),
+            sourceFile: _sourceFileOf(item, images, item.generatedImageUrl),
+          ),
+      ];
+      final batch = await itemRepo.saveBatch(
+        jobId: state.jobId.isEmpty ? null : state.jobId,
+        entries: entries,
+      );
+      final allSaved = <ItemModel>[for (final piece in batch.saved) piece.item];
+      for (final piece in batch.saved) {
+        _savedItemIds.add(piece.tempId);
+      }
+      final allFailures = [
+        for (final f in batch.failed) _nameOf(f.tempId, selected),
+      ];
+      for (final f in batch.failed) {
+        ErrorHandler.reportError(
+          StateError('Item batch save failed: ${f.message}'),
+          'Batch item save failed for ${f.tempId}',
+        );
+      }
+      if (legacyOnly.isNotEmpty) {
+        final legacy = await _saveLegacy(legacyOnly, occasionTags, images);
+        allSaved.addAll(legacy.saved);
+        allFailures.addAll(legacy.failed);
+      }
+      saved = allSaved;
+      failures = allFailures;
+    } on BatchSaveUnsupported {
+      (saved: saved, failed: failures) = await _saveLegacy(
+        selected,
+        occasionTags,
+        images,
+      );
+    } catch (_) {
+      // Never leave the page locked in `saving` after an unexpected throw.
+      if (_alive) state = state.copyWith(saving: false);
+      rethrow;
+    }
+
+    if (saved.isNotEmpty && ref.exists(wardrobeProvider)) {
+      ref.read(wardrobeProvider.notifier).addItems(saved);
+    }
+    if (_alive) {
+      // After a partial save only the pieces still to save stay on the list.
+      state = state.copyWith(
+        saving: false,
+        saveFailures: failures,
+        items: failures.isEmpty
+            ? null
+            : [
+                for (final i in state.items)
+                  if (!_savedItemIds.contains(i.id)) i,
+              ],
+      );
+    }
+    return saved;
+  }
+
+  CreateItemRequest _requestFor(
+    BatchExtractedItem item,
+    List<String>? occasionTags,
+  ) => CreateItemRequest(
+    name: item.name.isNotEmpty
+        ? item.name
+        : (item.subCategory ?? item.category.name),
+    category: item.category,
+    colors: item.colors,
+    material: item.material,
+    pattern: item.pattern,
+    description: item.description,
+    condition: domain.Condition.clean,
+    occasionTags: occasionTags,
+  );
+
+  /// A studio image the server can promote as-is: an http(s) URL. In-memory
+  /// base64 and data URIs ride the legacy path (uploaded from the client).
+  String? _promotableUrl(String? url) =>
+      (url != null && url.isNotEmpty && url.startsWith('http')) ? url : null;
+
+  /// The source photo backing a piece without a promotable studio image:
+  /// passed so the batch stages each photo once. Pieces WITH a promotable
+  /// URL save from the URL; the source is staging-free.
+  File? _sourceFileOf(
+    BatchExtractedItem item,
+    List<BatchImage> images,
+    String? generatedUrl,
+  ) {
+    if (_promotableUrl(generatedUrl) != null) return null;
+    if (item.generatedImageBase64 != null) return null;
+    final source = images.where((i) => i.id == item.sourceImageId).firstOrNull;
+    return source == null ? null : File(source.filePath);
+  }
+
+  String _nameOf(String tempId, List<BatchExtractedItem> selected) {
+    for (final item in selected) {
+      if (item.id == tempId) return item.name;
+    }
+    return tempId;
+  }
+
+  /// Legacy sequential save (create + upload + refetch per piece) for
+  /// backends without the batch route. Kept until the backend floor rises.
+  Future<({List<ItemModel> saved, List<String> failed})> _saveLegacy(
+    List<BatchExtractedItem> selected,
+    List<String>? occasionTags,
+    List<BatchImage> images,
+  ) async {
+    final itemRepo = ref.read(itemRepositoryProvider);
     final saved = <ItemModel>[];
     final failures = <String>[];
 
     for (final item in selected) {
       try {
         final created = await itemRepo.createItem(
-          CreateItemRequest(
-            name: item.name.isNotEmpty
-                ? item.name
-                : (item.subCategory ?? item.category.name),
-            category: item.category,
-            colors: item.colors,
-            material: item.material,
-            pattern: item.pattern,
-            description: item.description,
-            condition: domain.Condition.clean,
-            occasionTags: occasionTags,
-          ),
+          _requestFor(item, occasionTags),
           clientRequestId: _requestIdFor(item.id, item),
         );
 
@@ -876,30 +1111,14 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
         );
       }
     }
-
-    if (saved.isNotEmpty && ref.exists(wardrobeProvider)) {
-      ref.read(wardrobeProvider.notifier).addItems(saved);
-    }
-    if (_alive) {
-      // After a partial save only the pieces still to save stay on the list.
-      state = state.copyWith(
-        saving: false,
-        saveFailures: failures,
-        items: failures.isEmpty
-            ? null
-            : [
-                for (final i in state.items)
-                  if (!_savedItemIds.contains(i.id)) i,
-              ],
-      );
-    }
-    return saved;
+    return (saved: saved, failed: failures);
   }
 
   /// Clears the job, keeps the selected photos (reset to pending).
+  /// Detaches from the registry job without stopping it — explicit
+  /// [cancelExtraction] stops the server job.
   void resetJob() {
-    _sse?.cancel();
-    _sse = null;
+    _detachJob();
     _navigatedToReview = false;
     _createRequestIds.clear();
     _savedItemIds.clear();

@@ -143,7 +143,8 @@ class SettingsNotifier extends Notifier<SettingsState> {
     final result = await outcome;
     if (!result.succeeded && result.revision == _revision && ref.mounted) {
       final confirmed = _lastConfirmed ?? current;
-      await _theme.setThemeMode(confirmed.themeMode ?? AppThemeMode.system);
+      // Light is the product default; never fall back to following the OS.
+      await _theme.setThemeMode(confirmed.themeMode ?? AppThemeMode.light);
     }
   }
 

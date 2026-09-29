@@ -1,0 +1,253 @@
+"""Coverage for POST /items/batch-from-extraction and the batch save core.
+
+Pins the fast-save contract the mobile review pages rely on:
+- one call saves many pieces, each echoed with the client's ``temp_id``;
+- a per-item failure (e.g. an unowned image key) lands in ``failed`` while
+  the batch continues — the client retries only the failed subset;
+- a repeated ``client_request_id`` replays the committed row (no duplicate);
+- an empty batch is rejected by the request model (422 at parse time).
+"""
+
+from typing import Any, Dict
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+
+from app.api.v1 import items as items_module
+from app.models.item import BatchSaveRequest, ItemCreate, ItemImageBase
+from app.services import item_save_service as save_service
+from app.services.ai_settings_service import AISettingsService
+from tests.utils.fake_db import FakeDB
+
+USER_ID = "11111111-1111-1111-1111-111111111111"
+FOREIGN = "22222222-2222-2222-2222-222222222222"
+HEX = "0123456789abcdef0123456789abcdef"
+
+
+def _patch_no_embedding(monkeypatch) -> None:
+    """Skip the embedding side-effect: quota exhausted means no vector work."""
+    monkeypatch.setattr(
+        AISettingsService, "reserve_usage", AsyncMock(return_value=False)
+    )
+    monkeypatch.setattr(
+        save_service, "get_vector_service", lambda: Mock(upsert_item=AsyncMock())
+    )
+
+
+def _entry(temp_id: str, **overrides: Any) -> Dict[str, Any]:
+    body: Dict[str, Any] = {
+        "name": f"Piece {temp_id}",
+        "category": "tops",
+        "condition": "clean",
+    }
+    body.update(overrides)
+    return {"temp_id": temp_id, "item": body}
+
+
+@pytest.mark.asyncio
+async def test_batch_saves_many_items_in_one_call(monkeypatch):
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+
+    request = BatchSaveRequest(
+        job_id="job-1",
+        items=[
+            {"temp_id": "t1", "item": ItemCreate(name="Tee", category="tops")},
+            {"temp_id": "t2", "item": ItemCreate(name="Jeans", category="bottoms")},
+        ],
+    )
+    result = await items_module.batch_create_from_extraction(
+        request=request, user_id=USER_ID, db=db
+    )
+
+    assert result["message"] == "Saved 2"
+    saved = result["data"]["saved"]
+    failed = result["data"]["failed"]
+    assert [s["temp_id"] for s in saved] == ["t1", "t2"]
+    assert failed == []
+    assert saved[0]["item"]["name"] == "Tee"
+    assert saved[1]["item"]["name"] == "Jeans"
+
+
+@pytest.mark.asyncio
+async def test_batch_promotes_generated_url_without_client_reupload(monkeypatch):
+    """A generated preview URL reduces to its key and is promoted server-side,
+    so the client never downloads + re-uploads the bytes."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+    promoted = {
+        "image_url": "https://cdn.example/canonical.png",
+        "thumbnail_url": "https://cdn.example/canonical_thumb.png",
+        "storage_path": f"users/{USER_ID}/items/{HEX}.png",
+    }
+    monkeypatch.setattr(
+        save_service.StorageService,
+        "copy_temp_image_to_item",
+        AsyncMock(return_value=promoted),
+    )
+
+    request = BatchSaveRequest(
+        items=[
+            {
+                "temp_id": "t1",
+                "item": ItemCreate(
+                    name="Tee",
+                    category="tops",
+                    images=[
+                        ItemImageBase(
+                            image_url=f"https://cdn.example/users/{USER_ID}/tmp/batch/{HEX}.webp",
+                            is_primary=True,
+                        )
+                    ],
+                ),
+            }
+        ],
+    )
+    result = await items_module.batch_create_from_extraction(
+        request=request, user_id=USER_ID, db=db
+    )
+
+    assert result["data"]["failed"] == []
+    images = result["data"]["saved"][0]["item"]["images"]
+    assert images[0]["storage_path"] == f"users/{USER_ID}/items/{HEX}.png"
+
+
+@pytest.mark.asyncio
+async def test_batch_keeps_shared_tmp_source_until_batch_ends(monkeypatch):
+    """Pieces cut from one photo share one staged tmp key. It must survive the
+    first commit (siblings still copy from it) and be deleted exactly once."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+    promoted = {
+        "image_url": "https://cdn.example/canonical.png",
+        "thumbnail_url": "https://cdn.example/canonical_thumb.png",
+        "storage_path": f"users/{USER_ID}/items/{HEX}.png",
+    }
+    delete_image = AsyncMock()
+    monkeypatch.setattr(save_service.StorageService, "delete_image", delete_image)
+    deletes_seen_at_copy = []
+
+    async def fake_copy(*args, **kwargs):
+        deletes_seen_at_copy.append(delete_image.await_count)
+        return promoted
+
+    monkeypatch.setattr(
+        save_service.StorageService, "copy_temp_image_to_item", fake_copy
+    )
+
+    shared = f"https://cdn.example/users/{USER_ID}/tmp/batch/{HEX}.webp"
+    entries = [
+        (
+            temp_id,
+            ItemCreate(
+                name=temp_id,
+                category="tops",
+                images=[ItemImageBase(image_url=shared, is_primary=True)],
+            ),
+        )
+        for temp_id in ("t1", "t2")
+    ]
+    result = await save_service.batch_create_items(db, USER_ID, entries)
+
+    assert [s["temp_id"] for s in result["saved"]] == ["t1", "t2"]
+    assert deletes_seen_at_copy == [0, 0]
+    assert delete_image.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_isolates_per_item_failures(monkeypatch):
+    """An unowned image key fails its own entry; the batch continues and the
+    client can retry just the failed temp_id."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+
+    request = BatchSaveRequest(
+        items=[
+            {"temp_id": "good", "item": ItemCreate(name="Tee", category="tops")},
+            {
+                "temp_id": "bad",
+                "item": ItemCreate(
+                    name="Stolen",
+                    category="tops",
+                    images=[
+                        ItemImageBase(
+                            image_url="",
+                            storage_path=f"users/{FOREIGN}/items/{HEX}.png",
+                        )
+                    ],
+                ),
+            },
+        ],
+    )
+    result = await items_module.batch_create_from_extraction(
+        request=request, user_id=USER_ID, db=db
+    )
+
+    assert result["message"] == "Saved 1 of 2"
+    assert [s["temp_id"] for s in result["data"]["saved"]] == ["good"]
+    assert [f["temp_id"] for f in result["data"]["failed"]] == ["bad"]
+    assert "own objects" in result["data"]["failed"][0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_batch_replays_repeated_idempotency_keys(monkeypatch):
+    """Saving the same batch twice replays committed rows instead of
+    inserting duplicates (re-tapped Save / lost response)."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+
+    def make_request() -> BatchSaveRequest:
+        return BatchSaveRequest(
+            items=[
+                {
+                    "temp_id": "t1",
+                    "item": ItemCreate(
+                        name="Tee",
+                        category="tops",
+                        client_request_id="req-t1",
+                    ),
+                }
+            ],
+        )
+
+    first = await items_module.batch_create_from_extraction(
+        request=make_request(), user_id=USER_ID, db=db
+    )
+    second = await items_module.batch_create_from_extraction(
+        request=make_request(), user_id=USER_ID, db=db
+    )
+
+    assert first["data"]["failed"] == []
+    assert second["data"]["failed"] == []
+    assert (
+        first["data"]["saved"][0]["item"]["id"]
+        == second["data"]["saved"][0]["item"]["id"]
+    )
+    item_inserts = [i for i in db.inserts if i[0] == "items"]
+    assert len(item_inserts) == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_service_returns_raw_shapes(monkeypatch):
+    """The service core (not just the route) returns saved/failed shapes the
+    mobile client parses for its partial-retry banner."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+
+    result = await save_service.batch_create_items(
+        db,
+        USER_ID,
+        [("t1", ItemCreate(name="Tee", category="tops"))],
+    )
+
+    assert [s["temp_id"] for s in result["saved"]] == ["t1"]
+    assert result["failed"] == []
+    assert result["saved"][0]["item"]["name"] == "Tee"
+
+
+def test_batch_request_rejects_empty_items():
+    """An empty batch never reaches the handler (422 at parse time)."""
+    import pydantic
+
+    with pytest.raises(pydantic.ValidationError):
+        BatchSaveRequest(items=[])

@@ -17,16 +17,22 @@ enum _AddView { start, manual, processing, results, failure }
 _AddView _viewOf(ItemAddState s) {
   if (s.manualEntry) return _AddView.manual;
   if (s.image == null) return _AddView.start;
-  if (s.processing || s.generating) return _AddView.processing;
+  // Detected pieces show immediately (metadata + boxes + per-piece loaders)
+  // while studio photos still generate — never hold the progress bar once
+  // there is something to review.
   if (s.items.isNotEmpty) return _AddView.results;
+  if (s.processing || s.generating) return _AddView.processing;
   if (s.failure != null) return _AddView.failure;
   return _AddView.start;
 }
 
 /// Adds one piece from a photo (scanned by AI) or by hand. Each page owns
-/// its own session state.
+/// its own session state. [resumeJobId] reattaches to a registry-owned job
+/// (jobs list, shade notification) instead of starting a new scan.
 class ItemAddPage extends ConsumerStatefulWidget {
-  const ItemAddPage({super.key});
+  const ItemAddPage({super.key, this.resumeJobId});
+
+  final String? resumeJobId;
 
   @override
   ConsumerState<ItemAddPage> createState() => _ItemAddPageState();
@@ -35,6 +41,21 @@ class ItemAddPage extends ConsumerStatefulWidget {
 class _ItemAddPageState extends ConsumerState<ItemAddPage> {
   final int _session = newItemAddSession();
   final _picker = ImagePicker();
+  bool _resumeAttempted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final resumeJobId = widget.resumeJobId;
+    if (resumeJobId != null && resumeJobId.isNotEmpty) {
+      // attachToJob is async; the page builds the analyzing state first.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _resumeAttempted) return;
+        _resumeAttempted = true;
+        ref.read(itemAddProvider(_session).notifier).attachToJob(resumeJobId);
+      });
+    }
+  }
 
   Future<void> _pick(ImageSource source) async {
     final image = await _picker.pickImage(

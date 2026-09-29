@@ -118,6 +118,222 @@ class ItemRepository {
     return payload;
   }
 
+  /// One entry of a batch save: the review piece plus where its image lives.
+  /// Exactly one of [imageUrl]/[storagePath] (studio render, server-promoted)
+  /// or [sourceFile] (original photo, staged once per distinct file).
+  static Map<String, dynamic> batchSaveEntry({
+    required String tempId,
+    required CreateItemRequest request,
+    String? clientRequestId,
+    String? imageUrl,
+    String? storagePath,
+  }) {
+    final repository = ItemRepository();
+    final body = repository.createItemPayload(
+      request,
+      clientRequestId: clientRequestId,
+    );
+    if (imageUrl != null || storagePath != null) {
+      body['images'] = [
+        {
+          'image_url': imageUrl ?? '',
+          if (storagePath != null) 'storage_path': storagePath,
+          'is_primary': true,
+        },
+      ];
+    }
+    return {'temp_id': tempId, 'item': body};
+  }
+
+  /// Saves a whole extraction review in one call: stages each distinct
+  /// source photo once (shared by every piece cut from it), then posts the
+  /// batch. Entries whose studio image is already a URL/storage key need no
+  /// upload at all — the server promotes the bytes it already holds.
+  ///
+  /// Returns per-entry results; a transport failure marks every entry
+  /// failed instead of throwing (mirrors the legacy loop's all-failed
+  /// path). Throws [BatchSaveUnsupported] when the backend predates the
+  /// route so callers can fall back to the legacy sequential save.
+  Future<BatchSaveResult> saveBatch({
+    String? jobId,
+    required List<SaveEntryInput> entries,
+  }) async {
+    if (entries.isEmpty) return const BatchSaveResult(saved: [], failed: []);
+    // Stage each distinct source photo once: pieces without a studio render
+    // share the upload of the photo they were cut from.
+    final staged = <String, StagedImage>{};
+    final needStaging = <String>{};
+    for (final entry in entries) {
+      if (entry.imageUrl == null &&
+          entry.storagePath == null &&
+          entry.sourceFile != null) {
+        needStaging.add(entry.sourceFile!.path);
+      }
+    }
+    if (needStaging.isNotEmpty) {
+      try {
+        final uploaded = await stageSourceImages([
+          for (final path in needStaging) File(path),
+        ]);
+        for (final image in uploaded) {
+          if (image.storagePath != null) staged[image.sourcePath] = image;
+        }
+      } catch (_) {
+        // Staging failed (offline): entries needing it fail below; entries
+        // with studio images still go through in the same call.
+      }
+    }
+    final bodies = <Map<String, dynamic>>[];
+    final unsavable = <String>[];
+    for (final entry in entries) {
+      var storagePath = entry.storagePath;
+      if (entry.imageUrl == null &&
+          storagePath == null &&
+          entry.sourceFile != null) {
+        storagePath = staged[entry.sourceFile!.path]?.storagePath;
+      }
+      if (entry.imageUrl == null && storagePath == null) {
+        // No studio image and the source could not be staged: this piece
+        // cannot be saved by the batch route (it carries no local files).
+        unsavable.add(entry.tempId);
+        continue;
+      }
+      bodies.add(
+        batchSaveEntry(
+          tempId: entry.tempId,
+          request: entry.request,
+          clientRequestId: entry.clientRequestId,
+          imageUrl: entry.imageUrl,
+          storagePath: storagePath,
+        ),
+      );
+    }
+    List<BatchSaveFailure> failed = [
+      for (final tempId in unsavable)
+        BatchSaveFailure(tempId: tempId, message: 'Photo upload failed.'),
+    ];
+    List<SavedPiece> saved = const [];
+    if (bodies.isNotEmpty) {
+      try {
+        final result = await batchSaveItems(jobId: jobId, entries: bodies);
+        saved = result.saved;
+        failed = [...failed, ...result.failed];
+      } on BatchSaveUnsupported {
+        // Backend predates the route: the caller falls back to the legacy
+        // sequential save.
+        rethrow;
+      } catch (_) {
+        // Transport failure: every posted entry failed (legacy parity).
+        failed = [
+          ...failed,
+          for (final body in bodies)
+            BatchSaveFailure(
+              tempId: body['temp_id']?.toString() ?? '',
+              message: 'Nothing was saved. Try again.',
+            ),
+        ];
+      }
+    }
+    return BatchSaveResult(saved: saved, failed: failed);
+  }
+
+  /// Raw batch call: posts prebuilt entry bodies, parses per-entry results.
+  Future<BatchSaveResult> batchSaveItems({
+    String? jobId,
+    required List<Map<String, dynamic>> entries,
+  }) async {
+    try {
+      final response = await _apiClient.postWithExtendedTimeout(
+        ApiConstants.itemsBatchSave,
+        data: {if (jobId != null) 'job_id': jobId, 'items': entries},
+      );
+      final data = _extractDataMap(response.data);
+      final saved = <SavedPiece>[];
+      for (final entry in (data['saved'] as List? ?? const [])) {
+        if (entry is Map<String, dynamic>) {
+          final item = entry['item'];
+          if (item is Map<String, dynamic>) {
+            saved.add((
+              tempId: entry['temp_id']?.toString() ?? '',
+              item: _parseItem({'data': item}),
+            ));
+          }
+        }
+      }
+      final failed = <BatchSaveFailure>[
+        for (final entry in (data['failed'] as List? ?? const []))
+          if (entry is Map<String, dynamic>)
+            BatchSaveFailure(
+              tempId: entry['temp_id']?.toString() ?? '',
+              message:
+                  entry['error']?.toString() ?? 'Failed to save this piece.',
+            ),
+      ];
+      return BatchSaveResult(saved: saved, failed: failed);
+    } on DioException catch (e) {
+      // Backend predates the route (or a proxy blocks it): the caller falls
+      // back to the legacy sequential save. Anything else rethrows mapped.
+      final status = e.response?.statusCode;
+      if (status == 404 || status == 405 || status == 501) {
+        throw BatchSaveUnsupported();
+      }
+      throw handleDioException(e);
+    }
+  }
+
+  /// Uploads source photos for server-side staging (POST /items/upload).
+  /// Returns one entry per stored photo, keyed by the local file path.
+  Future<List<StagedImage>> stageSourceImages(List<File> files) async {
+    try {
+      final response = await _apiClient.uploadMultiple(
+        '${ApiConstants.items}/upload',
+        files,
+      );
+      final data = _extractDataMap(response.data);
+      final images = data['images'];
+      if (images is! List) return const [];
+      return pairStagedImages(files, images);
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Pairs the upload response with the files that were sent.
+  ///
+  /// The server drops files that failed to store and keeps no index, so a
+  /// short response cannot be paired by position: those are matched by the
+  /// echoed `filename`, and a photo whose name is missing or shared is left
+  /// unstaged (its pieces then fail as "Photo upload failed") rather than
+  /// guessed onto another photo's storage key.
+  @visibleForTesting
+  static List<StagedImage> pairStagedImages(List<File> files, List images) {
+    final complete = images.length == files.length;
+    final byName = <String, List<File>>{};
+    for (final file in files) {
+      byName.putIfAbsent(file.path.split('/').last, () => []).add(file);
+    }
+    final staged = <StagedImage>[];
+    for (var i = 0; i < images.length; i++) {
+      final raw = images[i];
+      if (raw is! Map<String, dynamic>) continue;
+      final File? file = complete
+          ? files[i]
+          : switch (byName[raw['filename']?.toString()]) {
+              final List<File> match when match.length == 1 => match.first,
+              _ => null,
+            };
+      if (file == null) continue;
+      staged.add(
+        StagedImage(
+          sourcePath: file.path,
+          storagePath: raw['storage_path']?.toString(),
+          imageUrl: raw['image_url']?.toString(),
+        ),
+      );
+    }
+    return staged;
+  }
+
   /// Create item with image
   ///
   /// One idempotency key covers the create (and therefore its internal retries)
@@ -305,10 +521,7 @@ class ItemRepository {
   /// saved by URL after a job completes). Downloads the bytes, then reuses
   /// the same multipart upload as [uploadImageFromBase64]. Best-effort:
   /// returns null on any download/upload failure so callers can fall back.
-  Future<ItemImage?> uploadImageFromUrl(
-    String itemId,
-    String imageUrl,
-  ) async {
+  Future<ItemImage?> uploadImageFromUrl(String itemId, String imageUrl) async {
     try {
       final response = await _apiClient.get(
         imageUrl,
@@ -518,10 +731,7 @@ class ItemRepository {
 
       final response = await _apiClient.post(
         ApiConstants.aiSingleExtract,
-        data: {
-          'image': imageBase64,
-          'auto_generate': true,
-        },
+        data: {'image': imageBase64, 'auto_generate': true},
       );
 
       final data = _extractDataMap(response.data);
@@ -949,4 +1159,61 @@ class ItemRepository {
     }
     return null;
   }
+}
+
+/// Thrown when the backend predates `POST /items/batch-from-extraction`
+/// (404/405/501): callers fall back to the legacy sequential save.
+class BatchSaveUnsupported implements Exception {}
+
+/// One review piece to save: the create body plus where its image lives.
+/// [imageUrl]/[storagePath] is a studio render the server already holds;
+/// [sourceFile] is the original photo (staged once per distinct file).
+class SaveEntryInput {
+  const SaveEntryInput({
+    required this.tempId,
+    required this.request,
+    this.clientRequestId,
+    this.imageUrl,
+    this.storagePath,
+    this.sourceFile,
+  });
+
+  final String tempId;
+  final CreateItemRequest request;
+  final String? clientRequestId;
+  final String? imageUrl;
+  final String? storagePath;
+  final File? sourceFile;
+}
+
+/// One staged source photo, keyed by the local file path it was read from.
+class StagedImage {
+  const StagedImage({
+    required this.sourcePath,
+    this.storagePath,
+    this.imageUrl,
+  });
+
+  final String sourcePath;
+  final String? storagePath;
+  final String? imageUrl;
+}
+
+/// One entry the batch route could not save.
+class BatchSaveFailure {
+  const BatchSaveFailure({required this.tempId, required this.message});
+
+  final String tempId;
+  final String message;
+}
+
+/// A saved row with the client `temp_id` the server echoed for it.
+typedef SavedPiece = ({String tempId, ItemModel item});
+
+/// The parsed batch response: saved items plus per-entry failures.
+class BatchSaveResult {
+  const BatchSaveResult({required this.saved, required this.failed});
+
+  final List<SavedPiece> saved;
+  final List<BatchSaveFailure> failed;
 }

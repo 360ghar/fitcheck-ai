@@ -241,3 +241,20 @@ class ItemListResponse(BaseModel):
     total_pages: int
     has_next: bool = False
     has_prev: bool = False
+
+
+class BatchSaveEntry(BaseModel):
+    """One review piece in a batch save: client temp id + full create body."""
+    temp_id: str = Field(..., min_length=1, max_length=128)
+    item: ItemCreate
+
+
+class BatchSaveRequest(BaseModel):
+    """Save a whole extraction review in one call.
+
+    ``job_id`` is telemetry only (lets operators tie a save burst to the
+    extraction job that produced it). The 50-entry cap mirrors the
+    extraction batch maximum (``MAX_UPLOAD_FILES``).
+    """
+    job_id: Optional[str] = Field(None, max_length=128)
+    items: List[BatchSaveEntry] = Field(..., min_length=1, max_length=50)

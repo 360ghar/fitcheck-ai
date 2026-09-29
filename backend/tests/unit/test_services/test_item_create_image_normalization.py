@@ -1,4 +1,4 @@
-"""Tests for items._normalize_create_image_row.
+"""Tests for item_save_service.normalize_create_image_row.
 
 Pins the create-image normalization contract:
 - an explicit unowned ``storage_path`` -> 400 (ValidationError);
@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from app.api.v1 import items as items_module
+from app.services import item_save_service as save_service
 from app.core.exceptions import ValidationError
 from app.models.item import ItemImageBase
 from app.services.storage_service import StorageService
@@ -36,7 +36,7 @@ async def test_explicit_unowned_storage_path_raises():
     img = ItemImageBase(image_url="", storage_path=FOREIGN_CANONICAL)
 
     with pytest.raises(ValidationError, match="caller's own objects"):
-        await items_module._normalize_create_image_row(img, Mock(), USER_ID)
+        await save_service.normalize_create_image_row(img, Mock(), USER_ID)
 
 
 @pytest.mark.asyncio
@@ -49,7 +49,7 @@ async def test_derived_unowned_url_raises():
     )
 
     with pytest.raises(ValidationError, match="caller's own objects"):
-        await items_module._normalize_create_image_row(img, Mock(), USER_ID)
+        await save_service.normalize_create_image_row(img, Mock(), USER_ID)
 
 
 @pytest.mark.asyncio
@@ -67,7 +67,7 @@ async def test_owned_preview_url_is_derived_and_promoted():
         "copy_temp_image_to_item",
         new=AsyncMock(return_value=promoted),
     ) as promote:
-        row = await items_module._normalize_create_image_row(img, Mock(), USER_ID)
+        row = await save_service.normalize_create_image_row(img, Mock(), USER_ID)
 
     promote.assert_awaited_once()
     kwargs = promote.await_args.kwargs
@@ -81,7 +81,7 @@ async def test_owned_preview_url_is_derived_and_promoted():
 async def test_external_url_passes_through_unchanged():
     img = ItemImageBase(image_url=OAUTH_URL, thumbnail_url=OAUTH_URL)
 
-    row = await items_module._normalize_create_image_row(img, Mock(), USER_ID)
+    row = await save_service.normalize_create_image_row(img, Mock(), USER_ID)
 
     assert row == {
         "image_url": OAUTH_URL,

@@ -12,9 +12,9 @@ import '../../../core/network/api_client.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../wardrobe/models/item_model.dart';
-import '../../wardrobe/widgets/garment_glyph.dart';
 import '../models/outfit_model.dart';
 import '../providers/outfit_providers.dart';
+import '../widgets/outfit_collage.dart';
 
 /// One outfit. Shows the cached list copy at once, then the fresh fetch.
 class OutfitDetailPage extends ConsumerWidget {
@@ -170,8 +170,7 @@ class _Body extends ConsumerWidget {
             IconButton(
               tooltip: 'Edit',
               icon: const Icon(Icons.edit_outlined),
-              onPressed: () =>
-                  context.push(Routes.outfitEdit(outfit.id)),
+              onPressed: () => context.push(Routes.outfitEdit(outfit.id)),
             ),
             Builder(
               builder: (buttonContext) => IconButton(
@@ -229,7 +228,7 @@ class _Body extends ConsumerWidget {
                               .remintImageUrl,
                           semanticLabel: outfit.name,
                         )
-                      : _Collage(pieces: pieces),
+                      : OutfitCollage(pieces: pieces),
                 ),
               ),
               const SizedBox(height: AppConstants.spacing20),
@@ -317,66 +316,6 @@ class _Body extends ConsumerWidget {
   }
 }
 
-/// Up to four piece photos when the outfit has no image of its own.
-class _Collage extends ConsumerWidget {
-  const _Collage({required this.pieces});
-
-  final List<ItemModel> pieces;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final shown = pieces.take(4).toList();
-    if (shown.isEmpty) {
-      return Center(
-        child: Icon(
-          Icons.style_outlined,
-          size: 64,
-          color: PaperTokens.of(context).textMuted,
-        ),
-      );
-    }
-    return GridView.count(
-      crossAxisCount: shown.length == 1 ? 1 : 2,
-      // Two pieces stand side by side at full height.
-      childAspectRatio: shown.length == 2 ? 0.5 : 1,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(AppConstants.spacing8),
-      mainAxisSpacing: AppConstants.spacing8,
-      crossAxisSpacing: AppConstants.spacing8,
-      children: [for (final p in shown) _PieceImage(item: p)],
-    );
-  }
-}
-
-class _PieceImage extends ConsumerWidget {
-  const _PieceImage({required this.item});
-
-  final ItemModel item;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final image = item.primaryImage;
-    final tokens = PaperTokens.of(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppConstants.radius8),
-      child: ColoredBox(
-        color: image == null ? tokens.stock.tint : tokens.stock.card,
-        child: image == null
-            ? Center(child: GarmentGlyph(category: item.category, size: 96))
-            : AppImage(
-                imageUrl: image.url,
-                fit: BoxFit.contain,
-                enableZoom: false,
-                memCacheWidth: 360,
-                storagePath: image.storagePath,
-                remintUrl: ref.read(outfitRepositoryProvider).remintImageUrl,
-                semanticLabel: item.name,
-              ),
-      ),
-    );
-  }
-}
-
 class _PieceTile extends StatelessWidget {
   const _PieceTile({required this.item});
 
@@ -390,13 +329,12 @@ class _PieceTile extends StatelessWidget {
         padding: EdgeInsets.zero,
         grain: false,
         clipBehavior: Clip.antiAlias,
-        onTap: () =>
-            context.push(Routes.item(item.id)),
+        onTap: () => context.push(Routes.item(item.id)),
         semanticLabel: item.name,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: _PieceImage(item: item)),
+            Expanded(child: OutfitPieceImage(item: item)),
             Padding(
               padding: const EdgeInsets.all(AppConstants.spacing6),
               child: Text(

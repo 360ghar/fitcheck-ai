@@ -28,6 +28,9 @@ logger = get_context_logger(__name__)
 # =============================================================================
 
 
+# Extraction reads facts from an image; low temperature keeps it repeatable.
+EXTRACTION_TEMPERATURE = 0.1
+
 VALID_CATEGORIES = [
     "tops",
     "bottoms",
@@ -55,7 +58,7 @@ MULTI_ITEM_RESPONSE_FORMAT: Dict[str, Any] = {
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
-                            "category": {"type": "string"},
+                            "category": {"type": "string", "enum": VALID_CATEGORIES},
                             "sub_category": {"type": ["string", "null"]},
                             "colors": {
                                 "type": "array",
@@ -147,6 +150,7 @@ You are given TWO images:
 - Image 2: the current user's profile picture.
 
 Match the current user in Image 1 against Image 2 and set is_current_user_person=true only for that matched person.
+Match on face and hair only, not on clothing. If you are not sure (people[].confidence below 0.6), treat it as no match.
 If no confident match exists, set is_current_user_person=false for everyone and profile_match_found=false.
 """
     else:
@@ -156,6 +160,7 @@ Set is_current_user_person=false for all people and profile_match_found=false.
 """
 
     return f"""Analyze the outfit photo and detect ALL visible clothing items worn by foreground people.
+If no person is shown (flat lay, hanger, or product photo), detect every clothing item shown and set person_id, person_label and is_current_user_person to null.
 Ignore background crowd members and non-wearable objects.
 
 {reference_text}
@@ -163,15 +168,15 @@ Ignore background crowd members and non-wearable objects.
 For each detected item:
 1. category (one of: tops, bottoms, shoes, accessories, outerwear, swimwear, activewear, other)
 2. sub_category
-3. colors (lowercase array)
-4. material
-5. pattern
+3. colors (lowercase basic color names, most dominant first, max 4; ignore skin, hair and background)
+4. material (only if visible, e.g. denim, knit, leather; else null)
+5. pattern (one of: solid, striped, checked, plaid, floral, graphic, print, polka-dot, animal, camouflage, other)
 6. brand (null if unknown)
 7. confidence (0.0 to 1.0)
 8. boundingBox — see BOUNDING BOX RULES below
 9. detailedDescription — see DETAILED DESCRIPTION RULES below (critical for image generation fidelity)
-10. person_id
-11. person_label
+10. person_id ("person_1", "person_2", ... left to right; must match an entry in people[])
+11. person_label (short visible cue, e.g. "left, red jacket")
 12. is_current_user_person
 
 DETAILED DESCRIPTION RULES (critical — this paragraph drives the image generator):
@@ -192,7 +197,7 @@ EXACT ORDER, separated by ";":
    yellowing at collar"
   "high-rise wide-leg jeans; mid-blue indigo wash; no print; faded vertical
    honeycomb whiskering at hips; classic 5-pocket waist with belt loops; full
-   length raw hem; front slash + back patch pockets; 12oz twill denim; matte
+   length raw hem; front slash + back patch pockets; rigid twill denim; matte
    broken-in mild knee bagging; antiqued brass rivets; leather patch back-right
    waist; slim-straight through thigh wide from knee; contrast orange bartack
    stitching"
@@ -221,14 +226,23 @@ Also return people[] summary with:
 - is_current_user_person
 - confidence
 
+If a value is not visible, use null. Do not guess brands from style alone; set brand only from a visible logo or label.
 Return JSON only according to the schema.
 """
 
 
+SINGLE_ITEM_DESCRIPTION_RULES = (
+    'one dense paragraph (>= 35 words) of observable visual facts separated by ";": '
+    "cut/silhouette; colorway; print; pattern; collar/neckline; sleeves; hem; "
+    "pockets/buttons/zips; fabric look; texture/sheen; hardware; logo placement; fit. "
+    'Write "none" for parts that do not apply. No vague praise.'
+)
+
+
 SINGLE_ITEM_EXTRACTION_PROMPT = """Analyze this clothing image and describe the single item shown.{category_hint}
 
-IMPORTANT: Focus ONLY on the main subject in the foreground.
-Ignore background elements and people.
+IMPORTANT: Focus ONLY on the main garment in the foreground. It may be worn by a person.
+Ignore the background, the wearer's body, and any other garments.
 
 Provide:
 1. category (tops, bottoms, shoes, accessories, outerwear, swimwear, activewear, other)
@@ -238,9 +252,12 @@ Provide:
 5. pattern
 6. brand (if visible, otherwise null)
 7. confidence (0-1)
+8. description: {description_rules}
 
-Return ONLY valid JSON in this exact format:
-{
+Use null for values that are not visible. Set brand only from a visible logo or label.
+
+Return ONLY valid JSON with these keys (the values below show the shape only):
+{{
   "category": "tops",
   "sub_category": "t-shirt",
   "colors": ["blue"],
@@ -248,13 +265,18 @@ Return ONLY valid JSON in this exact format:
   "pattern": "solid",
   "brand": null,
   "confidence": 0.9,
-  "description": "A blue cotton t-shirt"
-}"""
+  "description": "..."
+}}"""
 
 
-COLOR_DETECTION_PROMPT = """Identify the dominant colors in this clothing image.
+COLOR_DETECTION_PROMPT = """Identify the dominant colors of the clothing item in this image.
 
-Return only a JSON array of lowercase color names (e.g. ["black", "white", "navy"])."""
+Rules:
+- Max 4 colors, most dominant (largest area) first.
+- Ignore the background, skin, hair, and shadows.
+- Use lowercase basic color names (e.g. black, white, grey, navy, blue, red, green, beige, brown, pink).
+
+Return only a JSON array (e.g. ["black", "white", "navy"])."""
 
 
 # =============================================================================
@@ -437,6 +459,7 @@ class ItemExtractionAgent:
                 prompt=prompt,
                 images=images,
                 response_format=MULTI_ITEM_RESPONSE_FORMAT,
+                temperature=EXTRACTION_TEMPERATURE,
             )
 
             if not response.text:
@@ -701,12 +724,16 @@ class ItemExtractionAgent:
         logger.debug("Extracting single item from image", category_hint=category_hint)
 
         hint_text = f" The item is likely a {category_hint}." if category_hint else ""
-        prompt = SINGLE_ITEM_EXTRACTION_PROMPT.format(category_hint=hint_text)
+        prompt = SINGLE_ITEM_EXTRACTION_PROMPT.format(
+            category_hint=hint_text, description_rules=SINGLE_ITEM_DESCRIPTION_RULES
+        )
 
         try:
             response = await self.ai_service.chat_with_vision(
                 prompt=prompt,
                 images=[image_base64],
+                response_format={"type": "json_object"},
+                temperature=EXTRACTION_TEMPERATURE,
             )
 
             if not response.text:
@@ -719,7 +746,7 @@ class ItemExtractionAgent:
                     "category": "other",
                     "colors": [],
                     "confidence": 0,
-                    "description": response.text,
+                    "description": None,
                 }
 
             colors = parsed.get("colors", [])
@@ -769,6 +796,7 @@ class ItemExtractionAgent:
             response = await self.ai_service.chat_with_vision(
                 prompt=COLOR_DETECTION_PROMPT,
                 images=[image_base64],
+                temperature=EXTRACTION_TEMPERATURE,
             )
 
             if not response.text:

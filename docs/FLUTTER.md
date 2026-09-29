@@ -96,6 +96,33 @@ Paged lists end with `SliverLoadingMoreIndicator(isLoading:, error:, onRetry:)` 
 
 Prefer backend batch extract JSON base64 start endpoint from Flutter; SSE for progress. Align with `docs/BACKEND.md` batch section.
 
+### Extraction background pattern (wardrobe add, 2026-09-26)
+
+Long scans outlive their page. The app-scoped `extractionJobsProvider`
+(`features/wardrobe/providers/extraction_jobs_provider.dart`) owns one SSE
+broadcast per job: pages attach on open and detach on pop, so leaving never
+stops the server job. Tracks persist as JSON (photo mapping included, 20-job
+cap, 7-day TTL); on restore, jobs found terminal notify through
+`JobNotifications` (`flutter_local_notifications`, `extraction_jobs` channel)
+because Dart cannot run while the process is dead. The wardrobe tab shows an
+`ActiveJobBanner`; `/wardrobe/jobs` lists recent jobs with Resume/Review/
+Retry/Stop. Progress pages accept `extra: {'resumeJobId': ...}` and rebuild
+from the status snapshot. Review saves go through
+`ItemRepository.saveBatch` → `POST /items/batch-from-extraction` (studio URLs
+promote server-side, distinct source photos stage once), with a legacy
+sequential fallback when the backend predates the route
+(`BatchSaveUnsupported` propagates out of `saveBatch`). `BatchSaveResult.saved`
+carries the echoed `temp_id` per row: never match saved rows to review pieces
+by display name. `stageSourceImages` pairs uploads by position only when the
+response is complete, otherwise by `filename` (unmatched photos stay
+unstaged). Progress is two halves (photos read, studio photos made) and every
+counter is absolute, so a replayed SSE history cannot double-count. The
+completion notification is suppressed only while a page is open AND the app is
+resumed. Durable photo copies (`extraction_jobs/<jobId>/<index>-<name>`) are
+deleted when a job is forgotten or pruned. Unit tests override
+`extractionJobsPersistenceProvider` and `extractionJobsDocsDirProvider`: an
+unmocked path_provider channel never answers under the test binding.
+
 ## CI
 
 - `.github/workflows/flutter-ci.yml`

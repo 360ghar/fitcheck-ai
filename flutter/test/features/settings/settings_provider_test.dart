@@ -120,7 +120,8 @@ class _FakeRepo implements SettingsRepository {
 }
 
 class _FakeTheme extends ThemeService {
-  AppThemeMode _mode = AppThemeMode.system;
+  // Mirrors the product default: new users get Light.
+  AppThemeMode _mode = AppThemeMode.light;
 
   @override
   AppThemeMode get appThemeMode => _mode;

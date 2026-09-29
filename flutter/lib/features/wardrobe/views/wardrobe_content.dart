@@ -12,6 +12,7 @@ import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../models/item_model.dart';
 import '../providers/wardrobe_providers.dart';
+import '../widgets/active_job_banner.dart';
 import '../widgets/garment_glyph.dart';
 
 /// Closet tab. The shell supplies the Scaffold, the add button and the moss
@@ -112,6 +113,8 @@ class _WardrobeContentState extends ConsumerState<WardrobeContent> {
               SliverToBoxAdapter(
                 child: _header(page, failed: wardrobe.hasError),
               ),
+              // Scans running in the background stay resumable from here.
+              const SliverToBoxAdapter(child: ActiveJobBanner()),
               // The empty and error states carry their own scene.
               if (!_searching &&
                   (page == null ? !wardrobe.hasError : !page.isEmpty))

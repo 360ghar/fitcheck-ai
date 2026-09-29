@@ -185,7 +185,7 @@ async def test_outfit_sends_avatar_plus_numbered_garment_references():
     # Every reference is bound to ONE main subject wearing the whole outfit;
     # a second person is banned outright and the lock leads the identity lock.
     assert "SINGLE PERSON LOCK" in prompt
-    assert "ALL reference images show the SAME single person" in prompt
+    assert "The person reference image (IMAGE 1) shows the ONE main subject" in prompt
     assert "no second person" in prompt
     assert prompt.index("SINGLE PERSON LOCK") < prompt.index("IDENTITY LOCK")
     assert prompt.index("SINGLE PERSON LOCK") < prompt.index("GARMENT REFERENCE LOCK")
@@ -528,6 +528,7 @@ async def test_try_on_prompt_forbids_a_second_person():
     assert "Output EXACTLY ONE person" in prompt
     assert "no second person" in prompt
     assert prompt.index("SINGLE PERSON LOCK") < prompt.index("IDENTITY LOCK")
+    assert "not in the outfit described below" not in prompt
 
 
 @pytest.mark.asyncio
@@ -694,3 +695,11 @@ async def test_generate_with_references_raises_non_retryable_over_cap(monkeypatc
     assert excinfo.value.retryable is False
     assert excinfo.value.error_kind == "config"
     assert "at most 6" in str(excinfo.value)
+
+
+def test_photoshoot_prompt_has_each_lock_once():
+    from app.agents.prompt_fidelity import PHOTOSHOOT_FIDELITY_APPENDIX, sandwich_prompt
+
+    prompt = f"{sandwich_prompt('short dark hair', 'Setting: park')}\n\n{PHOTOSHOOT_FIDELITY_APPENDIX}"
+    for lock in ("IDENTITY LOCK", "OUTFIT LOCK", "AVOID:"):
+        assert prompt.count(lock) == 1, lock

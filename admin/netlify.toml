@@ -37,7 +37,7 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-Frame-Options = "DENY"
     X-Robots-Tag = "noindex, nofollow"
-    Content-Security-Policy = "default-src 'self'; connect-src 'self' https://api.fitcheckaiapp.com https://*.supabase.co; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'sha256-M5uhmt0/GQKIQ9UZ91zfBWgdsvV0G+5irWme7wsq7Qk='; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "default-src 'self'; connect-src 'self' https://api.fitcheckaiapp.com https://*.supabase.co; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'sha256-g0Bz7I5Lu5Z9g8siLEq/oLZ52dwJprOCVOdp5x5wSGU='; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 # Hashed assets — content-stable by construction (Vite content hashes).
 [[headers]]

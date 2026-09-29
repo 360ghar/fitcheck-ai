@@ -4,15 +4,24 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/batch_extraction_models.dart';
 import '../providers/batch_extraction_provider.dart';
+import '../providers/extraction_jobs_provider.dart';
 import '../widgets/extraction_progress_card.dart';
 
 /// Batch progress: finding pieces in each photo, then studio photos. Opens
-/// the review once the job completes.
+/// the review once the job completes. [resumeJobId] reattaches to a
+/// registry-owned job (jobs list, shade notification) instead of requiring a
+/// fresh start from the selector.
+///
+/// Leaving this page never stops the scan: the registry owns the job and the
+/// shade notifies when it finishes.
 class BatchExtractionProgressPage extends ConsumerStatefulWidget {
-  const BatchExtractionProgressPage({super.key});
+  const BatchExtractionProgressPage({super.key, this.resumeJobId});
+
+  final String? resumeJobId;
 
   @override
   ConsumerState<BatchExtractionProgressPage> createState() =>
@@ -35,15 +44,39 @@ class _BatchExtractionProgressPageState
         );
       }
     }, fireImmediately: true);
+    // Reattach to a backgrounded job: an explicit resume id wins, otherwise
+    // the latest active batch job. Nothing to resume closes the page.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(batchExtractionProvider).jobId.isNotEmpty) return;
+      final jobs = ref.read(extractionJobsProvider);
+      final resumeId =
+          widget.resumeJobId ??
+          jobs.active
+              .where((job) => job.kind == TrackedJobKind.batch)
+              .lastOrNull
+              ?.jobId;
+      if (resumeId == null || resumeId.isEmpty) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+      ref.read(batchExtractionProvider.notifier).attachToJob(resumeId);
+    });
   }
 
-  /// Back to the selection with the photos kept.
+  /// Back to the selection with the photos kept. The scan keeps running in
+  /// the background (banner + shade notification on finish).
   void _backToPhotos() {
     ref.read(batchExtractionProvider.notifier).resetJob();
+    ErrorHandler.showInfo(
+      'Still working. We will let you know when your pieces are ready.',
+      title: 'Running in background',
+    );
     Navigator.pop(context);
   }
 
-  Future<void> _confirmLeave() async {
+  /// Explicit stop: confirms first, because this really cancels the job.
+  Future<void> _confirmStop() async {
     final notifier = ref.read(batchExtractionProvider.notifier);
     if (!ref.read(batchExtractionProvider).isProcessing) {
       _backToPhotos();
@@ -53,7 +86,9 @@ class _BatchExtractionProgressPageState
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Stop finding pieces?'),
-        content: const Text('Progress on these photos is lost.'),
+        content: const Text(
+          'The scan stops and nothing is saved. Pieces already found stay in your activity until you dismiss them.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -87,16 +122,22 @@ class _BatchExtractionProgressPageState
       child: PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _confirmLeave();
+          if (!didPop) _backToPhotos();
         },
         child: Scaffold(
           appBar: AppBar(
             title: const Text('Add several photos'),
             leading: IconButton(
-              tooltip: 'Close',
+              tooltip: 'Run in background',
               icon: const Icon(Icons.close_rounded),
-              onPressed: _confirmLeave,
+              onPressed: _backToPhotos,
             ),
+            actions: [
+              TextButton(
+                onPressed: () => context.push(Routes.wardrobeJobs),
+                child: const Text('Scans'),
+              ),
+            ],
           ),
           body: AppPageBackground(
             child: SafeArea(
@@ -118,7 +159,7 @@ class _BatchExtractionProgressPageState
                         const Expanded(child: _PhotoList()),
                         _BottomBar(
                           onBack: _backToPhotos,
-                          onCancel: _confirmLeave,
+                          onCancel: _confirmStop,
                         ),
                       ],
                     ),
@@ -238,7 +279,27 @@ class _BottomBar extends ConsumerWidget {
     );
     final Widget child;
     if (processing) {
-      child = TextButton(onPressed: onCancel, child: const Text('Cancel'));
+      // Pieces stream in before the job finishes: review early while the
+      // rest generate, or stop the scan outright.
+      child = count > 0
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ElevatedButton(
+                  onPressed: () => context.pushReplacement(
+                    Routes.wardrobeBatchReview,
+                  ),
+                  child: Text(
+                    count == 1
+                        ? 'Review 1 piece now'
+                        : 'Review $count pieces now',
+                  ),
+                ),
+                TextButton(onPressed: onCancel, child: const Text('Stop')),
+              ],
+            )
+          : TextButton(onPressed: onCancel, child: const Text('Stop'));
     } else if (failed) {
       child = Column(
         mainAxisSize: MainAxisSize.min,

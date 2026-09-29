@@ -383,7 +383,7 @@ async def test_avatar_branch_sends_source_photo_between_avatar_and_garments():
     # All references are one main subject wearing the whole outfit; a second
     # person is banned and the lock precedes the identity lock.
     assert "SINGLE PERSON LOCK" in prompt
-    assert "ALL reference images show the SAME single person" in prompt
+    assert "The person reference image (IMAGE 1) shows the ONE main subject" in prompt
     assert prompt.index("SINGLE PERSON LOCK") < prompt.index("IDENTITY LOCK")
     # Identity lock still precedes the source-photo lock and garment lock.
     assert prompt.index("IDENTITY LOCK") < prompt.index("SOURCE PHOTO LOCK")

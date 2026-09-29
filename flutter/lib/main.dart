@@ -10,6 +10,7 @@ import 'core/config/env_config.dart';
 import 'core/services/analytics_service.dart';
 import 'core/providers.dart';
 import 'core/services/code_push_service.dart';
+import 'core/services/job_notifications.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/supabase_service.dart';
 import 'core/services/theme_service.dart';
@@ -39,6 +40,11 @@ void main() async {
     codePushService.loadCurrentPatch(),
     PackageInfo.fromPlatform(),
     appContainer.read(introSeenProvider.notifier).load(),
+    // Job-done shade alerts. The tap lands on the activity list; the router
+    // redirect keeps signed-out taps on the guest pages.
+    JobNotifications.instance.init(
+      onTap: (_) => appRouter.go(Routes.wardrobeJobs),
+    ),
   ]);
   final packageInfo = startup[4]! as PackageInfo;
   ApiClient.instance.initialize();

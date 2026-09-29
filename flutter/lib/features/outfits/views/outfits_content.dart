@@ -11,9 +11,9 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/season.dart';
 import '../../../domain/enums/style.dart';
 import '../../wardrobe/models/item_model.dart';
-import '../../wardrobe/widgets/garment_glyph.dart';
 import '../models/outfit_model.dart';
 import '../providers/outfit_providers.dart';
+import '../widgets/outfit_collage.dart';
 import 'outfit_detail_page.dart';
 
 /// Outfits tab. The shell supplies the Scaffold, the create button and the
@@ -470,7 +470,12 @@ class _OutfitCard extends ConsumerWidget {
                           .remintImageUrl,
                       semanticLabel: outfit.name,
                     )
-                  : _MiniCollage(pieces: pieces),
+                  : OutfitCollage(
+                      pieces: pieces,
+                      glyphSize: 40,
+                      memCacheWidth: 240,
+                      spacing: AppConstants.spacing4,
+                    ),
             ),
           ),
           Padding(
@@ -513,37 +518,6 @@ class _OutfitCard extends ConsumerWidget {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Garment glyphs for an outfit without its own image.
-class _MiniCollage extends StatelessWidget {
-  const _MiniCollage({required this.pieces});
-
-  final List<ItemModel> pieces;
-
-  @override
-  Widget build(BuildContext context) {
-    if (pieces.isEmpty) {
-      return Center(
-        child: Icon(
-          Icons.style_outlined,
-          size: 40,
-          color: PaperTokens.of(context).textMuted,
-        ),
-      );
-    }
-    return Center(
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: AppConstants.spacing8,
-        runSpacing: AppConstants.spacing8,
-        children: [
-          for (final p in pieces.take(4))
-            GarmentGlyph(category: p.category, size: 40),
         ],
       ),
     );

@@ -1413,6 +1413,7 @@ class AIProviderService:
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, Any]] = None,
+        temperature: float = 0.7,
     ) -> AIResponse:
         """
         Send a chat completion request with images (vision).
@@ -1439,7 +1440,7 @@ class AIProviderService:
         """
         if self.config.vision_provider == AIProvider.GEMINI:
             return await self._chat_with_vision_via_native_gemini(
-                prompt, images, model, max_tokens, response_format
+                prompt, images, model, max_tokens, response_format, temperature
             )
 
         primary_model = model or self.config.get_vision_model()
@@ -1461,6 +1462,7 @@ class AIProviderService:
                 model=primary_model,
                 max_tokens=max_tokens,
                 response_format=response_format,
+                temperature=temperature,
                 api_url=primary_api_url,
                 api_key=self.config.get_vision_api_key(),
             )
@@ -1485,6 +1487,7 @@ class AIProviderService:
                 model=fallback_model,
                 max_tokens=max_tokens,
                 response_format=response_format,
+                temperature=temperature,
                 api_url=self.config.get_vision_fallback_api_url(),
                 api_key=self.config.get_vision_fallback_api_key(),
             )
@@ -1513,6 +1516,7 @@ class AIProviderService:
         model: Optional[str],
         max_tokens: Optional[int],
         response_format: Optional[Dict[str, Any]],
+        temperature: float = 0.7,
     ) -> AIResponse:
         """Vision leg routed directly to Google's native Gemini API
         (AI_VISION_PROVIDER=gemini), falling back to the configured Agnes/
@@ -1544,6 +1548,7 @@ class AIProviderService:
                 model=primary_model,
                 max_tokens=max_tokens,
                 response_format=response_format,
+                temperature=temperature,
             )
         except AIServiceError as primary_err:
             if not fallback_model or fallback_model == primary_model:
@@ -1561,6 +1566,7 @@ class AIProviderService:
                     model=fallback_model,
                     max_tokens=max_tokens,
                     response_format=response_format,
+                    temperature=temperature,
                     api_url=self.config.get_vision_fallback_api_url(),
                     api_key=self.config.get_vision_fallback_api_key(),
                 )

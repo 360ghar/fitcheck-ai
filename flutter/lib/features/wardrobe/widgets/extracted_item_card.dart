@@ -135,25 +135,35 @@ class ExtractedItemCard extends StatelessWidget {
                   opacity: included ? 1 : 0.5,
                   child: ColoredBox(
                     color: tokens.stock.sunk,
-                    child: item.generatedImageUrl != null
-                        ? GeneratedImage(
-                            url: item.generatedImageUrl!,
-                            fallback: _source(tokens),
-                          )
-                        : _source(tokens),
+                    child: _PieceImage(
+                      item: item,
+                      tokens: tokens,
+                      sourceImagePath: sourceImagePath,
+                    ),
                   ),
                 ),
                 if (item.status == BatchItemStatus.generating)
-                  const ColoredBox(
+                  ColoredBox(
                     color: Colors.black45,
                     child: Center(
-                      child: SizedBox.square(
-                        dimension: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                          strokeCap: StrokeCap.round,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox.square(
+                            dimension: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                              strokeCap: StrokeCap.round,
+                            ),
+                          ),
+                          const SizedBox(height: AppConstants.spacing8),
+                          Text(
+                            'Making studio photo',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.white),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -251,8 +261,45 @@ class ExtractedItemCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _source(PaperTokens tokens) {
+/// The review tile image, most-ready first: the studio URL, then the
+/// in-memory render (arrives via SSE before the URL event), then the source
+/// photo with the detected box so the card is never an empty spinner.
+class _PieceImage extends StatelessWidget {
+  const _PieceImage({
+    required this.item,
+    required this.tokens,
+    required this.sourceImagePath,
+  });
+
+  final BatchExtractedItem item;
+  final PaperTokens tokens;
+  final String sourceImagePath;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = item.generatedImageUrl;
+    if (url != null) {
+      return GeneratedImage(url: url, fallback: _sourceCrop());
+    }
+    final base64 = item.generatedImageBase64;
+    if (base64 != null && base64.isNotEmpty) {
+      try {
+        return Image.memory(
+          base64Decode(base64),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => _sourceCrop(),
+        );
+      } catch (_) {
+        // Corrupt inline bytes: fall through to the source crop.
+      }
+    }
+    return _sourceCrop();
+  }
+
+  Widget _sourceCrop() {
     if (sourceImagePath.isEmpty) {
       return Center(
         child: Icon(

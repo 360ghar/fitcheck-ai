@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' hide Category;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/services/job_notifications.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/request_id.dart';
 import '../../../domain/constants/use_cases.dart';
@@ -12,7 +13,9 @@ import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
+import '../repositories/item_repository.dart';
 import 'batch_extraction_provider.dart' show aiConsentGateProvider;
+import 'extraction_jobs_provider.dart';
 import 'wardrobe_providers.dart';
 
 /// Why a single-photo extraction stopped without results. Picks the copy and
@@ -87,6 +90,7 @@ class ItemAddState {
     this.manualEntry = false,
     this.failure,
     this.cached = false,
+    this.itemBoxes = const {},
   });
 
   final File? image;
@@ -116,6 +120,11 @@ class ItemAddState {
   final ItemAddFailure? failure;
   final bool cached;
 
+  /// temp id to the detected bounding box (+ label) for the source-photo
+  /// overlay. Present as soon as pieces are detected, long before the
+  /// studio photos arrive.
+  final Map<String, Map<String, dynamic>> itemBoxes;
+
   int get includedCount => items.where((i) => i.includeInWardrobe).length;
   int get readyCount =>
       items.where((i) => i.generatedImageUrl?.isNotEmpty ?? false).length;
@@ -137,6 +146,7 @@ class ItemAddState {
     bool? manualEntry,
     ItemAddFailure? Function()? failure,
     bool? cached,
+    Map<String, Map<String, dynamic>>? itemBoxes,
   }) => ItemAddState(
     image: image == null ? this.image : image(),
     processing: processing ?? this.processing,
@@ -154,6 +164,7 @@ class ItemAddState {
     manualEntry: manualEntry ?? this.manualEntry,
     failure: failure == null ? this.failure : failure(),
     cached: cached ?? this.cached,
+    itemBoxes: itemBoxes ?? this.itemBoxes,
   );
 }
 
@@ -194,11 +205,15 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
   /// Pieces an earlier save of this photo already added.
   final Set<String> _savedTempIds = {};
 
+  /// Captured in [build]: Riverpod forbids `ref.read` inside `onDispose`.
+  ExtractionJobsNotifier? _jobs;
+
   @override
   ItemAddState build() {
+    _jobs = ref.read(extractionJobsProvider.notifier);
     ref.onDispose(() {
       _generation++;
-      _stopJob();
+      _detach();
     });
     return const ItemAddState();
   }
@@ -253,6 +268,28 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
       if (!ref.mounted) return;
       final jobId = job.jobId;
       _jobId = jobId;
+      // Hand stream ownership to the app-scoped registry: popping this page
+      // (or killing the app) no longer strands the job. Shade permission is
+      // requested in context — the job may finish while the user is away.
+      final jobs = ref.read(extractionJobsProvider.notifier);
+      await jobs.trackSingle(
+        jobId: jobId,
+        label: 'Scan',
+        sourcePath: image.path,
+      );
+      unawaited(JobNotifications.instance.requestPermissions());
+      if (generation != _generation) {
+        // Reset while the start was in flight: nothing is watching, so drop
+        // the registry entry and cancel server-side like before.
+        unawaited(jobs.forget(jobId));
+        try {
+          await repository.cancelSingleExtraction(jobId);
+        } catch (_) {
+          // Best effort; nothing is listening either way.
+        }
+        return;
+      }
+      if (!ref.mounted) return;
       if (job.message?.contains('cached') ?? false) {
         state = state.copyWith(
           cached: true,
@@ -261,22 +298,7 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
           statusText: 'Found in an earlier scan',
         );
       }
-      _sse = ref
-          .read(itemRepositoryProvider)
-          .subscribeSingleExtractionEvents(jobId)
-          .listen(
-            (event) => _onEvent(jobId, event),
-            onError: (Object _) {
-              if (_isCurrent(jobId) && state.phase != 'complete') {
-                _reconcile(jobId);
-              }
-            },
-            onDone: () {
-              // A drop mid-job: reconcile by polling instead of stranding
-              // the spinner.
-              if (_shouldReconcile(jobId)) _reconcile(jobId);
-            },
-          );
+      _listenToJob(jobId);
       _armWatchdog(jobId);
     } catch (e) {
       if (ref.mounted) _fail(e);
@@ -286,7 +308,153 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
   }
 
   bool _shouldReconcile(String jobId) =>
-      _isCurrent(jobId) && state.phase != 'complete' && !_reconciling;
+      _isCurrent(jobId) &&
+      state.phase != 'complete' &&
+      !_reconciling &&
+      ref.read(extractionJobsProvider).isActive(jobId);
+
+  /// Listens to the registry-owned broadcast for [jobId]. Detaching (page
+  /// pop, provider dispose) stops local updates only; the job continues.
+  void _listenToJob(String jobId) {
+    _sse?.cancel();
+    _sse = null;
+    final jobs = ref.read(extractionJobsProvider.notifier);
+    jobs.attach(jobId);
+    final events = jobs.events(jobId);
+    if (events == null) {
+      // Stream already gone (terminal while away): snapshot instead.
+      jobs.detach(jobId);
+      _reconcile(jobId);
+      return;
+    }
+    _sse = events.listen(
+      (event) => _onEvent(jobId, event),
+      onError: (Object _) {
+        if (_isCurrent(jobId) && state.phase != 'complete') {
+          _reconcile(jobId);
+        }
+      },
+      onDone: () {
+        // The registry closes the broadcast on cancel/forget: a local
+        // reconcile must not resurrect polling for a dead job.
+        if (_shouldReconcile(jobId)) _reconcile(jobId);
+      },
+    );
+  }
+
+  /// Reattaches this page to a registry-owned job (jobs list, shade
+  /// notification, or post-restart resume). Rebuilds the photo + detected
+  /// pieces from the persisted job and the status snapshot, then listens
+  /// live. Does nothing while another job is active here.
+  Future<void> attachToJob(String jobId) async {
+    if (_starting ||
+        state.processing ||
+        state.generating ||
+        _jobId != null ||
+        jobId.isEmpty) {
+      return;
+    }
+    final tracked = ref.read(extractionJobsProvider).job(jobId);
+    if (tracked == null) return;
+    _jobId = jobId;
+    _extracted.clear();
+    _decoupledToReview = false;
+    File? image;
+    if (tracked.sourcePaths.isNotEmpty) {
+      final file = File(tracked.sourcePaths.first);
+      if (await file.exists()) image = file;
+    }
+    state = ItemAddState(
+      image: image,
+      processing: true,
+      phase: 'analyzing',
+      secondsLeft: 30,
+      useCases: state.useCases,
+    );
+    try {
+      final raw = await ref
+          .read(itemRepositoryProvider)
+          .getSingleJobStatus(jobId);
+      if (!_isCurrent(jobId)) return;
+      _applyStatusSnapshot(raw);
+    } catch (_) {
+      // Snapshot failed (offline): the live stream still catches up.
+    }
+    if (!_isCurrent(jobId)) return;
+    if (state.phase == 'complete' || state.failure != null) return;
+    _listenToJob(jobId);
+    _armWatchdog(jobId);
+  }
+
+  /// Folds a status-poll payload into review state. Shared by the reconcile
+  /// fallback and [attachToJob]: merges detected pieces (keeping include
+  /// toggles and edited names) and finishes terminal jobs.
+  void _applyStatusSnapshot(Map<String, dynamic> raw) {
+    final existing = {for (final i in state.items) i.tempId: i};
+    var items = state.items;
+    var boxes = state.itemBoxes;
+    for (final parsed in _parseItems(raw['items'])) {
+      final old = existing[parsed.tempId];
+      final merged = old == null
+          ? parsed
+          : parsed.copyWith(
+              includeInWardrobe: old.includeInWardrobe,
+              name: old.name ?? parsed.name,
+            );
+      items = old == null
+          ? [...items, merged]
+          : [for (final i in items) i.tempId == merged.tempId ? merged : i];
+      final box = _boxOf(raw, parsed.tempId);
+      if (box != null) boxes = {...boxes, parsed.tempId: box};
+    }
+    // The status payload carries the same extracted rows the
+    // image_extraction_complete event would: seed the review list so boxes
+    // and metadata show even when the stream never delivered.
+    for (final s in _extracted.values) {
+      if (!items.any((i) => i.tempId == s.tempId)) {
+        items = [...items, _withImage(s, status: 'detected')];
+      }
+    }
+    state = state.copyWith(items: items, itemBoxes: boxes);
+    switch (raw['status']?.toString() ?? '') {
+      case 'completed':
+        _finishReconcile(success: true);
+      case 'failed':
+      case 'cancelled':
+        _finishReconcile(
+          success: state.items.isNotEmpty,
+          error: raw['error']?.toString() ?? 'Extraction failed',
+        );
+      default:
+        if (state.items.isNotEmpty && !_decoupledToReview) {
+          _decoupledToReview = true;
+          state = state.copyWith(phase: 'review', processing: false);
+        }
+    }
+  }
+
+  /// Finds the bounding box for [tempId] in a status/job_complete payload.
+  Map<String, dynamic>? _boxOf(Map<String, dynamic> raw, String tempId) {
+    final items = raw['items'];
+    if (items is! List) return null;
+    for (final entry in items) {
+      if (entry is Map<String, dynamic> &&
+          entry['temp_id']?.toString() == tempId) {
+        final box = entry['bounding_box'];
+        if (box is Map<String, dynamic>) {
+          return {
+            ...box,
+            'label':
+                entry['name']?.toString() ??
+                entry['sub_category']?.toString() ??
+                entry['category']?.toString() ??
+                '',
+          };
+        }
+      }
+    }
+    return null;
+  }
 
   /// The backend heartbeats every ~30 s, so 45 s of silence means the
   /// connection is dead or hung.
@@ -314,21 +482,29 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
         );
       case 'image_extraction_complete':
         final status = {...state.itemStatus};
+        var boxes = state.itemBoxes;
         final raw = data['items'];
         if (raw is List) {
           for (final item in raw.whereType<Map<String, dynamic>>()) {
             final parsed = DetectedItemData.fromJson(item);
             _extracted[parsed.tempId] = parsed;
-            status[parsed.tempId] = 'pending';
+            status.putIfAbsent(parsed.tempId, () => 'pending');
+            final box = item['bounding_box'];
+            if (box is Map<String, dynamic>) {
+              boxes = {
+                ...boxes,
+                parsed.tempId: {
+                  ...box,
+                  'label': parsed.subCategory ?? parsed.category,
+                },
+              };
+            }
           }
         }
-        state = state.copyWith(
-          phase: 'extracting',
-          progress: 60,
-          secondsLeft: 30,
-          statusText: 'Pieces found',
-          itemStatus: status,
-        );
+        // Show pieces the moment they are detected — metadata and boxes now,
+        // studio photos stream in via item_generation_complete — instead of
+        // holding the user on the progress bar until everything is done.
+        _seedItems(status: status, boxes: boxes);
       case 'image_extraction_failed':
         // Terminal for a one-photo job: stop listening so a late event of
         // this job can never reach a retry.
@@ -365,6 +541,10 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
           generating: false,
           statusText: 'Cancelled',
         );
+      case 'error':
+        // The registry's synthetic stream-failure event: reconcile by
+        // polling instead of stranding the spinner.
+        if (_shouldReconcile(jobId)) _reconcile(jobId);
     }
   }
 
@@ -492,13 +672,23 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
   );
 
   /// Shows the found pieces at once; studio photos swap in as they arrive.
-  void _seedReview() {
-    if (_extracted.isEmpty || _decoupledToReview) return;
+  /// Merges with the review list (never clobbers include toggles, edited
+  /// names or already-arrived studio photos) so late or repeated extraction
+  /// events are safe.
+  void _seedItems({
+    Map<String, String>? status,
+    Map<String, Map<String, dynamic>>? boxes,
+  }) {
+    if (_extracted.isEmpty) return;
     _decoupledToReview = true;
+    final existing = {for (final i in state.items) i.tempId: i};
     state = state.copyWith(
       items: [
-        for (final s in _extracted.values) _withImage(s, status: 'detected'),
+        for (final s in _extracted.values)
+          existing[s.tempId] ?? _withImage(s, status: 'detected'),
       ],
+      itemStatus: status ?? state.itemStatus,
+      itemBoxes: boxes ?? state.itemBoxes,
       phase: 'review',
       progress: 100,
       secondsLeft: 0,
@@ -506,6 +696,9 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
       statusText: 'Making studio photos',
     );
   }
+
+  /// Shows the found pieces at once; studio photos swap in as they arrive.
+  void _seedReview() => _seedItems();
 
   /// Polls the job status when the stream dies, hangs or the job is lost.
   /// Bounded by 2 minutes and 3 failures in a row. Stops as soon as the
@@ -524,41 +717,9 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
               .getSingleJobStatus(jobId);
           if (!_isCurrent(jobId)) return;
           failures = 0;
-          final existing = {for (final i in state.items) i.tempId: i};
-          var items = state.items;
-          for (final parsed in _parseItems(status['items'])) {
-            final old = existing[parsed.tempId];
-            final merged = old == null
-                ? parsed
-                : parsed.copyWith(
-                    includeInWardrobe: old.includeInWardrobe,
-                    name: old.name ?? parsed.name,
-                  );
-            items = old == null
-                ? [...items, merged]
-                : [
-                    for (final i in items)
-                      i.tempId == merged.tempId ? merged : i,
-                  ];
-          }
-          state = state.copyWith(items: items);
-          switch (status['status']?.toString() ?? '') {
-            case 'completed':
-              _finishReconcile(success: true);
-              return;
-            case 'failed':
-            case 'cancelled':
-              _finishReconcile(
-                success: state.items.isNotEmpty,
-                error: status['error']?.toString() ?? 'Extraction failed',
-              );
-              return;
-            default:
-              if (state.items.isNotEmpty && !_decoupledToReview) {
-                _decoupledToReview = true;
-                state = state.copyWith(phase: 'review', processing: false);
-              }
-          }
+          _applyStatusSnapshot(status);
+          if (state.phase == 'complete') return;
+          if (state.failure != null) return;
         } catch (_) {
           if (!_isCurrent(jobId)) return;
           failures++;
@@ -607,12 +768,21 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
     );
   }
 
-  /// Stops listening to the current job: stream, watchdog and polling.
-  void _stopJob() {
+  /// Detaches this page from the current job: local subscription and
+  /// watchdog stop, the registry attach count drops, but the server job and
+  /// its broadcast keep running for other pages (or a later resume).
+  void _detach() {
     _watchdog?.cancel();
     _watchdog = null;
     _sse?.cancel();
     _sse = null;
+    final jobId = _jobId;
+    if (jobId != null) _jobs?.detach(jobId);
+  }
+
+  /// Stops listening to the current job: stream, watchdog and polling.
+  void _stopJob() {
+    _detach();
     _jobId = null;
   }
 
@@ -623,15 +793,19 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
     reset();
     if (jobId == null) return;
     try {
-      await ref.read(itemRepositoryProvider).cancelSingleExtraction(jobId);
+      await ref.read(extractionJobsProvider.notifier).cancel(jobId);
     } catch (e, stack) {
       ErrorHandler.showError(e, title: 'Not cancelled', stackTrace: stack);
     }
   }
 
-  /// Saves the included pieces with their studio photos. Pieces an earlier
-  /// save added are skipped; a failed piece keeps its idempotency key.
-  /// A call while saving does nothing.
+  /// Saves the included pieces with their studio photos in ONE batch call:
+  /// studio URLs are promoted server-side (no download/re-upload), and the
+  /// source photo is staged once for every piece still waiting on its
+  /// studio render. Pieces an earlier save added are skipped; a failed piece
+  /// keeps its idempotency key. Falls back to the legacy sequential save
+  /// when the backend predates the batch route. A call while saving does
+  /// nothing.
   Future<ItemAddSaveResult> saveGeneratedItems() async {
     if (state.saving) return (saved: const <ItemModel>[], failed: 0);
     final toSave = [
@@ -641,24 +815,124 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
     if (toSave.isEmpty) return (saved: const <ItemModel>[], failed: 0);
     state = state.copyWith(saving: true);
     final repository = ref.read(itemRepositoryProvider);
-    final source = state.image;
     final occasionTags = state.useCases.isEmpty
         ? null
         : UseCases.normalizeList(state.useCases);
+    final source = state.image;
+    var result = (saved: const <ItemModel>[], failed: 0);
+    try {
+      // Inline (data-URI) studio renders cannot promote server-side: their
+      // bytes must go up from the client, so they ride the legacy path in
+      // the same call. Everything else saves in one batch.
+      final batchable = <DetectedItemDataWithImage>[];
+      final legacyOnly = <DetectedItemDataWithImage>[];
+      for (final item in toSave) {
+        final url = item.generatedImageUrl;
+        if (url != null && url.startsWith('data:')) {
+          legacyOnly.add(item);
+        } else {
+          batchable.add(item);
+        }
+      }
+      final entries = [
+        for (final item in batchable)
+          SaveEntryInput(
+            tempId: item.tempId,
+            request: _requestFor(item, occasionTags),
+            clientRequestId: _requestIdFor(item.tempId, item),
+            imageUrl: _promotableUrl(item.generatedImageUrl),
+            sourceFile: _promotableUrl(item.generatedImageUrl) == null
+                ? source
+                : null,
+          ),
+      ];
+      final batch = await repository.saveBatch(entries: entries);
+      final saved = <ItemModel>[];
+      for (final piece in batch.saved) {
+        _savedTempIds.add(piece.tempId);
+        if (!saved.any((s) => s.id == piece.item.id)) saved.add(piece.item);
+      }
+      for (final failure in batch.failed) {
+        ErrorHandler.reportError(
+          StateError('Item batch save failed: ${failure.message}'),
+          'Item add save failed for ${failure.tempId}',
+        );
+      }
+      var failed = batch.failed.length;
+      if (legacyOnly.isNotEmpty) {
+        final legacy = await _saveLegacy(legacyOnly, occasionTags);
+        saved.addAll(legacy.saved);
+        failed += legacy.failed;
+      }
+      result = (saved: saved, failed: failed);
+    } on BatchSaveUnsupported {
+      result = await _saveLegacy(toSave, occasionTags);
+    } catch (_) {
+      // Never leave the page locked in `saving` after an unexpected throw.
+      if (ref.mounted) state = state.copyWith(saving: false);
+      rethrow;
+    }
+
+    final saved = result.saved;
+    final failed = result.failed;
+    if (saved.isNotEmpty && ref.exists(wardrobeProvider)) {
+      ref.read(wardrobeProvider.notifier).addItems(saved);
+    }
+    if (ref.mounted) state = state.copyWith(saving: false);
+    if (failed == 0) {
+      ErrorHandler.showSuccess(
+        saved.length == 1
+            ? '1 piece is in your closet.'
+            : '${saved.length} pieces are in your closet.',
+        title: 'Saved',
+      );
+    } else if (saved.isNotEmpty) {
+      ErrorHandler.showWarning(
+        '${saved.length} of ${saved.length + failed} pieces saved. Tap save to try the rest again.',
+        title: 'Some pieces not saved',
+      );
+    } else {
+      ErrorHandler.showError(
+        'Nothing was saved. Try again.',
+        title: 'Not saved',
+      );
+    }
+    return (saved: saved, failed: failed);
+  }
+
+  CreateItemRequest _requestFor(
+    DetectedItemDataWithImage item,
+    List<String>? occasionTags,
+  ) => CreateItemRequest(
+    name: item.name ?? item.subCategory ?? item.category,
+    category: Category.fromString(item.category),
+    colors: item.colors,
+    material: item.material,
+    pattern: item.pattern,
+    description: item.detailedDescription,
+    condition: domain.Condition.clean,
+    occasionTags: occasionTags,
+  );
+
+  /// A studio image the server can promote as-is: an http(s) URL whose key
+  /// the save core derives and copies. Data URIs and blanks are not
+  /// promotable (the legacy path uploads their bytes / the source photo).
+  String? _promotableUrl(String? url) =>
+      (url != null && url.startsWith('http')) ? url : null;
+
+  /// Legacy sequential save (create + upload + refetch per piece) for
+  /// backends without the batch route. Kept until the backend floor rises.
+  Future<ItemAddSaveResult> _saveLegacy(
+    List<DetectedItemDataWithImage> toSave,
+    List<String>? occasionTags,
+  ) async {
+    final repository = ref.read(itemRepositoryProvider);
+    final source = state.image;
     final saved = <ItemModel>[];
     var failed = 0;
 
     for (final item in toSave) {
-      final request = CreateItemRequest(
-        name: item.name ?? item.subCategory ?? item.category,
-        category: Category.fromString(item.category),
-        colors: item.colors,
-        material: item.material,
-        pattern: item.pattern,
-        description: item.detailedDescription,
-        condition: domain.Condition.clean,
-        occasionTags: occasionTags,
-      );
+      final request = _requestFor(item, occasionTags);
       try {
         final ItemModel result;
         final url = item.generatedImageUrl;
@@ -717,29 +991,6 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
         failed++;
         ErrorHandler.reportError(e, 'Item add save failed', stackTrace: stack);
       }
-    }
-
-    if (saved.isNotEmpty && ref.exists(wardrobeProvider)) {
-      ref.read(wardrobeProvider.notifier).addItems(saved);
-    }
-    if (ref.mounted) state = state.copyWith(saving: false);
-    if (failed == 0) {
-      ErrorHandler.showSuccess(
-        saved.length == 1
-            ? '1 piece is in your closet.'
-            : '${saved.length} pieces are in your closet.',
-        title: 'Saved',
-      );
-    } else if (saved.isNotEmpty) {
-      ErrorHandler.showWarning(
-        '${saved.length} of ${saved.length + failed} pieces saved. Tap save to try the rest again.',
-        title: 'Some pieces not saved',
-      );
-    } else {
-      ErrorHandler.showError(
-        'Nothing was saved. Try again.',
-        title: 'Not saved',
-      );
     }
     return (saved: saved, failed: failed);
   }

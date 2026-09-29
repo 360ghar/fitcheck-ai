@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:fitcheck_ai/core/providers.dart' show noRetry;
+import 'package:fitcheck_ai/core/services/persistence_service.dart';
 import 'package:fitcheck_ai/domain/enums/category.dart';
 import 'package:fitcheck_ai/domain/enums/condition.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/batch_extraction_models.dart';
@@ -9,6 +10,8 @@ import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
 import 'package:fitcheck_ai/features/wardrobe/providers/batch_extraction_provider.dart'
     show aiConsentGateProvider;
 import 'package:fitcheck_ai/features/wardrobe/providers/item_add_provider.dart';
+import 'package:fitcheck_ai/features/wardrobe/providers/extraction_jobs_provider.dart'
+    show extractionJobsDocsDirProvider, extractionJobsPersistenceProvider;
 import 'package:fitcheck_ai/features/wardrobe/providers/wardrobe_providers.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/item_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,11 +46,30 @@ class FakeItemRepository extends ItemRepository {
   onUploadFiles;
   Future<Map<String, dynamic>> Function(String jobId)? onStatus;
 
+  /// Entries posted to the batch route, one list per call.
+  final List<List<SaveEntryInput>> saveBatchCalls = [];
+
+  /// Batch route behavior. Unset means the backend predates the route
+  /// ([BatchSaveUnsupported]), so saves take the legacy sequential path that
+  /// the image-strategy tests pin.
+  Future<BatchSaveResult> Function(List<SaveEntryInput> entries)? onSaveBatch;
+
+  @override
+  Future<BatchSaveResult> saveBatch({
+    String? jobId,
+    required List<SaveEntryInput> entries,
+  }) async {
+    saveBatchCalls.add(entries);
+    final hook = onSaveBatch;
+    if (hook == null) throw BatchSaveUnsupported();
+    return hook(entries);
+  }
+
   @override
   Future<SingleExtractionJob> extractItemsFromImageAsync(File image) async {
     jobsStarted++;
     final id = 'job-$jobsStarted';
-    streams[id] = StreamController<SSEEvent>();
+    streams[id] = StreamController<SSEEvent>.broadcast();
     return SingleExtractionJob(
       jobId: id,
       status: 'pending',
@@ -157,6 +179,20 @@ class FakeItemRepository extends ItemRepository {
   }
 }
 
+/// In-memory [PersistenceService]: no SharedPreferences in unit tests.
+class _InMemoryPersistence extends PersistenceService {
+  final Map<String, String> _store = {};
+
+  @override
+  Future<bool> setString(String key, String value) async {
+    _store[key] = value;
+    return true;
+  }
+
+  @override
+  Future<String?> getString(String key) async => _store[key];
+}
+
 DetectedItemDataWithImage generatedItem({
   String tempId = 'temp-1',
   String? generatedImageUrl,
@@ -180,6 +216,12 @@ const session = 0;
     overrides: [
       itemRepositoryProvider.overrideWithValue(repo),
       aiConsentGateProvider.overrideWithValue((_) async => true),
+      extractionJobsDocsDirProvider.overrideWithValue(
+        () async => throw StateError('no documents directory in unit tests'),
+      ),
+      extractionJobsPersistenceProvider.overrideWithValue(
+        _InMemoryPersistence(),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -378,6 +420,101 @@ void main() {
         expect(repo.createRequestIds[0], isNot(repo.createRequestIds[1]));
       },
     );
+  });
+
+  group('ItemAddNotifier.saveGeneratedItems batch route', () {
+    ItemModel savedRow(String id, String name) => ItemModel(
+      id: id,
+      userId: 'user-1',
+      name: name,
+      category: Category.tops,
+      condition: Condition.clean,
+    );
+
+    test('a batch save is one call and skips the legacy uploads', () async {
+      final repo = FakeItemRepository()
+        ..onSaveBatch = (entries) async => BatchSaveResult(
+          saved: [
+            for (final e in entries)
+              (tempId: e.tempId, item: savedRow('item-${e.tempId}', 'Tee')),
+          ],
+          failed: const [],
+        );
+      final h = host(repo);
+      seed(h.notifier, [
+        generatedItem(
+          generatedImageUrl: 'https://cdn.example.com/generated/1.png',
+        ),
+      ]);
+
+      final result = await h.notifier.saveGeneratedItems();
+
+      expect(repo.saveBatchCalls, hasLength(1));
+      expect(repo.createRequestIds, isEmpty);
+      expect(repo.urlUploads, isEmpty);
+      expect(result.saved, hasLength(1));
+      expect(result.failed, 0);
+    });
+
+    test('same-named pieces are matched by temp_id, so the failed one is '
+        'retried, not dropped', () async {
+      var failA = true;
+      final repo = FakeItemRepository()
+        ..onSaveBatch = (entries) async {
+          final saved = <SavedPiece>[];
+          final failed = <BatchSaveFailure>[];
+          for (final e in entries) {
+            if (e.tempId == 'a' && failA) {
+              failed.add(BatchSaveFailure(tempId: 'a', message: 'boom'));
+            } else {
+              saved.add((
+                tempId: e.tempId,
+                item: savedRow('item-${e.tempId}', 'Sneakers'),
+              ));
+            }
+          }
+          return BatchSaveResult(saved: saved, failed: failed);
+        };
+      final h = host(repo);
+      seed(h.notifier, [
+        generatedItem(
+          tempId: 'a',
+          name: 'Sneakers',
+          generatedImageUrl: 'https://cdn.example.com/a.png',
+        ),
+        generatedItem(
+          tempId: 'b',
+          name: 'Sneakers',
+          generatedImageUrl: 'https://cdn.example.com/b.png',
+        ),
+      ]);
+
+      final first = await h.notifier.saveGeneratedItems();
+      expect(first.saved, hasLength(1));
+      expect(first.failed, 1);
+
+      failA = false;
+      final second = await h.notifier.saveGeneratedItems();
+
+      expect([for (final e in repo.saveBatchCalls.last) e.tempId], ['a']);
+      expect(second.saved, hasLength(1));
+      expect(second.failed, 0);
+    });
+
+    test('an unexpected throw releases the saving lock', () async {
+      final repo = FakeItemRepository()
+        ..onSaveBatch = (_) async => throw StateError('boom');
+      final h = host(repo);
+      seed(h.notifier, [
+        generatedItem(
+          generatedImageUrl: 'https://cdn.example.com/generated/1.png',
+        ),
+      ]);
+
+      await expectLater(h.notifier.saveGeneratedItems(), throwsStateError);
+
+      expect(h.container.read(itemAddProvider(session)).saving, isFalse);
+    });
   });
 
   group('ItemAddNotifier job lifecycle', () {
