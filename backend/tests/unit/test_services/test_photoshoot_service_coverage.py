@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from app.agents.prompt_fidelity import IDENTITY_LOCK
 from app.core.exceptions import (
     DatabaseError,
     RateLimitError,
@@ -702,7 +703,9 @@ async def test_generate_prompts_handles_legacy_list_format():
             use_case=PhotoshootUseCase.LINKEDIN, num_prompts=1
         )
     assert len(prompts) == 1
-    assert prompts[0].full_prompt == "legacy list prompt"
+    # A bare legacy prompt still gets the identity lock wrapped around it.
+    assert "legacy list prompt" in prompts[0].full_prompt
+    assert IDENTITY_LOCK in prompts[0].full_prompt
 
 
 @pytest.mark.asyncio

@@ -30,6 +30,9 @@ logger = get_context_logger(__name__)
 
 # Extraction reads facts from an image; low temperature keeps it repeatable.
 EXTRACTION_TEMPERATURE = 0.1
+# people[].confidence below this is "not sure": a current-user flag is dropped
+# (matches the profile-match instruction in the prompt).
+MIN_MATCH_CONFIDENCE = 0.6
 
 VALID_CATEGORIES = [
     "tops",
@@ -546,6 +549,9 @@ class ItemExtractionAgent:
         person_order: List[str] = []
         person_lookup: Dict[str, Dict[str, Any]] = {}
         raw_to_canonical: Dict[str, str] = {}
+        # people[] confidence only: the merged meta["confidence"] also absorbs
+        # garment confidence, which says nothing about the face match.
+        people_conf: Dict[str, float] = {}
 
         def ensure_person(
             raw_person_id: Any,
@@ -583,12 +589,14 @@ class ItemExtractionAgent:
         for person in raw_people:
             if not isinstance(person, dict):
                 continue
-            ensure_person(
+            person_confidence = _clamp_confidence(person.get("confidence"), 0.0)
+            canonical = ensure_person(
                 raw_person_id=person.get("person_id") or person.get("id"),
                 raw_person_label=person.get("person_label") or person.get("label"),
                 is_current_user_person=_to_bool(person.get("is_current_user_person"), False),
-                confidence=_clamp_confidence(person.get("confidence"), 0.0),
+                confidence=person_confidence,
             )
+            people_conf[canonical] = max(people_conf.get(canonical, 0.0), person_confidence)
 
         for item in raw_items:
             if not isinstance(item, dict):
@@ -608,12 +616,18 @@ class ItemExtractionAgent:
             item_confidence = _clamp_confidence(item.get("confidence"), 0.5)
             item_is_current_user = _to_bool(item.get("is_current_user_person"), False)
 
-            person_id = ensure_person(
-                raw_person_id=item.get("person_id") or item.get("personId"),
-                raw_person_label=item.get("person_label") or item.get("personLabel"),
-                is_current_user_person=item_is_current_user,
-                confidence=item_confidence,
-            )
+            raw_person_id = item.get("person_id") or item.get("personId")
+            raw_person_label = item.get("person_label") or item.get("personLabel")
+            if _clean_text(raw_person_id) or _clean_text(raw_person_label):
+                person_id: Optional[str] = ensure_person(
+                    raw_person_id=raw_person_id,
+                    raw_person_label=raw_person_label,
+                    is_current_user_person=item_is_current_user,
+                    confidence=item_confidence,
+                )
+            else:
+                # Flat-lay / no wearer: no invented "Person N".
+                person_id = None
 
             processed_item = {
                 "temp_id": _generate_temp_id(),
@@ -635,10 +649,21 @@ class ItemExtractionAgent:
             }
             items.append(processed_item)
 
-        current_user_count = sum(1 for item in items if item.get("is_current_user_person"))
-        profile_match_found = has_profile_reference and (
-            _to_bool(parsed.get("profile_match_found"), False) or current_user_count > 0
+        # Drop current-user flags the model was not sure about (or that have no
+        # people[] entry to vouch for them) before they can drive the match.
+        for canonical, meta in person_lookup.items():
+            if people_conf.get(canonical, 0.0) < MIN_MATCH_CONFIDENCE:
+                meta["is_current_user_person"] = False
+        for item in items:
+            if people_conf.get(item["person_id"], 0.0) < MIN_MATCH_CONFIDENCE:
+                item["is_current_user_person"] = False
+
+        current_user_count = sum(1 for item in items if item.get("is_current_user_person")) + sum(
+            1
+            for canonical in {item["person_id"] for item in items}
+            if person_lookup.get(canonical, {}).get("is_current_user_person")
         )
+        profile_match_found = has_profile_reference and current_user_count > 0
 
         if not has_profile_reference:
             for item in items:
@@ -646,16 +671,15 @@ class ItemExtractionAgent:
 
         if has_profile_reference and profile_match_found:
             for item in items:
-                item["include_in_wardrobe"] = bool(item.get("is_current_user_person"))
+                # No wearer (flat-lay) is never filtered out by the profile match.
+                item["include_in_wardrobe"] = item["person_id"] is None or bool(
+                    item.get("is_current_user_person")
+                )
         else:
             for item in items:
                 item["include_in_wardrobe"] = True
 
-        used_person_ids = {item["person_id"] for item in items}
-        # Defensive: ensure_person above always assigns a person_id to every
-        # item, so this fallback can never fire.
-        if not used_person_ids and items:  # pragma: no cover - person_id always assigned
-            used_person_ids = {"person_1"}
+        used_person_ids = {item["person_id"] for item in items if item["person_id"]}
 
         non_current_counter = 1
         people: List[Dict[str, Any]] = []
@@ -687,6 +711,9 @@ class ItemExtractionAgent:
             )
 
         for item in items:
+            if item["person_id"] is None:
+                item["person_label"] = None
+                continue
             meta = person_lookup.get(item["person_id"], {})
             item["person_label"] = meta.get("person_label") or "Person"
             if not profile_match_found:

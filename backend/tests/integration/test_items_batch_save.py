@@ -154,6 +154,111 @@ async def test_batch_keeps_shared_tmp_source_until_batch_ends(monkeypatch):
     assert delete_image.await_count == 1
 
 
+def _shared_tmp_entries(*temp_ids: str):
+    shared = f"https://cdn.example/users/{USER_ID}/tmp/batch/{HEX}.webp"
+    return [
+        (
+            temp_id,
+            ItemCreate(
+                name=temp_id,
+                category="tops",
+                images=[ItemImageBase(image_url=shared, is_primary=True)],
+            ),
+        )
+        for temp_id in temp_ids
+    ]
+
+
+@pytest.mark.asyncio
+async def test_batch_keeps_tmp_source_when_a_sibling_fails(monkeypatch):
+    """A failed sibling's retry re-sends the shared tmp key, so it must survive."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+    promoted = {
+        "image_url": "https://cdn.example/canonical.png",
+        "thumbnail_url": "https://cdn.example/canonical_thumb.png",
+        "storage_path": f"users/{USER_ID}/items/{HEX}.png",
+    }
+    delete_image = AsyncMock()
+    monkeypatch.setattr(save_service.StorageService, "delete_image", delete_image)
+    monkeypatch.setattr(
+        save_service.StorageService,
+        "copy_temp_image_to_item",
+        AsyncMock(side_effect=[promoted, save_service.ValidationError("boom")]),
+    )
+
+    result = await save_service.batch_create_items(
+        db, USER_ID, _shared_tmp_entries("t1", "t2")
+    )
+
+    assert [s["temp_id"] for s in result["saved"]] == ["t1"]
+    assert [f["temp_id"] for f in result["failed"]] == ["t2"]
+    assert delete_image.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_batch_keeps_tmp_source_for_entries_skipped_by_schema_abort(monkeypatch):
+    """SchemaNotInitializedError aborts the batch: the aborted and never-tried
+    entries still reference the tmp key, so nothing is deleted."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+    promoted = {
+        "image_url": "https://cdn.example/canonical.png",
+        "thumbnail_url": "https://cdn.example/canonical_thumb.png",
+        "storage_path": f"users/{USER_ID}/items/{HEX}.png",
+    }
+    delete_image = AsyncMock()
+    monkeypatch.setattr(save_service.StorageService, "delete_image", delete_image)
+    monkeypatch.setattr(
+        save_service.StorageService,
+        "copy_temp_image_to_item",
+        AsyncMock(side_effect=[promoted, save_service.SchemaNotInitializedError()]),
+    )
+
+    with pytest.raises(save_service.SchemaNotInitializedError):
+        await save_service.batch_create_items(
+            db, USER_ID, _shared_tmp_entries("t1", "t2", "t3")
+        )
+
+    assert delete_image.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_batch_replay_of_half_committed_item_is_retryable_failure(monkeypatch):
+    """The item row commits before its image rows: a replay that lands in that
+    window has no images yet and must fail retryably, not return an image-less item."""
+    db = FakeDB(
+        rows={
+            "items": [
+                {
+                    "id": "existing-1",
+                    "user_id": USER_ID,
+                    "client_request_id": "req-t1",
+                    "is_deleted": False,
+                    "name": "Tee",
+                }
+            ]
+        }
+    )
+    _patch_no_embedding(monkeypatch)
+    entry = ItemCreate(
+        name="Tee",
+        category="tops",
+        client_request_id="req-t1",
+        images=[
+            ItemImageBase(
+                image_url="", storage_path=f"users/{USER_ID}/items/{HEX}.png"
+            )
+        ],
+    )
+
+    result = await save_service.batch_create_items(db, USER_ID, [("t1", entry)])
+
+    assert result["saved"] == []
+    assert [f["temp_id"] for f in result["failed"]] == ["t1"]
+    assert "still being saved" in result["failed"][0]["error"]
+
+
 @pytest.mark.asyncio
 async def test_batch_isolates_per_item_failures(monkeypatch):
     """An unowned image key fails its own entry; the batch continues and the

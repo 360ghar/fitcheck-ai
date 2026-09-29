@@ -28,7 +28,7 @@ from app.core.exceptions import (
     FitCheckException,
     ItemNotFoundError,
     SchemaNotInitializedError,
-    StorageServiceError,
+    ServiceError,
     ValidationError,
 )
 from app.core.logging_config import get_context_logger
@@ -128,6 +128,15 @@ async def find_item_by_client_request_id(
     if not result or not result.data:
         return None
     return normalize_item_images(result.data)
+
+
+def _replayable(existing: Dict[str, Any], item: ItemCreate) -> bool:
+    """False when ``existing`` is a half-committed create still in flight.
+
+    The item row commits before its image rows, so a replay that lands in that
+    window would return an image-less item for a request that carries images.
+    """
+    return not item.images or bool(existing.get("images"))
 
 
 async def normalize_create_image_row(img, db, user_id: str) -> Dict[str, Any]:
@@ -273,6 +282,8 @@ async def create_item_core(
         if item.client_request_id:
             existing = await find_item_by_client_request_id(db, user_id, item.client_request_id)
             if existing:
+                if not _replayable(existing, item):
+                    raise ServiceError("Item is still being saved; retry shortly")
                 logger.info(
                     "Create item replay via client_request_id",
                     user_id=user_id,
@@ -350,6 +361,8 @@ async def create_item_core(
                     db, user_id, item.client_request_id
                 )
                 if winner:
+                    if not _replayable(winner, item):
+                        raise ServiceError("Item is still being saved; retry shortly")
                     logger.info(
                         "Create item race collapsed onto client_request_id winner",
                         user_id=user_id,
@@ -430,15 +443,17 @@ async def create_item_core(
             # Generate embedding + upsert to Pinecone (best-effort)
             reserved = False
             embedding_stored = False
-            # The day the slot was reserved: a release after midnight must not
-            # decrement the new day's counter.
-            reserved_on = utc_today()
+            reserved_on = None
             try:
                 reserved = await AISettingsService.reserve_usage(
                     user_id=user_id,
                     operation_type=OperationType.EMBEDDING,
                     db=db,
                 )
+                # The day the slot was reserved (stamped right after the RPC
+                # returns): a release after midnight must not decrement the
+                # new day's counter.
+                reserved_on = utc_today()
                 if not reserved:
                     logger.info(
                         "Embedding rate limit exceeded for item create, skipping vector upsert",
@@ -519,7 +534,7 @@ async def create_item_core(
         row["images"] = images
         return row
 
-    except (ItemNotFoundError, ValidationError, StorageServiceError, DatabaseError):
+    except (ItemNotFoundError, ValidationError, ServiceError, DatabaseError):
         raise
     except Exception as e:
         # A hosted-schema gap (migrations 019/036 not applied) must never
@@ -565,16 +580,32 @@ async def batch_create_items(
     # Sibling pieces cut from one photo share one staged tmp key: keep it alive
     # until every entry has been tried, then delete it once.
     deferred_tmp: List[str] = []
+    # Tmp keys still referenced by an entry that was not saved: a failed entry's
+    # client retry re-sends the same key, so it must outlive this request.
+    retained: set[str] = set()
+
+    def _refs(entry: ItemCreate) -> List[str]:
+        # Same key form create_item_core records in temp_source_paths.
+        return [
+            ref
+            for img in entry.images or []
+            if (ref := getattr(img, "storage_path", None) or key_from_path(img.image_url or ""))
+        ]
+
     try:
-        for temp_id, entry in entries:
+        for index, (temp_id, entry) in enumerate(entries):
             try:
                 created = await create_item_core(
                     db, user_id, entry, defer_temp_cleanup=deferred_tmp
                 )
                 saved.append({"temp_id": temp_id, "item": created})
             except SchemaNotInitializedError:
+                # Aborts the request: this entry and every later one stay unsaved.
+                for _, rest in entries[index:]:
+                    retained.update(_refs(rest))
                 raise
             except FitCheckException as e:
+                retained.update(_refs(entry))
                 logger.warning(
                     "Batch save: item failed",
                     user_id=user_id,
@@ -583,6 +614,7 @@ async def batch_create_items(
                 )
                 failed.append({"temp_id": temp_id, "error": e.message})
             except Exception as e:
+                retained.update(_refs(entry))
                 logger.error(
                     f"Batch save: item failed ({type(e).__name__})",
                     user_id=user_id,
@@ -591,5 +623,5 @@ async def batch_create_items(
                 )
                 failed.append({"temp_id": temp_id, "error": "Failed to save this piece."})
     finally:
-        await cleanup_temp_sources(db, deferred_tmp)
+        await cleanup_temp_sources(db, [p for p in deferred_tmp if p not in retained])
     return {"saved": saved, "failed": failed}

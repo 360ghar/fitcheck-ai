@@ -636,7 +636,7 @@ RULES:
                     full_prompt = sandwich_prompt(subject_lock, scene_body)
                 else:
                     full_prompt = (p.get("full_prompt") or "").strip()
-                    if full_prompt and subject_lock and subject_lock not in full_prompt:
+                    if full_prompt and (not subject_lock or subject_lock not in full_prompt):
                         full_prompt = sandwich_prompt(subject_lock, full_prompt)
                     elif not full_prompt and scene_body:
                         full_prompt = sandwich_prompt(subject_lock, scene_body)

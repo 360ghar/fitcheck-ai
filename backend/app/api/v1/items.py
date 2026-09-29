@@ -280,6 +280,13 @@ async def batch_create_from_extraction(
     saved = result["saved"]
     failed = result["failed"]
     total = len(request.items)
+    logger.info(
+        "Batch save",
+        user_id=user_id,
+        job_id=request.job_id,
+        saved=len(saved),
+        failed=len(failed),
+    )
     return {
         "data": result,
         "message": (
@@ -611,15 +618,17 @@ async def update_item(
         if any(k in update_dict for k in ("name", "category", "colors", "brand", "tags", "sub_category", "material")):
             reserved = False
             embedding_stored = False
-            # The day the slot was reserved: a release after midnight must
-            # not decrement the new day's counter.
-            reserved_on = utc_today()
+            reserved_on = None
             try:
                 reserved = await AISettingsService.reserve_usage(
                     user_id=user_id,
                     operation_type=OperationType.EMBEDDING,
                     db=db,
                 )
+                # The day the slot was reserved (stamped right after the RPC
+                # returns): a release after midnight must not decrement the
+                # new day's counter.
+                reserved_on = utc_today()
                 if not reserved:
                     logger.info(
                         "Embedding rate limit exceeded for item update, skipping vector upsert",

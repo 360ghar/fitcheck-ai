@@ -462,7 +462,13 @@ async def test_create_item_persists_client_request_id(monkeypatch):
 async def test_create_item_replays_existing_row_for_repeated_client_request_id(monkeypatch):
     """F1-07: a transport retry that committed before the response was lost
     must replay the original row instead of inserting a duplicate item."""
-    db = FakeDB(rows={"items": [_item_row(client_request_id="req-abc")]})
+    # The committed original already has its image rows (a half-committed
+    # original without images is a retryable failure, not a replay).
+    db = FakeDB(
+        rows={
+            "items": [_item_row(client_request_id="req-abc", images=[_image_row()])]
+        }
+    )
     reserve, generate, release = _patch_embedding(monkeypatch)
     _patch_vector_service(monkeypatch)
 
