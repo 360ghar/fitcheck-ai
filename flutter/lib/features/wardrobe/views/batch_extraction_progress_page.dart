@@ -48,10 +48,19 @@ class _BatchExtractionProgressPageState
     // the latest active batch job. Nothing to resume closes the page.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (ref.read(batchExtractionProvider).jobId.isNotEmpty) return;
+      final notifier = ref.read(batchExtractionProvider.notifier);
+      final current = ref.read(batchExtractionProvider).jobId;
+      final requested = widget.resumeJobId;
+      if (current.isNotEmpty) {
+        // Already showing a job: keep it unless a different one was asked
+        // for (e.g. a notification for another scan). Detach without
+        // cancelling, then fall through to attach the requested job.
+        if (requested == null || requested == current) return;
+        notifier.resetJob();
+      }
       final jobs = ref.read(extractionJobsProvider);
       final resumeId =
-          widget.resumeJobId ??
+          requested ??
           jobs.active
               .where((job) => job.kind == TrackedJobKind.batch)
               .lastOrNull
@@ -60,18 +69,21 @@ class _BatchExtractionProgressPageState
         if (mounted) Navigator.pop(context);
         return;
       }
-      ref.read(batchExtractionProvider.notifier).attachToJob(resumeId);
+      notifier.attachToJob(resumeId);
     });
   }
 
   /// Back to the selection with the photos kept. The scan keeps running in
   /// the background (banner + shade notification on finish).
   void _backToPhotos() {
+    final wasProcessing = ref.read(batchExtractionProvider).isProcessing;
     ref.read(batchExtractionProvider.notifier).resetJob();
-    ErrorHandler.showInfo(
-      'Still working. We will let you know when your pieces are ready.',
-      title: 'Running in background',
-    );
+    if (wasProcessing) {
+      ErrorHandler.showInfo(
+        'Still working. We will let you know when your pieces are ready.',
+        title: 'Running in background',
+      );
+    }
     Navigator.pop(context);
   }
 
@@ -287,9 +299,8 @@ class _BottomBar extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 ElevatedButton(
-                  onPressed: () => context.pushReplacement(
-                    Routes.wardrobeBatchReview,
-                  ),
+                  onPressed: () =>
+                      context.pushReplacement(Routes.wardrobeBatchReview),
                   child: Text(
                     count == 1
                         ? 'Review 1 piece now'
@@ -306,7 +317,8 @@ class _BottomBar extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ElevatedButton(
-            onPressed: () => context.pushReplacement(Routes.wardrobeBatchReview),
+            onPressed: () =>
+                context.pushReplacement(Routes.wardrobeBatchReview),
             child: Text(count == 1 ? 'Review 1 piece' : 'Review $count pieces'),
           ),
           TextButton(onPressed: onBack, child: const Text('Try again')),

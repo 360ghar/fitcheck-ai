@@ -30,6 +30,10 @@ void main() {
     expect(images, hasLength(1));
     expect(images.single['image_url'], 'https://cdn.example.com/studio/t1.jpg');
     expect(images.single['is_primary'], isTrue);
+    expect((images.single as Map<String, dynamic>).keys.toSet(), {
+      'image_url',
+      'is_primary',
+    }, reason: 'a promoted URL must not carry re-upload fields');
   });
 
   test('batchSaveEntry carries a staged storage path when there is no URL', () {
@@ -43,6 +47,11 @@ void main() {
     final images = item['images'] as List;
     expect(images, hasLength(1));
     expect(images.single['storage_path'], 'users/u/tmp/stage.jpg');
+    expect((images.single as Map<String, dynamic>).keys.toSet(), {
+      'image_url',
+      'storage_path',
+      'is_primary',
+    });
   });
 
   test('batchSaveEntry omits images when the piece has no image yet', () {
@@ -53,6 +62,52 @@ void main() {
 
     final item = entry['item'] as Map<String, dynamic>;
     expect(item.containsKey('images'), isFalse);
+  });
+
+  group('saveBatch slicing', () {
+    List<SaveEntryInput> entries(int n) => [
+      for (var i = 0; i < n; i++)
+        SaveEntryInput(
+          tempId: 't$i',
+          request: request(),
+          imageUrl: 'https://cdn.example.com/studio/t$i.jpg',
+        ),
+    ];
+
+    test('51 entries go out as two requests of 50 and 1', () async {
+      final repo = _SlicingRepo();
+
+      final result = await repo.saveBatch(entries: entries(51));
+
+      expect(repo.posted.map((p) => p.length), [50, 1]);
+      expect(result.failed, isEmpty);
+      expect(repo.posted.expand((p) => p).length, 51);
+    });
+
+    test('a failing later slice fails only its entries', () async {
+      final repo = _SlicingRepo(failOnCall: 1);
+
+      final result = await repo.saveBatch(entries: entries(51));
+
+      expect(result.failed.map((f) => f.tempId), ['t50']);
+    });
+
+    test('unsupported on the first slice rethrows for the legacy path', () {
+      final repo = _SlicingRepo(unsupportedOnCall: 0);
+
+      expect(
+        repo.saveBatch(entries: entries(51)),
+        throwsA(isA<BatchSaveUnsupported>()),
+      );
+    });
+
+    test('unsupported on a later slice marks its entries failed', () async {
+      final repo = _SlicingRepo(unsupportedOnCall: 1);
+
+      final result = await repo.saveBatch(entries: entries(51));
+
+      expect(result.failed.map((f) => f.tempId), ['t50']);
+    });
   });
 
   group('pairStagedImages', () {
@@ -88,4 +143,25 @@ void main() {
       expect(staged, isEmpty);
     });
   });
+}
+
+/// Records each posted slice instead of calling the network.
+class _SlicingRepo extends ItemRepository {
+  _SlicingRepo({this.failOnCall, this.unsupportedOnCall});
+
+  final int? failOnCall;
+  final int? unsupportedOnCall;
+  final List<List<Map<String, dynamic>>> posted = [];
+
+  @override
+  Future<BatchSaveResult> batchSaveItems({
+    String? jobId,
+    required List<Map<String, dynamic>> entries,
+  }) async {
+    final call = posted.length;
+    posted.add(entries);
+    if (call == unsupportedOnCall) throw BatchSaveUnsupported();
+    if (call == failOnCall) throw Exception('offline');
+    return const BatchSaveResult(saved: [], failed: []);
+  }
 }

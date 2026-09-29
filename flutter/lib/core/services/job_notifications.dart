@@ -42,18 +42,29 @@ class JobNotifications {
         requestSoundPermission: false,
         requestBadgePermission: false,
       );
-      const settings = InitializationSettings(
-        android: android,
-        iOS: darwin,
-      );
+      const settings = InitializationSettings(android: android, iOS: darwin);
       await _plugin.initialize(
         settings: settings,
-        onDidReceiveNotificationResponse: (response) =>
-            onTap(response.payload),
+        onDidReceiveNotificationResponse: (response) => onTap(response.payload),
       );
       _ready = true;
     } catch (e) {
       debugPrint('JobNotifications init failed: $e');
+    }
+  }
+
+  /// Payload of the notification that cold-started the app, or null. The tap
+  /// callback only fires for taps on a running app; a tap that launched the
+  /// process is reported here instead.
+  Future<String?> launchPayload() async {
+    if (!_ready) return null;
+    try {
+      final details = await _plugin.getNotificationAppLaunchDetails();
+      if (details?.didNotificationLaunchApp != true) return null;
+      return details?.notificationResponse?.payload;
+    } catch (e) {
+      debugPrint('JobNotifications launch details failed: $e');
+      return null;
     }
   }
 
@@ -127,10 +138,7 @@ class JobNotifications {
         importance: Importance.defaultImportance,
       );
       const darwin = DarwinNotificationDetails();
-      const details = NotificationDetails(
-        android: android,
-        iOS: darwin,
-      );
+      const details = NotificationDetails(android: android, iOS: darwin);
       await _plugin.show(
         id: id,
         title: title,

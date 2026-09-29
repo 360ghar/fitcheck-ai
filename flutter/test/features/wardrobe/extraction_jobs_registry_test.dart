@@ -13,8 +13,12 @@ import 'package:flutter_test/flutter_test.dart';
 class _MemoryPersistence extends PersistenceService {
   final Map<String, String> _store = {};
 
+  /// Runs on every write, before the value is stored.
+  void Function()? onSet;
+
   @override
   Future<bool> setString(String key, String value) async {
+    onSet?.call();
     _store[key] = value;
     return true;
   }
@@ -62,15 +66,15 @@ void main() {
     ProviderContainer container,
     ExtractionJobsNotifier jobs,
     _FakeBatchRepo repo,
+    _MemoryPersistence persistence,
   })
   host() {
     final repo = _FakeBatchRepo();
+    final persistence = _MemoryPersistence();
     final container = ProviderContainer(
       overrides: [
         batchExtractionRepositoryProvider.overrideWithValue(repo),
-        extractionJobsPersistenceProvider.overrideWithValue(
-          _MemoryPersistence(),
-        ),
+        extractionJobsPersistenceProvider.overrideWithValue(persistence),
         extractionJobsDocsDirProvider.overrideWithValue(
           () async => throw StateError('no documents directory in unit tests'),
         ),
@@ -82,11 +86,20 @@ void main() {
       container: container,
       jobs: container.read(extractionJobsProvider.notifier),
       repo: repo,
+      persistence: persistence,
     );
   }
 
+  /// Short pause for the negative case ("nothing more happens").
   Future<void> settle() =>
       Future<void>.delayed(const Duration(milliseconds: 50));
+
+  /// Bounded poll (100 x 10 ms): waits for [cond] without a fixed sleep.
+  Future<void> until(bool Function() cond) async {
+    for (var i = 0; i < 100 && !cond(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+  }
 
   test('a stream that closes while the job runs is resubscribed', () async {
     final h = host();
@@ -98,7 +111,7 @@ void main() {
     expect(h.repo.subscribes, 1);
 
     await h.repo.streams.first.close();
-    await settle();
+    await until(() => h.repo.subscribes == 2);
 
     expect(h.repo.subscribes, 2, reason: 'recovery must open a new stream');
   });
@@ -117,9 +130,9 @@ void main() {
         .listen((e) => received.add(e.type), onDone: () => closed = true);
 
     await h.repo.streams.first.close();
-    await settle();
+    await until(() => h.repo.subscribes == 2);
     h.repo.streams.last.add(const SSEEvent(type: 'generation_started'));
-    await settle();
+    await until(() => received.isNotEmpty);
 
     expect(closed, isFalse, reason: 'the page-facing broadcast stays open');
     expect(received, ['generation_started']);
@@ -135,10 +148,59 @@ void main() {
 
     for (var i = 0; i < 6; i++) {
       await h.repo.streams.last.close();
-      await settle();
+      // Recoveries 1-3 resubscribe; later closes must change nothing.
+      if (i < 3) {
+        await until(() => h.repo.subscribes == i + 2);
+      } else {
+        await settle();
+      }
     }
 
     expect(h.repo.subscribes, 4, reason: '1 initial + 3 recoveries');
+  });
+
+  test('an event right after trackBatch returns reaches a page', () async {
+    final h = host();
+    var subscribesWhilePersisting = -1;
+    h.persistence.onSet = () {
+      // First write only: later events persist too, after subscribing.
+      if (subscribesWhilePersisting == -1) {
+        subscribesWhilePersisting = h.repo.subscribes;
+      }
+    };
+
+    await h.jobs.trackBatch(
+      jobId: 'j1',
+      label: '1 photo',
+      sourcePaths: const [],
+    );
+    final received = <String>[];
+    h.jobs.events('j1')!.listen((e) => received.add(e.type));
+    h.repo.streams.last.add(const SSEEvent(type: 'generation_started'));
+    await until(() => received.isNotEmpty);
+
+    expect(
+      subscribesWhilePersisting,
+      0,
+      reason: 'persist must finish before subscribing (nothing awaited after)',
+    );
+    expect(received, ['generation_started']);
+  });
+
+  test('events() is null once the job is terminal', () async {
+    final h = host();
+    await h.jobs.trackBatch(
+      jobId: 'j1',
+      label: '1 photo',
+      sourcePaths: const [],
+    );
+    expect(h.jobs.events('j1'), isNotNull);
+
+    h.repo.streams.last.add(const SSEEvent(type: 'job_cancelled'));
+    await until(() => !h.container.read(extractionJobsProvider).isActive('j1'));
+
+    expect(h.jobs.events('j1'), isNull);
+    expect(h.jobs.events('unknown'), isNull);
   });
 
   test(

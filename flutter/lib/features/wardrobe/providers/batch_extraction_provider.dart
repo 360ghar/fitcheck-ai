@@ -448,11 +448,19 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
       // Hand stream ownership to the app-scoped registry: leaving the flow
       // no longer strands the job. Shade permission is requested in context.
       final jobs = ref.read(extractionJobsProvider.notifier);
+      // Only photos that were actually sent belong to the job: unreadable
+      // ones failed locally and would otherwise show as running on resume.
+      final sent = {for (final input in inputs) input.imageId};
+      final submitted = [
+        for (final image in images)
+          if (sent.contains(image.id)) image,
+      ];
       await jobs.trackBatch(
         jobId: response.jobId,
-        label: '${images.length} ${images.length == 1 ? 'photo' : 'photos'}',
-        sourcePaths: [for (final image in images) image.filePath],
-        imageIds: [for (final image in images) image.id],
+        label:
+            '${submitted.length} ${submitted.length == 1 ? 'photo' : 'photos'}',
+        sourcePaths: [for (final image in submitted) image.filePath],
+        imageIds: [for (final image in submitted) image.id],
       );
       unawaited(JobNotifications.instance.requestPermissions());
       if (!_alive) return;
@@ -514,6 +522,9 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
       final status = await _batchRepo.getJobStatus(jobId);
       if (!_alive || state.jobId != jobId) return;
       final detected = status.detectedItems ?? const [];
+      // Per-image results carry the real outcome; a photo that yielded no
+      // pieces has no detected item, so items alone cannot mark it failed.
+      final byId = {for (final r in status.images ?? const []) r.id: r};
       state = state.copyWith(
         extractedCount: status.extractedCount,
         generatedCount: status.generatedCount,
@@ -525,9 +536,17 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
         images: [
           for (final image in images)
             image.copyWith(
-              status: detected.any((item) => item.sourceImageId == image.id)
-                  ? BatchImageStatus.extracted
-                  : image.status,
+              status: switch (byId[image.id]?.status) {
+                'failed' => BatchImageStatus.failed,
+                'completed' => BatchImageStatus.extracted,
+                _ =>
+                  detected.any((item) => item.sourceImageId == image.id)
+                      ? BatchImageStatus.extracted
+                      : image.status,
+              },
+              error: byId[image.id]?.status == 'failed'
+                  ? (byId[image.id]?.error ?? 'No pieces found in this photo.')
+                  : image.error,
               extractedItems: [
                 for (final item in detected)
                   if (item.sourceImageId == image.id) item,

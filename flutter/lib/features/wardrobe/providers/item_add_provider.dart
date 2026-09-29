@@ -393,6 +393,15 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
     final existing = {for (final i in state.items) i.tempId: i};
     var items = state.items;
     var boxes = state.itemBoxes;
+    // Record snapshot pieces like the extraction event does, so later
+    // seeding (_seedItems) does not drop them.
+    final rawItems = raw['items'];
+    if (rawItems is List) {
+      for (final entry in rawItems.whereType<Map<String, dynamic>>()) {
+        final detected = DetectedItemData.fromJson(entry);
+        _extracted[detected.tempId] = detected;
+      }
+    }
     for (final parsed in _parseItems(raw['items'])) {
       final old = existing[parsed.tempId];
       final merged = old == null

@@ -11,7 +11,10 @@ import 'package:fitcheck_ai/features/wardrobe/providers/batch_extraction_provide
     show aiConsentGateProvider;
 import 'package:fitcheck_ai/features/wardrobe/providers/item_add_provider.dart';
 import 'package:fitcheck_ai/features/wardrobe/providers/extraction_jobs_provider.dart'
-    show extractionJobsDocsDirProvider, extractionJobsPersistenceProvider;
+    show
+        extractionJobsDocsDirProvider,
+        extractionJobsPersistenceProvider,
+        extractionJobsProvider;
 import 'package:fitcheck_ai/features/wardrobe/providers/wardrobe_providers.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/item_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -564,6 +567,47 @@ void main() {
         final state = h.container.read(itemAddProvider(session));
         expect(state.processing, isTrue);
         expect(state.failure, isNull);
+      },
+    );
+
+    test(
+      'attach keeps snapshot pieces so a later studio photo lands',
+      () async {
+        final repo = FakeItemRepository()
+          ..onStatus = (_) async => {
+            'status': 'processing',
+            'items': [
+              {'temp_id': 'p1', 'category': 'tops', 'sub_category': 'Blazer'},
+            ],
+          };
+        repo.streams['job-x'] = StreamController<SSEEvent>.broadcast();
+        final h = host(repo);
+        await h.container
+            .read(extractionJobsProvider.notifier)
+            .trackSingle(
+              jobId: 'job-x',
+              label: 'Scan',
+              sourcePath: '/tmp/photo.jpg',
+            );
+
+        await h.notifier.attachToJob('job-x');
+        repo.streams['job-x']!.add(
+          const SSEEvent(
+            type: 'item_generation_complete',
+            data: {
+              'temp_id': 'p1',
+              'completed_count': 1,
+              'total_items': 1,
+              'generated_image_url': 'https://cdn.example.com/p1.png',
+            },
+          ),
+        );
+        await pumpEventQueue();
+
+        final state = h.container.read(itemAddProvider(session));
+        final piece = state.items.singleWhere((i) => i.tempId == 'p1');
+        expect(piece.generatedImageUrl, 'https://cdn.example.com/p1.png');
+        expect(state.generatingName, 'Blazer');
       },
     );
 

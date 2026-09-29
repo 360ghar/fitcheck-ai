@@ -108,7 +108,8 @@ class ApiConstants {
   static String photoshootStatus(String jobId) => '$photoshoot/$jobId/status';
 
   // Batch Extraction Endpoints
-  static const String aiBatchExtract = '$apiVersion/ai/batch-extract';  static String aiBatchExtractEvents(String jobId) =>
+  static const String aiBatchExtract = '$apiVersion/ai/batch-extract';
+  static String aiBatchExtractEvents(String jobId) =>
       '$aiBatchExtract/$jobId/events';
   static String aiBatchExtractCancel(String jobId) =>
       '$aiBatchExtract/$jobId/cancel';

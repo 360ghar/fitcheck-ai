@@ -12,6 +12,9 @@ import 'package:fitcheck_ai/features/wardrobe/models/social_import_models.dart';
 import 'package:fitcheck_ai/features/wardrobe/providers/batch_extraction_provider.dart';
 import 'package:fitcheck_ai/features/wardrobe/providers/extraction_jobs_provider.dart'
     show
+        ExtractionJobsState,
+        TrackedJob,
+        TrackedJobKind,
         extractionJobsDocsDirProvider,
         extractionJobsPersistenceProvider,
         extractionJobsProvider;
@@ -280,6 +283,7 @@ BatchExtractedItem generatedItem({
   FakeBatchExtractionRepository? batch,
   FakeItemRepository? items,
   FakeSocialImportRepository? social,
+  Future<String?> Function(File)? encoder,
 }) {
   final container = ProviderContainer(
     retry: noRetry,
@@ -302,7 +306,9 @@ BatchExtractedItem generatedItem({
         InMemoryPersistenceService(),
       ),
       socialCallbackLinksProvider.overrideWithValue(const Stream<Uri>.empty()),
-      batchImageEncoderProvider.overrideWithValue((_) async => 'QUJD'),
+      batchImageEncoderProvider.overrideWithValue(
+        encoder ?? (_) async => 'QUJD',
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -492,7 +498,11 @@ void main() {
         // tracked there; the registry owns `events` and forwards it.
         await h.container
             .read(extractionJobsProvider.notifier)
-            .trackBatch(jobId: 'job-1', label: '1 photo', sourcePaths: const []);
+            .trackBatch(
+              jobId: 'job-1',
+              label: '1 photo',
+              sourcePaths: const [],
+            );
         h.notifier.debugSetState(const BatchState(jobId: 'job-1'));
         h.notifier.subscribeToEventsForTesting('job-1');
 
@@ -556,6 +566,68 @@ void main() {
         expect(state.generatedCount, 0);
       },
     );
+
+    test('unreadable photos are not tracked as part of the job', () async {
+      final h = host(
+        encoder: (file) async => file.path.endsWith('b.jpg') ? null : 'QUJD',
+      );
+      h.notifier.debugSetState(
+        const BatchState(
+          images: [
+            BatchImage(id: 'a', filePath: '/tmp/a.jpg'),
+            BatchImage(id: 'b', filePath: '/tmp/b.jpg'),
+            BatchImage(id: 'c', filePath: '/tmp/c.jpg'),
+          ],
+        ),
+      );
+
+      await h.notifier.startExtraction();
+
+      final job = h.container.read(extractionJobsProvider).job('job-1')!;
+      expect(job.sourceIds, ['a', 'c']);
+      expect(job.sourcePaths, ['/tmp/a.jpg', '/tmp/c.jpg']);
+      expect(job.label, '2 photos');
+    });
+
+    test('attachToJob marks photos by their per-image result', () async {
+      final repo = FakeBatchExtractionRepository()
+        ..onGetJobStatus = (id) async => BatchJobStatusResponse(
+          jobId: id,
+          status: 'extracting',
+          totalImages: 3,
+          images: const [
+            BatchImageResult(id: 'a', status: 'failed'),
+            BatchImageResult(id: 'b', status: 'completed'),
+            BatchImageResult(id: 'c', status: 'failed', error: 'Blurry photo'),
+          ],
+        );
+      final h = host(batch: repo);
+      h.container
+          .read(extractionJobsProvider.notifier)
+          .debugSetState(
+            ExtractionJobsState(
+              jobs: {
+                'job-9': TrackedJob(
+                  jobId: 'job-9',
+                  kind: TrackedJobKind.batch,
+                  label: '3 photos',
+                  sourcePaths: const ['/tmp/a.jpg', '/tmp/b.jpg', '/tmp/c.jpg'],
+                  sourceIds: const ['a', 'b', 'c'],
+                  createdAt: DateTime.utc(2026, 9, 30),
+                ),
+              },
+            ),
+          );
+
+      await h.notifier.attachToJob('job-9');
+
+      final images = {for (final i in read(h.container).images) i.id: i};
+      expect(images['a']!.status, BatchImageStatus.failed);
+      expect(images['a']!.error, 'No pieces found in this photo.');
+      expect(images['b']!.status, BatchImageStatus.extracted);
+      expect(images['c']!.status, BatchImageStatus.failed);
+      expect(images['c']!.error, 'Blurry photo');
+    });
 
     test('a second run after reset navigates to review again', () {
       final h = host();

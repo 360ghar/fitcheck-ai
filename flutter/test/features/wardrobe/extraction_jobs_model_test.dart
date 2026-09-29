@@ -32,6 +32,16 @@ void main() {
     expect(restored.isActive, isTrue);
   });
 
+  test('the notified flag survives a JSON round trip', () {
+    expect(TrackedJob.fromJson(job().toJson()).notified, isFalse);
+
+    final restored = TrackedJob.fromJson(
+      job().copyWith(notified: true).toJson(),
+    );
+
+    expect(restored.notified, isTrue);
+  });
+
   test('progress falls back to photo counts when the total is unknown', () {
     final pending = job().copyWith(total: 0, extracted: 0, generated: 0);
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show min;
 import 'package:dio/dio.dart';
 // `show` keeps flutter/foundation's own `Category` (an annotation) from
 // colliding with the domain enum imported below.
@@ -19,6 +20,19 @@ import '../../../core/utils/request_id.dart';
 /// Wardrobe item repository
 class ItemRepository {
   final ApiClient _apiClient = ApiClient.instance;
+
+  /// Backend cap per batch-save request (`BatchSaveRequest.items`).
+  static const int _batchSaveSliceSize = 50;
+
+  static List<BatchSaveFailure> _sliceFailed(
+    List<Map<String, dynamic>> slice,
+  ) => [
+    for (final body in slice)
+      BatchSaveFailure(
+        tempId: body['temp_id']?.toString() ?? '',
+        message: 'Nothing was saved. Try again.',
+      ),
+  ];
 
   /// Get items list
   Future<ItemsListResponse> getItems({
@@ -212,26 +226,27 @@ class ItemRepository {
       for (final tempId in unsavable)
         BatchSaveFailure(tempId: tempId, message: 'Photo upload failed.'),
     ];
-    List<SavedPiece> saved = const [];
-    if (bodies.isNotEmpty) {
+    final saved = <SavedPiece>[];
+    // Slices keep each request under the backend's per-call entry cap; one
+    // failing slice must not discard the ones already saved.
+    for (var start = 0; start < bodies.length; start += _batchSaveSliceSize) {
+      final slice = bodies.sublist(
+        start,
+        min(start + _batchSaveSliceSize, bodies.length),
+      );
       try {
-        final result = await batchSaveItems(jobId: jobId, entries: bodies);
-        saved = result.saved;
+        final result = await batchSaveItems(jobId: jobId, entries: slice);
+        saved.addAll(result.saved);
         failed = [...failed, ...result.failed];
       } on BatchSaveUnsupported {
         // Backend predates the route: the caller falls back to the legacy
-        // sequential save.
-        rethrow;
+        // sequential save. Only safe before anything was posted; a later
+        // slice cannot fall back without re-saving earlier ones.
+        if (start == 0) rethrow;
+        failed = [...failed, ..._sliceFailed(slice)];
       } catch (_) {
         // Transport failure: every posted entry failed (legacy parity).
-        failed = [
-          ...failed,
-          for (final body in bodies)
-            BatchSaveFailure(
-              tempId: body['temp_id']?.toString() ?? '',
-              message: 'Nothing was saved. Try again.',
-            ),
-        ];
+        failed = [...failed, ..._sliceFailed(slice)];
       }
     }
     return BatchSaveResult(saved: saved, failed: failed);

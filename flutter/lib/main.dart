@@ -47,6 +47,10 @@ void main() async {
     ),
   ]);
   final packageInfo = startup[4]! as PackageInfo;
+  // A shade tap that cold-started the app never reaches the tap callback.
+  if (await JobNotifications.instance.launchPayload() != null) {
+    appRouter.go(Routes.wardrobeJobs);
+  }
   ApiClient.instance.initialize();
   // App-lifetime purchase recovery: owns the store stream, so a purchase
   // whose backend verification failed is verified even when the paywall

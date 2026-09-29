@@ -24,9 +24,7 @@ class ActiveJobBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final active = ref.watch(
-      extractionJobsProvider.select((s) => s.active),
-    );
+    final active = ref.watch(extractionJobsProvider.select((s) => s.active));
     if (active.isEmpty) return const SizedBox.shrink();
     final job = active.last;
     final tokens = PaperTokens.of(context);
@@ -52,17 +50,11 @@ class ActiveJobBanner extends ConsumerWidget {
           children: [
             SizedBox.square(
               dimension: 22,
-              child: job.isActive
-                  ? CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: tokens.stock.accent,
-                      strokeCap: StrokeCap.round,
-                    )
-                  : Icon(
-                      Icons.check_rounded,
-                      size: 22,
-                      color: tokens.success,
-                    ),
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: tokens.stock.accent,
+                strokeCap: StrokeCap.round,
+              ),
             ),
             const SizedBox(width: AppConstants.spacing12),
             Expanded(

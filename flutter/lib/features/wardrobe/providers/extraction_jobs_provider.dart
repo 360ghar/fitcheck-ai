@@ -145,12 +145,12 @@ class TrackedJob {
 
   factory TrackedJob.fromJson(Map<String, dynamic> json) => TrackedJob(
     jobId: json['jobId']?.toString() ?? '',
-    kind: json['kind'] == 'batch' ? TrackedJobKind.batch : TrackedJobKind.single,
+    kind: json['kind'] == 'batch'
+        ? TrackedJobKind.batch
+        : TrackedJobKind.single,
     label: json['label']?.toString() ?? '',
     sourcePaths:
-        (json['sourcePaths'] as List?)
-            ?.map((e) => e.toString())
-            .toList() ??
+        (json['sourcePaths'] as List?)?.map((e) => e.toString()).toList() ??
         const [],
     sourceIds:
         (json['sourceIds'] as List?)?.map((e) => e.toString()).toList() ??
@@ -269,8 +269,10 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
         createdAt: DateTime.now(),
       ),
     );
-    _subscribe(jobId, TrackedJobKind.single);
+    // Persist first: nothing may be awaited between subscribing and
+    // returning, or early events fire before the caller can listen.
     await _persist();
+    _subscribe(jobId, TrackedJobKind.single);
   }
 
   /// Takes ownership of a new batch job (same contract as [trackSingle]).
@@ -292,8 +294,8 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
         createdAt: DateTime.now(),
       ),
     );
-    _subscribe(jobId, TrackedJobKind.batch);
     await _persist();
+    _subscribe(jobId, TrackedJobKind.batch);
   }
 
   /// Copies picked photos (cache dir, purgeable) into the app documents dir
@@ -360,8 +362,13 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
   }
 
   /// Live events for a job, fanned out to every attached page. Null when the
-  /// job is unknown (e.g. pruned) — callers fall back to [refreshStatus].
-  Stream<SSEEvent>? events(String jobId) => _controllers[jobId]?.stream;
+  /// job is unknown (e.g. pruned) or already terminal (its broadcast stays
+  /// open but never emits again) — callers fall back to [refreshStatus].
+  Stream<SSEEvent>? events(String jobId) {
+    final job = state.job(jobId);
+    if (job == null || !job.isActive) return null;
+    return _controllers[jobId]?.stream;
+  }
 
   /// Cancels the server job and marks it cancelled. Attached pages observe
   /// the broadcast close and must NOT reconcile (see [isActive]).
@@ -524,10 +531,10 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
       _controllers[jobId] = controller;
     }
     final stream = kind == TrackedJobKind.batch
-        ? ref
-              .read(batchExtractionRepositoryProvider)
-              .subscribeToEvents(jobId)
-        : ref.read(itemRepositoryProvider).subscribeSingleExtractionEvents(jobId);
+        ? ref.read(batchExtractionRepositoryProvider).subscribeToEvents(jobId)
+        : ref
+              .read(itemRepositoryProvider)
+              .subscribeSingleExtractionEvents(jobId);
     late final StreamSubscription<SSEEvent> subscription;
     subscription = stream.listen(
       (event) {
@@ -649,8 +656,7 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
         _markTerminal(
           job,
           TrackedJobStatus.failed,
-          error:
-              data['error']?.toString() ?? rawError(data) ?? 'Job failed',
+          error: data['error']?.toString() ?? rawError(data) ?? 'Job failed',
         );
       case 'job_cancelled':
         _markTerminal(job, TrackedJobStatus.cancelled);
@@ -660,8 +666,7 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
 
   /// Some failure events carry the message outside `error` (stream-level
   /// synthetic events use `message`).
-  String? rawError(Map<String, dynamic> data) =>
-      data['message']?.toString();
+  String? rawError(Map<String, dynamic> data) => data['message']?.toString();
 
   void _markTerminal(
     TrackedJob job,
@@ -711,9 +716,7 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
       await notifications.showJobFailed(
         jobId: job.jobId,
         title: 'The scan stopped',
-        body: job.error.isEmpty
-            ? 'Open the app to try again.'
-            : job.error,
+        body: job.error.isEmpty ? 'Open the app to try again.' : job.error,
       );
     }
   }
