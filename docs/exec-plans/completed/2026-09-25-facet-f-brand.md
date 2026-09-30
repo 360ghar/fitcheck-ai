@@ -43,7 +43,7 @@ were inspected. Export dimensions, opacity, and mask-safe areas passed checks.
 ## Related
 
 - docs/brand/README.md
-- docs/exec-plans/active/2026-09-25-ios-1-2-release.md
+- docs/exec-plans/completed/2026-09-25-ios-1-2-release.md
 - docs/exec-plans/completed/2026-09-25-ten-icon-concepts.md
 - docs/exec-plans/completed/2026-09-25-ios-build-14-upload.md
 
