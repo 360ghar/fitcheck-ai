@@ -7,8 +7,8 @@
          photoshoot selfies, try-on photos, and feedback screenshots -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- READ_MEDIA_IMAGES: Android 13+ gallery access for selecting wardrobe photos -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- No READ_MEDIA_IMAGES: image_picker uses the system photo picker on Android 13+
+         (Google Play photo and video permissions policy). -->
 
     <!-- READ_EXTERNAL_STORAGE: Android 12 and below gallery access -->
     <uses-permission

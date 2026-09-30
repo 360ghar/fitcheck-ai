@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.1+15] - 2026-09-30
 
+iOS ships as build 15. Android ships as build 16, because Play rejected
+build 15 under its photo and video permissions policy.
+
 ### Added
 
 - Item extraction runs as a background job. A banner and a jobs screen show
@@ -17,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The review screen saves all extracted items in one request. Against a backend
   without `POST /items/batch-from-extraction`, the app uses the sequential save.
+- Android no longer declares `READ_MEDIA_IMAGES`. Gallery picks use the system
+  photo picker.
 
 ### Fixed
 
