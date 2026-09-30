@@ -187,6 +187,20 @@ void main() {
     expect(received, ['generation_started']);
   });
 
+  test('a container disposed while persisting does not subscribe', () async {
+    final h = host();
+    // Dispose mid-_persist: the notifier's ref is unusable afterwards.
+    h.persistence.onSet = h.container.dispose;
+
+    await h.jobs.trackBatch(
+      jobId: 'j1',
+      label: '1 photo',
+      sourcePaths: const [],
+    );
+
+    expect(h.repo.subscribes, 0);
+  });
+
   test('events() is null once the job is terminal', () async {
     final h = host();
     await h.jobs.trackBatch(

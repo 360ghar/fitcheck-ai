@@ -242,7 +242,7 @@ def test_parse_json_object_empty_and_bare_text():
 
 
 @pytest.mark.asyncio
-async def test_extract_multiple_items_person_without_id_gets_generated_label():
+async def test_extract_multiple_items_flat_lay_item_gets_no_person_and_you_label_becomes_person_n():
     payload = _payload(
         items=[
             _item(person_id=None, person_label=None),

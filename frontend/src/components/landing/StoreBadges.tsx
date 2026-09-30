@@ -1,4 +1,4 @@
-import { trackEvent } from '@/lib/analytics'
+import { trackLandingCta } from '@/lib/analytics'
 import { PLATFORM_AVAILABILITY } from '@/lib/plan-limits'
 import { cn } from '@/lib/utils'
 
@@ -40,7 +40,7 @@ export default function StoreBadges({
           href={badge.href}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={() => trackEvent('landing_cta_click', { location, store: badge.store })}
+          onClick={() => trackLandingCta(location, { store: badge.store })}
           className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <img

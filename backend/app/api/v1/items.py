@@ -620,15 +620,15 @@ async def update_item(
             embedding_stored = False
             reserved_on = None
             try:
+                # The day the slot was reserved, stamped BEFORE the RPC so it
+                # is never later than the charged day: a release after
+                # midnight must not decrement the new day's counter.
+                reserved_on = utc_today()
                 reserved = await AISettingsService.reserve_usage(
                     user_id=user_id,
                     operation_type=OperationType.EMBEDDING,
                     db=db,
                 )
-                # The day the slot was reserved (stamped right after the RPC
-                # returns): a release after midnight must not decrement the
-                # new day's counter.
-                reserved_on = utc_today()
                 if not reserved:
                     logger.info(
                         "Embedding rate limit exceeded for item update, skipping vector upsert",
@@ -1492,15 +1492,16 @@ async def check_duplicates(
                 "message": "No duplicates found",
             }
 
-        # If embedding quota is exhausted, fall back to text-based matching
+        # If embedding quota is exhausted, fall back to text-based matching.
+        # The day the slot was reserved, stamped BEFORE the RPC so it is never
+        # later than the charged day: a release after midnight must not
+        # decrement the new day's counter.
+        reserved_on = utc_today()
         reserved = await AISettingsService.reserve_usage(
             user_id=user_id,
             operation_type=OperationType.EMBEDDING,
             db=db,
         )
-        # The day the slot was reserved: a release after midnight must not
-        # decrement the new day's counter.
-        reserved_on = utc_today()
         if not reserved:
             logger.info(
                 "Embedding rate limit exceeded for duplicate check, using fallback",
@@ -1699,15 +1700,16 @@ async def find_similar_items(
 
         source_item = item_result.data
 
-        # Check rate limit before generating the source embedding
+        # Check rate limit before generating the source embedding. The day the
+        # slot was reserved is stamped BEFORE the RPC so it is never later than
+        # the charged day: a release after midnight must not decrement the new
+        # day's counter.
+        reserved_on = utc_today()
         reserved = await AISettingsService.reserve_usage(
             user_id=user_id,
             operation_type=OperationType.EMBEDDING,
             db=db,
         )
-        # The day the slot was reserved: a release after midnight must not
-        # decrement the new day's counter.
-        reserved_on = utc_today()
         if not reserved:
             raise RateLimitError(
                 "Daily embedding limit exceeded. Requested 1 embedding."

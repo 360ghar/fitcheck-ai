@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fitcheck_ai/app/themes/app_theme.dart';
 import 'package:fitcheck_ai/core/widgets/app_image.dart';
 import 'package:fitcheck_ai/domain/enums/category.dart';
@@ -9,6 +10,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// A valid 1x1 transparent PNG. A data URL renders through Image.memory: a
+/// network URL would go through the default cache manager, whose filesystem
+/// needs path_provider (no host implementation in widget tests).
+const _tinyPngBase64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8'
+    'z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 ItemModel _piece(String id, {bool withImage = false}) => ItemModel(
   id: id,
   userId: 'u',
@@ -16,7 +24,7 @@ ItemModel _piece(String id, {bool withImage = false}) => ItemModel(
   category: Category.tops,
   condition: domain.Condition.clean,
   itemImages: withImage
-      ? [ItemImage(id: 'i$id', url: 'https://x.test/$id.png')]
+      ? [ItemImage(id: 'i$id', url: 'data:image/png;base64,$_tinyPngBase64')]
       : null,
 );
 
@@ -46,6 +54,7 @@ void main() {
   ) async {
     await _pump(tester, [_piece('a', withImage: true), _piece('b')]);
     expect(find.byType(AppImage), findsOneWidget);
+    expect(find.byType(CachedNetworkImage), findsNothing);
     expect(find.byType(GarmentGlyph), findsOneWidget);
   });
 

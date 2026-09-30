@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:fitcheck_ai/domain/enums/category.dart';
+import 'package:fitcheck_ai/domain/enums/condition.dart' as domain;
 import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/item_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -81,6 +82,7 @@ void main() {
 
       expect(repo.posted.map((p) => p.length), [50, 1]);
       expect(result.failed, isEmpty);
+      expect(result.saved, hasLength(51));
       expect(repo.posted.expand((p) => p).length, 51);
     });
 
@@ -89,7 +91,37 @@ void main() {
 
       final result = await repo.saveBatch(entries: entries(51));
 
+      // Pieces saved by the first slice survive the second slice's failure.
+      expect(result.saved.map((s) => s.tempId), [
+        for (var i = 0; i < 50; i++) 't$i',
+      ]);
       expect(result.failed.map((f) => f.tempId), ['t50']);
+    });
+
+    test('entries sharing a staged photo stay in one request', () async {
+      final repo = _SlicingRepo();
+      const shared = 'users/u/tmp/shared.jpg';
+      // t49 and t50 are cut from one photo: a plain cut at 50 would split
+      // them, and the backend deletes the shared tmp key after slice one.
+      final input = [
+        for (var i = 0; i < 49; i++)
+          SaveEntryInput(
+            tempId: 't$i',
+            request: request(),
+            imageUrl: 'https://cdn.example.com/studio/t$i.jpg',
+          ),
+        for (final id in ['t49', 't50'])
+          SaveEntryInput(tempId: id, request: request(), storagePath: shared),
+      ];
+
+      final result = await repo.saveBatch(entries: input);
+
+      expect(repo.posted.map((p) => p.length), [49, 2]);
+      expect(
+        repo.posted.last.map((b) => b['temp_id']),
+        containsAll(['t49', 't50']),
+      );
+      expect(result.saved, hasLength(51));
     });
 
     test('unsupported on the first slice rethrows for the legacy path', () {
@@ -106,6 +138,7 @@ void main() {
 
       final result = await repo.saveBatch(entries: entries(51));
 
+      expect(result.saved, hasLength(50));
       expect(result.failed.map((f) => f.tempId), ['t50']);
     });
   });
@@ -162,6 +195,22 @@ class _SlicingRepo extends ItemRepository {
     posted.add(entries);
     if (call == unsupportedOnCall) throw BatchSaveUnsupported();
     if (call == failOnCall) throw Exception('offline');
-    return const BatchSaveResult(saved: [], failed: []);
+    // Echo every posted entry as saved, like the server does.
+    return BatchSaveResult(
+      saved: [
+        for (final entry in entries)
+          (
+            tempId: entry['temp_id'] as String,
+            item: ItemModel(
+              id: entry['temp_id'] as String,
+              userId: 'user-1',
+              name: 'Piece',
+              category: Category.tops,
+              condition: domain.Condition.clean,
+            ),
+          ),
+      ],
+      failed: const [],
+    );
   }
 }

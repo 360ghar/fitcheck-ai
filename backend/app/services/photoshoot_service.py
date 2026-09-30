@@ -1026,7 +1026,10 @@ RULES:
             if use_case == PhotoshootUseCase.CUSTOM and not custom_prompt:
                 raise ValidationError("Custom prompt is required for custom use case")
 
-            # Check daily limit
+            # Check daily limit. The day is stamped BEFORE the RPC so it is
+            # never later than the charged day (a midnight-straddling RPC then
+            # skips the release instead of over-crediting the new day).
+            reserved_on = utc_today()
             allowed, usage = await PhotoshootService.reserve_daily_usage(user_id, num_images, db)
             if not allowed:
                 raise RateLimitError(
@@ -1034,7 +1037,6 @@ RULES:
                     retry_after=int((usage.resets_at - utcnow()).total_seconds()) if usage.resets_at else 86400,
                 )
             reservation_made = True
-            reserved_on = utc_today()
 
             # Generate prompts
             prompts = await PhotoshootService.generate_prompts(
@@ -1217,6 +1219,8 @@ class PhotoshootStreamingService:
             # Check daily limit. Demo jobs are quota-exempt: the IP rate limit
             # was enforced at job creation (demo path), so no reservation.
             if not self.is_demo:
+                # Stamped BEFORE the RPC (see sync path note).
+                reserved_on = utc_today()
                 allowed, usage = await PhotoshootService.reserve_daily_usage(
                     self.user_id, job.num_images, self.db
                 )
@@ -1226,7 +1230,6 @@ class PhotoshootStreamingService:
                         retry_after=86400,
                     )
                 reservation_made = True
-                reserved_on = utc_today()
 
             # Broadcast generation started
             await PhotoshootJobService.broadcast_event(job.job_id, "generation_started", {

@@ -466,7 +466,9 @@ async def test_create_item_replays_existing_row_for_repeated_client_request_id(m
     # original without images is a retryable failure, not a replay).
     db = FakeDB(
         rows={
-            "items": [_item_row(client_request_id="req-abc", images=[_image_row()])]
+            "items": [
+                _item_row(client_request_id="req-abc", item_images=[_image_row()])
+            ]
         }
     )
     reserve, generate, release = _patch_embedding(monkeypatch)
@@ -486,6 +488,9 @@ async def test_create_item_replays_existing_row_for_repeated_client_request_id(m
     assert result["message"] == "Created"
     assert result["data"]["id"] == ITEM_ID
     assert result["data"]["name"] == "Crew-neck tee"
+    # The raw Supabase relation is normalized to the public `images` field.
+    assert result["data"]["images"][0]["id"] == IMAGE_ID
+    assert "item_images" not in result["data"]
     # No second items insert (the replay path returns before the write).
     assert all(t != "items" for t, _p, _c in db.inserts)
     reserve.assert_not_awaited()

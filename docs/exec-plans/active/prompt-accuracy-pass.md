@@ -11,7 +11,7 @@ Make extraction, try-on and photoshoot prompts accurate without regressions.
 - [ ] Results recorded in the progress log.
 
 ## Verification
-Run the backend prompt unit tests (`cd backend && pytest -k "item_extraction or photoshoot or prompt"`). Then run the live eval: extract each of the 10 photos and run the 5 try-on pairs against the old and new prompts. Record before/after pass counts in the progress log.
+Run the backend prompt unit tests (`cd backend && source .venv/bin/activate && pytest -k "item_extraction or photoshoot or prompt"`). Then run the live eval: extract each of the 10 photos and run the 5 try-on pairs against the old and new prompts. Record before/after pass counts in the progress log.
 
 ## Progress log
 | Date | Note |

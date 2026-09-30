@@ -1040,15 +1040,17 @@ async def similar_items(
     # UTC day the slot was reserved: the release RPC decrements whatever
     # day's counter is current (migration 024 keys on CURRENT_DATE), so after
     # the day rolls over a release would remove a slot reserved on the new day.
-    # Mirror items.py's day-boundary guard. Stamped right after the RPC returns.
+    # Mirror items.py's day-boundary guard. Stamped BEFORE the RPC so the stamp
+    # is never later than the charged day: an RPC that straddles midnight then
+    # skips the release instead of over-crediting the new day.
     reserved_on = None
     try:
+        reserved_on = utc_today()
         reserved = await AISettingsService.reserve_usage(
             user_id=user_id,
             operation_type=OperationType.EMBEDDING,
             db=db,
         )
-        reserved_on = utc_today()
         if reserved:
             embedding = await AIService.generate_item_embedding(source.data)
             if embedding:

@@ -8,7 +8,8 @@ Pins the fast-save contract the mobile review pages rely on:
 - an empty batch is rejected by the request model (422 at parse time).
 """
 
-from typing import Any, Dict
+from datetime import timedelta
+from typing import Any, Dict, Optional
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -17,11 +18,13 @@ from app.api.v1 import items as items_module
 from app.models.item import BatchSaveRequest, ItemCreate, ItemImageBase
 from app.services import item_save_service as save_service
 from app.services.ai_settings_service import AISettingsService
+from app.utils.datetime_util import utcnow, utcnow_iso
 from tests.utils.fake_db import FakeDB
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
 FOREIGN = "22222222-2222-2222-2222-222222222222"
 HEX = "0123456789abcdef0123456789abcdef"
+OTHER_HEX = "fedcba9876543210fedcba9876543210"
 
 
 def _patch_no_embedding(monkeypatch) -> None:
@@ -154,15 +157,25 @@ async def test_batch_keeps_shared_tmp_source_until_batch_ends(monkeypatch):
     assert delete_image.await_count == 1
 
 
-def _shared_tmp_entries(*temp_ids: str):
-    shared = f"https://cdn.example/users/{USER_ID}/tmp/batch/{HEX}.webp"
+def _shared_tmp_entries(*temp_ids: str, keys: Optional[Dict[str, str]] = None):
+    """Entries that all reference the staged tmp key ``HEX``; ``keys`` maps a
+    temp_id to a different tmp key for that entry."""
+    keys = keys or {}
     return [
         (
             temp_id,
             ItemCreate(
                 name=temp_id,
                 category="tops",
-                images=[ItemImageBase(image_url=shared, is_primary=True)],
+                images=[
+                    ItemImageBase(
+                        image_url=(
+                            f"https://cdn.example/users/{USER_ID}/tmp/batch/"
+                            f"{keys.get(temp_id, HEX)}.webp"
+                        ),
+                        is_primary=True,
+                    )
+                ],
             ),
         )
         for temp_id in temp_ids
@@ -196,12 +209,8 @@ async def test_batch_keeps_tmp_source_when_a_sibling_fails(monkeypatch):
     assert delete_image.await_count == 0
 
 
-@pytest.mark.asyncio
-async def test_batch_keeps_tmp_source_for_entries_skipped_by_schema_abort(monkeypatch):
-    """SchemaNotInitializedError aborts the batch: the aborted and never-tried
-    entries still reference the tmp key, so nothing is deleted."""
-    db = FakeDB()
-    _patch_no_embedding(monkeypatch)
+def _patch_schema_abort_on_second_copy(monkeypatch):
+    """First copy succeeds, the second raises SchemaNotInitializedError."""
     promoted = {
         "image_url": "https://cdn.example/canonical.png",
         "thumbnail_url": "https://cdn.example/canonical_thumb.png",
@@ -214,13 +223,48 @@ async def test_batch_keeps_tmp_source_for_entries_skipped_by_schema_abort(monkey
         "copy_temp_image_to_item",
         AsyncMock(side_effect=[promoted, save_service.SchemaNotInitializedError()]),
     )
+    return delete_image
+
+
+@pytest.mark.asyncio
+async def test_batch_keeps_tmp_source_for_entries_skipped_by_schema_abort(monkeypatch):
+    """SchemaNotInitializedError aborts the batch. t1 saves (its key ``HEX`` is
+    deferred), t2 aborts on a different key, t3 is never tried but shares ``HEX``
+    with t1. ``HEX`` is referenced only by the skipped t3 among the unsaved
+    entries, so it must survive: retaining just the aborting entry would delete
+    it."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+    delete_image = _patch_schema_abort_on_second_copy(monkeypatch)
 
     with pytest.raises(save_service.SchemaNotInitializedError):
         await save_service.batch_create_items(
-            db, USER_ID, _shared_tmp_entries("t1", "t2", "t3")
+            db,
+            USER_ID,
+            _shared_tmp_entries("t1", "t2", "t3", keys={"t2": OTHER_HEX}),
         )
 
     assert delete_image.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_batch_schema_abort_deletes_tmp_source_no_unsaved_entry_references(
+    monkeypatch,
+):
+    """Control for the test above: without the skipped t3, nothing unsaved
+    references ``HEX``, so it is deleted. Proves the zero-delete assertion
+    above is not vacuous."""
+    db = FakeDB()
+    _patch_no_embedding(monkeypatch)
+    delete_image = _patch_schema_abort_on_second_copy(monkeypatch)
+
+    with pytest.raises(save_service.SchemaNotInitializedError):
+        await save_service.batch_create_items(
+            db, USER_ID, _shared_tmp_entries("t1", "t2", keys={"t2": OTHER_HEX})
+        )
+
+    assert delete_image.await_count == 1
+    assert delete_image.await_args.kwargs["storage_path"].endswith(f"{HEX}.webp")
 
 
 @pytest.mark.asyncio
@@ -257,6 +301,87 @@ async def test_batch_replay_of_half_committed_item_is_retryable_failure(monkeypa
     assert result["saved"] == []
     assert [f["temp_id"] for f in result["failed"]] == ["t1"]
     assert "still being saved" in result["failed"][0]["error"]
+
+
+def _orphan_db(created_at: str) -> FakeDB:
+    """An item row whose creator died before inserting its image rows."""
+    return FakeDB(
+        rows={
+            "items": [
+                {
+                    "id": "orphan-1",
+                    "user_id": USER_ID,
+                    "client_request_id": "req-t1",
+                    "is_deleted": False,
+                    "name": "Tee",
+                    "created_at": created_at,
+                }
+            ]
+        }
+    )
+
+
+def _tmp_image_entry() -> ItemCreate:
+    return ItemCreate(
+        name="Tee",
+        category="tops",
+        client_request_id="req-t1",
+        images=[
+            ItemImageBase(
+                image_url=f"https://cdn.example/users/{USER_ID}/tmp/batch/{HEX}.webp",
+                is_primary=True,
+            )
+        ],
+    )
+
+
+@pytest.mark.asyncio
+async def test_batch_keeps_retryable_failure_for_recent_half_committed_item(monkeypatch):
+    """A row younger than the orphan window may still have a live creator: the
+    retry fails retryably and the row is left alone."""
+    db = _orphan_db(utcnow_iso())
+    _patch_no_embedding(monkeypatch)
+
+    result = await save_service.batch_create_items(
+        db, USER_ID, [("t1", _tmp_image_entry())]
+    )
+
+    assert result["saved"] == []
+    assert "still being saved" in result["failed"][0]["error"]
+    assert db.deletes == []
+    assert [r["id"] for r in db.rows["items"]] == ["orphan-1"]
+
+
+@pytest.mark.asyncio
+async def test_batch_reaps_stale_half_committed_item_and_recreates(monkeypatch):
+    """The creator died between the item row and its image rows (no rollback
+    ran). Past the orphan window a retry reaps the orphan and creates fresh
+    under the same key instead of returning 503 forever."""
+    stale = (utcnow() - save_service._ORPHAN_AFTER - timedelta(seconds=1)).isoformat()
+    db = _orphan_db(stale)
+    _patch_no_embedding(monkeypatch)
+    promoted = {
+        "image_url": "https://cdn.example/canonical.png",
+        "thumbnail_url": "https://cdn.example/canonical_thumb.png",
+        "storage_path": f"users/{USER_ID}/items/{HEX}.png",
+    }
+    monkeypatch.setattr(
+        save_service.StorageService,
+        "copy_temp_image_to_item",
+        AsyncMock(return_value=promoted),
+    )
+    monkeypatch.setattr(save_service.StorageService, "delete_image", AsyncMock())
+
+    result = await save_service.batch_create_items(
+        db, USER_ID, [("t1", _tmp_image_entry())]
+    )
+
+    assert result["failed"] == []
+    new_id = result["saved"][0]["item"]["id"]
+    assert new_id != "orphan-1"
+    assert ("items", None) in db.deletes
+    assert [r["id"] for r in db.rows["items"]] == [new_id]
+    assert db.rows["items"][0]["client_request_id"] == "req-t1"
 
 
 @pytest.mark.asyncio

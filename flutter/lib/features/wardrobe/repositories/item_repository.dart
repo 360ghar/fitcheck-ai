@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show min;
 import 'package:dio/dio.dart';
 // `show` keeps flutter/foundation's own `Category` (an annotation) from
 // colliding with the domain enum imported below.
@@ -23,6 +22,42 @@ class ItemRepository {
 
   /// Backend cap per batch-save request (`BatchSaveRequest.items`).
   static const int _batchSaveSliceSize = 50;
+
+  /// Splits batch-save bodies into requests of at most [_batchSaveSliceSize].
+  ///
+  /// Entries cut from one photo share one staged `tmp/` key, and the backend
+  /// deletes that key when the request that saved them ends. Entries sharing
+  /// an image reference therefore stay in the same slice, or a later slice
+  /// would fail to promote the deleted source.
+  ///
+  /// ponytail: one photo with more than [_batchSaveSliceSize] pieces still
+  /// overflows the backend cap; split it (and defer the cleanup) if that
+  /// ever happens.
+  @visibleForTesting
+  static List<List<Map<String, dynamic>>> sliceEntries(
+    List<Map<String, dynamic>> bodies,
+  ) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (var i = 0; i < bodies.length; i++) {
+      final images = (bodies[i]['item'] as Map?)?['images'] as List?;
+      final first = images == null || images.isEmpty ? null : images.first;
+      final ref = first is Map
+          ? (first['storage_path'] ?? first['image_url']) as String?
+          : null;
+      // No reference means no shared source: a group of its own.
+      final key = ref == null || ref.isEmpty ? '#$i' : ref;
+      groups.putIfAbsent(key, () => []).add(bodies[i]);
+    }
+    final slices = <List<Map<String, dynamic>>>[];
+    for (final group in groups.values) {
+      if (slices.isEmpty ||
+          slices.last.length + group.length > _batchSaveSliceSize) {
+        slices.add([]);
+      }
+      slices.last.addAll(group);
+    }
+    return slices;
+  }
 
   static List<BatchSaveFailure> _sliceFailed(
     List<Map<String, dynamic>> slice,
@@ -229,11 +264,8 @@ class ItemRepository {
     final saved = <SavedPiece>[];
     // Slices keep each request under the backend's per-call entry cap; one
     // failing slice must not discard the ones already saved.
-    for (var start = 0; start < bodies.length; start += _batchSaveSliceSize) {
-      final slice = bodies.sublist(
-        start,
-        min(start + _batchSaveSliceSize, bodies.length),
-      );
+    final slices = sliceEntries(bodies);
+    for (final slice in slices) {
       try {
         final result = await batchSaveItems(jobId: jobId, entries: slice);
         saved.addAll(result.saved);
@@ -242,7 +274,7 @@ class ItemRepository {
         // Backend predates the route: the caller falls back to the legacy
         // sequential save. Only safe before anything was posted; a later
         // slice cannot fall back without re-saving earlier ones.
-        if (start == 0) rethrow;
+        if (identical(slice, slices.first)) rethrow;
         failed = [...failed, ..._sliceFailed(slice)];
       } catch (_) {
         // Transport failure: every posted entry failed (legacy parity).

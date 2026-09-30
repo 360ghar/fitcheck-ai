@@ -17,8 +17,8 @@ Behavioral notes preserved from the route implementation:
 """
 
 import uuid
-from app.utils.datetime_util import utc_today, utcnow_iso
-from datetime import date
+from app.utils.datetime_util import parse_utc_datetime, utc_today, utcnow, utcnow_iso
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from supabase import Client
@@ -128,6 +128,12 @@ async def find_item_by_client_request_id(
     if not result or not result.data:
         return None
     return normalize_item_images(result.data)
+
+
+# ponytail: fixed window. A live creator slower than this loses its row to a
+# retry (its image insert then fails and rolls back; the retry replays the new
+# row). Raise it if image promotion gets slower.
+_ORPHAN_AFTER = timedelta(seconds=60)
 
 
 def _replayable(existing: Dict[str, Any], item: ItemCreate) -> bool:
@@ -281,9 +287,32 @@ async def create_item_core(
         # as a fresh create — instead of inserting again.
         if item.client_request_id:
             existing = await find_item_by_client_request_id(db, user_id, item.client_request_id)
-            if existing:
-                if not _replayable(existing, item):
+            if existing and not _replayable(existing, item):
+                created = parse_utc_datetime(existing.get("created_at"))
+                if created is None or utcnow() - created < _ORPHAN_AFTER:
                     raise ServiceError("Item is still being saved; retry shortly")
+                # The creator died between the item upsert and the image
+                # upsert (kill, OOM, redeploy: the rollback below never ran).
+                # The unique client_request_id would otherwise 503 every retry
+                # forever. Reap the orphan (item_images cascade) and create
+                # fresh under the same key; concurrent retries collapse onto
+                # the winner via the 23505 path below.
+                await execute_with_reconnect(
+                    lambda d: d.table("items")
+                    .delete()
+                    .eq("id", existing["id"])
+                    .eq("user_id", user_id)
+                    .execute(),
+                    db,
+                    extra={"operation": "create_item.reap_orphan", "user_id": user_id},
+                )
+                logger.warning(
+                    "Reaped half-committed item before create retry",
+                    user_id=user_id,
+                    item_id=existing["id"],
+                )
+                existing = None
+            if existing:
                 logger.info(
                     "Create item replay via client_request_id",
                     user_id=user_id,
@@ -445,15 +474,15 @@ async def create_item_core(
             embedding_stored = False
             reserved_on = None
             try:
+                # The day the slot was reserved, stamped BEFORE the RPC so it
+                # is never later than the charged day: a release after
+                # midnight must not decrement the new day's counter.
+                reserved_on = utc_today()
                 reserved = await AISettingsService.reserve_usage(
                     user_id=user_id,
                     operation_type=OperationType.EMBEDDING,
                     db=db,
                 )
-                # The day the slot was reserved (stamped right after the RPC
-                # returns): a release after midnight must not decrement the
-                # new day's counter.
-                reserved_on = utc_today()
                 if not reserved:
                     logger.info(
                         "Embedding rate limit exceeded for item create, skipping vector upsert",

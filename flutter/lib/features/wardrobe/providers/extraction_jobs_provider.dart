@@ -260,6 +260,8 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
     required String sourcePath,
   }) async {
     final durable = await _durablize(jobId, [sourcePath]);
+    // The notifier can be disposed while awaiting: state and ref are unusable.
+    if (!_alive) return;
     _upsert(
       TrackedJob(
         jobId: jobId,
@@ -272,6 +274,7 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
     // Persist first: nothing may be awaited between subscribing and
     // returning, or early events fire before the caller can listen.
     await _persist();
+    if (!_alive) return;
     _subscribe(jobId, TrackedJobKind.single);
   }
 
@@ -284,6 +287,7 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
     List<String> imageIds = const [],
   }) async {
     final durable = await _durablize(jobId, sourcePaths);
+    if (!_alive) return;
     _upsert(
       TrackedJob(
         jobId: jobId,
@@ -295,6 +299,7 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
       ),
     );
     await _persist();
+    if (!_alive) return;
     _subscribe(jobId, TrackedJobKind.batch);
   }
 
@@ -401,6 +406,7 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
     _subscriptions.remove(jobId)?.cancel();
     _resubscribes.remove(jobId);
     await _closeController(jobId);
+    if (!_alive) return;
     _attachCounts.remove(jobId);
     final jobs = Map<String, TrackedJob>.from(state.jobs)..remove(jobId);
     state = ExtractionJobsState(jobs: jobs);
