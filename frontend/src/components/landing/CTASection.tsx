@@ -4,11 +4,11 @@ import { ArrowRight, CheckCircle2, Loader2 } from 'lucide-react'
 
 import { joinWaitlist } from '@/api/waitlist'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
+import StoreBadges from '@/components/landing/StoreBadges'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { trackEvent } from '@/lib/analytics'
-import { PLATFORM_AVAILABILITY } from '@/lib/plan-limits'
 import { trialRegisterHref, TRIAL_PROMO_CODE } from '@/lib/trial-offer'
 
 /**
@@ -65,9 +65,9 @@ export default function CTASection() {
                   Start with your first clothing photo
                 </h2>
                 <p className="mt-5 max-w-xl text-base leading-relaxed text-body md:text-lg">
-                  Use FitCheck on the web or Android. Your first month of Pro is free, no card is required, and the account returns to Free unless you upgrade.
+                  Use FitCheck on the web, iPhone, or Android. Your first month of Pro is free, no card is required, and the account returns to Free unless you upgrade.
                 </p>
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                   {/* The one brand-gradient CTA on the page (DESIGN.md §08):
                       hex-locked brand red by design. It rides the final pressed
                       card, not a theme surface, so it reads identically in both
@@ -92,20 +92,7 @@ export default function CTASection() {
                       <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </Link>
                   </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-12 px-6"
-                    asChild
-                  >
-                    <a
-                      href={PLATFORM_AVAILABILITY.androidStoreUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Get Android app
-                    </a>
-                  </Button>
+                  <StoreBadges location="bottom" />
                 </div>
                 <p className="mt-4 text-sm text-muted-foreground">
                   Already have an account?{' '}
@@ -118,9 +105,9 @@ export default function CTASection() {
               {/* Waitlist column: a quiet oat wash on the white card so the two
                   jobs (convert vs. leave-an-email) read as separate rooms. */}
               <div className="min-w-0 border-t border-border bg-secondary/40 px-6 py-10 sm:px-10 lg:col-span-5 lg:border-l lg:border-t-0 lg:px-12 lg:py-20">
-                <p className="text-sm font-semibold text-foreground">iOS and product updates</p>
+                <p className="text-sm font-semibold text-foreground">Product updates</p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  iOS is on the waitlist. Leave your email for availability and major product updates.
+                  Leave your email to hear about major product updates.
                 </p>
 
                 {isSuccess ? (
@@ -129,7 +116,7 @@ export default function CTASection() {
                     <div>
                       <p className="font-medium text-foreground">You are on the list</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        We will email you about iOS availability and major updates.
+                        We will email you about major product updates.
                       </p>
                     </div>
                   </div>

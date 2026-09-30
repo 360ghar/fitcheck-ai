@@ -42,9 +42,10 @@ export function yearlySavings(plan: keyof typeof PLAN_PRICES): number {
 export const PLATFORM_AVAILABILITY = {
   web: true,
   android: true,
-  ios: 'waitlist' as const,
+  ios: true,
   androidStoreUrl:
     'https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai&hl=en_IN',
+  iosStoreUrl: 'https://apps.apple.com/app/id6794689012',
 }
 
 /** Short marketing bullets for Free plan */
@@ -56,7 +57,7 @@ export function freePlanFeatureBullets(): string[] {
     `${f.dailyPhotoshootImages} AI photoshoot images/day`,
     'Basic wardrobe management',
     'Weather-based suggestions',
-    'Web + Android app',
+    'Web, iOS + Android apps',
   ]
 }
 
@@ -99,5 +100,5 @@ export function freeVsProSummary(): string {
 }
 
 export function platformsSummary(): string {
-  return 'The web app works in any modern browser, and the Android app is on Google Play. iOS is on the waitlist — leave your email for updates.'
+  return 'The web app works in any modern browser. The iOS app is on the App Store, and the Android app is on Google Play.'
 }

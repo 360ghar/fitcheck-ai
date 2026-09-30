@@ -5,21 +5,21 @@ export const SEO_CONFIG = {
   siteUrl: 'https://fitcheckaiapp.com',
   defaultTitle: 'AI Virtual Closet & Outfit Planner | FitCheck AI',
   defaultDescription:
-    'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web and Android.',
+    'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web, iOS, and Android.',
   defaultOgImage: 'https://fitcheckaiapp.com/og-default.jpg',
   logoImage: 'https://fitcheckaiapp.com/icon-512.png',
   locale: 'en_US',
   themeColor: '#e60023',
   twitterHandle: '@FitCheckAI',
   positioning:
-    'FitCheck AI is an AI wardrobe and outfit app that turns photos of your clothes into a digital closet, daily outfit recommendations, virtual try-on, and AI photoshoots — on web and Android, with iOS on the waitlist.',
+    'FitCheck AI is an AI wardrobe and outfit app that turns photos of your clothes into a digital closet, daily outfit recommendations, virtual try-on, and AI photoshoots. It runs on web, iOS, and Android.',
 }
 
 export const PAGE_SEO = {
   landing: {
     title: 'AI Virtual Closet & Outfit Planner | FitCheck AI',
     description:
-      'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web and Android.',
+      'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web, iOS, and Android.',
     path: '/',
   },
   about: {

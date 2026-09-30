@@ -3,6 +3,7 @@ import { Mail, Phone } from 'lucide-react'
 import { Logo } from '@/components/brand/Logo'
 
 import { trackLandingCta } from '@/lib/analytics'
+import { PLATFORM_AVAILABILITY } from '@/lib/plan-limits'
 import { scrollToSectionId } from '@/lib/scroll'
 
 const footerLinks = {
@@ -16,10 +17,8 @@ const footerLinks = {
     { name: 'Outfit Recommendations', href: '/features/outfit-recommendations' },
     { name: 'Wardrobe Analytics', href: '/features/wardrobe-analytics' },
     { name: 'FAQ', href: '/faq' },
-    {
-      name: 'Android app',
-      href: 'https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai&hl=en_IN',
-    },
+    { name: 'iOS app', href: PLATFORM_AVAILABILITY.iosStoreUrl },
+    { name: 'Android app', href: PLATFORM_AVAILABILITY.androidStoreUrl },
   ],
   Resources: [
     { name: 'Blog', href: '/blog' },

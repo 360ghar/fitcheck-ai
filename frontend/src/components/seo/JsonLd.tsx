@@ -18,6 +18,7 @@ const ORGANIZATION_SCHEMA = {
   description: SEO_CONFIG.positioning,
   sameAs: [
     'https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai',
+    'https://apps.apple.com/app/id6794689012',
     'https://x.com/FitCheckAI',
     'https://www.linkedin.com/company/fitcheck-ai',
     'https://www.youtube.com/@FitCheckAI',

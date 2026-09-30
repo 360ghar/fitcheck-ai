@@ -138,7 +138,7 @@ export default function AboutPage() {
           <div className="max-w-3xl mx-auto px-4 text-center sm:px-6 lg:px-8">
             <h2 className="landing-display text-3xl font-semibold mb-4">Start free today</h2>
             <p className="text-stone-400 mb-8">
-              Create an account on the web or get the Android app on Google Play.
+              Create an account on the web, or get the app on the App Store or Google Play.
             </p>
             <Button asChild size="lg" className="bg-primary hover:bg-primary-pressed text-white">
               <Link to={trialRegisterHref()}>

@@ -16,7 +16,7 @@ export const LANDING_FAQS = [
   {
     question: 'What is FitCheck AI?',
     answer:
-      'FitCheck AI is an AI virtual closet and outfit planner. Photograph your clothes to build a digital wardrobe, then get weather-aware outfit ideas, virtual try-on, AI photoshoots, and wardrobe analytics from the clothes you already own — on web and Android, with iOS on the waitlist.',
+      'FitCheck AI is an AI virtual closet and outfit planner. Photograph your clothes to build a digital wardrobe, then get weather-aware outfit ideas, virtual try-on, AI photoshoots, and wardrobe analytics from the clothes you already own. It runs on web, iOS, and Android.',
   },
   {
     question: 'What is a virtual closet app?',
