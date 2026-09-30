@@ -5,6 +5,23 @@ All notable changes to the FitCheck AI Flutter app will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1+15] - 2026-09-30
+
+### Added
+
+- Item extraction runs as a background job. A banner and a jobs screen show
+  progress, and a local notification reports when the items are ready.
+- Outfits with no image of their own show a collage of up to four pieces.
+
+### Changed
+
+- The review screen saves all extracted items in one request. Against a backend
+  without `POST /items/batch-from-extraction`, the app uses the sequential save.
+
+### Fixed
+
+- Extraction progress, retry, and cancel states recover better after errors.
+
 ## [1.2.0+14] - 2026-09-25
 
 ### Changed
