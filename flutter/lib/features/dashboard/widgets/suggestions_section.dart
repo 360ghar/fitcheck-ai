@@ -1,188 +1,125 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../app/routes/app_routes.dart';
-import '../controllers/dashboard_controller.dart';
-import '../models/dashboard_models.dart';
 import '../../wardrobe/repositories/item_repository.dart';
+import '../models/dashboard_models.dart';
 
-/// Suggestions section showing weather and outfit of the day
+/// Today's weather note and outfit of the day. Hidden when neither exists.
 class SuggestionsSection extends StatelessWidget {
-  const SuggestionsSection({super.key});
+  const SuggestionsSection({super.key, required this.suggestions});
 
-  @override
-  Widget build(BuildContext context) {
-    final controller = Get.find<DashboardController>();
-    final tokens = AppUiTokens.of(context);
+  final DashboardSuggestions suggestions;
 
-    return Obx(() {
-      final suggestions = controller.dashboard.value?.suggestions;
-      final weather = suggestions?.weatherBased;
-      final outfit = suggestions?.outfitOfTheDay;
-
-      return AppGlassCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AppSectionHeader(
-              title: 'Today\'s Suggestions',
-              subtitle: 'AI-curated styling ideas',
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            if (weather == null && outfit == null)
-              Text(
-                'No suggestions yet. Add more outfits to unlock daily ideas.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
-              ),
-            if (weather != null) ...[
-              _WeatherSuggestion(weather: weather),
-              if (outfit != null) const SizedBox(height: AppConstants.spacing12),
-            ],
-            if (outfit != null) _OutfitSuggestion(outfit: outfit),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-class _WeatherSuggestion extends StatelessWidget {
-  final DashboardWeatherSuggestion weather;
-
-  const _WeatherSuggestion({required this.weather});
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final tempLabel = weather.temperature == null
-        ? 'Weather'
-        : '${weather.temperature!.toStringAsFixed(1)} deg C';
-
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        color: tokens.cardColor.withValues(alpha: 0.65),
-        border: Border.all(color: tokens.cardBorderColor),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppConstants.spacing8),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: tokens.brandColor.withValues(alpha: 0.15),
-            ),
-            child: Icon(Icons.wb_sunny_rounded, color: tokens.brandColor),
-          ),
-          const SizedBox(width: AppConstants.spacing12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tempLabel,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: tokens.textPrimary,
-                      ),
-                ),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  weather.recommendation ?? 'Style smart for the day ahead.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OutfitSuggestion extends StatelessWidget {
-  final DashboardOutfitOfTheDay outfit;
-
-  // Presigned image URLs expire after 1h; on a failed load a fresh URL is
-  // re-minted from the durable storage key.
+  // Presigned image URLs expire after 1h; a failed load re-mints the URL
+  // from the durable storage key.
   static final ItemRepository _itemRepository = ItemRepository();
 
-  const _OutfitSuggestion({required this.outfit});
-
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+    final weather = suggestions.weatherBased;
+    final outfit = suggestions.outfitOfTheDay;
+    if (weather == null && outfit == null) return const SizedBox.shrink();
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
 
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
-        color: tokens.cardColor.withValues(alpha: 0.65),
-        border: Border.all(color: tokens.cardBorderColor),
-      ),
-      child: Row(
+    return PaperSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            child: Container(
-              width: 64,
-              height: 64,
-              color: tokens.cardBorderColor.withValues(alpha: 0.2),
-              child: _nonEmpty(outfit.imageUrl) == null
-                  ? Icon(Icons.image, color: tokens.textMuted)
-                  : AppImage(
-                      // Prefer the small variant for a 64px tile; the full
-                      // size is retried once if the thumb object is missing.
-                      imageUrl:
-                          _nonEmpty(outfit.thumbnailUrl) ?? outfit.imageUrl,
-                      fallbackUrl: outfit.imageUrl,
-                      fit: BoxFit.contain,
-                      enableZoom: false,
-                      errorIcon: Icons.image,
-                      storagePath: outfit.storagePath,
-                      remintUrl: _itemRepository.remintImageUrl,
-                    ),
-            ),
-          ),
-          const SizedBox(width: AppConstants.spacing12),
-          Expanded(
-            child: Column(
+          Text('Today', style: text.headlineSmall),
+          if (weather != null) ...[
+            const SizedBox(height: AppConstants.spacing12),
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Outfit of the day',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
-                ),
-                const SizedBox(height: AppConstants.spacing4),
-                Text(
-                  outfit.name ?? 'Fresh look ready',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: tokens.textPrimary,
-                      ),
+                Icon(Icons.wb_sunny_outlined, color: tokens.stock.accent),
+                const SizedBox(width: AppConstants.spacing12),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        if (weather.temperature != null)
+                          TextSpan(
+                            text: '${weather.temperature!.round()}°C  ',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        TextSpan(
+                          text:
+                              weather.recommendation ??
+                              'Dress for the day ahead.',
+                        ),
+                      ],
+                    ),
+                    style: text.bodyMedium,
+                  ),
                 ),
               ],
             ),
-          ),
-          TextButton(
-            onPressed: () => Get.toNamed(Routes.outfits),
-            child: const Text('View'),
-          ),
+          ],
+          if (outfit != null) ...[
+            const SizedBox(height: AppConstants.spacing16),
+            InkWell(
+              borderRadius: BorderRadius.circular(AppConstants.radius12),
+              onTap: outfit.id == null
+                  ? null
+                  : () => context.push(Routes.outfit(outfit.id!)),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppConstants.radius12),
+                    child: SizedBox.square(
+                      dimension: 72,
+                      child: ColoredBox(
+                        color: tokens.stock.sunk,
+                        child: _nonEmpty(outfit.imageUrl) == null
+                            ? Icon(Icons.style_outlined, color: tokens.textMuted)
+                            : AppImage(
+                                imageUrl:
+                                    _nonEmpty(outfit.thumbnailUrl) ??
+                                    outfit.imageUrl,
+                                fallbackUrl: outfit.imageUrl,
+                                fit: BoxFit.cover,
+                                enableZoom: false,
+                                memCacheWidth: 216,
+                                errorIcon: Icons.style_outlined,
+                                storagePath: outfit.storagePath,
+                                remintUrl: _itemRepository.remintImageUrl,
+                              ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Outfit of the day',
+                          style: text.bodySmall?.copyWith(
+                            color: tokens.textMuted,
+                          ),
+                        ),
+                        Text(
+                          outfit.name ?? 'A fresh look',
+                          style: text.titleMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: tokens.textMuted),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  /// Empty strings count as absent — clients fall back only on EMPTY,
-  /// never on a 404 (see `AppNetworkImage.fallbackUrl`).
-  String? _nonEmpty(String? value) =>
+  static String? _nonEmpty(String? value) =>
       value == null || value.isEmpty ? null : value;
 }

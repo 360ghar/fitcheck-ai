@@ -138,6 +138,24 @@ class GiftDashboardSummary {
   }
 }
 
+/// Home banner order, same as web: an incoming gift, then a free invitation.
+extension GiftDashboardSummaryX on GiftDashboardSummary {
+  GiftDashboardPriority? get priority {
+    if (incoming.isNotEmpty) return GiftDashboardPriority.incoming;
+    if (freeAllowance != null) return GiftDashboardPriority.complimentary;
+    return null;
+  }
+
+  GiftVoucher? get incomingGift => incoming.isEmpty ? null : incoming.first;
+
+  GiftAllowance? get freeAllowance {
+    for (final allowance in allowances) {
+      if (allowance.remainingCount > 0) return allowance;
+    }
+    return null;
+  }
+}
+
 class GiftClaimResult {
   const GiftClaimResult({
     required this.voucher,

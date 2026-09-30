@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 
-/// Callback matching [SubscriptionController.shareReferralLink] so iPad gets a popover origin.
-typedef ReferralShareCallback = Future<void> Function({Rect? sharePositionOrigin});
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/widgets/app_ui.dart';
 
-/// Card for sharing referral code
+/// Matches [ReferralCodeNotifier.share]: iPad needs a popover origin.
+typedef ReferralShareCallback =
+    Future<void> Function({Rect? sharePositionOrigin});
+
+/// The user's referral code with copy and share actions.
 class ReferralShareCard extends StatelessWidget {
-  final String code;
-  final String shareUrl;
-  final int timesUsed;
-  final VoidCallback onCopy;
-  final ReferralShareCallback onShare;
-
   const ReferralShareCard({
     super.key,
     required this.code,
-    required this.shareUrl,
     required this.timesUsed,
     required this.onCopy,
     required this.onShare,
   });
+
+  final String code;
+  final int timesUsed;
+  final VoidCallback onCopy;
+  final ReferralShareCallback onShare;
 
   Rect? _originFrom(BuildContext context) {
     final box = context.findRenderObject() as RenderBox?;
@@ -28,143 +30,79 @@ class ReferralShareCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF6366F1), Color(0xFF9333EA)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return PaperSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Invite a friend', style: text.headlineSmall),
+          const SizedBox(height: AppConstants.spacing4),
+          Text(
+            'You and your friend each get a month of Pro.',
+            style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.card_giftcard, color: Colors.white, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Refer a Friend',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
+          const SizedBox(height: AppConstants.spacing16),
+          PaperSurface(
+            lift: 0,
+            grain: false,
+            color: tokens.stock.sunk,
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.spacing16,
+              AppConstants.spacing8,
+              AppConstants.spacing4,
+              AppConstants.spacing8,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Your code',
+                        style: text.bodySmall?.copyWith(
+                          color: tokens.textSecondary,
                         ),
-                        Text(
-                          'Both get 1 month of Pro free!',
-                          style: TextStyle(
-                            color: Colors.white.withAlpha(204),
-                            fontSize: 13,
-                          ),
+                      ),
+                      SelectableText(
+                        code,
+                        style: text.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1,
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(38),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Your Code',
-                            style: TextStyle(
-                              color: Colors.white.withAlpha(179),
-                              fontSize: 11,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            code,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ],
                       ),
-                    ),
-                    IconButton(
-                      onPressed: onCopy,
-                      icon: const Icon(Icons.copy, color: Colors.white),
-                      tooltip: 'Copy',
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onCopy,
-                      icon: const Icon(Icons.link),
-                      label: const Text('Copy Link'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withAlpha(128)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Builder(
-                      builder: (buttonContext) {
-                        return ElevatedButton.icon(
-                          onPressed: () => onShare(
-                            sharePositionOrigin: _originFrom(buttonContext),
-                          ),
-                          icon: const Icon(Icons.share),
-                          label: const Text('Share'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF6366F1),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              if (timesUsed > 0) ...[
-                const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    '$timesUsed friend${timesUsed == 1 ? '' : 's'} have used your code!',
-                    style: TextStyle(
-                      color: Colors.white.withAlpha(204),
-                      fontSize: 13,
-                    ),
-                  ),
+                IconButton(
+                  onPressed: onCopy,
+                  tooltip: 'Copy link',
+                  icon: const Icon(Icons.copy_rounded),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: AppConstants.spacing16),
+          Builder(
+            builder: (buttonContext) => ElevatedButton.icon(
+              onPressed: () =>
+                  onShare(sharePositionOrigin: _originFrom(buttonContext)),
+              icon: const Icon(Icons.ios_share_rounded, size: 20),
+              label: const Text('Share invite'),
+            ),
+          ),
+          if (timesUsed > 0) ...[
+            const SizedBox(height: AppConstants.spacing12),
+            Text(
+              timesUsed == 1
+                  ? '1 friend has used your code.'
+                  : '$timesUsed friends have used your code.',
+              style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ],
       ),
     );
   }

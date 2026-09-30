@@ -28,6 +28,12 @@ logger = get_context_logger(__name__)
 # =============================================================================
 
 
+# Extraction reads facts from an image; low temperature keeps it repeatable.
+EXTRACTION_TEMPERATURE = 0.1
+# people[].confidence below this is "not sure": a current-user flag is dropped
+# (matches the profile-match instruction in the prompt).
+MIN_MATCH_CONFIDENCE = 0.6
+
 VALID_CATEGORIES = [
     "tops",
     "bottoms",
@@ -55,7 +61,7 @@ MULTI_ITEM_RESPONSE_FORMAT: Dict[str, Any] = {
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
-                            "category": {"type": "string"},
+                            "category": {"type": "string", "enum": VALID_CATEGORIES},
                             "sub_category": {"type": ["string", "null"]},
                             "colors": {
                                 "type": "array",
@@ -147,6 +153,7 @@ You are given TWO images:
 - Image 2: the current user's profile picture.
 
 Match the current user in Image 1 against Image 2 and set is_current_user_person=true only for that matched person.
+Match on face and hair only, not on clothing. If you are not sure (people[].confidence below 0.6), treat it as no match.
 If no confident match exists, set is_current_user_person=false for everyone and profile_match_found=false.
 """
     else:
@@ -156,6 +163,7 @@ Set is_current_user_person=false for all people and profile_match_found=false.
 """
 
     return f"""Analyze the outfit photo and detect ALL visible clothing items worn by foreground people.
+If no person is shown (flat lay, hanger, or product photo), detect every clothing item shown and set person_id, person_label and is_current_user_person to null.
 Ignore background crowd members and non-wearable objects.
 
 {reference_text}
@@ -163,15 +171,15 @@ Ignore background crowd members and non-wearable objects.
 For each detected item:
 1. category (one of: tops, bottoms, shoes, accessories, outerwear, swimwear, activewear, other)
 2. sub_category
-3. colors (lowercase array)
-4. material
-5. pattern
+3. colors (lowercase basic color names, most dominant first, max 4; ignore skin, hair and background)
+4. material (only if visible, e.g. denim, knit, leather; else null)
+5. pattern (one of: solid, striped, checked, plaid, floral, graphic, print, polka-dot, animal, camouflage, other)
 6. brand (null if unknown)
 7. confidence (0.0 to 1.0)
 8. boundingBox — see BOUNDING BOX RULES below
 9. detailedDescription — see DETAILED DESCRIPTION RULES below (critical for image generation fidelity)
-10. person_id
-11. person_label
+10. person_id ("person_1", "person_2", ... left to right; must match an entry in people[])
+11. person_label (short visible cue, e.g. "left, red jacket")
 12. is_current_user_person
 
 DETAILED DESCRIPTION RULES (critical — this paragraph drives the image generator):
@@ -192,7 +200,7 @@ EXACT ORDER, separated by ";":
    yellowing at collar"
   "high-rise wide-leg jeans; mid-blue indigo wash; no print; faded vertical
    honeycomb whiskering at hips; classic 5-pocket waist with belt loops; full
-   length raw hem; front slash + back patch pockets; 12oz twill denim; matte
+   length raw hem; front slash + back patch pockets; rigid twill denim; matte
    broken-in mild knee bagging; antiqued brass rivets; leather patch back-right
    waist; slim-straight through thigh wide from knee; contrast orange bartack
    stitching"
@@ -221,14 +229,23 @@ Also return people[] summary with:
 - is_current_user_person
 - confidence
 
+If a value is not visible, use null. Do not guess brands from style alone; set brand only from a visible logo or label.
 Return JSON only according to the schema.
 """
 
 
+SINGLE_ITEM_DESCRIPTION_RULES = (
+    'one dense paragraph (>= 35 words) of observable visual facts separated by ";": '
+    "cut/silhouette; colorway; print; pattern; collar/neckline; sleeves; hem; "
+    "pockets/buttons/zips; fabric look; texture/sheen; hardware; logo placement; fit. "
+    'Write "none" for parts that do not apply. No vague praise.'
+)
+
+
 SINGLE_ITEM_EXTRACTION_PROMPT = """Analyze this clothing image and describe the single item shown.{category_hint}
 
-IMPORTANT: Focus ONLY on the main subject in the foreground.
-Ignore background elements and people.
+IMPORTANT: Focus ONLY on the main garment in the foreground. It may be worn by a person.
+Ignore the background, the wearer's body, and any other garments.
 
 Provide:
 1. category (tops, bottoms, shoes, accessories, outerwear, swimwear, activewear, other)
@@ -238,9 +255,12 @@ Provide:
 5. pattern
 6. brand (if visible, otherwise null)
 7. confidence (0-1)
+8. description: {description_rules}
 
-Return ONLY valid JSON in this exact format:
-{
+Use null for values that are not visible. Set brand only from a visible logo or label.
+
+Return ONLY valid JSON with these keys (the values below show the shape only):
+{{
   "category": "tops",
   "sub_category": "t-shirt",
   "colors": ["blue"],
@@ -248,13 +268,18 @@ Return ONLY valid JSON in this exact format:
   "pattern": "solid",
   "brand": null,
   "confidence": 0.9,
-  "description": "A blue cotton t-shirt"
-}"""
+  "description": "..."
+}}"""
 
 
-COLOR_DETECTION_PROMPT = """Identify the dominant colors in this clothing image.
+COLOR_DETECTION_PROMPT = """Identify the dominant colors of the clothing item in this image.
 
-Return only a JSON array of lowercase color names (e.g. ["black", "white", "navy"])."""
+Rules:
+- Max 4 colors, most dominant (largest area) first.
+- Ignore the background, skin, hair, and shadows.
+- Use lowercase basic color names (e.g. black, white, grey, navy, blue, red, green, beige, brown, pink).
+
+Return only a JSON array (e.g. ["black", "white", "navy"])."""
 
 
 # =============================================================================
@@ -437,6 +462,7 @@ class ItemExtractionAgent:
                 prompt=prompt,
                 images=images,
                 response_format=MULTI_ITEM_RESPONSE_FORMAT,
+                temperature=EXTRACTION_TEMPERATURE,
             )
 
             if not response.text:
@@ -523,6 +549,9 @@ class ItemExtractionAgent:
         person_order: List[str] = []
         person_lookup: Dict[str, Dict[str, Any]] = {}
         raw_to_canonical: Dict[str, str] = {}
+        # people[] confidence only: the merged meta["confidence"] also absorbs
+        # garment confidence, which says nothing about the face match.
+        people_conf: Dict[str, float] = {}
 
         def ensure_person(
             raw_person_id: Any,
@@ -560,12 +589,14 @@ class ItemExtractionAgent:
         for person in raw_people:
             if not isinstance(person, dict):
                 continue
-            ensure_person(
+            person_confidence = _clamp_confidence(person.get("confidence"), 0.0)
+            canonical = ensure_person(
                 raw_person_id=person.get("person_id") or person.get("id"),
                 raw_person_label=person.get("person_label") or person.get("label"),
                 is_current_user_person=_to_bool(person.get("is_current_user_person"), False),
-                confidence=_clamp_confidence(person.get("confidence"), 0.0),
+                confidence=person_confidence,
             )
+            people_conf[canonical] = max(people_conf.get(canonical, 0.0), person_confidence)
 
         for item in raw_items:
             if not isinstance(item, dict):
@@ -585,12 +616,18 @@ class ItemExtractionAgent:
             item_confidence = _clamp_confidence(item.get("confidence"), 0.5)
             item_is_current_user = _to_bool(item.get("is_current_user_person"), False)
 
-            person_id = ensure_person(
-                raw_person_id=item.get("person_id") or item.get("personId"),
-                raw_person_label=item.get("person_label") or item.get("personLabel"),
-                is_current_user_person=item_is_current_user,
-                confidence=item_confidence,
-            )
+            raw_person_id = item.get("person_id") or item.get("personId")
+            raw_person_label = item.get("person_label") or item.get("personLabel")
+            if _clean_text(raw_person_id) or _clean_text(raw_person_label):
+                person_id: Optional[str] = ensure_person(
+                    raw_person_id=raw_person_id,
+                    raw_person_label=raw_person_label,
+                    is_current_user_person=item_is_current_user,
+                    confidence=item_confidence,
+                )
+            else:
+                # Flat-lay / no wearer: no invented "Person N".
+                person_id = None
 
             processed_item = {
                 "temp_id": _generate_temp_id(),
@@ -612,10 +649,21 @@ class ItemExtractionAgent:
             }
             items.append(processed_item)
 
-        current_user_count = sum(1 for item in items if item.get("is_current_user_person"))
-        profile_match_found = has_profile_reference and (
-            _to_bool(parsed.get("profile_match_found"), False) or current_user_count > 0
+        # Drop current-user flags the model was not sure about (or that have no
+        # people[] entry to vouch for them) before they can drive the match.
+        for canonical, meta in person_lookup.items():
+            if people_conf.get(canonical, 0.0) < MIN_MATCH_CONFIDENCE:
+                meta["is_current_user_person"] = False
+        for item in items:
+            if people_conf.get(item["person_id"], 0.0) < MIN_MATCH_CONFIDENCE:
+                item["is_current_user_person"] = False
+
+        current_user_count = sum(1 for item in items if item.get("is_current_user_person")) + sum(
+            1
+            for canonical in {item["person_id"] for item in items}
+            if person_lookup.get(canonical, {}).get("is_current_user_person")
         )
+        profile_match_found = has_profile_reference and current_user_count > 0
 
         if not has_profile_reference:
             for item in items:
@@ -623,16 +671,15 @@ class ItemExtractionAgent:
 
         if has_profile_reference and profile_match_found:
             for item in items:
-                item["include_in_wardrobe"] = bool(item.get("is_current_user_person"))
+                # No wearer (flat-lay) is never filtered out by the profile match.
+                item["include_in_wardrobe"] = item["person_id"] is None or bool(
+                    item.get("is_current_user_person")
+                )
         else:
             for item in items:
                 item["include_in_wardrobe"] = True
 
-        used_person_ids = {item["person_id"] for item in items}
-        # Defensive: ensure_person above always assigns a person_id to every
-        # item, so this fallback can never fire.
-        if not used_person_ids and items:  # pragma: no cover - person_id always assigned
-            used_person_ids = {"person_1"}
+        used_person_ids = {item["person_id"] for item in items if item["person_id"]}
 
         non_current_counter = 1
         people: List[Dict[str, Any]] = []
@@ -664,6 +711,9 @@ class ItemExtractionAgent:
             )
 
         for item in items:
+            if item["person_id"] is None:
+                item["person_label"] = None
+                continue
             meta = person_lookup.get(item["person_id"], {})
             item["person_label"] = meta.get("person_label") or "Person"
             if not profile_match_found:
@@ -701,12 +751,16 @@ class ItemExtractionAgent:
         logger.debug("Extracting single item from image", category_hint=category_hint)
 
         hint_text = f" The item is likely a {category_hint}." if category_hint else ""
-        prompt = SINGLE_ITEM_EXTRACTION_PROMPT.format(category_hint=hint_text)
+        prompt = SINGLE_ITEM_EXTRACTION_PROMPT.format(
+            category_hint=hint_text, description_rules=SINGLE_ITEM_DESCRIPTION_RULES
+        )
 
         try:
             response = await self.ai_service.chat_with_vision(
                 prompt=prompt,
                 images=[image_base64],
+                response_format={"type": "json_object"},
+                temperature=EXTRACTION_TEMPERATURE,
             )
 
             if not response.text:
@@ -719,7 +773,7 @@ class ItemExtractionAgent:
                     "category": "other",
                     "colors": [],
                     "confidence": 0,
-                    "description": response.text,
+                    "description": None,
                 }
 
             colors = parsed.get("colors", [])
@@ -769,6 +823,7 @@ class ItemExtractionAgent:
             response = await self.ai_service.chat_with_vision(
                 prompt=COLOR_DETECTION_PROMPT,
                 images=[image_base64],
+                temperature=EXTRACTION_TEMPERATURE,
             )
 
             if not response.text:

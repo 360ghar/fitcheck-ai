@@ -1,7 +1,7 @@
 # Design
 
 Status: draft  
-Last updated: 2026-09-13
+Last updated: 2026-09-25
 
 Visual and interaction direction for FitCheck web (and guidance for mobile parity).
 
@@ -24,10 +24,18 @@ in `docs/exec-plans/active/clay-rebuild.md` and tokenized in
 - **Radii:** 12px controls (`rounded-md`), 24px feature cards
   (`rounded-2xl`/`3xl`), 32px sections (`rounded-[2rem]`), 40px page containers
   (`rounded-[2.5rem]`).
-- **Type:** Inter + Manrope; display up to `clamp(3.5rem, 8vw, 5rem)`,
+- **Type:** Inter + Manrope (self-hosted, `@font-face` in `frontend/src/index.css`); display up to `clamp(3.5rem, 8vw, 5rem)`,
   tracking −0.03em, weight ≤600.
 
 Token details and contrast tables live in `frontend/DESIGN.md`.
+
+## Brand mark (2026-09-25)
+
+One mark for every surface: Facet F, a jade folded F with a mint middle arm.
+The approved reference, vector master, colours and export rules are in
+`docs/brand/README.md`. Web and mobile retain their own visual systems;
+the mark is shared. In-app logos are transparent. Installed app icons use a
+dark ink background with the platform's corner mask.
 
 ## Foundations
 

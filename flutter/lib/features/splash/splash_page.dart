@@ -1,250 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
-import '../../../app/routes/app_routes.dart';
-import '../../../app/themes/app_colors.dart';
-import '../auth/controllers/auth_controller.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/widgets/app_ui.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../auth/providers/auth_provider.dart';
 
-class SplashPage extends StatefulWidget {
+/// First screen: the wordmark over a paper landscape while the session is
+/// restored. Everything is painted on the first frame; only the garments on
+/// the line sway. The router leaves this page once the session is restored.
+class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
 
   @override
-  State<SplashPage> createState() => _SplashPageState();
+  ConsumerState<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage>
-    with SingleTickerProviderStateMixin {
-  static const String _titleText = 'FitCheck AI';
-  late final AnimationController _controller;
-  late final List<Animation<double>> _letterAnimations;
-  late final Animation<double> _cursorAnimation;
+class _SplashPageState extends ConsumerState<SplashPage> {
+  bool _precached = false;
 
   @override
   void initState() {
     super.initState();
-
-    // Total duration: 2.5 seconds for all letters to appear
-    const totalDuration = Duration(milliseconds: 2500);
-    const staggerDelay = Duration(milliseconds: 150); // Delay between each letter
-
-    _controller = AnimationController(
-      vsync: this,
-      duration: totalDuration,
-    );
-
-    // Create individual animations for each letter with staggered delays
-    _letterAnimations = List.generate(
-      _titleText.length,
-      (index) {
-        final delay = index * staggerDelay.inMilliseconds;
-        final startTime = delay / totalDuration.inMilliseconds;
-        final endTime = ((delay + staggerDelay.inMilliseconds * 2) / totalDuration.inMilliseconds).clamp(0.0, 1.0);
-
-        return TweenSequence<double>([
-          TweenSequenceItem(
-            tween: Tween(begin: 0.0, end: 0.0),
-            weight: startTime.clamp(0.001, 1.0),
-          ),
-          TweenSequenceItem(
-            tween: Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeOutBack)),
-            weight: (endTime - startTime).clamp(0.001, 1.0),
-          ),
-          TweenSequenceItem(
-            tween: ConstantTween(1.0),
-            weight: (1.0 - endTime).clamp(0.001, 1.0),
-          ),
-        ]).animate(_controller);
-      },
-    );
-
-    // Cursor blinking animation
-    _cursorAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 1.0, curve: Curves.easeInOut),
-      ),
-    );
-
-    _controller.forward();
     _initializeApp();
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _initializeApp() async {
-    final authController = Get.find<AuthController>();
-    const minSplashDuration = Duration(milliseconds: 900);
-    await Future.wait([
-      authController.initializeAuth(),
-      Future.delayed(minSplashDuration),
-    ]);
-
-    if (!mounted) return;
-
-    // `isAuthenticated` additionally requires the backend profile
-    // (`user.value`) to have loaded. `_initializeAuth` swallows /users/me
-    // errors, so an offline or 5xx start left a valid session with a null
-    // profile — and routing that to onboarding signed the user out. A
-    // restored Supabase session is enough to enter the shell, which
-    // tolerates a late profile refresh.
-    if (authController.isAuthenticated || authController.hasSession) {
-      Get.offAllNamed(Routes.home);
-    } else {
-      Get.offAllNamed(Routes.onboarding);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_precached) {
+      _precached = true;
+      precachePaperGrain(context);
     }
   }
 
+  void _initializeApp() => ref.read(authProvider.notifier).initialize();
+
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFFAFAFA);
-    final primaryColor = isDarkMode ? Colors.white : Colors.black;
-    // Brand accents (Wardrobe Studio red + editorial purple) instead of the
-    // previous off-brand indigo/pink/rose that matched nothing in the app.
-    final secondaryColor = AppColors.secondary;
-    final accentColor = AppColors.primary;
-
-    final overlayStyle = isDarkMode
-        ? SystemUiOverlayStyle.light
-        : SystemUiOverlayStyle.dark;
-
-    final styledOverlay = overlayStyle.copyWith(
-      statusBarColor: Colors.transparent,
-      systemNavigationBarColor: backgroundColor,
-      statusBarIconBrightness: isDarkMode ? Brightness.light : Brightness.dark,
-      systemNavigationBarIconBrightness: isDarkMode ? Brightness.light : Brightness.dark,
-    );
-
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: styledOverlay,
-        child: Center(
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              // 10 letters at fontSize 52 + cursor exceed ~300px; scale the
-              // whole word down on very narrow surfaces instead of overflowing.
-              return FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
+    return PaperStockScope(
+      stock: PaperStockId.ink,
+      child: Builder(
+        builder: (context) {
+          final tokens = PaperTokens.of(context);
+          final dark = Theme.of(context).brightness == Brightness.dark;
+          final display = Theme.of(context).textTheme.displayMedium;
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: dark
+                ? SystemUiOverlayStyle.light
+                : SystemUiOverlayStyle.dark,
+            child: Scaffold(
+              backgroundColor: tokens.stock.page,
+              body: PaperScene(
+                preset: PaperScenes.auth,
+                height: null,
+                parallax: 0,
+                // The mark sits at the screen centre at the native launch
+                // image's size, so the hand-off does not jump.
+                child: Column(
                   children: [
-                    // Animated letters
-                    ...List.generate(_titleText.length, (index) {
-                      final letter = _titleText[index];
-                      final animation = _letterAnimations[index];
-
-                      return _AnimatedLetter(
-                        letter: letter,
-                        animation: animation,
-                        primaryColor: primaryColor,
-                        secondaryColor: secondaryColor,
-                        accentColor: accentColor,
-                        index: index,
-                      );
-                    }),
-
-                    // Typing cursor
-                    _buildCursor(_cursorAnimation, accentColor),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCursor(Animation<double> animation, Color color) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        final opacity = (animation.value * 0.5 + 0.5).clamp(0.0, 1.0);
-        return Container(
-          width: 3,
-          height: 48,
-          margin: const EdgeInsets.only(left: 4),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: opacity),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _AnimatedLetter extends StatelessWidget {
-  final String letter;
-  final Animation<double> animation;
-  final Color primaryColor;
-  final Color secondaryColor;
-  final Color accentColor;
-  final int index;
-
-  const _AnimatedLetter({
-    required this.letter,
-    required this.animation,
-    required this.primaryColor,
-    required this.secondaryColor,
-    required this.accentColor,
-    required this.index,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        final scale = animation.value;
-        final opacity = animation.value.clamp(0.0, 1.0);
-
-        // Use accent color for special letters (F, C, A). "FitCheck AI" maps
-        // F=0, C=3, A=9 -- the C was previously keyed to index 5 ('e'), so it
-        // silently never rendered in the accent color.
-        final isAccentLetter = letter == 'F' && index == 0 ||
-                               letter == 'C' && index == 3 ||
-                               letter == 'A' && index == 9;
-
-        final letterColor = isAccentLetter ? accentColor : primaryColor;
-
-        return Transform.scale(
-          scale: scale,
-          child: Opacity(
-            opacity: opacity,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 1),
-              child: Text(
-                letter,
-                style: TextStyle(
-                  fontSize: 52,
-                  fontWeight: FontWeight.w800,
-                  color: letterColor,
-                  letterSpacing: 0,
-                  height: 1.0,
-                  shadows: [
-                    Shadow(
-                      color: letterColor.withValues(alpha: 0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
+                    const Spacer(),
+                    const BrandMark(width: 160),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppConstants.spacing24,
+                          ),
+                          child: BrandWordmark(
+                            size: display?.fontSize ?? 44,
+                            showMark: false,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:get/get.dart';
+import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/exceptions/app_exceptions.dart';
@@ -16,10 +16,10 @@ import 'iap_service.dart';
 /// automatic redelivery can never fix these, so the UI must stop promising
 /// "picked up automatically" and point at the only real path: support.
 const String kPurchaseNotAppliedMessage =
-    'Your purchase could not be applied to your account. Please contact '
-    'support — do not purchase again.';
+    'Your purchase could not be applied to your account. Contact support, '
+    'and do not buy it again.';
 
-/// How a purchase-verification attempt ended. The page controller maps these
+/// How a purchase-verification attempt ended. The paywall maps these
 /// to page state and toasts; the background drain maps them to telemetry and
 /// (rarely) a snackbar.
 enum PurchaseVerificationOutcome {
@@ -72,7 +72,7 @@ class PurchaseVerificationResult {
 
 /// App-lifetime owner of the in_app_purchase stream.
 ///
-/// Why this exists: [SubscriptionController] used to be the ONLY listener,
+/// Why this exists: The paywall page used to be the ONLY listener,
 /// and it lives only while the paywall page is open. A purchase whose
 /// backend verification failed (network drop at the wrong moment) stayed
 /// unfinished with nothing draining it until the user happened to reopen the
@@ -95,14 +95,13 @@ class PurchaseVerificationResult {
 ///   matter which path delivers it (page + background overlap, store
 ///   redeliveries, iOS upgrade batches).
 ///
-/// Registered permanently in InitialBinding (same lifecycle as
-/// [SupabaseService]) — Get.put inside InitialBinding survives route
-/// disposal, which is exactly what makes the recovery app-lifetime.
-class PurchaseRecoveryService extends GetxService {
+/// Held by the app-lifetime `purchaseRecoveryServiceProvider`, which `main`
+/// reads at startup, so the recovery runs with no page open.
+class PurchaseRecoveryService {
   PurchaseRecoveryService({
     IapService? iapService,
     SubscriptionRepository? repository,
-    RxBool? isAuthenticated,
+    ValueListenable<bool>? isAuthenticated,
     String? Function()? currentUserId,
   }) : _iapOverride = iapService,
        _repositoryOverride = repository,
@@ -111,15 +110,14 @@ class PurchaseRecoveryService extends GetxService {
 
   final IapService? _iapOverride;
   final SubscriptionRepository? _repositoryOverride;
-  final RxBool? _isAuthenticatedOverride;
+  final ValueListenable<bool>? _isAuthenticatedOverride;
 
-  /// Resolves the signed-in user ID without assuming SupabaseService is
-  /// registered — widget tests build the service with no app bindings, and a
-  /// missing session must degrade to "signed out", never throw mid-drain.
+  /// Resolves the signed-in user ID. Widget tests build the service with no
+  /// Supabase client, and a missing session must degrade to "signed out",
+  /// never throw mid-drain.
   static String? _defaultCurrentUserId() {
     try {
-      if (!Get.isRegistered<SupabaseService>()) return null;
-      return Get.find<SupabaseService>().currentUserId;
+      return SupabaseService.instance.currentUserId;
     } catch (_) {
       return null;
     }
@@ -132,20 +130,19 @@ class PurchaseRecoveryService extends GetxService {
   SubscriptionRepository get _repository =>
       _repositoryOverride ?? SubscriptionRepository();
 
-  /// Auth flag observed for bootstrap attach / login re-drain. Defaults to
-  /// SupabaseService's flag when available; null (no reactivity) in tests
-  /// that construct the service standalone — per-update session gating still
-  /// guards every backend call.
-  RxBool? get _authFlag =>
-      _isAuthenticatedOverride ??
-      (Get.isRegistered<SupabaseService>()
-          ? Get.find<SupabaseService>().isAuthenticated
-          : null);
+  /// Auth flag observed for bootstrap attach / login re-drain. Per-update
+  /// session gating still guards every backend call.
+  ValueListenable<bool> get _authFlag =>
+      _isAuthenticatedOverride ?? SupabaseService.instance.isAuthenticated;
 
   final String? Function() _currentUserId;
 
+  /// The signed-in user's ID, attached to store purchases as the account
+  /// token (Apple appAccountToken, hashed for Play). Null when signed out.
+  String? get currentUserId => _currentUserId();
+
   StreamSubscription<List<PurchaseDetails>>? _streamSubscription;
-  Worker? _authWorker;
+  VoidCallback? _authListener;
 
   /// The paywall page's handler while the page is open; null when closed.
   void Function(List<PurchaseDetails> updates)? _pageHandler;
@@ -160,18 +157,15 @@ class PurchaseRecoveryService extends GetxService {
   final Set<String> _claimedTransactionIds = <String>{};
 
   /// Bootstrap: attach when a session already exists, and react to login so
-  /// a purchase stranded before sign-in still drains. Only runs for the
-  /// binding-registered instance (a page-constructed fallback never calls
-  /// this; the page attaches it explicitly).
-  @override
-  void onInit() {
-    super.onInit();
+  /// a purchase stranded before sign-in still drains.
+  void start() {
+    if (_authListener != null) return;
     final auth = _authFlag;
-    if (auth == null) return;
     // Attach only with a live session (a redelivery arriving signed-out
     // could not be verified anyway); attach + drain on every login.
     if (auth.value) _attachStream();
-    _authWorker = ever<bool>(auth, _onAuthChanged);
+    _authListener = () => _onAuthChanged(auth.value);
+    auth.addListener(_authListener!);
   }
 
   /// The plugin stream is attached HERE and only here for the whole app
@@ -217,6 +211,10 @@ class PurchaseRecoveryService extends GetxService {
   void deactivatePageHandler() {
     _pageHandler = null;
   }
+
+  /// Whether a paywall page is the active handler.
+  @visibleForTesting
+  bool get hasPageHandler => _pageHandler != null;
 
   void _onAuthChanged(bool authenticated) {
     if (authenticated) {
@@ -409,11 +407,10 @@ class PurchaseRecoveryService extends GetxService {
     return code >= 400 && code < 500 && code != 401 && code != 429;
   }
 
-  @override
-  void onClose() {
-    _authWorker?.dispose();
+  void dispose() {
+    if (_authListener != null) _authFlag.removeListener(_authListener!);
+    _authListener = null;
     detachStream();
     deactivatePageHandler();
-    super.onClose();
   }
 }

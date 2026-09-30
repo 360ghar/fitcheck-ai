@@ -767,7 +767,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     sections: [
       {
         heading: 'Ownership vs convenience',
-        body: 'Open Wardrobe gives you full control: your data on your server, no subscriptions, and code you can modify. That control comes with setup and maintenance. FitCheck AI runs on the web and Android with no infrastructure to manage, and AI does the cataloging.',
+        body: 'Open Wardrobe gives you full control: your data on your server, no subscriptions, and code you can modify. That control comes with setup and maintenance. FitCheck AI runs on the web, iOS, and Android with no infrastructure to manage, and AI does the cataloging.',
       },
       {
         heading: 'Feature set',

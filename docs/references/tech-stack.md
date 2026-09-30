@@ -1,6 +1,6 @@
 # Tech Stack
 
-Last updated: 2026-08-08
+Last updated: 2026-09-23
 
 ## Overview
 
@@ -94,7 +94,7 @@ Why:
 ### Core
 
 - Flutter (Dart SDK in `flutter/pubspec.yaml`)
-- GetX (routing + state/dependency patterns)
+- Riverpod 3 (state and dependency injection), go_router (routing)
 
 ### Networking and Data
 
@@ -171,5 +171,5 @@ Flutter keys are provided through:
 | Vector Search | Pinecone (optional) |
 | Web App | React, TypeScript, Vite, Tailwind, Zustand, TanStack Query |
 | Admin Console | React 19, Vite 7, Tailwind 4, vitest 3, openapi-fetch |
-| Mobile App | Flutter, GetX, Supabase Flutter, Dio, Shorebird |
+| Mobile App | Flutter, Riverpod, go_router, Supabase Flutter, Dio, Shorebird |
 | Testing | Pytest, frontend build/lint validation, Flutter test |

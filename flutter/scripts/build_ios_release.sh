@@ -82,6 +82,9 @@ fi
 if grep -q 'YOUR_TEAM_ID' "${EXPORT_OPTIONS_PLIST}"; then
   die "${EXPORT_OPTIONS_PLIST} still contains 'YOUR_TEAM_ID'. Replace it with the Apple Developer Team ID."
 fi
+if [ "$(plutil -extract destination raw -o - "${EXPORT_OPTIONS_PLIST}")" != 'export' ]; then
+  die "${EXPORT_OPTIONS_PLIST} must export a local IPA for the separate App Store upload step."
+fi
 
 # Production config comes from the bundled .env asset (same source the app
 # falls back to at runtime), mirroring what CI writes from GitHub secrets.

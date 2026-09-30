@@ -1,19 +1,30 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import '../../features/settings/models/user_preferences_model.dart';
 import 'persistence_service.dart';
 
 /// Theme service - handles theme persistence with local storage
 /// Loads immediately on app start, syncs with backend when online
-class ThemeService extends GetxController {
+class ThemeService {
+  ThemeService({PersistenceService? persistence})
+    : _persistence = persistence ?? PersistenceService.instance {
+    _loadCachedTheme();
+  }
+
+  /// The app-wide instance. The app widget rebuilds from [themeMode].
+  static final instance = ThemeService();
+
   static const String _themeStorageKey = 'fitcheck_theme_mode';
   static const AppThemeMode _defaultTheme = AppThemeMode.light;
 
-  PersistenceService get _persistence => Get.find<PersistenceService>();
+  final PersistenceService _persistence;
 
-  final Rx<AppThemeMode> _themeMode = _defaultTheme.obs;
+  final _themeMode = ValueNotifier<AppThemeMode>(_defaultTheme);
+
+  /// The chosen mode. Listen to rebuild on a change.
+  ValueListenable<AppThemeMode> get themeMode => _themeMode;
 
   final Completer<void> _ready = Completer<void>();
   Future<void> _themeSaveQueue = Future<void>.value();
@@ -40,12 +51,6 @@ class ThemeService extends GetxController {
     }
   }
 
-  @override
-  void onInit() {
-    super.onInit();
-    _loadCachedTheme();
-  }
-
   /// Load theme from local storage immediately on app start
   Future<void> _loadCachedTheme() async {
     try {
@@ -57,7 +62,6 @@ class ThemeService extends GetxController {
           orElse: () => _defaultTheme,
         );
         _themeMode.value = mode;
-        Get.changeThemeMode(currentThemeMode);
       }
       // If no stored value, keep the default (light)
     } catch (e) {
@@ -72,7 +76,6 @@ class ThemeService extends GetxController {
   /// Update theme mode - saves to local storage and applies theme
   Future<void> setThemeMode(AppThemeMode mode) async {
     _themeMode.value = mode;
-    Get.changeThemeMode(currentThemeMode);
     // Apply the latest choice immediately, but serialize persistence writes.
     // Without the queue, a slow earlier write can complete after a newer tap
     // and persist the stale mode for the next app launch.

@@ -82,18 +82,16 @@ def _payload(items, people=None, **overrides):
 
 
 @pytest.fixture
-def format_safe_single_prompt(monkeypatch):
-    """App bug workaround: SINGLE_ITEM_EXTRACTION_PROMPT contains unescaped
-    JSON braces, so ``.format(category_hint=...)`` raises KeyError on every
-    call before the try block (reported, not fixed here). Patching the module
-    constant with a format-safe template lets the function body be tested.
-    """
-    monkeypatch.setattr(
-        _item_agent_module,
-        "SINGLE_ITEM_EXTRACTION_PROMPT",
-        "Analyze this clothing image and describe the single item shown."
-        "{category_hint}\n\nReturn JSON only.",
+def format_safe_single_prompt():
+    """Kept for existing test signatures; the real prompt now formats safely."""
+
+
+def test_single_item_prompt_formats():
+    prompt = _item_agent_module.SINGLE_ITEM_EXTRACTION_PROMPT.format(
+        category_hint=" hint",
+        description_rules=_item_agent_module.SINGLE_ITEM_DESCRIPTION_RULES,
     )
+    assert '"category": "tops"' in prompt and "hint" in prompt
 
 
 # =============================================================================
@@ -244,7 +242,7 @@ def test_parse_json_object_empty_and_bare_text():
 
 
 @pytest.mark.asyncio
-async def test_extract_multiple_items_person_without_id_gets_generated_label():
+async def test_extract_multiple_items_flat_lay_item_gets_no_person_and_you_label_becomes_person_n():
     payload = _payload(
         items=[
             _item(person_id=None, person_label=None),
@@ -254,12 +252,58 @@ async def test_extract_multiple_items_person_without_id_gets_generated_label():
     agent = _agent(json.dumps(payload))
     result = await agent.extract_multiple_items(image_base64="img")
 
-    # No raw id -> no canonical mapping; default labels, forbidden labels
-    # replaced with Person N.
+    # Flat-lay item (no id, no label) has no wearer: no invented person. The
+    # forbidden label "you" on the second item is replaced with Person N.
     labels = [p["person_label"] for p in result["people"]]
-    assert labels == ["Person 1", "Person 2"]
-    assert result["items"][0]["person_id"] == "person_1"
-    assert result["items"][1]["person_id"] == "person_2"
+    assert labels == ["Person 1"]
+    assert result["items"][0]["person_id"] is None
+    assert result["items"][0]["person_label"] is None
+    assert result["items"][0]["include_in_wardrobe"] is True
+    assert result["items"][1]["person_id"] == "person_1"
+
+
+@pytest.mark.asyncio
+async def test_extract_multiple_items_flat_lay_has_no_person():
+    payload = _payload(
+        items=[_item(person_id=None, person_label=None) for _ in range(2)],
+    )
+    agent = _agent(json.dumps(payload))
+    result = await agent.extract_multiple_items(
+        image_base64="img", user_profile_image_base64="avatar"
+    )
+
+    assert result["people"] == []
+    assert all(i["person_id"] is None and i["person_label"] is None for i in result["items"])
+    assert all(i["include_in_wardrobe"] is True for i in result["items"])
+    assert result["profile_match_found"] is False
+
+
+@pytest.mark.asyncio
+async def test_extract_multiple_items_low_confidence_match_is_demoted():
+    # people[] confidence 0.5 is below the cutoff even though the flag, the
+    # model's profile_match_found and the garment confidence (0.9) all say match.
+    people = [
+        {"person_id": "p1", "person_label": "A", "is_current_user_person": True, "confidence": 0.5},
+        {"person_id": "p2", "person_label": "B", "is_current_user_person": False, "confidence": 0.9},
+    ]
+    payload = _payload(
+        items=[
+            _item(person_id="p1", person_label="A", is_current=True, confidence=0.9),
+            _item(person_id="p2", person_label="B", confidence=0.9),
+        ],
+        people=people,
+        profile_match_found=True,
+    )
+    agent = _agent(json.dumps(payload))
+    result = await agent.extract_multiple_items(
+        image_base64="img", user_profile_image_base64="avatar"
+    )
+
+    assert result["profile_match_found"] is False
+    assert all(i["include_in_wardrobe"] is True for i in result["items"])
+    assert all(i["is_current_user_person"] is False for i in result["items"])
+    assert all(p["is_current_user_person"] is False for p in result["people"])
+    assert "You" not in [p["person_label"] for p in result["people"]]
 
 
 @pytest.mark.asyncio
@@ -416,13 +460,13 @@ async def test_extract_single_item_empty_response_returns_empty(format_safe_sing
 
 
 @pytest.mark.asyncio
-async def test_extract_single_item_unparseable_response_returns_raw_text(format_safe_single_prompt):
+async def test_extract_single_item_unparseable_response_drops_raw_text(format_safe_single_prompt):
     result = await _agent(text="no json").extract_single_item(image_base64="img")
     assert result == {
         "category": "other",
         "colors": [],
         "confidence": 0,
-        "description": "no json",
+        "description": None,
     }
 
 

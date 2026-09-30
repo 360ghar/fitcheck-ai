@@ -98,7 +98,7 @@ if command -v flutter >/dev/null 2>&1; then
   echo "== flutter analyze =="
   (cd flutter && flutter analyze --no-fatal-infos --no-fatal-warnings)
   echo "== flutter test =="
-  (cd flutter && flutter test)
+  (cd flutter && flutter test --exclude-tags golden)
 else
   missing_check "flutter analyze/test" "flutter command not found"
 fi

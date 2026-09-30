@@ -190,6 +190,25 @@ class TestChat:
         assert image_part.inline_data.mime_type == "image/png"
 
     @pytest.mark.asyncio
+    async def test_vision_forwards_temperature(self):
+        provider = GeminiProvider(_make_config())
+        gen = AsyncMock(return_value=_fake_response(text="a shirt"))
+        with _patched_client(provider, gen):
+            await provider.chat_with_vision("describe", ["aGVsbG8="], temperature=0.1)
+        assert gen.call_args.kwargs["config"].temperature == 0.1
+
+    def test_vision_signature_matches_agent_call_kwargs(self):
+        # The extraction agent passes temperature= to whichever provider the
+        # user picked; every provider (and the protocol) must accept it.
+        import inspect
+
+        from app.services.ai_provider_interface import AIProviderClient
+        from app.services.ai_provider_service import AIProviderService
+
+        for cls in (GeminiProvider, AIProviderService, AIProviderClient):
+            assert "temperature" in inspect.signature(cls.chat_with_vision).parameters
+
+    @pytest.mark.asyncio
     async def test_generate_image_sets_response_modalities(self):
         provider = GeminiProvider(_make_config())
         gen = AsyncMock(return_value=_fake_response(images=[b"imgbytes"]))
@@ -226,20 +245,21 @@ class TestResponseFormatMapping:
         assert config.response_schema is None
 
     @pytest.mark.asyncio
-    async def test_json_schema_also_maps_to_mime_type_without_schema(self):
-        """v1 does not translate OpenAI json_schema contracts to Gemini's
-        response_schema (incompatible schema dialects) - guard against a
-        future change silently reintroducing this without reading the note."""
+    async def test_json_schema_maps_to_response_json_schema(self):
+        """OpenAI json_schema contracts go to response_json_schema (full JSON
+        Schema), never to the OpenAPI-subset response_schema."""
+        schema = {"type": "object", "additionalProperties": False, "properties": {"a": {"type": ["string", "null"]}}}
         provider = GeminiProvider(_make_config())
         gen = AsyncMock(return_value=_fake_response(text="{}"))
         with _patched_client(provider, gen):
             await provider.chat(
                 messages=[ChatMessage(role="user", content="hi")],
-                response_format={"type": "json_schema", "json_schema": {"name": "x", "schema": {}}},
+                response_format={"type": "json_schema", "json_schema": {"name": "x", "schema": schema}},
             )
         config = gen.call_args.kwargs["config"]
         assert config.response_mime_type == "application/json"
         assert config.response_schema is None
+        assert config.response_json_schema == schema
 
     @pytest.mark.asyncio
     async def test_image_modalities_take_precedence_over_response_format(self):

@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from app.api.v1 import items as items_module
+from app.services import item_save_service as save_service
 from app.core.exceptions import (
     AIServiceError,
     DatabaseError,
@@ -149,13 +150,17 @@ def _patch_embedding(
 
 
 def _patch_vector_service(monkeypatch) -> Mock:
-    """Patch items_module.get_vector_service to return a Mock with AsyncMock ops."""
+    """Patch get_vector_service to return a Mock with AsyncMock ops.
+
+    Patched on both the route module (update/delete paths) and the save
+    service (the create core moved there; routes stay thin)."""
     vector = Mock()
     vector.upsert_item = AsyncMock(return_value=True)
     vector.delete_item = AsyncMock(return_value=True)
     vector.batch_delete = AsyncMock(return_value=0)
     vector.find_similar = AsyncMock(return_value=[])
     monkeypatch.setattr(items_module, "get_vector_service", lambda: vector)
+    monkeypatch.setattr(save_service, "get_vector_service", lambda: vector)
     return vector
 
 
@@ -457,7 +462,15 @@ async def test_create_item_persists_client_request_id(monkeypatch):
 async def test_create_item_replays_existing_row_for_repeated_client_request_id(monkeypatch):
     """F1-07: a transport retry that committed before the response was lost
     must replay the original row instead of inserting a duplicate item."""
-    db = FakeDB(rows={"items": [_item_row(client_request_id="req-abc")]})
+    # The committed original already has its image rows (a half-committed
+    # original without images is a retryable failure, not a replay).
+    db = FakeDB(
+        rows={
+            "items": [
+                _item_row(client_request_id="req-abc", item_images=[_image_row()])
+            ]
+        }
+    )
     reserve, generate, release = _patch_embedding(monkeypatch)
     _patch_vector_service(monkeypatch)
 
@@ -475,6 +488,9 @@ async def test_create_item_replays_existing_row_for_repeated_client_request_id(m
     assert result["message"] == "Created"
     assert result["data"]["id"] == ITEM_ID
     assert result["data"]["name"] == "Crew-neck tee"
+    # The raw Supabase relation is normalized to the public `images` field.
+    assert result["data"]["images"][0]["id"] == IMAGE_ID
+    assert "item_images" not in result["data"]
     # No second items insert (the replay path returns before the write).
     assert all(t != "items" for t, _p, _c in db.inserts)
     reserve.assert_not_awaited()
@@ -524,7 +540,7 @@ async def test_create_item_race_collapses_onto_client_request_id_winner(monkeypa
             return SimpleNamespace(data=[], count=0)
         raise AssertionError(f"unexpected operation: {extra}")
 
-    monkeypatch.setattr(items_module, "execute_with_reconnect", flaky_execute)
+    monkeypatch.setattr(save_service, "execute_with_reconnect", flaky_execute)
 
     result = await items_module.create_item(
         item=ItemCreate(name="Tee", category="tops", client_request_id="req-abc"),
@@ -2438,7 +2454,7 @@ async def test_create_item_rolls_back_promoted_images_when_image_insert_fails(mo
     monkeypatch.setattr(StorageService, "copy_temp_image_to_item", staticmethod(fake_promote))
     monkeypatch.setattr(StorageService, "delete_image", staticmethod(fake_delete_image))
 
-    real = items_module.execute_with_reconnect
+    real = save_service.execute_with_reconnect
     state = {"calls": 0}
 
     async def flaky(callable_, db_, **kwargs):
@@ -2447,7 +2463,7 @@ async def test_create_item_rolls_back_promoted_images_when_image_insert_fails(mo
             raise RuntimeError("image insert boom")
         return await real(callable_, db_, **kwargs)
 
-    monkeypatch.setattr(items_module, "execute_with_reconnect", flaky)
+    monkeypatch.setattr(save_service, "execute_with_reconnect", flaky)
 
     item = ItemCreate(
         name="Tee",

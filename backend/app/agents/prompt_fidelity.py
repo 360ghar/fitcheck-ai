@@ -13,7 +13,7 @@ meta-instructions — they waste context and do not improve weak model fidelity.
 # This lock binds every reference to ONE subject wearing the WHOLE outfit and
 # bans any second figure outright.
 SINGLE_PERSON_LOCK = """SINGLE PERSON LOCK (highest priority):
-- ALL reference images show the SAME single person - the main subject - wearing the outfit described below.
+- The person reference image (IMAGE 1) shows the ONE main subject; every other reference image supplies garment appearance only.
 - Output EXACTLY ONE person: no second person, no background figures, no group or double shot, no mannequin.
 - The one person wears ALL the outfit items together; never split the outfit across multiple people.
 - Ignore and discard any other person, face, or body visible in the reference images - never render or merge them.
@@ -43,7 +43,7 @@ IDENTITY_LOCK = """IDENTITY LOCK (highest priority):
 # request and 400'd Agnes; IDENTITY_LOCK already pins appearance positively).
 SHORT_NEGATIVES = (
     "AVOID: different person, face morph, beauty filter, plastic skin, "
-    "extra limbs, distorted hands, watermark, text, second person"
+    "extra limbs, distorted hands, watermark, added text or captions, second person"
 )
 
 # Garment-only counterpart for no-person paths (flat lay, product shot).
@@ -65,7 +65,7 @@ PRODUCT_TEXT_ONLY_NEGATIVES = (
 # Outfit fidelity when inventory is provided
 OUTFIT_LOCK = """OUTFIT LOCK:
 - Match every listed clothing/footwear/accessory item exactly.
-- Preserve color shades, materials, patterns, silhouette, fit, logos, and hardware.
+- Preserve color shades, materials, patterns, silhouette, fit, existing logos, and hardware.
 - Do not add, remove, swap, or invent items."""
 
 # Closing block for both outfit person branches. Agnes weights the LAST text
@@ -80,13 +80,12 @@ OUTFIT_OUTPUT_CONTRACT = """OUTPUT CONTRACT (final - overrides everything above)
 - Reproduce every garment exactly - from its reference image when one is provided, otherwise from its inventory description."""
 
 # Combined appendix for photoshoot image generation (appended after full_prompt)
-PHOTOSHOOT_FIDELITY_APPENDIX = f"""{IDENTITY_LOCK}
+# The locks and negatives already come from sandwich_prompt(); repeating them
+# only dilutes a weak model's attention. The appendix labels the references
+# and closes with the one rule that must win.
+PHOTOSHOOT_FIDELITY_APPENDIX = """REFERENCE IMAGES: every image shows the SAME person. They are identity references only (face, body, hair, skin), not outfit or scene references.
 
-{OUTFIT_LOCK}
-
-{SHORT_NEGATIVES}
-
-Output one photoreal image of THIS exact person. Face must stay clearly visible."""
+Output one photoreal image of THIS exact person. Face must stay clearly visible. If any text conflicts with the reference images for face, body, hair or skin, follow the images."""
 
 # Compact block for outfit/try-on prompts that already include inventory.
 # SINGLE_PERSON_LOCK leads: a weak model must know there is exactly one

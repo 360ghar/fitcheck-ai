@@ -34,7 +34,7 @@ export function Sidebar({
           collapsed && 'justify-center px-2',
         )}
       >
-        <img src="/favicon.svg" alt="" className="size-6 shrink-0" aria-hidden="true" />
+        <img src="/favicon.svg?v=facet-f-1" alt="" className="size-6 shrink-0" aria-hidden="true" />
         {!collapsed ? (
           <span className="text-sm font-bold tracking-tight text-ink">{t('brand')}</span>
         ) : null}

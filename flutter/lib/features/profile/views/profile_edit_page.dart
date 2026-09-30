@@ -1,42 +1,45 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
-import '../../../core/widgets/app_network_image.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_ui.dart';
-import '../../auth/controllers/auth_controller.dart';
-import '../repositories/profile_repository.dart';
-import '../../../core/utils/error_handler.dart';
 
-/// Edit profile page
-class ProfileEditPage extends StatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/error_handler.dart';
+import '../../../core/widgets/app_ui.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../repositories/profile_repository.dart';
+import 'profile_content.dart' show ProfileAvatar;
+
+final profileRepositoryProvider = Provider<ProfileRepository>(
+  (ref) => ProfileRepository(),
+);
+
+/// Name, photo and optional birth details.
+class ProfileEditPage extends ConsumerStatefulWidget {
   const ProfileEditPage({super.key});
 
   @override
-  State<ProfileEditPage> createState() => _ProfileEditPageState();
+  ConsumerState<ProfileEditPage> createState() => _ProfileEditPageState();
 }
 
-class _ProfileEditPageState extends State<ProfileEditPage> {
+class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   final _formKey = GlobalKey<FormState>();
-  final ImagePicker _imagePicker = ImagePicker();
-  final ProfileRepository _repository = ProfileRepository();
+  final _imagePicker = ImagePicker();
+  ProfileRepository get _repository => ref.read(profileRepositoryProvider);
 
-  late TextEditingController _nameController;
-  late TextEditingController _birthDateController;
-  late TextEditingController _birthTimeController;
-  late TextEditingController _birthPlaceController;
-  final Rx<File?> newAvatar = Rx<File?>(null);
-  final RxBool isSaving = false.obs;
-
+  late final TextEditingController _nameController;
+  late final TextEditingController _birthDateController;
+  late final TextEditingController _birthTimeController;
+  late final TextEditingController _birthPlaceController;
+  File? _newAvatar;
+  bool _saving = false;
   String? _currentAvatarUrl;
 
   @override
   void initState() {
     super.initState();
-    final authController = Get.find<AuthController>();
-    final user = authController.user.value;
-
+    final user = ref.read(authProvider).user;
     _nameController = TextEditingController(text: user?.fullName ?? '');
     _birthDateController = TextEditingController(text: user?.birthDate ?? '');
     _birthTimeController = TextEditingController(
@@ -44,120 +47,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     );
     _birthPlaceController = TextEditingController(text: user?.birthPlace ?? '');
     _currentAvatarUrl = user?.avatarUrl;
-
     _loadProfileDetails();
-  }
-
-  Future<void> _loadProfileDetails() async {
-    try {
-      final profile = await _repository.getProfile();
-      if (!mounted) return;
-
-      final birthDate = profile['birth_date']?.toString() ?? '';
-      final birthTime = _toTimeInput(profile['birth_time']?.toString());
-      final birthPlace = profile['birth_place']?.toString() ?? '';
-      final fullName = profile['full_name']?.toString();
-      final avatarUrl = profile['avatar_url']?.toString();
-
-      setState(() {
-        if (fullName != null && fullName.isNotEmpty) {
-          _nameController.text = fullName;
-        }
-        _birthDateController.text = birthDate;
-        _birthTimeController.text = birthTime;
-        _birthPlaceController.text = birthPlace;
-        if (avatarUrl != null && avatarUrl.isNotEmpty) {
-          _currentAvatarUrl = avatarUrl;
-        }
-      });
-    } catch (_) {
-      // Keep existing local values if profile fetch fails.
-    }
-  }
-
-  Future<void> _pickAvatar() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 512,
-      maxHeight: 512,
-      imageQuality: 85,
-    );
-
-    if (image != null) {
-      newAvatar.value = File(image.path);
-    }
-  }
-
-  Future<void> _saveChanges() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_birthDateController.text.trim().isEmpty &&
-        _birthTimeController.text.trim().isNotEmpty) {
-      ErrorHandler.showValidation(
-        'Please select date of birth if birth time is provided.',
-        title: 'Date of Birth Required',
-      );
-      return;
-    }
-
-    isSaving.value = true;
-
-    try {
-      String? avatarUrl = _currentAvatarUrl;
-
-      // Upload avatar if changed
-      if (newAvatar.value != null) {
-        avatarUrl = await _repository.uploadAvatar(newAvatar.value!);
-      }
-
-      // Update profile. Empty text fields are sent as the clear sentinel
-      // ('') so a user can actually ERASE an optional birth field; null
-      // would mean "leave unchanged" server-side.
-      final result = await _repository.updateProfile(
-        fullName: _nameController.text.trim(),
-        avatarUrl: avatarUrl,
-        birthDate: _birthDateController.text.trim(),
-        birthTime: _toApiTimeOrClear(_birthTimeController.text),
-        birthPlace: _birthPlaceController.text.trim(),
-      );
-
-      final meta = result['meta'];
-      final skippedFieldsRaw = meta is Map<String, dynamic>
-          ? meta['skipped_fields']
-          : null;
-      final skippedFields = skippedFieldsRaw is List
-          ? skippedFieldsRaw.map((e) => e.toString()).toList()
-          : const <String>[];
-      final skippedBirthFields = skippedFields
-          .where(
-            (field) =>
-                field == 'birth_date' ||
-                field == 'birth_time' ||
-                field == 'birth_place',
-          )
-          .toList();
-
-      // Refresh user data in AuthController
-      final authController = Get.find<AuthController>();
-      await authController.refreshUser();
-
-      if (skippedBirthFields.isNotEmpty) {
-        ErrorHandler.showSuccess(
-          'Birth details couldn’t be saved right now. Please try again later.',
-          title: 'Profile Partially Updated',
-        );
-        return;
-      }
-
-      Get.back();
-      ErrorHandler.showSuccess(
-        'Profile updated successfully',
-        title: 'Success',
-      );
-    } catch (e) {
-      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
-    } finally {
-      isSaving.value = false;
-    }
   }
 
   @override
@@ -169,182 +59,225 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     super.dispose();
   }
 
+  Future<void> _loadProfileDetails() async {
+    try {
+      final profile = await _repository.getProfile();
+      if (!mounted) return;
+      final fullName = profile['full_name']?.toString();
+      final avatarUrl = profile['avatar_url']?.toString();
+      setState(() {
+        if (fullName != null && fullName.isNotEmpty) {
+          _nameController.text = fullName;
+        }
+        _birthDateController.text = profile['birth_date']?.toString() ?? '';
+        _birthTimeController.text = _toTimeInput(
+          profile['birth_time']?.toString(),
+        );
+        _birthPlaceController.text = profile['birth_place']?.toString() ?? '';
+        if (avatarUrl != null && avatarUrl.isNotEmpty) {
+          _currentAvatarUrl = avatarUrl;
+        }
+      });
+    } catch (_) {
+      // The cached profile values stay in the form.
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    final image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
+    if (image != null && mounted) {
+      setState(() => _newAvatar = File(image.path));
+    }
+  }
+
+  Future<void> _saveChanges() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_birthDateController.text.trim().isEmpty &&
+        _birthTimeController.text.trim().isNotEmpty) {
+      ErrorHandler.showValidation(
+        'Add a date of birth to go with the birth time.',
+        title: 'Date of birth needed',
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      var avatarUrl = _currentAvatarUrl;
+      if (_newAvatar case final file?) {
+        avatarUrl = await _repository.uploadAvatar(file);
+      }
+      // An empty field is sent as '' (clear); null would mean "unchanged".
+      final result = await _repository.updateProfile(
+        fullName: _nameController.text.trim(),
+        avatarUrl: avatarUrl,
+        birthDate: _birthDateController.text.trim(),
+        birthTime: _toApiTimeOrClear(_birthTimeController.text),
+        birthPlace: _birthPlaceController.text.trim(),
+      );
+      final meta = result['meta'];
+      final skipped =
+          meta is Map<String, dynamic> && meta['skipped_fields'] is List
+          ? (meta['skipped_fields'] as List).map((e) => e.toString()).toSet()
+          : const <String>{};
+      await ref.read(authProvider.notifier).refreshUser();
+      if (!mounted) return;
+      if (skipped.any(
+        (f) => f == 'birth_date' || f == 'birth_time' || f == 'birth_place',
+      )) {
+        ErrorHandler.showWarning(
+          'We saved your name and photo. Birth details did not save; try '
+          'again later.',
+          title: 'Partly saved',
+        );
+        setState(() => _saving = false);
+        return;
+      }
+      ErrorHandler.showSuccess('Your profile is saved.', title: 'Saved');
+      Navigator.pop(context);
+    } catch (e, stack) {
+      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final user = ref.watch(authProvider.select((s) => s.user));
+    const gap = SizedBox(height: AppConstants.spacing16);
+    final avatar = _newAvatar;
+    final url = _currentAvatarUrl;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Profile'),
-        elevation: 0,
-        actions: [
-          Obx(
-            () => TextButton(
-              onPressed: isSaving.value ? null : _saveChanges,
-              child: isSaving.value
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Save'),
+    return PaperStockScope(
+      stock: PaperStockId.stone,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Edit profile'),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: AppConstants.spacing8),
+              child: TextButton(
+                onPressed: _saving ? null : _saveChanges,
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
             ),
-          ),
-        ],
-      ),
-      body: AppPageBackground(
-        child: SafeArea(
+          ],
+        ),
+        body: AppPageBackground(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
+            padding: EdgeInsets.fromLTRB(
+              AppConstants.spacing16,
+              AppConstants.spacing8,
+              AppConstants.spacing16,
+              AppConstants.spacing32 + MediaQuery.paddingOf(context).bottom,
+            ),
             child: Form(
               key: _formKey,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Avatar section
-                  Semantics(
-                    button: true,
-                    label: 'Change profile photo',
-                    hint: 'Double tap to choose a new avatar.',
-                    child: GestureDetector(
-                      onTap: _pickAvatar,
-                      child: AppGlassCard(
-                        padding: const EdgeInsets.all(AppConstants.spacing20),
-                        child: Row(
-                          children: [
-                            Obx(() {
-                              final avatar = newAvatar.value;
-
-                              return Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: tokens.brandColor,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: ClipOval(
-                                  child: avatar != null
-                                      ? Image.file(avatar, fit: BoxFit.cover)
-                                      : _currentAvatarUrl != null &&
-                                            _currentAvatarUrl!.isNotEmpty
-                                      ? AppNetworkImage(
-                                          _currentAvatarUrl!,
-                                          fit: BoxFit.cover,
-                                          errorWidget:
-                                              (context, error, stackTrace) =>
-                                                  _buildAvatarPlaceholder(
-                                                    tokens,
-                                                  ),
-                                        )
-                                      : _buildAvatarPlaceholder(tokens),
-                                ),
-                              );
-                            }),
-                            const SizedBox(width: AppConstants.spacing16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Profile Photo',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                  const SizedBox(height: AppConstants.spacing4),
-                                  Text(
-                                    'Tap to change',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: tokens.textMuted),
-                                  ),
-                                ],
-                              ),
+                  PaperSurface(
+                    semanticLabel: 'Change profile photo',
+                    onTap: _saving ? null : _pickAvatar,
+                    child: Row(
+                      children: [
+                        if (avatar != null)
+                          ClipOval(
+                            child: Image.file(
+                              avatar,
+                              width: 72,
+                              height: 72,
+                              fit: BoxFit.cover,
                             ),
-                            Icon(Icons.camera_alt, color: tokens.brandColor),
-                          ],
+                          )
+                        else
+                          ProfileAvatar(
+                            user: user?.copyWith(avatarUrl: url),
+                            radius: 36,
+                          ),
+                        const SizedBox(width: AppConstants.spacing16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Profile photo', style: text.titleMedium),
+                              Text(
+                                'Tap to choose a new one',
+                                style: text.bodySmall?.copyWith(
+                                  color: tokens.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                        Icon(
+                          Icons.photo_camera_outlined,
+                          color: tokens.textSecondary,
+                        ),
+                      ],
                     ),
                   ),
-
                   const SizedBox(height: AppConstants.spacing24),
-
-                  // Name field
                   TextFormField(
                     controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Name *',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter your name';
-                      }
-                      return null;
-                    },
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    validator: (value) => (value?.trim().isEmpty ?? true)
+                        ? 'Enter your name'
+                        : null,
                   ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  InkWell(
+                  gap,
+                  TextFormField(
+                    controller: _birthDateController,
+                    readOnly: true,
+                    enabled: !_saving,
                     onTap: () => _pickBirthDate(context),
-                    child: IgnorePointer(
-                      child: TextFormField(
-                        controller: _birthDateController,
-                        decoration: const InputDecoration(
-                          labelText: 'Date of Birth (Optional)',
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.calendar_today),
-                        ),
-                      ),
+                    decoration: const InputDecoration(
+                      labelText: 'Date of birth (optional)',
+                      suffixIcon: Icon(Icons.calendar_today_outlined),
                     ),
                   ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  InkWell(
+                  gap,
+                  TextFormField(
+                    controller: _birthTimeController,
+                    readOnly: true,
+                    enabled: !_saving,
                     onTap: () => _pickBirthTime(context),
-                    child: IgnorePointer(
-                      child: TextFormField(
-                        controller: _birthTimeController,
-                        decoration: const InputDecoration(
-                          labelText: 'Birth Time (Optional)',
-                          helperText: 'Improves Vedic recommendation quality',
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.access_time),
-                        ),
-                      ),
+                    decoration: const InputDecoration(
+                      labelText: 'Birth time (optional)',
+                      helperText: 'Makes Vedic suggestions more exact',
+                      suffixIcon: Icon(Icons.schedule_outlined),
                     ),
                   ),
-
-                  const SizedBox(height: AppConstants.spacing16),
-
+                  gap,
                   TextFormField(
                     controller: _birthPlaceController,
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
-                      labelText: 'Birth Place (Optional)',
-                      hintText: 'e.g. New Delhi, India',
-                      border: OutlineInputBorder(),
+                      labelText: 'Birth place (optional)',
+                      hintText: 'For example, New Delhi, India',
                     ),
                   ),
-
-                  const SizedBox(height: AppConstants.spacing32),
                 ],
               ),
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildAvatarPlaceholder(AppUiTokens tokens) {
-    return Container(
-      color: tokens.brandColor,
-      child: const Icon(Icons.person, color: Colors.white, size: 40),
     );
   }
 

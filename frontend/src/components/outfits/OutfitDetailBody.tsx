@@ -161,6 +161,7 @@ export function OutfitDetailBody({
               .filter(Boolean) as string[]
           }
           previewLabel="Pieces in this outfit"
+          previewFit="contain"
         />
       )}
 

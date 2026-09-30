@@ -81,6 +81,10 @@ class ApiConstants {
   // Endpoints
   static const String auth = '$apiVersion/auth';
   static const String items = '$apiVersion/items';
+
+  /// One-call save for extraction reviews: creates every piece and attaches
+  /// studio/source images server-side (no client re-upload).
+  static const String itemsBatchSave = '$items/batch-from-extraction';
   static const String outfits = '$apiVersion/outfits';
   static const String recommendations = '$apiVersion/recommendations';
   static const String calendar = '$apiVersion/calendar';

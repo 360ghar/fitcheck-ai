@@ -5,6 +5,52 @@ All notable changes to the FitCheck AI Flutter app will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1+15] - 2026-09-30
+
+iOS ships as build 15. Android ships as build 16, because Play rejected
+build 15 under its photo and video permissions policy.
+
+### Added
+
+- Item extraction runs as a background job. A banner and a jobs screen show
+  progress, and a local notification reports when the items are ready.
+- Outfits with no image of their own show a collage of up to four pieces.
+
+### Changed
+
+- The review screen saves all extracted items in one request. Against a backend
+  without `POST /items/batch-from-extraction`, the app uses the sequential save.
+- Android no longer declares `READ_MEDIA_IMAGES`. Gallery picks use the system
+  photo picker.
+
+### Fixed
+
+- Extraction progress, retry, and cancel states recover better after errors.
+
+## [1.2.0+14] - 2026-09-25
+
+### Changed
+
+- Use the jade Facet F icon across app launchers, launch screens, and in-app branding.
+- Prepare build 14 for version 1.2.0; retain the features and fixes listed below.
+
+## [1.2.0+13] - 2026-09-25
+
+### Added
+
+- A paper-style mobile interface with new app icons, launch screens, and a short introduction.
+- Account setup for new users to choose their styles and occasions.
+
+### Changed
+
+- Denser wardrobe grids show cropped garment images with more space for each item.
+- Screens keep existing content visible during refresh and provide clearer loading and retry states.
+
+### Fixed
+
+- Account switches and late network responses no longer show data from an earlier session.
+- Outfit planning, photoshoot retries, and subscription and sign-in flows have stronger recovery paths.
+
 ## [1.0.5+10] - 2026-08-08
 
 First store release with the Shorebird engine: this and every future release

@@ -1,13 +1,12 @@
 import 'package:flutter/foundation.dart';
-import 'package:get/get.dart';
 import '../../../core/services/persistence_service.dart';
 import 'user_initialization_service.dart';
 
 /// Handles referral code operations — storing pending codes for OAuth flows
 /// and redeeming them after registration.
 ///
-/// Extracted from [AuthController] as part of FL7.
-class ReferralService extends GetxService {
+/// Extracted from the auth state notifier as part of FL7.
+class ReferralService {
   static const String _pendingReferralKey = 'pending_referral_code';
 
   final PersistenceService _persistence;
@@ -44,7 +43,12 @@ class ReferralService extends GetxService {
   }
 
   /// Handle OAuth callback: sync profile and redeem any pending referral code.
-  Future<void> handleOAuthCallback() async {
+  ///
+  /// [profileVerified] must be false when the backend profile can still be
+  /// unverified (email-confirmed signups redeeming on first login): a 403
+  /// then means "not verified yet", so the code stays pending instead of
+  /// being cleared as definitively rejected.
+  Future<void> handleOAuthCallback({bool profileVerified = true}) async {
     // Sync user profile with backend
     await _userInitService.syncOAuthProfile();
 
@@ -59,7 +63,11 @@ class ReferralService extends GetxService {
       final result = await _userInitService.redeemReferralCodeWithResult(
         pendingCode,
       );
-      if (result.isSuccess || result.status == ReferralRedemptionStatus.definitiveRejection) {
+      final retryableRejection =
+          !profileVerified && result.statusCode == 403;
+      if (result.isSuccess ||
+          (result.status == ReferralRedemptionStatus.definitiveRejection &&
+              !retryableRejection)) {
         if (!result.isSuccess) {
           debugPrint(
             'Pending referral code $pendingCode definitively rejected by '

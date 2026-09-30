@@ -1,190 +1,142 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../settings/widgets/paper_group.dart';
 
-/// Help and support page
+const _faqs = [
+  (
+    'How do I add pieces to my closet?',
+    'Tap Add item on the Closet tab. Take a photo or pick one from your '
+        'gallery; we find each piece and tag it for you.',
+  ),
+  (
+    'How does outfit matching work?',
+    'Open For you and pick pieces you own. We suggest what goes with them '
+        'and build full outfits from your closet.',
+  ),
+  (
+    'Can I use my own photos for try-on?',
+    'Yes. Add a full-length photo of yourself, then choose pieces to see '
+        'them on you.',
+  ),
+  (
+    'How do I earn rewards?',
+    'Plan and log outfits often. Streaks and achievements build as you go.',
+  ),
+  (
+    'Is my closet private?',
+    'Yes. Your closet and outfits are private unless you share a link to '
+        'one outfit.',
+  ),
+];
+
+/// Common questions and ways to reach us.
 class HelpPage extends StatelessWidget {
   const HelpPage({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Help & Support'),
-        elevation: 0,
-      ),
-      body: AppPageBackground(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Quick help
-                AppGlassCard(
-                  padding: const EdgeInsets.all(AppConstants.spacing16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.support_agent,
-                            color: tokens.brandColor,
-                          ),
-                          const SizedBox(width: AppConstants.spacing12),
-                          Text(
-                            'Need Help?',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppConstants.spacing16),
-                      Text(
-                        'Our support team is here to help you make the most of FitCheck AI.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing16),
-                      ElevatedButton.icon(
-                        onPressed: () => _contactSupport(),
-                        icon: const Icon(Icons.email),
-                        label: const Text('Contact Support'),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: AppConstants.spacing24),
-
-                // FAQ section
-                Text(
-                  'Frequently Asked Questions',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-
-                _buildFaqItem(
-                  'How do I add items to my wardrobe?',
-                  'Tap the Add button in the Wardrobe tab. You can take a photo, choose from gallery, or enter details manually. Our AI will automatically detect items from your photos.',
-                  tokens,
-                ),
-
-                _buildFaqItem(
-                  'How does outfit matching work?',
-                  'Go to Recommendations and select items you own. We\'ll suggest matching items and complete outfits based on your wardrobe.',
-                  tokens,
-                ),
-
-                _buildFaqItem(
-                  'Can I use my own photos for try-on?',
-                  'Yes! Upload a full-body photo as your avatar, then upload clothing items to see how they look on you.',
-                  tokens,
-                ),
-
-                _buildFaqItem(
-                  'How do I earn achievements?',
-                  'Use the app regularly! Log outfits, get recommendations, and engage with features to unlock achievements and build your streak.',
-                  tokens,
-                ),
-
-                _buildFaqItem(
-                  'Is my data private?',
-                  'Yes! Your wardrobe and outfits are private by default. You can choose to share specific outfits with public links.',
-                  tokens,
-                ),
-
-                const SizedBox(height: AppConstants.spacing24),
-
-                // Contact section
-                AppGlassCard(
-                  padding: const EdgeInsets.all(AppConstants.spacing16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Still have questions?',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing16),
-                      ListTile(
-                        leading: const Icon(Icons.email),
-                        title: const Text('Email Support'),
-                        subtitle: const Text('support@fitcheckaiapp.com'),
-                        onTap: () => _contactSupport(),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.chat),
-                        title: const Text('Live Chat'),
-                        subtitle: const Text('Available 9am-5pm EST'),
-                        onTap: () => _openChat(),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.book),
-                        title: const Text('Documentation'),
-                        subtitle: const Text('View full documentation'),
-                        onTap: () => _openDocs(),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFaqItem(String question, String answer, AppUiTokens tokens) {
-    return ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: const EdgeInsets.only(bottom: AppConstants.spacing12),
-      title: Text(
-        question,
-        style: Theme.of(Get.context!).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-      ),
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: AppConstants.spacing16, right: AppConstants.spacing16, bottom: AppConstants.spacing12),
-          child: Text(
-            answer,
-            style: Theme.of(Get.context!).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _contactSupport() {
-    Get.toNamed(Routes.feedback);
-  }
-
-  void _openChat() {
-    Get.toNamed(Routes.feedback);
-  }
-
-  void _openDocs() async {
+  Future<void> _openDocs() async {
     final url = Uri.parse('https://fitcheckaiapp.com/docs');
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    return PaperStockScope(
+      stock: PaperStockId.stone,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Help')),
+        body: AppPageBackground(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              AppConstants.spacing16,
+              AppConstants.spacing8,
+              AppConstants.spacing16,
+              AppConstants.spacing32 + MediaQuery.paddingOf(context).bottom,
+            ),
+            children: [
+              PaperSurface(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Ask us anything', style: text.headlineSmall),
+                    const SizedBox(height: AppConstants.spacing8),
+                    Text(
+                      'Send a message and we reply by email, usually within '
+                      'a day.',
+                      style: text.bodyMedium?.copyWith(
+                        color: tokens.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacing16),
+                    ElevatedButton(
+                      onPressed: () => context.push(Routes.feedback),
+                      child: const Text('Contact support'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing24),
+              PaperGroup(
+                title: 'Common questions',
+                children: [
+                  for (final (question, answer) in _faqs)
+                    ExpansionTile(
+                      shape: const Border(),
+                      collapsedShape: const Border(),
+                      title: Text(question, style: text.bodyLarge),
+                      childrenPadding: const EdgeInsets.fromLTRB(
+                        AppConstants.spacing16,
+                        0,
+                        AppConstants.spacing16,
+                        AppConstants.spacing16,
+                      ),
+                      expandedAlignment: Alignment.centerLeft,
+                      children: [
+                        Text(
+                          answer,
+                          style: text.bodyMedium?.copyWith(
+                            color: tokens.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacing24),
+              PaperGroup(
+                title: 'More help',
+                children: [
+                  PaperNavRow(
+                    icon: Icons.menu_book_outlined,
+                    title: 'Guides',
+                    subtitle: 'How each feature works',
+                    trailing: Icon(
+                      Icons.open_in_new_rounded,
+                      color: tokens.textMuted,
+                      size: 20,
+                    ),
+                    onTap: _openDocs,
+                  ),
+                  PaperNavRow(
+                    icon: Icons.shield_outlined,
+                    title: 'Privacy and terms',
+                    onTap: () => context.push(Routes.legal),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -15,13 +15,13 @@ export const SEO_ROUTES = [
     path: '/',
     title: 'AI Virtual Closet & Outfit Planner | FitCheck AI',
     description:
-      'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web and Android.',
+      'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web, iOS, and Android.',
     priority: '1.0',
     changefreq: 'weekly',
     keyPoints: [
       'Turns photos of your clothes into a digital wardrobe with AI item extraction.',
       'Provides weather-aware outfit recommendations, virtual try-on, and AI photoshoots from clothes you already own.',
-      'Free tier: 50 item extractions/month, 50 outfit visualizations/month, 10 photoshoot images/day. Web + Android live; iOS waitlist.',
+      'Free tier: 50 item extractions/month, 50 outfit visualizations/month, 10 photoshoot images/day. Web, iOS, and Android apps are live.',
     ],
   },
   { path: '/features', title: 'Features | AI Wardrobe, Try-On & Outfit Planner | FitCheck AI', description: 'Explore AI wardrobe extraction, virtual try-on, outfit recommendations, photoshoot generator, and wardrobe analytics.', priority: '0.9', changefreq: 'monthly', keyPoints: ['Five capabilities: AI wardrobe extraction, virtual try-on, outfit recommendations, AI photoshoot generator, wardrobe analytics.'] },

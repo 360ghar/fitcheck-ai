@@ -128,6 +128,21 @@ CachedNetworkImageProvider appImageProvider(String url) {
   );
 }
 
+/// Pixel width to decode an image at: the widget's width, or the laid-out
+/// width, times the device pixel ratio. Null when unbounded.
+int? decodeWidthFor(
+  BuildContext context,
+  double? width,
+  BoxConstraints constraints,
+) {
+  final logical =
+      width ?? (constraints.maxWidth.isFinite ? constraints.maxWidth : null);
+  // isFinite also rejects the `double.infinity` widths callers pass to mean
+  // "fill the row" — round() would throw on infinity during build.
+  if (logical == null || !logical.isFinite || logical <= 0) return null;
+  return (logical * MediaQuery.devicePixelRatioOf(context)).round();
+}
+
 /// Drop-in replacement for `Image.network` with disk caching + auth.
 ///
 /// Renders exactly like `Image.network` (transparent background, no shimmer,
@@ -254,8 +269,23 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.cacheWidth != null || widget.cacheHeight != null) {
+      return _buildImage(context, widget.cacheWidth, widget.cacheHeight);
+    }
+    // No explicit decode size: decode at the laid-out width, so a grid of
+    // camera photos never holds full-resolution bitmaps in memory.
+    return LayoutBuilder(
+      builder: (context, constraints) => _buildImage(
+        context,
+        decodeWidthFor(context, widget.width, constraints),
+        null,
+      ),
+    );
+  }
+
+  Widget _buildImage(BuildContext context, int? cacheWidth, int? cacheHeight) {
     if (_activeUrl.startsWith('data:image')) {
-      return _buildDataUriImage(context);
+      return _buildDataUriImage(context, cacheWidth, cacheHeight);
     }
     final fallback = _fallback;
 
@@ -267,8 +297,8 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
       fit: widget.fit,
       width: widget.width,
       height: widget.height,
-      memCacheWidth: widget.cacheWidth,
-      memCacheHeight: widget.cacheHeight,
+      memCacheWidth: cacheWidth,
+      memCacheHeight: cacheHeight,
       httpHeaders: _authEligible ? authHeadersForUrl(_activeUrl) : null,
       errorWidget: (context, failedUrl, error) {
         // Retry once with the full size before calling the tile broken. The
@@ -299,7 +329,11 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
   /// `CachedNetworkImage` cannot decode data URIs (the AI generation flows
   /// preview their live output as data URIs until the durable URL arrives),
   /// so route them through [Image.memory] — no network, no cache involved.
-  Widget _buildDataUriImage(BuildContext context) {
+  Widget _buildDataUriImage(
+    BuildContext context,
+    int? cacheWidth,
+    int? cacheHeight,
+  ) {
     final fallback = _fallback;
     final bytes = _tryDecodeDataUri(_activeUrl);
     if (bytes == null) {
@@ -315,8 +349,8 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
       fit: widget.fit,
       width: widget.width,
       height: widget.height,
-      cacheWidth: widget.cacheWidth,
-      cacheHeight: widget.cacheHeight,
+      cacheWidth: cacheWidth,
+      cacheHeight: cacheHeight,
       errorBuilder: (context, error, stackTrace) {
         if (!_usingFallback && fallback != null) {
           _scheduleFallbackSwap();
@@ -327,10 +361,23 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
     );
   }
 
+  // Decoded once per URL: a fresh byte list each build would decode megabytes
+  // per frame and miss the image cache (the preview flickers).
+  String? _decodedUrl;
+  Uint8List? _decodedBytes;
+
   /// Strips a `data:image/...;base64,` prefix and decodes the payload; null
   /// when the URI is not a base64 data URI or the payload is not valid
   /// base64.
   Uint8List? _tryDecodeDataUri(String url) {
+    if (url != _decodedUrl) {
+      _decodedUrl = url;
+      _decodedBytes = _decodeDataUri(url);
+    }
+    return _decodedBytes;
+  }
+
+  static Uint8List? _decodeDataUri(String url) {
     final data = url.replaceFirst(
       RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
       '',

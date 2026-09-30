@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, Menu, Shirt } from 'lucide-react'
+import { ChevronDown, Menu } from 'lucide-react'
+import { Logo } from '@/components/brand/Logo'
 
 import { ThemeToggle } from '@/components/theme'
 import { Button } from '@/components/ui/button'
@@ -104,12 +105,7 @@ export default function Navbar() {
             to="/"
             className="flex shrink-0 items-center gap-2.5 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary shadow-pressed">
-              <Shirt className="h-4 w-4 text-primary-foreground" aria-hidden="true" />
-            </span>
-            <span className="text-[17px] font-semibold tracking-tight text-foreground">
-              FitCheck<span className="font-normal text-muted-foreground"> AI</span>
-            </span>
+            <Logo markSize={34} wordmarkClassName="text-[17px]" />
           </Link>
 
           <div className="hidden items-center gap-4 lg:flex xl:gap-6">

@@ -25,6 +25,7 @@ import pytest
 from app.api.v1 import items as items_module
 from app.core.exceptions import DatabaseError, SchemaNotInitializedError
 from app.models.item import ItemCreate
+from app.services import item_save_service as save_service
 from app.utils.db import items_schema_migration_hint
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
@@ -187,8 +188,9 @@ async def test_create_item_non_migration_error_keeps_500_and_logs_type(monkeypat
 def monkeypatch_insert_error(monkeypatch, error: Exception) -> None:
     """Make the first DB touch inside create_item (the items insert, which
     runs through execute_with_reconnect) raise `error`."""
+    # create_item_core lives in item_save_service; the route only delegates.
     monkeypatch.setattr(
-        items_module,
+        save_service,
         "execute_with_reconnect",
         AsyncMock(side_effect=error),
     )

@@ -32,7 +32,7 @@ const faqCategories = [
       },
       {
         q: 'What devices and browsers are supported?',
-        a: 'FitCheck AI works on modern browsers including Chrome, Safari, Firefox, and Edge. The Android app is on Google Play; iOS is on the waitlist. The web app is fully responsive on phones, tablets, and desktops.'
+        a: 'FitCheck AI works on modern browsers including Chrome, Safari, Firefox, and Edge. The iOS app is on the App Store and the Android app is on Google Play. The web app is fully responsive on phones, tablets, and desktops.'
       }
     ]
   },

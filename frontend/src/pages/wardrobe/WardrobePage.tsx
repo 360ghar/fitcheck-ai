@@ -541,7 +541,7 @@ export default function WardrobePage() {
   const forceListRows = isDetailOpen && isSplitViewport && !isWideViewport
   const showMasonry = sort.isGridView && !forceListRows
   // JS-masonry column count mirrors the old CSS-columns tables (full vs split).
-  const columnCount = useColumnCount({ isDetailOpen: isDetailOpen })
+  const columnCount = useColumnCount({ isDetailOpen: isDetailOpen, dense: true })
   // Changing the result set's ORDER or MEMBERSHIP must re-spread the masonry from
   // scratch; a pure append (load-more) keeps this stable so cards stay put.
   const masonryResetKey = `${filters.category}|${filters.color}|${filters.occasion}|${filters.condition}|${filters.isFavorite}|${sort.sortBy}|${sort.sortOrder}|${sort.isGridView}`
@@ -632,7 +632,7 @@ export default function WardrobePage() {
   return (
     <div className="app-page max-w-7xl">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-2">
         <div>
           <h1 className="type-heading-xl text-foreground">Closet</h1>
           <p className="type-body-sm text-muted-foreground">
@@ -682,7 +682,7 @@ export default function WardrobePage() {
 
       {/* Quick category chips — dense closet browsing (Alta-style) */}
       <div
-        className="scroll-rail mb-4 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="scroll-rail mb-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label="Filter by category"
       >

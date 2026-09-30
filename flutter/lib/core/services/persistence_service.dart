@@ -1,10 +1,12 @@
-import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Abstraction over [SharedPreferences] that provides a consistent API for
 /// persisting key-value data. All app code should inject this service instead
 /// of calling [SharedPreferences.getInstance] directly (see FL2).
-class PersistenceService extends GetxService {
+class PersistenceService {
+  /// The app-wide instance.
+  static final instance = PersistenceService();
+
   SharedPreferences? _prefs;
 
   /// Whether the backing [SharedPreferences] instance is ready.

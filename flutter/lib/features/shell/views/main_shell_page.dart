@@ -1,90 +1,92 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../app/routes/app_routes.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
-import '../controllers/main_shell_controller.dart';
-import '../../dashboard/views/dashboard_content.dart';
-import '../../wardrobe/views/wardrobe_content.dart';
-import '../../outfits/views/outfits_content.dart';
-import '../../photoshoot/views/photoshoot_content.dart';
-import '../../profile/views/profile_content.dart';
+import '../../../core/widgets/paper.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../onboarding/setup_gate.dart';
+import '../../settings/providers/settings_provider.dart';
 
-/// Main shell page with persistent navbar and IndexedStack for tab switching.
-/// This eliminates navbar animation when switching between main tabs.
-class MainShellPage extends StatelessWidget {
-  const MainShellPage({super.key});
+/// The five tabs with the bottom bar. [shell] holds one navigator per tab,
+/// so each tab keeps its scroll position and state.
+class MainShellPage extends ConsumerStatefulWidget {
+  const MainShellPage({super.key, required this.shell});
+
+  final StatefulNavigationShell shell;
 
   @override
-  Widget build(BuildContext context) {
-    final controller = Get.find<MainShellController>();
+  ConsumerState<MainShellPage> createState() => _MainShellPageState();
+}
 
-    return Scaffold(
-      body: Obx(
-        () => IndexedStack(
-          index: controller.currentIndex.value,
-          children: List.generate(
-            5,
-            (index) => _buildTabContent(index, controller),
-          ),
-        ),
-      ),
-      floatingActionButton: Obx(
-        () => _buildFloatingActionButton(controller.currentIndex.value),
-      ),
-      bottomNavigationBar: Obx(
-        () => AppBottomNavigationBar(
-          currentIndex: controller.currentIndex.value,
-          onTabChanged: controller.changeTab,
-        ),
-      ),
+class _MainShellPageState extends ConsumerState<MainShellPage> {
+  String? _checkedUser;
+
+  @override
+  void initState() {
+    super.initState();
+    // The profile can land after the shell opens (restored session), so
+    // check on each user id, once.
+    ref.listenManual(
+      authProvider.select((s) => (s.user?.id, s.user?.createdAt)),
+      (_, user) => _maybeOpenSetup(user.$1, user.$2),
+      fireImmediately: true,
     );
   }
 
-  Widget _buildTabContent(int index, MainShellController controller) {
-    if (!controller.isTabLoaded(index)) {
-      return const SizedBox.shrink();
-    }
-
-    switch (index) {
-      case 0:
-        return const DashboardContent();
-      case 1:
-        return const PhotoshootContent();
-      case 2:
-        return const WardrobeContent();
-      case 3:
-        return const OutfitsContent();
-      case 4:
-        return const ProfileContent();
-      default:
-        return const SizedBox.shrink();
+  /// Opens the first-run setup for a new account with no style choices.
+  /// The disk read gates the network fetch: existing accounts never hit
+  /// the network here.
+  Future<void> _maybeOpenSetup(String? id, DateTime? createdAt) async {
+    if (id == null || id == _checkedUser) return;
+    _checkedUser = id;
+    try {
+      final done = await isSetupDone(id);
+      if (!isNewAccountForSetup(createdAt: createdAt, done: done)) return;
+      final prefs = await ref.read(settingsRepositoryProvider).getPreferences();
+      if (!shouldShowSetup(
+        createdAt: createdAt,
+        styles: prefs.preferredStyles,
+        done: done,
+      )) {
+        return;
+      }
+      if (mounted) context.push(Routes.welcome);
+    } catch (_) {
+      // Offline or a failed read: skip setup this launch.
     }
   }
 
-  Widget _buildFloatingActionButton(int currentIndex) {
-    switch (currentIndex) {
-      case 2: // Closet
-        return Semantics(
-          label: 'Add closet item',
-          button: true,
-          child: FloatingActionButton.extended(
-            onPressed: () => Get.toNamed(Routes.wardrobeAdd),
+  @override
+  Widget build(BuildContext context) {
+    final shell = widget.shell;
+    final current = shell.currentIndex;
+    return Scaffold(
+      body: shell,
+      floatingActionButton: PaperStockScope(
+        stock: tabStocks[current],
+        child: switch (current) {
+          2 => FloatingActionButton.extended(
+            onPressed: () => context.push(Routes.wardrobeAdd),
+            tooltip: 'Add closet item',
             icon: const Icon(Icons.add),
             label: const Text('Add Item'),
           ),
-        );
-      case 3: // Outfits
-        return Semantics(
-          label: 'Create new outfit',
-          button: true,
-          child: FloatingActionButton.extended(
-            onPressed: () => Get.toNamed(Routes.outfitBuilder),
+          3 => FloatingActionButton.extended(
+            onPressed: () => context.push(Routes.outfitBuilder),
+            tooltip: 'Create new outfit',
             icon: const Icon(Icons.add),
             label: const Text('Create Outfit'),
           ),
-        );
-      default:
-        return const SizedBox.shrink();
-    }
+          _ => const SizedBox.shrink(),
+        },
+      ),
+      bottomNavigationBar: AppBottomNavigationBar(
+        currentIndex: current,
+        // A tap on the open tab returns it to its first page.
+        onTabChanged: (i) => shell.goBranch(i, initialLocation: i == current),
+      ),
+    );
   }
 }

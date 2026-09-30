@@ -14,10 +14,9 @@ import { logger } from '@/lib/logger'
 import { useCurrentUser } from '../../stores/authStore'
 import { getUserPreferences, updateUserPreferences } from '@/api/users'
 import type { UserPreferences } from '@/types'
+import { OCCASION_SUGGESTIONS, STYLE_SUGGESTIONS } from '@/lib/style-options'
 
 const COLOR_SUGGESTIONS = ['Black', 'White', 'Navy', 'Gray', 'Beige', 'Brown', 'Red', 'Blue', 'Green', 'Pink', 'Olive']
-const STYLE_SUGGESTIONS = ['Casual', 'Formal', 'Business', 'Streetwear', 'Minimalist', 'Sporty', 'Bohemian', 'Classic', 'Elegant']
-const OCCASION_SUGGESTIONS = ['Work', 'Date night', 'Travel', 'Wedding', 'Gym', 'Weekend', 'Party', 'Interview']
 const PATTERN_SUGGESTIONS = ['Plaid', 'Stripes', 'Polka dots', 'Floral', 'Camo', 'Animal print', 'Logo']
 
 export function PreferencesPanel() {

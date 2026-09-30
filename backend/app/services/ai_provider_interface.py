@@ -93,6 +93,7 @@ class AIProviderClient(Protocol):
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, Any]] = None,
+        temperature: float = 0.7,
     ) -> AIResponse: ...
 
     async def generate_image(  # pragma: no cover - protocol stub, never executed

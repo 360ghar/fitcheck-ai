@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:shimmer/shimmer.dart';
 import 'app_network_image.dart';
 import 'app_ui.dart';
 
@@ -204,9 +203,23 @@ class _AppImageState extends State<AppImage> {
 
     if (_activeUrl == null || _activeUrl!.isEmpty) {
       imageWidget = _buildErrorWidget(context, tokens);
+    } else if (_activeUrl!.startsWith('data:image')) {
+      // Inline AI previews arrive as data URIs, which CachedNetworkImage
+      // cannot decode; AppNetworkImage decodes them once and caches bytes.
+      imageWidget = AppNetworkImage(
+        _activeUrl!,
+        fit: widget.fit,
+        width: widget.width,
+        height: widget.height,
+        cacheWidth: widget.memCacheWidth,
+        errorWidget: (context, _, _) =>
+            widget.errorWidget ?? _buildErrorWidget(context, tokens),
+      );
     } else {
       final canRemint = widget.storagePath != null && widget.remintUrl != null;
-      imageWidget = CachedNetworkImage(
+      final explicitSize =
+          widget.memCacheWidth != null || widget.memCacheHeight != null;
+      Widget network(int? decodeWidth) => CachedNetworkImage(
         imageUrl: _activeUrl!,
         cacheManager: widget.cacheManager,
         // Key on origin+path so a rotating presigned signature does not make
@@ -215,7 +228,7 @@ class _AppImageState extends State<AppImage> {
         fit: widget.fit,
         width: widget.width,
         height: widget.height,
-        memCacheWidth: widget.memCacheWidth,
+        memCacheWidth: explicitSize ? widget.memCacheWidth : decodeWidth,
         memCacheHeight: widget.memCacheHeight,
         // Worker-mode CDN URLs require the bearer token; presigned URLs must
         // NOT receive one (signature validation rejects it) — see
@@ -254,6 +267,14 @@ class _AppImageState extends State<AppImage> {
           );
         },
       );
+      // No explicit decode size: decode at the laid-out width.
+      imageWidget = explicitSize
+          ? network(null)
+          : LayoutBuilder(
+              builder: (context, constraints) => network(
+                decodeWidthFor(context, widget.width, constraints),
+              ),
+            );
     }
 
     if (widget.borderRadius != null) {
@@ -303,26 +324,16 @@ class _AppImageState extends State<AppImage> {
     );
   }
 
-  Widget _buildPlaceholder(BuildContext context, AppUiTokens tokens) {
-    final loadingSurface = Container(
-      width: widget.width,
-      height: widget.height,
-      color: tokens.cardColor.withValues(alpha: 0.3),
-    );
-
-    if (MediaQuery.disableAnimationsOf(context)) {
-      return ExcludeSemantics(child: loadingSurface);
-    }
-
-    return ExcludeSemantics(
-      child: Shimmer.fromColors(
-        baseColor: tokens.cardColor.withValues(alpha: 0.4),
-        highlightColor: tokens.cardColor.withValues(alpha: 0.7),
-        period: const Duration(milliseconds: 1200),
-        child: loadingSurface,
-      ),
-    );
-  }
+  // A flat recessed well, not a pulse: a grid can hold dozens of images and
+  // each would need its own animation.
+  Widget _buildPlaceholder(BuildContext context, AppUiTokens tokens) =>
+      ExcludeSemantics(
+        child: Container(
+          width: widget.width,
+          height: widget.height,
+          color: tokens.sunk,
+        ),
+      );
 
   Widget _buildErrorWidget(BuildContext context, AppUiTokens tokens) {
     return Semantics(
@@ -333,7 +344,7 @@ class _AppImageState extends State<AppImage> {
       child: Container(
         width: widget.width,
         height: widget.height,
-        color: tokens.cardColor.withValues(alpha: 0.3),
+        color: tokens.sunk,
         child: Center(
           child: Icon(widget.errorIcon, size: 48, color: tokens.textMuted),
         ),

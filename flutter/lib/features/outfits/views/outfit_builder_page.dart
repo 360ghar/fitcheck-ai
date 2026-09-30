@@ -1,792 +1,533 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
-import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
-import '../controllers/outfit_builder_controller.dart';
-import '../../wardrobe/repositories/item_repository.dart';
+import '../../../domain/enums/style.dart';
+import '../../wardrobe/models/item_model.dart';
+import '../../wardrobe/providers/wardrobe_providers.dart';
+import '../../wardrobe/widgets/garment_glyph.dart';
+import '../providers/outfit_builder_provider.dart';
 
-/// Outfit builder page - Create and visualize outfits
-class OutfitBuilderPage extends StatefulWidget {
+/// Builds a new outfit: pick pieces, name it, preview it with AI, save.
+class OutfitBuilderPage extends ConsumerStatefulWidget {
   const OutfitBuilderPage({super.key});
 
   @override
-  State<OutfitBuilderPage> createState() => _OutfitBuilderPageState();
+  ConsumerState<OutfitBuilderPage> createState() => _OutfitBuilderPageState();
 }
 
-class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
-  late final OutfitBuilderController controller;
-  final ItemRepository _itemRepository = ItemRepository();
+class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
+  final _search = TextEditingController();
+  Category? _category;
 
   @override
-  void initState() {
-    super.initState();
-    // Create the controller once here rather than on every build().
-    //
-    // Note this does NOT by itself avoid "markNeedsBuild called during build":
-    // initState runs from Element.inflateWidget -> mount -> _firstBuild while
-    // the *parent* is still the current build target — for a route's top-level
-    // widget that parent is the Builder inside _ModalScopeState, so onInit's Rx
-    // writes are still mid-frame. The deferral lives in the controller instead
-    // (see settleBuildPhase in core/utils/frame_safe.dart).
-    controller = Get.put(OutfitBuilderController());
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final outfit = await ref.read(outfitBuilderProvider.notifier).save();
+    if (outfit != null && mounted) Navigator.pop(context, outfit);
   }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+    final draft = ref.watch(outfitBuilderProvider);
+    final picker = ref.watch(builderPickerItemsProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Outfit'),
-        elevation: 0,
-        actions: [
-          Obx(
-            () => TextButton(
-              onPressed: controller.isSaving.value
-                  ? null
-                  : controller.selectedItems.isEmpty
-                  ? null
-                  : () => controller.saveOutfit(),
-              child: controller.isSaving.value
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Save'),
+    return PaperStockScope(
+      stock: PaperStockId.marigold,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Build an outfit'),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: AppConstants.spacing8),
+              child: TextButton(
+                onPressed: draft.saving || draft.pieces.isEmpty ? null : _save,
+                child: draft.saving
+                    ? const InlineProcessingStatus(
+                        phase: ProcessingPhase.processing,
+                        processingLabel: 'Saving',
+                      )
+                    : const Text('Save'),
+              ),
+            ),
+          ],
+        ),
+        body: AppPageBackground(
+          child: CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              const SliverToBoxAdapter(child: _DetailsCard()),
+              if (draft.previewUrl != null || draft.generating)
+                SliverToBoxAdapter(child: _Preview(draft: draft)),
+              SliverToBoxAdapter(child: _ChosenRow(pieces: draft.pieces)),
+              SliverToBoxAdapter(child: _pickerControls()),
+              ..._picker(picker, draft),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: AppConstants.spacing24),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: draft.pieces.isEmpty
+            ? null
+            : PaperActionBar(
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: draft.generating
+                        ? null
+                        : ref
+                              .read(outfitBuilderProvider.notifier)
+                              .generatePreview,
+                    icon: draft.generating
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_awesome_outlined),
+                    label: Text(
+                      draft.previewUrl == null
+                          ? 'Preview with AI'
+                          : 'Make a new preview',
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _pickerControls() {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppConstants.spacing16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spacing16,
+            ),
+            child: Text(
+              'Your closet',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          ),
+          const SizedBox(height: AppConstants.spacing8),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spacing16,
+            ),
+            child: TextField(
+              controller: _search,
+              onChanged: (_) => setState(() {}),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search pieces',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _search.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => setState(_search.clear),
+                      ),
+              ),
+            ),
+          ),
+          SizedBox(
+            height: 56,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.all(AppConstants.spacing8).copyWith(
+                left: AppConstants.spacing16,
+                right: AppConstants.spacing16,
+              ),
+              children: [
+                for (final c in <Category?>[null, ...Category.values])
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      right: AppConstants.spacing8,
+                    ),
+                    child: FilterChip(
+                      label: Text(c?.displayName ?? 'All'),
+                      selected: _category == c,
+                      showCheckmark: false,
+                      onSelected: (_) => setState(() => _category = c),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
       ),
-      body: AppPageBackground(
+    );
+  }
+
+  List<Widget> _picker(AsyncValue<List<ItemModel>> picker, OutfitDraft draft) {
+    const padding = EdgeInsets.symmetric(horizontal: AppConstants.spacing16);
+    const gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: 90,
+      mainAxisSpacing: AppConstants.spacing8,
+      crossAxisSpacing: AppConstants.spacing8,
+      childAspectRatio: 0.72,
+    );
+    return switch (picker) {
+      AsyncValue(:final value?) when value.isEmpty => [
+        SliverToBoxAdapter(
+          child: AppEmptyState(
+            scene: PaperScenes.closet,
+            title: 'Add pieces first',
+            message: 'Outfits are made from the pieces in your closet.',
+            actionLabel: 'Add a piece',
+            onAction: () async {
+              await context.push(Routes.wardrobeAdd);
+              // The picker caches one result per builder session; without a
+              // refresh the piece just added stays invisible.
+              if (context.mounted) ref.invalidate(builderPickerItemsProvider);
+            },
+          ),
+        ),
+      ],
+      AsyncValue(:final value?) => () {
+        final query = _search.text.trim().toLowerCase();
+        final shown = [
+          for (final item in value)
+            if ((_category == null || item.category == _category) &&
+                (query.isEmpty ||
+                    item.name.toLowerCase().contains(query) ||
+                    (item.brand?.toLowerCase().contains(query) ?? false)))
+              item,
+        ];
+        if (shown.isEmpty) {
+          return [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(AppConstants.spacing24),
+                child: Text(
+                  'No pieces match.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: PaperTokens.of(context).textSecondary,
+                  ),
+                ),
+              ),
+            ),
+          ];
+        }
+        return [
+          SliverPadding(
+            padding: padding,
+            sliver: SliverGrid.builder(
+              gridDelegate: gridDelegate,
+              itemCount: shown.length,
+              itemBuilder: (context, i) => _PickTile(
+                item: shown[i],
+                selected: draft.contains(shown[i].id),
+              ),
+            ),
+          ),
+        ];
+      }(),
+      AsyncValue(:final error?) => [
+        SliverToBoxAdapter(
+          child: AppErrorState(
+            error: error,
+            onRetry: () => ref.invalidate(builderPickerItemsProvider),
+          ),
+        ),
+      ],
+      _ => [
+        SliverPadding(
+          padding: padding,
+          sliver: SkeletonPulse(
+            child: SliverGrid.builder(
+              gridDelegate: gridDelegate,
+              itemCount: 12,
+              itemBuilder: (context, index) => const SkeletonGridItem(),
+            ),
+          ),
+        ),
+      ],
+    };
+  }
+}
+
+class _DetailsCard extends ConsumerStatefulWidget {
+  const _DetailsCard();
+
+  @override
+  ConsumerState<_DetailsCard> createState() => _DetailsCardState();
+}
+
+class _DetailsCardState extends ConsumerState<_DetailsCard> {
+  late final _name = TextEditingController(
+    text: ref.read(outfitBuilderProvider).name,
+  );
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final draft = ref.watch(outfitBuilderProvider);
+    final notifier = ref.read(outfitBuilderProvider.notifier);
+    return Padding(
+      padding: const EdgeInsets.all(AppConstants.spacing16),
+      child: PaperSurface(
         child: Column(
           children: [
-            // Scrollable content
-            Expanded(
-              child: Obx(() {
-                if (controller.isLoading.value &&
-                    controller.availableItems.isEmpty) {
-                  return SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppConstants.spacing16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Shimmer for outfit details form
-                          const ShimmerCard(height: 120),
-                          const SizedBox(height: AppConstants.spacing16),
-                          // Shimmer for section header
-                          const ShimmerBox(width: 180, height: 20),
-                          const SizedBox(height: AppConstants.spacing12),
-                          // Shimmer for selected items row
-                          const ShimmerCard(height: 100),
-                          const SizedBox(height: AppConstants.spacing16),
-                          // Shimmer for search filter
-                          const ShimmerCard(height: 56),
-                          const SizedBox(height: AppConstants.spacing16),
-                          // Shimmer for items grid
-                          ShimmerGridLoaderBox(
-                            crossAxisCount: 3,
-                            itemCount: 9,
-                            childAspectRatio: 0.75,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                return SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Outfit details form
-                      _buildOutfitDetails(context, controller, tokens),
-
-                      // Section header
-                      _buildSectionHeader(context, controller, tokens),
-
-                      // Selected items thumbnail row
-                      _buildSelectedItemsRow(context, controller, tokens),
-
-                      // Search and filter
-                      _buildSearchFilter(context, controller, tokens),
-
-                      // Wardrobe items grid
-                      _buildWardrobeGrid(context, controller, tokens),
-                    ],
-                  ),
-                );
-              }),
+            TextField(
+              controller: _name,
+              onChanged: notifier.setName,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Outfit name',
+                hintText: 'For example, Weekend linen',
+              ),
             ),
-
-            // Sticky bottom bar
-            _buildBottomBar(context, controller, tokens),
+            const SizedBox(height: AppConstants.spacing12),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<Style>(
+                    initialValue: draft.style,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Style'),
+                    items: [
+                      for (final s in Style.values)
+                        DropdownMenuItem(value: s, child: Text(s.displayName)),
+                    ],
+                    onChanged: (v) => v == null ? null : notifier.setStyle(v),
+                  ),
+                ),
+                const SizedBox(width: AppConstants.spacing12),
+                Expanded(
+                  child: DropdownButtonFormField<Season>(
+                    initialValue: draft.season,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Season'),
+                    items: [
+                      for (final s in Season.values)
+                        DropdownMenuItem(value: s, child: Text(s.displayName)),
+                    ],
+                    onChanged: (v) => v == null ? null : notifier.setSeason(v),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildOutfitDetails(
-    BuildContext context,
-    OutfitBuilderController controller,
-    AppUiTokens tokens,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        children: [
-          // Name input
-          TextFormField(
-            initialValue: controller.name.value,
-            onChanged: (value) => controller.name.value = value,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter an outfit name';
-              }
-              return null;
-            },
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            decoration: InputDecoration(
-              labelText: 'Outfit Name *',
-              hintText: 'My Casual Outfit',
-              filled: true,
-              fillColor: tokens.cardColor.withValues(alpha: 0.5),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-                borderSide: BorderSide.none,
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.error,
-                ),
-              ),
-            ),
-          ),
+class _Preview extends StatelessWidget {
+  const _Preview({required this.draft});
 
-          const SizedBox(height: AppConstants.spacing12),
+  final OutfitDraft draft;
 
-          // Style and Season dropdowns
-          Row(
-            children: [
-              Expanded(
-                child: Obx(
-                  () => DropdownButtonFormField<Style>(
-                    initialValue: controller.selectedStyle.value,
-                    decoration: InputDecoration(
-                      labelText: 'Style',
-                      filled: true,
-                      fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppConstants.radius12,
-                        ),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppConstants.spacing12,
-                        vertical: AppConstants.spacing8,
-                      ),
-                    ),
-                    items: Style.values.map((style) {
-                      return DropdownMenuItem(
-                        value: style,
-                        child: Text(style.displayName),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) controller.selectedStyle.value = value;
-                    },
-                  ),
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final url = draft.previewUrl;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+      child: PaperSurface(
+        padding: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        grain: false,
+        color: tokens.stock.sunk,
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: url == null
+              ? const SkeletonPulse(child: SkeletonBox(borderRadius: 0))
+              : AppImage(
+                  imageUrl: url,
+                  fit: BoxFit.contain,
+                  backgroundColor: tokens.stock.sunk,
+                  semanticLabel: 'AI preview of the outfit',
                 ),
-              ),
-              const SizedBox(width: AppConstants.spacing12),
-              Expanded(
-                child: Obx(
-                  () => DropdownButtonFormField<Season>(
-                    initialValue: controller.selectedSeason.value,
-                    decoration: InputDecoration(
-                      labelText: 'Season',
-                      filled: true,
-                      fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppConstants.radius12,
-                        ),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppConstants.spacing12,
-                        vertical: AppConstants.spacing8,
-                      ),
-                    ),
-                    items: Season.values.map((season) {
-                      return DropdownMenuItem(
-                        value: season,
-                        child: Text(season.displayName),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        controller.selectedSeason.value = value;
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(
-    BuildContext context,
-    OutfitBuilderController controller,
-    AppUiTokens tokens,
-  ) {
+class _ChosenRow extends ConsumerWidget {
+  const _ChosenRow({required this.pieces});
+
+  final List<ItemModel> pieces;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing16,
+        AppConstants.spacing16,
+        0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Add items to your outfit',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            pieces.isEmpty
+                ? 'Choose pieces'
+                : pieces.length == 1
+                ? '1 piece chosen'
+                : '${pieces.length} pieces chosen',
+            style: text.titleMedium,
           ),
-          Obx(
-            () => controller.selectedItems.isNotEmpty
-                ? Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing12,
-                      vertical: AppConstants.spacing4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: tokens.brandColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius16,
-                      ),
-                    ),
-                    child: Text(
-                      '${controller.selectedItems.length} selected',
-                      style: TextStyle(
-                        color: tokens.brandColor,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSelectedItemsRow(
-    BuildContext context,
-    OutfitBuilderController controller,
-    AppUiTokens tokens,
-  ) {
-    return Container(
-      height: 100,
-      margin: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacing16,
-        vertical: AppConstants.spacing12,
-      ),
-      decoration: BoxDecoration(
-        color: tokens.cardColor.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(AppConstants.radius12),
-        border: Border.all(
-          color: tokens.cardBorderColor,
-          style: BorderStyle.solid,
-        ),
-      ),
-      child: Obx(() {
-        if (controller.selectedItems.isEmpty) {
-          return Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.touch_app_outlined,
-                  color: tokens.textMuted,
-                  size: 20,
-                ),
-                const SizedBox(width: AppConstants.spacing8),
-                Text(
-                  'Tap items below to add',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.all(AppConstants.spacing12),
-          itemCount: controller.selectedItems.length,
-          itemBuilder: (context, index) {
-            final outfitItem = controller.selectedItems[index];
-            return _buildSelectedThumbnail(
-              context,
-              outfitItem,
-              controller,
-              tokens,
-            );
-          },
-        );
-      }),
-    );
-  }
-
-  Widget _buildSelectedThumbnail(
-    BuildContext context,
-    OutfitBuilderItem outfitItem,
-    OutfitBuilderController controller,
-    AppUiTokens tokens,
-  ) {
-    return Container(
-      width: 70,
-      margin: const EdgeInsets.only(right: AppConstants.spacing8),
-      child: Stack(
-        children: [
-          // Item image
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              color: tokens.cardColor,
-              borderRadius: BorderRadius.circular(AppConstants.radius8),
-              border: Border.all(color: tokens.brandColor, width: 2),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radius8 - 2),
-              child:
-                  outfitItem.item.itemImages != null &&
-                      outfitItem.item.itemImages!.isNotEmpty
-                  ? AppImage(
-                      imageUrl: outfitItem.item.itemImages!.first.url,
-                      fit: BoxFit.cover,
-                      enableZoom: false,
-                      errorIcon: _getCategoryIcon(outfitItem.item.category),
-                      // Presigned URLs expire after 1h; on a failed load
-                      // re-mint a fresh URL from the durable storage key.
-                      storagePath: outfitItem.item.itemImages!.first
-                          .storagePath,
-                      remintUrl: _itemRepository.remintImageUrl,
-                    )
-                  : Icon(
-                      _getCategoryIcon(outfitItem.item.category),
-                      color: tokens.textMuted,
-                      size: 24,
-                    ),
-            ),
-          ),
-
-          // Remove button
-          Positioned(
-            top: -4,
-            right: -4,
-            child: GestureDetector(
-              onTap: () => controller.removeItem(outfitItem.id),
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: tokens.cardColor, width: 2),
-                ),
-                child: const Icon(Icons.close, color: Colors.white, size: 12),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchFilter(
-    BuildContext context,
-    OutfitBuilderController controller,
-    AppUiTokens tokens,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-      child: Row(
-        children: [
-          // Search field
-          Expanded(
-            flex: 2,
-            child: TextField(
-              onChanged: (value) => controller.searchQuery.value = value,
-              decoration: InputDecoration(
-                hintText: 'Search items...',
-                filled: true,
-                fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                prefixIcon: const Icon(Icons.search, size: 20),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing12,
-                  vertical: AppConstants.spacing12,
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: AppConstants.spacing12),
-
-          // Category filter
-          Expanded(
-            child: Obx(
-              () => DropdownButtonFormField<String>(
-                initialValue: controller.categoryFilter.value,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacing12,
-                    vertical: AppConstants.spacing8,
-                  ),
-                ),
-                isExpanded: true,
-                items: [
-                  const DropdownMenuItem(value: 'all', child: Text('All')),
-                  ...Category.values.map((cat) {
-                    return DropdownMenuItem(
-                      value: cat.name,
-                      child: Text(cat.displayName),
-                    );
-                  }),
-                ],
-                onChanged: (value) {
-                  if (value != null) controller.categoryFilter.value = value;
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWardrobeGrid(
-    BuildContext context,
-    OutfitBuilderController controller,
-    AppUiTokens tokens,
-  ) {
-    return Obx(() {
-      final items = controller.filteredItems;
-
-      if (items.isEmpty) {
-        return Container(
-          height: 200,
-          alignment: Alignment.center,
-          child: Text(
-            'No items available',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-          ),
-        );
-      }
-
-      // Dense, horizontally-scrollable rails grouped by category (reference video UX).
-      final grouped = <String, List<dynamic>>{};
-      for (final item in items) {
-        grouped.putIfAbsent(item.category.name, () => <dynamic>[]).add(item);
-      }
-      final categories = grouped.keys.toList()..sort();
-
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: categories.map((category) {
-            final categoryItems = grouped[category]!;
-            return Column(
-              // Key the rail by category so a filter change cannot reuse a
-              // horizontal ListView for a different category and carry over
-              // its scroll offset.
-              key: ValueKey(category),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacing16,
-                    vertical: AppConstants.spacing8,
-                  ),
-                  child: Text(
-                    '${_categoryLabel(category)} (${categoryItems.length})',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: tokens.textMuted,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 132,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing16,
-                    ),
-                    itemCount: categoryItems.length,
-                    itemBuilder: (context, index) {
-                      final item = categoryItems[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(
-                          right: AppConstants.spacing12,
-                        ),
-                        child: SizedBox(
-                          width: 100,
-                          child: _buildWardrobeItemCard(
-                            context,
-                            item,
-                            controller,
-                            tokens,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing8),
-              ],
-            );
-          }).toList(),
-        ),
-      );
-    });
-  }
-
-  String _categoryLabel(String category) {
-    try {
-      return Category.values.firstWhere((c) => c.name == category).displayName;
-    } catch (_) {
-      return category.isEmpty
-          ? 'Other'
-          : category[0].toUpperCase() + category.substring(1);
-    }
-  }
-
-  Widget _buildWardrobeItemCard(
-    BuildContext context,
-    dynamic item,
-    OutfitBuilderController controller,
-    AppUiTokens tokens,
-  ) {
-    return Obx(() {
-      final isSelected = controller.isItemSelected(item.id);
-
-      return InkWell(
-        onTap: () => controller.toggleItem(item),
-        borderRadius: BorderRadius.circular(AppConstants.radius12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: tokens.cardColor,
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(
-              color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
-              width: isSelected ? 2 : 1,
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: tokens.brandColor.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Stack(
-            children: [
-              Column(
+          const SizedBox(height: AppConstants.spacing4),
+          if (pieces.isEmpty)
+            Text(
+              'Tap pieces below to add them.',
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+            )
+          else
+            SizedBox(
+              height: 84,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(top: AppConstants.spacing8),
                 children: [
-                  // Item image
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(AppConstants.radius12),
+                  for (final p in pieces)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: AppConstants.spacing8,
                       ),
-                      child:
-                          item.itemImages != null && item.itemImages!.isNotEmpty
-                          ? AppImage(
-                              imageUrl: item.itemImages!.first.url,
-                              fit: BoxFit.contain,
-                              enableZoom: false,
-                              errorIcon: _getCategoryIcon(item.category),
-                              // Presigned URLs expire after 1h; on a failed
-                              // load re-mint a fresh URL from the durable
-                              // storage key.
-                              storagePath: item.itemImages!.first.storagePath,
-                              remintUrl: _itemRepository.remintImageUrl,
-                            )
-                          : Container(
-                              color: tokens.cardColor.withValues(alpha: 0.5),
-                              child: Icon(
-                                _getCategoryIcon(item.category),
-                                color: tokens.textMuted,
+                      child: SizedBox.square(
+                        dimension: 72,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          clipBehavior: Clip.none,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                AppConstants.radius8,
+                              ),
+                              child: _PieceImage(item: p),
+                            ),
+                            // The 44px target overhangs the tile corner;
+                            // the row's top padding keeps it unclipped.
+                            Positioned(
+                              top: -8,
+                              right: -8,
+                              child: IconButton(
+                                tooltip: 'Remove ${p.name}',
+                                onPressed: () => ref
+                                    .read(outfitBuilderProvider.notifier)
+                                    .toggle(p),
+                                icon: Icon(
+                                  Icons.cancel_rounded,
+                                  size: 20,
+                                  color: tokens.textSecondary,
+                                ),
                               ),
                             ),
-                    ),
-                  ),
-
-                  // Item name
-                  Padding(
-                    padding: const EdgeInsets.all(AppConstants.spacing8),
-                    child: Text(
-                      item.name,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w500,
+                          ],
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
                 ],
               ),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
-              // Selection indicator
-              if (isSelected)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: tokens.brandColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 16,
+class _PickTile extends ConsumerWidget {
+  const _PickTile({required this.item, required this.selected});
+
+  final ItemModel item;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    return PaperSurface(
+      padding: EdgeInsets.zero,
+      grain: false,
+      clipBehavior: Clip.antiAlias,
+      color: selected ? tokens.stock.tint : null,
+      onTap: () => ref.read(outfitBuilderProvider.notifier).toggle(item),
+      semanticLabel: '${item.name}${selected ? ', chosen' : ''}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _PieceImage(item: item),
+                if (selected)
+                  Positioned(
+                    top: AppConstants.spacing4,
+                    right: AppConstants.spacing4,
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      color: tokens.stock.accent,
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    });
-  }
-
-  Widget _buildBottomBar(
-    BuildContext context,
-    OutfitBuilderController controller,
-    AppUiTokens tokens,
-  ) {
-    return Obx(() {
-      if (controller.selectedItems.isEmpty) {
-        return const SizedBox.shrink();
-      }
-
-      return Container(
-        padding: EdgeInsets.only(
-          left: AppConstants.spacing16,
-          right: AppConstants.spacing16,
-          top: AppConstants.spacing12,
-          bottom:
-              AppConstants.spacing12 +
-              MediaQuery.of(context).padding.bottom +
-              // Keep the sticky bar clear of the keyboard while a field is
-              // focused (padding.bottom alone is consumed by the keyboard).
-              MediaQuery.of(context).viewInsets.bottom,
-        ),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          border: Border(top: BorderSide(color: tokens.cardBorderColor)),
-        ),
-        child: Row(
-          children: [
-            // Selected count
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacing12,
-                vertical: AppConstants.spacing8,
-              ),
-              decoration: BoxDecoration(
-                color: tokens.brandColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppConstants.radius8),
-              ),
-              child: Text(
-                '${controller.selectedItems.length} item${controller.selectedItems.length > 1 ? 's' : ''}',
-                style: TextStyle(
-                  color: tokens.brandColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+          Padding(
+            padding: const EdgeInsets.all(AppConstants.spacing6),
+            child: Text(
+              item.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
             ),
-
-            const SizedBox(width: AppConstants.spacing12),
-
-            // Generate AI Preview button
-            Expanded(
-              child: controller.isGenerating.value
-                  ? ElevatedButton(
-                      onPressed: null,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                      ),
-                      child: const InlineProcessingStatus(
-                        phase: ProcessingPhase.processing,
-                        processingLabel: 'Generating',
-                      ),
-                    )
-                  : ElevatedButton.icon(
-                      onPressed: () => controller.generateAIOutfit(),
-                      icon: const Icon(Icons.auto_awesome),
-                      label: const Text('Generate AI Preview'),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      );
-    });
+          ),
+        ],
+      ),
+    );
   }
+}
 
-  IconData _getCategoryIcon(Category category) {
-    switch (category) {
-      case Category.tops:
-        return Icons.checkroom;
-      case Category.bottoms:
-        return Icons.work;
-      case Category.shoes:
-        return Icons.hiking;
-      case Category.accessories:
-        return Icons.shopping_bag;
-      case Category.outerwear:
-        return Icons.dry_cleaning;
-      case Category.swimwear:
-        return Icons.water_drop;
-      case Category.activewear:
-        return Icons.directions_run;
-      case Category.other:
-        return Icons.help;
-    }
+class _PieceImage extends ConsumerWidget {
+  const _PieceImage({required this.item});
+
+  final ItemModel item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final image = item.primaryImage;
+    return ColoredBox(
+      color: tokens.stock.sunk,
+      child: image == null
+          ? Center(child: GarmentGlyph(category: item.category, size: 36))
+          : AppImage(
+              imageUrl: image.url,
+              fit: BoxFit.contain,
+              enableZoom: false,
+              memCacheWidth: 300,
+              backgroundColor: tokens.stock.sunk,
+              storagePath: image.storagePath,
+              remintUrl: ref.read(itemRepositoryProvider).remintImageUrl,
+              semanticLabel: item.name,
+            ),
+    );
   }
 }

@@ -50,7 +50,7 @@ fitcheck-ai/
 │   ├── public/
 │   ├── vite.config.ts
 │   └── package.json
-├── flutter/                # Mobile app (GetX)
+├── flutter/                # Mobile app (Riverpod + go_router)
 ├── infra/                  # Cloudflare images worker (infra/images-worker)
 ├── docs/                   # Knowledge base (system of record)
 │   ├── design-docs/        # Beliefs, design decisions

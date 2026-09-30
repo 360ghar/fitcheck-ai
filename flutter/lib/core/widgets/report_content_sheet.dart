@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import '../providers.dart';
 import '../constants/app_constants.dart';
 import 'app_ui.dart';
 import '../../features/feedback/models/feedback_model.dart';
@@ -14,10 +14,14 @@ import '../utils/error_handler.dart';
 Future<void> showReportContentSheet({
   required String contentType,
   required String contentId,
-}) {
-  return Get.bottomSheet<void>(
-    ReportContentSheet(contentType: contentType, contentId: contentId),
+}) async {
+  final context = rootNavigatorKey.currentContext;
+  if (context == null) return;
+  await showModalBottomSheet<void>(
+    context: context,
     isScrollControlled: true,
+    builder: (_) =>
+        ReportContentSheet(contentType: contentType, contentId: contentId),
   );
 }
 
@@ -68,9 +72,7 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
             '$_selectedReason\n\n$details\n\nReported via in-app report.',
       );
 
-      if (Get.isBottomSheetOpen ?? false) {
-        Get.back();
-      }
+      if (mounted) Navigator.pop(context);
       ErrorHandler.showInfo('Thank you. Our team will review this content.', title: 'Report Submitted');
     } catch (e) {
       if (mounted) {

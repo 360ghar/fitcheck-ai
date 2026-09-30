@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
+import '../providers.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../constants/app_constants.dart';
@@ -82,7 +82,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
     // Restore system UI overlay style. The viewer opens over both themes, so
     // match the brightness of whatever route sits underneath instead of
     // always restoring to light-mode values.
-    final context = Get.context;
+    final context = rootNavigatorKey.currentContext;
     final dark =
         context != null &&
         Theme.of(context).brightness == Brightness.dark;

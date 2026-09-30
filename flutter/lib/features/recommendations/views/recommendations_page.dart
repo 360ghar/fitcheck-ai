@@ -1,326 +1,54 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_bottom_navigation_bar.dart';
-import '../../../core/widgets/app_network_image.dart';
+
 import '../../../core/widgets/app_ui.dart';
-import '../../wardrobe/models/item_model.dart';
-import '../../wardrobe/repositories/item_repository.dart';
-import '../controllers/recommendations_controller.dart';
-import '../widgets/find_matches_tab.dart';
-import '../widgets/complete_look_tab.dart';
-import '../widgets/weather_based_tab.dart';
-import '../widgets/shopping_tab.dart';
 import '../widgets/astrology_tab.dart';
+import '../widgets/complete_look_tab.dart';
+import '../widgets/find_matches_tab.dart';
+import '../widgets/shopping_tab.dart';
+import '../widgets/weather_based_tab.dart';
 
-/// Recommendations page with 5 tabs:
-/// 1. Find Matches - Find items that match selected items
-/// 2. Complete Look - Generate complete outfit suggestions
-/// 3. Weather-Based - Get recommendations based on weather
-/// 4. Astrology - Get lucky color suggestions and wardrobe picks
-/// 5. Shopping - Get shopping suggestions for wardrobe gaps
+/// Recommendations: find matches, complete a look, dress for the weather,
+/// lucky colours and pieces to buy. Each tab keeps its own results.
 class RecommendationsPage extends StatelessWidget {
-  const RecommendationsPage({super.key});
+  const RecommendationsPage({super.key, this.initialTab = 0});
+
+  final int initialTab;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final RecommendationsController controller =
-        Get.find<RecommendationsController>();
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
-      Get.currentRoute,
-    );
-
-    return Scaffold(
-      body: AppPageBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
-              // App bar with tabs
-              _buildAppBar(context, controller, tokens),
-
-              // Tab content
-              Expanded(
-                child: TabBarView(
-                  controller: controller.tabController,
-                  children: const [
-                    FindMatchesTab(),
-                    CompleteLookTab(),
-                    WeatherBasedTab(),
-                    AstrologyTab(),
-                    ShoppingTab(),
-                  ],
-                ),
-              ),
-            ],
+    return PaperStockScope(
+      stock: PaperStockId.ink,
+      child: DefaultTabController(
+        length: 5,
+        initialIndex: initialTab,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('For you'),
+            bottom: const TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [
+                Tab(text: 'Matches'),
+                Tab(text: 'Complete'),
+                Tab(text: 'Weather'),
+                Tab(text: 'Colours'),
+                Tab(text: 'Shop'),
+              ],
+            ),
+          ),
+          body: const AppPageBackground(
+            child: TabBarView(
+              children: [
+                FindMatchesTab(),
+                CompleteLookTab(),
+                WeatherBasedTab(),
+                AstrologyTab(),
+                ShoppingTab(),
+              ],
+            ),
           ),
         ),
       ),
-      bottomNavigationBar: AppBottomNavigationBar(currentIndex: currentIndex),
     );
-  }
-
-  Widget _buildAppBar(
-    BuildContext context,
-    RecommendationsController controller,
-    AppUiTokens tokens,
-  ) {
-    return Column(
-      children: [
-        // Header
-        Padding(
-          padding: const EdgeInsets.all(AppConstants.spacing16),
-          child: Row(
-            children: [
-              Text(
-                'Recommendations',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              Obx(
-                () => IconButton(
-                  tooltip: 'Refresh recommendations',
-                  onPressed: controller.isLoading.value
-                      ? null
-                      : () => controller.refreshCurrentTab(),
-                  icon: controller.isLoading.value
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Tab bar
-        TabBar(
-          controller: controller.tabController,
-          isScrollable: true,
-          labelColor: tokens.brandColor,
-          unselectedLabelColor: tokens.textMuted,
-          indicatorColor: tokens.brandColor,
-          tabs: const [
-            Tab(text: 'Find Matches', icon: Icon(Icons.search)),
-            Tab(text: 'Complete Look', icon: Icon(Icons.checkroom)),
-            Tab(text: 'Weather', icon: Icon(Icons.wb_sunny)),
-            Tab(text: 'Astrology', icon: Icon(Icons.auto_awesome)),
-            Tab(text: 'Shopping', icon: Icon(Icons.shopping_bag)),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// Selected items chips widget
-class SelectedItemsChips extends StatelessWidget {
-  final RxList<ItemModel> selectedItems;
-  final Function(ItemModel) onRemove;
-
-  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
-  // is re-minted from the durable storage key.
-  static final ItemRepository _itemRepository = ItemRepository();
-
-  const SelectedItemsChips({
-    super.key,
-    required this.selectedItems,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Obx(() {
-      if (selectedItems.isEmpty) {
-        return const SizedBox.shrink();
-      }
-
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-        height: 60,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: selectedItems.length,
-          itemBuilder: (context, index) {
-            final item = selectedItems[index];
-            return Padding(
-              padding: const EdgeInsets.only(right: AppConstants.spacing8),
-              child: Chip(
-                label: Text(item.name),
-                avatar: ClipOval(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child:
-                        item.itemImages != null && item.itemImages!.isNotEmpty
-                        ? AppNetworkImage(
-                            item.itemImages!.first.url,
-                            fit: BoxFit.cover,
-                            // Presigned URLs expire after 1h; on a failed
-                            // load re-mint a fresh URL from the durable
-                            // storage key.
-                            storagePath: item.itemImages!.first.storagePath,
-                            remintUrl:
-                                SelectedItemsChips._itemRepository
-                                    .remintImageUrl,
-                            errorWidget: (_, _, _) =>
-                                const Icon(Icons.image, size: 16),
-                          )
-                        : const Icon(Icons.image, size: 16),
-                  ),
-                ),
-                onDeleted: () => onRemove(item),
-                backgroundColor: tokens.brandColor.withValues(alpha: 0.1),
-              ),
-            );
-          },
-        ),
-      );
-    });
-  }
-}
-
-/// Recommendation card widget
-class RecommendationCard extends StatelessWidget {
-  final Map<String, dynamic> item;
-  final VoidCallback onTap;
-  /// Optional favorite action; omit when favorites are not wired yet
-  final VoidCallback? onFavorite;
-
-  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
-  // is re-minted from the durable storage key.
-  static final ItemRepository _recommendationItemRepository = ItemRepository();
-
-  const RecommendationCard({
-    super.key,
-    required this.item,
-    required this.onTap,
-    this.onFavorite,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-    final name = item['name']?.toString() ?? 'Unknown';
-    final brand = item['brand']?.toString();
-    final category = item['category']?.toString();
-    final imageUrl = item['image_url']?.toString();
-    final score = item['score'] as num? ?? 0.0;
-    // The response nests the full image rows under `images` (with the
-    // durable storage key) alongside the flattened convenience `image_url`.
-    final images = item['images'];
-    final storagePath = images is List && images.isNotEmpty && images.first is Map
-        ? (images.first as Map)['storage_path']?.toString()
-        : null;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: AppGlassCard(
-        padding: const EdgeInsets.all(AppConstants.spacing8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image or placeholder
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radius8),
-                child: imageUrl != null
-                    ? AppImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.contain,
-                        enableZoom: false,
-                        errorIcon: _getCategoryIcon(category),
-                        // Presigned URLs expire after 1h; on a failed load
-                        // re-mint a fresh URL from the durable storage key.
-                        storagePath: storagePath,
-                        remintUrl: _recommendationItemRepository.remintImageUrl,
-                      )
-                    : Container(
-                        color: tokens.cardColor.withValues(alpha: 0.5),
-                        child: Icon(
-                          _getCategoryIcon(category),
-                          color: tokens.textMuted,
-                        ),
-                      ),
-              ),
-            ),
-
-            const SizedBox(height: AppConstants.spacing8),
-
-            // Match score
-            if (score > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing8,
-                  vertical: AppConstants.spacing4,
-                ),
-                decoration: BoxDecoration(
-                  color: tokens.brandColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppConstants.radius8),
-                ),
-                child: Text(
-                  '${(score * 100).toInt()}% Match',
-                  style: TextStyle(
-                    color: tokens.brandColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: AppConstants.spacing4),
-
-            // Name
-            Text(
-              name,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-
-            if (brand != null) ...[
-              const SizedBox(height: AppConstants.spacing4),
-              Text(
-                brand,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  IconData _getCategoryIcon(String? category) {
-    switch (category) {
-      case 'tops':
-        return Icons.checkroom;
-      case 'bottoms':
-        return Icons.work;
-      case 'shoes':
-        return Icons.hiking;
-      case 'accessories':
-        return Icons.shopping_bag;
-      case 'outerwear':
-        return Icons.dry_cleaning;
-      default:
-        return Icons.help;
-    }
   }
 }

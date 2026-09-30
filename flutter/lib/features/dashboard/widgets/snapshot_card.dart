@@ -1,274 +1,187 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../outfits/controllers/outfit_list_controller.dart';
-import '../../shell/controllers/main_shell_controller.dart';
-import '../../wardrobe/controllers/wardrobe_controller.dart';
-import '../controllers/dashboard_controller.dart';
+import '../../outfits/providers/outfit_providers.dart';
+import '../../wardrobe/providers/wardrobe_providers.dart';
+import '../models/dashboard_models.dart';
 
-/// Wardrobe Snapshot card showing key metrics
-class SnapshotCard extends StatelessWidget {
-  const SnapshotCard({super.key});
+/// Closet totals as three large figures. An empty closet shows an invitation
+/// to add the first piece instead of a row of zeros.
+class SnapshotCard extends ConsumerWidget {
+  const SnapshotCard({super.key, required this.stats, this.streak});
+
+  final DashboardStats stats;
+  final StreakData? streak;
 
   @override
-  Widget build(BuildContext context) {
-    final controller = Get.find<DashboardController>();
-    final tokens = AppUiTokens.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
 
-    return Obx(() {
-      final stats = controller.dashboard.value?.statistics;
-      final streak = controller.streak.value;
-
-      final itemsCount = _formatCount(stats?.totalItems);
-      final outfitsCount = _formatCount(stats?.totalOutfits);
-      final streakCount = _formatCount(streak?.currentStreak);
-
-      return AppGlassCard(
+    if (stats.totalItems == 0) {
+      return PaperSurface(
+        stock: PaperStockId.moss,
+        padding: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AppSectionHeader(
-              title: 'Closet Snapshot',
-              subtitle: 'This month at a glance',
-              trailing: controller.isLoading.value
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Items',
-                    value: itemsCount,
-                    footnote: stats == null
-                        ? 'Loading'
-                        : '+${stats.itemsAddedThisMonth} this month',
-                    icon: Icons.checkroom,
-                    accent: const Color(0xFF3B82F6),
-                    onTap: () {
-                      final shellController = Get.find<MainShellController>();
-                      shellController.changeTab(2); // wardrobe tab
-                    },
-                  ),
-                ),
-                const SizedBox(width: AppConstants.spacing12),
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Outfits',
-                    value: outfitsCount,
-                    footnote: stats == null
-                        ? 'Loading'
-                        : '+${stats.outfitsCreatedThisMonth} this month',
-                    icon: Icons.auto_awesome,
-                    accent: const Color(0xFFEC4899),
-                    onTap: () {
-                      final shellController = Get.find<MainShellController>();
-                      shellController.changeTab(3); // outfits tab
-                    },
-                  ),
-                ),
-                const SizedBox(width: AppConstants.spacing12),
-                Expanded(
-                  child: _MetricTile(
-                    label: 'Streak',
-                    value: streakCount,
-                    footnote: streak == null
-                        ? 'Loading'
-                        : 'Best ${streak.longestStreak} days',
-                    icon: Icons.local_fire_department,
-                    accent: const Color(0xFFF59E0B),
-                    onTap: () => Get.toNamed(Routes.gamification),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-            Wrap(
-              spacing: AppConstants.spacing8,
-              runSpacing: AppConstants.spacing8,
-              children: [
-                _StatPill(
-                  label: 'Favorites',
-                  value: _formatCount(stats?.favoriteItemsCount),
-                  icon: Icons.favorite_border,
-                  onTap: () {
-                    final shellController = Get.find<MainShellController>();
-                    final wardrobeController = Get.find<WardrobeController>();
-                    shellController.changeTab(2); // wardrobe tab
-                    // A10b-03: the real favorites FILTER — sortType='favorite'
-                    // mapped to a nonexistent sort key and showed the whole
-                    // wardrobe.
-                    wardrobeController.favoritesOnly.value = true;
-                  },
-                ),
-                _StatPill(
-                  label: 'Saved outfits',
-                  value: _formatCount(stats?.favoriteOutfitsCount),
-                  icon: Icons.bookmark_border,
-                  onTap: () {
-                    final shellController = Get.find<MainShellController>();
-                    final outfitController = Get.find<OutfitListController>();
-                    shellController.changeTab(3); // outfits tab
-                    if (!outfitController.favoritesOnly.value) {
-                      outfitController.favoritesOnly.value = true;
-                    }
-                  },
-                ),
-              ],
-            ),
-            if (stats?.mostWornItem != null) ...[
-              const SizedBox(height: AppConstants.spacing12),
-              Text(
-                'Most worn: ${stats!.mostWornItem!.name} - ${stats.mostWornItem!.timesWorn} wears',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
+            const PaperScene(preset: PaperScenes.closet, height: 120),
+            Padding(
+              padding: const EdgeInsets.all(AppConstants.spacing16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Start your closet', style: text.headlineSmall),
+                  const SizedBox(height: AppConstants.spacing4),
+                  Text(
+                    'Photograph a few pieces. We tag them for you.',
+                    style: text.bodyMedium?.copyWith(
+                      color: tokens.textSecondary,
                     ),
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+                  ElevatedButton.icon(
+                    onPressed: () => context.push(Routes.wardrobeAdd),
+                    icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+                    label: const Text('Add your first piece'),
+                  ),
+                ],
               ),
-            ],
+            ),
           ],
         ),
       );
-    });
-  }
+    }
 
-  String _formatCount(int? value) {
-    if (value == null) return '--';
-    return value.toString();
-  }
-}
-
-class _MetricTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final String footnote;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback? onTap;
-
-  const _MetricTile({
-    required this.label,
-    required this.value,
-    required this.footnote,
-    required this.icon,
-    required this.accent,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppConstants.spacing12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-          border: Border.all(color: tokens.cardBorderColor),
-          color: tokens.cardColor.withValues(alpha: 0.75),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppConstants.spacing8),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
-                  child: Icon(icon, color: accent, size: 20),
-                ),
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: tokens.textPrimary,
-                      ),
-                ),
-              ],
+    final streak = this.streak;
+    return PaperSurface(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing8,
+        AppConstants.spacing16,
+        AppConstants.spacing8,
+        AppConstants.spacing8,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Figure(
+                value: stats.totalItems,
+                label: 'pieces',
+                note: '+${stats.itemsAddedThisMonth} this month',
+                onTap: () => context.go(Routes.wardrobe),
+              ),
+              _Figure(
+                value: stats.totalOutfits,
+                label: 'outfits',
+                note: '+${stats.outfitsCreatedThisMonth} this month',
+                onTap: () => context.go(Routes.outfits),
+              ),
+              _Figure(
+                value: streak?.currentStreak,
+                label: 'day streak',
+                note: streak == null ? '' : 'Best ${streak.longestStreak}',
+                onTap: () => context.push(Routes.gamification),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppConstants.spacing8),
+          Wrap(
+            children: [
+              TextButton.icon(
+                onPressed: () {
+                  context.go(Routes.wardrobe);
+                  ref
+                      .read(wardrobeFiltersProvider.notifier)
+                      .setFavoritesOnly(true);
+                },
+                icon: const Icon(Icons.favorite_border_rounded, size: 18),
+                label: Text('${stats.favoriteItemsCount} favourites'),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  context.go(Routes.outfits);
+                  ref.read(outfitFiltersProvider.notifier).setFavoritesOnly(true);
+                },
+                icon: const Icon(Icons.bookmark_border_rounded, size: 18),
+                label: Text('${stats.favoriteOutfitsCount} saved outfits'),
+              ),
+            ],
+          ),
+          if (stats.mostWornItem case final worn?)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppConstants.spacing12,
+                0,
+                AppConstants.spacing12,
+                AppConstants.spacing8,
+              ),
+              child: Text(
+                'Most worn: ${worn.name}, ${worn.timesWorn} times',
+                style: text.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
             ),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              footnote,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                    fontSize: 10,
-                  ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class _StatPill extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  const _StatPill({
-    required this.label,
+class _Figure extends StatelessWidget {
+  const _Figure({
     required this.value,
-    required this.icon,
-    this.onTap,
+    required this.label,
+    required this.note,
+    required this.onTap,
   });
+
+  final int? value;
+  final String label;
+  final String note;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppConstants.spacing12,
-          vertical: AppConstants.spacing8,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppConstants.radius24),
-          color: tokens.cardColor.withValues(alpha: 0.6),
-          border: Border.all(color: tokens.cardBorderColor),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: tokens.textSecondary),
-            const SizedBox(width: AppConstants.spacing8),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return Expanded(
+      child: Semantics(
+        button: true,
+        label: '${value ?? 'No'} $label',
+        excludeSemantics: true,
+        // excludeSemantics drops the InkWell's tap action: without this the
+        // node is announced as a button screen readers cannot activate.
+        onTap: onTap,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppConstants.radius12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spacing8,
+              vertical: AppConstants.spacing4,
             ),
-            const SizedBox(width: AppConstants.spacing4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  paperFigure(value),
+                  style: text.displaySmall?.copyWith(fontSize: 34),
+                ),
+                Text(label, style: text.labelLarge),
+                if (note.isNotEmpty)
+                  Text(
+                    note,
+                    style: text.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

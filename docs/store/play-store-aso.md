@@ -153,10 +153,9 @@ Create a compelling graphic showing:
 - Gradient overlay matching brand colors
 
 ## App Icon
-- Ensure high contrast and visibility at all sizes
-- Current icon is good but consider adding subtle clothing/wardrobe element
-- Must be recognizable at 48x48 (notification) and 512x512 (Play Store)
-- Use adaptive icons for Android (background + foreground layers)
+- The icon is three fanned paper tees on the ink stock `#E3E9F1` (2026-09-25). Masters and rules: `docs/brand/README.md`.
+- Android uses adaptive layers (ink-stock background, mark foreground) plus a monochrome layer for themed icons.
+- The 512x512 Play Store icon is `frontend/public/icon-512.png` (same render as the app icon).
 
 ## Video (30 seconds - 2 minutes)
 

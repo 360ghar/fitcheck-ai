@@ -569,7 +569,7 @@ export default function DashboardPage() {
                       src={item.images[0].thumbnail_url || item.images[0].image_url}
                       onError={thumbnailErrorFallback(item.images[0].image_url)}
                       alt={item.name}
-                      className="h-12 w-12 md:h-14 md:w-14 rounded-lg object-cover"
+                      className="h-12 w-12 md:h-14 md:w-14 rounded-lg bg-card object-contain"
                     />
                   ) : (
                     <div className="h-12 w-12 md:h-14 md:w-14 rounded-lg bg-muted flex items-center justify-center">

@@ -74,7 +74,7 @@ env:
   # Must match build-ios.yml. A patch is always compiled with the Flutter
   # version of its release, so this exists to keep the toolchain consistent
   # rather than to select one.
-  FLUTTER_VERSION: '3.44.6'
+  FLUTTER_VERSION: '3.47.5'
   BUNDLE_ID: com.fitcheckaiapp.fitcheckai
   DEVELOPMENT_TEAM: HMWGCVU4SV
   SIGNING_IDENTITY: 'Apple Distribution'

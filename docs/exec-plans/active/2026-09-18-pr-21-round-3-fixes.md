@@ -29,7 +29,7 @@ threads stay deferred to TD-111/TD-112.
 
 ## Context / links
 
-- PR: https://github.com/360ghar/fitcheck-ai/pull/21
+- PR: <https://github.com/360ghar/fitcheck-ai/pull/21>
 - Raw threads: `/tmp/pr21_review.json` (150 inline), `/tmp/pr21_latest.md` (newest 30)
 - Approved spec: `~/.factory/specs/2026-09-18-pr-21-round-3-fix-30-validated-review-threads.md`
 

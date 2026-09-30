@@ -1,2079 +1,1398 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/widgets/app_network_image.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/permission_helper.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../controllers/batch_extraction_controller.dart';
 import '../models/social_import_models.dart';
+import '../providers/batch_extraction_provider.dart';
 import '../widgets/batch_image_tile.dart';
+import '../widgets/extraction_progress_card.dart' show PaperProgressTrack;
 
-/// Page for selecting multiple images for batch extraction
-class BatchImageSelectorPage extends GetView<BatchExtractionController> {
-  final bool launchInSocialMode;
-
+/// Step one of a batch add: choose up to 50 photos, or import from a
+/// public profile.
+class BatchImageSelectorPage extends ConsumerStatefulWidget {
   const BatchImageSelectorPage({super.key, this.launchInSocialMode = false});
 
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+  final bool launchInSocialMode;
 
-    if (launchInSocialMode) {
+  @override
+  ConsumerState<BatchImageSelectorPage> createState() =>
+      _BatchImageSelectorPageState();
+}
+
+class _BatchImageSelectorPageState
+    extends ConsumerState<BatchImageSelectorPage> {
+  final _picker = ImagePicker();
+
+  BatchExtractionNotifier get _notifier =>
+      ref.read(batchExtractionProvider.notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.launchInSocialMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        controller.initializeSocialMode();
+        if (mounted) _notifier.setInputMode(BatchInputMode.social);
       });
     }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Obx(
-          () => Text(
-            controller.isSocialMode
-                ? 'Import from Social'
-                : 'Select Images (${controller.selectedImages.length}/${BatchExtractionController.maxImages})',
-          ),
-        ),
-        elevation: 0,
-        actions: [
-          Obx(() {
-            if (!controller.isSocialMode &&
-                controller.selectedImages.isNotEmpty) {
-              return TextButton(
-                onPressed: controller.clearAllImages,
-                child: Text(
-                  'Clear All',
-                  style: TextStyle(color: tokens.textMuted),
-                ),
-              );
-            }
-
-            if (controller.isSocialMode && controller.hasActiveSocialJob) {
-              return IconButton(
-                onPressed: controller.refreshSocialStatus,
-                icon: const Icon(Icons.refresh),
-              );
-            }
-            return const SizedBox.shrink();
-          }),
-        ],
-      ),
-      body: AppPageBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildModeSwitcher(context, tokens),
-              Expanded(
-                child: Obx(
-                  () => controller.isSocialMode
-                      ? _buildSocialBody(context, tokens)
-                      : (controller.selectedImages.isEmpty
-                            ? _buildEmptyState(context, tokens)
-                            : _buildImageGrid(context, tokens)),
-                ),
-              ),
-              Obx(
-                () => controller.isSocialMode
-                    ? const SizedBox.shrink()
-                    : _buildBottomBar(context, tokens),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
-  Widget _buildModeSwitcher(BuildContext context, AppUiTokens tokens) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing16,
-        AppConstants.spacing8,
-        AppConstants.spacing16,
-        AppConstants.spacing8,
-      ),
-      child: Obx(
-        () => Container(
-          decoration: BoxDecoration(
-            color: tokens.cardColor,
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: tokens.cardBorderColor),
-          ),
-          padding: const EdgeInsets.all(4),
-          child: Row(
-            children: [
-              Expanded(
-                child: _modeButton(
-                  context,
-                  tokens,
-                  label: 'Upload Photos',
-                  active: !controller.isSocialMode,
-                  onTap: () => controller.setInputMode(BatchInputMode.upload),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: _modeButton(
-                  context,
-                  tokens,
-                  label: 'Import URL',
-                  active: controller.isSocialMode,
-                  onTap: () => controller.setInputMode(BatchInputMode.social),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  static bool _denied(PlatformException e) =>
+      e.code.toLowerCase().contains('denied');
 
-  Widget _modeButton(
-    BuildContext context,
-    AppUiTokens tokens, {
-    required String label,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppConstants.spacing8,
-          vertical: AppConstants.spacing12,
-        ),
-        decoration: BoxDecoration(
-          color: active ? tokens.brandColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: active ? Colors.white : tokens.textMuted,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialBody(BuildContext context, AppUiTokens tokens) {
-    final job = controller.socialJob.value;
-
-    // State-based UI rendering for better UX
-    if (job == null) {
-      // No job started - show input form directly on page
-      return _buildSocialInputForm(context, tokens);
+  Future<void> _addFiles(List<XFile> picked) async {
+    if (picked.isEmpty || !mounted) return;
+    final rejected = await _notifier.addImages([
+      for (final f in picked) File(f.path),
+    ]);
+    if (rejected != null) {
+      ErrorHandler.showValidation(rejected, title: 'Some photos skipped');
     }
-
-    if (controller.isSocialAuthRequired) {
-      // Auth required - show inline auth options
-      return _buildSocialAuthForm(context, tokens, job);
-    }
-
-    if (job.status == SocialImportJobStatus.discovering) {
-      // Discovering photos
-      return _buildSocialDiscoveringState(context, tokens, job);
-    }
-
-    // Terminal states need closure UI. They used to fall through to the
-    // processing view, leaving the user stuck on 'Processing Photos' with a
-    // 'Cancel Import' button that errors because the job already ended.
-    if (job.isTerminal) {
-      return _buildSocialTerminalState(context, tokens, job);
-    }
-
-    // Processing/Review state or other states
-    return _buildSocialProcessingState(context, tokens, job);
   }
 
-  Widget _buildSocialTerminalState(
-    BuildContext context,
-    AppUiTokens tokens,
-    SocialImportJobData job,
-  ) {
-    return job.status == SocialImportJobStatus.completed
-        ? _buildSocialCompletedState(context, tokens, job)
-        : _buildSocialEndedState(context, tokens, job);
-  }
-
-  Widget _buildSocialCompletedState(
-    BuildContext context,
-    AppUiTokens tokens,
-    SocialImportJobData job,
-  ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AppGlassCard(
-            padding: const EdgeInsets.all(AppConstants.spacing24),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.check_circle_outline,
-                  size: 48,
-                  color: Colors.green,
-                ),
-                const SizedBox(height: AppConstants.spacing16),
-                Text(
-                  'Import Complete',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing8),
-                Text(
-                  '${job.approvedPhotos} photo${job.approvedPhotos == 1 ? '' : 's'} '
-                  'added to your wardrobe',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: tokens.textSecondary, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing24),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                // Same destination as a deep link to the wardrobe tab.
-                Get.offNamed(Routes.wardrobe);
-                controller.resetSocialImportState();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: tokens.brandColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                ),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.checkroom_outlined),
-              label: const Text(
-                'View Wardrobe',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSocialEndedState(
-    BuildContext context,
-    AppUiTokens tokens,
-    SocialImportJobData job,
-  ) {
-    final failed = job.status == SocialImportJobStatus.failed;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AppGlassCard(
-            padding: const EdgeInsets.all(AppConstants.spacing24),
-            child: Column(
-              children: [
-                Icon(
-                  failed ? Icons.error_outline : Icons.cancel_outlined,
-                  size: 48,
-                  color: failed ? Colors.red : tokens.textMuted,
-                ),
-                const SizedBox(height: AppConstants.spacing16),
-                Text(
-                  failed ? 'Import Failed' : 'Import Cancelled',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (failed) ...[
-                  const SizedBox(height: AppConstants.spacing12),
-                  _buildErrorCard(
-                    tokens,
-                    (job.errorMessage ?? '').trim().isNotEmpty
-                        ? job.errorMessage!.trim()
-                        : 'Something went wrong while importing.',
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing24),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton.icon(
-              onPressed: controller.resetSocialImportState,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: tokens.brandColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                ),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.refresh),
-              label: const Text(
-                'Start Over',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // New UI Components for improved UX
-
-  Widget _buildSocialInputForm(BuildContext context, AppUiTokens tokens) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Icon(Icons.camera_alt_outlined, size: 48, color: tokens.brandColor),
-          const SizedBox(height: AppConstants.spacing16),
-          Text(
-            'Import from Social',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: tokens.textPrimary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            'Enter a public Instagram or Facebook profile URL to import photos automatically.',
-            style: TextStyle(
-              color: tokens.textSecondary,
-              fontSize: 14,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing24),
-
-          // URL Input Field
-          Obx(() {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Profile URL',
-                  style: TextStyle(
-                    color: tokens.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AppConstants.spacing8),
-                TextField(
-                  controller: controller.socialUrlController,
-                  onChanged: controller.validateSocialUrl,
-                  decoration: InputDecoration(
-                    hintText: 'https://instagram.com/username',
-                    hintStyle: TextStyle(color: tokens.textMuted),
-                    prefixIcon: Icon(
-                      Icons.link_outlined,
-                      color: tokens.textMuted,
-                    ),
-                    suffixIcon: controller.socialUrlInput.value.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear,
-                              color: tokens.textMuted,
-                              size: 20,
-                            ),
-                            onPressed: controller.clearSocialUrl,
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius12,
-                      ),
-                      borderSide: BorderSide(color: tokens.cardBorderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius12,
-                      ),
-                      borderSide: BorderSide(color: tokens.cardBorderColor),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius12,
-                      ),
-                      borderSide: BorderSide(
-                        color: tokens.brandColor,
-                        width: 2,
-                      ),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius12,
-                      ),
-                      borderSide: const BorderSide(color: Colors.red, width: 1),
-                    ),
-                    errorText: controller.socialUrlError.value.isNotEmpty
-                        ? controller.socialUrlError.value
-                        : null,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing16,
-                      vertical: AppConstants.spacing16,
-                    ),
-                    filled: true,
-                    fillColor: tokens.cardColor,
-                  ),
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                ),
-              ],
-            );
-          }),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Start Import Button
-          Obx(() {
-            return SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed:
-                    controller.socialIsLoading.value ||
-                        !controller.isValidSocialUrl.value
-                    ? null
-                    : () => controller.startSocialImport(
-                        controller.socialUrlInput.value,
-                      ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: tokens.textMuted.withValues(
-                    alpha: 0.3,
-                  ),
-                  disabledForegroundColor: tokens.textMuted,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
-                  elevation: 0,
-                ),
-                icon: controller.socialIsLoading.value
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                    : Icon(Icons.download_outlined),
-                label: Text(
-                  controller.socialIsLoading.value
-                      ? 'Starting...'
-                      : 'Start Import',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-            );
-          }),
-
-          if (controller.hasSocialError) ...[
-            const SizedBox(height: AppConstants.spacing16),
-            _buildErrorCard(tokens, controller.socialError.value),
-          ],
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Info cards
-          _buildInfoCard(
-            tokens,
-            icon: Icons.info_outline,
-            title: 'How it works',
-            description:
-                'We\'ll scan the profile and import photos. You can review each item before adding it to your wardrobe.',
-          ),
-          const SizedBox(height: AppConstants.spacing12),
-          _buildInfoCard(
-            tokens,
-            icon: Icons.lock_outline,
-            title: 'Private accounts',
-            description:
-                'For private profiles, connect with OAuth. Manual credentials are supported for Instagram.',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(
-    AppUiTokens tokens, {
-    required IconData icon,
-    required String title,
-    required String description,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing12),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(AppConstants.radius12),
-        border: Border.all(color: tokens.cardBorderColor),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: tokens.brandColor, size: 20),
-          const SizedBox(width: AppConstants.spacing12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: tokens.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: tokens.textSecondary,
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSocialAuthForm(
-    BuildContext context,
-    AppUiTokens tokens,
-    SocialImportJobData job,
-  ) {
-    final allowManualLogin = job.platform == SocialPlatform.instagram;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Back button to reset
-          Row(
-            children: [
-              IconButton(
-                onPressed: controller.resetSocialImportState,
-                icon: Icon(Icons.arrow_back, color: tokens.textMuted),
-              ),
-              Expanded(
-                child: Text(
-                  'Authentication Required',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Icon and message
-          Center(
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: tokens.brandColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.lock_outline,
-                size: 40,
-                color: tokens.brandColor,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing24),
-
-          Text(
-            'This profile requires authentication',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: tokens.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacing8),
-          Text(
-            'The Instagram profile may be private or requires login to access photos.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: tokens.textSecondary,
-              fontSize: 14,
-              height: 1.5,
-            ),
-          ),
-
-          if (controller.hasSocialError) ...[
-            const SizedBox(height: AppConstants.spacing16),
-            _buildErrorCard(tokens, controller.socialError.value),
-          ],
-
-          const SizedBox(height: AppConstants.spacing32),
-
-          // Auth options
-          if (!controller.waitingForOtp.value) ...[
-            // Primary: OAuth Connect
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: controller.socialIsLoading.value
-                    ? null
-                    : controller.startSocialOAuthConnect,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
-                  elevation: 0,
-                ),
-                icon: Icon(Icons.open_in_browser),
-                label: Text(
-                  'Connect with ${job.platform.label}',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: AppConstants.spacing16),
-
-            if (allowManualLogin) ...[
-              // Divider
-              Row(
-                children: [
-                  Expanded(child: Divider(color: tokens.cardBorderColor)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing12,
-                    ),
-                    child: Text(
-                      'OR',
-                      style: TextStyle(
-                        color: tokens.textMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Expanded(child: Divider(color: tokens.cardBorderColor)),
-                ],
-              ),
-              const SizedBox(height: AppConstants.spacing16),
-              // Secondary: Manual login
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: OutlinedButton.icon(
-                  onPressed: controller.socialIsLoading.value
-                      ? null
-                      : () => _showManualAuthDialog(context, tokens),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: tokens.textPrimary,
-                    side: BorderSide(color: tokens.cardBorderColor),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radius12,
-                      ),
-                    ),
-                  ),
-                  icon: Icon(Icons.login),
-                  label: Text(
-                    'Enter Username & Password',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing12),
-            ],
-
-            // Tertiary: Already connected
-            Center(
-              child: TextButton(
-                onPressed: controller.socialIsLoading.value
-                    ? null
-                    : controller.refreshSocialStatus,
-                child: Text(
-                  'I already connected in browser',
-                  style: TextStyle(color: tokens.textMuted),
-                ),
-              ),
-            ),
-          ] else ...[
-            // 2FA State - Inline OTP UI
-            Row(
-              children: [
-                Icon(
-                  Icons.security_outlined,
-                  color: tokens.brandColor,
-                  size: 20,
-                ),
-                const SizedBox(width: AppConstants.spacing8),
-                Expanded(
-                  child: Text(
-                    'Two-Factor Authentication',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            Text(
-              'Your ${job.platform.label} account has 2FA enabled. Please enter the 6-digit code from your authenticator app.',
-              style: TextStyle(color: tokens.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: controller.socialIsLoading.value
-                    ? null
-                    : () => _showOtpDialog(context, tokens),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Enter 2FA Code'),
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: controller.socialIsLoading.value
-                    ? null
-                    : () {
-                        // Allow user to go back and try different method
-                        controller.waitingForOtp.value = false;
-                        controller.lastUsername.value = '';
-                        controller.lastPassword.value = '';
-                      },
-                child: const Text('Try Different Method'),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSocialDiscoveringState(
-    BuildContext context,
-    AppUiTokens tokens,
-    SocialImportJobData job,
-  ) {
-    return Center(
-      // The spinner + stats card + URL + cancel stack is ~500px tall and
-      // overflows the Expanded region on short screens; scroll it instead.
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Animated progress indicator
-            SizedBox(
-              width: 120,
-              height: 120,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    strokeWidth: 6,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      tokens.brandColor,
-                    ),
-                  ),
-                  Icon(Icons.search, size: 40, color: tokens.brandColor),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing32),
-
-            Text(
-              'Discovering photos...',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-
-            Obx(() {
-              final isConnected = controller.socialIsConnected.value;
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.circle,
-                    size: 8,
-                    color: isConnected ? Colors.green : Colors.orange,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isConnected ? 'Live connection' : 'Connecting...',
-                    style: TextStyle(
-                      color: isConnected ? Colors.green : Colors.orange,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              );
-            }),
-
-            const SizedBox(height: AppConstants.spacing24),
-
-            // Stats
-            Container(
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              decoration: BoxDecoration(
-                color: tokens.cardColor,
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-                border: Border.all(color: tokens.cardBorderColor),
-              ),
-              child: Column(
-                children: [
-                  _buildDiscoveringStat(
-                    tokens,
-                    'Photos Found',
-                    '${job.discoveredPhotos}',
-                  ),
-                  Divider(color: tokens.cardBorderColor, height: 24),
-                  _buildDiscoveringStat(
-                    tokens,
-                    'URL',
-                    job.normalizedUrl,
-                    isUrl: true,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: AppConstants.spacing32),
-
-            // Cancel button
-            OutlinedButton.icon(
-              onPressed: controller.socialIsLoading.value
-                  ? null
-                  : controller.cancelSocialImportJob,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing24,
-                  vertical: AppConstants.spacing12,
-                ),
-              ),
-              icon: Icon(Icons.cancel_outlined),
-              label: Text('Cancel Import'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDiscoveringStat(
-    AppUiTokens tokens,
-    String label,
-    String value, {
-    bool isUrl = false,
-  }) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Text(
-            label,
-            style: TextStyle(color: tokens.textSecondary, fontSize: 14),
-          ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Text(
-            value,
-            style: TextStyle(
-              color: tokens.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-            maxLines: isUrl ? 1 : null,
-            overflow: isUrl ? TextOverflow.ellipsis : null,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSocialProcessingState(
-    BuildContext context,
-    AppUiTokens tokens,
-    SocialImportJobData job,
-  ) {
-    final awaitingPhoto = controller.socialAwaitingPhoto;
-    final bufferedPhoto = controller.socialBufferedPhoto;
-    final processingPhoto = controller.socialProcessingPhoto;
-    // A rate-limit pause is a "paused, will auto-resume" state, not a
-    // failure - it must read differently from a genuinely stuck/errored
-    // import, even though both set the same socialError string.
-    final isPausedForRateLimit =
-        job.status == SocialImportJobStatus.pausedRateLimited;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header with progress
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isPausedForRateLimit ? 'Import Paused' : 'Processing Photos',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${job.processedPhotos} of ${job.totalPhotos} processed',
-                      style: TextStyle(
-                        color: tokens.textSecondary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Connection status
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing8,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: controller.socialIsConnected.value
-                      ? Colors.green.withValues(alpha: 0.1)
-                      : Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppConstants.radius8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.circle,
-                      size: 6,
-                      color: controller.socialIsConnected.value
-                          ? Colors.green
-                          : Colors.orange,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      controller.socialIsConnected.value ? 'Live' : 'Offline',
-                      style: TextStyle(
-                        color: controller.socialIsConnected.value
-                            ? Colors.green
-                            : Colors.orange,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppConstants.spacing16),
-
-          // Progress bar
-          LinearProgressIndicator(
-            value: job.totalPhotos > 0
-                ? job.processedPhotos / job.totalPhotos
-                : 0,
-            minHeight: 8,
-            backgroundColor: tokens.textMuted.withValues(alpha: 0.2),
-            valueColor: AlwaysStoppedAnimation<Color>(tokens.brandColor),
-            borderRadius: BorderRadius.circular(4),
-          ),
-
-          // Real backend message for a non-terminal pause (e.g. rate-limited,
-          // "will auto-resume after reset") - this state carried no visible
-          // copy before, so a paused job looked pixel-identical to one
-          // actively processing. Tinted brand color, not the red error card -
-          // pausing to auto-resume later is not a failure, and the message
-          // itself already explains the pause, so no separate title is added.
-          if (isPausedForRateLimit && controller.hasSocialError) ...[
-            const SizedBox(height: AppConstants.spacing12),
-            Container(
-              padding: const EdgeInsets.all(AppConstants.spacing12),
-              decoration: BoxDecoration(
-                color: tokens.brandColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-                border: Border.all(
-                  color: tokens.brandColor.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.hourglass_top_outlined,
-                    color: tokens.brandColor,
-                    size: 20,
-                  ),
-                  const SizedBox(width: AppConstants.spacing8),
-                  Expanded(
-                    child: Text(
-                      controller.socialError.value,
-                      style: TextStyle(color: tokens.brandColor, fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else if (!isPausedForRateLimit && controller.hasSocialError) ...[
-            const SizedBox(height: AppConstants.spacing12),
-            _buildErrorCard(tokens, controller.socialError.value),
-          ],
-
-          const SizedBox(height: AppConstants.spacing8),
-
-          // Stats row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildProcessingStat(
-                tokens,
-                'Approved',
-                job.approvedPhotos,
-                Colors.green,
-              ),
-              _buildProcessingStat(
-                tokens,
-                'Queued',
-                job.queuedCount,
-                tokens.brandColor,
-              ),
-              _buildProcessingStat(
-                tokens,
-                'Rejected',
-                job.rejectedPhotos,
-                Colors.red,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Current photo review or queue status
-          if (awaitingPhoto != null) ...[
-            _buildPhotoReviewCard(context, tokens, awaitingPhoto),
-          ] else if (processingPhoto != null) ...[
-            _buildProcessingCard(tokens, processingPhoto),
-          ] else ...[
-            _buildWaitingCard(tokens),
-          ],
-
-          if (bufferedPhoto != null) ...[
-            const SizedBox(height: AppConstants.spacing16),
-            _buildBufferedCard(tokens, bufferedPhoto),
-          ],
-
-          const SizedBox(height: AppConstants.spacing24),
-
-          // Cancel button
-          Center(
-            child: OutlinedButton.icon(
-              onPressed: controller.socialIsLoading.value
-                  ? null
-                  : controller.cancelSocialImportJob,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
-              ),
-              icon: Icon(Icons.cancel_outlined),
-              label: Text('Cancel Import'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProcessingStat(
-    AppUiTokens tokens,
-    String label,
-    int value,
-    Color color,
-  ) {
-    return Column(
-      children: [
-        Text(
-          '$value',
-          style: TextStyle(
-            color: color,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(color: tokens.textSecondary, fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPhotoReviewCard(
-    BuildContext context,
-    AppUiTokens tokens,
-    SocialImportPhoto photo,
-  ) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.reviews_outlined, color: tokens.brandColor, size: 20),
-              const SizedBox(width: AppConstants.spacing8),
-              Expanded(
-                child: Text(
-                  'Review Photo #${photo.ordinal}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppConstants.spacing16),
-
-          // Photo preview
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            child: AppNetworkImage(
-              photo.sourceThumbUrl ?? photo.sourcePhotoUrl,
-              width: double.infinity,
-              height: 200,
-              fit: BoxFit.cover,
-              errorWidget: (_, _, _) => Container(
-                width: double.infinity,
-                height: 200,
-                color: Colors.black12,
-                alignment: Alignment.center,
-                child: const Icon(Icons.broken_image_outlined, size: 40),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: AppConstants.spacing16),
-
-          // Items list
-          if (photo.items.isNotEmpty) ...[
-            Text(
-              'Detected Items (${photo.items.length})',
-              style: TextStyle(
-                color: tokens.textSecondary,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            ...photo.items.map(
-              (item) => _buildSocialItemTile(
-                context,
-                tokens,
-                photoId: photo.id,
-                item: item,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-          ],
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: controller.socialIsLoading.value
-                      ? null
-                      : controller.rejectAwaitingSocialPhoto,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppConstants.spacing12,
-                    ),
-                  ),
-                  icon: Icon(Icons.close, size: 18),
-                  label: Text('Reject'),
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacing12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: controller.socialIsLoading.value
-                      ? null
-                      : controller.approveAwaitingSocialPhoto,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppConstants.spacing12,
-                    ),
-                  ),
-                  icon: Icon(Icons.check, size: 18),
-                  label: Text('Approve'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProcessingCard(AppUiTokens tokens, SocialImportPhoto photo) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing24),
-      child: Column(
-        children: [
-          CircularProgressIndicator(color: tokens.brandColor),
-          const SizedBox(height: AppConstants.spacing16),
-          Text(
-            'Processing Photo #${photo.ordinal}',
-            style: TextStyle(
-              color: tokens.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'AI is analyzing this photo...',
-            style: TextStyle(color: tokens.textSecondary, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWaitingCard(AppUiTokens tokens) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing24),
-      child: Column(
-        children: [
-          Icon(Icons.hourglass_empty, size: 48, color: tokens.textMuted),
-          const SizedBox(height: AppConstants.spacing16),
-          Text(
-            'Waiting for next photo...',
-            style: TextStyle(
-              color: tokens.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Photos are being processed in the background',
-            style: TextStyle(color: tokens.textSecondary, fontSize: 14),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBufferedCard(AppUiTokens tokens, SocialImportPhoto photo) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing12),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        borderRadius: BorderRadius.circular(AppConstants.radius12),
-        border: Border.all(color: tokens.cardBorderColor),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppConstants.radius8),
-            child: AppNetworkImage(
-              photo.sourceThumbUrl ?? photo.sourcePhotoUrl,
-              width: 60,
-              height: 60,
-              fit: BoxFit.cover,
-              errorWidget: (_, _, _) => Container(
-                width: 60,
-                height: 60,
-                color: Colors.black12,
-                child: const Icon(Icons.broken_image_outlined, size: 20),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppConstants.spacing12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Next in Queue',
-                  style: TextStyle(color: tokens.textSecondary, fontSize: 12),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Photo #${photo.ordinal}',
-                  style: TextStyle(
-                    color: tokens.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.spacing8,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: tokens.brandColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppConstants.radius8),
-            ),
-            child: Text(
-              'Ready',
-              style: TextStyle(
-                color: tokens.brandColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorCard(AppUiTokens tokens, String message) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing12),
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppConstants.radius12),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 20),
-          const SizedBox(width: AppConstants.spacing8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: Colors.red, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showManualAuthDialog(BuildContext context, AppUiTokens tokens) {
-    final username = TextEditingController();
-    final password = TextEditingController();
-    final otp = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: tokens.cardColor,
-        title: Text(
-          'Manual Login',
-          style: TextStyle(color: tokens.textPrimary),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: username,
-              decoration: const InputDecoration(
-                hintText: 'Username',
-                border: OutlineInputBorder(),
-                isDense: true,
-                prefixIcon: Icon(Icons.person_outline, size: 20),
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            TextField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(
-                hintText: 'Password',
-                border: OutlineInputBorder(),
-                isDense: true,
-                prefixIcon: Icon(Icons.lock_outline, size: 20),
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            TextField(
-              controller: otp,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              decoration: const InputDecoration(
-                hintText: '2FA Code (if enabled)',
-                border: OutlineInputBorder(),
-                isDense: true,
-                prefixIcon: Icon(Icons.security_outlined, size: 20),
-                counterText: '',
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              'If you have two-factor authentication enabled, enter the 6-digit code from your authenticator app.',
-              style: TextStyle(color: tokens.textMuted, fontSize: 12),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: tokens.textMuted)),
-          ),
-          TextButton(
-            onPressed: () {
-              final user = username.text.trim();
-              final pass = password.text;
-              final otpCode = otp.text.trim();
-              Navigator.pop(context);
-              if (user.isNotEmpty && pass.isNotEmpty) {
-                // Store credentials for potential 2FA retry
-                controller.lastUsername.value = user;
-                controller.lastPassword.value = pass;
-
-                controller.submitSocialScraperAuth(
-                  username: user,
-                  password: pass,
-                  otpCode: otpCode.isNotEmpty ? otpCode : null,
-                );
-              }
-            },
-            child: Text('Continue', style: TextStyle(color: tokens.brandColor)),
-          ),
-        ],
-      ),
-    ).then((_) {
-      username.dispose();
-      password.dispose();
-      otp.dispose();
-    });
-  }
-
-  void _showOtpDialog(BuildContext context, AppUiTokens tokens) {
-    final otp = TextEditingController();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false, // Force user to respond
-      builder: (context) => AlertDialog(
-        backgroundColor: tokens.cardColor,
-        title: Row(
-          children: [
-            Icon(Icons.security_outlined, color: tokens.brandColor, size: 24),
-            const SizedBox(width: AppConstants.spacing8),
-            Text(
-              'Two-Factor Authentication',
-              style: TextStyle(color: tokens.textPrimary, fontSize: 18),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Enter the 6-digit code from your authenticator app',
-              style: TextStyle(color: tokens.textSecondary, fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-            TextField(
-              controller: otp,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              autofocus: true,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 28,
-                letterSpacing: 12,
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-              decoration: InputDecoration(
-                hintText: '000000',
-                hintStyle: TextStyle(
-                  fontSize: 28,
-                  letterSpacing: 12,
-                  color: tokens.textMuted.withValues(alpha: 0.5),
-                ),
-                border: const OutlineInputBorder(),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: AppConstants.spacing16,
-                  horizontal: AppConstants.spacing12,
-                ),
-                counterText: '',
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              'The code expires quickly. If it fails, wait for a new code to be generated.',
-              style: TextStyle(color: tokens.textMuted, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: tokens.textMuted)),
-          ),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: otp,
-            builder: (_, value, _) {
-              final isValid = value.text.trim().length == 6;
-              return TextButton(
-                onPressed: isValid
-                    ? () {
-                        final code = value.text.trim();
-                        Navigator.pop(context);
-                        controller.submitSocialScraperAuth(
-                          username: controller.lastUsername.value,
-                          password: controller.lastPassword.value,
-                          otpCode: code,
-                        );
-                      }
-                    : null,
-                child: Text(
-                  'Verify',
-                  style: TextStyle(
-                    color: isValid ? tokens.brandColor : tokens.textMuted,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    ).whenComplete(otp.dispose);
-  }
-
-  Widget _buildSocialItemTile(
-    BuildContext context,
-    AppUiTokens tokens, {
-    required String photoId,
-    required SocialImportItem item,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppConstants.spacing8),
-      padding: const EdgeInsets.all(AppConstants.spacing8),
-      decoration: BoxDecoration(
-        color: tokens.navBackground,
-        borderRadius: BorderRadius.circular(AppConstants.radius8),
-        border: Border.all(color: tokens.navBorder),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if ((item.generatedImageUrl ?? '').isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: AppNetworkImage(
-                item.generatedImageUrl!,
-                width: 72,
-                height: 72,
-                fit: BoxFit.cover,
-                errorWidget: (_, _, _) => Container(
-                  width: 72,
-                  height: 72,
-                  color: Colors.black12,
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.broken_image_outlined, size: 18),
-                ),
-              ),
-            ),
-          if ((item.generatedImageUrl ?? '').isNotEmpty)
-            const SizedBox(width: AppConstants.spacing8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name ?? item.subCategory ?? item.category.displayName,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${item.category.displayName} - ${item.colors.join(', ')}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: () => _showEditSocialItemDialog(
-              context,
-              tokens,
-              photoId: photoId,
-              item: item,
-            ),
-            icon: Icon(Icons.edit_outlined, color: tokens.brandColor, size: 18),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showEditSocialItemDialog(
-    BuildContext context,
-    AppUiTokens tokens, {
-    required String photoId,
-    required SocialImportItem item,
-  }) async {
-    final name = TextEditingController(text: item.name ?? '');
-    final category = TextEditingController(text: item.category.value);
-    final colors = TextEditingController(text: item.colors.join(', '));
-    final material = TextEditingController(text: item.material ?? '');
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: tokens.cardColor,
-        title: Text('Edit Item', style: TextStyle(color: tokens.textPrimary)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              TextField(
-                controller: category,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              TextField(
-                controller: colors,
-                decoration: const InputDecoration(
-                  labelText: 'Colors (comma-separated)',
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              TextField(
-                controller: material,
-                decoration: const InputDecoration(
-                  labelText: 'Material',
-                  isDense: true,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: tokens.textMuted)),
-          ),
-          TextButton(
-            onPressed: () async {
-              final colorValues = colors.text
-                  .split(',')
-                  .map((value) => value.trim())
-                  .where((value) => value.isNotEmpty)
-                  .toList();
-
-              await controller.patchSocialItem(
-                photoId: photoId,
-                itemId: item.id,
-                updates: {
-                  'name': name.text.trim().isEmpty ? null : name.text.trim(),
-                  'category': category.text.trim().isEmpty
-                      ? null
-                      : category.text.trim(),
-                  'colors': colorValues,
-                  'material': material.text.trim().isEmpty
-                      ? null
-                      : material.text.trim(),
-                },
-              );
-              if (context.mounted) {
-                Navigator.pop(context);
-              }
-            },
-            child: Text('Save', style: TextStyle(color: tokens.brandColor)),
-          ),
-        ],
-      ),
-    );
-    name.dispose();
-    category.dispose();
-    colors.dispose();
-    material.dispose();
-  }
-
-  Widget _buildEmptyState(BuildContext context, AppUiTokens tokens) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: tokens.brandColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.collections_outlined,
-                size: 40,
-                color: tokens.brandColor,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-            Text(
-              'No Images Selected',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              'Select up to ${BatchExtractionController.maxImages} images to extract clothing items',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppConstants.spacing24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildAddButton(
-                  context,
-                  tokens,
-                  icon: Icons.photo_library_outlined,
-                  label: 'Gallery',
-                  onTap: controller.pickFromGallery,
-                ),
-                const SizedBox(width: AppConstants.spacing16),
-                _buildAddButton(
-                  context,
-                  tokens,
-                  icon: Icons.camera_alt_outlined,
-                  label: 'Camera',
-                  onTap: controller.pickFromCamera,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddButton(
-    BuildContext context,
-    AppUiTokens tokens, {
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppConstants.spacing20,
-          vertical: AppConstants.spacing16,
-        ),
-        decoration: BoxDecoration(
-          color: tokens.brandColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          border: Border.all(color: tokens.brandColor.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: tokens.brandColor, size: 28),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              label,
-              style: TextStyle(
-                color: tokens.brandColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageGrid(BuildContext context, AppUiTokens tokens) {
-    return Obx(
-      () => GridView.builder(
-        padding: const EdgeInsets.all(AppConstants.spacing16),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 100,
-          crossAxisSpacing: AppConstants.spacing8,
-          mainAxisSpacing: AppConstants.spacing8,
-        ),
-        itemCount: controller.selectedImages.length + 1, // +1 for add button
-        itemBuilder: (context, index) {
-          // Last item is the add button
-          if (index == controller.selectedImages.length) {
-            return _buildAddMoreTile(context, tokens);
-          }
-
-          final image = controller.selectedImages[index];
-          return BatchImageTile(
-            image: image,
-            onRemove: () => controller.removeImage(image.id),
-            showStatus: false,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildAddMoreTile(BuildContext context, AppUiTokens tokens) {
-    return Obx(() {
-      if (controller.remainingSlots.value <= 0) {
-        return const SizedBox.shrink();
-      }
-
-      return InkWell(
-        onTap: () => _showAddImageOptions(context, tokens),
-        borderRadius: BorderRadius.circular(AppConstants.radius12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: tokens.cardColor,
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(
-              color: tokens.cardBorderColor,
-              style: BorderStyle.solid,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.add_photo_alternate_outlined,
-                color: tokens.textMuted,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Add',
-                style: TextStyle(color: tokens.textMuted, fontSize: 11),
-              ),
-            ],
-          ),
+  Future<void> _pickGallery() async {
+    if (!await PermissionHelper.confirmPhotoRationale()) return;
+    try {
+      await _addFiles(
+        await _picker.pickMultiImage(
+          maxWidth: 1920,
+          maxHeight: 1920,
+          imageQuality: 85,
         ),
       );
-    });
+    } on PlatformException catch (e) {
+      if (_denied(e)) {
+        await PermissionHelper.showDeniedRecovery(permissionName: 'Photos');
+      } else {
+        ErrorHandler.showError(e, title: 'Photos not added');
+      }
+    } catch (e, stack) {
+      ErrorHandler.showError(e, title: 'Photos not added', stackTrace: stack);
+    }
   }
 
-  void _showAddImageOptions(BuildContext context, AppUiTokens tokens) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: tokens.cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppConstants.radius16),
-        ),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: AppConstants.spacing16),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: tokens.textMuted.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-            ListTile(
-              leading: Icon(
-                Icons.photo_library_outlined,
-                color: tokens.brandColor,
-              ),
-              title: Text(
-                'Choose from Gallery',
-                style: TextStyle(color: tokens.textPrimary),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                controller.pickFromGallery();
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.camera_alt_outlined,
-                color: tokens.brandColor,
-              ),
-              title: Text(
-                'Take Photo',
-                style: TextStyle(color: tokens.textPrimary),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                controller.pickFromCamera();
-              },
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomBar(BuildContext context, AppUiTokens tokens) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      decoration: BoxDecoration(
-        color: tokens.navBackground,
-        border: Border(top: BorderSide(color: tokens.navBorder)),
-      ),
-      child: Obx(() {
-        final hasImages = controller.selectedImages.isNotEmpty;
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Info text
-            if (hasImages)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppConstants.spacing12),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: tokens.textMuted),
-                    const SizedBox(width: AppConstants.spacing8),
-                    Expanded(
-                      child: Text(
-                        'AI will detect clothing items from each image',
-                        style: TextStyle(color: tokens.textMuted, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // Start button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: hasImages ? _startExtraction : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: tokens.brandColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppConstants.spacing16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
-                ),
-                child: Text(
-                  hasImages
-                      ? 'Extract Items (${controller.selectedImages.length} ${controller.selectedImages.length == 1 ? 'image' : 'images'})'
-                      : 'Select Images to Continue',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      }),
-    );
-  }
-
-  Future<void> _startExtraction() async {
-    await controller.startExtraction();
-    // startExtraction aborts without starting a job when the AI-consent gate
-    // is declined (status stays idle, no error), when every image fails
-    // compression (status failed + error), or when the selection is empty.
-    // Navigating anyway stranded the user on an idle progress page with no
-    // feedback and no exit - surface the failure here instead.
-    if (controller.isIdle || controller.isFailed) {
-      ErrorHandler.showError(
-        controller.hasError
-            ? controller.error.value
-            : 'Could not start extraction. Please try again.',
-        title: 'Error',
+  Future<void> _pickCamera() async {
+    if (ref.read(batchExtractionProvider).remainingSlots <= 0) {
+      ErrorHandler.showValidation(
+        'You can add up to ${BatchExtractionNotifier.maxImages} photos.',
+        title: 'No room',
       );
       return;
     }
-    Get.toNamed(Routes.wardrobeBatchProgress);
+    if (!await PermissionHelper.confirmCameraRationale()) return;
+    try {
+      final photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      await _addFiles([?photo]);
+    } on PlatformException catch (e) {
+      if (_denied(e)) {
+        await PermissionHelper.showDeniedRecovery(permissionName: 'Camera');
+      } else {
+        ErrorHandler.showError(e, title: 'Photo not added');
+      }
+    } catch (e, stack) {
+      ErrorHandler.showError(e, title: 'Photo not added', stackTrace: stack);
+    }
   }
+
+  void _addSheet() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from gallery'),
+            onTap: () {
+              Navigator.pop(context);
+              _pickGallery();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () {
+              Navigator.pop(context);
+              _pickCamera();
+            },
+          ),
+          const SizedBox(height: AppConstants.spacing8),
+        ],
+      ),
+    ),
+  );
+
+  Future<void> _start() async {
+    await _notifier.startExtraction();
+    if (!mounted) return;
+    final s = ref.read(batchExtractionProvider);
+    if (s.isFailed) {
+      ErrorHandler.showError(s.error, title: 'Not started');
+      return;
+    }
+    // No job id: consent was declined or another start is running.
+    if (s.jobId.isEmpty) return;
+    context.push(Routes.wardrobeBatchProgress);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (social, count, hasSocialJob, busy) = ref.watch(
+      batchExtractionProvider.select(
+        (s) => (
+          s.isSocialMode,
+          s.images.length,
+          s.socialJobId.isNotEmpty,
+          s.isProcessing,
+        ),
+      ),
+    );
+
+    return PaperStockScope(
+      stock: PaperStockId.moss,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(social ? 'Import from a profile' : 'Add several photos'),
+          actions: [
+            if (!social && count > 0)
+              Padding(
+                padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                child: TextButton(
+                  onPressed: busy ? null : _notifier.clearAllImages,
+                  child: const Text('Clear'),
+                ),
+              ),
+            if (social && hasSocialJob)
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: _notifier.refreshSocialStatus,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+          ],
+        ),
+        body: AppPageBackground(
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppConstants.spacing16,
+                    AppConstants.spacing8,
+                    AppConstants.spacing16,
+                    AppConstants.spacing8,
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<BatchInputMode>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: BatchInputMode.upload,
+                          label: Text('Photos'),
+                          icon: Icon(Icons.collections_outlined),
+                        ),
+                        ButtonSegment(
+                          value: BatchInputMode.social,
+                          label: Text('Profile link'),
+                          icon: Icon(Icons.link_rounded),
+                        ),
+                      ],
+                      selected: {
+                        social ? BatchInputMode.social : BatchInputMode.upload,
+                      },
+                      onSelectionChanged: busy
+                          ? null
+                          : (value) => _notifier.setInputMode(value.first),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: social
+                      ? const _SocialBody()
+                      : count == 0
+                      ? SingleChildScrollView(
+                          child: AppEmptyState(
+                            scene: PaperScenes.closet,
+                            title: 'No photos yet',
+                            message:
+                                'Pick up to ${BatchExtractionNotifier.maxImages} photos. We find the pieces.',
+                            actionLabel: 'Choose photos',
+                            actionIcon: Icons.photo_library_outlined,
+                            onAction: _pickGallery,
+                            secondary: TextButton.icon(
+                              onPressed: _pickCamera,
+                              icon: const Icon(
+                                Icons.photo_camera_outlined,
+                                size: 20,
+                              ),
+                              label: const Text('Take a photo'),
+                            ),
+                          ),
+                        )
+                      : _PhotoGrid(onAdd: _addSheet),
+                ),
+                if (!social && count > 0) _ExtractBar(onStart: _start),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoGrid extends ConsumerWidget {
+  const _PhotoGrid({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (images, busy) = ref.watch(
+      batchExtractionProvider.select((s) => (s.images, s.isUploading)),
+    );
+    final notifier = ref.read(batchExtractionProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final canAdd = !busy && images.length < BatchExtractionNotifier.maxImages;
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.spacing20,
+            AppConstants.spacing8,
+            AppConstants.spacing20,
+            AppConstants.spacing12,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: Text(
+              '${images.length} of ${BatchExtractionNotifier.maxImages} photos',
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.spacing16,
+            0,
+            AppConstants.spacing16,
+            AppConstants.spacing16,
+          ),
+          sliver: SliverGrid.builder(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 120,
+              crossAxisSpacing: AppConstants.spacing8,
+              mainAxisSpacing: AppConstants.spacing8,
+            ),
+            itemCount: images.length + (canAdd ? 1 : 0),
+            itemBuilder: (context, i) {
+              if (i == images.length) {
+                return PaperSurface(
+                  lift: 0,
+                  color: tokens.stock.sunk,
+                  padding: EdgeInsets.zero,
+                  borderRadius: AppConstants.radius8,
+                  onTap: onAdd,
+                  semanticLabel: 'Add photos',
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add_rounded,
+                          color: tokens.stock.accent,
+                          size: 28,
+                        ),
+                        const SizedBox(height: AppConstants.spacing4),
+                        Text('Add', style: text.labelMedium),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              final image = images[i];
+              return BatchImageTile(
+                image: image,
+                showStatus: busy,
+                onRemove: busy ? null : () => notifier.removeImage(image.id),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExtractBar extends ConsumerWidget {
+  const _ExtractBar({required this.onStart});
+
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (count, uploading, progress, busy) = ref.watch(
+      batchExtractionProvider.select(
+        (s) =>
+            (s.images.length, s.isUploading, s.uploadProgress, s.isProcessing),
+      ),
+    );
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final done = (progress * count).round();
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.spacing16,
+          AppConstants.spacing8,
+          AppConstants.spacing16,
+          AppConstants.spacing12,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (uploading) ...[
+              PaperProgressTrack(
+                value: progress,
+                semanticLabel: 'Preparing photos',
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+            ] else ...[
+              Text(
+                'We find each piece and make a studio photo of it.',
+                textAlign: TextAlign.center,
+                style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+            ],
+            ElevatedButton(
+              // Disabled while photos are prepared: a second tap would start
+              // a second paid job.
+              onPressed: busy ? null : onStart,
+              child: Text(
+                uploading
+                    ? 'Preparing photo ${done.clamp(1, count)} of $count'
+                    : count == 1
+                    ? 'Find pieces in 1 photo'
+                    : 'Find pieces in $count photos',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Social import.
+
+class _SocialBody extends ConsumerWidget {
+  const _SocialBody();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (job, authRequired) = ref.watch(
+      batchExtractionProvider.select(
+        (s) => (s.socialJob, s.isSocialAuthRequired),
+      ),
+    );
+    if (job == null) return const _SocialInputForm();
+    if (authRequired) return _SocialAuth(job: job);
+    if (job.status == SocialImportJobStatus.discovering) {
+      return _SocialDiscovering(job: job);
+    }
+    // Terminal states need closure; they must not fall through to the
+    // processing view with a cancel button for a job that already ended.
+    if (job.isTerminal) return _SocialEnded(job: job);
+    return _SocialProcessing(job: job);
+  }
+}
+
+class _Padded extends StatelessWidget {
+  const _Padded({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.fromLTRB(
+      AppConstants.spacing16,
+      AppConstants.spacing8,
+      AppConstants.spacing16,
+      AppConstants.spacing32,
+    ),
+    children: children,
+  );
+}
+
+class _SocialError extends ConsumerWidget {
+  const _SocialError();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final error = ref.watch(
+      batchExtractionProvider.select((s) => s.socialError),
+    );
+    if (error.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppConstants.spacing12),
+      child: _Notice(
+        icon: Icons.error_outline_rounded,
+        color: PaperTokens.of(context).error,
+        text: error,
+      ),
+    );
+  }
+}
+
+/// A short message with a bare leading icon on a flat tinted sheet.
+class _Notice extends StatelessWidget {
+  const _Notice({required this.icon, required this.text, this.color});
+
+  final IconData icon;
+  final String text;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    return PaperSurface(
+      lift: 0,
+      grain: false,
+      color: tokens.stock.tint,
+      padding: const EdgeInsets.all(AppConstants.spacing12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: color ?? tokens.textSecondary),
+          const SizedBox(width: AppConstants.spacing8),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: color ?? tokens.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialInputForm extends ConsumerStatefulWidget {
+  const _SocialInputForm();
+
+  @override
+  ConsumerState<_SocialInputForm> createState() => _SocialInputFormState();
+}
+
+class _SocialInputFormState extends ConsumerState<_SocialInputForm> {
+  late final _url = TextEditingController(
+    text: ref.read(batchExtractionProvider).socialUrl,
+  );
+
+  @override
+  void dispose() {
+    _url.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (urlError, valid, loading) = ref.watch(
+      batchExtractionProvider.select(
+        (s) => (s.socialUrlError, s.validSocialUrl, s.socialLoading),
+      ),
+    );
+    final notifier = ref.read(batchExtractionProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    return _Padded(
+      children: [
+        PaperSurface(
+          padding: const EdgeInsets.all(AppConstants.spacing20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Paste a profile link', style: text.headlineSmall),
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                'A public Instagram or Facebook profile. We scan its photos, and you choose what goes in your closet.',
+                style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+              const SizedBox(height: AppConstants.spacing20),
+              TextField(
+                controller: _url,
+                onChanged: notifier.validateSocialUrl,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: 'Profile link',
+                  hintText: 'https://instagram.com/username',
+                  errorText: urlError.isEmpty ? null : urlError,
+                  suffixIcon: ValueListenableBuilder(
+                    valueListenable: _url,
+                    builder: (context, value, _) => value.text.isEmpty
+                        ? const SizedBox.shrink()
+                        : IconButton(
+                            tooltip: 'Clear link',
+                            icon: const Icon(Icons.clear_rounded),
+                            onPressed: () {
+                              _url.clear();
+                              notifier.validateSocialUrl('');
+                            },
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing16),
+              ElevatedButton(
+                onPressed: loading || !valid
+                    ? null
+                    : () => notifier.startSocialImport(_url.text),
+                child: Text(loading ? 'Starting' : 'Start import'),
+              ),
+              const _SocialError(),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppConstants.spacing16),
+        _HowItWorks(
+          icon: Icons.fact_check_outlined,
+          title: 'You review every photo',
+          body: 'Nothing is added until you approve it.',
+        ),
+        _HowItWorks(
+          icon: Icons.lock_outline_rounded,
+          title: 'Private profiles',
+          body:
+              'Connect your account. Instagram also takes a username and password.',
+        ),
+      ],
+    );
+  }
+}
+
+class _HowItWorks extends StatelessWidget {
+  const _HowItWorks({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppConstants.spacing8,
+        vertical: AppConstants.spacing8,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 22, color: tokens.stock.accent),
+          const SizedBox(width: AppConstants.spacing12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: text.titleSmall),
+                Text(
+                  body,
+                  style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialAuth extends ConsumerWidget {
+  const _SocialAuth({required this.job});
+
+  final SocialImportJobData job;
+
+  Future<void> _manualLogin(BuildContext context, WidgetRef ref) async {
+    final login = await showDialog<({String user, String pass, String otp})>(
+      context: context,
+      builder: (_) => const _ManualLoginDialog(),
+    );
+    if (login == null || login.user.isEmpty || login.pass.isEmpty) return;
+    await ref
+        .read(batchExtractionProvider.notifier)
+        .submitSocialScraperAuth(
+          username: login.user,
+          password: login.pass,
+          otpCode: login.otp.isEmpty ? null : login.otp,
+        );
+  }
+
+  Future<void> _otp(BuildContext context, WidgetRef ref) async {
+    final code = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _OtpDialog(),
+    );
+    if (code == null) return;
+    await ref.read(batchExtractionProvider.notifier).submitSocialOtp(code);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (otp, loading) = ref.watch(
+      batchExtractionProvider.select((s) => (s.waitingForOtp, s.socialLoading)),
+    );
+    final notifier = ref.read(batchExtractionProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final platform = job.platform.label;
+
+    return _Padded(
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: notifier.resetSocialImportState,
+            icon: const Icon(Icons.arrow_back_rounded, size: 20),
+            label: const Text('Use another link'),
+          ),
+        ),
+        const SizedBox(height: AppConstants.spacing8),
+        PaperSurface(
+          padding: const EdgeInsets.all(AppConstants.spacing20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 32,
+                color: tokens.stock.accent,
+              ),
+              const SizedBox(height: AppConstants.spacing12),
+              Text(
+                otp ? 'Enter your code' : 'Sign-in needed',
+                style: text.headlineSmall,
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                otp
+                    ? 'Your $platform account uses two-step sign-in. Enter the 6-digit code from your authenticator app.'
+                    : 'This $platform profile is private or needs a sign-in to show its photos.',
+                style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+              const _SocialError(),
+              const SizedBox(height: AppConstants.spacing20),
+              if (!otp) ...[
+                ElevatedButton.icon(
+                  onPressed: loading ? null : notifier.startSocialOAuthConnect,
+                  icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                  label: Text('Connect with $platform'),
+                ),
+                if (job.platform == SocialPlatform.instagram)
+                  TextButton(
+                    onPressed: loading
+                        ? null
+                        : () => _manualLogin(context, ref),
+                    child: const Text('Use username and password'),
+                  ),
+                TextButton(
+                  onPressed: loading ? null : notifier.refreshSocialStatus,
+                  child: const Text('I already connected in the browser'),
+                ),
+              ] else ...[
+                ElevatedButton(
+                  onPressed: loading ? null : () => _otp(context, ref),
+                  child: const Text('Enter code'),
+                ),
+                TextButton(
+                  onPressed: loading ? null : notifier.cancelSocialOtp,
+                  child: const Text('Try another way'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ConnectionLine extends ConsumerWidget {
+  const _ConnectionLine();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final live = ref.watch(
+      batchExtractionProvider.select((s) => s.socialConnected),
+    );
+    final tokens = PaperTokens.of(context);
+    final color = live ? tokens.success : tokens.warning;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          live ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+          size: 16,
+          color: color,
+        ),
+        const SizedBox(width: AppConstants.spacing4),
+        Text(
+          live ? 'Live' : 'Reconnecting',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+        ),
+      ],
+    );
+  }
+}
+
+class _CancelImport extends ConsumerWidget {
+  const _CancelImport();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final loading = ref.watch(
+      batchExtractionProvider.select((s) => s.socialLoading),
+    );
+    return Center(
+      child: TextButton(
+        style: TextButton.styleFrom(
+          foregroundColor: PaperTokens.of(context).error,
+        ),
+        onPressed: loading
+            ? null
+            : ref.read(batchExtractionProvider.notifier).cancelSocialImportJob,
+        child: const Text('Cancel import'),
+      ),
+    );
+  }
+}
+
+class _SocialDiscovering extends StatelessWidget {
+  const _SocialDiscovering({required this.job});
+
+  final SocialImportJobData job;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return _Padded(
+      children: [
+        PaperSurface(
+          padding: const EdgeInsets.all(AppConstants.spacing20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Finding photos', style: text.headlineSmall),
+                  ),
+                  const _ConnectionLine(),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                job.discoveredPhotos == 1
+                    ? '1 photo found so far'
+                    : '${job.discoveredPhotos} photos found so far',
+                style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+              ),
+              const SizedBox(height: AppConstants.spacing4),
+              Text(
+                job.normalizedUrl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.bodySmall?.copyWith(color: tokens.textMuted),
+              ),
+              const SizedBox(height: AppConstants.spacing16),
+              LinearProgressIndicator(
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(3),
+                color: tokens.stock.accent,
+                backgroundColor: tokens.stock.sunk,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppConstants.spacing16),
+        const _CancelImport(),
+      ],
+    );
+  }
+}
+
+class _SocialProcessing extends ConsumerWidget {
+  const _SocialProcessing({required this.job});
+
+  final SocialImportJobData job;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final error = ref.watch(
+      batchExtractionProvider.select((s) => s.socialError),
+    );
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    // A rate-limit pause resumes on its own: it reads as a pause, not a
+    // failure, even though both carry a message.
+    final paused = job.status == SocialImportJobStatus.pausedRateLimited;
+    final awaiting = job.awaitingReviewPhoto;
+    final processing = job.processingPhoto;
+    final buffered = job.bufferedPhoto;
+
+    return _Padded(
+      children: [
+        PaperSurface(
+          padding: const EdgeInsets.all(AppConstants.spacing20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      paused ? 'Import paused' : 'Processing photos',
+                      style: text.headlineSmall,
+                    ),
+                  ),
+                  const _ConnectionLine(),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacing12),
+              PaperProgressTrack(
+                value: job.totalPhotos > 0
+                    ? job.processedPhotos / job.totalPhotos
+                    : 0,
+                semanticLabel: 'Photos processed',
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                '${job.processedPhotos} of ${job.totalPhotos} processed · '
+                '${job.approvedPhotos} added · ${job.queuedCount} waiting · '
+                '${job.rejectedPhotos} skipped',
+                style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+              ),
+              if (error.isNotEmpty) ...[
+                const SizedBox(height: AppConstants.spacing12),
+                paused
+                    ? _Notice(icon: Icons.hourglass_top_rounded, text: error)
+                    : _Notice(
+                        icon: Icons.error_outline_rounded,
+                        text: error,
+                        color: tokens.error,
+                      ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppConstants.spacing16),
+        if (awaiting != null)
+          _PhotoReview(photo: awaiting)
+        else
+          PaperSurface(
+            padding: const EdgeInsets.all(AppConstants.spacing20),
+            child: Row(
+              children: [
+                if (processing != null)
+                  SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: tokens.stock.accent,
+                      strokeCap: StrokeCap.round,
+                    ),
+                  )
+                else
+                  Icon(Icons.schedule_rounded, color: tokens.textMuted),
+                const SizedBox(width: AppConstants.spacing12),
+                Expanded(
+                  child: Text(
+                    processing != null
+                        ? 'Scanning photo ${processing.ordinal}'
+                        : 'Waiting for the next photo',
+                    style: text.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (buffered != null) ...[
+          const SizedBox(height: AppConstants.spacing12),
+          PaperSurface(
+            lift: 0.6,
+            padding: const EdgeInsets.all(AppConstants.spacing8),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppConstants.radius8),
+                  child: AppNetworkImage(
+                    buffered.sourceThumbUrl ?? buffered.sourcePhotoUrl,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    cacheWidth: 168,
+                    errorWidget: (_, _, _) => SizedBox.square(
+                      dimension: 56,
+                      child: ColoredBox(color: tokens.stock.sunk),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppConstants.spacing12),
+                Expanded(
+                  child: Text(
+                    'Photo ${buffered.ordinal} is next',
+                    style: text.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppConstants.spacing16),
+        const _CancelImport(),
+      ],
+    );
+  }
+}
+
+class _PhotoReview extends ConsumerWidget {
+  const _PhotoReview({required this.photo});
+
+  final SocialImportPhoto photo;
+
+  Future<void> _edit(
+    BuildContext context,
+    WidgetRef ref,
+    SocialImportItem item,
+  ) async {
+    final updates = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _EditSocialItemDialog(item: item),
+    );
+    if (updates == null) return;
+    await ref
+        .read(batchExtractionProvider.notifier)
+        .patchSocialItem(photoId: photo.id, itemId: item.id, updates: updates);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final loading = ref.watch(
+      batchExtractionProvider.select((s) => s.socialLoading),
+    );
+    final notifier = ref.read(batchExtractionProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+
+    return PaperSurface(
+      padding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 220,
+            child: AppNetworkImage(
+              photo.sourceThumbUrl ?? photo.sourcePhotoUrl,
+              fit: BoxFit.cover,
+              cacheWidth: 1080,
+              errorWidget: (_, _, _) => ColoredBox(
+                color: tokens.stock.sunk,
+                child: Icon(
+                  Icons.image_not_supported_outlined,
+                  color: tokens.textMuted,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppConstants.spacing16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Photo ${photo.ordinal}', style: text.titleLarge),
+                const SizedBox(height: AppConstants.spacing4),
+                Text(
+                  photo.items.isEmpty
+                      ? 'No pieces found in this photo.'
+                      : photo.items.length == 1
+                      ? '1 piece found'
+                      : '${photo.items.length} pieces found',
+                  style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+                ),
+                for (final item in photo.items)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppConstants.spacing8),
+                    child: Row(
+                      children: [
+                        if ((item.generatedImageUrl ?? '').isNotEmpty) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppConstants.radius8,
+                            ),
+                            child: AppNetworkImage(
+                              item.generatedImageUrl!,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                              cacheWidth: 168,
+                              errorWidget: (_, _, _) => SizedBox.square(
+                                dimension: 56,
+                                child: ColoredBox(color: tokens.stock.sunk),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppConstants.spacing12),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name ??
+                                    item.subCategory ??
+                                    item.category.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.titleSmall,
+                              ),
+                              Text(
+                                [
+                                  item.category.displayName,
+                                  if (item.colors.isNotEmpty)
+                                    item.colors.join(', '),
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.bodySmall?.copyWith(
+                                  color: tokens.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Edit piece',
+                          onPressed: () => _edit(context, ref, item),
+                          icon: Icon(
+                            Icons.edit_outlined,
+                            color: tokens.stock.accent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: AppConstants.spacing16),
+                ElevatedButton(
+                  onPressed: loading
+                      ? null
+                      : notifier.approveAwaitingSocialPhoto,
+                  child: const Text('Add to closet'),
+                ),
+                TextButton(
+                  onPressed: loading
+                      ? null
+                      : notifier.rejectAwaitingSocialPhoto,
+                  child: const Text('Skip this photo'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialEnded extends ConsumerWidget {
+  const _SocialEnded({required this.job});
+
+  final SocialImportJobData job;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(batchExtractionProvider.notifier);
+    final completed = job.status == SocialImportJobStatus.completed;
+    final failed = job.status == SocialImportJobStatus.failed;
+    final message = (job.errorMessage ?? '').trim();
+
+    return SingleChildScrollView(
+      child: AppEmptyState(
+        scene: completed ? PaperScenes.closet : PaperScenes.oops,
+        title: completed
+            ? 'Import complete'
+            : failed
+            ? 'Import failed'
+            : 'Import cancelled',
+        message: completed
+            ? (job.approvedPhotos == 1
+                  ? '1 photo was added to your closet.'
+                  : '${job.approvedPhotos} photos were added to your closet.')
+            : failed
+            ? (message.isNotEmpty
+                  ? message
+                  : 'Something went wrong while importing.')
+            : 'Nothing more is imported from this profile.',
+        actionLabel: completed ? 'View closet' : 'Start over',
+        onAction: completed
+            ? () {
+                notifier.resetSocialImportState();
+                context.go(Routes.wardrobe);
+              }
+            : notifier.resetSocialImportState,
+      ),
+    );
+  }
+}
+
+// Dialogs. Each owns its text controllers, so they are disposed with the
+// dialog route, after its exit animation.
+
+class _ManualLoginDialog extends StatefulWidget {
+  const _ManualLoginDialog();
+
+  @override
+  State<_ManualLoginDialog> createState() => _ManualLoginDialogState();
+}
+
+class _ManualLoginDialogState extends State<_ManualLoginDialog> {
+  final _user = TextEditingController();
+  final _pass = TextEditingController();
+  final _otp = TextEditingController();
+
+  @override
+  void dispose() {
+    _user.dispose();
+    _pass.dispose();
+    _otp.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Sign in to Instagram'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _user,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'Username'),
+          ),
+          const SizedBox(height: AppConstants.spacing12),
+          TextField(
+            controller: _pass,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Password'),
+          ),
+          const SizedBox(height: AppConstants.spacing12),
+          TextField(
+            controller: _otp,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            decoration: const InputDecoration(
+              labelText: 'Code, if you use two-step sign-in',
+              counterText: '',
+            ),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      TextButton(
+        onPressed: () => Navigator.pop(context, (
+          user: _user.text.trim(),
+          pass: _pass.text,
+          otp: _otp.text.trim(),
+        )),
+        child: const Text('Sign in'),
+      ),
+    ],
+  );
+}
+
+class _OtpDialog extends StatefulWidget {
+  const _OtpDialog();
+
+  @override
+  State<_OtpDialog> createState() => _OtpDialogState();
+}
+
+class _OtpDialogState extends State<_OtpDialog> {
+  final _code = TextEditingController();
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Enter your code'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Use the 6-digit code from your authenticator app. Codes change quickly.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: PaperTokens.of(context).textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppConstants.spacing16),
+        TextField(
+          controller: _code,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(letterSpacing: 8),
+          decoration: const InputDecoration(
+            counterText: '',
+            hintText: '000000',
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      ValueListenableBuilder(
+        valueListenable: _code,
+        builder: (context, value, _) => TextButton(
+          onPressed: value.text.trim().length == 6
+              ? () => Navigator.pop(context, value.text.trim())
+              : null,
+          child: const Text('Verify'),
+        ),
+      ),
+    ],
+  );
+}
+
+class _EditSocialItemDialog extends StatefulWidget {
+  const _EditSocialItemDialog({required this.item});
+
+  final SocialImportItem item;
+
+  @override
+  State<_EditSocialItemDialog> createState() => _EditSocialItemDialogState();
+}
+
+class _EditSocialItemDialogState extends State<_EditSocialItemDialog> {
+  late final _name = TextEditingController(text: widget.item.name ?? '');
+  late final _category = TextEditingController(
+    text: widget.item.category.value,
+  );
+  late final _colors = TextEditingController(
+    text: widget.item.colors.join(', '),
+  );
+  late final _material = TextEditingController(
+    text: widget.item.material ?? '',
+  );
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _category.dispose();
+    _colors.dispose();
+    _material.dispose();
+    super.dispose();
+  }
+
+  String? _value(TextEditingController c) =>
+      c.text.trim().isEmpty ? null : c.text.trim();
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Edit piece'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _name,
+            decoration: const InputDecoration(labelText: 'Name'),
+          ),
+          const SizedBox(height: AppConstants.spacing12),
+          TextField(
+            controller: _category,
+            decoration: const InputDecoration(labelText: 'Category'),
+          ),
+          const SizedBox(height: AppConstants.spacing12),
+          TextField(
+            controller: _colors,
+            decoration: const InputDecoration(
+              labelText: 'Colours, separated by commas',
+            ),
+          ),
+          const SizedBox(height: AppConstants.spacing12),
+          TextField(
+            controller: _material,
+            decoration: const InputDecoration(labelText: 'Material'),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      TextButton(
+        onPressed: () => Navigator.pop(context, <String, dynamic>{
+          'name': _value(_name),
+          'category': _value(_category),
+          'colors': [
+            for (final c in _colors.text.split(','))
+              if (c.trim().isNotEmpty) c.trim(),
+          ],
+          'material': _value(_material),
+        }),
+        child: const Text('Save'),
+      ),
+    ],
+  );
 }

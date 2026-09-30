@@ -1,6 +1,6 @@
 # Frontend
 
-Last updated: 2026-09-13
+Last updated: 2026-09-25
 
 React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/CLAUDE.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
 
@@ -70,6 +70,7 @@ Domain modules: `src/api/*.ts` (auth, items, outfits, ai, batch, etc.).
 - Blog: `/blog`, `/blog/:slug` (plus `/blog/category/:category`); the index is
   prerendered with baked first-page content, post/category pages stay dynamic
 - Auth: `/auth/login`, `/auth/register`, forgot/reset password
+- First-run setup: protected `/welcome` (outside the app shell). `ProtectedRoute` redirects accounts aged 0 to less than 7 days with missing gender and no completion flag in this browser (`shouldShowSetup` in `src/lib/activation.ts`), before any app page mounts. It preserves the requested path, query, and fragment in `returnTo`; Skip setup and Later resume that destination. Add clothes explicitly opens the wardrobe upload. Style choices made during preference loading take precedence over the late response.
 - Protected: dashboard, wardrobe, outfits (incl. the `/outfits/new` create page), calendar, recommendations, try-on, photoshoot, profile
 - Protected + flag-gated: `/gamification` (only registered when `FEATURES.gamification` is true — see Feature flags below; with the flag off a bookmarked `/gamification` falls through to the catch-all redirect to `/dashboard`)
 - Gift vouchers: protected `/gifts` studio is flag-gated; public

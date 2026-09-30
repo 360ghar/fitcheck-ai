@@ -1,25 +1,28 @@
-// Fit Check AI widget tests
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:fitcheck_ai/core/providers.dart';
+import 'package:fitcheck_ai/main.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fitcheck_ai/main.dart';
-
 void main() {
-  testWidgets('App starts successfully', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const FitCheckApp());
-
-    // Verify that app launches without crashing
+  testWidgets('App starts and leaves the splash for the intro', (
+    tester,
+  ) async {
+    // Same container as main(): route guards read it directly.
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: appContainer,
+        child: const FitCheckApp(),
+      ),
+    );
     expect(find.byType(MaterialApp), findsOneWidget);
 
-    // Let the splash page's post-init navigation timer complete so the
-    // widget tree has no pending timers when the test tears down.
-    await tester.pumpAndSettle(const Duration(seconds: 2));
+    // Paper scenes sway forever, so pumpAndSettle never returns. Pump past
+    // the splash minimum and the route transition instead.
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+    // A first launch shows the intro sheets before the sign-in entry.
+    expect(find.text('Snap your closet once.'), findsOneWidget);
   });
 }

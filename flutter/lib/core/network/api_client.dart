@@ -17,7 +17,7 @@ class ApiClient {
   /// Initialize the API client
   ///
   /// Idempotent: the first access to [dio] may already have initialized the
-  /// instance (lazily), and [InitialBinding] calls this again on boot. Without
+  /// instance (lazily), and `main` calls this again on boot. Without
   /// the guard, re-running would append a second copy of every interceptor,
   /// so each request would carry the auth header twice and 401-refresh could
   /// recurse.

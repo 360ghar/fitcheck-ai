@@ -2,7 +2,7 @@
  * Gamification API endpoints
  */
 
-import { apiClient, getApiError } from './client'
+import { apiClient, getApiError, skipToast } from './client'
 import type { ApiEnvelope } from '../types'
 
 export interface NextMilestone {
@@ -65,7 +65,9 @@ export interface LeaderboardData {
 
 export async function getStreak(): Promise<StreakData> {
   try {
-    const response = await apiClient.get<ApiEnvelope<StreakData>>('/api/v1/gamification/streak')
+    // The gamification page renders fixed recovery copy; the global toast
+    // would leak raw backend diagnostics that the page deliberately hides.
+    const response = await apiClient.get<ApiEnvelope<StreakData>>('/api/v1/gamification/streak', skipToast)
     return response.data.data
   } catch (error) {
     throw getApiError(error)
@@ -74,7 +76,7 @@ export async function getStreak(): Promise<StreakData> {
 
 export async function getAchievements(): Promise<AchievementsData> {
   try {
-    const response = await apiClient.get<ApiEnvelope<AchievementsData>>('/api/v1/gamification/achievements')
+    const response = await apiClient.get<ApiEnvelope<AchievementsData>>('/api/v1/gamification/achievements', skipToast)
     return response.data.data
   } catch (error) {
     throw getApiError(error)
@@ -84,7 +86,8 @@ export async function getAchievements(): Promise<AchievementsData> {
 export async function getLeaderboard(): Promise<LeaderboardData> {
   try {
     const response = await apiClient.get<ApiEnvelope<{ entries: LeaderboardEntryData[]; user_rank?: UserRankData | null }>>(
-      '/api/v1/gamification/leaderboard'
+      '/api/v1/gamification/leaderboard',
+      skipToast,
     )
     const data = response.data.data
     return {

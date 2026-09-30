@@ -1,48 +1,41 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
-import 'package:get/get.dart';
+import 'package:flutter/foundation.dart';
 import '../exceptions/app_exceptions.dart';
 
 /// Service for monitoring network connectivity
-class NetworkService extends GetxService {
-  static NetworkService get instance => Get.find<NetworkService>();
-
-  final Connectivity _connectivity = Connectivity();
-  final RxBool isConnected = true.obs;
-  final RxList<ConnectivityResult> connectionStatus = <ConnectivityResult>[].obs;
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-
-  @override
-  void onInit() {
-    super.onInit();
+class NetworkService {
+  NetworkService._() {
     _initConnectivity();
   }
 
-  @override
-  void onClose() {
-    _connectivitySubscription?.cancel();
-    super.onClose();
-  }
+  /// Created on first use; monitors connectivity for the app's lifetime.
+  static final instance = NetworkService._();
+
+  final Connectivity _connectivity = Connectivity();
+  final isConnected = ValueNotifier<bool>(true);
+  List<ConnectivityResult> connectionStatus = const [];
+  // ignore: unused_field
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   /// Initialize connectivity monitoring
   Future<void> _initConnectivity() async {
-    // Get initial status
-    final status = await _connectivity.checkConnectivity();
-    _updateConnectionStatus(status);
-
-    // Listen for connectivity changes
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-      (List<ConnectivityResult> status) {
-        _updateConnectionStatus(status);
-      },
-    );
+    // A platform failure here must not crash startup. Keep the optimistic
+    // default (connected) and let requests report real failures.
+    try {
+      _updateConnectionStatus(await _connectivity.checkConnectivity());
+      _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
+        _updateConnectionStatus,
+        onError: (Object _) {},
+      );
+    } catch (_) {}
   }
 
   void _updateConnectionStatus(List<ConnectivityResult> status) {
-    connectionStatus.value = status;
-    isConnected.value = status.isNotEmpty &&
-                         !status.contains(ConnectivityResult.none);
+    connectionStatus = status;
+    isConnected.value =
+        status.isNotEmpty && !status.contains(ConnectivityResult.none);
   }
 
   /// Check if device is currently connected to internet
@@ -55,7 +48,8 @@ class NetworkService extends GetxService {
   bool get isOnMobile => connectionStatus.contains(ConnectivityResult.mobile);
 
   /// Check if connection is via Ethernet
-  bool get isOnEthernet => connectionStatus.contains(ConnectivityResult.ethernet);
+  bool get isOnEthernet =>
+      connectionStatus.contains(ConnectivityResult.ethernet);
 
   /// Get current connectivity result list
   List<ConnectivityResult> get currentStatus => connectionStatus;
@@ -86,8 +80,7 @@ class RetryHelper {
         return await operation();
       } catch (e) {
         // Check if we should retry
-        final shouldRetry =
-            _shouldRetry(e, retryIf) && attempts < maxAttempts;
+        final shouldRetry = _shouldRetry(e, retryIf) && attempts < maxAttempts;
 
         if (!shouldRetry) {
           rethrow;
@@ -108,9 +101,16 @@ class RetryHelper {
     }
 
     if (error is AppException) {
-      return error is NetworkException ||
-          error.errorCode == 'TIMEOUT' ||
-          error.errorCode == 'NO_CONNECTION';
+      if (error.errorCode == 'TIMEOUT' || error.errorCode == 'NO_CONNECTION') {
+        return true;
+      }
+      // handleDioException maps unlisted 4xx codes and cancelled requests to
+      // NetworkException. A retry cannot fix either one.
+      final status = error.statusCode;
+      final isClientError = status != null && status >= 400 && status < 500;
+      return error is NetworkException &&
+          !isClientError &&
+          error.errorCode != 'REQUEST_CANCELLED';
     }
 
     if (error is DioException) {

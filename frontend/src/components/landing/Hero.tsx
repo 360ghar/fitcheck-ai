@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
 
+import StoreBadges from '@/components/landing/StoreBadges'
 import { Button } from '@/components/ui/button'
 import { GeneratedImage } from '@/components/ui/generated-image'
 import { trackEvent } from '@/lib/analytics'
@@ -40,7 +41,7 @@ export default function Hero() {
               style={heroDelay(0)}
             >
               <span className="h-px w-8 bg-primary" aria-hidden="true" />
-              AI wardrobe workspace · Web + Android
+              AI wardrobe workspace · Web, iOS, Android
             </p>
             <h1
               id="landing-hero-heading"
@@ -92,6 +93,7 @@ export default function Hero() {
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               First month free · No card · Returns to Free unless upgraded
             </p>
+            <StoreBadges location="hero" className="mt-5" />
           </div>
         </div>
 

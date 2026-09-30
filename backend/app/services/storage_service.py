@@ -228,6 +228,8 @@ class StorageService:
         backend,
         storage_path: str,
         file_data: bytes,
+        *,
+        cache_control: str = DEFAULT_CACHE_CONTROL,
     ) -> bool:
         """Create the ``_thumb`` sibling object for an uploaded image.
 
@@ -237,7 +239,8 @@ class StorageService:
         is canonical so that, once ops has flipped ``THUMBNAILS_BACKFILLED``,
         the read path can emit ``thumbnail_url`` without per-object existence
         checks. CPU-bound Pillow work runs on the bounded image executor.
-        Returns True when the thumb object was written.
+        Returns True when the thumb object was written. ``cache_control`` can
+        override the normal upload TTL during an in-place backfill.
 
         Always WebP, always ``image/webp`` (see THUMB_EXTENSION): transparency
         survives, and the key/bytes/Content-Type cannot disagree.
@@ -276,7 +279,7 @@ class StorageService:
                 key=thumb_key,
                 data=thumb,
                 content_type=THUMB_CONTENT_TYPE,
-                cache_control=DEFAULT_CACHE_CONTROL,
+                cache_control=cache_control,
             )
             return True
         except Exception as e:
@@ -1131,7 +1134,8 @@ class StorageService:
         """Upload raw bytes to the S3 bucket with an explicit destination path.
 
         ``cache_control`` is seconds as a string; encoded on the object as
-        ``cache-control: max-age=<v>``. Defaults to DEFAULT_CACHE_CONTROL. Pass
+        ``cache-control: max-age=<v>`` on the object and its thumbnail.
+        Defaults to DEFAULT_CACHE_CONTROL. Pass
         a short value (e.g. "60") when overwriting an existing key so a CDN
         cannot keep serving the old bytes for an hour.
 
@@ -1154,7 +1158,10 @@ class StorageService:
             # (items/outfits/avatars/sources/feedback). Skipped internally for
             # tmp/generated/export paths (thumb_key_for returns None) and
             # never fails the upload (best-effort by contract).
-            await StorageService._upload_thumbnail(backend, file_path, file_data)
+            await StorageService._upload_thumbnail(
+                backend, file_path, file_data,
+                cache_control=cache_control or DEFAULT_CACHE_CONTROL,
+            )
             public_url = await StorageService.get_public_url(file_path)
             return {
                 "public_url": public_url,

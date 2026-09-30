@@ -1,3 +1,5 @@
+import { transferableAbortController } from 'node:util'
+
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest'
@@ -19,6 +21,19 @@ expect.extend(axeMatchers)
 
 // Deterministic date formatters: run tests in UTC.
 process.env.TZ = 'UTC'
+
+// React Router's data router constructs a Request for every navigation.
+// jsdom installs DOM-realm AbortController/AbortSignal, but Node's native
+// Request (undici) rejects that realm's signals — including ones from
+// `AbortSignal.timeout()` / `AbortSignal.abort()`. Grab the Node-realm
+// classes through node:util so both creation paths and `instanceof` checks
+// stay consistent with undici.
+const seedController = transferableAbortController()
+const NodeAbortController =
+  seedController.constructor as typeof AbortController
+const NodeAbortSignal = seedController.signal.constructor as typeof AbortSignal
+vi.stubGlobal('AbortController', NodeAbortController)
+vi.stubGlobal('AbortSignal', NodeAbortSignal)
 
 // matchMedia — used by next-themes and sonner. Stubbed via stubGlobal so
 // `restoreMocks: true` (which resets vi.fn implementations before each test)

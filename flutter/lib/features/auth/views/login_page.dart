@@ -1,456 +1,231 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
-import '../controllers/auth_controller.dart';
+import '../../../core/widgets/app_ui.dart';
+import '../providers/auth_provider.dart';
 import 'widgets/auth_ui.dart';
 
-/// Login page with email/password and Google OAuth
-class LoginPage extends StatefulWidget {
+/// Email, Apple and Google sign-in.
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _isPasswordVisible = false.obs;
+  bool _passwordVisible = false;
+
+  AuthNotifier get _auth => ref.read(authProvider.notifier);
 
   @override
   void initState() {
     super.initState();
-    // Clear email verification error when email changes
-    _emailController.addListener(_onEmailChanged);
-  }
-
-  void _onEmailChanged() {
-    final authController = Get.find<AuthController>();
-    if (authController.showEmailNotVerifiedError.value) {
-      authController.clearEmailVerificationError();
-    }
+    _emailController.addListener(_auth.clearEmailVerificationError);
   }
 
   @override
   void dispose() {
-    _emailController.removeListener(_onEmailChanged);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    // Keyboard submit (onFieldSubmitted) bypasses the button's disabled
-    // state, so the guard must live here too or Enter-spam double-submits
-    // credentials.
-    if (Get.find<AuthController>().isLoading.value) return;
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    final authController = Get.find<AuthController>();
-
-    try {
-      await authController.login(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
-    } catch (e) {
-      // Error is already handled by controller
-    }
-  }
-
-  Future<void> _handleGoogleSignIn() async {
-    final authController = Get.find<AuthController>();
-
-    try {
-      await authController.signInWithGoogle();
-    } catch (e) {
-      // Error is already handled by controller
-    }
-  }
-
-  Future<void> _handleAppleSignIn() async {
-    final authController = Get.find<AuthController>();
-
-    try {
-      await authController.signInWithApple();
-    } catch (e) {
-      // Error is already handled by controller
-    }
+  Future<void> _submit() async {
+    // Keyboard submit skips the disabled button, so guard here too.
+    if (ref.read(authProvider).busy != AuthBusy.none) return;
+    if (!_formKey.currentState!.validate()) return;
+    await _auth.login(_emailController.text.trim(), _passwordController.text);
   }
 
   @override
   Widget build(BuildContext context) {
-    final authController = Get.find<AuthController>();
-    final tokens = AuthUiTokens.of(context);
-    final screenSize = MediaQuery.of(context).size;
-    final titleSize = (screenSize.width * 0.09).clamp(26.0, 40.0);
-    final bodySize = (screenSize.width * 0.04).clamp(14.0, 16.0);
+    final busy = ref.watch(authProvider.select((s) => s.busy));
+    final unverified = ref.watch(authProvider.select((s) => s.unverifiedEmail));
+    final tokens = PaperTokens.of(context);
 
     return AuthScaffold(
+      showBack: true,
+      sceneFraction: 0.26,
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AuthHeaderBar(
-            textColor: tokens.textColor,
-            brandColor: tokens.brandColor,
+          const AuthHeading(
+            title: 'Welcome back',
+            subtitle: 'Sign in to open your closet.',
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: AppConstants.spacing20),
+          AutofillGroup(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email],
+                    decoration: AuthFormStyles.inputDecoration(
+                      label: 'Email',
+                      icon: Icons.mail_outline_rounded,
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Enter your email';
+                      if (!isValidEmail(v.trim())) {
+                        return 'Enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppConstants.spacing12),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: !_passwordVisible,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    onFieldSubmitted: (_) => _submit(),
+                    decoration: AuthFormStyles.inputDecoration(
+                      label: 'Password',
+                      icon: Icons.lock_outline_rounded,
+                      suffixIcon: IconButton(
+                        tooltip: _passwordVisible
+                            ? 'Hide password'
+                            : 'Show password',
+                        icon: Icon(
+                          _passwordVisible
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        onPressed: () => setState(
+                          () => _passwordVisible = !_passwordVisible,
+                        ),
+                      ),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Enter your password';
+                      if (v.length < 6) return 'At least 6 characters';
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => context.push(Routes.forgotPassword),
+              child: const Text('Forgot password?'),
+            ),
+          ),
+          if (unverified != null) ...[
+            _VerifyEmailPanel(
+              email: unverified,
+              sending: busy == AuthBusy.resend,
+              onResend: _auth.resendVerificationEmail,
+            ),
+            const SizedBox(height: AppConstants.spacing16),
+          ],
+          AuthPrimaryButton(
+            label: 'Sign in',
+            isLoading: busy == AuthBusy.email,
+            onPressed: _submit,
+          ),
+          const SizedBox(height: AppConstants.spacing20),
+          const AuthDivider(),
+          const SizedBox(height: AppConstants.spacing20),
+          if (!kIsWeb && Platform.isIOS) ...[
+            AppleSignInButton(
+              isLoading: busy == AuthBusy.apple,
+              onPressed: busy == AuthBusy.none ? _auth.signInWithApple : () {},
+            ),
+            const SizedBox(height: AppConstants.spacing12),
+          ],
+          GoogleSignInButton(
+            isLoading: busy == AuthBusy.google,
+            onPressed: _auth.signInWithGoogle,
+          ),
+          const Spacer(),
+          const SizedBox(height: AppConstants.spacing16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Welcome Back',
-                style: TextStyle(
-                  fontSize: titleSize,
-                  fontWeight: FontWeight.w800,
-                  color: tokens.textColor,
-                  height: 1.1,
+                'New here?',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: tokens.textSecondary,
                 ),
               ),
-              const SizedBox(height: AppConstants.spacing8),
-              Text(
-                'Sign in to access your AI-powered virtual closet.',
-                style: TextStyle(
-                  fontSize: bodySize,
-                  color: tokens.secondaryTextColor,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing24),
-              AuthGlassCard(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildEmailField(tokens),
-                      const SizedBox(height: AppConstants.spacing16),
-                      _buildPasswordField(tokens),
-                      const SizedBox(height: AppConstants.spacing8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Semantics(
-                          label: 'Forgot Password',
-                          button: true,
-                          child: TextButton(
-                            onPressed: () => Get.toNamed(Routes.forgotPassword),
-                            style: TextButton.styleFrom(
-                              foregroundColor: tokens.textColor.withValues(alpha: 0.85),
-                            ),
-                            child: const Text('Forgot Password?'),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing8),
-                      Obx(() => _buildLoginButton(authController, tokens)),
-                      Obx(
-                        () => _buildEmailVerificationError(
-                          authController,
-                          tokens,
-                        ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing16),
-                      _buildDivider(tokens),
-                      const SizedBox(height: AppConstants.spacing16),
-                      if (!kIsWeb && Platform.isIOS) ...[
-                        Obx(() => _buildAppleSignInButton(authController)),
-                        const SizedBox(height: AppConstants.spacing12),
-                      ],
-                      Obx(
-                        () => _buildGoogleSignInButton(authController, tokens),
-                      ),
-                    ],
-                  ),
-                ),
+              TextButton(
+                onPressed: () => context.pushReplacement(Routes.register),
+                child: const Text('Create an account'),
               ),
             ],
           ),
-          _buildBottomLinks(tokens),
+          const AuthFooterText(),
         ],
       ),
     );
   }
+}
 
-  Widget _buildEmailField(AuthUiTokens tokens) {
-    return Semantics(
-      label: 'Email',
-      textField: true,
-      child: TextFormField(
-        controller: _emailController,
-        keyboardType: TextInputType.emailAddress,
-        textInputAction: TextInputAction.next,
-      style: TextStyle(color: tokens.textColor),
-      cursorColor: tokens.brandColor,
-      decoration: AuthFormStyles.inputDecoration(
-        context: context,
-        label: 'Email',
-        hint: 'Enter your email',
-        icon: Icons.mail,
+class _VerifyEmailPanel extends StatelessWidget {
+  const _VerifyEmailPanel({
+    required this.email,
+    required this.sending,
+    required this.onResend,
+  });
+
+  final String email;
+  final bool sending;
+  final VoidCallback onResend;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaperTokens.of(context);
+    return PaperSurface(
+      color: tokens.stock.tint,
+      lift: 0,
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing12,
+        AppConstants.spacing8,
+        AppConstants.spacing8,
       ),
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter your email';
-        }
-        if (!GetUtils.isEmail(value)) {
-          return 'Please enter a valid email';
-        }
-        return null;
-      },
-    ),
-    );
-  }
-
-  Widget _buildPasswordField(AuthUiTokens tokens) {
-    return Obx(
-      () => Semantics(
-        label: 'Password',
-        textField: true,
-        child: TextFormField(
-          controller: _passwordController,
-        obscureText: !_isPasswordVisible.value,
-        textInputAction: TextInputAction.done,
-        onFieldSubmitted: (_) => _handleLogin(),
-        style: TextStyle(color: tokens.textColor),
-        cursorColor: tokens.brandColor,
-        decoration: AuthFormStyles.inputDecoration(
-          context: context,
-          label: 'Password',
-          hint: 'Enter your password',
-          icon: Icons.lock,
-          suffixIcon: IconButton(
-            tooltip: _isPasswordVisible.value ? 'Hide password' : 'Show password',
-            icon: Icon(
-              _isPasswordVisible.value
-                  ? Icons.visibility
-                  : Icons.visibility_off,
-              color: tokens.fieldIconColor,
-            ),
-            onPressed: () {
-              _isPasswordVisible.value = !_isPasswordVisible.value;
-            },
-          ),
-        ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your password';
-          }
-          if (value.length < 6) {
-            return 'Password must be at least 6 characters';
-          }
-          return null;
-        },
-      ),
-      ),
-    );
-  }
-
-  Widget _buildLoginButton(AuthController authController, AuthUiTokens tokens) {
-    return Semantics(
-      label: 'Sign In',
-      button: true,
-      enabled: !authController.isLoading.value,
-      child: ElevatedButton(
-        onPressed: authController.isLoading.value ? null : _handleLogin,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: tokens.brandColor,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.4,
-        ),
-      ),
-      child: authController.isLoading.value
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Text('Sign In'),
-    ),
-    );
-  }
-
-  Widget _buildEmailVerificationError(
-    AuthController authController,
-    AuthUiTokens tokens,
-  ) {
-    if (!authController.showEmailNotVerifiedError.value) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      children: [
-        const SizedBox(height: AppConstants.spacing16),
-        Container(
-          padding: const EdgeInsets.all(AppConstants.spacing12),
-          decoration: BoxDecoration(
-            color: Colors.orange.shade50,
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: Colors.orange.shade200),
-          ),
-          child: Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.orange.shade700,
-                    size: 20,
-                  ),
-                  const SizedBox(width: AppConstants.spacing8),
-                  Expanded(
-                    child: Text(
-                      'Please verify your email address before you log in.',
-                      style: TextStyle(
-                        color: Colors.orange.shade900,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppConstants.spacing12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: authController.isResendingVerification.value
-                      ? null
-                      : () => authController.resendVerificationEmail(),
-                  icon: authController.isResendingVerification.value
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          Icons.email_outlined,
-                          color: Colors.orange.shade700,
-                        ),
-                  label: Text(
-                    authController.isResendingVerification.value
-                        ? 'Sending...'
-                        : 'Resend Verification Email',
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.orange.shade700,
-                    side: BorderSide(color: Colors.orange.shade300),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppConstants.spacing12,
-                    ),
-                  ),
+              Icon(Icons.mark_email_unread_outlined, color: tokens.warning),
+              const SizedBox(width: AppConstants.spacing12),
+              Expanded(
+                child: Text(
+                  'Confirm $email before you sign in. Check your inbox.',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDivider(AuthUiTokens tokens) {
-    return Row(
-      children: [
-        Expanded(child: Divider(color: tokens.textColor.withValues(alpha: 0.2))),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppConstants.spacing16,
-          ),
-          child: Text(
-            'OR',
-            style: TextStyle(
-              color: tokens.textColor.withValues(alpha: 0.6),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1,
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: sending ? null : onResend,
+              child: Text(sending ? 'Sending…' : 'Send it again'),
             ),
           ),
-        ),
-        Expanded(child: Divider(color: tokens.textColor.withValues(alpha: 0.2))),
-      ],
-    );
-  }
-
-  Widget _buildAppleSignInButton(AuthController authController) {
-    final isLoading = authController.isAppleSigningIn.value;
-    return AppleSignInButton(
-      isLoading: isLoading,
-      onPressed: isLoading ? () {} : _handleAppleSignIn,
-    );
-  }
-
-  Widget _buildGoogleSignInButton(
-    AuthController authController,
-    AuthUiTokens tokens,
-  ) {
-    final isLoading = authController.isGoogleSigningIn.value;
-    return Semantics(
-      label: 'Continue with Google',
-      button: true,
-      enabled: !isLoading,
-      child: OutlinedButton.icon(
-        onPressed: isLoading ? null : _handleGoogleSignIn,
-      icon: isLoading
-          ? const SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.login),
-      label: Text(isLoading ? 'Signing in...' : 'Continue with Google'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: tokens.textColor,
-        side: BorderSide(color: tokens.textColor.withValues(alpha: 0.4)),
-        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.3,
-        ),
+        ],
       ),
-    ),
-    );
-  }
-
-  Widget _buildBottomLinks(AuthUiTokens tokens) {
-    return Column(
-      children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              "Don't have an account? ",
-              style: TextStyle(color: tokens.secondaryTextColor, fontSize: 14),
-            ),
-            Semantics(
-              label: 'Sign Up',
-              button: true,
-              child: TextButton(
-                onPressed: () => Get.toNamed(Routes.register),
-                style: TextButton.styleFrom(foregroundColor: tokens.textColor),
-                child: const Text('Sign Up'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        AuthFooterText(textColor: tokens.textColor),
-      ],
     );
   }
 }

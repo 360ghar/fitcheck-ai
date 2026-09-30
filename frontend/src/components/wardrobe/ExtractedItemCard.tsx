@@ -252,7 +252,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
             <img loading="lazy" decoding="async"
               src={imageSrc}
               alt={item.sub_category || item.category}
-              className="w-full h-full object-contain p-2"
+              className="w-full h-full object-contain p-1"
               onError={(event) =>
                 handleImageError(event.currentTarget.currentSrc || event.currentTarget.src)
               }

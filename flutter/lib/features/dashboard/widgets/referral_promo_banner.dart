@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../../../core/constants/app_constants.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/widgets/app_ui.dart';
 import '../../subscription/views/widgets/referral_share_card.dart';
 
-/// Promotional banner for referral program, displayed on dashboard
+/// Referral invitation on a torn strip of marigold paper.
 class ReferralPromoBanner extends StatelessWidget {
-  final bool isUrgent;
-  final VoidCallback? onDismiss;
-  final VoidCallback onCopyLink;
-  final ReferralShareCallback onShare;
-
   const ReferralPromoBanner({
     super.key,
     this.isUrgent = false,
@@ -16,6 +12,12 @@ class ReferralPromoBanner extends StatelessWidget {
     required this.onCopyLink,
     required this.onShare,
   });
+
+  /// The user is near a plan limit: the copy leads with that.
+  final bool isUrgent;
+  final VoidCallback? onDismiss;
+  final VoidCallback onCopyLink;
+  final ReferralShareCallback onShare;
 
   Rect? _originFrom(BuildContext context) {
     final box = context.findRenderObject() as RenderBox?;
@@ -25,181 +27,75 @@ class ReferralPromoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(
-          colors: isUrgent
-              ? const [Color(0xFFF59E0B), Color(0xFF6366F1), Color(0xFF9333EA)]
-              : const [Color(0xFF6366F1), Color(0xFF9333EA)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    return PaperSurface(
+      stock: PaperStockId.marigold,
+      color: tokens.marigold.tint,
+      deckle: PaperEdge.bottom,
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing12,
+        AppConstants.spacing4,
+        AppConstants.spacing12,
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Background overlay
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.white.withAlpha(13),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppConstants.spacing4),
+                  child: Text(
+                    isUrgent
+                        ? 'Running low? Invite a friend.'
+                        : 'Give a month, get a month.',
+                    style: text.headlineSmall?.copyWith(fontSize: 22),
+                  ),
+                ),
+              ),
+              if (onDismiss != null)
+                IconButton(
+                  tooltip: 'Dismiss for a week',
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: onDismiss,
+                ),
+            ],
           ),
           Padding(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    // Icon
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(51),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.card_giftcard,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: AppConstants.spacing12),
-                    // Text
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isUrgent
-                                ? 'Running low? Refer a friend!'
-                                : 'Refer a friend, get 1 month Pro free!',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            isUrgent
-                                ? 'Share your link - you both get rewarded.'
-                                : 'Both you and your friend get 1 month of Pro.',
-                            style: TextStyle(
-                              color: Colors.white.withAlpha(204),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Dismiss button (hidden when urgent) — 44pt touch target
-                    if (!isUrgent && onDismiss != null)
-                      IconButton(
-                        onPressed: onDismiss,
-                        tooltip: 'Dismiss',
-                        constraints: const BoxConstraints(
-                          minWidth: 44,
-                          minHeight: 44,
-                        ),
-                        padding: EdgeInsets.zero,
-                        icon: Icon(
-                          Icons.close,
-                          color: Colors.white.withAlpha(179),
-                          size: 20,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: AppConstants.spacing12),
-                // Action buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActionButton(
-                        icon: Icons.link,
-                        label: 'Copy Link',
-                        onTap: onCopyLink,
-                        isPrimary: false,
-                      ),
-                    ),
-                    const SizedBox(width: AppConstants.spacing8),
-                    Expanded(
-                      child: Builder(
-                        builder: (buttonContext) {
-                          return _ActionButton(
-                            icon: Icons.share,
-                            label: 'Share',
-                            onTap: () => onShare(
-                              sharePositionOrigin: _originFrom(buttonContext),
-                            ),
-                            isPrimary: true,
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            padding: const EdgeInsets.only(right: AppConstants.spacing12),
+            child: Text(
+              'You and your friend each get a month of Pro.',
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           ),
+          const SizedBox(height: AppConstants.spacing8),
+          Row(
+            children: [
+              Builder(
+                builder: (buttonContext) => TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: tokens.marigold.accent,
+                  ),
+                  onPressed: () =>
+                      onShare(sharePositionOrigin: _originFrom(buttonContext)),
+                  icon: const Icon(Icons.ios_share_rounded, size: 18),
+                  label: const Text('Share invite'),
+                ),
+              ),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: tokens.marigold.accent,
+                ),
+                onPressed: onCopyLink,
+                icon: const Icon(Icons.link_rounded, size: 18),
+                label: const Text('Copy link'),
+              ),
+            ],
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool isPrimary;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.isPrimary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (isPrimary) {
-      return ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 16),
-        label: Text(label),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF6366F1),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          textStyle: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-    }
-
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 16),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: Colors.white,
-        side: BorderSide(color: Colors.white.withAlpha(128)),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }

@@ -67,6 +67,13 @@ function selectedLabel(filter: TableToolbarFilter): string {
   return filter.options.find((option) => option.value === filter.value)?.label ?? filter.value ?? ''
 }
 
+function controlledFilterValue(filter: TableToolbarFilter): string {
+  // Toolbar filters always provide their explicit "all" sentinel first.
+  // Keeping Radix Select controlled from its first render avoids losing its
+  // state (and React warnings) when a URL-backed filter is applied later.
+  return filter.value ?? filter.options[0]?.value ?? '__all__'
+}
+
 export function TableToolbar({
   searchValue,
   onSearchChange,
@@ -128,7 +135,7 @@ export function TableToolbar({
 
       {primaryFilter ? (
         <Select
-          {...(primaryFilter.value !== undefined ? { value: primaryFilter.value } : {})}
+          value={controlledFilterValue(primaryFilter)}
           onValueChange={(value) => primaryFilter.onValueChange(value)}
         >
           <SelectTrigger className="h-8 w-full text-xs sm:w-44" aria-label={primaryFilter.label}>
@@ -172,7 +179,7 @@ export function TableToolbar({
                 <div key={filter.key} className="space-y-1.5">
                   <p className="text-xs font-medium text-muted-foreground">{filter.label}</p>
                   <Select
-                    {...(filter.value !== undefined ? { value: filter.value } : {})}
+                    value={controlledFilterValue(filter)}
                     onValueChange={(value) => filter.onValueChange(value)}
                   >
                     <SelectTrigger className="h-8 w-full text-xs" aria-label={filter.label}>

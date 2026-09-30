@@ -563,14 +563,9 @@ class GeminiProvider:
         system_instruction, contents = await self._messages_to_contents(messages)
 
         is_image_request = bool(response_modalities and "IMAGE" in response_modalities)
-        # No response_schema translation in v1 - every current caller passes
-        # either {"type": "json_object"} or a json_schema contract designed
-        # for OpenAI's structured-output shape, which doesn't map cleanly onto
-        # Gemini's OpenAPI-3.0-subset schema (e.g. ["string","null"] unions,
-        # additionalProperties: false are both invalid there). Both request
-        # shapes get the weaker but always-valid `response_mime_type` instead;
-        # callers already tolerantly parse JSON-ish text (see
-        # photoshoot_service.py's own manual JSON-retry loop).
+        # OpenAI-shaped json_schema contracts go to response_json_schema,
+        # which accepts full JSON Schema (type unions, additionalProperties)
+        # unlike the OpenAPI-subset response_schema.
         wants_json = bool(response_format and response_format.get("type") in ("json_object", "json_schema"))
 
         config_kwargs: Dict[str, Any] = {
@@ -585,6 +580,9 @@ class GeminiProvider:
             config_kwargs["response_modalities"] = ["TEXT", "IMAGE"]
         elif wants_json:
             config_kwargs["response_mime_type"] = "application/json"
+            json_schema = (response_format.get("json_schema") or {}).get("schema")
+            if json_schema:
+                config_kwargs["response_json_schema"] = json_schema
 
         logger.info(
             "AI chat request started",
@@ -715,6 +713,7 @@ class GeminiProvider:
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, Any]] = None,
+        temperature: float = 0.7,
     ) -> AIResponse:
         """Same primary -> fallback-model pattern as the OpenAI-compatible
         provider's chat_with_vision, narrowed to Gemini-model-to-Gemini-model
@@ -730,6 +729,7 @@ class GeminiProvider:
                 model=primary_model,
                 max_tokens=max_tokens,
                 response_format=response_format,
+                temperature=temperature,
             )
         except AIServiceError as e:
             if not fallback_model or fallback_model == primary_model or not e.retryable:
@@ -745,6 +745,7 @@ class GeminiProvider:
                 model=fallback_model,
                 max_tokens=max_tokens,
                 response_format=response_format,
+                temperature=temperature,
             )
 
     async def generate_image(

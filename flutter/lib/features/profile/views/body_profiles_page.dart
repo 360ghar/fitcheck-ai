@@ -1,634 +1,468 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../controllers/body_profile_controller.dart';
 import '../models/body_profile_model.dart';
-import '../../../core/utils/error_handler.dart';
+import '../providers/body_profiles_provider.dart';
 
-/// Body profiles page for managing size and fit preferences
-class BodyProfilesPage extends StatelessWidget {
+/// Saved measurements used for fit and try-on.
+class BodyProfilesPage extends ConsumerWidget {
   const BodyProfilesPage({super.key});
 
+  static void _openSheet(BuildContext context, [BodyProfileModel? profile]) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _BodyProfileSheet(profile: profile),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
-    final controller = Get.find<BodyProfileController>();
-    final tokens = AppUiTokens.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profiles = ref.watch(bodyProfilesProvider);
+    final notifier = ref.read(bodyProfilesProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Body Profiles'),
-        elevation: 0,
-      ),
-      body: AppPageBackground(
-        child: SafeArea(
-          child: Obx(() {
-            if (controller.isLoading.value && controller.profiles.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                child: Column(
-                  children: const [
-                    ShimmerCard(height: 80),
-                    SizedBox(height: AppConstants.spacing24),
-                    ShimmerCard(height: 48),
-                    SizedBox(height: AppConstants.spacing24),
-                    ShimmerBox(width: 120, height: 20),
-                    SizedBox(height: AppConstants.spacing12),
-                    ShimmerListTile(hasLeading: true, hasSubtitle: true),
-                    SizedBox(height: AppConstants.spacing8),
-                    ShimmerListTile(hasLeading: true, hasSubtitle: true),
-                  ],
-                ),
-              );
-            }
-
-            return RefreshIndicator(
-              onRefresh: controller.fetchProfiles,
-              child: SingleChildScrollView(
+    return PaperStockScope(
+      stock: PaperStockId.stone,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Body profiles')),
+        body: AppPageBackground(
+          child: RefreshIndicator(
+            onRefresh: notifier.refresh,
+            child: switch (profiles) {
+              AsyncValue(:final value?) when value.isEmpty => ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Info card
-                    _buildInfoCard(context, tokens),
-                    const SizedBox(height: AppConstants.spacing24),
-
-                    // Add button
-                    ElevatedButton.icon(
-                      onPressed: () => _showAddProfileDialog(context, controller),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Body Profile'),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                      ),
+                children: [
+                  if (profiles.hasError)
+                    AppErrorBanner(
+                      error: profiles.error,
+                      onRetry: notifier.refresh,
                     ),
-                    const SizedBox(height: AppConstants.spacing24),
-
-                    // Profiles list
-                    Text(
-                      'Your Profiles',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
-                          ),
-                    ),
-                    const SizedBox(height: AppConstants.spacing12),
-
-                    if (controller.profiles.isEmpty)
-                      _buildEmptyState(context, tokens)
-                    else
-                      ...controller.profiles.map(
-                        (profile) => _buildProfileCard(context, profile, controller),
-                      ),
-                  ],
-                ),
+                  AppEmptyState(
+                    scene: PaperScenes.studio,
+                    title: 'No body profiles yet',
+                    message: 'Add your height and build to get a better fit.',
+                    actionLabel: 'Add a profile',
+                    actionIcon: Icons.add_rounded,
+                    onAction: () => _openSheet(context),
+                  ),
+                ],
               ),
-            );
-          }),
+              AsyncValue(:final value?) => _ProfileList(
+                profiles: value,
+                error: profiles.hasError ? profiles.error : null,
+                onAdd: () => _openSheet(context),
+                onEdit: (p) => _openSheet(context, p),
+              ),
+              AsyncValue(:final error?) when !profiles.isLoading => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  AppErrorState(error: error, onRetry: notifier.refresh),
+                ],
+              ),
+              _ => ListView(
+                padding: const EdgeInsets.all(AppConstants.spacing16),
+                children: const [
+                  SkeletonPulse(
+                    child: Column(
+                      children: [
+                        SkeletonBox(
+                          height: 88,
+                          borderRadius: AppConstants.radius12,
+                        ),
+                        SizedBox(height: AppConstants.spacing12),
+                        SkeletonBox(
+                          height: 88,
+                          borderRadius: AppConstants.radius12,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            },
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildInfoCard(BuildContext context, AppUiTokens tokens) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      child: Row(
-        children: [
-          Icon(
-            Icons.info_outline,
-            color: tokens.brandColor,
-          ),
-          const SizedBox(width: AppConstants.spacing12),
-          Expanded(
-            child: Text(
-              'Save your measurements and size preferences for better recommendations',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                  ),
-            ),
-          ),
-        ],
+class _ProfileList extends ConsumerWidget {
+  const _ProfileList({
+    required this.profiles,
+    required this.error,
+    required this.onAdd,
+    required this.onEdit,
+  });
+
+  final List<BodyProfileModel> profiles;
+  final Object? error;
+  final VoidCallback onAdd;
+  final ValueChanged<BodyProfileModel> onEdit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final busy = ref.watch(bodyProfileBusyProvider);
+    final notifier = ref.read(bodyProfilesProvider.notifier);
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        AppConstants.spacing16,
+        AppConstants.spacing8,
+        AppConstants.spacing16,
+        AppConstants.spacing32 + MediaQuery.paddingOf(context).bottom,
       ),
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context, AppUiTokens tokens) {
-    return AppGlassCard(
-      padding: const EdgeInsets.all(AppConstants.spacing32),
-      child: Center(
-        child: Column(
-          children: [
-            Icon(
-              Icons.accessibility_new,
-              size: 48,
-              color: tokens.textMuted,
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-            Text(
-              'No body profiles yet',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textMuted,
-                  ),
-            ),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              'Add your first profile to get size recommendations',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                  ),
-            ),
-          ],
+      children: [
+        if (error != null)
+          AppErrorBanner(error: error, onRetry: notifier.refresh),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.spacing4,
+            0,
+            AppConstants.spacing4,
+            AppConstants.spacing16,
+          ),
+          child: Text(
+            'Your default profile is used for fit and try-on.',
+            style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildProfileCard(
-    BuildContext context,
-    BodyProfileModel profile,
-    BodyProfileController controller,
-  ) {
-    final tokens = AppUiTokens.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppConstants.spacing12),
-      child: AppGlassCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        for (final profile in profiles) ...[
+          PaperSurface(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.spacing16,
+              AppConstants.spacing12,
+              AppConstants.spacing4,
+              AppConstants.spacing12,
+            ),
+            child: Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              profile.name,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (profile.isDefault) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: tokens.brandColor.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'Default',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: tokens.brandColor,
+                      Text.rich(
+                        TextSpan(
+                          text: profile.name,
+                          children: [
+                            if (profile.isDefault)
+                              TextSpan(
+                                text: '  Default',
+                                style: text.bodyMedium?.copyWith(
+                                  color: tokens.stock.accent,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
                           ],
-                        ],
+                        ),
+                        style: text.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppConstants.spacing4),
                       Text(
-                        '${profile.heightCm.toStringAsFixed(0)} cm • ${profile.weightKg.toStringAsFixed(1)} kg',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                        '${profile.heightCm.toStringAsFixed(0)} cm · '
+                        '${profile.weightKg.toStringAsFixed(1)} kg',
+                        style: text.bodyMedium?.copyWith(
+                          color: tokens.textSecondary,
+                        ),
                       ),
                       Text(
-                        '${profile.bodyShape} • ${profile.skinTone}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                        '${profile.bodyShape} build · ${profile.skinTone} skin',
+                        style: text.bodySmall?.copyWith(
+                          color: tokens.textMuted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'edit':
-                        _showEditProfileDialog(context, profile, controller);
-                        break;
-                      case 'default':
-                        controller.setDefault(profile.id);
-                        break;
-                      case 'delete':
-                        _confirmDelete(context, profile, controller);
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    if (!profile.isDefault)
-                      const PopupMenuItem(value: 'default', child: Text('Set as Default')),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Delete', style: TextStyle(color: Colors.red)),
+                if (busy.contains(profile.id))
+                  const SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     ),
-                  ],
-                ),
+                  )
+                else
+                  PopupMenuButton<String>(
+                    tooltip: 'Options for ${profile.name}',
+                    icon: const Icon(Icons.more_vert_rounded),
+                    onSelected: (value) => switch (value) {
+                      'edit' => onEdit(profile),
+                      'default' => notifier.setDefault(profile.id),
+                      _ => _confirmDelete(context, ref, profile),
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      if (!profile.isDefault)
+                        const PopupMenuItem(
+                          value: 'default',
+                          child: Text('Make default'),
+                        ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text(
+                          'Delete',
+                          style: TextStyle(color: tokens.error),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
-          ],
+          ),
+          const SizedBox(height: AppConstants.spacing12),
+        ],
+        const SizedBox(height: AppConstants.spacing8),
+        ElevatedButton.icon(
+          onPressed: onAdd,
+          icon: const Icon(Icons.add_rounded, size: 20),
+          label: const Text('Add a profile'),
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+          ),
         ),
-      ),
+      ],
     );
   }
 
-  void _showAddProfileDialog(BuildContext context, BodyProfileController controller) {
-    final nameController = TextEditingController();
-    final heightController = TextEditingController();
-    final weightController = TextEditingController();
-    final bodyShapeController = TextEditingController(text: 'Regular');
-    final skinToneController = TextEditingController(text: 'Medium');
-    final formKey = GlobalKey<FormState>();
-
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: AppUiTokens.of(context).cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Create Body Profile',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing24),
-                  TextFormField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Profile Name *',
-                      hintText: 'e.g., Main Profile',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter a profile name';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: AppConstants.spacing16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: heightController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Height (cm) *',
-                            hintText: '170',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            final height = double.tryParse(value);
-                            if (height == null || height <= 0 || height > 300) {
-                              return 'Invalid';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: weightController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Weight (kg) *',
-                            hintText: '70',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            final weight = double.tryParse(value);
-                            if (weight == null || weight <= 0 || weight > 500) {
-                              return 'Invalid';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppConstants.spacing16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: bodyShapeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Body Shape *',
-                            hintText: 'Athletic',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: skinToneController,
-                          decoration: const InputDecoration(
-                            labelText: 'Skin Tone *',
-                            hintText: 'Medium',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppConstants.spacing24),
-                  Obx(() => ElevatedButton(
-                        onPressed: controller.isSaving.value
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
-
-                                final request = CreateBodyProfileRequest(
-                                  name: nameController.text.trim(),
-                                  heightCm: double.parse(heightController.text),
-                                  weightKg: double.parse(weightController.text),
-                                  bodyShape: bodyShapeController.text.trim(),
-                                  skinTone: skinToneController.text.trim(),
-                                );
-
-                                final success = await controller.createProfile(request);
-                                if (success) {
-                                  Get.back();
-                                  ErrorHandler.showSuccess('Body profile created', title: 'Success');
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                        ),
-                        child: controller.isSaving.value
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Save Profile'),
-                      )),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-      isScrollControlled: true,
-    ).then((_) {
-      nameController.dispose();
-      heightController.dispose();
-      weightController.dispose();
-      bodyShapeController.dispose();
-      skinToneController.dispose();
-    });
-  }
-
-  void _showEditProfileDialog(
+  Future<void> _confirmDelete(
     BuildContext context,
+    WidgetRef ref,
     BodyProfileModel profile,
-    BodyProfileController controller,
-  ) {
-    final nameController = TextEditingController(text: profile.name);
-    final heightController = TextEditingController(text: profile.heightCm.toString());
-    final weightController = TextEditingController(text: profile.weightKg.toString());
-    final bodyShapeController = TextEditingController(text: profile.bodyShape);
-    final skinToneController = TextEditingController(text: profile.skinTone);
-    final formKey = GlobalKey<FormState>();
-
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
-        decoration: BoxDecoration(
-          color: AppUiTokens.of(context).cardColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppConstants.radius24),
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Edit Body Profile',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: AppConstants.spacing24),
-                  TextFormField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Profile Name *',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter a profile name';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: AppConstants.spacing16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: heightController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Height (cm) *',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            final height = double.tryParse(value);
-                            if (height == null || height <= 0 || height > 300) {
-                              return 'Invalid';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: weightController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Weight (kg) *',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            final weight = double.tryParse(value);
-                            if (weight == null || weight <= 0 || weight > 500) {
-                              return 'Invalid';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppConstants.spacing16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: bodyShapeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Body Shape *',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: AppConstants.spacing12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: skinToneController,
-                          decoration: const InputDecoration(
-                            labelText: 'Skin Tone *',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppConstants.spacing24),
-                  Obx(() => ElevatedButton(
-                        onPressed: controller.isSaving.value
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
-
-                                final request = UpdateBodyProfileRequest(
-                                  name: nameController.text.trim(),
-                                  heightCm: double.parse(heightController.text),
-                                  weightKg: double.parse(weightController.text),
-                                  bodyShape: bodyShapeController.text.trim(),
-                                  skinTone: skinToneController.text.trim(),
-                                );
-
-                                final success = await controller.updateProfile(profile.id, request);
-                                if (success) {
-                                  Get.back();
-                                  ErrorHandler.showSuccess('Body profile updated', title: 'Success');
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                        ),
-                        child: controller.isSaving.value
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Update Profile'),
-                      )),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-      isScrollControlled: true,
-    ).then((_) {
-      nameController.dispose();
-      heightController.dispose();
-      weightController.dispose();
-      bodyShapeController.dispose();
-      skinToneController.dispose();
-    });
-  }
-
-  void _confirmDelete(
-    BuildContext context,
-    BodyProfileModel profile,
-    BodyProfileController controller,
-  ) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Delete Profile'),
-        content: Text('Are you sure you want to delete "${profile.name}"?'),
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete ${profile.name}?'),
+        content: const Text('You cannot undo this.'),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () async {
-              Get.back();
-              final success = await controller.deleteProfile(profile.id);
-              if (success) {
-                ErrorHandler.showSuccess('Body profile deleted', title: 'Success');
-              }
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(
+              foregroundColor: PaperTokens.of(dialogContext).error,
+            ),
+            child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(bodyProfilesProvider.notifier).delete(profile.id);
+    }
+  }
+}
+
+/// Create or edit form. Owns its text controllers and disposes them after
+/// the sheet's exit animation.
+class _BodyProfileSheet extends ConsumerStatefulWidget {
+  const _BodyProfileSheet({this.profile});
+
+  /// Null to create a new profile.
+  final BodyProfileModel? profile;
+
+  @override
+  ConsumerState<_BodyProfileSheet> createState() => _BodyProfileSheetState();
+}
+
+class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final _name = TextEditingController(text: widget.profile?.name);
+  late final _height = TextEditingController(
+    // toString(), not toStringAsFixed(0): a fractional height must not be
+    // silently rounded the moment the form opens.
+    text: widget.profile?.heightCm.toString(),
+  );
+  late final _weight = TextEditingController(
+    text: widget.profile?.weightKg.toString(),
+  );
+  late final _shape = TextEditingController(
+    text: widget.profile?.bodyShape ?? 'Regular',
+  );
+  late final _tone = TextEditingController(
+    text: widget.profile?.skinTone ?? 'Medium',
+  );
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    for (final c in [_name, _height, _weight, _shape, _tone]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  String? _required(String? value) =>
+      (value?.trim().isEmpty ?? true) ? 'Required' : null;
+
+  String? Function(String?) _number(double max) => (value) {
+    final n = double.tryParse(value?.trim() ?? '');
+    if (value?.trim().isEmpty ?? true) return 'Required';
+    if (n == null || n <= 0 || n > max) return 'Check this number';
+    return null;
+  };
+
+  Future<void> _save() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    final notifier = ref.read(bodyProfilesProvider.notifier);
+    final height = double.parse(_height.text.trim());
+    final weight = double.parse(_weight.text.trim());
+    final profile = widget.profile;
+    final saved = profile == null
+        ? await notifier.create(
+            CreateBodyProfileRequest(
+              name: _name.text.trim(),
+              heightCm: height,
+              weightKg: weight,
+              bodyShape: _shape.text.trim(),
+              skinTone: _tone.text.trim(),
+            ),
+          )
+        : await notifier.edit(
+            profile.id,
+            UpdateBodyProfileRequest(
+              name: _name.text.trim(),
+              heightCm: height,
+              weightKg: weight,
+              bodyShape: _shape.text.trim(),
+              skinTone: _tone.text.trim(),
+            ),
+          );
+    if (!mounted) return;
+    if (saved) {
+      Navigator.pop(context);
+    } else {
+      setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const gap = SizedBox(height: AppConstants.spacing12);
+    const across = SizedBox(width: AppConstants.spacing12);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppConstants.spacing24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  widget.profile == null ? 'New body profile' : 'Edit profile',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: AppConstants.spacing20),
+                TextFormField(
+                  controller: _name,
+                  enabled: !_saving,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    hintText: 'For example, Me',
+                  ),
+                  validator: _required,
+                ),
+                gap,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _height,
+                        enabled: !_saving,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Height',
+                          suffixText: 'cm',
+                        ),
+                        validator: _number(300),
+                      ),
+                    ),
+                    across,
+                    Expanded(
+                      child: TextFormField(
+                        controller: _weight,
+                        enabled: !_saving,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Weight',
+                          suffixText: 'kg',
+                        ),
+                        validator: _number(500),
+                      ),
+                    ),
+                  ],
+                ),
+                gap,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _shape,
+                        enabled: !_saving,
+                        decoration: const InputDecoration(labelText: 'Build'),
+                        validator: _required,
+                      ),
+                    ),
+                    across,
+                    Expanded(
+                      child: TextFormField(
+                        controller: _tone,
+                        enabled: !_saving,
+                        decoration: const InputDecoration(
+                          labelText: 'Skin tone',
+                        ),
+                        validator: _required,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppConstants.spacing24),
+                ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

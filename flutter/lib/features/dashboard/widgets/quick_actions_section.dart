@@ -1,164 +1,111 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../app/routes/app_routes.dart';
 
-/// Quick Actions grid section for dashboard
+/// Four shortcuts, each cut from the paper of the feature it opens.
 class QuickActionsSection extends StatelessWidget {
   const QuickActionsSection({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppSectionHeader(
-          title: 'Quick Actions',
-          subtitle: 'Jump back into your wardrobe',
-        ),
-        const SizedBox(height: AppConstants.spacing12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 900
-                ? 4
-                : constraints.maxWidth >= 680
-                    ? 3
-                    : 2;
-            final cardWidth = (constraints.maxWidth -
-                    (columns - 1) * AppConstants.spacing12) /
-                columns;
-
-            return Wrap(
-              spacing: AppConstants.spacing12,
-              runSpacing: AppConstants.spacing12,
-              children: [
-                SizedBox(
-                  width: cardWidth,
-                  child: _ActionCard(
-                    title: 'Add Item',
-                    subtitle: 'Capture new pieces',
-                    icon: Icons.add,
-                    gradient: LinearGradient(
-                      colors: [
-                        tokens.brandColor,
-                        tokens.brandColor.withValues(alpha: 0.7),
-                      ],
-                    ),
-                    onTap: () => Get.toNamed(Routes.wardrobeAdd),
-                  ),
+    const actions = [
+      (
+        'Add a piece',
+        'Photograph and tag',
+        Icons.add_a_photo_outlined,
+        PaperStockId.moss,
+        Routes.wardrobeAdd,
+      ),
+      (
+        'Build an outfit',
+        'Mix your pieces',
+        Icons.style_outlined,
+        PaperStockId.marigold,
+        Routes.outfitBuilder,
+      ),
+      (
+        'For you',
+        'Picks for today',
+        Icons.explore_outlined,
+        PaperStockId.ink,
+        Routes.recommendations,
+      ),
+      (
+        'Plan the week',
+        'Outfits by date',
+        Icons.calendar_month_outlined,
+        PaperStockId.clay,
+        Routes.calendar,
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 600 ? 4 : 2;
+        const gap = AppConstants.spacing12;
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap + 3, // Room for the paper slab.
+          children: [
+            for (final (title, subtitle, icon, stock, route) in actions)
+              SizedBox(
+                width: width,
+                child: _ActionCard(
+                  title: title,
+                  subtitle: subtitle,
+                  icon: icon,
+                  stock: stock,
+                  onTap: () => context.push(route),
                 ),
-                SizedBox(
-                  width: cardWidth,
-                  child: _ActionCard(
-                    title: 'Create Outfit',
-                    subtitle: 'Mix and match looks',
-                    icon: Icons.auto_awesome,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF111827),
-                        tokens.cardColor,
-                      ],
-                    ),
-                    onTap: () => Get.toNamed(Routes.outfits),
-                  ),
-                ),
-                SizedBox(
-                  width: cardWidth,
-                  child: _ActionCard(
-                    title: 'For You',
-                    subtitle: 'Personalized picks',
-                    icon: Icons.explore,
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF0EA5E9),
-                        Color(0xFF14B8A6),
-                      ],
-                    ),
-                    onTap: () => Get.toNamed(Routes.recommendations),
-                  ),
-                ),
-                SizedBox(
-                  width: cardWidth,
-                  child: _ActionCard(
-                    title: 'Plan Calendar',
-                    subtitle: 'Outfits ahead of time',
-                    icon: Icons.calendar_today,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF0F172A),
-                        tokens.cardColor.withValues(alpha: 0.8),
-                      ],
-                    ),
-                    onTap: () => Get.toNamed(Routes.calendar),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ],
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _ActionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Gradient gradient;
-  final VoidCallback onTap;
-
   const _ActionCard({
     required this.title,
     required this.subtitle,
     required this.icon,
-    required this.gradient,
+    required this.stock,
     required this.onTap,
   });
 
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final PaperStockId stock;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final tokens = PaperTokens.of(context);
+    final paper = tokens.stockOf(stock);
+    final text = Theme.of(context).textTheme;
+    return PaperSurface(
+      stock: stock,
+      color: paper.tint,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppConstants.spacing12),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 16,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(height: AppConstants.spacing8),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-            ),
-            const SizedBox(height: AppConstants.spacing4),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white70,
-                    fontSize: 11,
-                  ),
-            ),
-          ],
-        ),
+      semanticLabel: '$title. $subtitle',
+      padding: const EdgeInsets.all(AppConstants.spacing12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: paper.accent, size: 26),
+          const SizedBox(height: AppConstants.spacing16),
+          Text(title, style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            subtitle,
+            style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

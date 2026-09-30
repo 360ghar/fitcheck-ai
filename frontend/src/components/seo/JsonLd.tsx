@@ -14,10 +14,11 @@ const ORGANIZATION_SCHEMA = {
   '@type': 'Organization',
   name: 'FitCheck AI',
   url: SEO_CONFIG.siteUrl,
-  logo: `${SEO_CONFIG.siteUrl}/og-default.jpg`,
+  logo: SEO_CONFIG.logoImage,
   description: SEO_CONFIG.positioning,
   sameAs: [
     'https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai',
+    'https://apps.apple.com/app/id6794689012',
     'https://x.com/FitCheckAI',
     'https://www.linkedin.com/company/fitcheck-ai',
     'https://www.youtube.com/@FitCheckAI',
@@ -112,7 +113,7 @@ export function OutfitJsonLd({
       name: 'FitCheck AI',
       logo: {
         '@type': 'ImageObject',
-        url: SEO_CONFIG.defaultOgImage,
+        url: SEO_CONFIG.logoImage,
       },
     },
     keywords: tags?.join(', ') || 'outfit, fashion, style',
@@ -307,7 +308,7 @@ export function buildArticleSchema({
       name: 'FitCheck AI',
       logo: {
         '@type': 'ImageObject',
-        url: `${SEO_CONFIG.siteUrl}/og-default.jpg`,
+        url: SEO_CONFIG.logoImage,
       },
     },
     datePublished,

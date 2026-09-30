@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter/widgets.dart';
-import 'package:get/get.dart';
+
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 
 import '../utils/error_handler.dart';
+import 'notification_service.dart';
 
 /// Shorebird code push (OTA patches).
 ///
@@ -28,7 +29,7 @@ import '../utils/error_handler.dart';
 /// a background isolate ([loadCurrentPatch]) and can never stall `main()`.
 /// The main-isolate updater is built lazily, only when the first background
 /// update check runs (post-first-frame), so launch never pays for it.
-class CodePushService extends GetxService with WidgetsBindingObserver {
+class CodePushService with WidgetsBindingObserver {
   CodePushService({ShorebirdUpdater Function()? updaterFactory})
       : _updaterFactory = updaterFactory ?? ShorebirdUpdater.new;
 
@@ -51,11 +52,14 @@ class CodePushService extends GetxService with WidgetsBindingObserver {
   bool _updaterInitFailed = false;
   bool _announced = false;
 
+  /// The app-wide instance. Tests replace it.
+  static CodePushService instance = CodePushService();
+
   /// The patch currently running, or `null` on an unpatched release build.
-  final RxnInt currentPatchNumber = RxnInt();
+  final currentPatchNumber = ValueNotifier<int?>(null);
 
   /// True once a patch has finished downloading and needs a relaunch to apply.
-  final RxBool restartRequired = false.obs;
+  final restartRequired = ValueNotifier<bool>(false);
 
   /// Constructed lazily: building the real [ShorebirdUpdater] probes the engine
   /// over FFI and prints a banner when it is missing, so tests and debug runs
@@ -77,24 +81,17 @@ class CodePushService extends GetxService with WidgetsBindingObserver {
   /// Whether this binary was built by `shorebird release` and can be patched.
   bool get isAvailable => _updaterOrNull?.isAvailable ?? false;
 
-  @override
-  void onInit() {
-    super.onInit();
+  /// Starts lifecycle observation and the post-first-frame update check.
+  void start() {
     WidgetsBinding.instance.addObserver(this);
     // Start the (network) update check only once the first frame is up, so it
     // can never contend with startup work.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       checkForUpdateInBackground();
     });
-    ever<bool>(restartRequired, (value) {
-      if (value) _announceRestartRequired();
+    restartRequired.addListener(() {
+      if (restartRequired.value) _announceRestartRequired();
     });
-  }
-
-  @override
-  void onClose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.onClose();
   }
 
   @override
@@ -181,11 +178,11 @@ class CodePushService extends GetxService with WidgetsBindingObserver {
     if (_announced) return;
 
     Future<void>.delayed(_announceDelay, () {
-      // No overlay yet means no snackbar host. Leave _announced false so the
-      // next resume retries rather than swallowing the prompt for the session.
-      if (Get.context == null) return;
+      // No snackbar host yet. Leave _announced false so the next resume
+      // retries rather than swallowing the prompt for the session.
+      if (scaffoldMessengerKey.currentState == null) return;
       if (_announced) return;
-      // Routed through ErrorHandler rather than Get.snackbar so this toast is
+      // Routed through ErrorHandler so this toast is
       // styled like every other one. test/core/utils/snackbar_policy_test.dart
       // enforces that NotificationService.present is the only caller.
       //

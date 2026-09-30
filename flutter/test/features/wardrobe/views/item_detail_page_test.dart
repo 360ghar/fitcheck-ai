@@ -1,22 +1,15 @@
-import 'package:fitcheck_ai/core/services/network_service.dart';
 import 'package:fitcheck_ai/domain/enums/category.dart';
 import 'package:fitcheck_ai/domain/enums/condition.dart';
-import 'package:fitcheck_ai/features/wardrobe/controllers/wardrobe_controller.dart';
+import 'package:fitcheck_ai/features/wardrobe/providers/wardrobe_providers.dart';
+import 'package:flutter/material.dart';
+import 'package:fitcheck_ai/core/providers.dart' show noRetry;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/item_repository.dart';
 import 'package:fitcheck_ai/features/wardrobe/views/item_detail_page.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart' hide Condition;
-
-class FakeNetworkService extends NetworkService {
-  FakeNetworkService({bool connected = true}) {
-    isConnected.value = connected;
-  }
-
-  @override
-  // ignore: must_call_super
-  void onInit() {}
-}
+import 'package:fitcheck_ai/core/services/notification_service.dart'
+    show scaffoldMessengerKey;
 
 /// Fake that fakes both list and single-item endpoints, so detail-page tests
 /// can assert the refresh-on-open behaviour without any network.
@@ -37,9 +30,9 @@ class FakeItemRepository extends ItemRepository {
     String? sortBy,
     String? sortOrder,
   }) async {
-    return const ItemsListResponse(
-      items: [],
-      total: 0,
+    return ItemsListResponse(
+      items: [item('item-1')],
+      total: 1,
       page: 1,
       limit: 20,
       hasMore: false,
@@ -62,95 +55,69 @@ ItemModel item(String id) => ItemModel(
 );
 
 void main() {
-  setUp(Get.reset);
-  tearDown(Get.reset);
+  /// Loads the closet list first, so the page has a cached copy to show.
+  Future<FakeItemRepository> pumpDetail(
+    WidgetTester tester,
+    Future<ItemModel> Function(String id) onGetItem,
+  ) async {
+    final repository = FakeItemRepository()..onGetItem = onGetItem;
+    final container = ProviderContainer(
+      retry: noRetry,
+      overrides: [itemRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    container.listen(wardrobeProvider, (_, _) {});
+    await container.read(wardrobeProvider.future);
 
-  group('ItemDetailPage refresh-on-open', () {
-    testWidgets(
-      'refreshes a cached item from the server instead of serving it blind',
-      (tester) async {
-        final network = FakeNetworkService();
-        Get.put<NetworkService>(network);
-        final repository = FakeItemRepository()
-          ..onGetItem = (_) async => ItemModel(
-            id: 'item-1',
-            userId: 'user-1',
-            name: 'refreshed-name',
-            category: Category.tops,
-            condition: Condition.clean,
-          );
-        final controller = WardrobeController(
-          itemRepository: repository,
-          networkService: network,
-        );
-        // Simulate the app state before the fix: the list already holds the
-        // item from an earlier fetch, with presigned image URLs that may
-        // have expired since.
-        controller.items.add(item('item-1'));
-        Get.put(controller);
+    // A phone-sized screen: the name sits under a square photo.
+    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          scaffoldMessengerKey: scaffoldMessengerKey,
+          home: const MediaQuery(
+            data: MediaQueryData(disableAnimations: true),
+            child: ItemDetailPage(itemId: 'item-1'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    return repository;
+  }
 
-        await tester.pumpWidget(
-          const GetMaterialApp(home: ItemDetailPage(itemId: 'item-1')),
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 100));
-
-        expect(
-          repository.getItemCalls,
-          1,
-          reason: 'opening a detail page must re-mint fresh presigned image '
-              'URLs (refreshItemById) instead of rendering the cached model '
-              'blind — an expired URL otherwise leaves a permanently broken '
-              'image tile',
-        );
-        expect(
-          find.text('refreshed-name'),
-          findsOneWidget,
-          reason: 'the page must render the freshly fetched item',
-        );
-        controller.onClose();
-      },
+  testWidgets('opening a cached item fetches it fresh', (tester) async {
+    final repository = await pumpDetail(
+      tester,
+      (_) async => ItemModel(
+        id: 'item-1',
+        userId: 'user-1',
+        name: 'refreshed-name',
+        category: Category.tops,
+        condition: Condition.clean,
+      ),
     );
 
-    testWidgets('falls back to the cached item when the refresh fails', (
+    // Image URLs are presigned and expire: the page must not render the
+    // cached copy blind.
+    expect(repository.getItemCalls, 1);
+    expect(find.text('refreshed-name'), findsWidgets);
+  });
+
+  testWidgets('a failed fetch keeps the cached item and shows a banner', (
+    tester,
+  ) async {
+    final repository = await pumpDetail(
       tester,
-    ) async {
-      final network = FakeNetworkService();
-      Get.put<NetworkService>(network);
-      final repository = FakeItemRepository()
-        ..onGetItem = (_) async => throw Exception('network down');
-      final controller = WardrobeController(
-        itemRepository: repository,
-        networkService: network,
-      );
-      controller.items.add(item('item-1'));
-      Get.put(controller);
+      (_) async => throw Exception('network down'),
+    );
 
-      await tester.pumpWidget(
-        const GetMaterialApp(home: ItemDetailPage(itemId: 'item-1')),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(
-        repository.getItemCalls,
-        1,
-        reason: 'the refresh attempt must still happen on open',
-      );
-      expect(
-        find.text('item-1'),
-        findsOneWidget,
-        reason: 'a failed refresh must not blank the page — the cached '
-            'model is shown',
-      );
-
-      // Flush the error snackbar: advance past its auto-dismiss duration,
-      // then let the dismiss animation finish so no ticker is left running
-      // when the tree is torn down.
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      controller.onClose();
-    });
+    expect(repository.getItemCalls, 1);
+    expect(find.text('item-1'), findsWidgets);
+    expect(find.text('Retry'), findsOneWidget);
   });
 }

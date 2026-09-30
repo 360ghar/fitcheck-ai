@@ -69,8 +69,14 @@ class ProfileRepository {
         '${ApiConstants.users}/me/avatar',
         imageFile,
       );
-      final data = _extractData(response.data);
-      return data['avatar_url'] as String;
+      final url = _extractData(response.data)['avatar_url'];
+      if (url is! String || url.isEmpty) {
+        throw const ServerException(
+          message: 'Avatar upload did not return an image URL.',
+          statusCode: 502,
+        );
+      }
+      return url;
     } on DioException catch (e) {
       throw handleDioException(e);
     }

@@ -42,7 +42,7 @@ Layer flow: clients → API → services → data/AI/storage; images served from
 | `backend/` | API, business logic, AI orchestration, tests |
 | `frontend/` | Web client (Vite + React + TypeScript) |
 | `admin/` | Internal admin console (React 19 SPA; backend-enforced RBAC) |
-| `flutter/` | Mobile client (GetX) |
+| `flutter/` | Mobile client (Riverpod + go_router) |
 | `docs/` | System of record for product/design/plans/quality |
 | `scripts/` | Repo harness checks (docs structure, architecture) |
 
@@ -108,7 +108,7 @@ Details: `docs/FRONTEND.md`.
 
 ```text
 features/*  →  core/*  →  external packages
-app/ owns routes, bindings, theme
+app/ owns the router, routes, theme
 ```
 
 Details: `docs/FLUTTER.md`.

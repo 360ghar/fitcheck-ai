@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:get/get.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import '../exceptions/app_exceptions.dart';
 import '../services/analytics_service.dart';
@@ -119,24 +118,5 @@ class ErrorHandler {
       message: message,
       type: NotificationType.warning,
     ));
-  }
-}
-
-/// Extension to easily show errors from controllers
-extension ErrorHandlerExtension on GetxController {
-  void handleError(dynamic error, {String? title, StackTrace? stackTrace}) {
-    ErrorHandler.showError(error, title: title, stackTrace: stackTrace);
-  }
-
-  void handleSuccess(String message, {String? title}) {
-    ErrorHandler.showSuccess(message, title: title);
-  }
-
-  void handleInfo(String message, {String? title}) {
-    ErrorHandler.showInfo(message, title: title);
-  }
-
-  void handleWarning(String message, {String? title}) {
-    ErrorHandler.showWarning(message, title: title);
   }
 }

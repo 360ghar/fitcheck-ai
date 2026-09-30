@@ -1,444 +1,282 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../../../core/widgets/app_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
-import '../controllers/photoshoot_controller.dart';
 import '../models/photoshoot_models.dart';
+import '../providers/photoshoot_provider.dart';
+import 'photoshoot_image.dart';
 
-/// Step 4: Results gallery
-class PhotoshootResultsStep extends GetView<PhotoshootController> {
+/// Step 4: the gallery, with a retry on each failed slot.
+class PhotoshootResultsStep extends ConsumerWidget {
   const PhotoshootResultsStep({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(photoshootProvider);
+    final notifier = ref.read(photoshootProvider.notifier);
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final failed = [...s.failedIndices]..sort();
 
+    if (s.images.isEmpty && failed.isEmpty) {
+      return AppEmptyState(
+        scene: PaperScenes.studio,
+        title: 'No photos came back',
+        message: 'The shoot finished without images. Try again.',
+        actionLabel: 'Try again',
+        onAction: () => notifier.reset(keepPhotos: true),
+      );
+    }
+
+    final count = s.images.length;
+    // Slots in their original order, failed ones in place.
+    final slots = <int>{
+      for (final img in s.images) img.index,
+      ...failed,
+    }.toList()..sort();
+    final byIndex = {for (final img in s.images) img.index: img};
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Action bar
-        Padding(
-          padding: const EdgeInsets.all(AppConstants.spacing16),
-          child: Column(
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: AppConstants.spacing12 + 3,
+            crossAxisSpacing: AppConstants.spacing12,
+            childAspectRatio: 3 / 4,
+          ),
+          itemCount: slots.length,
+          itemBuilder: (context, i) {
+            final image = byIndex[slots[i]];
+            return image == null
+                ? _FailedCard(index: slots[i])
+                : _ImageCard(index: s.images.indexOf(image), image: image);
+          },
+        ),
+        const SizedBox(height: AppConstants.spacing24),
+        ElevatedButton.icon(
+          onPressed: count == 0 || s.isDownloading
+              ? null
+              : notifier.downloadAll,
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+          ),
+          icon: s.downloadingAll
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download_rounded, size: 20),
+          label: Text(
+            s.downloadingAll
+                ? 'Saving ${(s.downloadingIndex ?? 0) + 1} of $count'
+                : 'Save all $count to gallery',
+          ),
+        ),
+        const SizedBox(height: AppConstants.spacing8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton(
+              onPressed: () => notifier.reset(keepPhotos: true),
+              child: const Text('New style'),
+            ),
+            const SizedBox(width: AppConstants.spacing8),
+            TextButton(
+              onPressed: notifier.reset,
+              child: const Text('New photos'),
+            ),
+          ],
+        ),
+        if (s.usage != null) ...[
+          const SizedBox(height: AppConstants.spacing4),
+          Text(
+            '${s.usage!.remaining} left today',
+            textAlign: TextAlign.center,
+            style: text.bodySmall?.copyWith(color: tokens.textSecondary),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// White glyph with a solid offset edge, readable over any photo.
+const _onPhoto = [Shadow(color: Colors.black87, offset: Offset(0.5, 1))];
+
+class _ImageCard extends ConsumerWidget {
+  const _ImageCard({required this.index, required this.image});
+
+  final int index;
+  final GeneratedImage image;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final saving = ref.watch(
+      photoshootProvider.select((s) => s.downloadingIndex == index),
+    );
+    final busy = ref.watch(photoshootProvider.select((s) => s.isDownloading));
+    final notifier = ref.read(photoshootProvider.notifier);
+    return PaperSurface(
+      padding: EdgeInsets.zero,
+      grain: false,
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Semantics(
+            button: true,
+            label: 'Open photo ${index + 1}',
+            child: GestureDetector(
+              onTap: () => _showFullScreen(context, ref),
+              child: PhotoshootImage(image: image),
+            ),
+          ),
+          // Apple Guideline 1.2: generated images must be reportable.
+          Positioned(
+            top: 0,
+            right: 0,
+            child: IconButton(
+              tooltip: 'Report photo',
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              onPressed: () => showReportContentSheet(
+                contentType: 'AI photoshoot image',
+                contentId: image.id,
+              ),
+              icon: const Icon(
+                Icons.flag_outlined,
+                size: 20,
+                color: Colors.white,
+                shadows: _onPhoto,
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: IconButton(
+              tooltip: 'Save to gallery',
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              onPressed: busy ? null : () => notifier.downloadImage(index),
+              icon: saving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.download_rounded,
+                      size: 22,
+                      color: Colors.white,
+                      shadows: _onPhoto,
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullScreen(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(AppConstants.spacing16),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: double.infinity,
+          height: MediaQuery.sizeOf(dialogContext).height * 0.75,
+          child: Stack(
             children: [
-              // Download All button
-              Obx(
-                () => ElevatedButton.icon(
-                  onPressed:
-                      controller.generatedImages.isNotEmpty &&
-                          !controller.isDownloading.value
-                      ? controller.downloadAll
-                      : null,
-                  icon: controller.isDownloading.value
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.download),
-                  label: Text(
-                    controller.isDownloading.value
-                        ? 'Downloading ${controller.downloadingIndex.value + 1}/${controller.generatedImages.length}'
-                        : 'Download All (${controller.generatedImages.length})',
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
+              Positioned.fill(
+                child: InteractiveViewer(
+                  child: PhotoshootImage(image: image, fit: BoxFit.contain),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(dialogContext),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    shadows: _onPhoto,
                   ),
                 ),
               ),
-              const SizedBox(height: AppConstants.spacing12),
-              // New Style and New Photos buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => controller.reset(keepPhotos: true),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('New Style'),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(0, 44),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppConstants.spacing12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: controller.reset,
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('New Photos'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 44),
-                      ),
-                    ),
-                  ),
-                ],
+              Positioned(
+                left: AppConstants.spacing16,
+                right: AppConstants.spacing16,
+                bottom: AppConstants.spacing16,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    ref.read(photoshootProvider.notifier).downloadImage(index);
+                    Navigator.pop(dialogContext);
+                  },
+                  icon: const Icon(Icons.download_rounded, size: 20),
+                  label: const Text('Save to gallery'),
+                ),
               ),
             ],
           ),
         ),
-
-        Obx(() {
-          if (!controller.partialSuccess.value ||
-              controller.failedCount.value <= 0) {
-            return const SizedBox.shrink();
-          }
-
-          return Container(
-            margin: const EdgeInsets.symmetric(
-              horizontal: AppConstants.spacing16,
-              vertical: AppConstants.spacing8,
-            ),
-            padding: const EdgeInsets.all(AppConstants.spacing12),
-            decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(AppConstants.radius12),
-              border: Border.all(color: Colors.amber.shade300),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.amber,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${controller.failedCount.value} image slot(s) failed. Retry each failed slot below.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-
-        // Image grid
-        Expanded(
-          child: Obx(() {
-            final failed = controller.failedIndices.toList()..sort();
-            return GridView.builder(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacing16,
-              ),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 190,
-                crossAxisSpacing: AppConstants.spacing12,
-                mainAxisSpacing: AppConstants.spacing12,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: controller.generatedImages.length + failed.length,
-              itemBuilder: (context, index) {
-                if (index < controller.generatedImages.length) {
-                  final image = controller.generatedImages[index];
-                  return _buildImageCard(context, tokens, image, index);
-                }
-
-                final failedIndex =
-                    failed[index - controller.generatedImages.length];
-                return _buildFailedSlotCard(context, failedIndex);
-              },
-            );
-          }),
-        ),
-
-        // Usage summary
-        Obx(() => _buildUsageSummary(context, tokens)),
-      ],
+      ),
     );
   }
+}
 
-  Widget _buildFailedSlotCard(BuildContext context, int failedIndex) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppConstants.radius12),
-        border: Border.all(
-          color: Colors.amber.shade300,
-          style: BorderStyle.solid,
-        ),
-      ),
+class _FailedCard extends ConsumerWidget {
+  const _FailedCard({required this.index});
+
+  final int index;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = PaperTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final retrying = ref.watch(
+      photoshootProvider.select((s) => s.retryingIndex),
+    );
+    final isThis = retrying == index;
+    return PaperSurface(
+      lift: 0,
+      color: tokens.stock.sunk,
       padding: const EdgeInsets.all(AppConstants.spacing12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.25),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              'Failed slot #${failedIndex + 1}',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-            ),
+          Icon(Icons.broken_image_outlined, size: 28, color: tokens.textMuted),
+          const SizedBox(height: AppConstants.spacing8),
+          Text(
+            'Photo ${index + 1} failed',
+            textAlign: TextAlign.center,
+            style: text.titleSmall?.copyWith(color: tokens.textPrimary),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Generation failed for this slot. Retry to fill it.',
-            style: TextStyle(fontSize: 12),
-          ),
-          const Spacer(),
-          Obx(() {
-            final isRetrying =
-                controller.retryingFailedIndex.value == failedIndex;
-            return SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: controller.retryingFailedIndex.value == -1
-                    ? () => controller.retryFailedSlot(failedIndex)
-                    : null,
-                icon: isRetrying
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh, size: 16),
-                label: Text(isRetrying ? 'Retrying...' : 'Retry'),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImageCard(
-    BuildContext context,
-    AppUiTokens tokens,
-    GeneratedImage image,
-    int index,
-  ) {
-    return AppGlassCard(
-      padding: EdgeInsets.zero,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            child: _buildImageWidget(tokens, image, BoxFit.cover),
-          ),
-
-          // Index badge
-          Positioned(
-            top: 8,
-            left: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${index + 1}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-
-          // Report image button (Apple Guideline 1.2 — generated UGC must be
-          // reportable).
-          Positioned(
-            top: 4,
-            right: 4,
-            child: Material(
-              color: Colors.black54,
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => showReportContentSheet(
-                  contentType: 'AI photoshoot image',
-                  contentId: image.id,
-                ),
-                child: const Padding(
-                  padding: EdgeInsets.all(6),
-                  child: Icon(
-                    Icons.flag_outlined,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Download button
-          Positioned(
-            bottom: 8,
-            right: 8,
-            child: Obx(() {
-              final isDownloadingThis =
-                  controller.isDownloading.value &&
-                  controller.downloadingIndex.value == index;
-              return Material(
-                color: tokens.brandColor,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: controller.isDownloading.value
-                      ? null
-                      : () => controller.downloadImage(index),
-                  customBorder: const CircleBorder(),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: isDownloadingThis
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.download,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                  ),
-                ),
-              );
-            }),
-          ),
-
-          // Full screen tap
-          Positioned.fill(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _showFullScreen(context, image, index),
-                borderRadius: BorderRadius.circular(AppConstants.radius12),
-              ),
-            ),
+          const SizedBox(height: AppConstants.spacing8),
+          TextButton(
+            onPressed: retrying == null
+                ? () => ref
+                      .read(photoshootProvider.notifier)
+                      .retryFailedSlot(index)
+                : null,
+            child: isThis
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Retry'),
           ),
         ],
       ),
-    );
-  }
-
-  void _showFullScreen(BuildContext context, GeneratedImage image, int index) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Stack(
-          children: [
-            // Image
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: _buildImageWidget(
-                  AppUiTokens.of(context),
-                  image,
-                  BoxFit.contain,
-                ),
-              ),
-            ),
-
-            // Close button
-            Positioned(
-              top: 0,
-              right: 0,
-              child: IconButton(
-                tooltip: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close, color: Colors.white, size: 28),
-              ),
-            ),
-
-            // Download button
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    controller.downloadImage(index);
-                    Navigator.of(context).pop();
-                  },
-                  icon: const Icon(Icons.download),
-                  label: const Text('Download'),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUsageSummary(BuildContext context, AppUiTokens tokens) {
-    final usage = controller.usage.value;
-    if (usage == null) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacing16),
-      decoration: BoxDecoration(
-        color: tokens.cardColor,
-        border: Border(top: BorderSide(color: tokens.cardBorderColor)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              '${controller.generatedImages.length} images generated  •  ${usage.remaining} remaining today',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageWidget(
-    AppUiTokens tokens,
-    GeneratedImage image,
-    BoxFit fit,
-  ) {
-    final base64Data = image.imageBase64;
-    if (base64Data != null && base64Data.isNotEmpty) {
-      return Image.memory(
-        base64Decode(base64Data),
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) => _brokenImage(tokens),
-      );
-    }
-
-    final url = image.imageUrl;
-    if (url != null && url.isNotEmpty) {
-      return AppNetworkImage(
-        url,
-        fit: fit,
-        errorWidget: (context, error, stackTrace) => _brokenImage(tokens),
-      );
-    }
-
-    return _brokenImage(tokens);
-  }
-
-  Widget _brokenImage(AppUiTokens tokens) {
-    return Container(
-      color: tokens.cardColor,
-      child: Icon(Icons.broken_image, color: tokens.textMuted, size: 48),
     );
   }
 }
