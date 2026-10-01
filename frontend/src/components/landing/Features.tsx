@@ -85,7 +85,9 @@ export default function Features() {
             <li
               key={day.day}
               className={`paper-sheet w-[46vw] max-w-[220px] shrink-0 snap-start p-3 sm:w-auto sm:max-w-none ${
-                day.today ? 'ring-2 ring-paper-accent' : ''
+                // Same box-shadow layering as Pricing: ring-2 would replace
+                // the paper slab instead of joining it.
+                day.today ? 'paper-sheet-accent' : ''
               }`}
             >
               <p className="flex items-baseline justify-between gap-2">
