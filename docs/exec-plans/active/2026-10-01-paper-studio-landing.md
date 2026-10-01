@@ -57,7 +57,7 @@ closet grid, then one outfit. The 14 landing sections become 9.
 ```bash
 cd frontend && npx tsc && npx vite build && node scripts/prerender-meta.mjs && node scripts/prerender-html.mjs  # no IndexNow ping
 npm run lint && npm test
-cd .. && python3 scripts/check_theme_tokens.py && python scripts/check_architecture.py && python scripts/check_docs_structure.py
+cd .. && python3 scripts/check_theme_tokens.py && python3 scripts/check_architecture.py && python3 scripts/check_docs_structure.py
 ```
 
 ## Deferred debt

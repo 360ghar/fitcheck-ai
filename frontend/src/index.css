@@ -38,32 +38,34 @@
     U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Basteleur (Velvetyne, SIL OFL; public/fonts/Basteleur-OFL.txt): the paper
- * studio display face, shared with the mobile app (flutter/assets/fonts).
- * Latin subsets made with pyftsubset. Landing only.
+/* Paper Studio (Basteleur by Velvetyne, SIL OFL; public/fonts/Basteleur-OFL.txt):
+ * the paper studio display face, shared with the mobile app
+ * (flutter/assets/fonts). Latin subsets made with pyftsubset and renamed to
+ * "Paper Studio": the OFL reserves the "Basteleur" name, so the modified
+ * subsets must not ship under it. Landing only.
  *
  * The two Fallback faces are Georgia with metric overrides measured with
  * fontTools (average advance over the landing headlines; hhea ascent 950,
  * descent 250 at UPM 1000), so the swap does not move the H1 (the mobile LCP).
  */
 @font-face {
-  font-family: 'Basteleur';
+  font-family: 'Paper Studio';
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url('/fonts/basteleur-bold-latin.woff2') format('woff2');
+  src: url('/fonts/paper-studio-bold-latin.woff2') format('woff2');
 }
 
 @font-face {
-  font-family: 'Basteleur Moonlight';
+  font-family: 'Paper Studio Moonlight';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('/fonts/basteleur-moonlight-latin.woff2') format('woff2');
+  src: url('/fonts/paper-studio-moonlight-latin.woff2') format('woff2');
 }
 
 @font-face {
-  font-family: 'Basteleur Fallback';
+  font-family: 'Paper Studio Fallback';
   src: local('Georgia Bold'), local('Georgia-Bold');
   font-weight: 700;
   size-adjust: 112.3%;
@@ -73,7 +75,7 @@
 }
 
 @font-face {
-  font-family: 'Basteleur Moonlight Fallback';
+  font-family: 'Paper Studio Moonlight Fallback';
   src: local('Georgia'), local('Georgia-Regular');
   font-weight: 400;
   size-adjust: 121.2%;
@@ -964,18 +966,25 @@ a.text-primary {
     border-radius: 14px;
     box-shadow: 1.5px 3px 0 0 hsl(var(--s-slab));
   }
+  /* Highlighted sheet: the accent ring is layered into the same box-shadow,
+     so it never replaces the slab the way Tailwind's `ring-*` would. */
+  .paper-sheet-accent {
+    box-shadow:
+      1.5px 3px 0 0 hsl(var(--s-slab)),
+      0 0 0 2px hsl(var(--s-accent));
+  }
 
   /* Display type. Basteleur Bold is wide; tracking stays at 0 so the
      letters keep their air. */
   .paper-display {
-    font-family: 'Basteleur', 'Basteleur Fallback', Georgia, serif;
+    font-family: 'Paper Studio', 'Paper Studio Fallback', Georgia, serif;
     font-weight: 700;
     letter-spacing: 0;
     line-height: 1.04;
     text-wrap: balance;
   }
   .paper-head {
-    font-family: 'Basteleur Moonlight', 'Basteleur Moonlight Fallback', Georgia, serif;
+    font-family: 'Paper Studio Moonlight', 'Paper Studio Moonlight Fallback', Georgia, serif;
     font-weight: 400;
     letter-spacing: 0;
     line-height: 1.12;

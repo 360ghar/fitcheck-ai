@@ -217,11 +217,6 @@ const config: Config = {
         display: [
           'Manrope', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif',
         ],
-        // Paper studio display face (landing only). Fallback faces carry
-        // metric overrides so the H1 does not shift when Basteleur arrives.
-        paper: ['Basteleur', '"Basteleur Fallback"', 'Georgia', 'serif'],
-        'paper-head': ['"Basteleur Moonlight"', '"Basteleur Moonlight Fallback"', 'Georgia', 'serif'],
-        'paper-body': ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

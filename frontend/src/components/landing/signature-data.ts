@@ -45,8 +45,11 @@ export const SIGNATURE_ITEMS: SignatureItem[] = [
  * starts from the "start" values and settles on it.
  */
 export const STAGE = {
-  photo: { x: 0, y: 6.5, w: 36, h: 27 },
+  /* The default (end) photo frame; the start frame lives in CSS. */
   photoStart: { x: 24, y: 0.5, w: 52, h: 39 },
+  /* .sig-photo padding and the start-frame scale in index.css. */
+  photoPad: 0.45,
+  photoStartScale: 1.4444,
   grid: { x: 40, y: 4.5, cellW: 10.6, cellH: 13.5, gapX: 1.2, gapY: 1, cols: 3 },
   /* The cut-out sits in the top part of its cell; the label sits below. */
   cut: { padX: 0.9, padTop: 0.8, h: 9 },
@@ -62,14 +65,22 @@ export function cutoutStart(item: SignatureItem, index: number) {
   const cutW = g.cellW - cut.padX * 2
   const endCx = cellX + g.cellW / 2
   const endCy = cellY + cut.padTop + cut.h / 2
-  const startCx = p.x + (p.w * (item.box.x + item.box.w / 2)) / 100
-  const startCy = p.y + (p.h * (item.box.y + item.box.h / 2)) / 100
+  // The garment boxes are percentages of the bare photo; the img sits inside
+  // .sig-photo's padding, and the start frame scales the whole figure. Use
+  // the img box as seen at the start frame, or the cut-outs lift off target.
+  const inset = STAGE.photoPad * STAGE.photoStartScale
+  const imgBox = { x: p.x + inset, y: p.y + inset, w: p.w - inset * 2, h: p.h - inset * 2 }
+  const startCx = imgBox.x + (imgBox.w * (item.box.x + item.box.w / 2)) / 100
+  const startCy = imgBox.y + (imgBox.h * (item.box.y + item.box.h / 2)) / 100
   // object-fit: contain inside a cutW x cut.h box
   const fit = Math.min(cutW / item.width, cut.h / item.height)
   const drawnW = item.width * fit
   const drawnH = item.height * fit
   // min, so the lifted cut-out never pokes out past its garment in the photo
-  const scale = Math.min((p.w * item.box.w) / 100 / drawnW, (p.h * item.box.h) / 100 / drawnH)
+  const scale = Math.min(
+    (imgBox.w * item.box.w) / 100 / drawnW,
+    (imgBox.h * item.box.h) / 100 / drawnH,
+  )
   const round = (n: number) => Math.round(n * 100) / 100
   return { dx: round(startCx - endCx), dy: round(startCy - endCy), scale: round(scale) }
 }

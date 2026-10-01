@@ -40,6 +40,14 @@ const mobileLinks = [...primaryLinks, ...resourceLinks]
 
 const isHashLink = (href: string) => href.startsWith('/#')
 
+/*
+ * Resource-section active state: the dropdown groups pages, so any page in a
+ * section marks the whole section as current (every /guides/* post marks
+ * "Guides"). Other links match by prefix.
+ */
+const isResourceActive = (href: string, pathname: string) =>
+  href.startsWith('/guides') ? pathname.startsWith('/guides') : pathname.startsWith(href)
+
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const isAuthenticated = useIsAuthenticated()
@@ -69,7 +77,14 @@ export default function Navbar() {
   const renderNavLink = (link: (typeof mobileLinks)[number], mobile = false) => {
     // Paper nav: bare text on the stone strip. Hover is a tone step; the
     // current page reads through weight, never a dot or an underline.
-    const current = !isHashLink(link.href) && location.pathname.startsWith(link.href)
+    const current =
+      !isHashLink(link.href) &&
+      (resourceLinks.includes(link)
+        ? isResourceActive(link.href, location.pathname)
+        : location.pathname.startsWith(link.href))
+    // aria-current="page" means this exact page; section parents styled as
+    // active on descendant routes must not claim it.
+    const isPage = !isHashLink(link.href) && location.pathname === link.href
     const className = mobile
       ? `flex min-h-12 items-center paper-head text-2xl text-paper-text transition-colors hover:text-paper-accent ${current ? 'font-bold' : ''}`
       : `inline-flex min-h-11 items-center rounded-lg px-3 text-[15px] transition-colors hover:text-paper-text ${current ? 'font-semibold text-paper-text' : 'font-medium text-paper-text-2'}`
@@ -89,12 +104,16 @@ export default function Navbar() {
         to={link.href}
         onClick={() => setIsMobileMenuOpen(false)}
         className={className}
-        aria-current={current ? 'page' : undefined}
+        aria-current={isPage ? 'page' : undefined}
       >
         {link.name}
       </Link>
     )
   }
+
+  const isResourceSectionActive = resourceLinks.some((link) =>
+    isResourceActive(link.href, location.pathname),
+  )
 
   return (
     <nav
@@ -116,7 +135,11 @@ export default function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="h-11 gap-1.5 rounded-lg px-3 text-[15px] font-medium text-paper-text-2 hover:bg-transparent hover:text-paper-text data-[state=open]:text-paper-text"
+                  className={`h-11 gap-1.5 rounded-lg px-3 text-[15px] hover:bg-transparent hover:text-paper-text data-[state=open]:text-paper-text ${
+                    isResourceSectionActive
+                      ? 'font-semibold text-paper-text'
+                      : 'font-medium text-paper-text-2'
+                  }`}
                 >
                   Resources
                   <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -130,9 +153,18 @@ export default function Navbar() {
                   <DropdownMenuItem
                     key={link.name}
                     asChild
-                    className="rounded-lg px-3 py-2.5 text-[15px] text-paper-text-2 focus:bg-paper-tint focus:text-paper-text"
+                    className={`rounded-lg px-3 py-2.5 text-[15px] text-paper-text-2 focus:bg-paper-tint focus:text-paper-text ${
+                      isResourceActive(link.href, location.pathname)
+                        ? 'font-semibold text-paper-text'
+                        : ''
+                    }`}
                   >
-                    <Link to={link.href}>{link.name}</Link>
+                    <Link
+                      to={link.href}
+                      aria-current={location.pathname === link.href ? 'page' : undefined}
+                    >
+                      {link.name}
+                    </Link>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>

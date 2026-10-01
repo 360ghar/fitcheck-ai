@@ -218,8 +218,9 @@ display tiers, declared with `@font-face` in `src/index.css`. No serif in the ap
 
 **Exception, the public landing (2026-10-01):** the landing, Navbar and Footer use
 the paper studio type of the mobile app: **Basteleur** Bold for display and
-Basteleur Moonlight for section heads (Velvetyne, SIL OFL, self-hosted Latin subsets
-in `public/fonts/`, metric-matched Georgia fallbacks), and `system-ui` for body.
+Basteleur Moonlight for section heads (Velvetyne, SIL OFL; the self-hosted Latin
+subsets in `public/fonts/` are renamed "Paper Studio" because the OFL reserves
+the "Basteleur" name; metric-matched Georgia fallbacks), and `system-ui` for body.
 Figures (prices, limits, temperatures) stay in the body face with `tabular-nums`:
 Basteleur has a slashed zero and no `₹`. See §08 "Paper studio landing". Steep hierarchy: display drops straight to
 16px body with no intermediate display tier.

@@ -112,7 +112,9 @@ function PricingCard({
     <article
       className={cn(
         'paper-sheet flex h-full flex-col overflow-hidden',
-        highlighted && 'ring-2 ring-paper-accent'
+        // The ring must live in the same box-shadow as the paper slab:
+        // Tailwind's `ring-2` would replace `.paper-sheet`'s slab shadow.
+        highlighted && 'paper-sheet-accent'
       )}
     >
       <div className="px-6 pt-6">

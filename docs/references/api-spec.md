@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **247** operations across **219** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **248** operations across **220** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -950,6 +950,32 @@ Batch delete items (and best-effort remove embeddings/images).
 **Responses:**
 
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
+
+### POST /api/v1/items/batch-from-extraction
+
+Save a whole extraction review in one call.
+
+Each entry carries the client's ``temp_id`` plus a full ``ItemCreate``
+body — including ``images`` references to the pipeline's generated
+previews, which the save core promotes server-side (no client
+download/re-upload). Entries run sequentially and isolated: a per-item
+failure lands in ``failed`` with the entry's ``temp_id`` and the batch
+continues, so the client retries only the failed subset with the same
+``client_request_id`` values (idempotent replay, no duplicates).
+
+**Auth:** required — `Authorization: Bearer <jwt>`
+
+**Request body** (`application/json`, required):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `items` | array<`BatchSaveEntry`> | yes |  |
+| `job_id` | string (nullable) | no |  |
+
+**Responses:**
+
+- **201** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
 - **Errors:** 422 Unprocessable Entity
 
 ### GET /api/v1/items/by-category/{category}
@@ -6047,6 +6073,24 @@ Full job status response.
 | `status` | string | yes |  |
 | `total_images` | integer | yes |  |
 | `total_items` | integer | yes |  |
+
+### `BatchSaveEntry`
+
+One review piece in a batch save: client temp id + full create body.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `item` | `ItemCreate` | yes |  |
+| `temp_id` | string | yes |  |
+
+### `BatchSaveRequest`
+
+Save a whole extraction review in one call. ``job_id`` is telemetry only (lets operators tie a save burst to the extraction job that produced it). The 50-entry cap mirrors the extraction batch maximum (``MAX_UPLOAD_FILES``).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `items` | array<`BatchSaveEntry`> | yes |  |
+| `job_id` | string (nullable) | no |  |
 
 ### `BlogPostCreate`
 

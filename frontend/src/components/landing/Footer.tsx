@@ -71,7 +71,9 @@ export default function Footer() {
     'inline-flex min-h-[36px] items-center py-1 text-paper-text-2 transition-colors hover:text-paper-text'
 
   return (
-    <footer className="paper-landing paper-floor paper-section paper-tear overflow-hidden pt-16">
+    // No overflow-hidden: it would clip the torn top edge, which sits above
+    // the padding box (see `.paper-tear`).
+    <footer className="paper-landing paper-floor paper-section paper-tear pt-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-12">
           <div className="col-span-2 lg:col-span-4">

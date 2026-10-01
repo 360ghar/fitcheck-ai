@@ -97,7 +97,7 @@ export default function Features() {
                   <GeneratedImage
                     key={piece}
                     src={`/signature/${piece}.webp`}
-                    alt=""
+                    alt={SIZE[piece].name}
                     width={SIZE[piece].width}
                     height={SIZE[piece].height}
                     loading="lazy"
