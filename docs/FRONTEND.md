@@ -1,6 +1,6 @@
 # Frontend
 
-Last updated: 2026-09-25
+Last updated: 2026-10-01
 
 React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/CLAUDE.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
 

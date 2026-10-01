@@ -25,6 +25,9 @@ const config: Config = {
       //    full pattern).
       pressed: 'var(--shadow-pressed)',
       offset: 'var(--shadow-offset)',
+      // Paper studio slab (landing): a solid, tinted offset under a sheet.
+      // `--s-slab` comes from the section's .stock-* class.
+      slab: '1.5px 3px 0 0 hsl(var(--s-slab))',
     },
     borderRadius: {
       // Clay radius scale (clay-rebuild brief): 12px standard controls (md /
@@ -192,6 +195,20 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Paper studio (landing). The stock-* class on a section sets the
+        // --s-* vars, so `bg-paper-card` follows whatever stock it sits on.
+        paper: {
+          page: "hsl(var(--s-page) / <alpha-value>)",
+          card: "hsl(var(--s-card) / <alpha-value>)",
+          sunk: "hsl(var(--s-sunk) / <alpha-value>)",
+          tint: "hsl(var(--s-tint) / <alpha-value>)",
+          edge: "hsl(var(--s-edge) / <alpha-value>)",
+          slab: "hsl(var(--s-slab) / <alpha-value>)",
+          accent: "hsl(var(--s-accent) / <alpha-value>)",
+          text: "hsl(var(--paper-text) / <alpha-value>)",
+          "text-2": "hsl(var(--paper-text-2) / <alpha-value>)",
+          "text-3": "hsl(var(--paper-text-3) / <alpha-value>)",
+        },
       },
       fontFamily: {
         sans: [
@@ -200,6 +217,11 @@ const config: Config = {
         display: [
           'Manrope', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif',
         ],
+        // Paper studio display face (landing only). Fallback faces carry
+        // metric overrides so the H1 does not shift when Basteleur arrives.
+        paper: ['Basteleur', '"Basteleur Fallback"', 'Georgia', 'serif'],
+        'paper-head': ['"Basteleur Moonlight"', '"Basteleur Moonlight Fallback"', 'Georgia', 'serif'],
+        'paper-body': ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

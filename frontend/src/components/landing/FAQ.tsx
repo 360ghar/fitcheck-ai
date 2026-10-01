@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatedSection } from './AnimatedSection'
-import { SectionKicker } from './SectionKicker'
 import {
   Collapsible,
   CollapsibleContent,
@@ -26,7 +25,7 @@ export const LANDING_FAQS = [
   {
     question: 'How does AI wardrobe extraction work?',
     answer:
-      'Upload a photo of your clothes — individually or as a flat lay or hang. FitCheck identifies each item, extracts colors, categorizes it (tops, bottoms, shoes, and more), and adds style tags. Review the extracted details before saving. Multi-item photos and batch uploads are supported in the app.',
+      'Upload a photo of your clothes: single pieces, a flat lay, a hang or a pile. FitCheck identifies each item, extracts colors, categorizes it (tops, bottoms, shoes, and more), and adds style tags. Review the extracted details before saving. Multi-item photos and batch uploads are supported in the app.',
   },
   {
     question: 'Is FitCheck AI free?',
@@ -35,7 +34,7 @@ export const LANDING_FAQS = [
   {
     question: 'How does the first month of Pro free work?',
     answer:
-      'Every new account can claim its first month of Pro free — no credit card required. Sign up through the offer link (or enter the code at signup) and Pro is applied to your account. After the free month, the account returns to the Free plan unless you choose to upgrade, so nothing is charged automatically.',
+      'Every new account can claim its first month of Pro free. No credit card is required. Sign up through the offer link (or enter the code at signup) and Pro is applied to your account. After the free month, the account returns to the Free plan unless you choose to upgrade, so nothing is charged automatically.',
   },
   {
     question: 'How is FitCheck different from Acloset or Whering?',
@@ -45,7 +44,7 @@ export const LANDING_FAQS = [
   {
     question: 'Does virtual try-on use my real clothes?',
     answer:
-      `Yes. Try-on is built around pieces in your wardrobe or photos you provide, so you visualize combinations of clothes you actually own — not only brand catalog garments. Monthly generation limits apply per plan: ${PLAN_LIMITS.free.monthlyGenerations} on Free, ${PLAN_LIMITS.plus.monthlyGenerations} on Plus, ${PLAN_LIMITS.pro.monthlyGenerations.toLocaleString()} on Pro.`,
+      `Yes. Try-on is built around pieces in your wardrobe or photos you provide, so you visualize combinations of clothes you actually own, not only brand catalog garments. Monthly generation limits apply per plan: ${PLAN_LIMITS.free.monthlyGenerations} on Free, ${PLAN_LIMITS.plus.monthlyGenerations} on Plus, ${PLAN_LIMITS.pro.monthlyGenerations.toLocaleString()} on Pro.`,
   },
   {
     question: 'What can I use the AI photoshoot for?',
@@ -84,46 +83,43 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      {/* Clay accordion item: a pressed card rather than a hairline row.
-          `.card-interactive` rests shadow-pressed and rises into the offset
-          shadow on hover AND on focus-within, so keyboard users get the same
-          physical feedback as pointer users. */}
-      <div className="card-interactive rounded-2xl border border-border bg-card">
+      {/* Paper accordion item: a sheet on its slab. */}
+      <div className="paper-sheet">
         <CollapsibleTrigger className="group flex min-h-14 w-full items-center justify-between rounded-2xl px-5 py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <span className="pr-4 text-[15px] font-medium text-foreground md:text-base">
+          <span className="pr-4 text-[15px] font-semibold text-paper-text md:text-base">
             {question}
           </span>
           <ChevronDown
             className={cn(
-              'h-5 w-5 shrink-0 text-muted-foreground transition-transform',
-              isOpen && 'rotate-180 text-primary'
+              'h-5 w-5 shrink-0 text-paper-text-3 transition-transform',
+              isOpen && 'rotate-180 text-paper-accent'
             )}
           />
         </CollapsibleTrigger>
         {/* Height animation rides on Radix's --radix-collapsible-content-height
             var via the accordion-down/up keyframes in tailwind.config.ts. */}
         <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-          <div className="space-y-2 px-5 pb-5 pr-8 leading-relaxed text-body [overflow-wrap:anywhere]">
+          <div className="space-y-2 px-5 pb-5 pr-8 text-[15px] leading-relaxed text-paper-text-2 [overflow-wrap:anywhere]">
             <p>{answer}</p>
             {question.includes('Acloset') && (
               <p className="text-sm">
                 <Link
                   to="/compare/fitcheck-vs-acloset"
-                  className="text-primary hover:text-primary-pressed"
+                  className="font-semibold text-paper-accent hover:text-paper-text"
                 >
                   FitCheck vs Acloset
                 </Link>
                 {' · '}
                 <Link
                   to="/compare/fitcheck-vs-whering"
-                  className="text-primary hover:text-primary-pressed"
+                  className="font-semibold text-paper-accent hover:text-paper-text"
                 >
                   FitCheck vs Whering
                 </Link>
                 {' · '}
                 <Link
                   to="/best/virtual-closet-apps"
-                  className="text-primary hover:text-primary-pressed"
+                  className="font-semibold text-paper-accent hover:text-paper-text"
                 >
                   Best virtual closet apps
                 </Link>
@@ -133,21 +129,21 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
               <p className="text-sm">
                 <Link
                   to="/for/busy-professionals"
-                  className="text-primary hover:text-primary-pressed"
+                  className="font-semibold text-paper-accent hover:text-paper-text"
                 >
                   Professionals
                 </Link>
                 {' · '}
                 <Link
                   to="/for/content-creators"
-                  className="text-primary hover:text-primary-pressed"
+                  className="font-semibold text-paper-accent hover:text-paper-text"
                 >
                   Creators
                 </Link>
                 {' · '}
                 <Link
                   to="/for/festive-and-wedding-outfits"
-                  className="text-primary hover:text-primary-pressed"
+                  className="font-semibold text-paper-accent hover:text-paper-text"
                 >
                   Festive & wedding
                 </Link>
@@ -157,7 +153,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
               <p className="text-sm">
                 <Link
                   to="/privacy"
-                  className="text-primary hover:text-primary-pressed"
+                  className="font-semibold text-paper-accent hover:text-paper-text"
                 >
                   Privacy Policy
                 </Link>
@@ -172,20 +168,23 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 export default function FAQ() {
   return (
-    <section id="faq" aria-labelledby="faq-heading" className="scroll-mt-16 bg-background py-20 md:py-28">
+    <section
+      id="faq"
+      aria-labelledby="faq-heading"
+      className="paper-section paper-tear stock-stone pb-24 pt-20 md:pb-32 md:pt-28"
+    >
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8">
         <AnimatedSection className="reveal min-w-0 lg:col-span-4">
           <div className="lg:sticky lg:top-24">
-            <SectionKicker tone="amber">FAQ</SectionKicker>
-            <h2 id="faq-heading" className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
-              Clear answers before you upload
+            <h2 id="faq-heading" className="paper-display text-[clamp(2.2rem,3.6vw,3.25rem)] text-paper-text">
+              Before you upload.
             </h2>
-            <p className="mt-4 text-body">
-              Product, privacy, billing, and platform details in one place.
+            <p className="mt-4 text-[15px] leading-relaxed text-paper-text-2">
+              Product, privacy, billing and platform answers in one place.
             </p>
-            <p className="mt-6 text-sm text-muted-foreground">
+            <p className="mt-6 text-sm text-paper-text-3">
               Need more detail?{' '}
-              <Link to="/faq" className="text-primary hover:text-primary-pressed">
+              <Link to="/faq" className="font-semibold text-paper-accent hover:text-paper-text">
                 Open the full FAQ
               </Link>
             </p>

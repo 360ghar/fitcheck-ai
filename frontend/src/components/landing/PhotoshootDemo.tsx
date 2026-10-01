@@ -15,6 +15,7 @@ import { Camera, Loader2, Download, AlertCircle, CheckCircle2, ArrowRight, Alert
 import { Button } from '@/components/ui/button';
 import { cn, downloadBlob } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+import { GeneratedImage } from '@/components/ui/generated-image'
 import { EditorialPanel } from './EditorialPanel';
 import { LoginPromptModal } from './LoginPromptModal';
 import {
@@ -285,36 +286,54 @@ export function PhotoshootDemo() {
     <EditorialPanel className="p-6 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
-          <Camera className="h-5 w-5 text-primary" />
+        <div className="flex shrink-0 items-center">
+          <Camera className="h-5 w-5 text-paper-accent" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold tracking-tight text-foreground">AI photoshoot</h3>
-          <p className="text-sm text-muted-foreground">2 free images</p>
+          <h3 className="text-lg font-semibold tracking-tight text-paper-text">AI photoshoot</h3>
+          <p className="text-sm text-paper-text-3">2 free images</p>
         </div>
       </div>
 
       <div className="flex-1 min-h-[300px]">
         {/* Idle State - No Photo */}
         {state === 'idle' && !photo && (
+          <div className="flex h-full flex-col gap-3">
+          <figure className="flex shrink-0 items-center gap-3 rounded-xl bg-paper-sunk/60 p-3">
+            <GeneratedImage
+              src="/generated/photoshoot-studio-3x4-640.webp"
+              alt="Example result: a studio-style portrait in a navy blazer"
+              width={640}
+              height={853}
+              loading="lazy"
+              decoding="async"
+              className="h-20 w-16 shrink-0 rounded-lg object-cover object-top"
+              fallback="hide-figure"
+            />
+            <figcaption className="text-xs leading-relaxed text-paper-text-3">
+              <span className="font-semibold text-paper-text">Example result.</span> One selfie in,
+              studio-style portraits out. AI-generated.
+            </figcaption>
+          </figure>
           <div
             {...getRootProps()}
             className={cn(
-              'flex h-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center',
-              'transition-[border-color,background-color] duration-200 hover:border-primary/50 hover:bg-secondary/70',
-              isDragActive && 'border-primary bg-secondary/70'
+              'flex min-h-0 flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-paper-edge bg-paper-sunk/60 p-8 text-center',
+              'transition-[border-color,background-color] duration-200 hover:border-paper-accent/60 hover:bg-paper-tint',
+              isDragActive && 'border-paper-accent bg-paper-tint'
             )}
           >
             <input {...getInputProps({ 'aria-label': 'Upload your photo' })} />
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-pressed">
-              <Camera className={cn('h-5 w-5 text-primary transition-transform duration-200', isDragActive && 'scale-110')} />
+            <div className="mb-3 flex items-center justify-center">
+              <Camera className={cn('h-5 w-5 text-paper-accent transition-transform duration-200', isDragActive && 'scale-110')} />
             </div>
-            <p className="text-body font-medium mb-1">
+            <p className="text-paper-text-2 font-medium mb-1">
               {isDragActive ? 'Drop your photo here' : 'Upload your photo'}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-paper-text-3">
               Clear face photo for best results
             </p>
+          </div>
           </div>
         )}
 
@@ -344,7 +363,7 @@ export function PhotoshootDemo() {
 
             {/* Generate Button - centered in remaining space */}
             <div className="flex-1 flex flex-col items-center justify-center">
-              <p className="text-body mb-4 text-center">
+              <p className="text-paper-text-2 mb-4 text-center">
                 Ready to generate 2 AI-styled photos
               </p>
               <Button onClick={handleGenerate}>Generate 2 Images</Button>
@@ -352,7 +371,7 @@ export function PhotoshootDemo() {
           </div>
         )}
 
-      {/* Processing State — live progress + partial images */}
+      {/* Processing State: live progress + partial images */}
       {state === 'processing' && (
         <div className="h-full flex flex-col items-center justify-center">
           {photoPreview && (
@@ -362,11 +381,11 @@ export function PhotoshootDemo() {
               className="max-h-40 rounded-lg mb-4 object-contain"
             />
           )}
-          <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
-          <p className="text-body">
+          <Loader2 className="w-8 h-8 text-paper-accent animate-spin mb-2" />
+          <p className="text-paper-text-2">
             {partialImages.length > 0 ? `${partialImages.length}/2 images ready…` : 'Creating your AI photos...'}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-paper-text-3 mt-1">
             Generation time can vary. You can keep exploring while this runs.
           </p>
 
@@ -377,7 +396,7 @@ export function PhotoshootDemo() {
                   key={img.id}
                   src={getImageSrc(img)}
                   alt="Generated preview"
-                  className="aspect-[3/4] w-full rounded-lg object-cover shadow-pressed"
+                  className="aspect-[3/4] w-full rounded-lg object-cover shadow-slab"
                 />
               ))}
             </div>
@@ -409,7 +428,7 @@ export function PhotoshootDemo() {
                 <img
                   src={getImageSrc(img)}
                   alt={`Generated ${idx + 1}`}
-                  className="aspect-[3/4] w-full rounded-lg object-cover shadow-pressed"
+                  className="aspect-[3/4] w-full rounded-lg object-cover shadow-slab"
                 />
                 <button
                   type="button"
@@ -428,7 +447,7 @@ export function PhotoshootDemo() {
                 className="flex aspect-[3/4] flex-col justify-between rounded-lg border border-dashed border-tint-amber bg-tint-amber-pale/60 p-3"
               >
                 <div>
-                  <div className="mb-2 inline-flex rounded-full border border-soft bg-card px-2 py-1 text-xs font-medium text-tint-amber">
+                  <div className="mb-2 inline-flex rounded-full border border-paper-edge bg-paper-card px-2 py-1 text-xs font-medium text-tint-amber">
                     Failed #{failedIndex + 1}
                   </div>
                   <p className="text-xs text-tint-amber">Retry to generate this slot.</p>
@@ -448,7 +467,7 @@ export function PhotoshootDemo() {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={handleReset}>
+            <Button variant="ghost" size="sm" onClick={handleReset}>
               Try Another
             </Button>
             <Button

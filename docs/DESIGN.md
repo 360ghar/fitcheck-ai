@@ -1,7 +1,7 @@
 # Design
 
 Status: draft  
-Last updated: 2026-09-25
+Last updated: 2026-10-01
 
 Visual and interaction direction for FitCheck web (and guidance for mobile parity).
 
@@ -10,6 +10,10 @@ Visual and interaction direction for FitCheck web (and guidance for mobile parit
 FitCheck should feel like a **practical wardrobe studio**: calm, image-forward, fast to scan a closet and commit an outfit. Not a generic SaaS marketing template and not a noisy social feed.
 
 ## Visual direction: the clay system (2026-09-13)
+
+> **Landing exception (2026-10-01):** the public landing, Navbar and Footer now use the
+> mobile paper-cut system (Basteleur, paper stocks, torn edges). See `frontend/DESIGN.md`
+> §08 "Paper studio landing". Everything below still applies to the logged-in web app.
 
 The web app and landing page share a clay.com-grade "tactile" language, specced
 in `docs/exec-plans/active/clay-rebuild.md` and tokenized in

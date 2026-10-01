@@ -57,7 +57,7 @@ describe('enterprise landing navigation', () => {
 })
 
 describe('enterprise landing structure', () => {
-  it('retains required anchors, one H1, and the hero-machine LCP hint', () => {
+  it('retains required anchors, one H1, and the signature LCP hint', () => {
     const { container } = render(
       <MemoryRouter>
         <LandingPage />
@@ -82,16 +82,35 @@ describe('enterprise landing structure', () => {
       expect(document.getElementById(id), `missing #${id}`).not.toBeNull()
     }
 
-    // The clay rebuild made the hero illustration-led: the wardrobe machine
-    // is the LCP, not the flat-lay proof photo.
-    const lcpImage = screen.getByAltText(
-      'Claymation wardrobe machine on rolling green hills, holding a rail of tiny sweaters under a paper-cloud sky'
-    )
-    expect(lcpImage).toHaveAttribute('src', '/generated/hero-machine-640.webp')
+    // The paper-studio hero is the signature: the pile photo is the LCP.
+    // scripts/prerender-html.mjs preloads the same src/srcset/sizes.
+    const lcpImage = screen.getByAltText(/A phone photo of six clothes on a bed/)
+    expect(lcpImage).toHaveAttribute('src', '/signature/pile-800.webp')
     expect(lcpImage).toHaveAttribute('fetchpriority', 'high')
-    expect(lcpImage).toHaveAttribute(
-      'sizes',
-      '(min-width: 1280px) 1216px, calc(100vw - 32px)'
+    expect(lcpImage).toHaveAttribute('sizes', '(min-width: 768px) 640px, calc(100vw - 32px)')
+    expect(document.querySelectorAll('[fetchpriority="high"]')).toHaveLength(1)
+  })
+
+  it('renders the signature end frame by default, with nothing hidden by opacity', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <LandingPage />
+      </MemoryRouter>
     )
+
+    // Default render = the finished frame: six cut-outs with their labels
+    // and the outfit, all in the DOM before any scroll animation runs.
+    const cells = container.querySelectorAll('.sig-cell')
+    expect(cells).toHaveLength(6)
+    for (const cell of cells) {
+      expect(cell.querySelector('img')?.getAttribute('src')).toMatch(/^\/signature\/.+\.webp$/)
+      expect(cell.querySelector('.sig-label')?.textContent?.trim()).not.toBe('')
+    }
+    expect(container.querySelector('.sig-outfit img')).not.toBeNull()
+
+    // Content is visible by default: no inline opacity: 0 anywhere.
+    for (const el of container.querySelectorAll<HTMLElement>('[style]')) {
+      expect(el.style.opacity, el.outerHTML.slice(0, 80)).not.toBe('0')
+    }
   })
 })

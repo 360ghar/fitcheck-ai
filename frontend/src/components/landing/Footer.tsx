@@ -44,11 +44,10 @@ const footerLinks = {
 }
 
 /**
- * Page close — warm cream, per the clay rebuild's revocation of the dark
- * stone-950 footer. The tinted room (`bg-surface-room`, the deeper cream)
- * layers a rounded top over the canvas so the page ends like a stamped
- * clay slab, not a dark slab. Every href, the router-aware hash navigation,
- * and the trackLandingCta calls are unchanged from the previous footer.
+ * Page close: the deep moss floor, torn along the top like every sheet above
+ * it. Brand and contact on the left, link groups on the content grid, and an
+ * oversized FitCheck wordmark anchored flush to the bottom edge. Every href,
+ * the router-aware hash navigation and the trackLandingCta calls are kept.
  */
 export default function Footer() {
   const location = useLocation()
@@ -69,23 +68,23 @@ export default function Footer() {
   }
 
   const linkClass =
-    'inline-flex min-h-[36px] items-center py-1.5 text-muted-foreground transition-colors hover:text-primary'
+    'inline-flex min-h-[36px] items-center py-1 text-paper-text-2 transition-colors hover:text-paper-text'
 
   return (
-    <footer className="rounded-t-[2.5rem] bg-surface-room pb-8 pt-14 text-body shadow-pressed">
+    <footer className="paper-landing paper-floor paper-section paper-tear overflow-hidden pt-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="col-span-2 lg:col-span-2">
-            <Link to="/" className="mb-4 flex items-center gap-2.5">
-              <Logo markSize={36} wordmarkClassName="text-lg" />
+        <div className="grid grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-12">
+          <div className="col-span-2 lg:col-span-4">
+            <Link to="/" className="mb-4 inline-flex items-center gap-2.5 rounded-lg">
+              <Logo markSize={36} wordmarkClassName="text-lg text-paper-text [&_span]:text-paper-text-2" />
             </Link>
-            <p className="max-w-xs text-sm leading-relaxed">
-              Photograph your clothes. Get outfits that fit the day. A quieter way to use what you own.
+            <p className="max-w-xs text-[15px] leading-relaxed text-paper-text-2">
+              Photograph your clothes. Get outfits that fit the day.
             </p>
-            <div className="mt-6 space-y-2 text-sm">
+            <div className="mt-5 space-y-1 text-sm text-paper-text-2">
               <a
                 href="mailto:info@fitcheckaiapp.com"
-                className="flex min-h-[36px] items-center gap-2 py-1.5 transition-colors hover:text-primary"
+                className="flex min-h-[36px] items-center gap-2 py-1 transition-colors hover:text-paper-text"
               >
                 <Mail className="h-4 w-4" aria-hidden="true" />
                 <span>info@fitcheckaiapp.com</span>
@@ -94,7 +93,7 @@ export default function Footer() {
                 href="https://wa.me/919310833204"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex min-h-[36px] items-center gap-2 py-1.5 transition-colors hover:text-primary"
+                className="flex min-h-[36px] items-center gap-2 py-1 transition-colors hover:text-paper-text"
               >
                 <Phone className="h-4 w-4" aria-hidden="true" />
                 <span>+91 9310833204</span>
@@ -103,9 +102,9 @@ export default function Footer() {
           </div>
 
           {Object.entries(footerLinks).map(([category, links]) => (
-            <div key={category} className="border-t border-border pt-5">
-              <h3 className="mb-4 text-sm font-semibold text-foreground">{category}</h3>
-              <ul className="space-y-2.5 text-sm">
+            <div key={category} className="min-w-0 lg:col-span-2">
+              <h3 className="paper-head mb-3 text-xl text-paper-text">{category}</h3>
+              <ul className="space-y-0.5 text-sm">
                 {links.map((link) => (
                   <li key={link.name}>
                     {link.href.startsWith('/#') ? (
@@ -138,12 +137,16 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="flex flex-col items-start justify-between gap-3 border-t border-border pt-6 md:flex-row md:items-center">
-          <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} FitCheck AI. All rights reserved.
-          </p>
-        </div>
+        <p className="mt-12 text-xs text-paper-text-2">
+          &copy; {new Date().getFullYear()} FitCheck AI. All rights reserved.
+        </p>
       </div>
+      {/* The signature wordmark: whole on top and both sides, set on the
+          baseline at the floor's bottom edge. Decorative; the Logo above is
+          the accessible brand mark. */}
+      <p aria-hidden="true" className="footer-wordmark paper-display select-none">
+        FitCheck
+      </p>
     </footer>
   )
 }

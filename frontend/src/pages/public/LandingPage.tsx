@@ -1,15 +1,10 @@
 import Hero from '@/components/landing/Hero'
-import ProofBar from '@/components/landing/ProofBar'
-import DemoStrip from '@/components/landing/DemoStrip'
-import TrustBar from '@/components/landing/TrustBar'
 import DemoSection from '@/components/landing/DemoSection'
 import Features from '@/components/landing/Features'
-import HowItWorks from '@/components/landing/HowItWorks'
 import PhotoshootShowcase from '@/components/landing/PhotoshootShowcase'
 import WhoItsFor from '@/components/landing/WhoItsFor'
 import GuidesStrip from '@/components/landing/GuidesStrip'
 import Pricing from '@/components/landing/Pricing'
-import ProofBand from '@/components/landing/ProofBand'
 import FAQ, { LANDING_FAQS } from '@/components/landing/FAQ'
 import CTASection from '@/components/landing/CTASection'
 import SEO from '@/components/seo/SEO'
@@ -23,17 +18,17 @@ import {
 const HOW_TO_STEPS = [
   {
     name: 'Photograph',
-    text: 'Snap singles or full hangs of clothes you own. FitCheck reads each image and prepares items for cataloging.',
+    text: 'Photograph a pile, a hang, or single pieces you own. FitCheck finds every garment in the photo.',
     url: `${SEO_CONFIG.siteUrl}/#step-photograph`,
   },
   {
     name: 'Catalog',
-    text: 'AI tags colors, categories, and styles so your closet becomes searchable without manual data entry.',
+    text: 'Each piece is cut out and tagged with its category, colors, and material. You review it before it saves.',
     url: `${SEO_CONFIG.siteUrl}/#step-catalog`,
   },
   {
     name: 'Wear',
-    text: 'Get recommendations, try looks on, plan the week, and generate photoshoot-style images from your wardrobe.',
+    text: 'Get outfits from what you own, matched to the weather and your plans, and preview them before you wear them.',
     url: `${SEO_CONFIG.siteUrl}/#step-wear`,
   },
 ]
@@ -81,7 +76,7 @@ export default function LandingPage() {
   // after client hydration.
 
   return (
-    <>
+    <div className="paper-landing">
       <SEO
         title={PAGE_SEO.landing.title}
         description={PAGE_SEO.landing.description}
@@ -90,19 +85,14 @@ export default function LandingPage() {
         jsonLd={[faqSchema, howToSchema, featureListSchema]}
       />
       <Hero />
-      <ProofBar />
-      <DemoStrip />
-      <TrustBar />
-      <DemoSection />
       <Features />
-      <HowItWorks />
       <PhotoshootShowcase />
+      <DemoSection />
       <WhoItsFor />
-      <GuidesStrip />
       <Pricing />
-      <ProofBand />
+      <GuidesStrip />
       <FAQ />
       <CTASection />
-    </>
+    </div>
   )
 }

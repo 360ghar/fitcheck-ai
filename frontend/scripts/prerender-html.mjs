@@ -385,7 +385,16 @@ async function main() {
       // a mismatch makes the browser fetch a different tier than the preload,
       // wasting it and doubling the LCP request.
       headInject.push(
-        '<link rel="preload" as="image" href="/landing/flatlay-640.webp" imagesrcset="/landing/flatlay-640.webp 640w, /landing/flatlay.webp 1024w" imagesizes="(min-width: 1024px) 42vw, calc(100vw - 32px)" fetchpriority="high" />'
+        '<link rel="preload" as="image" href="/signature/pile-800.webp" imagesrcset="/signature/pile-800.webp 800w, /signature/pile-1200.webp 1200w, /signature/pile-1600.webp 1600w" imagesizes="(min-width: 768px) 640px, calc(100vw - 32px)" fetchpriority="high" />',
+        // The H1 (the mobile LCP) is set in Basteleur Bold on this page only.
+        '<link rel="preload" href="/fonts/basteleur-bold-latin.woff2" as="font" type="font/woff2" crossorigin />'
+      )
+      // The paper landing sets no text in Inter or Manrope (body is system-ui,
+      // display is Basteleur), so their global preloads would only compete
+      // with the LCP image here. Other routes keep them.
+      out = out.replace(
+        /\s*<link rel="preload" href="\/fonts\/(?:inter|manrope)-latin-var\.woff2"[^>]*>/g,
+        ''
       )
     }
     // The blog index's JS chunk graph is only discovered after the entry

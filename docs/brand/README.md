@@ -1,7 +1,7 @@
 # Brand mark
 
 Status: active  
-Last updated: 2026-09-25
+Last updated: 2026-10-01
 
 FitCheck AI uses Facet F: a jade folded stem and top arm, with a mint middle
 arm. The user selected concept 03. `facet-f-reference.png` preserves that
