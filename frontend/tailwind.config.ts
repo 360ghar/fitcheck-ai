@@ -25,6 +25,9 @@ const config: Config = {
       //    full pattern).
       pressed: 'var(--shadow-pressed)',
       offset: 'var(--shadow-offset)',
+      // Paper studio slab (landing): a solid, tinted offset under a sheet.
+      // `--s-slab` comes from the section's .stock-* class.
+      slab: '1.5px 3px 0 0 hsl(var(--s-slab))',
     },
     borderRadius: {
       // Clay radius scale (clay-rebuild brief): 12px standard controls (md /
@@ -191,6 +194,20 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        // Paper studio (landing). The stock-* class on a section sets the
+        // --s-* vars, so `bg-paper-card` follows whatever stock it sits on.
+        paper: {
+          page: "hsl(var(--s-page) / <alpha-value>)",
+          card: "hsl(var(--s-card) / <alpha-value>)",
+          sunk: "hsl(var(--s-sunk) / <alpha-value>)",
+          tint: "hsl(var(--s-tint) / <alpha-value>)",
+          edge: "hsl(var(--s-edge) / <alpha-value>)",
+          slab: "hsl(var(--s-slab) / <alpha-value>)",
+          accent: "hsl(var(--s-accent) / <alpha-value>)",
+          text: "hsl(var(--paper-text) / <alpha-value>)",
+          "text-2": "hsl(var(--paper-text-2) / <alpha-value>)",
+          "text-3": "hsl(var(--paper-text-3) / <alpha-value>)",
         },
       },
       fontFamily: {

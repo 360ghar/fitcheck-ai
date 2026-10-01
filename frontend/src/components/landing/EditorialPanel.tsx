@@ -5,12 +5,11 @@ interface EditorialPanelProps {
   className?: string
 }
 
-/** Pressed-clay panel for interactive landing demos (clay-rebuild "Depth"):
- *  `landing-panel` supplies the 24px card radius + oat hairline; the resting
- *  `shadow-pressed` stack stamps the demo card into the page. */
+/** Paper sheet for the interactive landing demos: the stock's card colour on
+ *  its slab (see `.paper-sheet` in index.css). */
 export function EditorialPanel({ children, className }: EditorialPanelProps) {
   return (
-    <div className={cn('landing-panel shadow-pressed', className)}>
+    <div className={cn('paper-sheet', className)}>
       {children}
     </div>
   )

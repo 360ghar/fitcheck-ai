@@ -113,14 +113,14 @@ export function TryOnDemo() {
   return (
     <EditorialPanel className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
-          <Wand2 className="h-5 w-5 text-primary" />
+        <div className="flex shrink-0 items-center">
+          <Wand2 className="h-5 w-5 text-paper-accent" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold tracking-tight text-foreground">
+          <h3 className="text-lg font-semibold tracking-tight text-paper-text">
             Virtual try-on
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-paper-text-3">
             See yourself in any outfit
           </p>
         </div>
@@ -130,39 +130,40 @@ export function TryOnDemo() {
         {/* Step 1: Upload Person Photo */}
         {state === 'person' && (
           <div className="flex h-full flex-col gap-3">
-            <div
-              {...personDropzone.getRootProps()}
-              className={cn(
-                'flex min-h-0 flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center',
-                'transition-[border-color,background-color] duration-200 hover:border-primary/50 hover:bg-secondary/70',
-                personDropzone.isDragActive && 'border-primary bg-secondary/70'
-              )}
-            >
-              <input {...personDropzone.getInputProps({ 'aria-label': 'Upload your photo' })} />
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-pressed">
-                <User className={cn('h-5 w-5 text-primary transition-transform duration-200', personDropzone.isDragActive && 'scale-110')} />
-              </div>
-              <p className="text-body font-medium mb-1">
-                Step 1: Upload your photo
-              </p>
-              <p className="text-sm text-muted-foreground">
-                A clear full-body or half-body photo works best
-              </p>
-            </div>
-            <figure className="flex shrink-0 items-center gap-3 rounded-xl border border-border bg-secondary/40 p-3">
+            <figure className="flex shrink-0 items-center gap-3 rounded-xl bg-paper-sunk/60 p-3">
               <GeneratedImage
                 src="/generated/demo-beforeafter-base-4x3-640.webp"
                 alt=""
                 aria-hidden="true"
-                className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                className="h-20 w-16 shrink-0 rounded-lg object-cover"
                 loading="lazy"
                 fallback="hide-figure"
               />
-              <figcaption className="text-xs leading-relaxed text-muted-foreground">
-                <span className="font-medium text-foreground">Demo input photo.</span>{' '}
-                Example of a photo you can upload — your result is generated, never claimed here.
+              <figcaption className="text-xs leading-relaxed text-paper-text-3">
+                <span className="font-semibold text-paper-text">Example input.</span>{' '}
+                A clear full-body photo like this works best. Your result is generated from your own
+                photo.
               </figcaption>
             </figure>
+            <div
+              {...personDropzone.getRootProps()}
+              className={cn(
+                'flex min-h-0 flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-paper-edge bg-paper-sunk/60 p-8 text-center',
+                'transition-[border-color,background-color] duration-200 hover:border-paper-accent/60 hover:bg-paper-tint',
+                personDropzone.isDragActive && 'border-paper-accent bg-paper-tint'
+              )}
+            >
+              <input {...personDropzone.getInputProps({ 'aria-label': 'Upload your photo' })} />
+              <div className="mb-3 flex items-center justify-center">
+                <User className={cn('h-5 w-5 text-paper-accent transition-transform duration-200', personDropzone.isDragActive && 'scale-110')} />
+              </div>
+              <p className="text-paper-text-2 font-medium mb-1">
+                Step 1: Upload your photo
+              </p>
+              <p className="text-sm text-paper-text-3">
+                A clear full-body or half-body photo works best
+              </p>
+            </div>
           </div>
         )}
 
@@ -194,19 +195,19 @@ export function TryOnDemo() {
             <div
               {...outfitDropzone.getRootProps()}
               className={cn(
-                'flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center',
-                'transition-[border-color,background-color] duration-200 hover:border-primary/50 hover:bg-secondary/70',
-                outfitDropzone.isDragActive && 'border-primary bg-secondary/70'
+                'flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-paper-edge bg-paper-sunk/60 p-8 text-center',
+                'transition-[border-color,background-color] duration-200 hover:border-paper-accent/60 hover:bg-paper-tint',
+                outfitDropzone.isDragActive && 'border-paper-accent bg-paper-tint'
               )}
             >
               <input {...outfitDropzone.getInputProps({ 'aria-label': 'Upload an outfit to try on' })} />
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-pressed">
-                <Shirt className={cn('h-5 w-5 text-primary transition-transform duration-200', outfitDropzone.isDragActive && 'scale-110')} />
+              <div className="mb-3 flex items-center justify-center">
+                <Shirt className={cn('h-5 w-5 text-paper-accent transition-transform duration-200', outfitDropzone.isDragActive && 'scale-110')} />
               </div>
-              <p className="text-body font-medium mb-1">
+              <p className="text-paper-text-2 font-medium mb-1">
                 Step 2: Upload outfit to try on
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-paper-text-3">
                 Drop a clothing image or outfit photo
               </p>
             </div>
@@ -221,23 +222,23 @@ export function TryOnDemo() {
                 <img
                   src={personPreview}
                   alt="You"
-                  className="h-20 w-20 rounded-lg object-cover shadow-pressed"
+                  className="h-20 w-20 rounded-lg object-cover shadow-slab"
                 />
               )}
-              <span className="self-center text-2xl text-muted-foreground">+</span>
+              <span className="self-center text-2xl text-paper-text-3">+</span>
               {outfitPreview && (
                 <img
                   src={outfitPreview}
                   alt="Outfit"
-                  className="h-20 w-20 rounded-lg object-cover shadow-pressed"
+                  className="h-20 w-20 rounded-lg object-cover shadow-slab"
                 />
               )}
             </div>
-            <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
-            <p className="text-body">
+            <Loader2 className="w-8 h-8 text-paper-accent animate-spin mb-2" />
+            <p className="text-paper-text-2">
               Creating your look...
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-paper-text-3 mt-1">
               Generation time can vary. You can keep exploring while this runs.
             </p>
           </div>
@@ -250,12 +251,12 @@ export function TryOnDemo() {
               <img
                 src={`data:image/png;base64,${result.image_base64}`}
                 alt="Try-on result"
-                className="max-h-64 rounded-xl object-contain shadow-pressed"
+                className="max-h-64 rounded-xl object-contain shadow-slab"
               />
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={handleReset}>
+              <Button variant="ghost" size="sm" onClick={handleReset}>
                 Try Another
               </Button>
               <Button

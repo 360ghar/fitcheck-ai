@@ -1,7 +1,7 @@
 # Design
 
 Status: draft  
-Last updated: 2026-09-25
+Last updated: 2026-10-01
 
 Visual and interaction direction for FitCheck web (and guidance for mobile parity).
 
@@ -11,9 +11,14 @@ FitCheck should feel like a **practical wardrobe studio**: calm, image-forward, 
 
 ## Visual direction: the clay system (2026-09-13)
 
-The web app and landing page share a clay.com-grade "tactile" language, specced
+> **Landing exception (2026-10-01):** the public landing, Navbar and Footer now use the
+> mobile paper-cut system (Basteleur, paper stocks, torn edges). See `frontend/DESIGN.md`
+> §08 "Paper studio landing". Everything below still applies to the logged-in web app.
+
+The **logged-in web app** uses a clay.com-grade "tactile" language, specced
 in `docs/exec-plans/active/clay-rebuild.md` and tokenized in
-`frontend/src/index.css` + `frontend/tailwind.config.ts`:
+`frontend/src/index.css` + `frontend/tailwind.config.ts` (the public landing
+now uses the paper system above; the two share tokens, not the clay look):
 
 - **Color:** warm cream canvas (`40 33% 98%`), pure-white raised cards, a
   deeper-cream section tint (`bg-surface-room`, max one tinted room per

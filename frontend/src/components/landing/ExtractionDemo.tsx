@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { trackLandingCta } from '@/lib/analytics'
+import { SIGNATURE_ITEMS } from './signature-data'
 import { EditorialPanel } from './EditorialPanel'
 import { LoginPromptModal } from './LoginPromptModal'
 import {
@@ -94,36 +95,62 @@ export function ExtractionDemo() {
   return (
     <EditorialPanel className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
-          <Camera className="h-5 w-5 text-primary" />
+        <div className="flex shrink-0 items-center">
+          <Camera className="h-5 w-5 text-paper-accent" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold tracking-tight text-foreground">Item extraction</h3>
-          <p className="text-sm text-muted-foreground">Upload a photo to detect clothing</p>
+          <h3 className="text-lg font-semibold tracking-tight text-paper-text">Item extraction</h3>
+          <p className="text-sm text-paper-text-3">Upload a photo to detect clothing</p>
         </div>
       </div>
 
       <div className="flex-1 min-h-[300px]">
-        {/* Idle State - Dropzone */}
+        {/* Idle State: a real example result (the hero photo) over a drop zone
+            that covers the whole area, so a click or a drop starts a run. */}
         {state === 'idle' && (
           <div
             {...getRootProps()}
             className={cn(
-              'flex h-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center',
-              'transition-[border-color,background-color] duration-200 hover:border-primary/50 hover:bg-secondary/70',
-              isDragActive && 'border-primary bg-secondary/70'
+              'flex h-full cursor-pointer flex-col rounded-xl border border-dashed border-paper-edge bg-paper-sunk/60 p-4',
+              'transition-[border-color,background-color] duration-200 hover:border-paper-accent/60 hover:bg-paper-tint',
+              isDragActive && 'border-paper-accent bg-paper-tint'
             )}
           >
             <input {...getInputProps({ 'aria-label': 'Upload a clothing photo' })} />
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-card shadow-pressed">
-              <Upload className={cn('h-5 w-5 text-primary transition-transform duration-200', isDragActive && 'scale-110')} />
+            <div className="flex items-center gap-3">
+              <img
+                src="/signature/pile-160.webp"
+                alt="Example photo: six clothes on a bed"
+                width={160}
+                height={120}
+                loading="lazy"
+                decoding="async"
+                className="h-16 w-20 shrink-0 rounded-lg object-cover"
+              />
+              <div className="min-w-0">
+                <p className="text-xs text-paper-text-3">Example result</p>
+                <p className="text-sm font-semibold text-paper-text">
+                  Found {SIGNATURE_ITEMS.length} items
+                </p>
+              </div>
             </div>
-            <p className="text-body font-medium mb-1">
-              {isDragActive ? 'Drop your photo here' : 'Drop a clothing photo'}
+            <ul className="mt-3 space-y-1.5">
+              {SIGNATURE_ITEMS.slice(0, 4).map((item) => (
+                <li key={item.key} className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="font-medium text-paper-text">{item.name}</span>
+                  <span className="truncate text-xs text-paper-text-3">{item.colors}</span>
+                </li>
+              ))}
+              <li className="text-xs text-paper-text-3">and {SIGNATURE_ITEMS.length - 4} more</li>
+            </ul>
+            <p className="mt-auto flex items-center justify-center gap-2 pt-5 font-semibold text-paper-text">
+              <Upload
+                className={cn('h-4 w-4 text-paper-accent transition-transform duration-200', isDragActive && 'scale-110')}
+                aria-hidden="true"
+              />
+              {isDragActive ? 'Drop your photo here' : 'Try it with your photo'}
             </p>
-            <p className="text-sm text-muted-foreground">
-              or click to browse
-            </p>
+            <p className="mt-1 text-center text-xs text-paper-text-3">Drop a clothing photo or click to browse</p>
           </div>
         )}
 
@@ -135,8 +162,8 @@ export function ExtractionDemo() {
               alt="Preview"
               className="max-h-48 rounded-lg mb-4 object-contain"
             />
-            <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
-            <p className="text-body">
+            <Loader2 className="w-8 h-8 text-paper-accent animate-spin mb-2" />
+            <p className="text-paper-text-2">
               Analyzing clothing items...
             </p>
           </div>
@@ -154,11 +181,11 @@ export function ExtractionDemo() {
                 />
               )}
               <div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-paper-text-3">
                   Found {results.item_count} item
                   {results.item_count !== 1 ? 's' : ''}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-paper-text-3">
                   {Math.round(results.overall_confidence * 100)}% confidence
                 </p>
               </div>
@@ -171,7 +198,7 @@ export function ExtractionDemo() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={handleReset}>
+              <Button variant="ghost" size="sm" onClick={handleReset}>
                 Try Another
               </Button>
               <Button
@@ -209,22 +236,22 @@ export function ExtractionDemo() {
 
 function ExtractedItemCard({ item }: { item: DemoDetectedItem }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-secondary p-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-card shadow-pressed">
-        <Shirt className="h-4 w-4 text-primary" />
+    <div className="flex items-center gap-3 rounded-lg bg-paper-sunk p-3">
+      <div className="flex shrink-0 items-center">
+        <Shirt className="h-4 w-4 text-paper-accent" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-foreground text-sm capitalize">
+        <p className="font-medium text-paper-text text-sm capitalize">
           {item.sub_category || item.category}
         </p>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-paper-text-3">
           {item.colors.length > 0 && (
             <span className="capitalize">{item.colors.slice(0, 2).join(', ')}</span>
           )}
           {item.material && <span>{item.material}</span>}
         </div>
       </div>
-      <span className="text-xs text-muted-foreground">
+      <span className="text-xs text-paper-text-3">
         {Math.round(item.confidence * 100)}%
       </span>
     </div>

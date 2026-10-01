@@ -38,6 +38,52 @@
     U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+/* Paper Studio (Basteleur by Velvetyne, SIL OFL; public/fonts/Basteleur-OFL.txt):
+ * the paper studio display face, shared with the mobile app
+ * (flutter/assets/fonts). Latin subsets made with pyftsubset and renamed to
+ * "Paper Studio": the OFL reserves the "Basteleur" name, so the modified
+ * subsets must not ship under it. Landing only.
+ *
+ * The two Fallback faces are Georgia with metric overrides measured with
+ * fontTools (average advance over the landing headlines; hhea ascent 950,
+ * descent 250 at UPM 1000), so the swap does not move the H1 (the mobile LCP).
+ */
+@font-face {
+  font-family: 'Paper Studio';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/paper-studio-bold-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Paper Studio Moonlight';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/paper-studio-moonlight-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Paper Studio Fallback';
+  src: local('Georgia Bold'), local('Georgia-Bold');
+  font-weight: 700;
+  size-adjust: 112.3%;
+  ascent-override: 84.6%;
+  descent-override: 22.3%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Paper Studio Moonlight Fallback';
+  src: local('Georgia'), local('Georgia-Regular');
+  font-weight: 400;
+  size-adjust: 121.2%;
+  ascent-override: 78.4%;
+  descent-override: 20.6%;
+  line-gap-override: 0%;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -161,6 +207,61 @@
       inset 0 -1px 1px rgba(0, 0, 0, 0.04), 0 -0.5px 1px rgba(0, 0, 0, 0.05);
     --shadow-offset: -7px 7px 0 0 rgb(0, 0, 0);
 
+    /* Paper studio (landing only, docs/exec-plans/active/2026-10-01-paper-studio-landing.md).
+       Values copied from flutter/lib/core/theme/paper_tokens.dart so the landing
+       and the mobile app share one paper system. Consumed through the
+       .stock-* classes, never directly in components. */
+    /* ink */
+    --paper-ink-page: 214 33.3% 91.8%; /* #E3E9F1 */
+    --paper-ink-card: 210 33.3% 98.8%; /* #FBFCFD */
+    --paper-ink-sunk: 215 30.2% 87.6%; /* #D6DEE9 */
+    --paper-ink-tint: 214 35.4% 87.3%; /* #D3DDEA */
+    --paper-ink-edge: 214 26.3% 81.4%; /* #C3CEDC */
+    --paper-ink-slab: 214 25.5% 70%; /* #9FB0C6 */
+    --paper-ink-accent: 214 41% 30.6%; /* #2E4A6E */
+    /* clay */
+    --paper-clay-page: 22 49.1% 89.2%; /* #F1E0D6 */
+    --paper-clay-card: 24 100% 99%; /* #FFFCFA */
+    --paper-clay-sunk: 22 47.5% 84.3%; /* #EAD2C4 */
+    --paper-clay-tint: 21 57.3% 85.3%; /* #EFD3C4 */
+    --paper-clay-edge: 22 40.9% 77.5%; /* #DDBFAE */
+    --paper-clay-slab: 20 39.7% 64.9%; /* #C99A82 */
+    --paper-clay-accent: 15 57.3% 34.9%; /* #8C4026 */
+    /* moss */
+    --paper-moss-page: 88 25.4% 88.4%; /* #E2E9DA */
+    --paper-moss-card: 80 42.9% 98.6%; /* #FCFDFA */
+    --paper-moss-sunk: 93 23.3% 83.1%; /* #D3DECA */
+    --paper-moss-tint: 90 26.7% 82.4%; /* #D2DEC6 */
+    --paper-moss-edge: 91 21.6% 75.5%; /* #C0CEB3 */
+    --paper-moss-slab: 93 18.6% 62%; /* #9CB08C */
+    --paper-moss-accent: 106 27% 29%; /* #3F5E36 */
+    /* marigold */
+    --paper-marigold-page: 43 73% 85.5%; /* #F5E6BF */
+    --paper-marigold-card: 48 100% 99%; /* #FFFEFA */
+    --paper-marigold-sunk: 44 67.9% 79.2%; /* #EEDBA6 */
+    --paper-marigold-tint: 45 73.2% 78%; /* #F0DC9E */
+    --paper-marigold-edge: 44 58.9% 70.4%; /* #E0C987 */
+    --paper-marigold-slab: 43 55.8% 55.7%; /* #CDA94F */
+    --paper-marigold-accent: 42 80.3% 23.9%; /* #6E510C */
+    /* stone */
+    --paper-stone-page: 50 11.1% 89.4%; /* #E7E6E1 */
+    --paper-stone-card: 60 20% 99%; /* #FDFDFC */
+    --paper-stone-sunk: 51 9.1% 84.9%; /* #DCDBD5 */
+    --paper-stone-tint: 53 9.8% 83.9%; /* #DAD9D2 */
+    --paper-stone-edge: 53 7% 77.6%; /* #CAC9C2 */
+    --paper-stone-slab: 53 5.1% 65.3%; /* #ABAAA2 */
+    --paper-stone-accent: 60 4.5% 21.8%; /* #3A3A35 */
+    --paper-text: 48 9.8% 10%; /* #1C1B17 */
+    --paper-text-2: 47 7% 25.3%; /* #45433C */
+    --paper-text-3: 48 5.8% 33.7%; /* #5B5951 */
+    --paper-brand-slab: 354 100% 31%; /* #9E0010 */
+    /* Footer floor: a deep moss sheet the page ends on. */
+    --paper-floor: 109 28.7% 22.5%; /* #2F4A29 */
+    --paper-floor-text: 84 27.8% 92.9%; /* #EEF2E8 */
+    --paper-floor-text-2: 91 22.7% 76.7%; /* #C3D1B6 */
+    --paper-floor-slab: 107 32.4% 13.9%; /* #1D2F18 */
+    --paper-floor-mark: 105 27% 31%; /* #436539, decorative wordmark */
+
     /* Sidebar */
     --sidebar-width: 240px;
     --sidebar-width-collapsed: 64px;
@@ -267,6 +368,57 @@
     /* Identical to :root on purpose — see the note there. */
     --on-image: 0 0% 100%;
     --on-image-foreground: 0 0% 0%;
+
+    /* Paper studio, dark stocks (paper_tokens.dart `dark`). */
+    /* ink */
+    --paper-ink-page: 218 52.4% 12.4%; /* #0F1B30 */
+    --paper-ink-card: 219 46.7% 17.6%; /* #182742 */
+    --paper-ink-sunk: 220 55.1% 9.6%; /* #0B1426 */
+    --paper-ink-tint: 217 46.1% 22.5%; /* #1F3354 */
+    --paper-ink-edge: 217 41.7% 28.2%; /* #2A4166 */
+    --paper-ink-slab: 220 60% 4.9%; /* #050A14 */
+    --paper-ink-accent: 215 50.4% 77.1%; /* #A7C0E2 */
+    /* clay */
+    --paper-clay-page: 19 38.8% 9.6%; /* #22150F */
+    --paper-clay-card: 17 31.1% 17.6%; /* #3B271F */
+    --paper-clay-sunk: 16 40.5% 7.3%; /* #1A0F0B */
+    --paper-clay-tint: 18 35.1% 21.8%; /* #4B3024 */
+    --paper-clay-edge: 18 33.3% 21.8%; /* #4A3025 */
+    --paper-clay-slab: 15 40% 3.9%; /* #0E0806 */
+    --paper-clay-accent: 18 69% 72.2%; /* #E9A487 */
+    /* moss */
+    --paper-moss-page: 108 20.8% 9.4%; /* #151D13 */
+    --paper-moss-card: 107 18.9% 14.5%; /* #212C1E */
+    --paper-moss-sunk: 111 20% 6.9%; /* #0F150E */
+    --paper-moss-tint: 107 19.6% 19%; /* #2B3A27 */
+    --paper-moss-edge: 106 18.6% 22.2%; /* #33432E */
+    --paper-moss-slab: 105 25% 3.1%; /* #070A06 */
+    --paper-moss-accent: 100 28.7% 69.2%; /* #A9C79A */
+    /* marigold */
+    --paper-marigold-page: 42 53.5% 8.4%; /* #211A0A */
+    --paper-marigold-card: 40 45% 15.7%; /* #3A2E16 */
+    --paper-marigold-sunk: 40 60% 5.9%; /* #181206 */
+    --paper-marigold-tint: 40 45.3% 18.6%; /* #45371A */
+    --paper-marigold-edge: 40 45.1% 20%; /* #4A3B1C */
+    --paper-marigold-slab: 40 60% 2.9%; /* #0C0903 */
+    --paper-marigold-accent: 44 73.3% 66.3%; /* #E8C66A */
+    /* stone */
+    --paper-stone-page: 40 6.1% 9.6%; /* #1A1917 */
+    --paper-stone-card: 45 5.6% 14.1%; /* #262522 */
+    --paper-stone-sunk: 30 5.6% 7.1%; /* #131211 */
+    --paper-stone-tint: 40 6.7% 17.6%; /* #302E2A */
+    --paper-stone-edge: 43 6.7% 20.6%; /* #383631 */
+    --paper-stone-slab: 60 5.3% 3.7%; /* #0A0A09 */
+    --paper-stone-accent: 43 14.6% 81.2%; /* #D6D2C8 */
+    --paper-text: 45 22.2% 92.9%; /* #F1EFE9 */
+    --paper-text-2: 43 12.7% 78.4%; /* #CFCBC1 */
+    --paper-text-3: 43 7.4% 63.1%; /* #A8A49A */
+    --paper-brand-slab: 354 100% 23.9%; /* #7A000C */
+    --paper-floor: 110 21.4% 5.5%; /* #0C110B */
+    --paper-floor-text: 88 25.4% 88.4%; /* #E2E9DA */
+    --paper-floor-text-2: 100 28.7% 69.2%; /* #A9C79A */
+    --paper-floor-slab: 120 25% 1.6%; /* #030503 */
+    --paper-floor-mark: 105 23% 12.5%; /* #1B2717, decorative wordmark */
   }
 
   * {
@@ -274,7 +426,10 @@
   }
 
   body {
-    @apply bg-background text-foreground overflow-x-hidden w-full max-w-[100vw];
+    @apply bg-background text-foreground w-full max-w-[100vw];
+    /* clip, not hidden: hidden makes the element a scroll container, which
+       breaks position: sticky and view() timelines for everything inside. */
+    overflow-x: clip;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     min-height: 100svh;
     -webkit-text-size-adjust: 100%;
@@ -282,7 +437,8 @@
   }
 
   #root {
-    @apply w-full max-w-[100vw] overflow-x-hidden;
+    @apply w-full max-w-[100vw];
+    overflow-x: clip;
   }
 
   /* Mobile interaction resets: no grey tap flash; contain scroll chaining;
@@ -302,6 +458,9 @@
 
   .skip-link {
     @apply fixed left-4 top-4 z-[200] rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground shadow-lg;
+    /* The system face: this off-screen link is on every page, and in Inter
+       it alone made the paper landing download Inter (47 KB). */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     transform: translateY(-150%);
     transition: transform 160ms ease-out;
   }
@@ -642,15 +801,6 @@ a.text-primary {
       animation-timeline: view();
       animation-range: entry 0% entry calc(60% + min(var(--reveal-step, 0), 4) * 10%);
     }
-
-    /*
-     * Navbar scroll-progress hairline. Base state is invisible so browsers
-     * without scroll timelines never render a stray line.
-     */
-    .scroll-progress {
-      animation: progress-x linear both;
-      animation-timeline: scroll(root);
-    }
   }
 
   /* Hero load choreography: transform-only, time-based, and done in <1s. */
@@ -697,11 +847,609 @@ a.text-primary {
   }
 }
 
-@keyframes progress-x {
-  from {
-    transform: scaleX(0);
+/* ==========================================================================
+ * Paper studio (landing, Navbar, Footer).
+ * docs/exec-plans/active/2026-10-01-paper-studio-landing.md
+ *
+ * Ported from the mobile paper system (flutter/DESIGN.md 01-03): coloured
+ * paper stocks, a fine grain under content, torn edges where one sheet of
+ * paper lies on the next, and solid tinted slabs under sheets. No blur, no
+ * glow, no black shadows. Components read the --s-* vars through the
+ * `paper-*` Tailwind colours, so a sheet follows the stock it sits on.
+ * ========================================================================== */
+@layer components {
+  .stock-ink, .stock-clay, .stock-moss, .stock-marigold, .stock-stone {
+    color: hsl(var(--paper-text));
   }
-  to {
-    transform: scaleX(1);
+  .stock-ink { --s-page: var(--paper-ink-page); --s-card: var(--paper-ink-card); --s-sunk: var(--paper-ink-sunk); --s-tint: var(--paper-ink-tint); --s-edge: var(--paper-ink-edge); --s-slab: var(--paper-ink-slab); --s-accent: var(--paper-ink-accent); }
+  .stock-clay { --s-page: var(--paper-clay-page); --s-card: var(--paper-clay-card); --s-sunk: var(--paper-clay-sunk); --s-tint: var(--paper-clay-tint); --s-edge: var(--paper-clay-edge); --s-slab: var(--paper-clay-slab); --s-accent: var(--paper-clay-accent); }
+  .stock-moss { --s-page: var(--paper-moss-page); --s-card: var(--paper-moss-card); --s-sunk: var(--paper-moss-sunk); --s-tint: var(--paper-moss-tint); --s-edge: var(--paper-moss-edge); --s-slab: var(--paper-moss-slab); --s-accent: var(--paper-moss-accent); }
+  .stock-marigold { --s-page: var(--paper-marigold-page); --s-card: var(--paper-marigold-card); --s-sunk: var(--paper-marigold-sunk); --s-tint: var(--paper-marigold-tint); --s-edge: var(--paper-marigold-edge); --s-slab: var(--paper-marigold-slab); --s-accent: var(--paper-marigold-accent); }
+  .stock-stone { --s-page: var(--paper-stone-page); --s-card: var(--paper-stone-card); --s-sunk: var(--paper-stone-sunk); --s-tint: var(--paper-stone-tint); --s-edge: var(--paper-stone-edge); --s-slab: var(--paper-stone-slab); --s-accent: var(--paper-stone-accent); }
+
+  /* Body type for the paper surfaces: the platform face, as in the app. */
+  .paper-landing {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* A section of paper: its stock colour with the app's grain tile on top of
+     the colour and under every child (it is a background, so it can never
+     sit over text). */
+  .paper-section {
+    position: relative;
+    isolation: isolate;
+    background-color: hsl(var(--s-page));
+    background-image: url('/paper/grain-light.webp');
+    background-size: 128px 128px;
+  }
+  .dark .paper-section {
+    background-image: url('/paper/grain-dark.webp');
+  }
+
+  /* Torn top edge: this sheet lies over the one above it. ::after is the
+     slab (the paper's thickness, 3px proud of the tear), ::before is the
+     sheet itself. Both use the same seamless 240px tile, repeated so it
+     never stretches. Sections keep >= 48px top padding, so nothing in them
+     reaches the 16px tear band. */
+  .paper-tear::before,
+  .paper-tear::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 16px;
+    pointer-events: none;
+    -webkit-mask: url('/paper/tear.svg') repeat-x 0 0 / 240px 16px;
+    mask: url('/paper/tear.svg') repeat-x 0 0 / 240px 16px;
+  }
+  .paper-tear::before {
+    top: -15px;
+    z-index: -1;
+    background-color: hsl(var(--s-page));
+    background-image: inherit;
+    background-size: 128px 128px;
+  }
+  .paper-tear::after {
+    top: -18px;
+    z-index: -2;
+    background-color: hsl(var(--s-slab));
+    -webkit-mask-position: 7px 0;
+    mask-position: 7px 0;
+  }
+
+  /* Torn bottom edge (the fixed Navbar): the same tile, flipped. */
+  .paper-tear-bottom::before,
+  .paper-tear-bottom::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 16px;
+    pointer-events: none;
+    transform: scaleY(-1);
+    -webkit-mask: url('/paper/tear.svg') repeat-x 0 0 / 240px 16px;
+    mask: url('/paper/tear.svg') repeat-x 0 0 / 240px 16px;
+  }
+  .paper-tear-bottom::before {
+    bottom: -15px;
+    z-index: -1;
+    background-color: hsl(var(--s-page));
+    background-image: inherit;
+    background-size: 128px 128px;
+  }
+  .paper-tear-bottom::after {
+    bottom: -18px;
+    z-index: -2;
+    background-color: hsl(var(--s-slab));
+    -webkit-mask-position: 7px 0;
+    mask-position: 7px 0;
+  }
+
+  /* The footer floor: its own darker sheet, torn along the top like the
+     sections above it. */
+  .paper-floor {
+    --s-page: var(--paper-floor);
+    --s-slab: var(--paper-floor-slab);
+    --s-card: var(--paper-floor);
+    --s-edge: var(--paper-floor-mark);
+    --s-tint: var(--paper-floor-mark);
+    --s-accent: var(--paper-floor-text);
+    --paper-text: var(--paper-floor-text);
+    --paper-text-2: var(--paper-floor-text-2);
+    --paper-text-3: var(--paper-floor-text-2);
+    color: hsl(var(--paper-floor-text));
+  }
+
+  /* A raised sheet on its slab. */
+  .paper-sheet {
+    background-color: hsl(var(--s-card));
+    border-radius: 14px;
+    box-shadow: 1.5px 3px 0 0 hsl(var(--s-slab));
+  }
+  /* Highlighted sheet: the accent ring is layered into the same box-shadow,
+     so it never replaces the slab the way Tailwind's `ring-*` would. */
+  .paper-sheet-accent {
+    box-shadow:
+      1.5px 3px 0 0 hsl(var(--s-slab)),
+      0 0 0 2px hsl(var(--s-accent));
+  }
+
+  /* Display type. Basteleur Bold is wide; tracking stays at 0 so the
+     letters keep their air. */
+  .paper-display {
+    font-family: 'Paper Studio', 'Paper Studio Fallback', Georgia, serif;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.04;
+    text-wrap: balance;
+  }
+  .paper-head {
+    font-family: 'Paper Studio Moonlight', 'Paper Studio Moonlight Fallback', Georgia, serif;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.12;
+    text-wrap: balance;
+  }
+
+  /* Buttons. One red action per view; it presses down onto its slab and
+     never moves on hover (hover is a colour step only). */
+  .paper-btn,
+  .paper-btn-sheet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 48px;
+    padding: 0 1.4rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1;
+    white-space: nowrap;
+    transition: background-color 120ms ease-out, transform 90ms ease-out, box-shadow 90ms ease-out;
+  }
+  .paper-btn {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 1.5px 3px 0 0 hsl(var(--paper-brand-slab));
+  }
+  .paper-btn:hover {
+    background-color: hsl(var(--primary-pressed));
+  }
+  .paper-btn-sheet {
+    background-color: hsl(var(--s-card));
+    color: hsl(var(--paper-text));
+    box-shadow: 1.5px 3px 0 0 hsl(var(--s-slab));
+  }
+  .paper-btn-sheet:hover {
+    background-color: hsl(var(--s-tint));
+  }
+  /* On a sheet, a sheet button steps down to the sunk tone so it never
+     disappears into the card it sits on. */
+  .paper-sheet .paper-btn-sheet {
+    background-color: hsl(var(--s-sunk));
+  }
+  .paper-sheet .paper-btn-sheet:hover {
+    background-color: hsl(var(--s-tint));
+  }
+  .paper-btn:active,
+  .paper-btn-sheet:active {
+    transform: translate(1.5px, 3px);
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  /* Cut-out garment: a thin paper border that follows the silhouette and a
+     solid slab offset, both from the stock (no blur). */
+  .paper-cutout {
+    filter: drop-shadow(1px 0 0 hsl(var(--s-card))) drop-shadow(-1px 0 0 hsl(var(--s-card)))
+      drop-shadow(0 1px 0 hsl(var(--s-card))) drop-shadow(0 -1px 0 hsl(var(--s-card)))
+      drop-shadow(1.5px 3px 0 hsl(var(--s-slab)));
+  }
+
+  /* Anchored sections clear the fixed Navbar (64px + its 16px tear). */
+  .paper-landing [id] {
+    scroll-margin-top: 88px;
+  }
+
+  .paper-landing a:focus-visible,
+  .paper-landing button:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Landing signature: "Snap your closet once" (components/landing/Hero.tsx).
+ *
+ * Three layers, each complete on its own:
+ *   1. Phones / short screens: a stacked story (caption, photo, caption,
+ *      closet grid, caption, outfit). Static.
+ *   2. Wide screens: the end frame on one stage, 100 x 40 cqw (photo, grid,
+ *      outfit, captions on a shared grid). Static. This is also what the
+ *      prerender, Firefox and reduced-motion users see.
+ *   3. Wide + scroll timelines + motion OK: the section grows tall, the
+ *      stage sticks, and elements play from the start frame (big photo) to
+ *      layer 2. Transform, z-index and colour only; nothing is ever hidden
+ *      by opacity.
+ * -------------------------------------------------------------------------- */
+@layer components {
+  /* Head and stage share one width (--sig-w), so their edges line up. */
+  .sig {
+    --sig-w: 80rem;
+  }
+  .sig-frame {
+    width: 100%;
+    max-width: var(--sig-w);
+    margin-inline: auto;
+  }
+  .sig-top {
+    padding-top: 6.5rem;
+  }
+  .sig-sticky {
+    padding-bottom: 3.5rem;
+  }
+  .sig-title {
+    font-size: clamp(2.6rem, 9vw, 5.5rem);
+  }
+  .sig-pitch {
+    margin-top: 1.25rem;
+    max-width: 34rem;
+  }
+  .sig-stage {
+    container: sig / inline-size;
+    margin-top: 2.5rem;
+  }
+  .sig-canvas {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .sig-photo {
+    order: 2;
+    padding: 6px;
+  }
+  .sig-photo img,
+  .sig-outfit img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 9px;
+  }
+  .sig-grid {
+    order: 4;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .sig-cell {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 8px 10px;
+  }
+  .sig-cut {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+  }
+  .sig-label {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .sig-swatch {
+    display: inline-block;
+    flex: none;
+    width: 0.8em;
+    height: 0.8em;
+    border-radius: 3px;
+    box-shadow: 0 0 0 1px hsl(var(--s-edge));
+  }
+  /* The three pieces in today's outfit: an accent ring on the sheet. */
+  .sig-picked {
+    box-shadow: 1.5px 3px 0 0 hsl(var(--s-slab)), 0 0 0 2px hsl(var(--s-accent));
+  }
+  .sig-outfit {
+    order: 6;
+    align-self: center;
+    width: min(72%, 300px);
+    padding: 6px 6px 10px;
+  }
+  .sig-outfit-caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 4px 0;
+    font-size: 13px;
+  }
+  .sig-steps {
+    display: contents;
+  }
+  .sig-step:nth-child(1) { order: 1; }
+  .sig-step:nth-child(2) { order: 3; margin-top: 1rem; }
+  .sig-step:nth-child(3) { order: 5; margin-top: 1rem; }
+  .sig-step-title {
+    font-size: 1.6rem;
+    color: hsl(var(--paper-text));
+  }
+  .sig-note {
+    margin-top: 1.5rem;
+    font-size: 12px;
+    color: hsl(var(--paper-text-3));
+  }
+
+  @media (min-width: 1024px) {
+    .sig-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 22rem;
+      align-items: end;
+      column-gap: 3rem;
+    }
+    /* The H1 shares the row with the pitch column; scale it with the width
+       so it holds two lines (22 chars at ~0.66em each). */
+    .sig-title {
+      font-size: clamp(2.6rem, 5.6vw, 5.5rem);
+    }
+    .sig-pitch {
+      margin-top: 0;
+    }
+  }
+
+  /* Layer 2: the wide stage. Head and stage share one width, capped by the
+     viewport height so the whole frame fits the screen. */
+  @media (min-width: 768px) and (min-height: 640px) {
+    /* The stage is 100 x 40 cqw plus ~170px of captions and note; cap its
+       width so the whole stage fits under the 80px Navbar. */
+    .sig {
+      --sig-w: min(80rem, calc(max(640px, (100svh - 270px) * 2.5) + 4rem));
+    }
+    .sig-sticky {
+      padding-top: 2.5rem;
+      padding-bottom: 2.5rem;
+    }
+    .sig-stage {
+      margin-top: 0;
+    }
+    .sig-canvas {
+      display: block;
+      position: relative;
+      height: calc(40cqw + 6.5rem);
+    }
+    .sig-photo {
+      position: absolute;
+      left: 0;
+      top: 6.5cqw;
+      width: 36cqw;
+      padding: 0.45cqw;
+      z-index: 2;
+      transform-origin: 0 0;
+    }
+    .sig-photo img {
+      border-radius: 0.7cqw;
+    }
+    .sig-grid {
+      position: absolute;
+      left: 40cqw;
+      top: 4.5cqw;
+      grid-template-columns: repeat(3, 10.6cqw);
+      grid-auto-rows: 13.5cqw;
+      column-gap: 1.2cqw;
+      row-gap: 1cqw;
+    }
+    .sig-cell {
+      position: relative;
+      padding: 0;
+      border-radius: 1cqw;
+    }
+    .sig-cut {
+      position: absolute;
+      left: 0.9cqw;
+      top: 0.8cqw;
+      width: calc(100% - 1.8cqw);
+      height: 9cqw;
+      aspect-ratio: auto;
+      z-index: 0;
+    }
+    .sig-label {
+      position: absolute;
+      left: 0.9cqw;
+      right: 0.6cqw;
+      bottom: 0.7cqw;
+      margin: 0;
+      font-size: clamp(10px, 0.92cqw, 13px);
+    }
+    .sig-label > span {
+      white-space: nowrap;
+    }
+    .sig-outfit {
+      position: absolute;
+      left: 77.5cqw;
+      top: 0;
+      width: 22.5cqw;
+      padding: 0.45cqw 0.45cqw 0.6cqw;
+      transform-origin: 0 0;
+    }
+    .sig-outfit img {
+      border-radius: 0.7cqw;
+    }
+    .sig-outfit-caption {
+      padding: 0.6cqw 0.3cqw 0;
+      font-size: clamp(11px, 1cqw, 14px);
+    }
+    .sig-steps {
+      display: block;
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 41.5cqw;
+    }
+    .sig-step {
+      position: absolute;
+      top: 0;
+      margin: 0 !important;
+    }
+    .sig-step:nth-child(1) { left: 0; width: 36cqw; }
+    .sig-step:nth-child(2) { left: 40cqw; width: 34.2cqw; }
+    .sig-step:nth-child(3) { left: 77.5cqw; width: 22.5cqw; }
+    .sig-step-title {
+      font-size: clamp(1.25rem, 1.9cqw, 1.75rem);
+    }
+    .sig-note {
+      margin-top: 0.75rem;
+    }
+  }
+
+  /* Narrow wide-stages (768-1100px): a cell is ~90px wide. The name may
+     wrap to two lines and the colour line moves to screen-reader text (the
+     swatch still shows the colour), so no label is ever cut off. */
+  @media (min-width: 768px) and (min-height: 640px) {
+    @container sig (max-width: 1100px) {
+      .sig-label > span:first-child {
+        white-space: normal;
+        align-items: flex-start;
+        line-height: 1.15;
+      }
+      .sig-label .sig-swatch {
+        margin-top: 0.15em;
+      }
+      .sig-label > span:last-child {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+    }
+  }
+
+  /* Layer 3: scroll-played. */
+  @media (prefers-reduced-motion: no-preference) and (min-width: 768px) and (min-height: 640px) {
+    @supports (animation-timeline: view()) {
+      .sig-track {
+        height: 230svh;
+        view-timeline: --sig block;
+      }
+      .sig-sticky {
+        position: sticky;
+        top: 80px;
+        height: calc(100svh - 80px);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding-top: 0;
+        padding-bottom: 0;
+      }
+      .sig-photo,
+      .sig-cut,
+      .sig-outfit {
+        will-change: transform;
+      }
+      .sig-photo {
+        animation: sig-photo linear both;
+        animation-timeline: --sig;
+        animation-range: contain 0% contain 100%;
+      }
+      .sig-cut {
+        animation: sig-cut linear both;
+        animation-timeline: --sig;
+        animation-range: contain calc(10% + var(--i) * 4%) contain calc(42% + var(--i) * 4%);
+      }
+      .sig-outfit {
+        animation: sig-outfit linear both;
+        animation-timeline: --sig;
+        animation-range: contain 0% contain 100%;
+      }
+      .sig-picked {
+        animation: sig-pick linear both;
+        animation-timeline: --sig;
+        animation-range: contain 0% contain 100%;
+      }
+      .sig-step-title {
+        animation: var(--sig-step-anim) linear both;
+        animation-timeline: --sig;
+        animation-range: contain 0% contain 100%;
+      }
+      .sig-step:nth-child(1) .sig-step-title { --sig-step-anim: sig-step-1; }
+      .sig-step:nth-child(2) .sig-step-title { --sig-step-anim: sig-step-2; }
+      .sig-step:nth-child(3) .sig-step-title { --sig-step-anim: sig-step-3; }
+    }
+  }
+}
+
+/* Start frame: the photo fills the middle of the stage (24..76 x 0.5..39.5
+   cqw) and covers the grid and the outfit, which wait underneath it. */
+@keyframes sig-photo {
+  0%, 10% { transform: translate(24cqw, -6cqw) scale(1.4444); }
+  45%, 100% { transform: none; }
+}
+/* Each cut-out starts over its garment in the big photo (--dx/--dy/--s from
+   signature-data.ts), under the photo; it comes on top as it lifts off. */
+@keyframes sig-cut {
+  0% { transform: translate(var(--dx), var(--dy)) scale(var(--s)); z-index: 0; }
+  6% { z-index: 0; }
+  7% { transform: translate(var(--dx), var(--dy)) scale(var(--s)); z-index: 3; }
+  100% { transform: none; z-index: 3; }
+}
+/* The outfit starts small behind the grid's right column (the picked
+   pieces), then slides out to its place; it comes on top once it is clear. */
+@keyframes sig-outfit {
+  0%, 52% { transform: translate(-14cqw, 6cqw) scale(0.5); z-index: -1; }
+  76% { z-index: -1; }
+  77% { z-index: 1; }
+  84%, 100% { transform: none; z-index: 1; }
+}
+@keyframes sig-pick {
+  0%, 62% { box-shadow: 1.5px 3px 0 0 hsl(var(--s-slab)), 0 0 0 0 hsl(var(--s-accent)); }
+  74%, 100% { box-shadow: 1.5px 3px 0 0 hsl(var(--s-slab)), 0 0 0 2px hsl(var(--s-accent)); }
+}
+@keyframes sig-step-1 {
+  0%, 30% { color: hsl(var(--s-accent)); }
+  36%, 100% { color: hsl(var(--paper-text-3)); }
+}
+@keyframes sig-step-2 {
+  0%, 30% { color: hsl(var(--paper-text-3)); }
+  36%, 62% { color: hsl(var(--s-accent)); }
+  68%, 100% { color: hsl(var(--paper-text-3)); }
+}
+@keyframes sig-step-3 {
+  0%, 62% { color: hsl(var(--paper-text-3)); }
+  68%, 100% { color: hsl(var(--s-accent)); }
+}
+
+/* Washing line (CTASection): pieces hang from their pins and swing when the
+   line is hovered, alternating left and right. No idle loop. */
+@layer components {
+  .wash-piece {
+    transform-box: view-box;
+    filter: drop-shadow(1.5px 3px 0 hsl(var(--s-slab)));
+    transition: transform 700ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .wash-line:hover .wash-piece:nth-of-type(odd) {
+    transform: rotate(4deg);
+  }
+  .wash-line:hover .wash-piece:nth-of-type(even) {
+    transform: rotate(-3deg);
+  }
+}
+
+/* Footer wordmark: Basteleur Bold sized to the content width, one tonal
+   step off the floor, sitting on the bottom edge. "FitCheck" has no
+   descenders, so the baseline is the visual bottom; the line box is trimmed
+   so the caps keep their full height above it. */
+@layer components {
+  .footer-wordmark {
+    /* The small negative bottom margin sets the foot serifs on the edge. */
+    margin: 2.5rem auto -0.02em;
+    max-width: 80rem;
+    padding-inline: 1rem;
+    /* "FitCheck" is 5.42em wide in Basteleur Bold: this keeps it inside the
+       content width, so it centres instead of overflowing to the right. */
+    font-size: min(16.4vw, 13.6rem);
+    line-height: 0.74;
+    text-align: center;
+    letter-spacing: 0.01em;
+    color: hsl(var(--paper-floor-mark));
+    white-space: nowrap;
   }
 }

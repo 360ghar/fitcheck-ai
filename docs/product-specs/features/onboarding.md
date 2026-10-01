@@ -1,7 +1,7 @@
 # Onboarding
 
 Status: implemented  
-Last updated: 2026-09-25
+Last updated: 2026-10-01
 
 ## Mobile intro (signed out, first launch)
 

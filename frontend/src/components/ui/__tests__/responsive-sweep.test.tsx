@@ -8,7 +8,6 @@ import AppLayout from '@/components/layout/AppLayout'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import Hero from '@/components/landing/Hero'
 import PhotoshootShowcase from '@/components/landing/PhotoshootShowcase'
-import TrustBar from '@/components/landing/TrustBar'
 import { FeaturePageTemplate } from '@/components/landing/FeaturePageTemplate'
 import BottomNav from '@/components/navigation/BottomNav'
 import { WizardSteps } from '@/components/ui/wizard-steps'
@@ -92,36 +91,17 @@ const sweepCardItem = {
 } as unknown as Item
 
 describe('responsive sweep regression guards', () => {
-  it('keeps the landing hero on a minmax(0, 1fr) track on narrow screens', () => {
+  it('keeps the hero signature DOM that the stage CSS depends on', () => {
     const { container } = render(
       <MemoryRouter>
         <Hero />
       </MemoryRouter>
     )
-    const heroGrid = container.querySelector('section > div > .grid')
-    expect(heroGrid).toHaveClass('grid-cols-1')
-    expect(heroGrid?.children[0]).toHaveClass('min-w-0')
-    expect(heroGrid?.children[1]).toHaveClass('min-w-0')
-  })
-
-  it('stacks the trust facts before the two- and four-column layouts', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <TrustBar />
-      </MemoryRouter>
-    )
-    const list = container.querySelector('ul')
-    expect(list).toHaveClass('grid-cols-1')
-    expect(list).toHaveClass('sm:grid-cols-2')
-    expect(list).toHaveClass('lg:grid-cols-4')
-    expect(screen.getByRole('link', { name: /Private by default/ })).toHaveAttribute(
-      'href',
-      '/privacy'
-    )
-    expect(screen.getByRole('link', { name: /No-card trial/ })).toHaveAttribute(
-      'href',
-      '#faq'
-    )
+    // The signature stage is a container (cqw units) and the grid uses
+    // minmax(0, 1fr) tracks in CSS; here we guard the DOM it depends on.
+    expect(container.querySelector('.sig-stage .sig-canvas')).not.toBeNull()
+    expect(container.querySelectorAll('.sig-grid > li')).toHaveLength(6)
+    expect(container.querySelectorAll('.sig-steps > li')).toHaveLength(3)
   })
 
   it('shows example photoshoot results without a before-and-after claim', () => {
@@ -137,7 +117,7 @@ describe('responsive sweep regression guards', () => {
     for (const figure of section?.querySelectorAll('figure') ?? []) {
       expect(figure.textContent).toMatch(/example result/i)
     }
-    expect(section?.textContent).not.toMatch(/before(?!\s*(\/after|-and-after))/i)
+    expect(section?.textContent).not.toMatch(/before\s*(\/|-?and-?|&)\s*after/i)
   })
 
   it('keeps all three demos mounted in a local mobile snap rail', () => {

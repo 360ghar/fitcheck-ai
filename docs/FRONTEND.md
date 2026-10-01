@@ -1,6 +1,6 @@
 # Frontend
 
-Last updated: 2026-09-25
+Last updated: 2026-10-01
 
 React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/CLAUDE.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
 
@@ -199,12 +199,21 @@ Inter and Manrope are **self-hosted from `public/fonts/`** with two hand-written
 `@font-face` rules at the top of `src/index.css`, named to match
 `tailwind.config.ts` (`Inter`, `Manrope`).
 
+The paper studio landing adds four more: **Paper Studio** (Basteleur Bold,
+display / the H1) and **Paper Studio Moonlight** (section heads), each with a
+Georgia-based metric-override Fallback face so `font-display: swap` does not
+shift the layout. The Basteleur subsets were made with `pyftsubset` and renamed
+"Paper Studio" because the SIL OFL reserves the "Basteleur" name for unmodified
+versions. All six `@font-face` rules live at the top of `src/index.css`; the
+landing type is applied through the `.paper-display` / `.paper-head` classes,
+and Paper Studio Bold carries `.paper-display` on the hero H1 — the mobile LCP
+element — preloaded from the prerendered HTML.
+
 Do not reintroduce `@fontsource-variable/*`: those packages register the
 families as `"Inter Variable"` / `"Manrope Variable"`, which never matched the
 Tailwind stack. The result was 284 KB of fonts deployed that the browser never
 requested, and every surface silently rendering in system-ui. Latin subsets
-only, `font-display: swap`, both preloaded from `index.html` (Manrope carries
-`.landing-display`, the mobile LCP element).
+only, `font-display: swap` throughout.
 
 ### Replayable previews (PostHog session recordings)
 

@@ -43,4 +43,4 @@ version 1.2.0, build 14, as Processing. Upload ID:
 - IPA: `flutter/build/ios/ipa/FitCheck AI.ipa` (15,503,484 bytes).
 - SHA-256: `77a0f15b8e924c660d5319c82c4859fd3402944c308a5419c7ced6dc89599e9c`.
 - Signing: Apple Distribution, team `HMWGCVU4SV`.
-- Store: https://appstoreconnect.apple.com/apps/6794689012/testflight/ios
+- Store: <https://appstoreconnect.apple.com/apps/6794689012/testflight/ios>

@@ -1,261 +1,156 @@
 import { Link } from 'react-router-dom'
-import {
-  ArrowUpRight,
-  BarChart3,
-  Calendar,
-  Camera,
-  CloudSun,
-  Eye,
-  Images,
-  Tags,
-} from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 
-import { AnimatedSection } from './AnimatedSection'
-import { SectionKicker } from './SectionKicker'
-import { cn } from '@/lib/utils'
 import { GeneratedImage } from '@/components/ui/generated-image'
 
-type VerbTone = 'coral' | 'amber' | 'teal' | 'violet' | 'blue'
+import { SIGNATURE_ITEMS } from './signature-data'
 
-// Literal class map: Tailwind's JIT needs complete class names at scan time.
-const VERB_TONE: Record<VerbTone, string> = {
-  coral: 'text-tint-coral',
-  amber: 'text-tint-amber',
-  teal: 'text-tint-teal',
-  violet: 'text-tint-violet',
-  blue: 'text-tint-blue',
-}
+const SIZE = Object.fromEntries(SIGNATURE_ITEMS.map((item) => [item.key, item]))
 
-const capabilities: Array<{
-  number: string
-  verb: string
-  title: string
-  description: string
-  href: string
-  icon: typeof Tags
-  tone: VerbTone
-  illustration: { src: string; alt: string }
-}> = [
+/*
+ * An example week, dressed only from the six pieces in the hero photo (same
+ * cut-outs, /signature/*.webp). The weather values are an illustration.
+ */
+const WEEK: Array<{ day: string; weather: string; pieces: string[]; today?: boolean }> = [
+  { day: 'Mon', weather: '24° clear', pieces: ['tee', 'trousers', 'sneakers'], today: true },
+  { day: 'Tue', weather: '19° cloud', pieces: ['stripe', 'trousers', 'sneakers'] },
+  { day: 'Wed', weather: '16° wind', pieces: ['jacket', 'tee', 'trousers'] },
+  { day: 'Thu', weather: '14° rain', pieces: ['sweater', 'jacket', 'trousers'] },
+  { day: 'Fri', weather: '21° sun', pieces: ['stripe', 'jacket', 'sneakers'] },
+]
+
+const capabilities = [
   {
-    number: '01',
     verb: 'Catalog',
-    title: 'Turn clothing photos into a searchable wardrobe',
-    description:
-      'Extract color, category, and style details from single items, full hangs, and flat lays. Review the result before it enters your closet.',
+    body: 'Colour, category and material from single pieces, hangs and piles. You review before it saves.',
     href: '/features/ai-wardrobe-extraction',
-    icon: Tags,
-    tone: 'teal',
-    illustration: {
-      src: '/generated/primitive-catalog-640.webp',
-      alt: 'Clay illustration of garments being catalogued into an ordered grid',
-    },
   },
   {
-    number: '02',
     verb: 'Plan',
-    title: 'Build outfits around weather and occasion',
-    description:
-      'Use clothes you already own to plan daily looks and calendar-ready outfits for the conditions ahead.',
+    body: 'Daily outfits and calendar events matched to the forecast and the occasion.',
     href: '/features/outfit-recommendations',
-    icon: CloudSun,
-    tone: 'blue',
-    illustration: {
-      src: '/generated/primitive-plan-640.webp',
-      alt: 'Clay illustration of pastel outfit capsules laid out for the week ahead',
-    },
   },
   {
-    number: '03',
     verb: 'Preview',
-    title: 'See combinations on you before you commit',
-    description:
-      'Use virtual try-on to compare wardrobe combinations before changing clothes or buying something new.',
+    body: 'Try a combination on your own photo before you change or buy.',
     href: '/features/virtual-try-on',
-    icon: Eye,
-    tone: 'violet',
-    illustration: {
-      src: '/generated/primitive-preview-640.webp',
-      alt: 'Clay illustration of an outfit previewed in a standing mirror',
-    },
   },
   {
-    number: '04',
     verb: 'Create',
-    title: 'Produce studio-style images from one selfie',
-    description:
-      'Choose wardrobe pieces and a setting for LinkedIn, dating, social, or portfolio images.',
+    body: 'Studio-style images for LinkedIn, dating or social from one selfie.',
     href: '/features/ai-photoshoot-generator',
-    icon: Camera,
-    tone: 'coral',
-    illustration: {
-      src: '/generated/primitive-create-640.webp',
-      alt: 'Clay illustration of gripper arms assembling a studio photoshoot set',
-    },
   },
   {
-    number: '05',
     verb: 'Understand',
-    title: 'See what earns a place in your wardrobe',
-    description:
-      'Review wear patterns, underused items, wardrobe gaps, and cost per wear before the next purchase.',
+    body: 'Wear counts, cost per wear and the gaps worth filling next.',
     href: '/features/wardrobe-analytics',
-    icon: BarChart3,
-    tone: 'amber',
-    illustration: {
-      src: '/generated/primitive-understand-640.webp',
-      alt: 'Clay illustration of a wardrobe report with rising bar charts',
-    },
   },
 ]
 
 const alsoInApp = [
-  {
-    title: 'Bulk and Instagram import',
-    body: 'Move many clothing photos into one review queue. Instagram import appears where enabled.',
-  },
-  {
-    title: 'Calendar week planning',
-    body: 'Assign outfits to events and prepare the week before the morning rush.',
-  },
-  {
-    title: 'Trip packing lists',
-    body: 'Build packing lists from your real wardrobe for the destination and weather.',
-  },
-  {
-    title: 'Outfit sharing and feedback',
-    body: 'Share a look by link and collect feedback before you wear it.',
-  },
-  {
-    title: 'Gaps and smarter shopping',
-    body: 'Find wardrobe gaps so new purchases solve a real need.',
-  },
-  {
-    title: 'Referrals',
-    body: 'Invite a friend. Both accounts receive one month of Pro when they join.',
-  },
+  { title: 'Bulk and Instagram import', body: 'Many photos into one review queue. Instagram import where enabled.' },
+  { title: 'Week planning', body: 'Assign outfits to events before the morning rush.' },
+  { title: 'Packing lists', body: 'Packing lists from your real wardrobe, for the trip and its weather.' },
+  { title: 'Sharing and feedback', body: 'Share a look by link and collect opinions before you wear it.' },
+  { title: 'Smarter shopping', body: 'Find the gaps, so a new purchase solves a real need.' },
+  { title: 'Referrals', body: 'Invite a friend. Both accounts get one month of Pro when they join.' },
 ]
 
-const secondaryLinks = [
-  { icon: CloudSun, title: 'Weather-aware picks', href: '/features/outfit-recommendations' },
-  { icon: Calendar, title: 'Calendar planning', href: '/features' },
-  { icon: Images, title: 'All product features', href: '/features' },
+/* Where each piece sits in a day's little collage (percent of the tile). */
+const COLLAGE = [
+  'left-[4%] top-[4%] w-[58%] rotate-[-4deg]',
+  'right-[2%] top-[18%] w-[56%] rotate-[3deg]',
+  'left-[22%] bottom-[2%] w-[50%] rotate-[-1deg]',
 ]
 
 export default function Features() {
   return (
-    <section id="features" className="scroll-mt-16 bg-background py-20 md:py-28">
+    <section id="features" className="paper-section paper-tear stock-marigold pb-24 pt-20 md:pb-32 md:pt-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-16">
-          <AnimatedSection className="reveal min-w-0 lg:col-span-4">
-            <div className="lg:sticky lg:top-24">
-              <SectionKicker tone="violet">Capability ledger</SectionKicker>
-              <h2 className="landing-display text-3xl font-semibold leading-tight text-foreground sm:text-4xl md:text-[2.75rem]">
-                One wardrobe record. Five useful decisions.
-              </h2>
-              <p className="mt-4 max-w-md text-base leading-relaxed text-body md:text-lg">
-                FitCheck keeps the source clothes, the outfit context, and the result connected.
-                Each capability builds on the same private wardrobe.
-              </p>
-              <Link
-                to="/features"
-                className="mt-6 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-pressed"
-              >
-                Review every feature
-                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </div>
-          </AnimatedSection>
-
-          <div className="min-w-0 border-t border-border lg:col-span-8">
-            {capabilities.map((capability, index) => (
-              <AnimatedSection key={capability.verb} delay={index * 60}>
-                <Link
-                  to={capability.href}
-                  className="group grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 border-b border-border py-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:grid-cols-[3rem_minmax(0,1fr)_1.5rem] sm:items-start sm:gap-x-6 sm:py-8"
-                >
-                  <span className="text-xs font-semibold text-muted-foreground">{capability.number}</span>
-                  {/* Clay hover lives on the illustration tile: it rests pressed
-                      and rises into the hard offset shadow when the row is
-                      hovered/focused — the ledger keeps its hairline character. */}
-                  <span className="col-start-2 flex min-w-0 items-start gap-4 sm:col-start-2 sm:gap-6">
-                    <span
-                      className="mt-0.5 block shrink-0 overflow-hidden rounded-2xl border border-border bg-surface-soft shadow-pressed transition-[box-shadow,transform] duration-150 ease-out group-hover:shadow-offset motion-safe:group-hover:-translate-x-px motion-safe:group-hover:-translate-y-px"
-                    >
-                      <GeneratedImage
-                        src={capability.illustration.src}
-                        alt={capability.illustration.alt}
-                        className="h-20 w-20 object-cover sm:h-24 sm:w-24"
-                        loading="lazy"
-                        decoding="async"
-                        width={640}
-                        height={640}
-                        fallback="hide-parent"
-                      />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={cn('flex items-center gap-2 text-sm font-semibold', VERB_TONE[capability.tone])}>
-                        <capability.icon className="h-4 w-4" aria-hidden="true" />
-                        {capability.verb}
-                      </span>
-                      <span className="mt-1.5 block text-lg font-semibold leading-snug text-foreground group-hover:text-primary sm:text-xl">
-                        {capability.title}
-                      </span>
-                      <span className="mt-2 block text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
-                        {capability.description}
-                      </span>
-                    </span>
-                  </span>
-                  <ArrowUpRight
-                    className="col-start-2 h-4 w-4 self-center text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary sm:col-start-3 sm:row-start-1 sm:self-start"
-                    aria-hidden="true"
-                  />
-                </Link>
-              </AnimatedSection>
-            ))}
-          </div>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end lg:gap-12">
+          <h2 className="paper-display text-[clamp(2.4rem,6vw,4.75rem)] text-paper-text">
+            Get dressed faster.
+          </h2>
+          <p className="max-w-md text-base leading-relaxed text-paper-text-2 sm:text-[17px]">
+            Outfits from what you own, matched to the weather and your plans. Here is a week from
+            the six pieces above.
+          </p>
         </div>
 
-        <div id="also-in-app" className="mt-20 scroll-mt-24 border-t border-border pt-14 md:mt-28 md:pt-16">
-          <AnimatedSection className="reveal">
-            <div className="grid gap-4 md:grid-cols-12 md:items-end">
-              <div className="md:col-span-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                  Also in the app
-                </p>
-                <h3 className="landing-display mt-3 text-2xl font-semibold text-foreground sm:text-3xl">
-                  The operational details are covered
-                </h3>
-              </div>
-              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground md:col-span-7 md:justify-self-end md:text-base">
-                Import, schedule, pack, share, and make buying decisions without moving the wardrobe record between tools.
+        <ol
+          aria-label="An example week of outfits"
+          className="scroll-rail -mx-4 mt-12 flex snap-x gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:grid sm:grid-cols-5 sm:overflow-visible sm:px-0 md:gap-5"
+        >
+          {WEEK.map((day) => (
+            <li
+              key={day.day}
+              className={`paper-sheet w-[46vw] max-w-[220px] shrink-0 snap-start p-3 sm:w-auto sm:max-w-none ${
+                // Same box-shadow layering as Pricing: ring-2 would replace
+                // the paper slab instead of joining it.
+                day.today ? 'paper-sheet-accent' : ''
+              }`}
+            >
+              <p className="flex items-baseline justify-between gap-2">
+                <span className="paper-head text-xl text-paper-text">{day.today ? 'Today' : day.day}</span>
+                <span className="text-xs tabular-nums text-paper-text-3">{day.weather}</span>
               </p>
-            </div>
-          </AnimatedSection>
+              <div className="relative mt-2 aspect-[4/5]">
+                {day.pieces.map((piece, index) => (
+                  <GeneratedImage
+                    key={piece}
+                    src={`/signature/${piece}.webp`}
+                    alt={SIZE[piece].name}
+                    width={SIZE[piece].width}
+                    height={SIZE[piece].height}
+                    loading="lazy"
+                    decoding="async"
+                    className={`paper-cutout absolute h-auto ${COLLAGE[index]}`}
+                  />
+                ))}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-3 text-xs text-paper-text-3">Example week. The weather is illustrative.</p>
 
-          <div className="mt-10 grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
-            {alsoInApp.map((item, index) => (
-              <AnimatedSection key={item.title} delay={index * 40}>
-                <div className="h-full border-t border-border py-6">
-                  <h4 className="text-base font-semibold text-foreground">{item.title}</h4>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
-                </div>
-              </AnimatedSection>
-            ))}
-          </div>
+        <ul className="mt-16 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-5 md:mt-20">
+          {capabilities.map((capability) => (
+            <li key={capability.verb} className="reveal">
+              <Link to={capability.href} className="group block rounded-lg">
+                <span className="flex items-center gap-1.5">
+                  <span className="paper-head text-[1.7rem] text-paper-text transition-colors group-hover:text-paper-accent">
+                    {capability.verb}
+                  </span>
+                  <ArrowUpRight
+                    className="h-5 w-5 text-paper-text-3 transition-[color,transform] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-paper-accent"
+                    aria-hidden="true"
+                  />
+                </span>
+                <span className="mt-2 block text-[15px] leading-relaxed text-paper-text-2">
+                  {capability.body}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
 
-          <ul className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
-            {secondaryLinks.map((item) => (
+        <div id="also-in-app" className="mt-20 md:mt-24">
+          <h3 className="paper-head text-[1.7rem] text-paper-text">Also in the app</h3>
+          <ul className="mt-6 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+            {alsoInApp.map((item) => (
               <li key={item.title}>
-                <Link
-                  to={item.href}
-                  className="inline-flex min-h-11 items-center gap-2 text-body transition-colors hover:text-primary"
-                >
-                  <item.icon className="h-4 w-4 text-primary" aria-hidden="true" />
-                  {item.title}
-                </Link>
+                <p className="text-[15px] font-semibold text-paper-text">{item.title}</p>
+                <p className="mt-1 text-[15px] leading-relaxed text-paper-text-2">{item.body}</p>
               </li>
             ))}
           </ul>
+          <Link
+            to="/features"
+            className="mt-8 inline-flex min-h-11 items-center gap-1.5 text-[15px] font-semibold text-paper-accent hover:text-paper-text"
+          >
+            Every feature
+            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
         </div>
       </div>
     </section>

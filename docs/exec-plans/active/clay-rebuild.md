@@ -1,6 +1,7 @@
 # clay-rebuild — clay.com-grade landing + webapp lift
 
-Status: active
+Status: active (web app); superseded for the landing on 2026-10-01 by
+`2026-10-01-paper-studio-landing.md`
 Started: 2026-09-13
 Owner: orchestrator (dispatches parallel agents per wave)
 

@@ -20,12 +20,19 @@ export function GeneratedImage({ fallback = 'hide-self', onError, ...rest }: Gen
   const handleError: ReactEventHandler<HTMLImageElement> = (event) => {
     onError?.(event)
     switch (fallback) {
-      case 'hide-parent':
-        event.currentTarget.parentElement?.setAttribute('hidden', '')
+      // Inline style, not the `hidden` attribute: attribute hiding is the
+      // base-layer `[hidden] { display: none }` rule, which any `flex`/`grid`
+      // utility on the target (utilities layer) silently overrides.
+      case 'hide-parent': {
+        const parent = event.currentTarget.parentElement
+        if (parent) parent.style.display = 'none'
         break
-      case 'hide-figure':
-        event.currentTarget.closest('figure')?.setAttribute('hidden', '')
+      }
+      case 'hide-figure': {
+        const figure = event.currentTarget.closest('figure')
+        if (figure) figure.style.display = 'none'
         break
+      }
       case 'hide-self':
         event.currentTarget.style.display = 'none'
         break

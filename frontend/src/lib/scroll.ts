@@ -1,7 +1,7 @@
 /**
  * Scroll to a landing section and move keyboard focus to it so screen-reader
  * and keyboard users land where the viewport went. Shared by the Navbar,
- * Footer, Pricing, and ProofBand same-page anchors.
+ * Footer, and Pricing same-page anchors.
  */
 export function scrollToSectionId(id: string) {
   const el = document.getElementById(id)
