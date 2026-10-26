@@ -103,6 +103,25 @@ export const DEVICES = {
     chrome: 'notch',
     screenAspect: 1284 / 2778,
   },
+  129: {
+    key: '129',
+    dir: 'ipad-129',
+    display: 'APP_IPAD_PRO_3GEN_129',
+    label: 'iPad Pro 12.9" — required while TARGETED_DEVICE_FAMILY includes 2',
+    // Apple's live imageSpecs put 2048x2732 in IPAD_129_PROFILE and 2064x2752 in
+    // IPAD_13_PROFILE. The live 1.2.1 set is APP_IPAD_PRO_3GEN_129, so this size
+    // keeps the 1.3.0 gallery in the same slot instead of opening a second one.
+    size: [2048, 2732],
+    accepted: [
+      [2048, 2732],
+      [2064, 2752],
+    ],
+    // Tablets have no cutout: the camera sits in the bezel, so the screen is a
+    // plain rounded rectangle.
+    chrome: 'tablet',
+    profile: 'tablet',
+    screenAspect: 2048 / 2732,
+  },
 };
 
 /**

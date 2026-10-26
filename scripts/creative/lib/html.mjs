@@ -246,17 +246,19 @@ function deviceMarkup({ device, screenSrc, screenW, rtlSign }) {
   const bezY = Math.round(screenH * 0.0125);
   const bodyW = screenW + bezX * 2;
   const bodyH = screenH + bezY * 2;
-  const bodyR = Math.round(bodyW * 0.142);
+  const bodyR = Math.round(bodyW * (spec.chrome === 'tablet' ? 0.075 : 0.142));
   const screenR = Math.round(bodyR - bezX * 0.86);
 
   const cutout =
-    spec.chrome === 'island'
-      ? `<div class="island" style="width:${Math.round(screenW * 0.255)}px;height:${Math.round(
-          screenW * 0.081,
-        )}px;top:${Math.round(screenH * 0.0125)}px"></div>`
-      : `<div class="notch" style="width:${Math.round(screenW * 0.36)}px;height:${Math.round(
-          screenH * 0.032,
-        )}px"></div>`;
+    spec.chrome === 'tablet'
+      ? ''
+      : spec.chrome === 'island'
+        ? `<div class="island" style="width:${Math.round(screenW * 0.255)}px;height:${Math.round(
+            screenW * 0.081,
+          )}px;top:${Math.round(screenH * 0.0125)}px"></div>`
+        : `<div class="notch" style="width:${Math.round(screenW * 0.36)}px;height:${Math.round(
+            screenH * 0.032,
+          )}px"></div>`;
 
   const css = `
 .device{position:relative;width:${bodyW}px;height:${bodyH}px;border-radius:${bodyR}px;

@@ -25,6 +25,9 @@ export const MANIFEST = join(OUT, 'manifest.json');
 /** Inputs committed to the repo. */
 export const SOURCE = join(OUT, 'source');
 export const SCREENS = join(SOURCE, 'screens');
+/** Tablet-aspect captures, kept apart so a phone capture is never cropped into
+ * an iPad frame. Only the primary locale is captured today. */
+export const SCREENS_TABLET = join(SOURCE, 'screens-ipad');
 export const ART = join(SOURCE, 'art');
 export const FONTS = join(OUT, 'fonts');
 export const COPY = join(OUT, 'copy.json');

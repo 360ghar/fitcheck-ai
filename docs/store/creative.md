@@ -323,6 +323,28 @@ covers the script, and redirects every golden write to
 `flutter/scripts/store_capture_post.py` then maps the six screens we ship onto
 760 × 1643. Nothing in `flutter/lib/**` changes.
 
+**Tablet sources.** App Store Connect requires an iPad screenshot set while
+`TARGETED_DEVICE_FAMILY` includes `2`, and a phone capture cannot be reused: the
+aspect is 0.46 against a tablet's 0.75, so the frame would crop the app's sides.
+Run the same capture with a tablet surface and a separate output tree:
+
+```bash
+cd flutter
+flutter test --dart-define=STORE_CAPTURE_LOCALE=en-US \
+  --dart-define=STORE_CAPTURE_SIZE=1032x1376 \
+  test/visual/wardrobe_golden_test.dart test/visual/dashboard_golden_test.dart \
+  test/visual/more_golden_test.dart test/visual/photoshoot_golden_test.dart \
+  test/visual/plan_golden_test.dart
+python3 scripts/store_capture_post.py en-US --size 2048x2732 \
+  --out ../store/creative/source/screens-ipad
+node scripts/creative/render.mjs --locale en-US --device 129
+```
+
+2048 × 2732 is deliberate: Apple's `imageSpecs` place it in the 12.9-inch
+profile, which is the display type the live listing already fills. Only `en-US`
+is captured today, so other storefronts show the English iPad gallery while
+their iPhone gallery stays localized (TD-143).
+
 **One face, not a font stack.** The Flutter test shell has no platform font
 fallback, and it does not fall back between faces registered under one family —
 the family's first face wins. A non-Latin capture therefore registers

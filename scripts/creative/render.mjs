@@ -38,6 +38,7 @@ import {
   PREVIEW,
   ROOT,
   SCREENS,
+  SCREENS_TABLET,
   SEARCH,
   ART,
 } from './lib/paths.mjs';
@@ -141,16 +142,29 @@ const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 const fileHash = (path) => (existsSync(path) ? sha256(readFileSync(path)) : 'missing');
 const rel = (path) => relative(ROOT, path);
 
-function screenPath(name, locale) {
+function screenPath(name, locale, device) {
   // A locale-specific capture wins, so an Arabic frame can show the Arabic app.
   // Falling back to the shared English capture keeps the pipeline usable while a
   // capture run is incomplete: a missing locale must degrade to the old frame,
   // not break the build. `check.mjs` warns for every frame still on the fallback,
   // because shipping one means an English UI under localized marketing copy.
-  const localized = locale ? join(SCREENS, locale, `${name}.png`) : null;
-  const path = localized && existsSync(localized) ? localized : join(SCREENS, `${name}.png`);
-  if (!existsSync(path)) {
-    throw new Error(`missing source screen ${rel(path)} — see docs/store/creative.md`);
+  //
+  // Tablet frames read a separate tree. A phone capture is 0.46 wide and an iPad
+  // is 0.75, so `object-fit: cover` would crop the sides off the app screen —
+  // the frame would look plausible and be wrong. There is deliberately no
+  // cross-tree fallback.
+  const tablet = device?.profile === 'tablet';
+  const root = tablet ? SCREENS_TABLET : SCREENS;
+  const candidates = [
+    locale ? join(root, locale, `${name}.png`) : null,
+    tablet ? join(root, 'en-US', `${name}.png`) : null,
+    tablet ? null : join(root, `${name}.png`),
+  ].filter(Boolean);
+  const path = candidates.find((candidate) => existsSync(candidate));
+  if (!path) {
+    throw new Error(
+      `missing source screen ${rel(candidates[0])}${tablet ? ' (tablet capture)' : ''} — see docs/store/creative.md`,
+    );
   }
   return path;
 }
@@ -293,7 +307,7 @@ function specFor(task, variant = 'listing') {
   const frame = task.frame;
   const copy = copyFor(locale.asc, frame, { variant });
   const offer = offerFor(locale.asc);
-  const screen = screenPath(frame.screen, locale.asc);
+  const screen = screenPath(frame.screen, locale.asc, task.device);
   const inputs = [screen, fonts.displayPath, fonts.bodyPath];
   if (frame.art) inputs.push(artPath(frame.art));
   const [W, H] = task.device.size;

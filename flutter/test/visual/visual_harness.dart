@@ -50,6 +50,23 @@ Future<void> loadAppFonts() async {
   await load('MaterialIcons', ['$fonts/MaterialIcons-Regular.otf']);
 }
 
+/// Logical size the store-capture run asks for, or the phone the regression
+/// goldens were recorded on.
+///
+/// `--dart-define=STORE_CAPTURE_SIZE=1032x1376` captures an iPad-aspect source
+/// (2064x2752 at 2x) for the App Store's 13-inch slot, which App Store Connect
+/// requires whenever the binary declares iPad support. Left empty, every run
+/// keeps 390x844 so the committed goldens stay comparable.
+Size _surfaceSize() {
+  const raw = String.fromEnvironment('STORE_CAPTURE_SIZE');
+  if (raw.isEmpty) return const Size(390 * 2, 844 * 2);
+  final parts = raw.split('x');
+  if (parts.length != 2) {
+    throw ArgumentError.value(raw, 'STORE_CAPTURE_SIZE', 'expected <width>x<height>');
+  }
+  return Size(double.parse(parts[0]) * 2, double.parse(parts[1]) * 2);
+}
+
 /// Pumps [child] on a 390x844 phone in the app theme.
 Future<void> pumpPhone(
   WidgetTester tester,
@@ -62,7 +79,7 @@ Future<void> pumpPhone(
   final captureLocale = isStoreCapture
       ? LocaleRegistry.byAsc(storeCaptureLocale)?.locale ?? const Locale('en')
       : const Locale('en');
-  tester.view.physicalSize = const Size(390 * 2, 844 * 2);
+  tester.view.physicalSize = _surfaceSize();
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(

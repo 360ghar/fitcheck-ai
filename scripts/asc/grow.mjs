@@ -1493,8 +1493,18 @@ async function cmdSubmit() {
 
     const experiments = await listExperiments(client, appId);
     const localPpo = readStoreFile('ppo.json');
-    record(experiments.length >= (localPpo.experiments?.length ?? 0), 'PPO experiments',
-      `${experiments.length} live of ${localPpo.experiments?.length ?? 0} planned — run grow.mjs ppo --apply`);
+    // A planned-but-absent experiment is a backlog item, not a submission
+    // blocker. Apple reviews the version; an experiment that is not in the
+    // submission is simply not reviewed, and the version converts on the page
+    // that is live either way. What must hold is that the experiment that does
+    // exist has its treatments placed. The rest are created as the running one
+    // concludes, because Apple splits live traffic across one experiment at a
+    // time; PPO 1 additionally needs app-icon variants, which no API can upload.
+    const plannedCount = localPpo.experiments?.length ?? 0;
+    record(experiments.length > 0, 'PPO experiments',
+      experiments.length > 0
+        ? `${experiments.length} live of ${plannedCount} planned (the rest are created as the running one concludes) — status: grow.mjs status`
+        : `none live of ${plannedCount} planned — run grow.mjs ppo --apply`);
 
     // --- report -----------------------------------------------------------
     heading('Checks');
