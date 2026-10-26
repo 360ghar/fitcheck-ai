@@ -172,6 +172,30 @@ node scripts/asc/grow.mjs submit              # prints what would be submitted
 
 The submit step refuses when anything required is missing and names it.
 
+### When submission reports a reason that is not true
+
+Two failures cost two hours on 1.3.0 because the error names the wrong thing.
+
+**`STATE_ERROR.ASSET_UPLOAD_IN_PROGRESS.APP_SCREENSHOT`, forever.** The message
+says an upload is in flight. In practice it means one screenshot was reserved and
+never given bytes: an `appAssetLibraryImage` sitting in `AWAITING_UPLOAD` at 0x0.
+Every `appScreenshot` in the set can report `COMPLETE` while this is true, and the
+stuck asset can be in any of the 50 locales. Find it by scanning all of them:
+
+```bash
+node scripts/asc/scan-assets.mjs      # lists every screenshot whose state is not COMPLETE
+```
+
+An asset that still has a placement cannot be deleted, so the order is: delete the
+placement, delete the image, then re-run `node scripts/asc/media.mjs upload --apply`
+to upload the bytes again and re-place it.
+
+**`STATE_ERROR.SCREENSHOT_REQUIRED.IPAD_13_PROFILE` on a custom product page.**
+The version can pass every gallery check while a CPP localization still fails:
+each CPP localization needs its own 13-inch placement, and the main listing's
+iPad gallery does not count for it. Place one on all of them (nine pages × seven
+locales) before submitting.
+
 ## Rollback
 
 | Step | How to undo |
