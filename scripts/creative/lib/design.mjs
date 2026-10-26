@@ -106,21 +106,22 @@ export const DEVICES = {
   129: {
     key: '129',
     dir: 'ipad-129',
-    display: 'APP_IPAD_PRO_3GEN_129',
-    label: 'iPad Pro 12.9" — required while TARGETED_DEVICE_FAMILY includes 2',
-    // Apple's live imageSpecs put 2048x2732 in IPAD_129_PROFILE and 2064x2752 in
-    // IPAD_13_PROFILE. The live 1.2.1 set is APP_IPAD_PRO_3GEN_129, so this size
-    // keeps the 1.3.0 gallery in the same slot instead of opening a second one.
-    size: [2048, 2732],
+    // APP_IPAD_13, not APP_IPAD_PRO_3GEN_129. Apple validates the *required*
+    // slot by profile name and rejects the submission with
+    // STATE_ERROR.SCREENSHOT_REQUIRED.IPAD_13_PROFILE when only the 12.9-inch
+    // set exists, which is what happened on the first 1.3.0 attempt.
+    display: 'APP_IPAD_13',
+    label: 'iPad 13" — required while TARGETED_DEVICE_FAMILY includes 2',
+    size: [2064, 2752],
     accepted: [
-      [2048, 2732],
       [2064, 2752],
+      [2048, 2732],
     ],
     // Tablets have no cutout: the camera sits in the bezel, so the screen is a
     // plain rounded rectangle.
     chrome: 'tablet',
     profile: 'tablet',
-    screenAspect: 2048 / 2732,
+    screenAspect: 2064 / 2752,
   },
 };
 
