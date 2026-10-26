@@ -10,7 +10,7 @@
 
 ## Overview
 
-This reference covers **248** operations across **220** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
+This reference covers **250** operations across **222** paths, grouped by router. Request bodies and response models are rendered from the OpenAPI `components.schemas`; where a route is declared with an arbitrary-JSON response model (no schema), the response is documented as the `{data, message}` envelope and the shape of `data` should be confirmed against the route source.
 
 Job-based endpoints (photoshoot, batch extraction, social import) accept work asynchronously: they return a `job_id` in `data` immediately (202) and expose `/status` polling plus `/events` SSE streams (see TD-020 below).
 
@@ -63,6 +63,8 @@ Public endpoints (no auth required):
 - `GET /api/v1/gifts/public/{public_id}`
 - `GET /api/v1/gifts/public/{public_id}/artwork/og.png`
 - `GET /api/v1/health`
+- `GET /api/v1/i18n/languages`
+- `GET /api/v1/i18n/resolve`
 - `GET /api/v1/oauth/.well-known/oauth-authorization-server`
 - `GET /api/v1/oauth/.well-known/oauth-protected-resource`
 - `GET /api/v1/oauth/authorize`
@@ -185,6 +187,40 @@ Root endpoint.
 **Responses:**
 
 - **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/i18n/languages
+
+Every language the app and store listing support.
+
+**Auth:** none (public endpoint)
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+
+### GET /api/v1/i18n/resolve
+
+Normalize an arbitrary tag, or report what this request resolved to.
+
+Used by the client when it needs to know which of its locales the server
+will actually answer in — for example, to show "AI answers in {language}"
+in the picker. With no `tag` this reports the request's *effective*
+language (the `Content-Language` the response carries), not just the
+header, so an authenticated caller that saved a choice in settings sees
+that choice here too.
+
+**Auth:** none (public endpoint)
+
+**Parameters:**
+
+| Parameter | In | Type | Required | Description |
+|-----------|----|------|----------|-------------|
+| `tag` | query | string (nullable) | no |  |
+
+**Responses:**
+
+- **200** Arbitrary JSON object — routes wrap payloads in the `{data, message}` envelope (see [Response Format](#response-format)).
+- **Errors:** 422 Unprocessable Entity
 
 ### GET /api/v1/oauth/.well-known/oauth-authorization-server
 
@@ -858,6 +894,7 @@ Update User Settings
 | `default_location` | string (nullable) | no |  |
 | `email_marketing` | boolean (nullable) | no |  |
 | `language` | string (nullable) | no |  |
+| `language_explicit` | boolean (nullable) | no |  |
 | `measurement_units` | string (nullable) | no |  |
 | `notifications_enabled` | boolean (nullable) | no |  |
 | `timezone` | string (nullable) | no |  |
@@ -7056,6 +7093,7 @@ Model for updating user settings (all fields optional).
 | `default_location` | string (nullable) | no |  |
 | `email_marketing` | boolean (nullable) | no |  |
 | `language` | string (nullable) | no |  |
+| `language_explicit` | boolean (nullable) | no |  |
 | `measurement_units` | string (nullable) | no |  |
 | `notifications_enabled` | boolean (nullable) | no |  |
 | `timezone` | string (nullable) | no |  |

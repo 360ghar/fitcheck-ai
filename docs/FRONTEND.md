@@ -1,6 +1,6 @@
 # Frontend
 
-Last updated: 2026-10-01
+Last updated: 2026-10-27
 
 React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/AGENTS.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
 

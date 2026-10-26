@@ -1,6 +1,6 @@
 # FitCheck AI knowledge base
 
-Last updated: 2026-08-08
+Last updated: 2026-10-27
 
 This directory is the **system of record** for product intent, design decisions, execution plans, quality grades, and deep technical notes. Agents should start at root `AGENTS.md`, then `ARCHITECTURE.md`, then the files below.
 
