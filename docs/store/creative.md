@@ -335,15 +335,16 @@ flutter test --dart-define=STORE_CAPTURE_LOCALE=en-US \
   test/visual/wardrobe_golden_test.dart test/visual/dashboard_golden_test.dart \
   test/visual/more_golden_test.dart test/visual/photoshoot_golden_test.dart \
   test/visual/plan_golden_test.dart
-python3 scripts/store_capture_post.py en-US --size 2048x2732 \
+python3 scripts/store_capture_post.py en-US --size 2064x2752 \
   --out ../store/creative/source/screens-ipad
 node scripts/creative/render.mjs --locale en-US --device 129
 ```
 
-2048 × 2732 is deliberate: Apple's `imageSpecs` place it in the 12.9-inch
-profile, which is the display type the live listing already fills. Only `en-US`
-is captured today, so other storefronts show the English iPad gallery while
-their iPhone gallery stays localized (TD-143).
+2064 × 2752 is deliberate: it is the 13-inch profile, and that is the slot Apple
+checks. Placing a 12.9-inch set instead is not enough — the submission comes back
+`STATE_ERROR.SCREENSHOT_REQUIRED.IPAD_13_PROFILE` even though a 12.9-inch set is
+full. Only `en-US` is captured today, so other storefronts show the English iPad
+gallery while their iPhone gallery stays localized (TD-143).
 
 **One face, not a font stack.** The Flutter test shell has no platform font
 fallback, and it does not fall back between faces registered under one family —
