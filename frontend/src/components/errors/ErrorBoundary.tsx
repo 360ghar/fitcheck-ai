@@ -122,7 +122,7 @@ class ErrorBoundary extends Component<Props, State> {
                 <button
                   type="button"
                   onClick={this.toggleDetails}
-                  className="flex items-center justify-between w-full text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center justify-between w-full text-start-left text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <span className="font-medium">Error Details (Development Only)</span>
                   {isDetailsExpanded ? (

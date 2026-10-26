@@ -1,8 +1,11 @@
-What's new in FitCheck AI 1.2.1:
+What's new in FitCheck AI 1.3.0:
 
-- Add clothes in the background. Keep using the app and get a notification when your items are ready.
-- Save every item from a photo in one step.
-- Outfits without a photo now show a collage of their pieces.
-- Fixes for extraction progress, retry, and cancel.
+FitCheck AI now speaks 43 languages across 50 App Store storefronts, including Hindi, Arabic, Japanese and every Indian regional language, with right-to-left layouts for Arabic, Hebrew and Urdu. The App Store screens you saw are localized too, and dates now follow your language instead of English.
 
-Thanks for using FitCheck AI.
+- One month of Pro free for new subscribers: upload your whole closet, a batch at a time
+- A translated interface across all 43 languages, with localized dates
+- The App Store listing itself is localized in all 50 storefronts
+- Faster batch upload with background progress
+- Fixes for extraction retries and offline starts
+
+Keep your closet going free forever with 50 AI uploads and 50 outfits every month. Thanks for using FitCheck AI.

@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "يحتاج FitCheck AI إلى الوصول إلى الكاميرا لالتقاط صور لملابسك وتنسيقاتك.";
+"NSPhotoLibraryUsageDescription" = "يحتاج FitCheck AI إلى الوصول إلى مكتبة الصور لاختيار صور لملابسك وتنسيقاتك.";
+"NSPhotoLibraryAddUsageDescription" = "يحتاج FitCheck AI إلى حفظ صور التنسيقات المولدة بالذكاء الاصطناعي في مكتبة الصور الخاصة بك.";

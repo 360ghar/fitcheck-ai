@@ -33,9 +33,9 @@ export function OutfitSelectionTray({ items, onRemove, disabled }: OutfitSelecti
       </p>
 
       {/* min-h holds the row open at exactly one tile's height from the start.
-          -mx-4 px-4 pr-8 lets the scroller bleed to the page gutter while the
+          -mx-4 px-4 pe-8 lets the scroller bleed to the page gutter while the
           last tile still clears the container edge by 32px. */}
-      <div className="-mx-4 mt-sm min-h-14 snap-x overflow-x-auto px-4 pr-8">
+      <div className="-mx-4 mt-sm min-h-14 snap-x overflow-x-auto px-4 pe-8">
         {count === 0 ? (
           <p className="flex h-14 items-center text-xs text-muted-foreground">
             Tap a piece below to add it to the look.
@@ -79,7 +79,7 @@ export function OutfitSelectionTray({ items, onRemove, disabled }: OutfitSelecti
                     glyph dead-centre in the disc. */}
                 <span
                   className={cn(
-                    'absolute right-0 top-0 flex h-[18px] w-[18px] items-center justify-center rounded-full',
+                    'absolute end-0 top-0 flex h-[18px] w-[18px] items-center justify-center rounded-full',
                     'bg-ink text-on-dark transition-colors group-hover:bg-destructive',
                     'group-hover:text-destructive-foreground'
                   )}

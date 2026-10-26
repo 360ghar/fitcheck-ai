@@ -2,7 +2,10 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // `Intl.ListFormat` (ES2021) is used for localized "a, b and c"; the app
+    // already relies on `Intl.PluralRules` and `Intl.RelativeTimeFormat`. The
+    // lib is the type surface only — the emit target stays ES2020.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
 

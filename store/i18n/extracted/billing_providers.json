@@ -1,0 +1,445 @@
+{
+  "group": "billing_providers",
+  "files": [
+    "features/subscription/providers/subscription_providers.dart",
+    "features/subscription/services/purchase_recovery_service.dart",
+    "features/gifts/providers/gift_providers.dart",
+    "features/gifts/views/gift_vouchers_page.dart",
+    "features/settings/providers/ai_settings_provider.dart",
+    "features/settings/providers/settings_provider.dart"
+  ],
+  "keys": [
+    {
+      "key": "subscriptionManageInStoreTitle",
+      "value": "Manage in the store",
+      "description": "Toast title shown to a subscriber who taps cancel on a plan billed by the App Store or Play Store."
+    },
+    {
+      "key": "subscriptionManageInStoreBody",
+      "value": "This plan is billed through the store. Manage it in your store account settings.",
+      "description": "Toast body explaining that a store-billed plan must be cancelled from the store, shown after the in-app cancel is refused."
+    },
+    {
+      "key": "subscriptionCancelledTitle",
+      "value": "Subscription cancelled",
+      "description": "Toast title confirming the cancellation of a card-billed subscription."
+    },
+    {
+      "key": "subscriptionCancelledBody",
+      "value": "Your plan stays active until the end of this billing period.",
+      "description": "Toast body after a successful cancellation, telling the subscriber when their access ends."
+    },
+    {
+      "key": "subscriptionCancelFailedTitle",
+      "value": "Could not cancel",
+      "description": "Toast title shown to a subscriber when the cancellation request fails."
+    },
+    {
+      "key": "subscriptionCouldNotOpenTitle",
+      "value": "Could not open",
+      "description": "Toast title shown when the app cannot open the billing portal or an external store link."
+    },
+    {
+      "key": "subscriptionOpenBillingFailedBody",
+      "value": "Could not open billing management.",
+      "description": "Toast body shown on web when the billing portal session comes back empty."
+    },
+    {
+      "key": "subscriptionOpenLinkFailedBody",
+      "value": "Could not open the link.",
+      "description": "Toast body shown when an external billing or store link cannot be launched on the device."
+    },
+    {
+      "key": "subscriptionReferralLoadFailedTitle",
+      "value": "Could not load your link",
+      "description": "Toast title shown when the signed-in user's referral code cannot be loaded."
+    },
+    {
+      "key": "subscriptionReferralLoadFailedBody",
+      "value": "Could not load your referral link. Try again.",
+      "description": "Toast body shown when the referral link fails to load before the user copies or shares it."
+    },
+    {
+      "key": "subscriptionReferralCopiedTitle",
+      "value": "Copied",
+      "description": "Toast title after the referral link is placed on the clipboard."
+    },
+    {
+      "key": "subscriptionReferralCopiedBody",
+      "value": "Referral link copied.",
+      "description": "Toast body confirming the user's referral link was copied to the clipboard."
+    },
+    {
+      "key": "subscriptionReferralShareSubject",
+      "value": "Try FitCheck AI",
+      "description": "Subject line of the system share sheet when the user shares their referral invite."
+    },
+    {
+      "key": "subscriptionReferralShareMessage",
+      "value": "Join FitCheck AI and we both get a month of Pro. {link}",
+      "description": "Body of the system share sheet when the user shares their referral invite, ending with their referral link.",
+      "placeholders": {"link": "String"}
+    },
+    {
+      "key": "subscriptionLinkCopiedTitle",
+      "value": "Link copied",
+      "description": "Toast title shown when the share sheet is unavailable and the referral link is copied instead."
+    },
+    {
+      "key": "subscriptionShareUnavailableBody",
+      "value": "Sharing is not available, so we copied the link.",
+      "description": "Toast body telling the user their referral link was copied because the share sheet failed."
+    },
+    {
+      "key": "subscriptionShareFailedTitle",
+      "value": "Could not share",
+      "description": "Toast title shown when both sharing and copying the referral link fail."
+    },
+    {
+      "key": "subscriptionShareFailedBody",
+      "value": "Copy the link from the referral page instead.",
+      "description": "Toast body telling the user where else to find their referral link after share and copy both fail."
+    },
+    {
+      "key": "subscriptionStoreReadyTitle",
+      "value": "Store ready",
+      "description": "Toast title after the paywall's retry makes the store products available again."
+    },
+    {
+      "key": "subscriptionStoreReadyBody",
+      "value": "Store prices are available. You can upgrade now.",
+      "description": "Toast body telling the subscriber that upgrades work again after a successful store retry."
+    },
+    {
+      "key": "purchaseFailedTitle",
+      "value": "Purchase failed",
+      "description": "Toast title shown when checkout or a store purchase errors."
+    },
+    {
+      "key": "purchaseUnavailableTitle",
+      "value": "Purchase unavailable",
+      "description": "Toast title shown when checkout for a plan cannot start."
+    },
+    {
+      "key": "purchaseIapUnavailableBody",
+      "value": "In-app purchases are not available on this device.",
+      "description": "Toast body shown when the device cannot make in-app purchases from the store."
+    },
+    {
+      "key": "purchasePlanNotAvailableBody",
+      "value": "This plan is not available for purchase yet.",
+      "description": "Toast body shown when the store has no product for the plan the user tapped."
+    },
+    {
+      "key": "purchasePlanNotInStoreBody",
+      "value": "This plan is not available in the store yet. Please check back soon.",
+      "description": "Toast body shown when the store has already failed to serve this plan for the whole session."
+    },
+    {
+      "key": "purchaseStartFailedBody",
+      "value": "The purchase could not start. Try again.",
+      "description": "Toast body shown when the store refuses to open the native purchase sheet."
+    },
+    {
+      "key": "purchaseNoPaymentLinkBody",
+      "value": "Checkout did not return a payment link.",
+      "description": "Toast body shown on web when Stripe checkout returns no payment URL."
+    },
+    {
+      "key": "purchasePendingTitle",
+      "value": "Purchase pending",
+      "description": "Toast title shown while a store purchase waits for parental or bank approval."
+    },
+    {
+      "key": "purchasePendingBody",
+      "value": "Your purchase is waiting for approval. You'll get access as soon as it's approved.",
+      "description": "Toast body explaining that an Ask to Buy purchase needs approval before the subscription activates."
+    },
+    {
+      "key": "purchaseFailedBody",
+      "value": "The purchase failed. Try again.",
+      "description": "Toast body replacing the raw store error when a purchase reports an error status."
+    },
+    {
+      "key": "purchaseRestoredTitle",
+      "value": "Restored",
+      "description": "Toast title shown to the user after the store restores their past purchases."
+    },
+    {
+      "key": "purchaseRestoredBody",
+      "value": "Your purchases are restored.",
+      "description": "Toast body confirming that a restored purchase was verified and applied."
+    },
+    {
+      "key": "purchaseActiveTitle",
+      "value": "Subscription active",
+      "description": "Toast title shown after a purchase made on the paywall activates the subscription."
+    },
+    {
+      "key": "purchaseActiveBody",
+      "value": "Your subscription is active. Welcome.",
+      "description": "Toast body welcoming the user after their paywall purchase is verified."
+    },
+    {
+      "key": "purchaseSignInRequiredTitle",
+      "value": "Sign in required",
+      "description": "Toast title shown when a purchase cannot be applied because no user is signed in."
+    },
+    {
+      "key": "purchaseSignInRequiredBody",
+      "value": "Sign in to finish your purchase.",
+      "description": "Toast body asking the signed-out user to sign in so their purchase can be verified."
+    },
+    {
+      "key": "purchaseErrorTitle",
+      "value": "Purchase error",
+      "description": "Toast title shown when a store transaction carries no usable transaction ID."
+    },
+    {
+      "key": "purchaseInvalidTransactionBody",
+      "value": "The purchase did not include a verifiable transaction ID.",
+      "description": "Toast body shown when a store purchase cannot be verified because it has no transaction ID."
+    },
+    {
+      "key": "purchaseVerificationPendingTitle",
+      "value": "Verification pending",
+      "description": "Toast title shown when the backend cannot be reached to verify a purchase right away."
+    },
+    {
+      "key": "purchaseVerificationPendingBody",
+      "value": "We couldn't verify your purchase with the store right now. It will finish automatically, and you won't be charged twice.",
+      "description": "Toast body reassuring the user that a temporarily unverified purchase completes itself without a second charge."
+    },
+    {
+      "key": "purchaseNotAppliedTitle",
+      "value": "Purchase not applied",
+      "description": "Toast title shown when the backend permanently rejects a store transaction."
+    },
+    {
+      "key": "purchaseNotAppliedBody",
+      "value": "Your purchase could not be applied to your account. Contact support, and do not buy it again.",
+      "description": "Toast body telling a charged user that a rejected purchase needs support and must not be bought again."
+    },
+    {
+      "key": "purchaseRestoreFailedTitle",
+      "value": "Restore failed",
+      "description": "Toast title shown when the store's restore request throws."
+    },
+    {
+      "key": "purchaseRestoreFailedBody",
+      "value": "Could not restore purchases. Try again.",
+      "description": "Toast body shown when restoring past purchases fails."
+    },
+    {
+      "key": "purchaseRecoveredActiveBody",
+      "value": "Your subscription is active.",
+      "description": "Toast body shown when a purchase recovered in the background activates the subscription with no paywall open."
+    },
+    {
+      "key": "purchaseCompleteTitle",
+      "value": "Purchase complete",
+      "description": "Toast title shown when a purchase recovered in the background finishes outside the paywall."
+    },
+    {
+      "key": "giftCreateFailedTitle",
+      "value": "Could not create the gift",
+      "description": "Toast title shown when sending a free gift invitation fails."
+    },
+    {
+      "key": "giftClaimFailedTitle",
+      "value": "Could not claim the gift",
+      "description": "Toast title shown when claiming an incoming gift fails."
+    },
+    {
+      "key": "giftIncomingCount",
+      "value": "{count, plural, =1{A gift for you} other{{count} gifts for you}}",
+      "description": "Heading over the list of incoming gifts, counting how many gifts the signed-in user has waiting.",
+      "placeholders": {"count": "int"}
+    },
+    {
+      "key": "giftDurationTerm",
+      "value": "{months, plural, =1{1 month} =12{1 year} other{{months} months}}",
+      "description": "Length of a gift as a duration phrase, used on allowance chips, gift cards and the share message.",
+      "placeholders": {"months": "int"}
+    },
+    {
+      "key": "giftAllowanceChip",
+      "value": "{duration}, {remaining, plural, =1{1 left} other{{remaining} left}}",
+      "description": "Choice chip for a gift allowance, naming the duration plus how many invitations are left.",
+      "placeholders": {"duration": "String", "remaining": "int"}
+    },
+    {
+      "key": "giftDurationOfPro",
+      "value": "{duration} of FitCheck Pro",
+      "description": "Line on an incoming gift card naming how much FitCheck Pro the gift gives.",
+      "placeholders": {"duration": "String"}
+    },
+    {
+      "key": "giftShareMessage",
+      "value": "{sender} sent you {duration} of FitCheck Pro. {link}",
+      "description": "Body of the share sheet after creating a gift, naming the sender, the duration and the claim link.",
+      "placeholders": {"sender": "String", "duration": "String", "link": "String"}
+    },
+    {
+      "key": "giftShareSubject",
+      "value": "A FitCheck Pro gift for {recipient}",
+      "description": "Subject line of the share sheet after creating a gift, naming the recipient.",
+      "placeholders": {"recipient": "String"}
+    },
+    {
+      "key": "giftFromSender",
+      "value": "From {sender}",
+      "description": "Line on an incoming gift card naming the person who sent it.",
+      "placeholders": {"sender": "String"}
+    },
+    {
+      "key": "giftPreviewFor",
+      "value": "For {recipient}",
+      "description": "Live card preview line naming who the gift is addressed to.",
+      "placeholders": {"recipient": "String"}
+    },
+    {
+      "key": "giftPreviewFrom",
+      "value": "From {sender}",
+      "description": "Live card preview line naming who the gift is from.",
+      "placeholders": {"sender": "String"}
+    },
+    {
+      "key": "giftPreviewPlaceholderRecipient",
+      "value": "your recipient",
+      "description": "Stand-in recipient name on the live card preview while the recipient field is still empty."
+    },
+    {
+      "key": "giftPreviewPlaceholderSender",
+      "value": "you",
+      "description": "Stand-in sender name on the live card preview while the sender field is still empty."
+    },
+    {
+      "key": "settingsSavedTitle",
+      "value": "Saved",
+      "description": "Toast title confirming that a preference change was stored."
+    },
+    {
+      "key": "settingsNotSavedTitle",
+      "value": "Not saved",
+      "description": "Toast title shown when a settings change could not be stored."
+    },
+    {
+      "key": "settingsAiChooseProviderBody",
+      "value": "Choose a provider.",
+      "description": "Validation toast shown when the user saves AI settings without picking a provider."
+    },
+    {
+      "key": "settingsAiCustomUrlRequiredBody",
+      "value": "A custom provider needs an API URL.",
+      "description": "Validation toast shown when a custom AI provider is saved without an API URL."
+    },
+    {
+      "key": "settingsAiKeyRequiredBody",
+      "value": "Enter an API key.",
+      "description": "Validation toast shown when no API key was typed and none is stored for the AI provider."
+    },
+    {
+      "key": "settingsAiSavedBody",
+      "value": "Your AI settings are saved.",
+      "description": "Toast body confirming the user's AI provider settings were saved."
+    },
+    {
+      "key": "settingsAiMissingDetailsTitle",
+      "value": "Missing details",
+      "description": "Toast title shown when the AI connection test is started without a URL or model."
+    },
+    {
+      "key": "settingsAiUrlAndModelRequiredBody",
+      "value": "Enter an API URL and a chat model to test.",
+      "description": "Toast body asking the user for the URL and chat model needed to test an AI provider."
+    },
+    {
+      "key": "settingsAiKeyNeededTitle",
+      "value": "API key needed",
+      "description": "Toast title shown when the AI connection test runs without an API key."
+    },
+    {
+      "key": "settingsAiKeyToTestPrivateBody",
+      "value": "Enter your API key to test. Your saved key stays private.",
+      "description": "Toast body asking for the API key again for a test, reassuring that the stored key is not exposed."
+    },
+    {
+      "key": "settingsAiKeyToTestBody",
+      "value": "Enter your API key to test.",
+      "description": "Toast body asking the user to type their API key before running the AI connection test."
+    },
+    {
+      "key": "settingsAiConnectedTitle",
+      "value": "Connected",
+      "description": "Toast title shown when the AI provider connection test succeeds."
+    },
+    {
+      "key": "settingsAiConnectedBody",
+      "value": "The connection works.",
+      "description": "Toast body confirming the tested AI provider answered correctly."
+    },
+    {
+      "key": "settingsAiTestFailedTitle",
+      "value": "Test failed",
+      "description": "Toast title shown when the AI provider connection test fails."
+    },
+    {
+      "key": "settingsPreferencesSavedBody",
+      "value": "Your preferences are saved.",
+      "description": "Toast body confirming the user's app preferences were saved to the backend."
+    },
+    {
+      "key": "settingsPasswordNotChangedTitle",
+      "value": "Password not changed",
+      "description": "Toast title shown whenever the password change is refused or fails."
+    },
+    {
+      "key": "settingsOAuthPasswordBody",
+      "value": "This account signs in with Google or Apple. Use \"Forgot password\" to set a password first.",
+      "description": "Toast body shown to a Google or Apple sign-in user who tries to change a password they do not have."
+    },
+    {
+      "key": "settingsCurrentPasswordIncorrectBody",
+      "value": "Current password is incorrect.",
+      "description": "Toast body shown when re-authentication with the typed current password is rejected."
+    },
+    {
+      "key": "settingsExportReadyTitle",
+      "value": "Export ready",
+      "description": "Toast title shown when the user's data export download opens."
+    },
+    {
+      "key": "settingsExportReadyBody",
+      "value": "Your data export is ready to download.",
+      "description": "Toast body telling the user their data export file was opened in the browser."
+    },
+    {
+      "key": "settingsLinkCopiedTitle",
+      "value": "Link copied",
+      "description": "Toast title shown when a download link is copied to the clipboard instead of opened."
+    },
+    {
+      "key": "settingsExportClipboardBody",
+      "value": "We could not open your browser, so we copied the download link. Paste it into a browser soon: it expires.",
+      "description": "LEGAL: Toast body telling the user their data-export download link was copied instead of opened and expires soon."
+    },
+    {
+      "key": "settingsExportFailedTitle",
+      "value": "Export failed",
+      "description": "Toast title shown when the data export request fails."
+    },
+    {
+      "key": "settingsAccountNotDeletedTitle",
+      "value": "Account not deleted",
+      "description": "LEGAL: Toast title telling the user their account-deletion request did not go through and the account still exists."
+    }
+  ],
+  "deferred": [
+    {"value": "Plus monthly", "file": "features/subscription/providers/subscription_providers.dart", "line": 96, "reason": "Canonical plan tier label from the product catalog (Plus/Pro plus the billing period); product naming is not translated."},
+    {"value": "Plus yearly", "file": "features/subscription/providers/subscription_providers.dart", "line": 97, "reason": "Canonical plan tier label from the product catalog (Plus/Pro plus the billing period); product naming is not translated."},
+    {"value": "Pro monthly", "file": "features/subscription/providers/subscription_providers.dart", "line": 98, "reason": "Canonical plan tier label from the product catalog (Plus/Pro plus the billing period); product naming is not translated."},
+    {"value": "Pro yearly", "file": "features/subscription/providers/subscription_providers.dart", "line": 99, "reason": "Canonical plan tier label from the product catalog (Plus/Pro plus the billing period); product naming is not translated."},
+    {"value": "Free", "file": "features/subscription/providers/subscription_providers.dart", "line": 100, "reason": "Canonical plan tier label from the product catalog; the same switch supplies the paid tier names and must stay consistent with them."}
+  ]
+}

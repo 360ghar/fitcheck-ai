@@ -577,7 +577,7 @@ export default function GiftsPage() {
                       resetIntent()
                     }}
                     className={cn(
-                      'min-h-24 rounded-md border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'min-h-24 rounded-md border p-3 text-start-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       duration === option.duration_months
                         ? 'border-primary bg-primary/5'
                         : 'border-border bg-card hover:border-foreground/30',
@@ -609,7 +609,7 @@ export default function GiftsPage() {
                     resetIntent()
                   }}
                   className={cn(
-                    'rounded-md border p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    'rounded-md border p-4 text-start-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     mode === 'complimentary' ? 'border-primary bg-primary/5' : 'border-border bg-card',
                   )}
                 >
@@ -628,7 +628,7 @@ export default function GiftsPage() {
                     resetIntent()
                   }}
                   className={cn(
-                    'rounded-md border p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-55',
+                    'rounded-md border p-4 text-start-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-55',
                     mode === 'paid' ? 'border-primary bg-primary/5' : 'border-border bg-card',
                   )}
                 >

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/season.dart';
@@ -45,18 +47,18 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
       stock: PaperStockId.marigold,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Build an outfit'),
+          title: Text(context.l10n.quickBuildOutfit),
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: AppConstants.spacing8),
+              padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
               child: TextButton(
                 onPressed: draft.saving || draft.pieces.isEmpty ? null : _save,
                 child: draft.saving
-                    ? const InlineProcessingStatus(
+                    ? InlineProcessingStatus(
                         phase: ProcessingPhase.processing,
-                        processingLabel: 'Saving',
+                        processingLabel: context.l10n.itemManualSaving,
                       )
-                    : const Text('Save'),
+                    : Text(context.l10n.actionSave),
               ),
             ),
           ],
@@ -97,8 +99,8 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
                         : const Icon(Icons.auto_awesome_outlined),
                     label: Text(
                       draft.previewUrl == null
-                          ? 'Preview with AI'
-                          : 'Make a new preview',
+                          ? context.l10n.outfitPreviewWithAi
+                          : context.l10n.outfitNewPreview,
                     ),
                   ),
                 ),
@@ -118,7 +120,7 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
               horizontal: AppConstants.spacing16,
             ),
             child: Text(
-              'Your closet',
+              context.l10n.outfitBuilderClosetHeading,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
           ),
@@ -132,12 +134,12 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
               onChanged: (_) => setState(() {}),
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Search pieces',
+                hintText: context.l10n.outfitBuilderSearchHint,
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _search.text.isEmpty
                     ? null
                     : IconButton(
-                        tooltip: 'Clear search',
+                        tooltip: context.l10n.outfitClearSearch,
                         icon: const Icon(Icons.close_rounded),
                         onPressed: () => setState(_search.clear),
                       ),
@@ -159,7 +161,9 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
                       right: AppConstants.spacing8,
                     ),
                     child: FilterChip(
-                      label: Text(c?.displayName ?? 'All'),
+                      label: Text(
+                        c?.label(context.l10n) ?? context.l10n.actionAll,
+                      ),
                       selected: _category == c,
                       showCheckmark: false,
                       onSelected: (_) => setState(() => _category = c),
@@ -186,9 +190,9 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
         SliverToBoxAdapter(
           child: AppEmptyState(
             scene: PaperScenes.closet,
-            title: 'Add pieces first',
-            message: 'Outfits are made from the pieces in your closet.',
-            actionLabel: 'Add a piece',
+            title: context.l10n.outfitBuilderAddPiecesTitle,
+            message: context.l10n.outfitBuilderAddPiecesBody,
+            actionLabel: context.l10n.quickAddPiece,
             onAction: () async {
               await context.push(Routes.wardrobeAdd);
               // The picker caches one result per builder session; without a
@@ -214,7 +218,7 @@ class _OutfitBuilderPageState extends ConsumerState<OutfitBuilderPage> {
               child: Padding(
                 padding: const EdgeInsets.all(AppConstants.spacing24),
                 child: Text(
-                  'No pieces match.',
+                  context.l10n.outfitBuilderNoMatches,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: PaperTokens.of(context).textSecondary,
@@ -293,9 +297,9 @@ class _DetailsCardState extends ConsumerState<_DetailsCard> {
               controller: _name,
               onChanged: notifier.setName,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Outfit name',
-                hintText: 'For example, Weekend linen',
+              decoration: InputDecoration(
+                labelText: context.l10n.outfitNameLabel,
+                hintText: context.l10n.outfitNameHint,
               ),
             ),
             const SizedBox(height: AppConstants.spacing12),
@@ -305,10 +309,15 @@ class _DetailsCardState extends ConsumerState<_DetailsCard> {
                   child: DropdownButtonFormField<Style>(
                     initialValue: draft.style,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Style'),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.filterStyle,
+                    ),
                     items: [
                       for (final s in Style.values)
-                        DropdownMenuItem(value: s, child: Text(s.displayName)),
+                        DropdownMenuItem(
+                          value: s,
+                          child: Text(s.label(context.l10n)),
+                        ),
                     ],
                     onChanged: (v) => v == null ? null : notifier.setStyle(v),
                   ),
@@ -318,10 +327,15 @@ class _DetailsCardState extends ConsumerState<_DetailsCard> {
                   child: DropdownButtonFormField<Season>(
                     initialValue: draft.season,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Season'),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.filterSeason,
+                    ),
                     items: [
                       for (final s in Season.values)
-                        DropdownMenuItem(value: s, child: Text(s.displayName)),
+                        DropdownMenuItem(
+                          value: s,
+                          child: Text(s.label(context.l10n)),
+                        ),
                     ],
                     onChanged: (v) => v == null ? null : notifier.setSeason(v),
                   ),
@@ -359,7 +373,7 @@ class _Preview extends StatelessWidget {
                   imageUrl: url,
                   fit: BoxFit.contain,
                   backgroundColor: tokens.stock.sunk,
-                  semanticLabel: 'AI preview of the outfit',
+                  semanticLabel: context.l10n.outfitPreviewSemantic,
                 ),
         ),
       ),
@@ -388,7 +402,7 @@ class _ChosenRow extends ConsumerWidget {
         children: [
           Text(
             pieces.isEmpty
-                ? 'Choose pieces'
+                ? context.l10n.outfitChoosePieces
                 : pieces.length == 1
                 ? '1 piece chosen'
                 : '${pieces.length} pieces chosen',
@@ -397,7 +411,7 @@ class _ChosenRow extends ConsumerWidget {
           const SizedBox(height: AppConstants.spacing4),
           if (pieces.isEmpty)
             Text(
-              'Tap pieces below to add them.',
+              context.l10n.outfitTapPiecesHint,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             )
           else
@@ -430,7 +444,7 @@ class _ChosenRow extends ConsumerWidget {
                               top: -8,
                               right: -8,
                               child: IconButton(
-                                tooltip: 'Remove ${p.name}',
+                                tooltip: context.l10n.outfitRemovePieceTooltip(p.name),
                                 onPressed: () => ref
                                     .read(outfitBuilderProvider.notifier)
                                     .toggle(p),

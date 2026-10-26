@@ -58,9 +58,9 @@ const alsoInApp = [
 
 /* Where each piece sits in a day's little collage (percent of the tile). */
 const COLLAGE = [
-  'left-[4%] top-[4%] w-[58%] rotate-[-4deg]',
-  'right-[2%] top-[18%] w-[56%] rotate-[3deg]',
-  'left-[22%] bottom-[2%] w-[50%] rotate-[-1deg]',
+  'start-[4%] top-[4%] w-[58%] rotate-[-4deg]',
+  'end-[2%] top-[18%] w-[56%] rotate-[3deg]',
+  'start-[22%] bottom-[2%] w-[50%] rotate-[-1deg]',
 ]
 
 export default function Features() {

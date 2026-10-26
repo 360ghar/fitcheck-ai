@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/i18n/l10n.dart';
 import '../../../../core/widgets/app_ui.dart';
 
 /// One monthly allowance: label, count and a bar. The bar turns to the
@@ -27,7 +28,7 @@ class UsageProgress extends StatelessWidget {
     final color = share > 0.8 ? tokens.warning : tokens.stock.accent;
 
     return Semantics(
-      label: '$label: $current of $max used',
+      label: context.l10n.usageProgressSemantics(label, current, max),
       child: ExcludeSemantics(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -8,10 +8,12 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/permission_helper.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/directional_icon.dart';
 import '../models/social_import_models.dart';
 import '../providers/batch_extraction_provider.dart';
 import '../widgets/batch_image_tile.dart';
@@ -55,7 +57,10 @@ class _BatchImageSelectorPageState
       for (final f in picked) File(f.path),
     ]);
     if (rejected != null) {
-      ErrorHandler.showValidation(rejected, title: 'Some photos skipped');
+      ErrorHandler.showValidation(
+        rejected,
+        title: ErrorHandler.l10n?.wardrobeSomePhotosSkipped ?? 'Some photos skipped',
+      );
     }
   }
 
@@ -73,18 +78,28 @@ class _BatchImageSelectorPageState
       if (_denied(e)) {
         await PermissionHelper.showDeniedRecovery(permissionName: 'Photos');
       } else {
-        ErrorHandler.showError(e, title: 'Photos not added');
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.wardrobePhotosNotAdded ?? 'Photos not added',
+        );
       }
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Photos not added', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.wardrobePhotosNotAdded ?? 'Photos not added',
+        stackTrace: stack,
+      );
     }
   }
 
   Future<void> _pickCamera() async {
     if (ref.read(batchExtractionProvider).remainingSlots <= 0) {
       ErrorHandler.showValidation(
-        'You can add up to ${BatchExtractionNotifier.maxImages} photos.',
-        title: 'No room',
+        ErrorHandler.l10n?.photoshootPhotoLimit(
+              BatchExtractionNotifier.maxImages,
+            ) ??
+            'You can add up to ${BatchExtractionNotifier.maxImages} photos.',
+        title: ErrorHandler.l10n?.wardrobeNoRoomTitle ?? 'No room',
       );
       return;
     }
@@ -101,10 +116,17 @@ class _BatchImageSelectorPageState
       if (_denied(e)) {
         await PermissionHelper.showDeniedRecovery(permissionName: 'Camera');
       } else {
-        ErrorHandler.showError(e, title: 'Photo not added');
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.wardrobePhotoNotAdded ?? 'Photo not added',
+        );
       }
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Photo not added', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.wardrobePhotoNotAdded ?? 'Photo not added',
+        stackTrace: stack,
+      );
     }
   }
 
@@ -117,7 +139,7 @@ class _BatchImageSelectorPageState
         children: [
           ListTile(
             leading: const Icon(Icons.photo_library_outlined),
-            title: const Text('Choose from gallery'),
+            title: Text(context.l10n.itemAddGallery),
             onTap: () {
               Navigator.pop(context);
               _pickGallery();
@@ -125,7 +147,7 @@ class _BatchImageSelectorPageState
           ),
           ListTile(
             leading: const Icon(Icons.photo_camera_outlined),
-            title: const Text('Take a photo'),
+            title: Text(context.l10n.itemAddCamera),
             onTap: () {
               Navigator.pop(context);
               _pickCamera();
@@ -142,7 +164,10 @@ class _BatchImageSelectorPageState
     if (!mounted) return;
     final s = ref.read(batchExtractionProvider);
     if (s.isFailed) {
-      ErrorHandler.showError(s.error, title: 'Not started');
+      ErrorHandler.showError(
+        s.error,
+        title: ErrorHandler.l10n?.wardrobeNotStartedTitle ?? 'Not started',
+      );
       return;
     }
     // No job id: consent was declined or another start is running.
@@ -167,19 +192,23 @@ class _BatchImageSelectorPageState
       stock: PaperStockId.moss,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(social ? 'Import from a profile' : 'Add several photos'),
+          title: Text(
+            social
+                ? context.l10n.wardrobeImportFromProfileTitle
+                : context.l10n.wardrobeAddSeveralPhotosTitle,
+          ),
           actions: [
             if (!social && count > 0)
               Padding(
-                padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
                 child: TextButton(
                   onPressed: busy ? null : _notifier.clearAllImages,
-                  child: const Text('Clear'),
+                  child: Text(context.l10n.wardrobeClearAction),
                 ),
               ),
             if (social && hasSocialJob)
               IconButton(
-                tooltip: 'Refresh',
+                tooltip: context.l10n.wardrobeRefreshTooltip,
                 onPressed: _notifier.refreshSocialStatus,
                 icon: const Icon(Icons.refresh_rounded),
               ),
@@ -201,16 +230,16 @@ class _BatchImageSelectorPageState
                     width: double.infinity,
                     child: SegmentedButton<BatchInputMode>(
                       showSelectedIcon: false,
-                      segments: const [
+                      segments: [
                         ButtonSegment(
                           value: BatchInputMode.upload,
-                          label: Text('Photos'),
-                          icon: Icon(Icons.collections_outlined),
+                          label: Text(context.l10n.itemPhotos),
+                          icon: const Icon(Icons.collections_outlined),
                         ),
                         ButtonSegment(
                           value: BatchInputMode.social,
-                          label: Text('Profile link'),
-                          icon: Icon(Icons.link_rounded),
+                          label: Text(context.l10n.batchProfileLinkLabel),
+                          icon: const Icon(Icons.link_rounded),
                         ),
                       ],
                       selected: {
@@ -229,10 +258,12 @@ class _BatchImageSelectorPageState
                       ? SingleChildScrollView(
                           child: AppEmptyState(
                             scene: PaperScenes.closet,
-                            title: 'No photos yet',
+                            title: context.l10n.batchNoPhotosYetTitle,
                             message:
-                                'Pick up to ${BatchExtractionNotifier.maxImages} photos. We find the pieces.',
-                            actionLabel: 'Choose photos',
+                                context.l10n.batchPickUpToBody(
+                                  BatchExtractionNotifier.maxImages,
+                                ),
+                            actionLabel: context.l10n.batchChoosePhotosAction,
                             actionIcon: Icons.photo_library_outlined,
                             onAction: _pickGallery,
                             secondary: TextButton.icon(
@@ -241,7 +272,7 @@ class _BatchImageSelectorPageState
                                 Icons.photo_camera_outlined,
                                 size: 20,
                               ),
-                              label: const Text('Take a photo'),
+                              label: Text(context.l10n.itemAddCamera),
                             ),
                           ),
                         )
@@ -283,7 +314,10 @@ class _PhotoGrid extends ConsumerWidget {
           ),
           sliver: SliverToBoxAdapter(
             child: Text(
-              '${images.length} of ${BatchExtractionNotifier.maxImages} photos',
+              context.l10n.batchPhotoCounter(
+                images.length,
+                BatchExtractionNotifier.maxImages,
+              ),
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           ),
@@ -310,7 +344,7 @@ class _PhotoGrid extends ConsumerWidget {
                   padding: EdgeInsets.zero,
                   borderRadius: AppConstants.radius8,
                   onTap: onAdd,
-                  semanticLabel: 'Add photos',
+                  semanticLabel: context.l10n.wardrobeAddPhotosSemantic,
                   child: Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -321,7 +355,10 @@ class _PhotoGrid extends ConsumerWidget {
                           size: 28,
                         ),
                         const SizedBox(height: AppConstants.spacing4),
-                        Text('Add', style: text.labelMedium),
+                        Text(
+                          context.l10n.batchAddTileLabel,
+                          style: text.labelMedium,
+                        ),
                       ],
                     ),
                   ),
@@ -374,12 +411,12 @@ class _ExtractBar extends ConsumerWidget {
             if (uploading) ...[
               PaperProgressTrack(
                 value: progress,
-                semanticLabel: 'Preparing photos',
+                semanticLabel: context.l10n.batchPreparingPhotosSemantic,
               ),
               const SizedBox(height: AppConstants.spacing8),
             ] else ...[
               Text(
-                'We find each piece and make a studio photo of it.',
+                context.l10n.batchWeFindEachPieceBody,
                 textAlign: TextAlign.center,
                 style: text.bodySmall?.copyWith(color: tokens.textSecondary),
               ),
@@ -391,10 +428,11 @@ class _ExtractBar extends ConsumerWidget {
               onPressed: busy ? null : onStart,
               child: Text(
                 uploading
-                    ? 'Preparing photo ${done.clamp(1, count)} of $count'
-                    : count == 1
-                    ? 'Find pieces in 1 photo'
-                    : 'Find pieces in $count photos',
+                    ? context.l10n.batchPreparingPhotoBody(
+                        done.clamp(1, count),
+                        count,
+                      )
+                    : context.l10n.batchFindPiecesInPhotos(count),
               ),
             ),
           ],
@@ -536,10 +574,13 @@ class _SocialInputFormState extends ConsumerState<_SocialInputForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Paste a profile link', style: text.headlineSmall),
+              Text(
+                context.l10n.batchPasteProfileLinkTitle,
+                style: text.headlineSmall,
+              ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
-                'A public Instagram or Facebook profile. We scan its photos, and you choose what goes in your closet.',
+                context.l10n.batchPasteProfileLinkBody,
                 style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
               const SizedBox(height: AppConstants.spacing20),
@@ -550,7 +591,7 @@ class _SocialInputFormState extends ConsumerState<_SocialInputForm> {
                 autocorrect: false,
                 enableSuggestions: false,
                 decoration: InputDecoration(
-                  labelText: 'Profile link',
+                  labelText: context.l10n.batchProfileLinkLabel,
                   hintText: 'https://instagram.com/username',
                   errorText: urlError.isEmpty ? null : urlError,
                   suffixIcon: ValueListenableBuilder(
@@ -558,7 +599,7 @@ class _SocialInputFormState extends ConsumerState<_SocialInputForm> {
                     builder: (context, value, _) => value.text.isEmpty
                         ? const SizedBox.shrink()
                         : IconButton(
-                            tooltip: 'Clear link',
+                            tooltip: context.l10n.batchClearLinkTooltip,
                             icon: const Icon(Icons.clear_rounded),
                             onPressed: () {
                               _url.clear();
@@ -573,7 +614,11 @@ class _SocialInputFormState extends ConsumerState<_SocialInputForm> {
                 onPressed: loading || !valid
                     ? null
                     : () => notifier.startSocialImport(_url.text),
-                child: Text(loading ? 'Starting' : 'Start import'),
+                child: Text(
+                  loading
+                      ? context.l10n.batchStartingButton
+                      : context.l10n.batchStartImportAction,
+                ),
               ),
               const _SocialError(),
             ],
@@ -582,14 +627,13 @@ class _SocialInputFormState extends ConsumerState<_SocialInputForm> {
         const SizedBox(height: AppConstants.spacing16),
         _HowItWorks(
           icon: Icons.fact_check_outlined,
-          title: 'You review every photo',
-          body: 'Nothing is added until you approve it.',
+          title: context.l10n.batchReviewEveryPhotoTitle,
+          body: context.l10n.batchReviewEveryPhotoBody,
         ),
         _HowItWorks(
           icon: Icons.lock_outline_rounded,
-          title: 'Private profiles',
-          body:
-              'Connect your account. Instagram also takes a username and password.',
+          title: context.l10n.batchPrivateProfilesTitle,
+          body: context.l10n.batchPrivateProfilesBody,
         ),
       ],
     );
@@ -682,11 +726,11 @@ class _SocialAuth extends ConsumerWidget {
     return _Padded(
       children: [
         Align(
-          alignment: Alignment.centerLeft,
+          alignment: AlignmentDirectional.centerStart,
           child: TextButton.icon(
             onPressed: notifier.resetSocialImportState,
-            icon: const Icon(Icons.arrow_back_rounded, size: 20),
-            label: const Text('Use another link'),
+            icon: const DirectionalIcon(Icons.arrow_back_rounded, size: 20),
+            label: Text(context.l10n.batchUseAnotherLinkAction),
           ),
         ),
         const SizedBox(height: AppConstants.spacing8),
@@ -702,14 +746,16 @@ class _SocialAuth extends ConsumerWidget {
               ),
               const SizedBox(height: AppConstants.spacing12),
               Text(
-                otp ? 'Enter your code' : 'Sign-in needed',
+                otp
+                    ? context.l10n.batchEnterYourCodeTitle
+                    : context.l10n.batchSignInNeededTitle,
                 style: text.headlineSmall,
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
                 otp
-                    ? 'Your $platform account uses two-step sign-in. Enter the 6-digit code from your authenticator app.'
-                    : 'This $platform profile is private or needs a sign-in to show its photos.',
+                    ? context.l10n.batchTwoStepSignInBody(platform)
+                    : context.l10n.batchPrivateProfileBody(platform),
                 style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
               const _SocialError(),
@@ -718,27 +764,29 @@ class _SocialAuth extends ConsumerWidget {
                 ElevatedButton.icon(
                   onPressed: loading ? null : notifier.startSocialOAuthConnect,
                   icon: const Icon(Icons.open_in_new_rounded, size: 20),
-                  label: Text('Connect with $platform'),
+                  label: Text(context.l10n.batchConnectWithPlatform(platform)),
                 ),
                 if (job.platform == SocialPlatform.instagram)
                   TextButton(
                     onPressed: loading
                         ? null
                         : () => _manualLogin(context, ref),
-                    child: const Text('Use username and password'),
+                    child: Text(
+                      context.l10n.batchUseUsernamePasswordAction,
+                    ),
                   ),
                 TextButton(
                   onPressed: loading ? null : notifier.refreshSocialStatus,
-                  child: const Text('I already connected in the browser'),
+                  child: Text(context.l10n.batchAlreadyConnectedAction),
                 ),
               ] else ...[
                 ElevatedButton(
                   onPressed: loading ? null : () => _otp(context, ref),
-                  child: const Text('Enter code'),
+                  child: Text(context.l10n.batchEnterCodeAction),
                 ),
                 TextButton(
                   onPressed: loading ? null : notifier.cancelSocialOtp,
-                  child: const Text('Try another way'),
+                  child: Text(context.l10n.batchTryAnotherWayAction),
                 ),
               ],
             ],
@@ -769,7 +817,9 @@ class _ConnectionLine extends ConsumerWidget {
         ),
         const SizedBox(width: AppConstants.spacing4),
         Text(
-          live ? 'Live' : 'Reconnecting',
+          live
+              ? context.l10n.batchLiveStatus
+              : context.l10n.batchReconnectingStatus,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
         ),
       ],
@@ -793,7 +843,7 @@ class _CancelImport extends ConsumerWidget {
         onPressed: loading
             ? null
             : ref.read(batchExtractionProvider.notifier).cancelSocialImportJob,
-        child: const Text('Cancel import'),
+        child: Text(context.l10n.batchCancelImportAction),
       ),
     );
   }
@@ -818,16 +868,17 @@ class _SocialDiscovering extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text('Finding photos', style: text.headlineSmall),
+                    child: Text(
+                      context.l10n.batchFindingPhotosTitle,
+                      style: text.headlineSmall,
+                    ),
                   ),
                   const _ConnectionLine(),
                 ],
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
-                job.discoveredPhotos == 1
-                    ? '1 photo found so far'
-                    : '${job.discoveredPhotos} photos found so far',
+                context.l10n.batchPhotosFoundSoFar(job.discoveredPhotos),
                 style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
               const SizedBox(height: AppConstants.spacing4),
@@ -884,7 +935,9 @@ class _SocialProcessing extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      paused ? 'Import paused' : 'Processing photos',
+                      paused
+                          ? context.l10n.batchImportPausedTitle
+                          : context.l10n.batchProcessingPhotosTitle,
                       style: text.headlineSmall,
                     ),
                   ),
@@ -896,13 +949,17 @@ class _SocialProcessing extends ConsumerWidget {
                 value: job.totalPhotos > 0
                     ? job.processedPhotos / job.totalPhotos
                     : 0,
-                semanticLabel: 'Photos processed',
+                semanticLabel: context.l10n.batchPhotosProcessedSemantic,
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
-                '${job.processedPhotos} of ${job.totalPhotos} processed · '
-                '${job.approvedPhotos} added · ${job.queuedCount} waiting · '
-                '${job.rejectedPhotos} skipped',
+                context.l10n.batchImportStatusLine(
+                  job.processedPhotos,
+                  job.totalPhotos,
+                  job.approvedPhotos,
+                  job.queuedCount,
+                  job.rejectedPhotos,
+                ),
                 style: text.bodySmall?.copyWith(color: tokens.textSecondary),
               ),
               if (error.isNotEmpty) ...[
@@ -941,8 +998,8 @@ class _SocialProcessing extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     processing != null
-                        ? 'Scanning photo ${processing.ordinal}'
-                        : 'Waiting for the next photo',
+                        ? context.l10n.batchScanningPhoto(processing.ordinal)
+                        : context.l10n.batchWaitingNextPhoto,
                     style: text.bodyMedium,
                   ),
                 ),
@@ -973,7 +1030,7 @@ class _SocialProcessing extends ConsumerWidget {
                 const SizedBox(width: AppConstants.spacing12),
                 Expanded(
                   child: Text(
-                    'Photo ${buffered.ordinal} is next',
+                    context.l10n.batchPhotoIsNext(buffered.ordinal),
                     style: text.bodyMedium,
                   ),
                 ),
@@ -1043,14 +1100,15 @@ class _PhotoReview extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Photo ${photo.ordinal}', style: text.titleLarge),
+                Text(
+                  context.l10n.batchPhotoLabel(photo.ordinal),
+                  style: text.titleLarge,
+                ),
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
                   photo.items.isEmpty
-                      ? 'No pieces found in this photo.'
-                      : photo.items.length == 1
-                      ? '1 piece found'
-                      : '${photo.items.length} pieces found',
+                      ? context.l10n.batchNoPiecesInPhotoBody
+                      : context.l10n.batchPiecesFound(photo.items.length),
                   style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
                 ),
                 for (final item in photo.items)
@@ -1105,7 +1163,7 @@ class _PhotoReview extends ConsumerWidget {
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Edit piece',
+                          tooltip: context.l10n.itemEditPieceTitle,
                           onPressed: () => _edit(context, ref, item),
                           icon: Icon(
                             Icons.edit_outlined,
@@ -1120,13 +1178,13 @@ class _PhotoReview extends ConsumerWidget {
                   onPressed: loading
                       ? null
                       : notifier.approveAwaitingSocialPhoto,
-                  child: const Text('Add to closet'),
+                  child: Text(context.l10n.batchAddToClosetAction),
                 ),
                 TextButton(
                   onPressed: loading
                       ? null
                       : notifier.rejectAwaitingSocialPhoto,
-                  child: const Text('Skip this photo'),
+                  child: Text(context.l10n.batchSkipPhotoAction),
                 ),
               ],
             ),
@@ -1153,20 +1211,20 @@ class _SocialEnded extends ConsumerWidget {
       child: AppEmptyState(
         scene: completed ? PaperScenes.closet : PaperScenes.oops,
         title: completed
-            ? 'Import complete'
+            ? context.l10n.batchImportCompleteTitle
             : failed
-            ? 'Import failed'
-            : 'Import cancelled',
+            ? context.l10n.batchImportFailedTitle
+            : context.l10n.batchImportCancelledTitle,
         message: completed
-            ? (job.approvedPhotos == 1
-                  ? '1 photo was added to your closet.'
-                  : '${job.approvedPhotos} photos were added to your closet.')
+            ? context.l10n.batchPhotosAddedBody(job.approvedPhotos)
             : failed
             ? (message.isNotEmpty
                   ? message
-                  : 'Something went wrong while importing.')
-            : 'Nothing more is imported from this profile.',
-        actionLabel: completed ? 'View closet' : 'Start over',
+                  : context.l10n.batchImportErrorBody)
+            : context.l10n.batchNothingMoreImportedBody,
+        actionLabel: completed
+            ? context.l10n.batchViewClosetAction
+            : context.l10n.batchStartOverAction,
         onAction: completed
             ? () {
                 notifier.resetSocialImportState();
@@ -1203,7 +1261,7 @@ class _ManualLoginDialogState extends State<_ManualLoginDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Sign in to Instagram'),
+    title: Text(context.l10n.batchSignInToInstagramTitle),
     content: SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1211,21 +1269,25 @@ class _ManualLoginDialogState extends State<_ManualLoginDialog> {
           TextField(
             controller: _user,
             autocorrect: false,
-            decoration: const InputDecoration(labelText: 'Username'),
+            decoration: InputDecoration(
+              labelText: context.l10n.batchUsernameLabel,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing12),
           TextField(
             controller: _pass,
             obscureText: true,
-            decoration: const InputDecoration(labelText: 'Password'),
+            decoration: InputDecoration(
+              labelText: context.l10n.authPassword,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing12),
           TextField(
             controller: _otp,
             keyboardType: TextInputType.number,
             maxLength: 6,
-            decoration: const InputDecoration(
-              labelText: 'Code, if you use two-step sign-in',
+            decoration: InputDecoration(
+              labelText: context.l10n.batchCodeIfTwoStepLabel,
               counterText: '',
             ),
           ),
@@ -1235,7 +1297,7 @@ class _ManualLoginDialogState extends State<_ManualLoginDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: Text(context.l10n.actionCancel),
       ),
       TextButton(
         onPressed: () => Navigator.pop(context, (
@@ -1243,7 +1305,7 @@ class _ManualLoginDialogState extends State<_ManualLoginDialog> {
           pass: _pass.text,
           otp: _otp.text.trim(),
         )),
-        child: const Text('Sign in'),
+        child: Text(context.l10n.authSignIn),
       ),
     ],
   );
@@ -1267,12 +1329,12 @@ class _OtpDialogState extends State<_OtpDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Enter your code'),
+    title: Text(context.l10n.batchEnterYourCodeTitle),
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Use the 6-digit code from your authenticator app. Codes change quickly.',
+          context.l10n.batchAuthenticatorCodeBody,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: PaperTokens.of(context).textSecondary,
           ),
@@ -1297,7 +1359,7 @@ class _OtpDialogState extends State<_OtpDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: Text(context.l10n.actionCancel),
       ),
       ValueListenableBuilder(
         valueListenable: _code,
@@ -1305,7 +1367,7 @@ class _OtpDialogState extends State<_OtpDialog> {
           onPressed: value.text.trim().length == 6
               ? () => Navigator.pop(context, value.text.trim())
               : null,
-          child: const Text('Verify'),
+          child: Text(context.l10n.batchVerifyAction),
         ),
       ),
     ],
@@ -1347,31 +1409,37 @@ class _EditSocialItemDialogState extends State<_EditSocialItemDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Edit piece'),
+    title: Text(context.l10n.itemEditPieceTitle),
     content: SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(
+              labelText: context.l10n.authName,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing12),
           TextField(
             controller: _category,
-            decoration: const InputDecoration(labelText: 'Category'),
+            decoration: InputDecoration(
+              labelText: context.l10n.closetCategoryLabel,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing12),
           TextField(
             controller: _colors,
-            decoration: const InputDecoration(
-              labelText: 'Colours, separated by commas',
+            decoration: InputDecoration(
+              labelText: context.l10n.batchEditPieceColoursLabel,
             ),
           ),
           const SizedBox(height: AppConstants.spacing12),
           TextField(
             controller: _material,
-            decoration: const InputDecoration(labelText: 'Material'),
+            decoration: InputDecoration(
+              labelText: context.l10n.itemMaterial,
+            ),
           ),
         ],
       ),
@@ -1379,7 +1447,7 @@ class _EditSocialItemDialogState extends State<_EditSocialItemDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: Text(context.l10n.actionCancel),
       ),
       TextButton(
         onPressed: () => Navigator.pop(context, <String, dynamic>{
@@ -1391,7 +1459,7 @@ class _EditSocialItemDialogState extends State<_EditSocialItemDialog> {
           ],
           'material': _value(_material),
         }),
-        child: const Text('Save'),
+        child: Text(context.l10n.actionSave),
       ),
     ],
   );

@@ -113,7 +113,9 @@ class GiftNotifier extends AsyncNotifier<GiftDashboardSummary?> {
         } catch (e, stackTrace) {
           ErrorHandler.showError(
             e,
-            title: 'Could not create the gift',
+            title:
+                ErrorHandler.l10n?.giftCreateFailedTitle ??
+                'Could not create the gift',
             stackTrace: stackTrace,
           );
           return null;
@@ -135,7 +137,9 @@ class GiftNotifier extends AsyncNotifier<GiftDashboardSummary?> {
         } catch (e, stackTrace) {
           ErrorHandler.showError(
             e,
-            title: 'Could not claim the gift',
+            title:
+                ErrorHandler.l10n?.giftClaimFailedTitle ??
+                'Could not claim the gift',
             stackTrace: stackTrace,
           );
           return null;

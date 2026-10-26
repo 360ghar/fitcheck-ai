@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../providers/recommendations_providers.dart';
@@ -71,16 +73,16 @@ class _WeatherBasedTabState extends ConsumerState<WeatherBasedTab>
                       textInputAction: TextInputAction.search,
                       textCapitalization: TextCapitalization.words,
                       onSubmitted: (_) => _search(),
-                      decoration: const InputDecoration(
-                        labelText: 'City',
-                        prefixIcon: Icon(Icons.location_on_outlined),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.recommendCityLabel,
+                        prefixIcon: const Icon(Icons.location_on_outlined),
                       ),
                     ),
                   ),
                   const SizedBox(width: AppConstants.spacing12),
                   ElevatedButton(
                     onPressed: weather.isLoading ? null : _search,
-                    child: const Text('Check'),
+                    child: Text(context.l10n.recommendCheck),
                   ),
                 ],
               ),
@@ -117,13 +119,13 @@ class _WeatherBasedTabState extends ConsumerState<WeatherBasedTab>
       ];
     }
     if (report == null) {
-      return const [
+      return [
         SliverFillRemaining(
           hasScrollBody: false,
           child: AppEmptyState(
             scene: PaperScenes.home,
-            title: "What's the weather?",
-            message: 'Enter your city to get picks for today.',
+            title: context.l10n.recommendWeatherTitle,
+            message: context.l10n.recommendWeatherBody,
           ),
         ),
       ];
@@ -150,12 +152,15 @@ class _WeatherBasedTabState extends ConsumerState<WeatherBasedTab>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Wear today', style: text.headlineSmall),
+              Text(
+                context.l10n.recommendWearToday,
+                style: text.headlineSmall,
+              ),
               const SizedBox(height: AppConstants.spacing4),
               Text(
                 [
                   for (final c in report.categories)
-                    Category.values.asNameMap()[c]?.displayName ??
+                    Category.values.asNameMap()[c]?.label(context.l10n) ??
                         capitalizeWords(c),
                 ].join(' · '),
                 style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
@@ -169,7 +174,7 @@ class _WeatherBasedTabState extends ConsumerState<WeatherBasedTab>
           padding: tabPadding,
           sliver: SliverToBoxAdapter(
             child: Text(
-              'No pieces in your closet for this weather yet.',
+              context.l10n.recommendWeatherNoPieces,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           ),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
@@ -22,7 +23,7 @@ class WardrobeStatsPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.moss,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Closet stats')),
+        appBar: AppBar(title: Text(context.l10n.closetStatsTitle)),
         // Root-navigator page: restore the shell tabs below the content.
         bottomNavigationBar: AppBottomNavigationBar.shellBar(
           context,
@@ -86,9 +87,9 @@ class _StatsBody extends StatelessWidget {
         children: [
           AppEmptyState(
             scene: PaperScenes.closet,
-            title: 'No stats yet',
-            message: 'Add a few pieces and your closet mix shows up here.',
-            actionLabel: 'Add a piece',
+            title: context.l10n.statsNoStatsTitle,
+            message: context.l10n.statsNoStatsBody,
+            actionLabel: context.l10n.quickAddPiece,
             onAction: () => context.push(Routes.wardrobeAdd),
           ),
         ],
@@ -110,7 +111,10 @@ class _StatsBody extends StatelessWidget {
                 label: total == 1 ? 'piece' : 'pieces',
               ),
               if (value > 0)
-                _Figure(value: value.toStringAsFixed(0), label: 'total value'),
+                _Figure(
+                  value: value.toStringAsFixed(0),
+                  label: context.l10n.statsTotalValue,
+                ),
             ],
           ),
         ),
@@ -120,7 +124,7 @@ class _StatsBody extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('By category', style: text.headlineSmall),
+                Text(context.l10n.statsByCategory, style: text.headlineSmall),
                 const SizedBox(height: AppConstants.spacing12),
                 for (final (i, e) in sorted.indexed)
                   Padding(
@@ -143,7 +147,7 @@ class _StatsBody extends StatelessWidget {
                         Expanded(
                           child: LayoutBuilder(
                             builder: (context, c) => Align(
-                              alignment: Alignment.centerLeft,
+                              alignment: AlignmentDirectional.centerStart,
                               child: Container(
                                 height: 12,
                                 width: c.maxWidth * e.value / peak,
@@ -162,7 +166,7 @@ class _StatsBody extends StatelessWidget {
                           child: Text(
                             '${e.value}',
                             style: text.labelLarge,
-                            textAlign: TextAlign.right,
+                            textAlign: TextAlign.end,
                           ),
                         ),
                       ],
@@ -174,11 +178,11 @@ class _StatsBody extends StatelessWidget {
         ],
         if (mostWorn.isNotEmpty) ...[
           const SizedBox(height: AppConstants.spacing16),
-          _WearList(title: 'Worn the most', items: mostWorn),
+          _WearList(title: context.l10n.statsMostWorn, items: mostWorn),
         ],
         if (leastWorn.isNotEmpty) ...[
           const SizedBox(height: AppConstants.spacing16),
-          _WearList(title: 'Waiting for a turn', items: leastWorn),
+          _WearList(title: context.l10n.statsLeastWorn, items: leastWorn),
         ],
         const SizedBox(height: AppConstants.spacing32),
       ],
@@ -238,7 +242,8 @@ class _WearList extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        item['name']?.toString() ?? 'Unnamed piece',
+                        item['name']?.toString() ??
+                            context.l10n.statsUnnamedPiece,
                         style: text.bodyMedium,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

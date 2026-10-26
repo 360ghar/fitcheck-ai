@@ -44,12 +44,17 @@ class FeedbackTicketsNotifier extends AsyncNotifier<List<TicketListItem>> {
         attachments: attachments.isEmpty ? null : attachments,
       );
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not sent', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.feedbackNotSentTitle ?? 'Not sent',
+        stackTrace: stack,
+      );
       return false;
     }
     ErrorHandler.showSuccess(
-      'Thanks. We read every message and reply if we need more.',
-      title: 'Feedback sent',
+      ErrorHandler.l10n?.feedbackSentBody ??
+          'Thanks. We read every message and reply if we need more.',
+      title: ErrorHandler.l10n?.feedbackSentTitle ?? 'Feedback sent',
     );
     if (ref.mounted) await refresh();
     return true;

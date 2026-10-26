@@ -41,6 +41,72 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_theme_tokens.py
 echo "== ios deployment target =="
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_ios_deployment_target.py
 
+# The store listing and the in-app catalogs are two halves of the same shipping
+# surface: Apple rejects a listing whose metadata drifts from the app's declared
+# localizations, and a locale present in one inventory but not the others renders
+# English to a user who asked for their own language. Both gates are additive, so
+# a checkout that predates them still runs the rest.
+if [[ -f "$ROOT/scripts/i18n/check_locales.py" ]]; then
+  echo "== locale coverage =="
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/i18n/check_locales.py
+else
+  missing_check "locale coverage" "scripts/i18n/check_locales.py not found"
+fi
+
+# The listing promises right-to-left layouts for Arabic, Hebrew and Urdu, so the
+# app has to mirror. Flutter only mirrors directional APIs; a ratchet keeps new
+# `EdgeInsets.only(left:)` / `Alignment.centerRight` / asymmetric
+# `EdgeInsets.fromLTRB` out of the tree.
+if [[ -f "$ROOT/scripts/i18n/check_rtl.py" ]]; then
+  echo "== rtl layout =="
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/i18n/check_rtl.py
+else
+  missing_check "rtl layout" "scripts/i18n/check_rtl.py not found"
+fi
+
+# A string can be complete, non-empty, key-aligned and still wrong: a Malayalam
+# paragraph carrying three Bengali letters reads as broken to a native speaker
+# and passes every other check in this repo. This one compares each character
+# against the scripts the locale actually uses.
+if [[ -f "$ROOT/scripts/i18n/check_scripts.py" ]]; then
+  echo "== locale scripts =="
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/i18n/check_scripts.py
+else
+  missing_check "locale scripts" "scripts/i18n/check_scripts.py not found"
+fi
+
+if [[ -f "$ROOT/scripts/asc/check-listings.mjs" ]]; then
+  echo "== app store listing =="
+  # Errors only, matching `docs/store/release-runbook.md`. Most of the current
+  # warnings are one per locale saying the machine translation has not had a
+  # native review — real debt, tracked in tech-debt-tracker.md, and not
+  # something a code change can clear. Failing every run on it would train
+  # people to skip this harness. `--strict` remains the release-readiness
+  # signal, and the runbook's submission step is where it belongs.
+  node scripts/asc/check-listings.mjs
+else
+  missing_check "app store listing" "scripts/asc/check-listings.mjs not found"
+fi
+
+# Report-only on purpose. This compares the published copy against the build and
+# prints the gap — how many languages the listing claims versus how many have a
+# catalog, and how many user-facing English literals are still hardcoded outside
+# the ARB system. It exits 0 here so a mid-migration tree stays usable; the
+# `--gate` form is what the release runbook runs before submission.
+if [[ -f "$ROOT/scripts/i18n/check_claims.py" ]]; then
+  echo "== localization claims =="
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/i18n/check_claims.py
+fi
+
+if [[ -f "$ROOT/scripts/creative/check.mjs" ]]; then
+  echo "== store creative =="
+  node scripts/creative/check.mjs
+else
+  # Rendering 600 store images needs a browser and is not part of a source
+  # checkout's default verification, so this one is genuinely optional.
+  echo "== store creative skipped: no rendered manifest (run scripts/creative/render.mjs) =="
+fi
+
 if [[ -x "$ROOT/backend/.venv/bin/ruff" ]]; then
   echo "== backend ruff =="
   (cd backend && .venv/bin/ruff check .)
@@ -95,6 +161,14 @@ else
 fi
 
 if command -v flutter >/dev/null 2>&1; then
+  # `flutter/lib/l10n/generated/` is produced by gen-l10n and is not committed, so
+  # a clean checkout has no AppLocalizations class at all and every one of the 200+
+  # files that import it fails to compile. Generating first makes this harness
+  # work on a fresh clone instead of only on a machine that already ran the app.
+  # It also keeps the generated classes in step with the ARB catalogs, which is
+  # the failure a developer would otherwise only see inside the app.
+  echo "== flutter gen-l10n =="
+  (cd flutter && flutter gen-l10n >/dev/null)
   echo "== flutter analyze =="
   (cd flutter && flutter analyze --no-fatal-infos --no-fatal-warnings)
   echo "== flutter test =="

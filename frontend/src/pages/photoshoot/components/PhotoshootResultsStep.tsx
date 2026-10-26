@@ -88,11 +88,11 @@ export function PhotoshootResultsStep() {
       {/* Action Bar */}
       <div className="flex gap-3">
         <Button onClick={downloadAll} className="flex-1">
-          <Download className="w-4 h-4 mr-2" />
+          <Download className="w-4 h-4 me-2" />
           Download All ({generatedImages.length})
         </Button>
         <Button variant="outline" onClick={reset}>
-          <RefreshCw className="w-4 h-4 mr-2" />
+          <RefreshCw className="w-4 h-4 me-2" />
           New
         </Button>
       </div>
@@ -135,7 +135,7 @@ export function PhotoshootResultsStep() {
             </button>
 
             {/* Index Badge */}
-            <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 rounded-full">
+            <div className="absolute top-2 start-2 px-2 py-1 bg-black/50 rounded-full">
               <span className="text-xs text-white font-medium">{slotNumber}</span>
             </div>
 
@@ -147,7 +147,7 @@ export function PhotoshootResultsStep() {
                 e.stopPropagation();
                 downloadImage(index, true);
               }}
-              className="absolute bottom-2 right-2 p-2.5 min-h-11 min-w-11 flex items-center justify-center bg-primary rounded-full text-primary-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              className="absolute bottom-2 end-2 p-2.5 min-h-11 min-w-11 flex items-center justify-center bg-primary rounded-full text-primary-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -172,7 +172,7 @@ export function PhotoshootResultsStep() {
               disabled={retryingFailedIndex !== null}
               onClick={() => void retryFailedSlot(failedIndex)}
             >
-              <RotateCcw className="w-4 h-4 mr-2" />
+              <RotateCcw className="w-4 h-4 me-2" />
               {retryingFailedIndex === failedIndex ? 'Retrying…' : 'Retry'}
             </Button>
           </div>
@@ -202,14 +202,14 @@ export function PhotoshootResultsStep() {
                 height={2048}
                 className="w-full h-auto max-h-[80dvh] object-contain"
               />
-              <div className="absolute bottom-[calc(1rem+var(--safe-area-bottom))] left-1/2 -translate-x-1/2">
+              <div className="absolute bottom-[calc(1rem+var(--safe-area-bottom))] start-1/2 -translate-x-1/2">
                 <Button
                   onClick={() => {
                     downloadImage(previewIndex, true);
                     setPreviewIndex(null);
                   }}
                 >
-                  <Download className="w-4 h-4 mr-2" />
+                  <Download className="w-4 h-4 me-2" />
                   Download
                 </Button>
               </div>

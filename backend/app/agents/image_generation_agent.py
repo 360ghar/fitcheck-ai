@@ -58,6 +58,13 @@ logger = get_context_logger(__name__)
 # =============================================================================
 # BACKGROUND PROMPT FRAGMENTS
 # =============================================================================
+# Image prompts stay English whatever language the user reads: the output is a
+# picture, so there is no prose to localize, and every prompt in this module is
+# also a fidelity contract (item inventory, garment references, matte
+# instructions) that translation would loosen. Do not splice
+# `language_instruction(...)` into these prompts — see docs/BACKEND.md →
+# "Language contract".
+#
 # No provider we use can return an alpha channel: `_generate_image_via_images_
 # api` sends a fixed payload with no output_format, and gemini_provider discards
 # the response mime entirely. So `background="transparent"` does NOT mean "ask

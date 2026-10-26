@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/request_id.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -87,11 +88,11 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
   Widget build(BuildContext context) {
     final Widget body;
     if (!EnvConfig.giftVouchersEnabled) {
-      body = const Center(
+      body = Center(
         child: Padding(
-          padding: EdgeInsets.all(AppConstants.spacing24),
+          padding: const EdgeInsets.all(AppConstants.spacing24),
           child: Text(
-            'Gift invitations are not available in this build.',
+            context.l10n.giftUnavailable,
             textAlign: TextAlign.center,
           ),
         ),
@@ -147,7 +148,7 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
     return PaperStockScope(
       stock: PaperStockId.marigold,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Gift FitCheck Pro')),
+        appBar: AppBar(title: Text(context.l10n.giftPageTitle)),
         body: AppPageBackground(child: body),
       ),
     );
@@ -161,8 +162,8 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
         children: [
           Text(
             incoming.length == 1
-                ? 'A gift for you'
-                : '${incoming.length} gifts for you',
+                ? context.l10n.giftGiftForYou
+                : context.l10n.giftIncomingCount(incoming.length),
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           for (final voucher in incoming) ...[
@@ -188,7 +189,7 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
     if (available.isEmpty) {
       return PaperSurface(
         child: Text(
-          'No free gift invitations are available right now.',
+          context.l10n.giftNoAllowances,
           style: text.bodyMedium,
         ),
       );
@@ -209,11 +210,13 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Send a free invitation', style: text.headlineSmall),
+            Text(
+              context.l10n.giftFormTitle,
+              style: text.headlineSmall,
+            ),
             const SizedBox(height: AppConstants.spacing4),
             Text(
-              'Your recipient claims the gift with this verified email. We '
-              "don't send the email for you.",
+              context.l10n.giftFormBody,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
             const SizedBox(height: AppConstants.spacing16),
@@ -224,8 +227,12 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
                 for (final allowance in available)
                   ChoiceChip(
                     label: Text(
-                      '${_term(allowance.durationMonths)}, '
-                      '${allowance.remainingCount} left',
+                      context.l10n.giftAllowanceChip(
+                        context.l10n.giftDurationTerm(
+                          '${allowance.durationMonths}',
+                        ),
+                        allowance.remainingCount,
+                      ),
                     ),
                     selected: selectedDuration == allowance.durationMonths,
                     onSelected: creating
@@ -240,8 +247,8 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
             TextFormField(
               controller: _fromNameController,
               // Short fields keep the limit but hide the counter.
-              decoration: const InputDecoration(
-                labelText: 'From',
+              decoration: InputDecoration(
+                labelText: context.l10n.giftFieldFrom,
                 counterText: '',
               ),
               textInputAction: TextInputAction.next,
@@ -251,8 +258,8 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
             ),
             TextFormField(
               controller: _toNameController,
-              decoration: const InputDecoration(
-                labelText: 'Recipient name',
+              decoration: InputDecoration(
+                labelText: context.l10n.giftFieldRecipientName,
                 counterText: '',
               ),
               textInputAction: TextInputAction.next,
@@ -262,8 +269,8 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
             ),
             TextFormField(
               controller: _recipientEmailController,
-              decoration: const InputDecoration(
-                labelText: 'Recipient email',
+              decoration: InputDecoration(
+                labelText: context.l10n.giftFieldRecipientEmail,
                 counterText: '',
               ),
               keyboardType: TextInputType.emailAddress,
@@ -276,17 +283,26 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
               // Rebuilt when the form resets the occasion after a gift.
               key: ValueKey(_occasion),
               initialValue: _occasion?.name ?? 'none',
-              decoration: const InputDecoration(
-                labelText: 'Occasion (optional)',
+              decoration: InputDecoration(
+                labelText: context.l10n.giftFieldOccasion,
               ),
-              items: const [
-                DropdownMenuItem(value: 'none', child: Text('No occasion')),
-                DropdownMenuItem(value: 'birthday', child: Text('Birthday')),
+              items: [
+                DropdownMenuItem(
+                  value: 'none',
+                  child: Text(context.l10n.giftNoOccasion),
+                ),
+                DropdownMenuItem(
+                  value: 'birthday',
+                  child: Text(context.l10n.giftOccasionBirthday),
+                ),
                 DropdownMenuItem(
                   value: 'anniversary',
-                  child: Text('Anniversary'),
+                  child: Text(context.l10n.giftOccasionAnniversary),
                 ),
-                DropdownMenuItem(value: 'other', child: Text('Other')),
+                DropdownMenuItem(
+                  value: 'other',
+                  child: Text(context.l10n.giftOccasionOther),
+                ),
               ],
               onChanged: creating
                   ? null
@@ -302,9 +318,9 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
             if (_occasion == GiftOccasion.other)
               TextFormField(
                 controller: _occasionGreetingController,
-                decoration: const InputDecoration(
-                  labelText: 'Card greeting',
-                  helperText: 'This appears on the card exactly as written.',
+                decoration: InputDecoration(
+                  labelText: context.l10n.giftFieldCardGreeting,
+                  helperText: context.l10n.giftFieldCardGreetingHelper,
                 ),
                 textInputAction: TextInputAction.next,
                 maxLength: 80,
@@ -313,8 +329,8 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
               ),
             TextFormField(
               controller: _messageController,
-              decoration: const InputDecoration(
-                labelText: 'Private note (optional)',
+              decoration: InputDecoration(
+                labelText: context.l10n.giftFieldPrivateNote,
               ),
               maxLength: 240,
               minLines: 2,
@@ -348,7 +364,7 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.card_giftcard_outlined, size: 20),
-              label: const Text('Create free gift'),
+              label: Text(context.l10n.giftCreateAction),
             ),
           ],
         ),
@@ -390,9 +406,9 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
     if (!mounted || result == null) return;
     ErrorHandler.showSuccess(
       result.entitlementStatus == 'active'
-          ? 'Your FitCheck Pro gift is active.'
-          : 'Your FitCheck Pro gift starts after your current access.',
-      title: 'Gift claimed',
+          ? context.l10n.giftClaimedActive
+          : context.l10n.giftClaimedQueued,
+      title: context.l10n.giftClaimedTitle,
     );
   }
 
@@ -411,40 +427,41 @@ class _GiftVouchersPageState extends ConsumerState<GiftVouchersPage> {
         voucher.occasionGreeting,
       );
       await Share.share(
-        '${greeting == null ? '' : '$greeting. '}${voucher.fromName} sent you '
-        '${_term(voucher.durationMonths)} of FitCheck Pro. $link',
-        subject: 'A FitCheck Pro gift for ${voucher.toName}',
+        '${greeting == null ? '' : '$greeting. '}'
+        '${context.l10n.giftShareMessage(
+          voucher.fromName,
+          context.l10n.giftDurationTerm('${voucher.durationMonths}'),
+          link,
+        )}',
+        subject: context.l10n.giftShareSubject(voucher.toName),
         sharePositionOrigin: origin,
       );
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: link));
-      ErrorHandler.showInfo('Gift link copied to the clipboard.');
+      ErrorHandler.showInfo(
+        ErrorHandler.l10n?.giftLinkCopied ?? 'Gift link copied to the clipboard.',
+      );
     }
   }
 
-  String? _requiredName(String? value) =>
-      value?.trim().isNotEmpty == true ? null : 'Enter a name.';
+  String? _requiredName(String? value) => value?.trim().isNotEmpty == true
+      ? null
+      : context.l10n.giftErrorName;
 
   String? _email(String? value) {
     final email = value?.trim() ?? '';
     return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)
         ? null
-        : 'Enter a valid email address.';
+        : context.l10n.giftErrorEmail;
   }
 
   String? _occasionGreeting(String? value) {
     if (_occasion != GiftOccasion.other) return null;
     final greeting = value?.trim() ?? '';
-    if (greeting.isEmpty) return 'Enter the card greeting.';
-    if (greeting.length > 80) return 'Use no more than 80 characters.';
+    if (greeting.isEmpty) return context.l10n.giftErrorGreeting;
+    if (greeting.length > 80) return context.l10n.giftErrorGreetingLength;
     return null;
   }
-}
-
-String _term(int months) {
-  if (months == 1) return '1 month';
-  if (months == 12) return '1 year';
-  return '$months months';
 }
 
 class _IncomingGiftTile extends StatelessWidget {
@@ -491,11 +508,13 @@ class _IncomingGiftTile extends StatelessWidget {
                 ),
               ),
             Text(
-              'From ${voucher.fromName}',
+              context.l10n.giftFromSender(voucher.fromName),
               style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             Text(
-              '${_term(voucher.durationMonths)} of FitCheck Pro',
+              context.l10n.giftDurationOfPro(
+                context.l10n.giftDurationTerm('${voucher.durationMonths}'),
+              ),
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
             const SizedBox(height: AppConstants.spacing12),
@@ -506,7 +525,7 @@ class _IncomingGiftTile extends StatelessWidget {
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Claim gift'),
+                  : Text(context.l10n.giftClaimAction),
             ),
           ],
         ),
@@ -533,8 +552,12 @@ class _GiftPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
-    final to = toName.trim().isEmpty ? 'your recipient' : toName.trim();
-    final from = fromName.trim().isEmpty ? 'you' : fromName.trim();
+    final to = toName.trim().isEmpty
+        ? context.l10n.giftPreviewPlaceholderRecipient
+        : toName.trim();
+    final from = fromName.trim().isEmpty
+        ? context.l10n.giftPreviewPlaceholderSender
+        : fromName.trim();
     return PaperSurface(
       color: tokens.stock.tint,
       deckle: PaperEdge.bottom,
@@ -548,14 +571,23 @@ class _GiftPreview extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Card preview',
+            context.l10n.giftCardPreview,
             style: text.bodySmall?.copyWith(color: tokens.textSecondary),
           ),
           const SizedBox(height: AppConstants.spacing8),
-          Text(greeting ?? 'A gift for you', style: text.headlineSmall),
+          Text(
+            greeting ?? context.l10n.giftGiftForYou,
+            style: text.headlineSmall,
+          ),
           const SizedBox(height: AppConstants.spacing8),
-          Text('For $to', style: text.bodyMedium),
-          Text('From $from', style: text.bodyMedium),
+          Text(
+            context.l10n.giftPreviewFor(to),
+            style: text.bodyMedium,
+          ),
+          Text(
+            context.l10n.giftPreviewFrom(from),
+            style: text.bodyMedium,
+          ),
           if (message.trim().isNotEmpty) ...[
             const SizedBox(height: AppConstants.spacing8),
             Text(

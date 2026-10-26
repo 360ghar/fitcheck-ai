@@ -219,8 +219,9 @@ class SettingsNotifier extends Notifier<SettingsState> {
         if (latest()) {
           state = state.copyWith(preferences: confirmed, isSaving: false);
           ErrorHandler.showSuccess(
-            'Your preferences are saved.',
-            title: 'Saved',
+            ErrorHandler.l10n?.settingsPreferencesSavedBody ??
+                'Your preferences are saved.',
+            title: ErrorHandler.l10n?.settingsSavedTitle ?? 'Saved',
           );
         }
         return _SaveOutcome(revision, true);
@@ -230,7 +231,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
             preferences: _lastConfirmed ?? fallback,
             isSaving: false,
           );
-          ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+          ErrorHandler.showError(
+            e,
+            title: ErrorHandler.l10n?.settingsNotSavedTitle ?? 'Not saved',
+            stackTrace: stack,
+          );
         }
         return _SaveOutcome(revision, false);
       }
@@ -258,9 +263,12 @@ class SettingsNotifier extends Notifier<SettingsState> {
         email == null ||
         email.isEmpty) {
       ErrorHandler.showValidation(
-        'This account signs in with Google or Apple. Use "Forgot password" '
-        'to set a password first.',
-        title: 'Password not changed',
+        ErrorHandler.l10n?.settingsOAuthPasswordBody ??
+            'This account signs in with Google or Apple. Use "Forgot password" '
+                'to set a password first.',
+        title:
+            ErrorHandler.l10n?.settingsPasswordNotChangedTitle ??
+            'Password not changed',
       );
       return false;
     }
@@ -268,14 +276,19 @@ class SettingsNotifier extends Notifier<SettingsState> {
       await _auth.reauthenticate(email: email, password: currentPassword);
     } on AuthException {
       ErrorHandler.showValidation(
-        'Current password is incorrect.',
-        title: 'Password not changed',
+        ErrorHandler.l10n?.settingsCurrentPasswordIncorrectBody ??
+            'Current password is incorrect.',
+        title:
+            ErrorHandler.l10n?.settingsPasswordNotChangedTitle ??
+            'Password not changed',
       );
       return false;
     } catch (e, stack) {
       ErrorHandler.showError(
         e,
-        title: 'Password not changed',
+        title:
+            ErrorHandler.l10n?.settingsPasswordNotChangedTitle ??
+            'Password not changed',
         stackTrace: stack,
       );
       return false;
@@ -304,19 +317,25 @@ class SettingsNotifier extends Notifier<SettingsState> {
       }
       if (opened) {
         ErrorHandler.showInfo(
-          'Your data export is ready to download.',
-          title: 'Export ready',
+          ErrorHandler.l10n?.settingsExportReadyBody ??
+              'Your data export is ready to download.',
+          title: ErrorHandler.l10n?.settingsExportReadyTitle ?? 'Export ready',
         );
         return;
       }
       await Clipboard.setData(ClipboardData(text: exportUrl));
       ErrorHandler.showWarning(
-        'We could not open your browser, so we copied the download link. '
-        'Paste it into a browser soon: it expires.',
-        title: 'Link copied',
+        ErrorHandler.l10n?.settingsExportClipboardBody ??
+            'We could not open your browser, so we copied the download link. '
+                'Paste it into a browser soon: it expires.',
+        title: ErrorHandler.l10n?.settingsLinkCopiedTitle ?? 'Link copied',
       );
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Export failed', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.settingsExportFailedTitle ?? 'Export failed',
+        stackTrace: stack,
+      );
     }
   }
 
@@ -328,7 +347,9 @@ class SettingsNotifier extends Notifier<SettingsState> {
     } catch (e, stack) {
       ErrorHandler.showError(
         e,
-        title: 'Account not deleted',
+        title:
+            ErrorHandler.l10n?.settingsAccountNotDeletedTitle ??
+            'Account not deleted',
         stackTrace: stack,
       );
       return false;

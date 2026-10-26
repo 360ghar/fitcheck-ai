@@ -457,6 +457,15 @@ class PhotoshootService:
             guidance = template["prompt_guidance"]
 
         # Combined system prompt: low-creativity identity analysis + scene diversity
+        #
+        # Deliberately English and deliberately NOT localized: the scene plans
+        # are an image-generation prompt, not user-facing copy. They never
+        # reach the client (`PhotoshootResultResponse` carries URLs only), and
+        # `scene_body` is sandwiched around the English `subject_lock`, so a
+        # translated body would put an identity lock and a scene description in
+        # two languages inside one image prompt — the failure mode this
+        # prompt's whole structure exists to avoid. See docs/BACKEND.md →
+        # "Language contract".
         system_prompt = f"""You are a professional fashion photographer planning a photoshoot for a WEAK image model.
 Your job is to lock identity tightly and only vary setting/outfit/pose/lighting.
 

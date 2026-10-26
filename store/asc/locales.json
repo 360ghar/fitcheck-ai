@@ -1,0 +1,406 @@
+{
+  "_comment": "The 50 locales App Store Connect accepts, with the Flutter locale each maps to. `asc` is the shortcode the App Store Connect API expects in appInfoLocalization.locale and appStoreVersionLocalization.locale. `dart` is the language[_Script][_Country] code that becomes a Flutter Locale; it is what the in-app l10n system uses. `tier` drives review effort: 1 = native review, 2 = machine + back-translation, 3 = machine with an in-app feedback link. `rtl` drives Directionality and mirroring.",
+  "default": "en-US",
+  "locales": [
+    {
+      "asc": "en-US",
+      "dart": "en",
+      "native": "English (US)",
+      "english": "English (US)",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "en-GB",
+      "dart": "en_GB",
+      "native": "English (UK)",
+      "english": "English (UK)",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "en-AU",
+      "dart": "en_AU",
+      "native": "English (Australia)",
+      "english": "English (Australia)",
+      "tier": 3,
+      "rtl": false
+    },
+    {
+      "asc": "en-CA",
+      "dart": "en_CA",
+      "native": "English (Canada)",
+      "english": "English (Canada)",
+      "tier": 3,
+      "rtl": false
+    },
+    {
+      "asc": "es-ES",
+      "dart": "es",
+      "native": "Español (España)",
+      "english": "Spanish (Spain)",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "es-MX",
+      "dart": "es_MX",
+      "native": "Español (México)",
+      "english": "Spanish (Mexico)",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "pt-BR",
+      "dart": "pt_BR",
+      "native": "Português (Brasil)",
+      "english": "Portuguese (Brazil)",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "pt-PT",
+      "dart": "pt_PT",
+      "native": "Português (Portugal)",
+      "english": "Portuguese (Portugal)",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "fr-FR",
+      "dart": "fr",
+      "native": "Français",
+      "english": "French",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "fr-CA",
+      "dart": "fr_CA",
+      "native": "Français (Canada)",
+      "english": "French (Canada)",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "de-DE",
+      "dart": "de",
+      "native": "Deutsch",
+      "english": "German",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "it",
+      "dart": "it",
+      "native": "Italiano",
+      "english": "Italian",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "nl-NL",
+      "dart": "nl",
+      "native": "Nederlands",
+      "english": "Dutch",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "sv",
+      "dart": "sv",
+      "native": "Svenska",
+      "english": "Swedish",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "no",
+      "dart": "no",
+      "native": "Norsk",
+      "english": "Norwegian",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "da",
+      "dart": "da",
+      "native": "Dansk",
+      "english": "Danish",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "fi",
+      "dart": "fi",
+      "native": "Suomi",
+      "english": "Finnish",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "pl",
+      "dart": "pl",
+      "native": "Polski",
+      "english": "Polish",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "cs",
+      "dart": "cs",
+      "native": "Čeština",
+      "english": "Czech",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "sk",
+      "dart": "sk",
+      "native": "Slovenčina",
+      "english": "Slovak",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "sl-SI",
+      "dart": "sl",
+      "native": "Slovenščina",
+      "english": "Slovenian",
+      "tier": 3,
+      "rtl": false
+    },
+    {
+      "asc": "hr",
+      "dart": "hr",
+      "native": "Hrvatski",
+      "english": "Croatian",
+      "tier": 3,
+      "rtl": false
+    },
+    {
+      "asc": "ro",
+      "dart": "ro",
+      "native": "Română",
+      "english": "Romanian",
+      "tier": 3,
+      "rtl": false
+    },
+    {
+      "asc": "hu",
+      "dart": "hu",
+      "native": "Magyar",
+      "english": "Hungarian",
+      "tier": 3,
+      "rtl": false
+    },
+    {
+      "asc": "el",
+      "dart": "el",
+      "native": "Ελληνικά",
+      "english": "Greek",
+      "tier": 3,
+      "rtl": false
+    },
+    {
+      "asc": "tr",
+      "dart": "tr",
+      "native": "Türkçe",
+      "english": "Turkish",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "ru",
+      "dart": "ru",
+      "native": "Русский",
+      "english": "Russian",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "uk",
+      "dart": "uk",
+      "native": "Українська",
+      "english": "Ukrainian",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "ar-SA",
+      "dart": "ar",
+      "native": "العربية",
+      "english": "Arabic",
+      "tier": 1,
+      "rtl": true
+    },
+    {
+      "asc": "he",
+      "dart": "he",
+      "native": "עברית",
+      "english": "Hebrew",
+      "tier": 2,
+      "rtl": true
+    },
+    {
+      "asc": "ur-PK",
+      "dart": "ur",
+      "native": "اردو",
+      "english": "Urdu",
+      "tier": 2,
+      "rtl": true
+    },
+    {
+      "asc": "hi",
+      "dart": "hi",
+      "native": "हिन्दी",
+      "english": "Hindi",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "bn-BD",
+      "dart": "bn",
+      "native": "বাংলা",
+      "english": "Bangla",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "gu-IN",
+      "dart": "gu",
+      "native": "ગુજરાતી",
+      "english": "Gujarati",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "kn-IN",
+      "dart": "kn",
+      "native": "ಕನ್ನಡ",
+      "english": "Kannada",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "ml-IN",
+      "dart": "ml",
+      "native": "മലയാളം",
+      "english": "Malayalam",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "mr-IN",
+      "dart": "mr",
+      "native": "मराठी",
+      "english": "Marathi",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "or-IN",
+      "dart": "or",
+      "native": "ଓଡ଼ିଆ",
+      "english": "Odia",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "pa-IN",
+      "dart": "pa",
+      "native": "ਪੰਜਾਬੀ",
+      "english": "Punjabi",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "ta-IN",
+      "dart": "ta",
+      "native": "தமிழ்",
+      "english": "Tamil",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "te-IN",
+      "dart": "te",
+      "native": "తెలుగు",
+      "english": "Telugu",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "zh-Hans",
+      "dart": "zh_Hans",
+      "native": "简体中文",
+      "english": "Chinese (Simplified)",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "zh-Hant",
+      "dart": "zh_Hant",
+      "native": "繁體中文",
+      "english": "Chinese (Traditional)",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "ja",
+      "dart": "ja",
+      "native": "日本語",
+      "english": "Japanese",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "ko",
+      "dart": "ko",
+      "native": "한국어",
+      "english": "Korean",
+      "tier": 1,
+      "rtl": false
+    },
+    {
+      "asc": "th",
+      "dart": "th",
+      "native": "ไทย",
+      "english": "Thai",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "vi",
+      "dart": "vi",
+      "native": "Tiếng Việt",
+      "english": "Vietnamese",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "id",
+      "dart": "id",
+      "native": "Bahasa Indonesia",
+      "english": "Indonesian",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "ms",
+      "dart": "ms",
+      "native": "Bahasa Melayu",
+      "english": "Malay",
+      "tier": 2,
+      "rtl": false
+    },
+    {
+      "asc": "ca",
+      "dart": "ca",
+      "native": "Català",
+      "english": "Catalan",
+      "tier": 3,
+      "rtl": false
+    }
+  ]
+}

@@ -1,0 +1,369 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #coc-bg {
+      background: #FCFAF8;
+    }
+    .coc-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .coc-glow-a {
+      width: 620px;
+      height: 620px;
+      left: 380px;
+      top: -180px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.14) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .coc-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -200px;
+      top: 780px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .coc-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 560px;
+      top: 1180px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .coc-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— floating-pill wallpaper (flat — no shadow) ————— */
+    .coc-fp {
+      position: absolute;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 24px;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      background: #FFFFFF;
+      color: #1A1A1A;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 21px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    #coc-fp1 { left: 84px;  top: 128px;  background: #51D6B0; }
+    #coc-fp2 { right: 72px; top: 208px;  background: #9BFAED; }
+    #coc-fp3 { left: 72px;  top: 1420px; background: #89F9EA; }
+    #coc-fp4 { right: 64px; top: 1510px; background: #91F9EB; }
+
+    /* ————— the gentle-settle camera (the blueprint's push-through, softened) ————— */
+    #coc-camera {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 42%;
+    }
+    #coc-stack {
+      position: absolute;
+      top: 340px;
+      left: 0;
+      right: 0;
+      height: 928px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 44px;
+    }
+
+    /* ————— stat-pill: white card, 2px outline, soft offset shadow ————— */
+    .coc-pill {
+      width: 820px;
+      height: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 0 48px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 2rem;
+      box-shadow: 0.3cqw 0.3cqw 0 rgba(26, 26, 26, 0.08);
+      will-change: transform;
+    }
+
+    /* ————— the counting stat-numerals (Bodoni, colored — the one place color meets type) ————— */
+    .coc-counter-wrap {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+    }
+    #coc-cw1, #coc-cw2 { width: 110px; }
+    #coc-cw3 { width: 190px; }
+    .coc-counter {
+      display: inline-block;
+      font-family: "Bodoni Moda", serif;
+      font-size: 86px;
+      font-weight: 800;
+      line-height: 1.0;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      transform-origin: center center;
+      will-change: transform;
+    }
+    #coc-n1 { color: #078675; }
+    #coc-n2 { color: #74DEC0; }
+    #coc-n3 { color: #065B50; }
+    .coc-suffix {
+      display: inline-block;
+      font-family: "Bodoni Moda", serif;
+      font-size: 48px;
+      font-weight: 800;
+      line-height: 1.0;
+      color: #065B50;
+      opacity: 0;
+    }
+
+    /* ————— paired graphics: pill 1's jade accent rule, pills 2–3's bar-tracks ————— */
+    .coc-accentbar {
+      width: 96px;
+      height: 8px;
+      background: #078675;
+      border-radius: 9999px;
+      transform: scaleX(0);
+      transform-origin: left center;
+    }
+    .coc-track {
+      width: 100%;
+      height: 36px;
+      background: #FCFAF8;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+    .coc-fill {
+      width: 100%;
+      height: 100%;
+      border-radius: 9999px;
+      transform: scaleX(0);
+      transform-origin: left center;
+    }
+    #coc-fill2 { background: #74DEC0; }
+    #coc-fill3 { background: #065B50; }
+
+    /* ————— pill labels (Space Grotesk, uppercase, tracked) ————— */
+    .coc-label {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="02-cost-of-chaos"
+    data-start="0"
+    data-duration="7.19"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="coc-bg" data-start="0" data-duration="7.19" data-track-index="0">
+      <div class="coc-glow coc-glow-a"></div>
+      <div class="coc-glow coc-glow-b"></div>
+      <div class="coc-glow coc-glow-c"></div>
+      <div class="coc-grain"></div>
+    </div>
+
+    <!-- floating-pill wallpaper -->
+    <div class="clip" id="coc-wallpaper" data-start="0" data-duration="7.19" data-track-index="1">
+      <div class="coc-fp" id="coc-fp1">New</div>
+      <div class="coc-fp" id="coc-fp2">Fresh</div>
+      <div class="coc-fp" id="coc-fp3">Next</div>
+      <div class="coc-fp" id="coc-fp4">Daily</div>
+    </div>
+
+    <!-- the stat-pill stack: 15 / 3 / 50% -->
+    <div class="clip" id="coc-stack-clip" data-start="0" data-duration="7.19" data-track-index="2">
+      <div id="coc-camera">
+        <div id="coc-stack">
+          <!-- Scene 1: "15" minutes deciding, jade -->
+          <div class="coc-pill" id="coc-pill1">
+            <div class="coc-counter-wrap" id="coc-cw1">
+              <span class="coc-counter" id="coc-n1">0</span>
+            </div>
+            <div class="coc-accentbar" id="coc-bar1"></div>
+            <div class="coc-label" id="coc-l1">Minutes deciding</div>
+          </div>
+
+          <!-- Scene 2: "3" impulse buys a month, brand mint, track fills -->
+          <div class="coc-pill" id="coc-pill2">
+            <div class="coc-counter-wrap" id="coc-cw2">
+              <span class="coc-counter" id="coc-n2">0</span>
+            </div>
+            <div class="coc-track">
+              <div class="coc-fill" id="coc-fill2"></div>
+            </div>
+            <div class="coc-label" id="coc-l2">Impulse buys / month</div>
+          </div>
+
+          <!-- Scene 3: "50%" of the closet forgotten, deep crease, track fills to half -->
+          <div class="coc-pill" id="coc-pill3">
+            <div class="coc-counter-wrap" id="coc-cw3">
+              <span class="coc-counter" id="coc-n3">0</span><span class="coc-suffix" id="coc-s3">%</span>
+            </div>
+            <div class="coc-track">
+              <div class="coc-fill" id="coc-fill3"></div>
+            </div>
+            <div class="coc-label" id="coc-l3">Of your closet, forgotten</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["02-cost-of-chaos"] = tl;
+
+        var n1 = document.getElementById("coc-n1");
+        var n2 = document.getElementById("coc-n2");
+        var n3 = document.getElementById("coc-n3");
+
+        /* ——— gentle-settle camera: the blueprint's push-through, softened to a settle (front half only) ——— */
+        tl.fromTo(
+          "#coc-camera",
+          { scale: 0.955, y: 30 },
+          { scale: 1, y: 0, duration: 2.9, ease: "power3.out" },
+          0
+        );
+
+        /* ——— floating-pill wallpaper: quiet pops; the late pair keeps the hold alive ——— */
+        tl.fromTo("#coc-fp1", { scale: 0.5, rotation: -26, opacity: 0 }, { scale: 1, rotation: -14, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.15);
+        tl.fromTo("#coc-fp2", { scale: 0.5, rotation: 0, opacity: 0 }, { scale: 1, rotation: 12, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.3);
+        tl.fromTo("#coc-fp3", { scale: 0.5, y: 24, rotation: 22, opacity: 0 }, { scale: 1, y: 0, rotation: -10, opacity: 1, duration: 0.5, ease: "power3.out" }, 4.4);
+        tl.fromTo("#coc-fp4", { scale: 0.5, y: 24, rotation: -24, opacity: 0 }, { scale: 1, y: 0, rotation: 14, opacity: 1, duration: 0.5, ease: "power3.out" }, 5.1);
+
+        /* ——— Scene 1 (0–1.6s): first stat-pill spring-pops upper-center; "15" counts up in jade ——— */
+        tl.fromTo("#coc-pill1", { scale: 0, y: 30, opacity: 0 }, { scale: 1, y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 0.06);
+        tl.fromTo("#coc-l1", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.18);
+
+        var st1 = { v: 0 };
+        tl.to(
+          st1,
+          { v: 15, duration: 1.2, ease: "power3.out", onUpdate: function () { n1.textContent = Math.round(st1.v); } },
+          0.3
+        );
+        tl.fromTo(n1, { scale: 0.5 }, { scale: 1, duration: 1.2, ease: "power3.out" }, 0.3);
+        tl.fromTo("#coc-bar1", { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: "power3.out" }, 0.3);
+
+        /* ——— Scene 2 (1.6–3.4s): second pill pushes in below; "3" counts up in brand mint; the bar-track fills ——— */
+        tl.fromTo("#coc-pill2", { y: 110, scale: 0.94, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.65, ease: "power3.out" }, 1.62);
+        tl.fromTo("#coc-l2", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 1.75);
+
+        var st2 = { v: 0 };
+        tl.to(
+          st2,
+          { v: 3, duration: 1.2, ease: "power3.out", onUpdate: function () { n2.textContent = Math.round(st2.v); } },
+          2.05
+        );
+        tl.fromTo(n2, { scale: 0.5 }, { scale: 1, duration: 1.2, ease: "power3.out" }, 2.05);
+        tl.fromTo("#coc-fill2", { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: "power3.out" }, 2.05);
+
+        /* ——— Scene 3 (3.4–7.19s): third pill enters; "50" counts up in deep crease, "%" takes its own beat; the track fills to half ——— */
+        tl.fromTo("#coc-pill3", { y: 110, scale: 0.94, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.65, ease: "power3.out" }, 3.42);
+        tl.fromTo("#coc-l3", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 3.55);
+
+        var st3 = { v: 0 };
+        tl.to(
+          st3,
+          { v: 50, duration: 1.35, ease: "power3.out", onUpdate: function () { n3.textContent = Math.round(st3.v); } },
+          3.85
+        );
+        tl.fromTo(n3, { scale: 0.5 }, { scale: 1, duration: 1.35, ease: "power3.out" }, 3.85);
+        tl.fromTo("#coc-fill3", { scaleX: 0 }, { scaleX: 0.5, duration: 1.35, ease: "power3.out" }, 3.85);
+        tl.fromTo("#coc-s3", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.35, ease: "back.out(1.7)" }, 5.25);
+
+        /* ——— the hold: subtle deterministic sine jitter on the stack — the only aliveness, no breathing ——— */
+        var jitEl = document.getElementById("coc-stack");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 0.85,
+            duration: 1.59,
+            ease: "none",
+            onUpdate: function () {
+              var x = 1.8 * Math.sin(jit.p);
+              var y = 1.2 * Math.sin(jit.p * 1.31);
+              jitEl.style.transform = "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0)";
+            },
+          },
+          5.6
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

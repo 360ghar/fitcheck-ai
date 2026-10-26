@@ -53,18 +53,25 @@ class AiSettingsNotifier extends AsyncNotifier<AiSettingsModel> {
     final key = apiKey.trim();
     final keySet = state.value?.providerConfigs[provider]?.apiKeySet ?? false;
     if (provider.isEmpty) {
-      ErrorHandler.showValidation('Choose a provider.', title: 'Not saved');
+      ErrorHandler.showValidation(
+        ErrorHandler.l10n?.settingsAiChooseProviderBody ?? 'Choose a provider.',
+        title: ErrorHandler.l10n?.settingsNotSavedTitle ?? 'Not saved',
+      );
       return false;
     }
     if (provider == 'custom' && url.isEmpty) {
       ErrorHandler.showValidation(
-        'A custom provider needs an API URL.',
-        title: 'Not saved',
+        ErrorHandler.l10n?.settingsAiCustomUrlRequiredBody ??
+            'A custom provider needs an API URL.',
+        title: ErrorHandler.l10n?.settingsNotSavedTitle ?? 'Not saved',
       );
       return false;
     }
     if (!keySet && key.isEmpty) {
-      ErrorHandler.showValidation('Enter an API key.', title: 'Not saved');
+      ErrorHandler.showValidation(
+        ErrorHandler.l10n?.settingsAiKeyRequiredBody ?? 'Enter an API key.',
+        title: ErrorHandler.l10n?.settingsNotSavedTitle ?? 'Not saved',
+      );
       return false;
     }
     final payload = <String, dynamic>{
@@ -80,10 +87,17 @@ class AiSettingsNotifier extends AsyncNotifier<AiSettingsModel> {
         providerConfigs: {provider: payload},
       );
       if (ref.mounted) state = AsyncData(updated);
-      ErrorHandler.showSuccess('Your AI settings are saved.', title: 'Saved');
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.settingsAiSavedBody ?? 'Your AI settings are saved.',
+        title: ErrorHandler.l10n?.settingsSavedTitle ?? 'Saved',
+      );
       return true;
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.settingsNotSavedTitle ?? 'Not saved',
+        stackTrace: stack,
+      );
       return false;
     }
   }
@@ -101,8 +115,10 @@ class AiSettingsNotifier extends AsyncNotifier<AiSettingsModel> {
     final model = chatModel.trim();
     if (url.isEmpty || model.isEmpty) {
       ErrorHandler.showInfo(
-        'Enter an API URL and a chat model to test.',
-        title: 'Missing details',
+        ErrorHandler.l10n?.settingsAiUrlAndModelRequiredBody ??
+            'Enter an API URL and a chat model to test.',
+        title:
+            ErrorHandler.l10n?.settingsAiMissingDetailsTitle ?? 'Missing details',
       );
       return;
     }
@@ -110,9 +126,11 @@ class AiSettingsNotifier extends AsyncNotifier<AiSettingsModel> {
       final keySet = state.value?.providerConfigs[provider]?.apiKeySet ?? false;
       ErrorHandler.showInfo(
         keySet
-            ? 'Enter your API key to test. Your saved key stays private.'
-            : 'Enter your API key to test.',
-        title: 'API key needed',
+            ? (ErrorHandler.l10n?.settingsAiKeyToTestPrivateBody ??
+                  'Enter your API key to test. Your saved key stays private.')
+            : (ErrorHandler.l10n?.settingsAiKeyToTestBody ??
+                  'Enter your API key to test.'),
+        title: ErrorHandler.l10n?.settingsAiKeyNeededTitle ?? 'API key needed',
       );
       return;
     }
@@ -123,12 +141,22 @@ class AiSettingsNotifier extends AsyncNotifier<AiSettingsModel> {
         model: model,
       );
       if (result.success) {
-        ErrorHandler.showSuccess('The connection works.', title: 'Connected');
+        ErrorHandler.showSuccess(
+          ErrorHandler.l10n?.settingsAiConnectedBody ?? 'The connection works.',
+          title: ErrorHandler.l10n?.settingsAiConnectedTitle ?? 'Connected',
+        );
       } else {
-        ErrorHandler.showValidation(result.message, title: 'Test failed');
+        ErrorHandler.showValidation(
+          result.message,
+          title: ErrorHandler.l10n?.settingsAiTestFailedTitle ?? 'Test failed',
+        );
       }
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Test failed', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.settingsAiTestFailedTitle ?? 'Test failed',
+        stackTrace: stack,
+      );
     }
   }
 }

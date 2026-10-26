@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/constants/app_constants.dart';
 import '../../../../../core/widgets/app_ui.dart';
+import '../../../../core/i18n/l10n.dart';
+import '../../../../core/widgets/directional_icon.dart';
 import '../../models/gift_models.dart';
 
 /// Home banner for an incoming gift or a free invitation, on the same torn
@@ -26,6 +28,7 @@ class GiftPriorityBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final hasIncoming = priority == GiftDashboardPriority.incoming;
     final greeting = hasIncoming
         ? giftOccasionGreeting(incoming!.occasion, incoming!.occasionGreeting)
@@ -33,12 +36,12 @@ class GiftPriorityBanner extends StatelessWidget {
     final title = hasIncoming
         ? incomingCount > 1
               ? '$incomingCount gifts are waiting for you'
-              : 'A gift is waiting for you'
+              : l10n.giftGiftWaiting
         : 'Send a free ${_term(allowance!.durationMonths)} invitation';
     final remaining = allowance?.remainingCount ?? 0;
     final body = hasIncoming
         ? incomingCount > 1
-              ? 'Open your gifts to claim them with your verified email.'
+              ? l10n.giftOpenBody
               : '${greeting == null ? '' : '$greeting. '}${incoming!.fromName} '
                     'sent you ${_term(incoming!.durationMonths)} of FitCheck Pro.'
         : '$remaining free ${_term(allowance!.durationMonths)} '
@@ -69,11 +72,14 @@ class GiftPriorityBanner extends StatelessWidget {
               foregroundColor: tokens.marigold.accent,
             ),
             onPressed: onOpen,
-            icon: Icon(
-              hasIncoming ? Icons.card_giftcard_outlined : Icons.send_outlined,
-              size: 18,
+            // Only the paper-plane is directional; a mirrored gift box reads as
+            // an error, so it stays unwrapped.
+            icon: hasIncoming
+                ? const Icon(Icons.card_giftcard_outlined, size: 18)
+                : const DirectionalIcon(Icons.send_outlined, size: 18),
+            label: Text(
+              hasIncoming ? l10n.giftOpenGifts : l10n.giftSendInvitation,
             ),
-            label: Text(hasIncoming ? 'Open gifts' : 'Send invitation'),
           ),
         ],
       ),

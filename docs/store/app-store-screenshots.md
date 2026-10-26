@@ -1,8 +1,15 @@
 # App Store Screenshots — Capture Plan & Spec (FitCheck AI iOS)
 
 **Work stream:** WS6
-**Last updated:** 2026-08-08
+**Last updated:** 2026-10-26
 **Companion:** `flutter/scripts/capture_ios_screenshots.sh` (boots simulators + captures frames).
+
+> **Superseded for upload.** The framed, localized store screenshots are produced by
+> `scripts/creative/`. Read `docs/store/creative.md` for the current pipeline, the
+> verified accepted sizes, the font stack per script and the manifest that an
+> uploader consumes. This document remains the record of how the raw screens were
+> captured, and its §1 dimension table predates the live check recorded in
+> `docs/store/creative.md` §2 (the 6.9" set is graded on `APP_IPHONE_67`).
 
 ---
 

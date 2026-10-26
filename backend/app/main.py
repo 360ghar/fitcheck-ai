@@ -16,8 +16,13 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
-from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images, gifts, admin, health, oauth
+from app.core.middleware import (
+    CorrelationIdMiddleware,
+    LanguageMiddleware,
+    RequestLoggingMiddleware,
+    get_correlation_id,
+)
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images, gifts, admin, health, oauth, i18n
 from app.db.connection import SupabaseDB
 from app.utils.db import is_db_connection_error, missing_quota_rpcs, missing_referral_rpcs, probe_valid_batch_size_bound
 from app.mcp.curated import build_curated_registry
@@ -652,6 +657,9 @@ app.add_middleware(RequestLoggingMiddleware)
 # Correlation ID (generates unique ID per request)
 app.add_middleware(CorrelationIdMiddleware)
 
+# Request language (resolves Accept-Language for AI output and Content-Language)
+app.add_middleware(LanguageMiddleware)
+
 
 # ============================================================================
 # ROUTE REGISTRATION
@@ -756,6 +764,9 @@ app.include_router(images.router, prefix="/api/v1/images", tags=["Images"])
 # Health endpoints: canonical /health + /api/v1/health compatibility alias.
 # The routes carry full paths, so no prefix is applied here.
 app.include_router(health.router, tags=["Health"])
+
+# Supported languages (public, static; used by the client and store tooling)
+app.include_router(i18n.router, prefix="/api/v1/i18n", tags=["Internationalization"])
 # OAuth 2.1 gateway for the MCP/ChatGPT surface (discovery, DCR, authorize,
 # token, revoke). No-op (503) unless MCP_OAUTH_ISSUER is configured. Must be
 # registered BEFORE the MCP root mount below.

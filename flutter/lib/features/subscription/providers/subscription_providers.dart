@@ -14,6 +14,7 @@ import '../models/subscription_model.dart';
 import '../repositories/subscription_repository.dart';
 import '../services/iap_service.dart';
 import '../services/purchase_recovery_service.dart';
+import '../services/trial_eligibility.dart';
 
 final subscriptionRepositoryProvider = Provider<SubscriptionRepository>(
   (ref) => SubscriptionRepository(),
@@ -35,6 +36,24 @@ final purchaseRecoveryServiceProvider = Provider<PurchaseRecoveryService>((
 final iapServiceProvider = Provider<IapService>(
   (ref) => ref.watch(purchaseRecoveryServiceProvider).iapService,
 );
+
+/// StoreKit 2 introductory-offer eligibility, behind an injectable service so
+/// tests and Android get a stable answer instead of a missing plugin.
+final trialEligibilityServiceProvider = Provider<TrialEligibilityService>(
+  (ref) => const TrialEligibilityService(),
+);
+
+/// Whether the signed-in user can still take the free month on [productId].
+///
+/// Keyed by product id so the probe re-runs when the live product id arrives
+/// with `/plans` and differs from [kProMonthlyProductId]. Resolves to
+/// `unknown` on every non-iOS platform and every failure; the paywall treats
+/// that as "no trial copy", never as "offer it anyway".
+final trialEligibilityProvider =
+    FutureProvider.autoDispose.family<TrialEligibility, String>(
+      (ref, productId) =>
+          ref.watch(trialEligibilityServiceProvider).check(productId),
+    );
 
 /// Whether monetization (paywall, purchase flow) may render. Off only in
 /// builds compiled with PAYWALL_ENABLED=false (App Review builds).
@@ -159,9 +178,12 @@ class SubscriptionStatusNotifier extends AsyncNotifier<SubscriptionState> {
     if (current == null) return false;
     if (current.isStoreBilled) {
       ErrorHandler.showValidation(
-        'This plan is billed through the store. Manage it in your store '
-        'account settings.',
-        title: 'Manage in the store',
+        ErrorHandler.l10n?.subscriptionManageInStoreBody ??
+            'This plan is billed through the store. Manage it in your store '
+                'account settings.',
+        title:
+            ErrorHandler.l10n?.subscriptionManageInStoreTitle ??
+            'Manage in the store',
       );
       return false;
     }
@@ -169,14 +191,17 @@ class SubscriptionStatusNotifier extends AsyncNotifier<SubscriptionState> {
       await _repository.cancelSubscription();
       await refresh();
       ErrorHandler.showSuccess(
-        'Your plan stays active until the end of this billing period.',
-        title: 'Subscription cancelled',
+        ErrorHandler.l10n?.subscriptionCancelledBody ??
+            'Your plan stays active until the end of this billing period.',
+        title:
+            ErrorHandler.l10n?.subscriptionCancelledTitle ??
+            'Subscription cancelled',
       );
       return true;
     } catch (e, stackTrace) {
       ErrorHandler.showError(
         e,
-        title: 'Could not cancel',
+        title: ErrorHandler.l10n?.subscriptionCancelFailedTitle ?? 'Could not cancel',
         stackTrace: stackTrace,
       );
       return false;
@@ -191,8 +216,11 @@ class SubscriptionStatusNotifier extends AsyncNotifier<SubscriptionState> {
         final portalUrl = await _repository.createPortalSession();
         if (portalUrl.isEmpty) {
           ErrorHandler.showValidation(
-            'Could not open billing management.',
-            title: 'Could not open',
+            ErrorHandler.l10n?.subscriptionOpenBillingFailedBody ??
+                'Could not open billing management.',
+            title:
+                ErrorHandler.l10n?.subscriptionCouldNotOpenTitle ??
+                'Could not open',
           );
           return;
         }
@@ -200,7 +228,8 @@ class SubscriptionStatusNotifier extends AsyncNotifier<SubscriptionState> {
       } catch (e, stackTrace) {
         ErrorHandler.showError(
           e,
-          title: 'Could not open',
+          title:
+              ErrorHandler.l10n?.subscriptionCouldNotOpenTitle ?? 'Could not open',
           stackTrace: stackTrace,
         );
       }
@@ -220,8 +249,9 @@ Future<void> _openExternal(Uri url) async {
     await launchUrl(url, mode: LaunchMode.externalApplication);
   } else {
     ErrorHandler.showValidation(
-      'Could not open the link.',
-      title: 'Could not open',
+      ErrorHandler.l10n?.subscriptionOpenLinkFailedBody ??
+          'Could not open the link.',
+      title: ErrorHandler.l10n?.subscriptionCouldNotOpenTitle ?? 'Could not open',
     );
   }
 }
@@ -264,8 +294,12 @@ class ReferralCodeNotifier extends AsyncNotifier<ReferralCodeModel> {
     final code = state.value;
     if (code == null) {
       ErrorHandler.showError(
-        state.error ?? 'Could not load your referral link. Try again.',
-        title: 'Could not load your link',
+        state.error ??
+            ErrorHandler.l10n?.subscriptionReferralLoadFailedBody ??
+            'Could not load your referral link. Try again.',
+        title:
+            ErrorHandler.l10n?.subscriptionReferralLoadFailedTitle ??
+            'Could not load your link',
       );
     }
     return code;
@@ -275,7 +309,11 @@ class ReferralCodeNotifier extends AsyncNotifier<ReferralCodeModel> {
     final code = await _ensure();
     if (code == null) return;
     await Clipboard.setData(ClipboardData(text: code.shareUrl));
-    ErrorHandler.showSuccess('Referral link copied.', title: 'Copied');
+    ErrorHandler.showSuccess(
+      ErrorHandler.l10n?.subscriptionReferralCopiedBody ??
+          'Referral link copied.',
+      title: ErrorHandler.l10n?.subscriptionReferralCopiedTitle ?? 'Copied',
+    );
   }
 
   /// Opens the share sheet. [sharePositionOrigin] anchors the iPad popover.
@@ -285,21 +323,26 @@ class ReferralCodeNotifier extends AsyncNotifier<ReferralCodeModel> {
     if (code == null) return;
     try {
       await Share.share(
-        'Join FitCheck AI and we both get a month of Pro. ${code.shareUrl}',
-        subject: 'Try FitCheck AI',
+        ErrorHandler.l10n?.subscriptionReferralShareMessage(code.shareUrl) ??
+            'Join FitCheck AI and we both get a month of Pro. ${code.shareUrl}',
+        subject:
+            ErrorHandler.l10n?.subscriptionReferralShareSubject ??
+            'Try FitCheck AI',
         sharePositionOrigin: sharePositionOrigin,
       );
     } catch (_) {
       try {
         await Clipboard.setData(ClipboardData(text: code.shareUrl));
         ErrorHandler.showInfo(
-          'Sharing is not available, so we copied the link.',
-          title: 'Link copied',
+          ErrorHandler.l10n?.subscriptionShareUnavailableBody ??
+              'Sharing is not available, so we copied the link.',
+          title: ErrorHandler.l10n?.subscriptionLinkCopiedTitle ?? 'Link copied',
         );
       } catch (_) {
         ErrorHandler.showValidation(
-          'Copy the link from the referral page instead.',
-          title: 'Could not share',
+          ErrorHandler.l10n?.subscriptionShareFailedBody ??
+              'Copy the link from the referral page instead.',
+          title: ErrorHandler.l10n?.subscriptionShareFailedTitle ?? 'Could not share',
         );
       }
     }
@@ -565,8 +608,9 @@ class PaywallNotifier extends Notifier<PaywallState> {
     await refreshStoreProducts();
     if (ref.mounted && state.storeStatus == StoreStatus.ready) {
       ErrorHandler.showSuccess(
-        'Store prices are available. You can upgrade now.',
-        title: 'Store ready',
+        ErrorHandler.l10n?.subscriptionStoreReadyBody ??
+            'Store prices are available. You can upgrade now.',
+        title: ErrorHandler.l10n?.subscriptionStoreReadyTitle ?? 'Store ready',
       );
     }
   }
@@ -590,7 +634,7 @@ class PaywallNotifier extends Notifier<PaywallState> {
       // store payload); the user sees only the friendly message.
       ErrorHandler.showError(
         e,
-        title: 'Purchase failed',
+        title: ErrorHandler.l10n?.purchaseFailedTitle ?? 'Purchase failed',
         stackTrace: stackTrace,
       );
     } finally {
@@ -598,24 +642,36 @@ class PaywallNotifier extends Notifier<PaywallState> {
     }
   }
 
-  void _unavailable(String message) =>
-      ErrorHandler.showValidation(message, title: 'Purchase unavailable');
+  void _unavailable(String message) => ErrorHandler.showValidation(
+    message,
+    title:
+        ErrorHandler.l10n?.purchaseUnavailableTitle ?? 'Purchase unavailable',
+  );
 
   Future<void> _startStorePurchase(String planType) async {
     if (!_iap.isStoreBillingAvailable) {
-      return _unavailable('In-app purchases are not available on this device.');
+      return _unavailable(
+        ErrorHandler.l10n?.purchaseIapUnavailableBody ??
+            'In-app purchases are not available on this device.',
+      );
     }
     final productId = state.storeProducts.productIdFor(
       _iap.storeName,
       planType,
     );
     if (productId == null) {
-      return _unavailable('This plan is not available for purchase yet.');
+      return _unavailable(
+        ErrorHandler.l10n?.purchasePlanNotAvailableBody ??
+            'This plan is not available for purchase yet.',
+      );
     }
     if (state.storeStatus == StoreStatus.unavailable) {
       // The page-load query already failed this session; a re-query can only
       // repeat it after its retry delay. The banner's Retry is the recovery.
-      return _unavailable(kPlanNotAvailableInStoreMessage);
+      return _unavailable(
+        ErrorHandler.l10n?.purchasePlanNotInStoreBody ??
+            kPlanNotAvailableInStoreMessage,
+      );
     }
     // Prefer the page-load cache so a transient store error at the tap
     // cannot fail a purchase with valid details on hand. StoreKit re-resolves
@@ -623,7 +679,12 @@ class PaywallNotifier extends Notifier<PaywallState> {
     var product = state.storeProductDetails[planType];
     if (product == null) {
       final query = await _iap.fetchProducts({productId});
-      if (query.isEmpty) return _unavailable(kPlanNotAvailableInStoreMessage);
+      if (query.isEmpty) {
+        return _unavailable(
+          ErrorHandler.l10n?.purchasePlanNotInStoreBody ??
+              kPlanNotAvailableInStoreMessage,
+        );
+      }
       product = query.products.first;
     }
     final started = await _iap.startPurchase(
@@ -631,7 +692,10 @@ class PaywallNotifier extends Notifier<PaywallState> {
       appAccountToken: _recovery.currentUserId,
     );
     if (!started) {
-      _unavailable('The purchase could not start. Try again.');
+      _unavailable(
+        ErrorHandler.l10n?.purchaseStartFailedBody ??
+            'The purchase could not start. Try again.',
+      );
     }
     // The result arrives on the purchase stream.
   }
@@ -645,7 +709,10 @@ class PaywallNotifier extends Notifier<PaywallState> {
     }
     final checkoutUrl = session.checkoutUrl;
     if (checkoutUrl == null || checkoutUrl.isEmpty) {
-      return _unavailable('Checkout did not return a payment link.');
+      return _unavailable(
+        ErrorHandler.l10n?.purchaseNoPaymentLinkBody ??
+            'Checkout did not return a payment link.',
+      );
     }
     await _openExternal(Uri.parse(checkoutUrl));
   }
@@ -687,20 +754,23 @@ class PaywallNotifier extends Notifier<PaywallState> {
       case PurchaseStatus.pending:
         // Ask to Buy / parental approval. No charge yet.
         ErrorHandler.showSuccess(
-          "Your purchase is waiting for approval. You'll get access as soon "
-          "as it's approved.",
-          title: 'Purchase pending',
+          ErrorHandler.l10n?.purchasePendingBody ??
+              "Your purchase is waiting for approval. You'll get access as soon "
+                  "as it's approved.",
+          title: ErrorHandler.l10n?.purchasePendingTitle ?? 'Purchase pending',
         );
       case PurchaseStatus.error:
         // The plugin's message is a raw platform dump; the user gets a stable
         // sentence and Sentry gets the details.
         ErrorHandler.showError(
           IapException(
-            message: 'The purchase failed. Try again.',
+            message:
+                ErrorHandler.l10n?.purchaseFailedBody ??
+                'The purchase failed. Try again.',
             errorCode: details.error?.code,
             details: details.error?.toString(),
           ),
-          title: 'Purchase failed',
+          title: ErrorHandler.l10n?.purchaseFailedTitle ?? 'Purchase failed',
         );
       case PurchaseStatus.canceled:
         break;
@@ -727,37 +797,48 @@ class PaywallNotifier extends Notifier<PaywallState> {
         if (subscription != null) await status.applyVerified(subscription);
         ErrorHandler.showSuccess(
           restored
-              ? 'Your purchases are restored.'
-              : 'Your subscription is active. Welcome.',
-          title: restored ? 'Restored' : 'Subscription active',
+              ? (ErrorHandler.l10n?.purchaseRestoredBody ??
+                    'Your purchases are restored.')
+              : (ErrorHandler.l10n?.purchaseActiveBody ??
+                    'Your subscription is active. Welcome.'),
+          title: restored
+              ? (ErrorHandler.l10n?.purchaseRestoredTitle ?? 'Restored')
+              : (ErrorHandler.l10n?.purchaseActiveTitle ?? 'Subscription active'),
         );
       case PurchaseVerificationOutcome.duplicate:
         // Already verified elsewhere. A second toast reads as a second charge.
         break;
       case PurchaseVerificationOutcome.noSession:
         ErrorHandler.showValidation(
-          'Sign in to finish your purchase.',
-          title: 'Sign in required',
+          ErrorHandler.l10n?.purchaseSignInRequiredBody ??
+              'Sign in to finish your purchase.',
+          title:
+              ErrorHandler.l10n?.purchaseSignInRequiredTitle ?? 'Sign in required',
         );
       case PurchaseVerificationOutcome.invalidTransaction:
         ErrorHandler.showError(
           result.message ??
+              ErrorHandler.l10n?.purchaseInvalidTransactionBody ??
               'The purchase did not include a verifiable transaction ID.',
-          title: 'Purchase error',
+          title: ErrorHandler.l10n?.purchaseErrorTitle ?? 'Purchase error',
         );
       case PurchaseVerificationOutcome.transientFailure:
         // Not completed; the claim is released and the recovery service
         // drains the redelivery after this page closes.
         ErrorHandler.showValidation(
-          "We couldn't verify your purchase with the store right now. It "
-          "will finish automatically, and you won't be charged twice.",
-          title: 'Verification pending',
+          ErrorHandler.l10n?.purchaseVerificationPendingBody ??
+              "We couldn't verify your purchase with the store right now. It "
+                  "will finish automatically, and you won't be charged twice.",
+          title:
+              ErrorHandler.l10n?.purchaseVerificationPendingTitle ??
+              'Verification pending',
         );
       case PurchaseVerificationOutcome.terminalFailure:
         // Rejected for good: redelivery cannot fix it, support can.
         ErrorHandler.showValidation(
           kPurchaseNotAppliedMessage,
-          title: 'Purchase not applied',
+          title:
+              ErrorHandler.l10n?.purchaseNotAppliedTitle ?? 'Purchase not applied',
         );
     }
   }
@@ -781,10 +862,12 @@ class PaywallNotifier extends Notifier<PaywallState> {
       // One report: showError reports the exception it shows.
       ErrorHandler.showError(
         IapException(
-          message: 'Could not restore purchases. Try again.',
+          message:
+              ErrorHandler.l10n?.purchaseRestoreFailedBody ??
+              'Could not restore purchases. Try again.',
           details: e.toString(),
         ),
-        title: 'Restore failed',
+        title: ErrorHandler.l10n?.purchaseRestoreFailedTitle ?? 'Restore failed',
         stackTrace: stackTrace,
       );
     }

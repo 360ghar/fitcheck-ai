@@ -88,7 +88,7 @@ function Price({ plan, isYearly }: { plan: PlanKey; isYearly: boolean }) {
         ${price.toFixed(price % 1 === 0 ? 0 : 2)}
       </span>
       {price > 0 && (
-        <span className="ml-1 text-sm font-normal text-paper-text-3">
+        <span className="ms-1 text-sm font-normal text-paper-text-3">
           /{isYearly ? 'year' : 'month'}
         </span>
       )}
@@ -208,14 +208,14 @@ export default function Pricing() {
                 className="data-[state=checked]:bg-paper-accent data-[state=unchecked]:bg-paper-edge"
               />
               <span className={cn('text-sm font-medium', isYearly ? 'text-paper-text' : 'text-paper-text-3')}>
-                Yearly <span className="ml-1 text-paper-accent">2 months free</span>
+                Yearly <span className="ms-1 text-paper-accent">2 months free</span>
               </span>
             </div>
           </div>
         </div>
 
         <div className="paper-sheet mt-12 hidden overflow-hidden lg:block">
-          <table className="w-full table-fixed border-collapse text-left">
+          <table className="w-full table-fixed border-collapse text-start-left">
             <caption className="sr-only">FitCheck plan and usage limit comparison</caption>
             <thead>
               <tr className="border-b border-paper-edge align-top">
@@ -306,7 +306,7 @@ export default function Pricing() {
         <div className="min-w-0 max-w-full overflow-hidden [contain:paint] lg:hidden">
           <div
             data-testid="mobile-pricing-rail"
-            className="mt-12 flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4 pr-4"
+            className="mt-12 flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4 pe-4"
           >
             {tiers.map((tier, index) => (
               <AnimatedSection

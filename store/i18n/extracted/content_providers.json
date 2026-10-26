@@ -1,0 +1,1442 @@
+{
+  "group": "content_providers",
+  "files": [
+    "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+    "flutter/lib/features/tryon/providers/tryon_provider.dart",
+    "flutter/lib/features/calendar/providers/calendar_providers.dart",
+    "flutter/lib/features/outfits/providers/outfit_providers.dart",
+    "flutter/lib/features/outfits/providers/outfit_builder_provider.dart",
+    "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart",
+    "flutter/lib/features/wardrobe/providers/item_add_provider.dart",
+    "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart",
+    "flutter/lib/features/profile/providers/body_profiles_provider.dart",
+    "flutter/lib/features/feedback/providers/feedback_provider.dart",
+    "flutter/lib/features/recommendations/providers/recommendations_providers.dart",
+    "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+    "flutter/lib/features/wardrobe/views/batch_item_review_page.dart",
+    "flutter/lib/features/calendar/views/calendar_page.dart"
+  ],
+  "keys": [
+    {
+      "key": "photoshootPhotoLimit",
+      "value": "You can add up to {max} photos.",
+      "description": "Validation toast when the user has already picked the maximum number of photos and tries to add more.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "placeholders": {
+        "max": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "photoshootPhotoLimitTitle",
+      "value": "Photo limit",
+      "description": "Bold heading of the message shown when the user already holds the maximum number of photos.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootAddAtLeastOnePhoto",
+      "value": "Add at least one photo.",
+      "description": "Validation toast when the user taps Continue on the setup step without any photo.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootNoPhotosSelectedTitle",
+      "value": "No photos",
+      "description": "Bold heading of the message shown when the user tries to continue the photoshoot with no photo chosen.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootDescribeLookBody",
+      "value": "Describe the look you want.",
+      "description": "Validation toast when the user picked the custom-prompt style but left the prompt empty.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootPromptNeededTitle",
+      "value": "Prompt needed",
+      "description": "Bold heading of the message shown when the custom photoshoot prompt is left empty.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootConsentFeatureLabel",
+      "value": "AI Photoshoot",
+      "description": "Name of the AI features the photoshoot uses; printed in the third-party consent sheet the first time a user starts a shoot.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootStatusPreparing",
+      "value": "Preparing your photos",
+      "description": "Progress line under the bar while the chosen photos are uploaded before generation starts.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootStatusGenerating",
+      "value": "Generating",
+      "description": "Progress line under the bar once the server accepted the shoot and starts making images.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootStatusBatch",
+      "value": "Batch {current} of {total}",
+      "description": "Progress line that counts which generation batch of the shoot is running.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "placeholders": {
+        "current": {
+          "type": "int"
+        },
+        "total": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "photoshootStatusImagesDone",
+      "value": "{done} of {total} done",
+      "description": "Progress line counting how many studio images of the shoot are finished.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "placeholders": {
+        "done": {
+          "type": "int"
+        },
+        "total": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "photoshootGenerationFailedBody",
+      "value": "Generation failed.",
+      "description": "Banner body on the setup step when the photoshoot job failed without a server message.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootPartlyDoneBody",
+      "value": "{ready} ready, {failed} failed.",
+      "description": "Toast body when a shoot finishes with some images generated and some failed.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "placeholders": {
+        "ready": {
+          "type": "int"
+        },
+        "failed": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "photoshootPartlyDoneTitle",
+      "value": "Partly done",
+      "description": "Bold heading of the message shown when a shoot ends with some images missing.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootPhotosReady",
+      "value": "{count, plural, =1{1 photo is ready.} other{{count} photos are ready.}}",
+      "description": "Toast body when every requested studio image was generated successfully.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "photoshootConnectionLostBody",
+      "value": "We lost the connection. Please try again.",
+      "description": "Banner body on the setup step when polling the shoot status kept failing.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootCouldNotCancelTitle",
+      "value": "Could not cancel",
+      "description": "Toast title when the server refused to cancel the running shoot.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootRetryFailedTitle",
+      "value": "Retry failed",
+      "description": "Toast title when regenerating one failed image slot did not work.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootPhotoReplacedBody",
+      "value": "Photo {number} is ready.",
+      "description": "Toast body after a failed image slot was regenerated successfully.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "placeholders": {
+        "number": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "photoshootReplacedTitle",
+      "value": "Replaced",
+      "description": "Toast title for the regenerated image slot.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootSavedToGalleryBody",
+      "value": "Saved to your gallery.",
+      "description": "Toast body after one studio image was written to the device photo library.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootSavedTitle",
+      "value": "Saved",
+      "description": "Success toast title used for photoshoot saves.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootNotSavedTitle",
+      "value": "Not saved",
+      "description": "Error toast title when a studio image could not be written to the gallery.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "photoshootAllSavedBody",
+      "value": "{count, plural, =1{1 photo is in your gallery.} other{All {count} photos are in your gallery.}}",
+      "description": "Toast body after saving every studio image of the shoot in one go.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "photoshootSomeSavedBody",
+      "value": "{saved} of {total} saved.",
+      "description": "Start of the toast body when saving all images partly failed; the error reason is appended after it.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "placeholders": {
+        "saved": {
+          "type": "int"
+        },
+        "total": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "photoshootSomePhotosNotSavedTitle",
+      "value": "Some photos not saved",
+      "description": "Error toast title when only some studio images reached the gallery.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart"
+    },
+    {
+      "key": "tryonConsentFeatureLabel",
+      "value": "Virtual Try-On",
+      "description": "Name of the AI feature printed in the third-party consent sheet shown before the first virtual try-on.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonAvatarUpdatedBody",
+      "value": "Your photo is updated.",
+      "description": "Toast body after the user's try-on avatar photo finished uploading.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonSavedTitle",
+      "value": "Saved",
+      "description": "Success toast title used for try-on saves.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonUploadFailedTitle",
+      "value": "Upload failed",
+      "description": "Error toast title when the avatar photo upload failed.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonChooseGarmentFirstBody",
+      "value": "Choose a garment photo first.",
+      "description": "Validation toast when the user taps Create try-on without a garment photo.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonNoGarmentTitle",
+      "value": "No garment",
+      "description": "Bold heading of the message shown when Create try-on is tapped with no garment photo.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonWaitForUploadBody",
+      "value": "Wait for your photo to finish uploading.",
+      "description": "Validation toast when the user creates a try-on while their own photo is still uploading.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonStillUploadingTitle",
+      "value": "Still uploading",
+      "description": "Bold heading of the message shown when a try-on starts while the avatar upload is still running.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonAddYourPhotoFirstBody",
+      "value": "Add a photo of yourself first.",
+      "description": "Validation toast when the user creates a try-on without an avatar photo.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonReadyBody",
+      "value": "Your try-on is ready.",
+      "description": "Toast body when the try-on image was generated successfully.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonFailedTitle",
+      "value": "Try-on failed",
+      "description": "Error toast title when the try-on image could not be generated.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonSavedToGalleryBody",
+      "value": "Saved to your gallery.",
+      "description": "Toast body after a try-on image was written to the device photo library.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "tryonNotSavedTitle",
+      "value": "Not saved",
+      "description": "Error toast title when a try-on image could not be written to the gallery.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart"
+    },
+    {
+      "key": "calendarEventAddedBody",
+      "value": "Event added",
+      "description": "Toast body after a new calendar event was created.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarEventPlannedTitle",
+      "value": "Planned",
+      "description": "Success toast title for a newly created calendar event.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarEventSavedBody",
+      "value": "Event saved",
+      "description": "Toast body after edits to a calendar event were stored.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarSavedTitle",
+      "value": "Saved",
+      "description": "Success toast title used when a calendar event is stored.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarEventNotSavedTitle",
+      "value": "Event not saved",
+      "description": "Error toast title when creating or editing a calendar event failed.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarEventRemovedBody",
+      "value": "Event removed",
+      "description": "Toast body after a calendar event was deleted.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarEventDeletedTitle",
+      "value": "Deleted",
+      "description": "Success toast title for a deleted calendar event.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarEventNotDeletedTitle",
+      "value": "Event not deleted",
+      "description": "Error toast title when deleting a calendar event failed.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarOutfitNotLinkedTitle",
+      "value": "Outfit not linked",
+      "description": "Error toast title when an outfit could not be linked to a calendar event.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarLinkedTitle",
+      "value": "Linked",
+      "description": "Success toast title after an outfit was linked to a calendar event.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarOutfitNotRemovedTitle",
+      "value": "Outfit not removed",
+      "description": "Error toast title when the outfit linked to an event could not be removed.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarOutfitRemovedBody",
+      "value": "Outfit removed",
+      "description": "Toast body after the outfit was unlinked from a calendar event.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarDisconnectedBody",
+      "value": "Calendar disconnected",
+      "description": "Toast body after a connected external calendar was disconnected.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarDisconnectedTitle",
+      "value": "Disconnected",
+      "description": "Success toast title for a disconnected external calendar.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarNotDisconnectedTitle",
+      "value": "Calendar not disconnected",
+      "description": "Error toast title when disconnecting an external calendar failed.",
+      "file": "flutter/lib/features/calendar/providers/calendar_providers.dart"
+    },
+    {
+      "key": "calendarTodayLabel",
+      "value": "today",
+      "description": "Spoken as part of a day cell's screen-reader label when that day is today; lower case because it is read mid-list.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarEventCount",
+      "value": "{count, plural, =1{1 event} other{{count} events}}",
+      "description": "Spoken as part of a day cell's screen-reader label to say how many events that day holds.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "calendarTimeRange",
+      "value": "{start} to {end}",
+      "description": "Time span of a timed event, read inside the event row's screen-reader label.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart",
+      "placeholders": {
+        "start": {
+          "type": "String"
+        },
+        "end": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "calendarEventSemantic",
+      "value": "{title}, {time}",
+      "description": "Screen-reader label of an event row that has no outfit linked.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart",
+      "placeholders": {
+        "title": {
+          "type": "String"
+        },
+        "time": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "calendarEventSemanticWithOutfit",
+      "value": "{title}, {time}, outfit linked",
+      "description": "Screen-reader label of an event row that has an outfit linked.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart",
+      "placeholders": {
+        "title": {
+          "type": "String"
+        },
+        "time": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "calendarDeleteEventBody",
+      "value": "\"{title}\" will be removed.",
+      "description": "Body of the confirmation dialog before deleting one calendar event.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart",
+      "placeholders": {
+        "title": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "calendarThisAppLabel",
+      "value": "This app",
+      "description": "Name shown for events that live only inside FitCheck, next to the external calendar names.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarSyncUnavailableBody",
+      "value": "Syncing with {provider} is not available yet. You can still add events here.",
+      "description": "Toast body when the user taps a calendar provider that is not supported yet; the provider name is filled in.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart",
+      "placeholders": {
+        "provider": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "calendarWeekdaySunShort",
+      "value": "Sun",
+      "description": "Abbreviated Sunday in the weekday header of the month grid.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayMonShort",
+      "value": "Mon",
+      "description": "Abbreviated Monday in the weekday header of the month grid.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayTueShort",
+      "value": "Tue",
+      "description": "Abbreviated Tuesday in the weekday header of the month grid.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayWedShort",
+      "value": "Wed",
+      "description": "Abbreviated Wednesday in the weekday header of the month grid.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayThuShort",
+      "value": "Thu",
+      "description": "Abbreviated Thursday in the weekday header of the month grid.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayFriShort",
+      "value": "Fri",
+      "description": "Abbreviated Friday in the weekday header of the month grid.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdaySatShort",
+      "value": "Sat",
+      "description": "Abbreviated Saturday in the weekday header of the month grid.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayMonday",
+      "value": "Monday",
+      "description": "Full Monday, read at the start of a day cell's screen-reader label.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayTuesday",
+      "value": "Tuesday",
+      "description": "Full Tuesday, read at the start of a day cell's screen-reader label.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayWednesday",
+      "value": "Wednesday",
+      "description": "Full Wednesday, read at the start of a day cell's screen-reader label.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayThursday",
+      "value": "Thursday",
+      "description": "Full Thursday, read at the start of a day cell's screen-reader label.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdayFriday",
+      "value": "Friday",
+      "description": "Full Friday, read at the start of a day cell's screen-reader label.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdaySaturday",
+      "value": "Saturday",
+      "description": "Full Saturday, read at the start of a day cell's screen-reader label.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarWeekdaySunday",
+      "value": "Sunday",
+      "description": "Full Sunday, read at the start of a day cell's screen-reader label.",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "outfitSavedToFavouritesBody",
+      "value": "Saved to favourites",
+      "description": "Toast body shown after an outfit is added to favourites from the outfit list.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitRemovedFromFavouritesBody",
+      "value": "Removed from favourites",
+      "description": "Toast body shown after an outfit is taken out of favourites.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitNotSavedTitle",
+      "value": "Not saved",
+      "description": "Error toast title for any failed outfit save, favourite toggle or edit.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitLoggedAsWornBody",
+      "value": "Logged as worn today.",
+      "description": "Toast body after the user marks an outfit as worn today.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitNicePickTitle",
+      "value": "Nice pick",
+      "description": "Success toast title shown with the worn-today confirmation.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitRemovedBody",
+      "value": "Outfit removed.",
+      "description": "Toast body after an outfit was deleted from the list.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitDeletedTitle",
+      "value": "Deleted",
+      "description": "Success toast title for a deleted outfit.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitNotDeletedTitle",
+      "value": "Not deleted",
+      "description": "Error toast title when deleting an outfit failed.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitDuplicatedBody",
+      "value": "A copy is in your outfits.",
+      "description": "Toast body after the user duplicates an outfit.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitDuplicatedTitle",
+      "value": "Duplicated",
+      "description": "Success toast title for a duplicated outfit.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitNotDuplicatedTitle",
+      "value": "Not duplicated",
+      "description": "Error toast title when duplicating an outfit failed.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitNotSharedTitle",
+      "value": "Not shared",
+      "description": "Error toast title when creating a public link for an outfit failed.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitCollectionReadyBody",
+      "value": "\"{name}\" is ready.",
+      "description": "Toast body after a new outfit collection was created; the collection name is filled in.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart",
+      "placeholders": {
+        "name": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "outfitCollectionNotCreatedTitle",
+      "value": "Collection not created",
+      "description": "Error toast title when creating an outfit collection failed.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitCollectionUpdatedBody",
+      "value": "Collection updated.",
+      "description": "Toast body after a collection was renamed or its description changed.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitCollectionNotUpdatedTitle",
+      "value": "Collection not updated",
+      "description": "Error toast title when renaming or editing a collection failed.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitCollectionDeletedBody",
+      "value": "Collection deleted.",
+      "description": "Toast body after a collection was deleted.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitCollectionNotDeletedTitle",
+      "value": "Collection not deleted",
+      "description": "Error toast title when deleting a collection failed.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitAddedToCollection",
+      "value": "{count, plural, =1{1 outfit added.} other{{count} outfits added.}}",
+      "description": "Toast body after outfits were dropped into a collection from the add picker.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "outfitNotAddedToCollectionTitle",
+      "value": "Outfits not added",
+      "description": "Error toast title when adding outfits to a collection failed.",
+      "file": "flutter/lib/features/outfits/providers/outfit_providers.dart"
+    },
+    {
+      "key": "outfitPreviewNotCreatedTitle",
+      "value": "Preview not created",
+      "description": "Error toast title when the AI outfit preview could not be generated.",
+      "file": "flutter/lib/features/outfits/providers/outfit_builder_provider.dart"
+    },
+    {
+      "key": "outfitGiveNameBody",
+      "value": "Give the outfit a name.",
+      "description": "Validation toast when the user saves a new outfit without a name.",
+      "file": "flutter/lib/features/outfits/providers/outfit_builder_provider.dart"
+    },
+    {
+      "key": "outfitNameMissingTitle",
+      "value": "Name",
+      "description": "Bold heading of the message shown when a new outfit is saved without a name, above the line asking for one.",
+      "file": "flutter/lib/features/outfits/providers/outfit_builder_provider.dart"
+    },
+    {
+      "key": "outfitChooseAtLeastOnePieceBody",
+      "value": "Choose at least one piece.",
+      "description": "Validation toast when the user saves a new outfit with no pieces.",
+      "file": "flutter/lib/features/outfits/providers/outfit_builder_provider.dart"
+    },
+    {
+      "key": "outfitCreatedBody",
+      "value": "{name} is in your outfits.",
+      "description": "Toast body after a new outfit is saved; the outfit name is filled in.",
+      "file": "flutter/lib/features/outfits/providers/outfit_builder_provider.dart",
+      "placeholders": {
+        "name": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "outfitSavedTitle",
+      "value": "Saved",
+      "description": "Success toast title for a newly saved outfit.",
+      "file": "flutter/lib/features/outfits/providers/outfit_builder_provider.dart"
+    },
+    {
+      "key": "wardrobeAddedToFavouritesBody",
+      "value": "Added to favourites",
+      "description": "Toast body after a closet piece is added to favourites.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart"
+    },
+    {
+      "key": "wardrobeRemovedFromFavouritesBody",
+      "value": "Removed from favourites",
+      "description": "Toast body after a closet piece is taken out of favourites.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart"
+    },
+    {
+      "key": "wardrobeNotSavedTitle",
+      "value": "Not saved",
+      "description": "Error toast title for a failed favourite toggle or worn-today log on a closet piece.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart"
+    },
+    {
+      "key": "wardrobeLoggedAsWornBody",
+      "value": "Logged as worn today.",
+      "description": "Toast body after the user marks a closet piece as worn today.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart"
+    },
+    {
+      "key": "wardrobeRemovedFromClosetBody",
+      "value": "Removed from your closet.",
+      "description": "Toast body after one piece was deleted from the closet.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart"
+    },
+    {
+      "key": "wardrobeDeletedTitle",
+      "value": "Deleted",
+      "description": "Success toast title for deleted closet pieces.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart"
+    },
+    {
+      "key": "wardrobeNotDeletedTitle",
+      "value": "Not deleted",
+      "description": "Error toast title when deleting closet pieces failed.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart"
+    },
+    {
+      "key": "wardrobePiecesRemovedBody",
+      "value": "{count, plural, =1{1 piece removed from your closet.} other{{count} pieces removed from your closet.}}",
+      "description": "Toast body after a multi-select delete in the closet.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "wardrobeAiConsentLabel",
+      "value": "AI Wardrobe Extraction",
+      "description": "Name of the AI feature printed in the third-party consent sheet before a photo is analysed.",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart"
+    },
+    {
+      "key": "itemAddScanJobLabel",
+      "value": "Scan",
+      "description": "Short name of a running single-photo scan, shown in the active-scan banner and the activity list.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddFoundEarlierBody",
+      "value": "Found in an earlier scan",
+      "description": "Status line when the scanned photo was already analysed before, so the earlier result is reused.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddLookingAtPhoto",
+      "value": "Looking at your photo",
+      "description": "Status line while the AI inspects the uploaded photo for clothing.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddExtractionFailedBody",
+      "value": "Extraction failed",
+      "description": "Generic failure message on the add-piece screen when the scan stopped without a server reason.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddJobFailedBody",
+      "value": "Job failed",
+      "description": "Failure message on the add-piece screen when the scan job reported a failure with no detail.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddConnectionLostBody",
+      "value": "Connection was lost. Try again.",
+      "description": "Failure message on the add-piece screen when status polling kept failing.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddConnectionLostProcessingBody",
+      "value": "Connection lost while processing.",
+      "description": "Failure message on the add-piece screen when polling timed out while the scan was still running.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddGeneratingPiece",
+      "value": "Piece {number}",
+      "description": "Caption naming the piece whose studio photo is being made, numbered by its place in the scan.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart",
+      "placeholders": {
+        "number": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "itemAddGeneratingPieceFallback",
+      "value": "Piece",
+      "description": "Caption for the piece being rendered when its position is not known yet.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddNotCancelledTitle",
+      "value": "Not cancelled",
+      "description": "Error toast title when the server could not cancel the running scan.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "itemAddPiecesSavedBody",
+      "value": "{count, plural, =1{1 piece is in your closet.} other{{count} pieces are in your closet.}}",
+      "description": "Toast body after the reviewed pieces of one photo were saved to the closet.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "itemAddSomeSavedBody",
+      "value": "{saved} of {total} pieces saved. Tap save to try the rest again.",
+      "description": "Warning toast body when some pieces could not be saved in a scan result.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart",
+      "placeholders": {
+        "saved": {
+          "type": "int"
+        },
+        "total": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "itemAddSomePiecesNotSavedTitle",
+      "value": "Some pieces not saved",
+      "description": "Warning toast title shown when only part of the reviewed pieces were stored.",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart"
+    },
+    {
+      "key": "batchChooseAtLeastOnePhotoBody",
+      "value": "Choose at least one photo.",
+      "description": "Inline error on the batch screen when the user starts the scan with no photo selected.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchPhotoUnreadableBody",
+      "value": "This photo could not be read.",
+      "description": "Per-photo error in the batch grid when one file could not be prepared for upload.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchNoPhotosReadableBody",
+      "value": "None of these photos could be read. Try other photos.",
+      "description": "Inline error when every selected photo failed to load, so no job was started.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchJobLabelPhotos",
+      "value": "{count, plural, =1{1 photo} other{{count} photos}}",
+      "description": "Name of the running batch job in the active-scan banner and activity list.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchConnectionLostWorkingBody",
+      "value": "We lost the connection while working. Try again.",
+      "description": "Inline error when polling the batch job kept failing until the retry limit.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchNotCancelledTitle",
+      "value": "Not cancelled",
+      "description": "Error toast title when the server could not cancel the batch scan.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchPostLinkUnsupportedBody",
+      "value": "Post links are not supported. Enter a profile link.",
+      "description": "Field error under the profile link input when the user pasted a link to a single post.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchLinkSpacesBody",
+      "value": "Links cannot contain spaces.",
+      "description": "Field error under the profile link input when the pasted link contains a space.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchEnterProfileLinkBody",
+      "value": "Enter an Instagram or Facebook profile link.",
+      "description": "Field error under the profile link input when the pasted URL is from an unsupported site.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchEnterProfileLinkShortBody",
+      "value": "Enter a profile link.",
+      "description": "Inline error when the user starts a profile import with an empty link field.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchSignInPageNotOpenBody",
+      "value": "The sign-in page did not open. Try again.",
+      "description": "Inline error when the browser could not be opened for the social sign-in step.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchSignInBrowserBody",
+      "value": "Sign in in your browser, then come back to FitCheck.",
+      "description": "Toast body telling the user to complete the sign-in in their browser and return.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchConnectAccountTitle",
+      "value": "Connect your account",
+      "description": "Toast title for the social sign-in instructions.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchEnterAuthenticatorCodeBody",
+      "value": "Enter the code from your authenticator app.",
+      "description": "Inline error on the profile import sign-in step when the platform asks for a 2FA code.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchInstagramSecurityCheckBody",
+      "value": "Instagram wants a security check. Sign in in your browser first.",
+      "description": "Inline error on the import sign-in step when Instagram blocks the login with a security checkpoint.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchEnterCredentialsAgainBody",
+      "value": "Enter your username and password again.",
+      "description": "Inline error when the two-step code was submitted after the held credentials were dropped.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchSignInFailedBody",
+      "value": "Sign-in failed. Check your username and password.",
+      "description": "Inline error on the import sign-in step when the platform rejected the credentials.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchSignInToKeepImportingBody",
+      "value": "Sign in to keep importing.",
+      "description": "Inline error on the import screen when the platform asked for a sign-in without a known reason.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchAccountNotConnectedBody",
+      "value": "Your account was not connected.",
+      "description": "Fallback message after returning from the browser sign-in without a server-supplied reason.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchAccountConnectedTitle",
+      "value": "Account connected",
+      "description": "Toast title after the social account was linked and the import continues.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchNotConnectedTitle",
+      "value": "Not connected",
+      "description": "Toast title when the social account sign-in did not complete.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchImportConnectionLostBody",
+      "value": "We lost the connection to the import. Refresh to check it.",
+      "description": "Inline error on the import progress screen when status polling kept failing.",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart"
+    },
+    {
+      "key": "batchPickUpToBody",
+      "value": "Pick up to {max} photos. We find the pieces.",
+      "description": "Empty-state message on the batch screen before any photo is chosen.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "max": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchPhotoCounter",
+      "value": "{count} of {total} photos",
+      "description": "Counter above the photo grid showing how many of the allowed photos are selected.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        },
+        "total": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchPreparingPhotoBody",
+      "value": "Preparing photo {done} of {count}",
+      "description": "Label on the scan button while the selected photos are being prepared for upload.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "done": {
+          "type": "int"
+        },
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchFindPiecesInPhotos",
+      "value": "{count, plural, =1{Find pieces in 1 photo} other{Find pieces in {count} photos}}",
+      "description": "Label on the button that starts the scan for the selected photos.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchTwoStepSignInBody",
+      "value": "Your {platform} account uses two-step sign-in. Enter the 6-digit code from your authenticator app.",
+      "description": "Explanation on the import sign-in step when the platform asked for a 2FA code.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "platform": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "batchPrivateProfileBody",
+      "value": "This {platform} profile is private or needs a sign-in to show its photos.",
+      "description": "Explanation on the import sign-in step when the pasted profile needs a login.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "platform": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "batchConnectWithPlatform",
+      "value": "Connect with {platform}",
+      "description": "Button on the import sign-in step that opens the platform's sign-in page.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "platform": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "batchPhotosFoundSoFar",
+      "value": "{count, plural, =1{1 photo found so far} other{{count} photos found so far}}",
+      "description": "Running count of photos discovered on the pasted profile.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchImportStatusLine",
+      "value": "{processed} of {total} processed · {added} added · {waiting} waiting · {skipped} skipped",
+      "description": "Status line under the import progress bar, counting processed, kept, queued and rejected photos.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "processed": {
+          "type": "int"
+        },
+        "total": {
+          "type": "int"
+        },
+        "added": {
+          "type": "int"
+        },
+        "waiting": {
+          "type": "int"
+        },
+        "skipped": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchScanningPhoto",
+      "value": "Scanning photo {number}",
+      "description": "Status line while one imported photo is being scanned for pieces.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "number": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchPhotoIsNext",
+      "value": "Photo {number} is next",
+      "description": "Status line naming the imported photo that is waiting to be scanned.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "number": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchPhotoLabel",
+      "value": "Photo {number}",
+      "description": "Heading of the review card for one imported photo.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "number": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchPiecesFound",
+      "value": "{count, plural, =1{1 piece found} other{{count} pieces found}}",
+      "description": "Line under the photo heading saying what the scan found in that photo.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchPhotosAddedBody",
+      "value": "{count, plural, =1{1 photo was added to your closet.} other{{count} photos were added to your closet.}}",
+      "description": "End screen of a finished profile import, saying how many photos were kept.",
+      "file": "flutter/lib/features/wardrobe/views/batch_image_selector_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchMoreStudioPhotosBody",
+      "value": "{count, plural, =1{1 more studio photo on the way. You can save what is ready, or leave — we will let you know.} other{{count} more studio photos on the way. You can save what is ready, or leave — we will let you know.}}",
+      "description": "Banner on the review screen while studio photos are still being made.",
+      "file": "flutter/lib/features/wardrobe/views/batch_item_review_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchNotSavedYetBody",
+      "value": "Not saved yet: {names}.",
+      "description": "Error banner listing the pieces whose save failed; the names are joined by commas.",
+      "file": "flutter/lib/features/wardrobe/views/batch_item_review_page.dart",
+      "placeholders": {
+        "names": {
+          "type": "String"
+        }
+      }
+    },
+    {
+      "key": "batchPiecesFromPhotos",
+      "value": "{pieces, plural, =1{1 piece} other{{pieces} pieces}} from {photos, plural, =1{1 photo} other{{photos} photos}}",
+      "description": "Summary heading of the review screen, counting detected pieces and the photos they came from.",
+      "file": "flutter/lib/features/wardrobe/views/batch_item_review_page.dart",
+      "placeholders": {
+        "pieces": {
+          "type": "int"
+        },
+        "photos": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchSelectedChosen",
+      "value": "{chosen} chosen. Tap a piece to skip it.",
+      "description": "Hint under the review summary saying how many pieces are selected.",
+      "file": "flutter/lib/features/wardrobe/views/batch_item_review_page.dart",
+      "placeholders": {
+        "chosen": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchSavingPiecesLabel",
+      "value": "{count, plural, =1{Saving 1 piece} other{Saving {count} pieces}}",
+      "description": "Save button label while the selected pieces are being stored.",
+      "file": "flutter/lib/features/wardrobe/views/batch_item_review_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "batchSavePiecesLabel",
+      "value": "{count, plural, =1{Save 1 piece} other{Save {count} pieces}}",
+      "description": "Save button label on the review screen with the number of selected pieces.",
+      "file": "flutter/lib/features/wardrobe/views/batch_item_review_page.dart",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    {
+      "key": "bodyProfileSavedBody",
+      "value": "Your body profile is saved.",
+      "description": "Toast body after a new body profile with measurements was created.",
+      "file": "flutter/lib/features/profile/providers/body_profiles_provider.dart"
+    },
+    {
+      "key": "bodyProfileSavedTitle",
+      "value": "Saved",
+      "description": "Success toast title for body profile changes.",
+      "file": "flutter/lib/features/profile/providers/body_profiles_provider.dart"
+    },
+    {
+      "key": "bodyProfileNotSavedTitle",
+      "value": "Not saved",
+      "description": "Error toast title when a body profile change failed.",
+      "file": "flutter/lib/features/profile/providers/body_profiles_provider.dart"
+    },
+    {
+      "key": "bodyProfileSetDefaultBody",
+      "value": "Set as your default profile.",
+      "description": "Toast body after one body profile was made the default for fit and try-on.",
+      "file": "flutter/lib/features/profile/providers/body_profiles_provider.dart"
+    },
+    {
+      "key": "bodyProfileDeletedBody",
+      "value": "Body profile deleted.",
+      "description": "Toast body after a body profile was deleted.",
+      "file": "flutter/lib/features/profile/providers/body_profiles_provider.dart"
+    },
+    {
+      "key": "bodyProfileDeletedTitle",
+      "value": "Deleted",
+      "description": "Success toast title for a deleted body profile.",
+      "file": "flutter/lib/features/profile/providers/body_profiles_provider.dart"
+    },
+    {
+      "key": "bodyProfileNotDeletedTitle",
+      "value": "Not deleted",
+      "description": "Error toast title when deleting a body profile failed.",
+      "file": "flutter/lib/features/profile/providers/body_profiles_provider.dart"
+    },
+    {
+      "key": "feedbackNotSentTitle",
+      "value": "Not sent",
+      "description": "Error toast title when sending a feedback ticket failed.",
+      "file": "flutter/lib/features/feedback/providers/feedback_provider.dart"
+    },
+    {
+      "key": "feedbackSentBody",
+      "value": "Thanks. We read every message and reply if we need more.",
+      "description": "Toast body after the user's feedback was submitted.",
+      "file": "flutter/lib/features/feedback/providers/feedback_provider.dart"
+    },
+    {
+      "key": "feedbackSentTitle",
+      "value": "Feedback sent",
+      "description": "Success toast title for a submitted feedback ticket.",
+      "file": "flutter/lib/features/feedback/providers/feedback_provider.dart"
+    },
+    {
+      "key": "recommendUnnamedPiece",
+      "value": "Unnamed piece",
+      "description": "Placeholder name for a matched closet piece the server returned without a name.",
+      "file": "flutter/lib/features/recommendations/providers/recommendations_providers.dart"
+    },
+    {
+      "key": "recommendEnterCityBody",
+      "value": "Enter your city to get picks for the weather.",
+      "description": "Validation toast when the user asks for weather picks with an empty city.",
+      "file": "flutter/lib/features/recommendations/providers/recommendations_providers.dart"
+    },
+    {
+      "key": "recommendWhichCityTitle",
+      "value": "Which city?",
+      "description": "Bold heading of the message asking for a city before the weather picks can load.",
+      "file": "flutter/lib/features/recommendations/providers/recommendations_providers.dart"
+    }
+  ],
+  "deferred": [
+    {
+      "value": "No replacement image came back.",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "reason": "Dart exception message. ErrorHandler.extractMessage is documented as the English form because it is what Sentry groups on, so exception text must stay English."
+    },
+    {
+      "value": "No image came back. Please try again.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart",
+      "reason": "Dart exception message surfaced through ErrorHandler.extractMessage, which is deliberately English for telemetry grouping."
+    },
+    {
+      "value": "The image was empty.",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart",
+      "reason": "Dart exception message surfaced through ErrorHandler.extractMessage, which is deliberately English for telemetry grouping."
+    },
+    {
+      "value": "casual, formal, business, sporty, streetwear, elegant",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart",
+      "reason": "TryOnNotifier.styles are style identifiers sent to the API in the generation payload, not display copy; the page renders its own localized style labels."
+    },
+    {
+      "value": "studio white, studio gray, urban street, nature, minimal",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart",
+      "reason": "Background identifiers posted to the API and matched server-side; the page shows the localized tryOnBackground* labels instead."
+    },
+    {
+      "value": "standing front, standing side, walking, casual",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart",
+      "reason": "Pose identifiers posted to the API and matched server-side; the page shows the localized tryOnPose* labels instead."
+    },
+    {
+      "value": "Photos / Camera (permissionName arguments)",
+      "file": "flutter/lib/features/tryon/providers/tryon_provider.dart",
+      "reason": "Passed to PermissionHelper.showDeniedRecovery, which renders them inside one shared dialog. Localizing them means changing that helper, which sits outside this file scope."
+    },
+    {
+      "value": "Photos / Camera (permissionName arguments)",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "reason": "Passed to PermissionHelper.showDeniedRecovery, whose dialog is shared with every other feature; the helper itself must be localized first."
+    },
+    {
+      "value": "Photoshoot job failed",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "reason": "Second argument of ErrorHandler.reportError: telemetry context for Sentry, never rendered."
+    },
+    {
+      "value": "Photoshoot polling exhausted",
+      "file": "flutter/lib/features/photoshoot/providers/photoshoot_provider.dart",
+      "reason": "Second argument of ErrorHandler.reportError: telemetry context for Sentry, never rendered."
+    },
+    {
+      "value": "Outfit preview upload / Outfit $outfitId was created without its generated preview",
+      "file": "flutter/lib/features/outfits/providers/outfit_builder_provider.dart",
+      "reason": "ErrorHandler.reportError context strings; they exist for Sentry grouping and are never shown to the user."
+    },
+    {
+      "value": "Item batch save failed: ${failure.message} / Item add save failed for ${failure.tempId}",
+      "file": "flutter/lib/features/wardrobe/providers/item_add_provider.dart",
+      "reason": "ErrorHandler.reportError context strings used for telemetry grouping only."
+    },
+    {
+      "value": "Batch extraction start failed / Batch extraction polling timed out / Batch extraction polling exhausted after $maxPollAttempts attempts",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart",
+      "reason": "ErrorHandler.reportError context strings used for telemetry grouping only."
+    },
+    {
+      "value": "Item image upload failed / Batch item save failed / Batch item save failed for ${f.tempId}",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart",
+      "reason": "StateError messages and ErrorHandler.reportError context strings used for telemetry grouping only."
+    },
+    {
+      "value": "Social import polling timed out / Social import restore failed",
+      "file": "flutter/lib/features/wardrobe/providers/batch_extraction_provider.dart",
+      "reason": "ErrorHandler.reportError context strings used for telemetry grouping only."
+    },
+    {
+      "value": "Weather location not loaded / Temperature unit not loaded / Closet not loaded for weather",
+      "file": "flutter/lib/features/recommendations/providers/recommendations_providers.dart",
+      "reason": "ErrorHandler.reportError context strings used for telemetry grouping only."
+    },
+    {
+      "value": "Newest first / Oldest first / Name (A–Z) / Most worn",
+      "file": "flutter/lib/features/wardrobe/providers/wardrobe_providers.dart",
+      "reason": "WardrobeSort.label is a const enum field. The closet sheet already renders sort.labelOf(context.l10n) with the sortNewest/sortOldest/sortName/sortMostWorn keys, so this field is no longer displayed."
+    },
+    {
+      "value": "Google Calendar / Apple Calendar / Outlook",
+      "file": "flutter/lib/features/calendar/views/calendar_page.dart",
+      "reason": "Product names of external calendar providers; brands are not translated, only the surrounding sentence is."
+    }
+  ]
+}

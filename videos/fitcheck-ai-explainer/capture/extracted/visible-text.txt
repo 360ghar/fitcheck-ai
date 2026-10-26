@@ -1,0 +1,57 @@
+# FitCheck AI — source of information (faceless explainer)
+
+Compiled from docs/product-specs/overview.md, core-features-notes.md, PRODUCT_SENSE.md.
+
+## The problem
+
+- Wardrobe blindness: people own more clothes than they realize; items get forgotten in the back of closets.
+- Outfit decision fatigue: the daily struggle of choosing what to wear; time wasted on trial and error.
+- Impulse shopping: buying items that don't match the existing wardrobe; duplicate purchases; money wasted on unworn clothing.
+- No visualization: can't see how items look together before wearing them; no way to plan for occasions; no virtual try-before-buy.
+
+## Personas
+
+- Sarah, 28, marketing manager: 200+ clothing items, spends 15+ minutes daily choosing outfits, 3–4 impulse purchases per month, mobile-first, on social media daily.
+- Minimalist Mike, 32: capsule wardrobe, tracks cost-per-wear.
+- Priya, 24, influencer: shares outfit inspiration, optimizes content creation.
+- Peter, 45, busy professional: needs weather-appropriate efficiency.
+
+## The solution — FitCheck AI
+
+A virtual closet with AI-powered outfit visualization.
+
+### Core features (all shipped)
+
+1. Wardrobe management — upload photos; AI batch-extracts items with attributes and images (parallel extraction, generation overlaps; SSE-backed real progress; review before anything is saved).
+2. Outfit builder + visualization — visual mix-and-match; AI-generated outfit looks; realistic try-on visualization.
+3. Smart analytics — usage tracking, cost-per-wear, underutilized items, wardrobe optimization.
+4. Planning & calendar — calendar-based outfit planning, weather integration, occasion-based filtering.
+5. Recommendations — wardrobe gaps, style suggestions, similar items, weather suggestions, shopping recommendations.
+6. Shopping intelligence — gap analysis, virtual try-before-buy, sustainability scoring.
+7. Social — share outfits (public shared pages), community + stylists.
+8. Gamification — streaks, achievements, leaderboard.
+
+### Product principles
+
+- Photo-first, low typing — extraction and generation reduce manual cataloging.
+- Review before commit — AI proposals are drafts; users confirm writes.
+- Honest AI limits — recoverable failures and clear status over silent wrongness.
+- Privacy-aware defaults — user-owned wardrobe data; share flows are explicit.
+
+### Pricing (freemium)
+
+- Free: 50 item extractions/mo, 50 outfit visualizations/mo.
+- Plus $10/mo ($100/yr): 200 extractions, 350 visualizations, 30 photoshoot images/day; virtual try-on, analytics, calendar planning, priority support.
+- Pro $20/mo ($200/yr): 400 extractions, 1,000 visualizations, 50 photoshoot images/day.
+- Yearly billing on either paid tier is 10× monthly (2 months free).
+
+### Success stories (vision)
+
+- Emma: "I had 200+ clothes but only wore 20 of them. FitCheck AI helped me discover hidden gems and create 50+ new outfits from items I already owned. I saved $500/month on shopping!"
+- Marcus: "As a busy executive, I needed efficiency. FitCheck AI plans my entire week's outfits based on my calendar and weather. Saves me 2 hours every week."
+- Priya: "I create content for 50K followers. FitCheck AI helps me plan and visualize outfits before shooting. Increased engagement by 40%!"
+
+## Market context
+
+- Global fashion e-commerce: $820B (2025). Personal styling market: $15B, growing 12% YoY.
+- Wardrobe management apps: 50M users, growing 35% YoY.

@@ -10,6 +10,7 @@ import '../../../core/services/analytics_service.dart';
 import '../../../core/services/persistence_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../subscription/repositories/subscription_repository.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
@@ -172,6 +173,12 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
+  /// Localized copy for the toasts below. A Riverpod notifier has no
+  /// BuildContext, so this reads the app-wide context ErrorHandler already
+  /// owns for its snackbars. Null only before the first frame, which no toast
+  /// can precede.
+  AppLocalizations? get _l10n => ErrorHandler.l10n;
+
   /// Wrong credentials are user errors: shown, not reported.
   void _showAuthError(Object e, String title) {
     if (e is AuthException) {
@@ -195,17 +202,23 @@ class AuthNotifier extends Notifier<AuthState> {
         _authService.trackLogin('email');
         final name = state.user?.fullName ?? state.user?.email;
         ErrorHandler.showInfo(
-          name != null ? 'Signed in as $name' : 'Signed in',
-          title: 'Welcome back',
+          name != null
+              ? _l10n?.authSignedInAs(name) ?? 'Signed in as $name'
+              : _l10n?.authSignedIn ?? 'Signed in',
+          title: _l10n?.authWelcomeBackTitle ?? 'Welcome back',
         );
       } on AuthException catch (e) {
         if (e.message.toLowerCase().contains('email not confirmed')) {
           state = state.copyWith(unverifiedEmail: email);
           return; // Shown inline on the login page.
         }
-        _showAuthError(e, 'Sign-in failed');
+        _showAuthError(e, _l10n?.authSignInFailed ?? 'Sign-in failed');
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Sign-in failed', stackTrace: stack);
+        ErrorHandler.showError(
+        e,
+        title: _l10n?.authSignInFailed ?? 'Sign-in failed',
+        stackTrace: stack,
+      );
       }
     });
   }
@@ -232,8 +245,9 @@ class AuthNotifier extends Notifier<AuthState> {
           if (code != null) await _referrals.setPendingReferralCode(code);
           state = state.copyWith(unverifiedEmail: email);
           ErrorHandler.showInfo(
-            'Check your inbox for a confirmation email, then sign in.',
-            title: 'Confirm your email',
+            _l10n?.authConfirmEmailBody ??
+                'Check your inbox for a confirmation email, then sign in.',
+            title: _l10n?.authConfirmEmailTitle ?? 'Confirm your email',
           );
           return;
         }
@@ -243,12 +257,19 @@ class AuthNotifier extends Notifier<AuthState> {
           // Transient failure: retried on the next auth event.
           await _referrals.setPendingReferralCode(code);
         }
-        ErrorHandler.showInfo('Your closet is ready.', title: 'Welcome');
+        ErrorHandler.showInfo(
+          _l10n?.authClosetReady ?? 'Your closet is ready.',
+          title: _l10n?.authWelcomeTitle ?? 'Welcome',
+        );
       } catch (e, stack) {
         if (e is AuthException) {
-          _showAuthError(e, 'Sign-up failed');
+          _showAuthError(e, _l10n?.authSignUpFailed ?? 'Sign-up failed');
         } else {
-          ErrorHandler.showError(e, title: 'Sign-up failed', stackTrace: stack);
+          ErrorHandler.showError(
+            e,
+            title: _l10n?.authSignUpFailed ?? 'Sign-up failed',
+            stackTrace: stack,
+          );
         }
       }
     });
@@ -262,11 +283,11 @@ class AuthNotifier extends Notifier<AuthState> {
         await _authService.signInWithGoogle();
       } catch (e, stack) {
         if (e is AuthException) {
-          _showAuthError(e, 'Google sign-in failed');
+          _showAuthError(e, _l10n?.authGoogleSignInFailed ?? 'Google sign-in failed');
         } else {
           ErrorHandler.showError(
             e,
-            title: 'Google sign-in failed',
+            title: _l10n?.authGoogleSignInFailed ?? 'Google sign-in failed',
             stackTrace: stack,
           );
         }
@@ -287,16 +308,16 @@ class AuthNotifier extends Notifier<AuthState> {
         if (e.code == AuthorizationErrorCode.canceled) return;
         ErrorHandler.showError(
           e.message,
-          title: 'Apple sign-in failed',
+          title: _l10n?.authAppleSignInFailed ?? 'Apple sign-in failed',
           stackTrace: stack,
         );
       } catch (e, stack) {
         if (e is AuthException) {
-          _showAuthError(e, 'Apple sign-in failed');
+          _showAuthError(e, _l10n?.authAppleSignInFailed ?? 'Apple sign-in failed');
         } else {
           ErrorHandler.showError(
             e,
-            title: 'Apple sign-in failed',
+            title: _l10n?.authAppleSignInFailed ?? 'Apple sign-in failed',
             stackTrace: stack,
           );
         }
@@ -314,9 +335,16 @@ class AuthNotifier extends Notifier<AuthState> {
         // A pending referral must not be redeemed by the next account.
         await _referrals.clearPendingReferral();
         state = state.copyWith(user: null, unverifiedEmail: null);
-        ErrorHandler.showInfo('You are signed out.', title: 'Signed out');
+        ErrorHandler.showInfo(
+          _l10n?.authSignedOutBody ?? 'You are signed out.',
+          title: _l10n?.authSignedOutTitle ?? 'Signed out',
+        );
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Sign-out failed', stackTrace: stack);
+        ErrorHandler.showError(
+        e,
+        title: _l10n?.authSignOutFailed ?? 'Sign-out failed',
+        stackTrace: stack,
+      );
       }
     });
   }
@@ -329,11 +357,11 @@ class AuthNotifier extends Notifier<AuthState> {
         await _authService.requestPasswordReset(email);
         sent = true;
         ErrorHandler.showSuccess(
-          'Check your email for a reset link.',
-          title: 'Email sent',
+          _l10n?.authResetLinkSent ?? 'Check your email for a reset link.',
+          title: _l10n?.authEmailSentTitle ?? 'Email sent',
         );
       } catch (e) {
-        _showAuthError(e, 'Could not send the email');
+        _showAuthError(e, _l10n?.authCouldNotSendEmail ?? 'Could not send the email');
       }
     });
     return sent;
@@ -354,12 +382,12 @@ class AuthNotifier extends Notifier<AuthState> {
       try {
         await _authService.updatePassword(newPassword);
         ErrorHandler.showSuccess(
-          'Your password is updated.',
-          title: 'Password updated',
+          _l10n?.authPasswordUpdated ?? 'Your password is updated.',
+          title: _l10n?.authPasswordUpdatedTitle ?? 'Password updated',
         );
       } catch (e) {
         failure = e;
-        _showAuthError(e, 'Password not updated');
+        _showAuthError(e, _l10n?.authPasswordNotUpdated ?? 'Password not updated');
       }
     });
     if (failure != null) throw failure!;
@@ -378,11 +406,11 @@ class AuthNotifier extends Notifier<AuthState> {
       try {
         await _authService.resendVerificationEmail(email);
         ErrorHandler.showSuccess(
-          'We sent a new confirmation email.',
-          title: 'Email sent',
+          _l10n?.authResendSentBody ?? 'We sent a new confirmation email.',
+          title: _l10n?.authEmailSentTitle ?? 'Email sent',
         );
       } catch (e) {
-        _showAuthError(e, 'Email not sent');
+        _showAuthError(e, _l10n?.authEmailNotSent ?? 'Email not sent');
       }
     });
   }

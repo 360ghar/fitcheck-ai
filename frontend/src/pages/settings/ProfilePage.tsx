@@ -36,6 +36,7 @@ import { AppSettingsPanel } from './AppSettingsPanel'
 import { SecurityPanel } from './SecurityPanel'
 import { useIsSplitViewport } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/i18n'
 
 /** Grouped settings IA (legacy ?tab= values still resolve). */
 type TabType = 'account' | 'style' | 'app' | 'plan' | 'help'
@@ -80,15 +81,18 @@ function nextSearchParams(params: URLSearchParams): URLSearchParams {
   return next
 }
 
+// Messages ids, not English: this array is module scope, so resolving here
+// would freeze the tab strip in whatever language was active at import time.
 const PROFILE_TABS = [
-  { id: 'account' as TabType, name: 'Account', description: 'Profile info and security', icon: User },
-  { id: 'style' as TabType, name: 'Style', description: 'Colors, styles, occasions, brands', icon: Palette },
-  { id: 'app' as TabType, name: 'App', description: 'Notifications, theme, units, location', icon: Settings2 },
-  { id: 'plan' as TabType, name: 'Plan', description: 'Subscription, usage, referral code', icon: CreditCard },
-  { id: 'help' as TabType, name: 'Help', description: 'Feedback, tickets, legal', icon: MessageSquarePlus },
+  { id: 'account' as TabType, nameKey: 'profile.tabAccount', descriptionKey: 'profile.tabAccountDescription', icon: User },
+  { id: 'style' as TabType, nameKey: 'profile.tabStyle', descriptionKey: 'profile.tabStyleDescription', icon: Palette },
+  { id: 'app' as TabType, nameKey: 'profile.tabApp', descriptionKey: 'profile.tabAppDescription', icon: Settings2 },
+  { id: 'plan' as TabType, nameKey: 'profile.tabPlan', descriptionKey: 'profile.tabPlanDescription', icon: CreditCard },
+  { id: 'help' as TabType, nameKey: 'profile.tabHelp', descriptionKey: 'profile.tabHelpDescription', icon: MessageSquarePlus },
 ]
 
 export default function ProfilePage() {
+  const { t } = useTranslation()
   const user = useCurrentUser()
   const logout = useAuthStore((state) => state.logout)
   const setUser = useAuthStore((state) => state.setUser)
@@ -308,13 +312,12 @@ export default function ProfilePage() {
 
       if (skippedBirthFields.length > 0) {
         toast({
-          title: 'Profile partially updated',
-          description:
-            'Some birth details could not be saved. Please try again or contact support if this continues.',
+          title: t('profile.partiallyUpdated'),
+          description: t('profile.partiallyUpdatedBody'),
           variant: 'destructive',
         })
       } else {
-        toast({ title: 'Profile updated' })
+        toast({ title: t('profile.updated') })
       }
     } catch {
       // api/client interceptor already toasts the failure.
@@ -327,8 +330,8 @@ export default function ProfilePage() {
     <div className="app-page max-w-7xl">
       {/* Header — hidden on mobile subpages, where the back bar carries the title */}
       <div className={cn('mb-4 md:mb-4', mobileSubpageOpen && 'hidden')}>
-        <h1 className="text-lg md:text-2xl font-bold text-foreground">Profile & Settings</h1>
-        <p className="mt-1 md:mt-2 text-xs md:text-sm text-muted-foreground">Manage your account and preferences</p>
+        <h1 className="text-lg md:text-2xl font-bold text-foreground">{t('profile.title')}</h1>
+        <p className="mt-1 md:mt-2 text-xs md:text-sm text-muted-foreground">{t('profile.subtitle')}</p>
       </div>
 
       <div className="bg-card rounded-lg">
@@ -339,7 +342,7 @@ export default function ProfilePage() {
 
         {/* Desktop tab strip (≥md) */}
         <ScrollableTabs
-          aria-label="Profile sections"
+          aria-label={t('profile.sections')}
           fadeClassName="bg-card/95"
           className="hidden md:block w-full border-b border-border px-0 md:px-6 lg:px-8"
         >
@@ -351,8 +354,12 @@ export default function ProfilePage() {
               className="min-w-[100px] justify-center"
             >
               <tab.icon className="h-4 w-4" />
-              <span className="hidden xs:inline">{tab.name}</span>
-              <span className="xs:hidden">{tab.name.split(' ')[0]}</span>
+              <span className="hidden xs:inline">{t(tab.nameKey)}</span>
+              {/* The tab strip's 100px floor cannot hold a long translation
+                  (German "Einstellungen"), so the narrow variant keeps the
+                  label whole and lets the strip scroll rather than clipping a
+                  word to its first token. */}
+              <span className="xs:hidden">{t(tab.nameKey)}</span>
             </ScrollableTab>
           ))}
         </ScrollableTabs>
@@ -365,21 +372,21 @@ export default function ProfilePage() {
               variant="ghost"
               size="icon"
               onClick={handleBack}
-              aria-label="Back to profile settings"
+              aria-label={t('profile.backToSettings')}
               className="touch-target shrink-0"
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <h1 className="flex min-w-0 flex-1 items-center gap-2 truncate text-base font-semibold text-foreground">
               {subpageTabDef?.icon && <subpageTabDef.icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
-              <span className="truncate">{subpageTabDef?.name ?? 'Account'}</span>
+              <span className="truncate">{subpageTabDef ? t(subpageTabDef.nameKey) : t('profile.account')}</span>
             </h1>
           </div>
         )}
 
         {/* Mobile root chrome: section list (drill-down index) */}
         {isMobile && !mobileSubpageOpen && (
-          <nav aria-label="Profile sections" className="md:hidden">
+          <nav aria-label={t('profile.sections')} className="md:hidden">
             <ul className="m-0 list-none divide-y divide-border p-0">
               {tabs.map((tab) => (
                 <li key={tab.id}>
@@ -387,14 +394,14 @@ export default function ProfilePage() {
                     data-section={tab.id}
                     type="button"
                     onClick={() => handleSectionClick(tab.id)}
-                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 active:bg-muted/60"
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-start transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 active:bg-muted/60"
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
                       <tab.icon className="h-5 w-5 text-foreground" aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-foreground">{tab.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{tab.description}</span>
+                      <span className="block text-sm font-medium text-foreground">{t(tab.nameKey)}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{t(tab.descriptionKey)}</span>
                     </span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   </button>
@@ -412,14 +419,14 @@ export default function ProfilePage() {
           {activeTab === 'account' && (
             <div className="space-y-4 md:space-y-6">
               <div>
-                <h3 className="text-base md:text-lg font-medium text-foreground mb-4">Profile Information</h3>
+                <h3 className="text-base md:text-lg font-medium text-foreground mb-4">{t('profile.profileInformation')}</h3>
                 <div className="grid grid-cols-1 gap-y-4 md:gap-y-6 gap-x-4 sm:grid-cols-2 md:grid-cols-6">
                   <div className="sm:col-span-2 md:col-span-6">
                     <label
                       htmlFor="fullName"
                       className="block text-sm font-medium text-foreground"
                     >
-                      Full Name
+                      {t('profile.fullName')}
                     </label>
                     <div className="mt-1 flex rounded-md shadow-sm">
                       <input
@@ -438,22 +445,22 @@ export default function ProfilePage() {
                       htmlFor="gender"
                       className="block text-sm font-medium text-foreground"
                     >
-                      Gender
+                      {t('profile.gender')}
                     </label>
                     <p className="text-xs text-muted-foreground mb-1">
-                      Used for AI-generated outfit visualizations
+                      {t('profile.genderHint')}
                     </p>
                     <select
                       id="gender"
                       value={isEditing ? gender : user?.gender || ''}
                       onChange={(e) => setGender(e.target.value)}
                       disabled={!isEditing}
-                      className="mt-1 block w-full h-12 px-3 pr-10 text-base md:text-sm border border-border focus:outline-none focus:ring-primary focus:border-primary rounded-md disabled:bg-muted disabled:text-muted-foreground bg-background text-foreground appearance-none"
+                      className="mt-1 block w-full h-12 px-3 pe-10 text-base md:text-sm border border-border focus:outline-none focus:ring-primary focus:border-primary rounded-md disabled:bg-muted disabled:text-muted-foreground bg-background text-foreground appearance-none"
                     >
-                      <option value="">Prefer not to say</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="non_binary">Non-binary</option>
+                      <option value="">{t('profile.genderPreferNotToSay')}</option>
+                      <option value="male">{t('profile.genderMale')}</option>
+                      <option value="female">{t('profile.genderFemale')}</option>
+                      <option value="non_binary">{t('profile.genderNonBinary')}</option>
                     </select>
                   </div>
 
@@ -462,10 +469,10 @@ export default function ProfilePage() {
                       htmlFor="email"
                       className="block text-sm font-medium text-foreground"
                     >
-                      Email Address
+                      {t('profile.emailAddress')}
                     </label>
                     <div className="mt-1 relative rounded-md shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                         <Mail className="h-5 w-5 text-muted-foreground" />
                       </div>
                       <input
@@ -473,20 +480,20 @@ export default function ProfilePage() {
                         id="email"
                         value={user?.email || ''}
                         disabled
-                        className="pl-10 flex-1 min-w-0 block w-full h-12 px-3 rounded-md border border-border bg-muted text-muted-foreground text-base"
+                        className="ps-10 flex-1 min-w-0 block w-full h-12 px-3 rounded-md border border-border bg-muted text-muted-foreground text-base"
                       />
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Contact support to change your email
+                      {t('profile.emailLocked')}
                     </p>
                   </div>
 
                   <div className="sm:col-span-1 md:col-span-3">
                     <label htmlFor="birthDate" className="block text-sm font-medium text-foreground">
-                      Date of Birth (Optional)
+                      {t('profile.birthDateOptional')}
                     </label>
                     <p className="text-xs text-muted-foreground mb-1">
-                      Needed for astrology color recommendations
+                      {t('profile.birthDateHint')}
                     </p>
                     <input
                       type="date"
@@ -500,10 +507,10 @@ export default function ProfilePage() {
 
                   <div className="sm:col-span-1 md:col-span-3">
                     <label htmlFor="birthTime" className="block text-sm font-medium text-foreground">
-                      Birth Time (Optional)
+                      {t('profile.birthTimeOptional')}
                     </label>
                     <p className="text-xs text-muted-foreground mb-1">
-                      Optional: improves Vedic accuracy when available
+                      {t('profile.birthTimeHint')}
                     </p>
                     <input
                       type="time"
@@ -517,10 +524,10 @@ export default function ProfilePage() {
 
                   <div className="md:col-span-6">
                     <label htmlFor="birthPlace" className="block text-sm font-medium text-foreground">
-                      Birth Place (Optional)
+                      {t('profile.birthPlaceOptional')}
                     </label>
                     <p className="text-xs text-muted-foreground mb-1">
-                      City and country helps timezone-accurate calculations
+                      {t('profile.birthPlaceHint')}
                     </p>
                     <input
                       type="text"
@@ -529,7 +536,7 @@ export default function ProfilePage() {
                       onChange={(e) => setBirthPlace(e.target.value)}
                       disabled={!isEditing}
                       className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
-                      placeholder="e.g. New Delhi, India"
+                      placeholder={t('profile.birthPlacePlaceholder')}
                     />
                   </div>
                 </div>
@@ -549,19 +556,19 @@ export default function ProfilePage() {
                         }}
                         className="w-full sm:w-auto"
                       >
-                        Cancel
+                        {t('common.cancel')}
                       </Button>
                       <Button
                         onClick={handleSaveProfile}
                         disabled={isSavingProfile}
                         className="w-full sm:w-auto"
                       >
-                        {isSavingProfile ? 'Saving...' : 'Save Changes'}
+                        {isSavingProfile ? t('common.saving') : t('profile.saveChanges')}
                       </Button>
                     </>
                   ) : (
                     <Button onClick={() => setIsEditing(true)} className="w-full sm:w-auto">
-                      Edit Profile
+                      {t('profile.editProfile')}
                     </Button>
                   )}
                 </div>
@@ -603,7 +610,7 @@ export default function ProfilePage() {
         {isMobile && !mobileSubpageOpen && (
           <div className="border-t border-border px-4 py-4">
             <Button variant="outline" onClick={handleLogout} className="w-full">
-              Sign Out
+              {t('profile.signOut')}
             </Button>
           </div>
         )}

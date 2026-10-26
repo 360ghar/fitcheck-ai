@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../providers/auth_provider.dart';
 import 'widgets/auth_ui.dart';
@@ -58,9 +59,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AuthHeading(
-            title: 'Welcome back',
-            subtitle: 'Sign in to open your closet.',
+          AuthHeading(
+            title: context.l10n.authWelcomeBack,
+            subtitle: context.l10n.authSignInBody,
           ),
           const SizedBox(height: AppConstants.spacing20),
           AutofillGroup(
@@ -75,13 +76,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     textInputAction: TextInputAction.next,
                     autofillHints: const [AutofillHints.email],
                     decoration: AuthFormStyles.inputDecoration(
-                      label: 'Email',
+                      label: context.l10n.authEmail,
                       icon: Icons.mail_outline_rounded,
                     ),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Enter your email';
+                      if (v == null || v.trim().isEmpty) {
+                        return context.l10n.authEnterEmail;
+                      }
                       if (!isValidEmail(v.trim())) {
-                        return 'Enter a valid email';
+                        return context.l10n.authEnterValidEmail;
                       }
                       return null;
                     },
@@ -94,12 +97,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     autofillHints: const [AutofillHints.password],
                     onFieldSubmitted: (_) => _submit(),
                     decoration: AuthFormStyles.inputDecoration(
-                      label: 'Password',
+                      label: context.l10n.authPassword,
                       icon: Icons.lock_outline_rounded,
                       suffixIcon: IconButton(
                         tooltip: _passwordVisible
-                            ? 'Hide password'
-                            : 'Show password',
+                            ? context.l10n.authHidePassword
+                            : context.l10n.authShowPassword,
                         icon: Icon(
                           _passwordVisible
                               ? Icons.visibility_off_outlined
@@ -111,8 +114,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ),
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'Enter your password';
-                      if (v.length < 6) return 'At least 6 characters';
+                      if (v == null || v.isEmpty) {
+                        return context.l10n.authEnterPassword;
+                      }
+                      if (v.length < 6) {
+                        return context.l10n.authPasswordTooShort;
+                      }
                       return null;
                     },
                   ),
@@ -121,10 +128,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ),
           ),
           Align(
-            alignment: Alignment.centerRight,
+            alignment: AlignmentDirectional.centerEnd,
             child: TextButton(
               onPressed: () => context.push(Routes.forgotPassword),
-              child: const Text('Forgot password?'),
+              child: Text(context.l10n.authForgotPassword),
             ),
           ),
           if (unverified != null) ...[
@@ -136,7 +143,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             const SizedBox(height: AppConstants.spacing16),
           ],
           AuthPrimaryButton(
-            label: 'Sign in',
+            label: context.l10n.authSignIn,
             isLoading: busy == AuthBusy.email,
             onPressed: _submit,
           ),
@@ -160,14 +167,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'New here?',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: tokens.textSecondary,
-                ),
+                context.l10n.authNewHere,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
               TextButton(
                 onPressed: () => context.pushReplacement(Routes.register),
-                child: const Text('Create an account'),
+                child: Text(context.l10n.authCreateAccount),
               ),
             ],
           ),
@@ -195,7 +202,7 @@ class _VerifyEmailPanel extends StatelessWidget {
     return PaperSurface(
       color: tokens.stock.tint,
       lift: 0,
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         AppConstants.spacing16,
         AppConstants.spacing12,
         AppConstants.spacing8,
@@ -211,17 +218,21 @@ class _VerifyEmailPanel extends StatelessWidget {
               const SizedBox(width: AppConstants.spacing12),
               Expanded(
                 child: Text(
-                  'Confirm $email before you sign in. Check your inbox.',
+                  context.l10n.authConfirmEmail(email),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
             ],
           ),
           Align(
-            alignment: Alignment.centerRight,
+            alignment: AlignmentDirectional.centerEnd,
             child: TextButton(
               onPressed: sending ? null : onResend,
-              child: Text(sending ? 'Sending…' : 'Send it again'),
+              child: Text(
+                sending
+                    ? context.l10n.authResendingEmail
+                    : context.l10n.authResendEmail,
+              ),
             ),
           ),
         ],

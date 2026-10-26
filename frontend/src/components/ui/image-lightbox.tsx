@@ -4,6 +4,7 @@ import { TransformWrapper, TransformComponent, useControls } from 'react-zoom-pa
 import { X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/i18n'
 
 export interface ImageLightboxProps {
   src: string;
@@ -13,16 +14,17 @@ export interface ImageLightboxProps {
 }
 
 function ZoomControls() {
+  const { t } = useTranslation()
   const { zoomIn, zoomOut, resetTransform } = useControls();
 
   return (
-    <div className="absolute bottom-[calc(1rem+var(--safe-area-bottom))] left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border border-white/20 bg-black/80 px-3 py-2">
+    <div className="absolute bottom-[calc(1rem+var(--safe-area-bottom))] inset-x-0 mx-auto w-fit z-50 flex items-center gap-2 rounded-full border border-white/20 bg-black/80 px-3 py-2">
       <Button
         variant="ghost"
         size="icon"
           className="h-11 w-11 text-white hover:bg-white/20 hover:text-white"
         onClick={() => zoomOut()}
-        aria-label="Zoom out"
+        aria-label={t('lightbox.zoomOut')}
       >
         <ZoomOut className="h-5 w-5" />
       </Button>
@@ -31,7 +33,7 @@ function ZoomControls() {
         size="icon"
           className="h-11 w-11 text-white hover:bg-white/20 hover:text-white"
         onClick={() => resetTransform()}
-        aria-label="Reset zoom"
+        aria-label={t('lightbox.resetZoom')}
       >
         <RotateCcw className="h-5 w-5" />
       </Button>
@@ -40,7 +42,7 @@ function ZoomControls() {
         size="icon"
           className="h-11 w-11 text-white hover:bg-white/20 hover:text-white"
         onClick={() => zoomIn()}
-        aria-label="Zoom in"
+        aria-label={t('lightbox.zoomIn')}
       >
         <ZoomIn className="h-5 w-5" />
       </Button>
@@ -49,6 +51,7 @@ function ZoomControls() {
 }
 
 export function ImageLightbox({ src, alt, open, onClose }: ImageLightboxProps) {
+  const { t } = useTranslation()
   // Handle keyboard shortcuts
   React.useEffect(() => {
     if (!open) return;
@@ -90,9 +93,9 @@ export function ImageLightbox({ src, alt, open, onClose }: ImageLightboxProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-[calc(1rem+var(--safe-area-top))] right-4 z-[101] h-11 w-11 text-white hover:bg-white/20 hover:text-white"
+            className="absolute top-[calc(1rem+var(--safe-area-top))] end-4 z-[101] h-11 w-11 text-white hover:bg-white/20 hover:text-white"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X className="h-6 w-6" />
           </Button>
@@ -124,11 +127,11 @@ export function ImageLightbox({ src, alt, open, onClose }: ImageLightboxProps) {
 
           {/* Hint text — short touch label on phones; full pointer hint from sm up
               (the full pill overlaps the close button below ~430px) */}
-          <div className="absolute top-[calc(1rem+var(--safe-area-top))] left-1/2 -translate-x-1/2 z-50 hidden sm:block text-white/60 text-sm bg-black/40 backdrop-blur-sm rounded-full px-3 py-1">
-            Double-click to zoom • Scroll or pinch to adjust
+          <div className="absolute top-[calc(1rem+var(--safe-area-top))] inset-x-0 mx-auto w-fit z-50 hidden sm:block text-white/60 text-sm bg-black/40 backdrop-blur-sm rounded-full px-3 py-1">
+            {t('lightbox.zoomHint')}
           </div>
-          <div className="absolute top-[calc(1rem+var(--safe-area-top))] left-1/2 -translate-x-1/2 z-50 sm:hidden text-white/60 text-xs bg-black/40 backdrop-blur-sm rounded-full px-3 py-1">
-            Pinch to zoom
+          <div className="absolute top-[calc(1rem+var(--safe-area-top))] inset-x-0 mx-auto w-fit z-50 sm:hidden text-white/60 text-xs bg-black/40 backdrop-blur-sm rounded-full px-3 py-1">
+            {t('lightbox.pinchHint')}
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

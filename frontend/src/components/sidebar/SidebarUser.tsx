@@ -22,8 +22,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/theme'
+import { useTranslation } from '@/i18n'
 
 export function SidebarUser() {
+  const { t } = useTranslation()
   const { isCollapsed, closeMobile } = useSidebar()
   const logout = useAuthStore((state) => state.logout)
   const userDisplayName = useUserDisplayName()
@@ -71,7 +73,7 @@ export function SidebarUser() {
             <span className="truncate text-sm font-medium">
               {userDisplayName}
             </span>
-            <span className="text-xs text-muted-foreground">View profile</span>
+            <span className="text-xs text-muted-foreground">{t('nav.viewProfile')}</span>
           </div>
         </Button>
       </DropdownMenuTrigger>
@@ -94,7 +96,7 @@ export function SidebarUser() {
             className="flex items-center gap-2"
           >
             <User className="h-4 w-4" />
-            Profile
+            {t('nav.profile')}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
@@ -104,7 +106,7 @@ export function SidebarUser() {
             className="flex items-center gap-2"
           >
             <Settings className="h-4 w-4" />
-            Settings
+            {t('nav.settings')}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -113,7 +115,7 @@ export function SidebarUser() {
           className="flex items-center gap-2 text-destructive focus:text-destructive"
         >
           <LogOut className="h-4 w-4" />
-          Log out
+          {t('nav.logOut')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

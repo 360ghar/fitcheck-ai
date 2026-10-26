@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../models/subscription_model.dart';
 import '../providers/subscription_providers.dart';
+import '../services/trial_eligibility.dart';
 import 'widgets/plan_card.dart';
 import 'widgets/referral_share_card.dart';
 import 'widgets/subscription_disclosure.dart';
+import 'widgets/trial_spotlight.dart';
 import 'widgets/usage_progress.dart';
 
 /// Plan, usage, upgrade options and the referral code.
@@ -35,6 +39,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
     // Watching keeps the paywall alive (and the purchase handler attached)
     // exactly as long as this page.
     final paywall = ref.watch(paywallProvider);
+    final l10n = context.l10n;
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     final Widget body;
@@ -96,21 +101,23 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
                     ref.read(subscriptionStatusProvider.notifier).refresh(),
               ),
             const SizedBox(height: AppConstants.spacing8),
+            // The offer leads. Everything below it (current plan, usage) is
+            // management; the free month is the reason this screen is open,
+            // and App Review's 3.1.2 disclosure has to be reachable without
+            // scrolling, so it cannot sit under two cards.
+            if (s.canUpgrade && paywallEnabled) ...[
+              _upgradeSection(s, paywall),
+              gap,
+            ],
             _CurrentPlan(status: s),
             if (s.usage != null) ...[gap, _Usage(status: s)],
-            // Offered to Free and Plus (a Plus subscriber can still reach
-            // Pro). Hidden when the paywall is off (App Review builds).
-            if (s.canUpgrade && paywallEnabled) ...[
-              gap,
-              _upgradeSection(s, paywall),
-            ],
             // Restore is required on both stores whenever the purchase
             // plugin ships, for every user, even with the paywall off: a
             // paying user who reinstalls must be able to recover the plan.
             if (!kIsWeb) ...[
               const SizedBox(height: AppConstants.spacing8),
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: TextButton.icon(
                   // Flush with the content edge; the 44pt height stays.
                   style: TextButton.styleFrom(
@@ -127,7 +134,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.restore_rounded, size: 20),
-                  label: const Text('Restore purchases'),
+                  label: Text(l10n.paywallRestore),
                 ),
               ),
             ],
@@ -152,7 +159,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
     return PaperStockScope(
       stock: PaperStockId.stone,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Subscription')),
+        appBar: AppBar(title: Text(l10n.billingTitle)),
         body: AppPageBackground(child: body),
       ),
     );
@@ -161,19 +168,18 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   Widget _upgradeSection(SubscriptionState s, PaywallState paywall) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final notifier = ref.read(paywallProvider.notifier);
     final onPlus = s.onPlus;
 
     final header = [
       Text(
-        onPlus ? 'Upgrade your plan' : 'Choose a plan',
+        onPlus ? l10n.billingUpgradeHeading : l10n.paywallTitle,
         style: text.headlineSmall,
       ),
       const SizedBox(height: AppConstants.spacing4),
       Text(
-        onPlus
-            ? 'Same features, higher limits.'
-            : 'Plus and Pro have the same features. Pick the limits you need.',
+        onPlus ? l10n.billingUpgradeOnPlusBody : l10n.billingUpgradeBody,
         style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
       ),
     ];
@@ -187,14 +193,38 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
           header.first,
           const SizedBox(height: AppConstants.spacing8),
           Text(
-            "Online upgrades aren't available yet. A promo or referral code "
-            'still unlocks Plus or Pro. Invite friends below to earn free '
-            'months.',
+            l10n.billingWebUnavailableBody,
             style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
         ],
       );
     }
+
+    // The free month is an App Store introductory offer on Pro Monthly.
+    // Only StoreKit 2 can say whether this user still has it. Android, the
+    // web, and a failed probe all answer `unknown`, which renders the honest
+    // non-trial copy: never promise a free month to someone who is about to
+    // be charged.
+    final trialProductId =
+        paywall.storeProducts.productIdFor(
+          ref.read(iapServiceProvider).storeName,
+          'pro_monthly',
+        ) ??
+        kProMonthlyProductId;
+    final eligibility =
+        ref.watch(trialEligibilityProvider(trialProductId)).value ??
+        TrialEligibility.unknown;
+    final canPromiseFreeMonth = eligibility.canPromiseFreeMonth;
+
+    // Pro Monthly is:
+    //  - the price that begins after the trial, and
+    //  - the only variant the trial exists on.
+    // Prefer the localized store price; fall back to the /plans price.
+    final proMonthlyPrice =
+        paywall.storePriceFor('pro_monthly') ??
+        paywall.storeProductDetails['pro_monthly']?.price ??
+        paywall.plan('pro')?.priceMonthly.toString() ??
+        r'$20';
 
     final options = [
       if (!onPlus)
@@ -217,11 +247,25 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
         fallbackGenerations: 1000,
       ),
     ];
+    // Default to the variant that carries the free month, so a new user who
+    // taps the CTA without touching the picker gets what the headline
+    // promised. A Plus subscriber can only reach Pro anyway.
+    final trialAvailable = canPromiseFreeMonth && !s.isPro;
+    final defaultId = trialAvailable && !onPlus ? 'pro' : options.first.id;
     final selected = options.firstWhere(
       (o) => o.id == _selectedTier,
-      orElse: () => options.first,
+      orElse: () => options.firstWhere(
+        (o) => o.id == defaultId,
+        orElse: () => options.first,
+      ),
     );
     final planType = '${selected.id}_${_yearly ? 'yearly' : 'monthly'}';
+    // The trial is one month of Pro. It is not on Plus, not on yearly, and a
+    // user who already pays is not a new subscriber (StoreKit would answer
+    // ineligible anyway, but never depend on that for copy that promises a
+    // free month). The trial copy disappears the moment any of those stops
+    // being true, rather than misleading the user into the wrong product.
+    final trialHeads = trialAvailable && selected.id == 'pro' && !_yearly;
     final busy = paywall.isCheckingOut || paywall.isRestoring;
     // The store cannot serve the plans yet (the definitive zero-products
     // state, or no product IDs published): say so above the plans instead
@@ -234,12 +278,32 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ...header,
+        if (trialHeads) ...[
+          TrialSpotlight(priceAfterTrial: proMonthlyPrice),
+          const SizedBox(height: AppConstants.spacing12),
+        ] else ...[
+          ...header,
+          if (!kIsWeb && !canPromiseFreeMonth) ...[
+            const SizedBox(height: AppConstants.spacing8),
+            TrialIneligibleNote(price: proMonthlyPrice),
+          ],
+          const SizedBox(height: AppConstants.spacing12),
+        ],
+        // The permanent free tier is the retention story, so it sits with the
+        // offer rather than under the plan cards in small print. Hidden from a
+        // paying subscriber: for them it would read as a downgrade pitch.
+        if (!s.isPro) ...[
+          FreeForeverCard(
+            monthlyUploads: paywall.plan('free')?.monthlyExtractions ?? 50,
+            monthlyOutfits: paywall.plan('free')?.monthlyGenerations ?? 50,
+            dailyPhotoshootImages: kFreeDailyPhotoshootImages,
+          ),
+          const SizedBox(height: AppConstants.spacing20),
+        ],
         if (paywall.plansError != null) ...[
           const SizedBox(height: AppConstants.spacing8),
           AppErrorBanner(
-            message:
-                "Couldn't load the latest plans. Prices may be out of date.",
+            message: l10n.billingPlansStale,
             onRetry: notifier.loadPlans,
           ),
         ],
@@ -251,9 +315,9 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
         ],
         const SizedBox(height: AppConstants.spacing16),
         SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment(value: false, label: Text('Monthly')),
-            ButtonSegment(value: true, label: Text('Yearly')),
+          segments: [
+            ButtonSegment(value: false, label: Text(l10n.billingMonthly)),
+            ButtonSegment(value: true, label: Text(l10n.billingYearly)),
           ],
           selected: {_yearly},
           showSelectedIcon: false,
@@ -286,7 +350,14 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
                   dimension: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Text('Upgrade to ${selected.title}'),
+              // "Start my free month" only when the free month is the offer
+              // actually being bought: Pro Monthly, on iOS, from an
+              // eligible user.
+              : Text(
+                  trialHeads && !storeDown
+                      ? l10n.paywallCtaTrial
+                      : l10n.paywallCtaUpgrade(selected.title),
+                ),
         ),
         // Guideline 3.1.2: the purchase screen itself discloses the
         // auto-renewing terms and links the EULA and privacy policy. Store
@@ -297,8 +368,8 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
             priceSummary: _priceSummary(paywall, includePlus: !onPlus),
             isApple: ref.read(iapServiceProvider).isApple,
             planNames: onPlus
-                ? 'Pro is an auto-renewing subscription'
-                : 'Plus and Pro are auto-renewing subscriptions',
+                ? l10n.billingDisclosureProRenewing
+                : l10n.billingDisclosureBothRenewing,
           ),
         ],
       ],
@@ -325,7 +396,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
 
     String note;
     if (!_yearly) {
-      note = 'Billed monthly';
+      note = context.l10n.billingBilledMonthly;
     } else {
       // Compare in the store's currency when both store prices are known,
       // so the saving never mixes currencies.
@@ -336,7 +407,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
           : (monthly * 12 - yearly, r'$');
       note = save > 0
           ? 'Save $symbol${save.toStringAsFixed(0)} a year'
-          : 'Billed yearly';
+          : context.l10n.billingBilledYearly;
     }
 
     return PlanOption(
@@ -348,8 +419,8 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
       features: [
         '${_count(plan?.monthlyExtractions ?? fallbackExtractions)} item extractions',
         '${_count(plan?.monthlyGenerations ?? fallbackGenerations)} outfit visualizations',
-        'Virtual try-on',
-        'Priority support',
+        context.l10n.billingVirtualTryOn,
+        context.l10n.billingPrioritySupport,
       ],
     );
   }
@@ -384,6 +455,7 @@ class _CurrentPlan extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final sub = status.subscription;
     final periodEnd = sub.currentPeriodEnd;
     final credit = sub.referralCreditMonths;
@@ -404,7 +476,7 @@ class _CurrentPlan extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Current plan',
+            l10n.billingCurrentPlan,
             style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
           const SizedBox(height: AppConstants.spacing4),
@@ -426,7 +498,7 @@ class _CurrentPlan extends StatelessWidget {
                       vertical: 3,
                     ),
                     child: Text(
-                      'Active',
+                      l10n.billingActive,
                       style: text.labelMedium?.copyWith(
                         color: tokens.stock.page,
                         fontWeight: FontWeight.w700,
@@ -464,22 +536,23 @@ class _Usage extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final usage = status.usage!;
     return PaperSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('This month', style: text.headlineSmall),
+          Text(l10n.billingThisMonth, style: text.headlineSmall),
           const SizedBox(height: AppConstants.spacing16),
           UsageProgress(
-            label: 'Item extractions',
+            label: l10n.billingItemExtractions,
             current: usage.monthlyExtractions,
             max: usage.monthlyExtractionsLimit,
             icon: Icons.photo_camera_outlined,
           ),
           const SizedBox(height: AppConstants.spacing16),
           UsageProgress(
-            label: 'Outfit visualizations',
+            label: l10n.billingOutfitVisualizations,
             current: usage.monthlyGenerations,
             max: usage.monthlyGenerationsLimit,
             icon: Icons.checkroom_outlined,
@@ -498,9 +571,8 @@ class _Usage extends StatelessWidget {
                 Expanded(
                   child: Text(
                     paywallEnabled
-                        ? "You're close to this month's limit. Upgrade for more."
-                        : "You're close to this month's limit. It resets at "
-                              'the start of next month.',
+                        ? l10n.billingNearLimitUpgrade
+                        : l10n.billingNearLimitResets,
                     style: text.bodyMedium,
                   ),
                 ),
@@ -525,11 +597,11 @@ class _StoreUnavailable extends StatelessWidget {
       lift: 0,
       grain: false,
       color: tokens.stock.tint,
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing12,
-        AppConstants.spacing4,
-        AppConstants.spacing4,
-        AppConstants.spacing4,
+      padding: const EdgeInsetsDirectional.only(
+        start: AppConstants.spacing12,
+        top: AppConstants.spacing4,
+        end: AppConstants.spacing4,
+        bottom: AppConstants.spacing4,
       ),
       child: Row(
         children: [
@@ -545,12 +617,15 @@ class _StoreUnavailable extends StatelessWidget {
                 vertical: AppConstants.spacing8,
               ),
               child: Text(
-                "Upgrades aren't available in the store yet. Check back soon.",
+                context.l10n.billingStoreUnavailable,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          TextButton(
+            onPressed: onRetry,
+            child: Text(context.l10n.actionRetry),
+          ),
         ],
       ),
     );
@@ -572,22 +647,23 @@ class _ManageInStore extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Manage your plan', style: text.headlineSmall),
+          Text(context.l10n.billingManageHeading, style: text.headlineSmall),
           const SizedBox(height: AppConstants.spacing8),
           Text(
-            'This plan is billed through the $store. Change or cancel it in '
-            'your $store account settings.',
+            context.l10n.billingBilledThroughStore(store),
             style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
           const SizedBox(height: AppConstants.spacing8),
           TextButton.icon(
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.only(right: AppConstants.spacing8),
+              padding: const EdgeInsetsDirectional.only(
+                end: AppConstants.spacing8,
+              ),
             ),
             onPressed: () =>
                 ref.read(subscriptionStatusProvider.notifier).openManage(),
             icon: const Icon(Icons.open_in_new_rounded, size: 20),
-            label: Text('Manage in the $store'),
+            label: Text(context.l10n.billingManageInStore(store)),
           ),
         ],
       ),
@@ -602,24 +678,27 @@ class _CancelPlan extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     return PaperSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Cancel subscription', style: text.headlineSmall),
+          Text(l10n.billingCancelPlan, style: text.headlineSmall),
           const SizedBox(height: AppConstants.spacing8),
           Text(
-            'You keep access until the end of this billing period.',
+            l10n.billingCancelKeepsAccess,
             style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
           const SizedBox(height: AppConstants.spacing8),
           TextButton(
             style: TextButton.styleFrom(
               foregroundColor: tokens.error,
-              padding: const EdgeInsets.only(right: AppConstants.spacing8),
+              padding: const EdgeInsetsDirectional.only(
+                end: AppConstants.spacing8,
+              ),
             ),
             onPressed: () => _confirm(context, ref),
-            child: const Text('Cancel subscription'),
+            child: Text(l10n.billingCancelPlan),
           ),
         ],
       ),
@@ -628,22 +707,21 @@ class _CancelPlan extends ConsumerWidget {
 
   Future<void> _confirm(BuildContext context, WidgetRef ref) async {
     final tokens = PaperTokens.of(context);
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel your subscription?'),
-        content: const Text(
-          'You keep access until the end of this billing period.',
-        ),
+        title: Text(l10n.billingCancelConfirmTitle),
+        content: Text(l10n.billingCancelKeepsAccess),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep plan'),
+            child: Text(l10n.billingKeepPlan),
           ),
           TextButton(
             style: TextButton.styleFrom(foregroundColor: tokens.error),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Cancel plan'),
+            child: Text(l10n.billingCancelPlanAction),
           ),
         ],
       ),

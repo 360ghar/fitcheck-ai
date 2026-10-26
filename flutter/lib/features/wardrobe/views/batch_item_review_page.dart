@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/batch_extraction_models.dart';
@@ -26,16 +27,17 @@ class BatchItemReviewPage extends ConsumerWidget {
     final failures = ref.read(batchExtractionProvider).saveFailures;
     if (failures.isEmpty && saved.isNotEmpty) {
       ErrorHandler.showSuccess(
-        saved.length == 1
-            ? '1 piece is in your closet.'
-            : '${saved.length} pieces are in your closet.',
-        title: 'Saved',
+        ErrorHandler.l10n?.itemAddPiecesSavedBody(saved.length) ??
+            (saved.length == 1
+                ? '1 piece is in your closet.'
+                : '${saved.length} pieces are in your closet.'),
+        title: context.l10n.itemManualSavedTitle,
       );
       _exitFlow(context, ref);
     } else if (failures.isNotEmpty && saved.isEmpty) {
       ErrorHandler.showError(
-        'Nothing was saved. Try again.',
-        title: 'Not saved',
+        context.l10n.batchNothingSavedRetryBody,
+        title: context.l10n.batchNotSavedTitle,
       );
     }
     // A partial save stays on the page: the banner names what is left.
@@ -45,19 +47,19 @@ class BatchItemReviewPage extends ConsumerWidget {
     final discard = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Discard these pieces?'),
-        content: const Text('Nothing from this batch is saved.'),
+        title: Text(context.l10n.batchDiscardPiecesTitle),
+        content: Text(context.l10n.batchDiscardPiecesBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep'),
+            child: Text(context.l10n.batchKeepAction),
           ),
           TextButton(
             style: TextButton.styleFrom(
               foregroundColor: PaperTokens.of(context).error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard'),
+            child: Text(context.l10n.batchDiscardAction),
           ),
         ],
       ),
@@ -85,16 +87,20 @@ class BatchItemReviewPage extends ConsumerWidget {
         canPop: !saving,
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Review pieces'),
+            title: Text(context.l10n.batchReviewPiecesTitle),
             actions: [
               if (!empty)
                 Padding(
-                  padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                  padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
                   child: TextButton(
                     onPressed: saving
                         ? null
                         : () => notifier.setAllIncluded(!allIncluded),
-                    child: Text(allIncluded ? 'Skip all' : 'Include all'),
+                    child: Text(
+                      allIncluded
+                          ? context.l10n.batchSkipAllAction
+                          : context.l10n.batchIncludeAllAction,
+                    ),
                   ),
                 ),
             ],
@@ -105,9 +111,9 @@ class BatchItemReviewPage extends ConsumerWidget {
               child: empty
                   ? AppEmptyState(
                       scene: PaperScenes.closet,
-                      title: 'No pieces found',
-                      message: 'We found no clothes in these photos.',
-                      actionLabel: 'Choose other photos',
+                      title: context.l10n.batchNoPiecesFoundTitle,
+                      message: context.l10n.batchNoPiecesFoundBody,
+                      actionLabel: context.l10n.batchChooseOtherPhotosAction,
                       onAction: () {
                         notifier.reset();
                         Navigator.pop(context);
@@ -156,7 +162,7 @@ class BatchItemReviewPage extends ConsumerWidget {
                                             ),
                                             onToggle: notifier.toggleUseCase,
                                             helper:
-                                                'Added to every piece you save.',
+                                                context.l10n.batchUseCaseHelper,
                                           ),
                                     ),
                                   ),
@@ -224,9 +230,7 @@ class _StillGeneratingBanner extends ConsumerWidget {
             const SizedBox(width: AppConstants.spacing12),
             Expanded(
               child: Text(
-                pending == 1
-                    ? '1 more studio photo on the way. You can save what is ready, or leave — we will let you know.'
-                    : '$pending more studio photos on the way. You can save what is ready, or leave — we will let you know.',
+                context.l10n.batchMoreStudioPhotosBody(pending),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -248,7 +252,7 @@ class _SaveFailures extends ConsumerWidget {  const _SaveFailures({required this
     );
     if (failures.isEmpty) return const SizedBox.shrink();
     return AppErrorBanner(
-      message: 'Not saved yet: ${failures.join(', ')}.',
+      message: context.l10n.batchNotSavedYetBody(failures.join(', ')),
       onRetry: onRetry,
     );
   }
@@ -269,12 +273,12 @@ class _Summary extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '$total ${total == 1 ? 'piece' : 'pieces'} from $photos ${photos == 1 ? 'photo' : 'photos'}',
+          context.l10n.batchPiecesFromPhotos(total, photos),
           style: text.headlineSmall,
         ),
         const SizedBox(height: AppConstants.spacing4),
         Text(
-          '$selected chosen. Tap a piece to skip it.',
+          context.l10n.batchSelectedChosen(selected),
           style: text.bodyMedium?.copyWith(
             color: PaperTokens.of(context).textSecondary,
           ),
@@ -322,19 +326,19 @@ class _Grid extends ConsumerWidget {
     final remove = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove this piece?'),
-        content: const Text('It is not saved to your closet.'),
+        title: Text(context.l10n.batchRemovePieceTitle),
+        content: Text(context.l10n.batchRemovePieceBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep'),
+            child: Text(context.l10n.batchKeepAction),
           ),
           TextButton(
             style: TextButton.styleFrom(
               foregroundColor: PaperTokens.of(context).error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove'),
+            child: Text(context.l10n.batchRemoveAction),
           ),
         ],
       ),
@@ -395,15 +399,15 @@ class _SaveBar extends ConsumerWidget {
             onPressed: saving || count == 0 ? null : onSave,
             child: Text(
               saving
-                  ? 'Saving $count ${count == 1 ? 'piece' : 'pieces'}'
+                  ? context.l10n.batchSavingPiecesLabel(count)
                   : count == 0
-                  ? 'Choose pieces to save'
-                  : 'Save $count ${count == 1 ? 'piece' : 'pieces'}',
+                  ? context.l10n.batchChoosePiecesToSave
+                  : context.l10n.batchSavePiecesLabel(count),
             ),
           ),
           TextButton(
             onPressed: saving ? null : onDiscard,
-            child: const Text('Discard all'),
+            child: Text(context.l10n.batchDiscardAllAction),
           ),
         ],
       ),

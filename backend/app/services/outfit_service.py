@@ -2,7 +2,7 @@
 Outfit domain service: persistence orchestration for outfit lifecycle.
 
 Keeps routes thin per the repo rule "routes thin, logic in services"
-(ARCHITECTURE.md / CLAUDE.md). Delete orchestration lives here: an
+(ARCHITECTURE.md / AGENTS.md). Delete orchestration lives here: an
 ownership-scoped row delete plus best-effort cleanup of the outfit's owned
 image storage paths. Storage failures are logged, never fatal — the DB row
 is the source of truth and the delete is idempotent.

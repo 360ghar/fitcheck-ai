@@ -86,7 +86,10 @@ const offeredTiersFor = (
 // COMPONENT
 // ============================================================================
 
+import { formatDate, useTranslation } from '@/i18n'
+
 export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams();
   const requestedPlan = searchParams.get("plan_type");
   const [copied, setCopied] = useState(false);
@@ -164,12 +167,12 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
     // time this runs; the toast is the only piece the user was missing.
     if (isSuccess) {
       toast({
-        title: "Payment successful",
+        title: t('subscription.paymentSuccessful'),
         description: "Welcome! Your new plan is active.",
       });
     } else {
       toast({
-        title: "Checkout cancelled",
+        title: t('subscription.checkoutCancelled'),
         description: "No changes were made to your plan.",
       });
     }
@@ -222,7 +225,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
     const code = promoInput.trim();
     if (code.length < 3) {
       toast({
-        title: "Enter a promo code",
+        title: t('subscription.enterPromoCode'),
         description: "Promo codes are at least 3 characters long.",
         variant: "destructive",
       });
@@ -239,7 +242,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
     if (result?.success) {
       localStorage.removeItem(PENDING_PROMO_KEY);
       toast({
-        title: `You're on ${planDisplayName(result.plan_type)}! 🎉`,
+        title: t('subscription.youreOnPlan', { plan: planDisplayName(result.plan_type) }),
         description: result.message,
       });
     }
@@ -251,13 +254,13 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
     if (success) {
       setCopied(true);
       toast({
-        title: "Link copied!",
+        title: t('subscription.linkCopied'),
         description: "Share this link with friends to earn free Pro months.",
       });
       setTimeout(() => setCopied(false), 2000);
     } else {
       toast({
-        title: "Failed to copy",
+        title: t('subscription.failedToCopy'),
         description: "Please try again.",
         variant: "destructive",
       });
@@ -270,7 +273,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
       await startCheckout(planType);
     } catch {
       toast({
-        title: "Checkout failed",
+        title: t('subscription.checkoutFailed'),
         description: "Please try again or contact support.",
         variant: "destructive",
       });
@@ -282,13 +285,13 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
     try {
       await cancelSubscription();
       toast({
-        title: "Subscription cancelled",
+        title: t('subscription.cancelled'),
         description:
           "You'll retain access until the end of your billing period.",
       });
     } catch {
       toast({
-        title: "Failed to cancel",
+        title: t('subscription.failedToCancel'),
         description: "Please try again or contact support.",
         variant: "destructive",
       });
@@ -301,7 +304,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
       await openBillingPortal();
     } catch {
       toast({
-        title: "Failed to open billing portal",
+        title: t('subscription.failedBillingPortal'),
         description: "Please try again or contact support.",
         variant: "destructive",
       });
@@ -327,23 +330,23 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
         <div className="p-4 bg-error-pale border border-destructive/30 rounded-lg flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-error shrink-0 mt-0.5" />
           <div>
-            <p className="text-error font-medium">Error</p>
+            <p className="text-error font-medium">{t('subscription.error')}</p>
             <p className="text-error text-sm">{error}</p>
           </div>
         </div>
       )}
 
-      {/* Current Plan */}
+      {/* {t('subscription.currentPlan')} */}
       <Card>
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <Crown
               className={`h-5 w-5 ${isPro ? "text-tint-amber" : "text-muted-foreground/70"}`}
             />
-            Current Plan
+            {t('subscription.currentPlan')}
           </CardTitle>
           <CardDescription>
-            Manage your subscription and billing
+            {t('subscription.subtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
@@ -359,11 +362,9 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               </div>
               {subscription?.cancel_at_period_end && (
                 <p className="text-sm text-tint-amber mt-1">
-                  Cancels at end of period (
-                  {new Date(
-                    subscription.current_period_end!,
-                  ).toLocaleDateString()}
-                  )
+                  {t('subscription.cancelsAtPeriodEnd', {
+                    date: formatDate(new Date(subscription.current_period_end!)),
+                  })}
                 </p>
               )}
               {subscription?.referral_credit_months &&
@@ -404,8 +405,8 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                       onClick={handleManageBilling}
                       disabled={isLoading}
                     >
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Manage Billing
+                      <CreditCard className="h-4 w-4 me-2" />
+                      {t('subscription.manageBilling')}
                     </Button>
                   )}
                   {!isStoreBilled && !subscription?.cancel_at_period_end && (
@@ -415,13 +416,13 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                           variant="ghost"
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
-                          Cancel Subscription
+                          {t('subscription.cancelSubscription')}
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>
-                            Cancel subscription?
+                            {t('subscription.cancelConfirmTitle')}
                           </AlertDialogTitle>
                           <AlertDialogDescription>
                             You'll retain access to Pro features until the end
@@ -431,13 +432,13 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>
-                            Keep Subscription
+                            {t('subscription.keepSubscription')}
                           </AlertDialogCancel>
                           <AlertDialogAction
                             onClick={handleCancel}
                             className="bg-destructive hover:bg-destructive/90"
                           >
-                            Cancel Subscription
+                            {t('subscription.cancelSubscription')}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -462,13 +463,13 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                 >
                   {isCheckingOut ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Loading...
+                      <Loader2 className="h-4 w-4 me-2 animate-spin" />
+                      {t('common.loading')}
                     </>
                   ) : (
                     <>
-                      <Crown className="h-4 w-4 mr-2" />
-                      Upgrade to Pro
+                      <Crown className="h-4 w-4 me-2" />
+                      {t('subscription.upgradeToPro')}
                     </>
                   )}
                 </Button>
@@ -486,10 +487,10 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
               <Ticket className="h-5 w-5 text-primary" />
-              Have a promo code?
+              {t('subscription.havePromoCode')}
             </CardTitle>
             <CardDescription>
-              Redeem a code to get Plus or Pro free for a limited time.
+              {t('subscription.redeemHint')}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
@@ -519,12 +520,12 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                   >
                     {isRedeemingPromo ? (
                       <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Applying...
+                        <Loader2 className="h-4 w-4 me-2 animate-spin" />
+                        {t('subscription.applying')}
                       </>
                     ) : (
                       <>
-                        <Gift className="h-4 w-4 mr-2" />
+                        <Gift className="h-4 w-4 me-2" />
                         Get {promoValidation.plan_name} free
                       </>
                     )}
@@ -548,7 +549,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                       // New input invalidates the previous validation result.
                       if (promoValidation || promoError) clearPromo();
                     }}
-                    placeholder="Enter promo code"
+                    placeholder={t('subscription.enterPromoCodePlaceholder')}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -556,7 +557,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                       }
                     }}
                     className="flex-1 h-11 px-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
-                    aria-label="Promo code"
+                    aria-label={t('subscription.promoCodeLabel')}
                   />
                   <Button
                     onClick={handleValidatePromo}
@@ -564,9 +565,9 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                     className="h-11"
                   >
                     {isPromoValidating ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <Loader2 className="h-4 w-4 me-2 animate-spin" />
                     ) : (
-                      <Ticket className="h-4 w-4 mr-2" />
+                      <Ticket className="h-4 w-4 me-2" />
                     )}
                     {isPromoValidating ? "Checking..." : "Apply"}
                   </Button>
@@ -610,7 +611,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-background/90 p-4">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-5 w-5 text-muted-foreground" />
-                  <p className="font-medium">Card payments are being set up</p>
+                  <p className="font-medium">{t('subscription.cardPaymentsPending')}</p>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   We're finishing our payment setup and upgrades will be
@@ -647,8 +648,8 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                       }
                     >
                       {recommended && (
-                        <Badge className="absolute -top-2.5 left-4 bg-primary">
-                          Most popular
+                        <Badge className="absolute -top-2.5 start-4 bg-primary">
+                          {t('subscription.mostPopular')}
                         </Badge>
                       )}
                       <div className="mb-4">
@@ -670,8 +671,9 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                         </li>
                         <li className="flex items-center gap-2">
                           <Check className="h-4 w-4 text-success shrink-0" />
-                          {limits.monthlyGenerations.toLocaleString()} outfit
-                          visualizations/month
+                          {t('subscription.generationsPerMonth', {
+                            count: limits.monthlyGenerations,
+                          })}
                         </li>
                         <li className="flex items-center gap-2">
                           <Check className="h-4 w-4 text-success shrink-0" />
@@ -680,7 +682,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                         </li>
                         <li className="flex items-center gap-2">
                           <Check className="h-4 w-4 text-success shrink-0" />
-                          Virtual try-on, analytics &amp; priority support
+                          {t('subscription.proPerks')}
                         </li>
                       </ul>
                       <div className="mt-auto grid grid-cols-2 gap-2">
@@ -723,18 +725,20 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              Monthly Usage
+              {t('subscription.monthlyUsage')}
             </CardTitle>
             <CardDescription>
-              {new Date(usage.period_start).toLocaleDateString()} -{" "}
-              {new Date(usage.period_end).toLocaleDateString()}
+              {t('subscription.periodRange', {
+                start: formatDate(new Date(usage.period_start)),
+                end: formatDate(new Date(usage.period_end)),
+              })}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 px-4 pb-4 md:px-6 md:pb-6">
             {/* Extractions */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-medium">Item Extractions</span>
+                <span className="font-medium">{t('subscription.itemExtractions')}</span>
                 <span className="text-sm text-muted-foreground">
                   {usage.monthly_extractions} /{" "}
                   {usage.monthly_extractions_limit}
@@ -751,7 +755,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               <p className="text-xs text-muted-foreground">
                 {usage.monthly_extractions_remaining} remaining this month
                 {nearLimit.extractions && canUpgrade && (
-                  <span className="text-tint-amber ml-2">
+                  <span className="text-tint-amber ms-2">
                     - Consider upgrading!
                   </span>
                 )}
@@ -761,7 +765,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
             {/* Generations */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-medium">Outfit Visualizations</span>
+                <span className="font-medium">{t('subscription.outfitVisualizations')}</span>
                 <span className="text-sm text-muted-foreground">
                   {usage.monthly_generations} /{" "}
                   {usage.monthly_generations_limit}
@@ -778,7 +782,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               <p className="text-xs text-muted-foreground">
                 {usage.monthly_generations_remaining} remaining this month
                 {nearLimit.generations && canUpgrade && (
-                  <span className="text-tint-amber ml-2">
+                  <span className="text-tint-amber ms-2">
                     - Consider upgrading!
                   </span>
                 )}
@@ -789,7 +793,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
             {usage.monthly_embeddings_limit > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Similarity Searches</span>
+                  <span className="font-medium">{t('subscription.similaritySearches')}</span>
                   <span className="text-sm text-muted-foreground">
                     {usage.monthly_embeddings} /{" "}
                     {usage.monthly_embeddings_limit}
@@ -817,10 +821,10 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <Gift className="h-5 w-5 text-primary" />
-            Refer a Friend
+            {t('subscription.referAFriend')}
           </CardTitle>
           <CardDescription>
-            Share your code and both of you get 1 month of Pro free!
+            {t('subscription.referralHint')}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
@@ -845,8 +849,8 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
               >
                 {isLoadingReferral ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Loading…
+                    <Loader2 className="h-4 w-4 me-2 animate-spin" />
+                    {t('common.loading')}
                   </>
                 ) : (
                   "Retry"
@@ -868,13 +872,13 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                 >
                   {copied ? (
                     <>
-                      <Check className="h-4 w-4 mr-2 text-success" />
-                      Copied!
+                      <Check className="h-4 w-4 me-2 text-success" />
+                      {t('common.copied')}
                     </>
                   ) : (
                     <>
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy Link
+                      <Copy className="h-4 w-4 me-2" />
+                      {t('subscription.copyLink')}
                     </>
                   )}
                 </Button>
@@ -882,7 +886,7 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
 
               {/* Referral Code Display */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Your code:</span>
+                <span>{t('subscription.yourCode')}</span>
                 <code className="bg-muted px-2 py-1 rounded-md font-mono">
                   {referralCode.code}
                 </code>
@@ -901,8 +905,8 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                     );
                   }}
                 >
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share on X
+                  <Share2 className="h-4 w-4 me-2" />
+                  {t('subscription.shareOnX')}
                 </Button>
                 <Button
                   variant="outline"
@@ -915,8 +919,8 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                     );
                   }}
                 >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  WhatsApp
+                  <ExternalLink className="h-4 w-4 me-2" />
+                  {t('share.whatsapp')}
                 </Button>
                 <Button
                   variant="outline"
@@ -927,8 +931,8 @@ export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
                     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                   }}
                 >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Email
+                  <ExternalLink className="h-4 w-4 me-2" />
+                  {t('share.email')}
                 </Button>
               </div>
 

@@ -4,10 +4,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/config/env_config.dart';
+import 'core/i18n/l10n.dart';
+import 'core/i18n/locale_controller.dart';
+import 'core/i18n/locale_registry.dart';
 import 'core/services/analytics_service.dart';
+import 'core/utils/date_utils.dart';
 import 'core/providers.dart';
 import 'core/services/code_push_service.dart';
 import 'core/services/job_notifications.dart';
@@ -40,6 +45,9 @@ void main() async {
     codePushService.loadCurrentPatch(),
     PackageInfo.fromPlatform(),
     appContainer.read(introSeenProvider.notifier).load(),
+    // The stored language choice must be known before the first frame, or a
+    // user who picked Hindi sees one frame of English.
+    appContainer.read(localeControllerProvider.notifier).load(),
     // Job-done shade alerts. The tap lands on the activity list; the router
     // redirect keeps signed-out taps on the guest pages.
     JobNotifications.instance.init(
@@ -132,22 +140,45 @@ void main() async {
   }, appRunner: () => runApp(app));
 }
 
-class FitCheckApp extends StatelessWidget {
+class FitCheckApp extends ConsumerWidget {
   const FitCheckApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = ThemeService.instance;
+    final selection = ref.watch(localeControllerProvider);
+    final locale = effectiveLocale(
+      selection,
+      WidgetsBinding.instance.platformDispatcher.locales,
+    );
+    // Date, number and money helpers have no BuildContext, so they read this.
+    // Set before the first frame that can render a date.
+    AppDateUtils.locale = locale;
+    Intl.defaultLocale = locale.toLanguageTag();
     return ValueListenableBuilder(
       valueListenable: theme.themeMode,
       builder: (context, _, _) => MaterialApp.router(
-        title: 'Fit Check AI',
+        // The generated delegate set covers all 50 locales. `onGenerateTitle`
+        // rather than `title` so the task switcher shows the localized brand
+        // name rather than the English one.
+        onGenerateTitle: (context) => context.l10n.appName,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: theme.currentThemeMode,
         routerConfig: appRouter,
         scaffoldMessengerKey: scaffoldMessengerKey,
+        locale: locale,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localeResolutionCallback: (deviceLocale, supported) {
+          // Explicit choice wins; otherwise fall through the device list so a
+          // phone set to [ta, en] gets Tamil rather than English.
+          if (!selection.followsDevice) return selection.resolve(const []);
+          return LocaleRegistry.resolve(
+            deviceLocales: WidgetsBinding.instance.platformDispatcher.locales,
+          );
+        },
       ),
     );
   }

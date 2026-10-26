@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/request_id.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -54,7 +56,7 @@ class _UseCasePickerState extends State<UseCasePicker> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Use cases', style: text.titleSmall),
+        Text(context.l10n.itemUseCases, style: text.titleSmall),
         if (widget.helper != null) ...[
           const SizedBox(height: 2),
           Text(
@@ -69,7 +71,7 @@ class _UseCasePickerState extends State<UseCasePicker> {
           children: [
             for (final useCase in {...UseCases.defaults, ...widget.selected})
               FilterChip(
-                label: Text(UseCases.displayLabel(useCase)),
+                label: Text(localizedTaxonomy(context.l10n, useCase)),
                 selected: widget.selected.contains(useCase),
                 onSelected: (_) => widget.onToggle(useCase),
               ),
@@ -81,10 +83,10 @@ class _UseCasePickerState extends State<UseCasePicker> {
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _add(),
           decoration: InputDecoration(
-            labelText: 'Add a use case',
-            hintText: 'For example, brunch',
+            labelText: context.l10n.itemManualAddUseCase,
+            hintText: context.l10n.closetOtherUseCaseHint,
             suffixIcon: IconButton(
-              tooltip: 'Add use case',
+              tooltip: context.l10n.itemManualAddUseCaseAction,
               icon: const Icon(Icons.add_rounded),
               onPressed: _add,
             ),
@@ -169,6 +171,9 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    // Read once, before the first await: the strings are needed after the
+    // create call returns, and `context` may be gone by then.
+    final l10n = context.l10n;
     final repository = ref.read(itemRepositoryProvider);
     // Captured before the awaits: backing out of this form disposes its ref,
     // and a post-await ref access would throw after the item was created.
@@ -222,12 +227,12 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
       _requestId = null;
       _requestPayload = null;
       ErrorHandler.showSuccess(
-        '${created.name} is in your closet.',
-        title: 'Saved',
+        l10n.itemManualSavedBody(created.name),
+        title: l10n.itemManualSavedTitle,
       );
       if (mounted) Navigator.pop(context);
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(e, title: l10n.itemManualNotSaved, stackTrace: stack);
       if (mounted) setState(() => _saving = false);
     }
   }
@@ -244,7 +249,7 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
         children: [
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(
+              padding: const EdgeInsetsDirectional.fromSTEB(
                 AppConstants.spacing16,
                 AppConstants.spacing8,
                 AppConstants.spacing16,
@@ -252,7 +257,7 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
               ),
               children: [
                 Text(
-                  'Only a name is needed. Add the rest now or later.',
+                  context.l10n.itemManualIntro,
                   style: text.bodyMedium?.copyWith(
                     color: PaperTokens.of(context).textSecondary,
                   ),
@@ -268,30 +273,41 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
                 TextFormField(
                   controller: _name,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                    hintText: 'For example, blue cotton tee',
+                  decoration: InputDecoration(
+                    labelText: context.l10n.authName,
+                    hintText: context.l10n.itemManualNameHint,
                   ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? context.l10n.itemManualEnterName
+                      : null,
                 ),
                 gap,
                 DropdownButtonFormField<Category>(
                   initialValue: _category,
-                  decoration: const InputDecoration(labelText: 'Category'),
+                  decoration: InputDecoration(
+                    labelText: context.l10n.closetCategoryLabel,
+                  ),
                   items: [
                     for (final c in Category.values)
-                      DropdownMenuItem(value: c, child: Text(c.displayName)),
+                      DropdownMenuItem(
+                        value: c,
+                        child: Text(c.label(context.l10n)),
+                      ),
                   ],
                   onChanged: (v) => setState(() => _category = v ?? _category),
                 ),
                 gap,
                 DropdownButtonFormField<domain.Condition>(
                   initialValue: _condition,
-                  decoration: const InputDecoration(labelText: 'Condition'),
+                  decoration: InputDecoration(
+                    labelText: context.l10n.filterConditionLabel,
+                  ),
                   items: [
                     for (final c in domain.Condition.values)
-                      DropdownMenuItem(value: c, child: Text(c.displayName)),
+                      DropdownMenuItem(
+                        value: c,
+                        child: Text(c.label(context.l10n)),
+                      ),
                   ],
                   onChanged: (v) =>
                       setState(() => _condition = v ?? _condition),
@@ -301,10 +317,12 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
                   controller: _description,
                   maxLines: 3,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Notes'),
+                  decoration: InputDecoration(
+                    labelText: context.l10n.itemManualNotes,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing20),
-                Text('Colours', style: text.titleSmall),
+                Text(context.l10n.itemColours, style: text.titleSmall),
                 const SizedBox(height: AppConstants.spacing8),
                 Wrap(
                   spacing: AppConstants.spacing8,
@@ -312,7 +330,7 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
                   children: [
                     for (final color in _commonColors)
                       FilterChip(
-                        label: Text(color),
+                        label: Text(localizedTaxonomy(context.l10n, color)),
                         selected: _colors.contains(color),
                         onSelected: (on) => setState(
                           () => on ? _colors.add(color) : _colors.remove(color),
@@ -335,14 +353,18 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
                     Expanded(
                       child: TextFormField(
                         controller: _brand,
-                        decoration: const InputDecoration(labelText: 'Brand'),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.itemManualBrand,
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppConstants.spacing12),
                     Expanded(
                       child: TextFormField(
                         controller: _size,
-                        decoration: const InputDecoration(labelText: 'Size'),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.itemManualSize,
+                        ),
                       ),
                     ),
                   ],
@@ -353,8 +375,8 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
                     Expanded(
                       child: TextFormField(
                         controller: _material,
-                        decoration: const InputDecoration(
-                          labelText: 'Material',
+                        decoration: InputDecoration(
+                          labelText: context.l10n.itemMaterial,
                         ),
                       ),
                     ),
@@ -362,7 +384,9 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
                     Expanded(
                       child: TextFormField(
                         controller: _pattern,
-                        decoration: const InputDecoration(labelText: 'Pattern'),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.itemPattern,
+                        ),
                       ),
                     ),
                   ],
@@ -376,12 +400,14 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        decoration: const InputDecoration(labelText: 'Price'),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.itemPrice,
+                        ),
                         validator: (v) {
                           final value = v?.trim() ?? '';
                           if (value.isEmpty) return null;
                           return double.tryParse(value) == null
-                              ? 'Enter a number'
+                              ? context.l10n.itemManualEnterNumber
                               : null;
                         },
                       ),
@@ -390,7 +416,9 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
                     Expanded(
                       child: TextFormField(
                         controller: _location,
-                        decoration: const InputDecoration(labelText: 'Kept in'),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.itemKeptIn,
+                        ),
                       ),
                     ),
                   ],
@@ -401,7 +429,9 @@ class _ManualEntryFormState extends ConsumerState<ManualEntryForm> {
           _BottomAction(
             child: ElevatedButton(
               onPressed: _saving ? null : _save,
-              child: Text(_saving ? 'Saving' : 'Save piece'),
+              child: Text(
+                _saving ? context.l10n.itemManualSaving : context.l10n.itemManualSavePiece,
+              ),
             ),
           ),
         ],
@@ -436,11 +466,11 @@ class _Photos extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text('Photos', style: text.titleSmall)),
+            Expanded(child: Text(context.l10n.itemPhotos, style: text.titleSmall)),
             TextButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
-              label: const Text('Add photos'),
+              label: Text(context.l10n.itemAddPhotos),
             ),
           ],
         ),
@@ -450,7 +480,7 @@ class _Photos extends StatelessWidget {
             lift: 0,
             color: tokens.stock.sunk,
             child: Text(
-              'No photo yet. You can save without one.',
+              context.l10n.itemNoPhotoYet,
               textAlign: TextAlign.center,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
@@ -484,11 +514,11 @@ class _Photos extends StatelessWidget {
                       ),
                     ),
                     if (i >= fixedCount)
-                      Positioned(
+                      PositionedDirectional(
                         top: 0,
-                        right: 0,
+                        end: 0,
                         child: IconButton(
-                          tooltip: 'Remove photo',
+                          tooltip: context.l10n.itemRemovePhoto,
                           onPressed: () => onRemove(i - fixedCount),
                           style: IconButton.styleFrom(
                             minimumSize: const Size(44, 44),

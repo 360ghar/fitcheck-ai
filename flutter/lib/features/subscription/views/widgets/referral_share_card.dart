@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/i18n/l10n.dart';
 import '../../../../core/widgets/app_ui.dart';
 
 /// Matches [ReferralCodeNotifier.share]: iPad needs a popover origin.
@@ -32,14 +33,15 @@ class ReferralShareCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     return PaperSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Invite a friend', style: text.headlineSmall),
+          Text(l10n.billingInviteFriend, style: text.headlineSmall),
           const SizedBox(height: AppConstants.spacing4),
           Text(
-            'You and your friend each get a month of Pro.',
+            l10n.billingInviteBody,
             style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
           const SizedBox(height: AppConstants.spacing16),
@@ -47,11 +49,11 @@ class ReferralShareCard extends StatelessWidget {
             lift: 0,
             grain: false,
             color: tokens.stock.sunk,
-            padding: const EdgeInsets.fromLTRB(
-              AppConstants.spacing16,
-              AppConstants.spacing8,
-              AppConstants.spacing4,
-              AppConstants.spacing8,
+            padding: const EdgeInsetsDirectional.only(
+              start: AppConstants.spacing16,
+              top: AppConstants.spacing8,
+              end: AppConstants.spacing4,
+              bottom: AppConstants.spacing8,
             ),
             child: Row(
               children: [
@@ -60,7 +62,7 @@ class ReferralShareCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Your code',
+                        l10n.billingYourCode,
                         style: text.bodySmall?.copyWith(
                           color: tokens.textSecondary,
                         ),
@@ -77,7 +79,7 @@ class ReferralShareCard extends StatelessWidget {
                 ),
                 IconButton(
                   onPressed: onCopy,
-                  tooltip: 'Copy link',
+                  tooltip: l10n.billingCopyLink,
                   icon: const Icon(Icons.copy_rounded),
                 ),
               ],
@@ -89,7 +91,7 @@ class ReferralShareCard extends StatelessWidget {
               onPressed: () =>
                   onShare(sharePositionOrigin: _originFrom(buttonContext)),
               icon: const Icon(Icons.ios_share_rounded, size: 20),
-              label: const Text('Share invite'),
+              label: Text(l10n.billingShareInvite),
             ),
           ),
           if (timesUsed > 0) ...[

@@ -5,6 +5,7 @@ import '../../../core/services/analytics_service.dart';
 import '../../../core/exceptions/app_exceptions.dart' as app_exceptions;
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Handles all authentication operations — login, register, logout, token
 /// management, and email verification.
@@ -58,8 +59,9 @@ class AuthService {
     final started =
         await (_googleSignInLauncher ?? _supabase.signInWithGoogle)();
     if (!started) {
-      throw const app_exceptions.AuthException(
-        message: 'Unable to start Google Sign-In. Please try again.',
+      throw app_exceptions.AuthException(
+        message: ErrorHandler.l10n?.authGoogleSignInStartFailed ??
+            'Unable to start Google Sign-In. Please try again.',
         errorCode: 'GOOGLE_SIGN_IN_START_FAILED',
       );
     }

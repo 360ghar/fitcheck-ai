@@ -237,7 +237,9 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
     final generation = _generation;
     final repository = ref.read(itemRepositoryProvider);
     try {
-      if (!await ref.read(aiConsentGateProvider)('AI Wardrobe Extraction')) {
+      if (!await ref.read(aiConsentGateProvider)(
+        ErrorHandler.l10n?.wardrobeAiConsentLabel ?? 'AI Wardrobe Extraction',
+      )) {
         return;
       }
       if (!ref.mounted || generation != _generation) return;
@@ -274,7 +276,7 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
       final jobs = ref.read(extractionJobsProvider.notifier);
       await jobs.trackSingle(
         jobId: jobId,
-        label: 'Scan',
+        label: ErrorHandler.l10n?.itemAddScanJobLabel ?? 'Scan',
         sourcePath: image.path,
       );
       unawaited(JobNotifications.instance.requestPermissions());
@@ -295,7 +297,9 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
           cached: true,
           phase: 'complete',
           progress: 100,
-          statusText: 'Found in an earlier scan',
+          statusText:
+              ErrorHandler.l10n?.itemAddFoundEarlierBody ??
+              'Found in an earlier scan',
         );
       }
       _listenToJob(jobId);
@@ -432,7 +436,10 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
       case 'cancelled':
         _finishReconcile(
           success: state.items.isNotEmpty,
-          error: raw['error']?.toString() ?? 'Extraction failed',
+          error:
+              raw['error']?.toString() ??
+              ErrorHandler.l10n?.itemAddExtractionFailedBody ??
+              'Extraction failed',
         );
       default:
         if (state.items.isNotEmpty && !_decoupledToReview) {
@@ -487,7 +494,8 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
           phase: 'analyzing',
           progress: 10,
           secondsLeft: 45,
-          statusText: 'Looking at your photo',
+          statusText:
+              ErrorHandler.l10n?.itemAddLookingAtPhoto ?? 'Looking at your photo',
         );
       case 'image_extraction_complete':
         final status = {...state.itemStatus};
@@ -518,7 +526,13 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
         // Terminal for a one-photo job: stop listening so a late event of
         // this job can never reach a retry.
         _stopJob();
-        _fail(Exception(data['error'] ?? 'Extraction failed'));
+        _fail(
+          Exception(
+            data['error'] ??
+                ErrorHandler.l10n?.itemAddExtractionFailedBody ??
+                'Extraction failed',
+          ),
+        );
       case 'all_extractions_complete':
         _seedReview();
       case 'generation_started':
@@ -527,7 +541,9 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
           progress: _decoupledToReview ? null : 65,
           generating: _decoupledToReview ? null : true,
           secondsLeft: 25,
-          statusText: 'Making studio photos',
+          statusText:
+              ErrorHandler.l10n?.batchMakingStudioPhotosTitle ??
+              'Making studio photos',
         );
       case 'item_generation_complete':
         _onItemGenerated(data);
@@ -542,13 +558,19 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
         _onJobComplete(data);
       case 'job_failed':
         _stopJob();
-        _fail(Exception(data['error'] ?? 'Job failed'));
+        _fail(
+          Exception(
+            data['error'] ??
+                ErrorHandler.l10n?.itemAddJobFailedBody ??
+                'Job failed',
+          ),
+        );
       case 'job_cancelled':
         _stopJob();
         state = state.copyWith(
           processing: false,
           generating: false,
-          statusText: 'Cancelled',
+          statusText: ErrorHandler.l10n?.batchCancelledLabel ?? 'Cancelled',
         );
       case 'error':
         // The registry's synthetic stream-failure event: reconcile by
@@ -603,7 +625,11 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
       generatingIndex: done,
       generatingName: (candidate?.isNotEmpty ?? false)
           ? candidate
-          : (done > 0 ? 'Piece $done' : 'Piece'),
+          : (done > 0
+                ? ErrorHandler.l10n?.itemAddGeneratingPiece(done) ??
+                      'Piece $done'
+                : ErrorHandler.l10n?.itemAddGeneratingPieceFallback ??
+                      'Piece'),
       progress: 65 + 30 * done / total,
       secondsLeft: (total - done) > 0 ? (total - done) * 5 : 0,
       items: items,
@@ -641,7 +667,7 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
       phase: 'complete',
       progress: 100,
       secondsLeft: 0,
-      statusText: 'Done',
+      statusText: ErrorHandler.l10n?.actionDone ?? 'Done',
       processing: false,
       generating: false,
       failure: next.items.isEmpty
@@ -735,7 +761,9 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
           if (state.items.isNotEmpty || failures >= 3) {
             _finishReconcile(
               success: state.items.isNotEmpty,
-              error: 'Connection was lost. Try again.',
+              error:
+                  ErrorHandler.l10n?.itemAddConnectionLostBody ??
+                  'Connection was lost. Try again.',
             );
             return;
           }
@@ -743,7 +771,9 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
         if (DateTime.now().isAfter(deadline)) {
           _finishReconcile(
             success: state.items.isNotEmpty,
-            error: 'Connection lost while processing.',
+            error:
+                ErrorHandler.l10n?.itemAddConnectionLostProcessingBody ??
+                'Connection lost while processing.',
           );
           return;
         }
@@ -765,7 +795,13 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
         secondsLeft: 0,
       );
     } else {
-      _fail(Exception(error ?? 'Extraction failed'));
+      _fail(
+        Exception(
+          error ??
+              ErrorHandler.l10n?.itemAddExtractionFailedBody ??
+              'Extraction failed',
+        ),
+      );
     }
   }
 
@@ -804,7 +840,11 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
     try {
       await ref.read(extractionJobsProvider.notifier).cancel(jobId);
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not cancelled', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.itemAddNotCancelledTitle ?? 'Not cancelled',
+        stackTrace: stack,
+      );
     }
   }
 
@@ -890,20 +930,28 @@ class ItemAddNotifier extends Notifier<ItemAddState> {
     if (ref.mounted) state = state.copyWith(saving: false);
     if (failed == 0) {
       ErrorHandler.showSuccess(
-        saved.length == 1
-            ? '1 piece is in your closet.'
-            : '${saved.length} pieces are in your closet.',
-        title: 'Saved',
+        ErrorHandler.l10n?.itemAddPiecesSavedBody(saved.length) ??
+            (saved.length == 1
+                ? '1 piece is in your closet.'
+                : '${saved.length} pieces are in your closet.'),
+        title: ErrorHandler.l10n?.itemManualSavedTitle ?? 'Saved',
       );
     } else if (saved.isNotEmpty) {
       ErrorHandler.showWarning(
-        '${saved.length} of ${saved.length + failed} pieces saved. Tap save to try the rest again.',
-        title: 'Some pieces not saved',
+        ErrorHandler.l10n?.itemAddSomeSavedBody(
+              saved.length,
+              saved.length + failed,
+            ) ??
+            '${saved.length} of ${saved.length + failed} pieces saved. Tap save to try the rest again.',
+        title:
+            ErrorHandler.l10n?.itemAddSomePiecesNotSavedTitle ??
+            'Some pieces not saved',
       );
     } else {
       ErrorHandler.showError(
-        'Nothing was saved. Try again.',
-        title: 'Not saved',
+        ErrorHandler.l10n?.batchNothingSavedRetryBody ??
+            'Nothing was saved. Try again.',
+        title: ErrorHandler.l10n?.batchNotSavedTitle ?? 'Not saved',
       );
     }
     return (saved: saved, failed: failed);

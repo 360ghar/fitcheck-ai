@@ -3,6 +3,7 @@ import { Link2, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useTranslation } from '@/i18n'
 
 interface SocialImportUrlPaneProps {
   isLoading?: boolean
@@ -11,6 +12,7 @@ interface SocialImportUrlPaneProps {
 }
 
 export function SocialImportUrlPane({ isLoading = false, error, onStart }: SocialImportUrlPaneProps) {
+  const { t } = useTranslation()
   const [url, setUrl] = useState('')
 
   const handleStart = async () => {
@@ -26,7 +28,7 @@ export function SocialImportUrlPane({ isLoading = false, error, onStart }: Socia
             <Link2 className="h-4 w-4" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">Import from Instagram or Facebook URL</p>
+            <p className="text-sm font-semibold text-foreground">{t('social.importFromUrl')}</p>
             <p className="text-xs text-muted-foreground">
               Paste a profile URL. We will discover photos, process them one-by-one, and keep the next result ready in background.
             </p>
@@ -36,7 +38,7 @@ export function SocialImportUrlPane({ isLoading = false, error, onStart }: Socia
 
       <div className="space-y-2">
         <label htmlFor="social-profile-url" className="text-sm font-medium text-foreground">
-          Profile URL
+          {t('social.profileUrl')}
         </label>
         <Input
           id="social-profile-url"
@@ -58,8 +60,8 @@ export function SocialImportUrlPane({ isLoading = false, error, onStart }: Socia
         <Button onClick={handleStart} disabled={isLoading || !url.trim()}>
           {isLoading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Starting...
+              <Loader2 className="me-2 h-4 w-4 animate-spin" />
+              {t('social.starting')}
             </>
           ) : (
             'Start Import'

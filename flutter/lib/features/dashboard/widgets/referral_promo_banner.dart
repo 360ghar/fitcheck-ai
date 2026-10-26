@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../subscription/views/widgets/referral_share_card.dart';
 
@@ -33,11 +34,11 @@ class ReferralPromoBanner extends StatelessWidget {
       stock: PaperStockId.marigold,
       color: tokens.marigold.tint,
       deckle: PaperEdge.bottom,
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing16,
-        AppConstants.spacing12,
-        AppConstants.spacing4,
-        AppConstants.spacing12,
+      padding: const EdgeInsetsDirectional.only(
+        start: AppConstants.spacing16,
+        top: AppConstants.spacing12,
+        end: AppConstants.spacing4,
+        bottom: AppConstants.spacing12,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,24 +51,26 @@ class ReferralPromoBanner extends StatelessWidget {
                   padding: const EdgeInsets.only(top: AppConstants.spacing4),
                   child: Text(
                     isUrgent
-                        ? 'Running low? Invite a friend.'
-                        : 'Give a month, get a month.',
+                        ? context.l10n.referralBannerUrgent
+                        : context.l10n.referralBannerTitle,
                     style: text.headlineSmall?.copyWith(fontSize: 22),
                   ),
                 ),
               ),
               if (onDismiss != null)
                 IconButton(
-                  tooltip: 'Dismiss for a week',
+                  tooltip: context.l10n.referralBannerDismiss,
                   icon: const Icon(Icons.close_rounded, size: 20),
                   onPressed: onDismiss,
                 ),
             ],
           ),
           Padding(
-            padding: const EdgeInsets.only(right: AppConstants.spacing12),
+            padding: const EdgeInsetsDirectional.only(
+              end: AppConstants.spacing12,
+            ),
             child: Text(
-              'You and your friend each get a month of Pro.',
+              context.l10n.referralBannerBody,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           ),
@@ -82,7 +85,7 @@ class ReferralPromoBanner extends StatelessWidget {
                   onPressed: () =>
                       onShare(sharePositionOrigin: _originFrom(buttonContext)),
                   icon: const Icon(Icons.ios_share_rounded, size: 18),
-                  label: const Text('Share invite'),
+                  label: Text(context.l10n.referralBannerShare),
                 ),
               ),
               TextButton.icon(
@@ -91,7 +94,7 @@ class ReferralPromoBanner extends StatelessWidget {
                 ),
                 onPressed: onCopyLink,
                 icon: const Icon(Icons.link_rounded, size: 18),
-                label: const Text('Copy link'),
+                label: Text(context.l10n.referralBannerCopy),
               ),
             ],
           ),

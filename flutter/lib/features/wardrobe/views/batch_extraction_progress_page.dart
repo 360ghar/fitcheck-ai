@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/batch_extraction_models.dart';
@@ -80,8 +81,8 @@ class _BatchExtractionProgressPageState
     ref.read(batchExtractionProvider.notifier).resetJob();
     if (wasProcessing) {
       ErrorHandler.showInfo(
-        'Still working. We will let you know when your pieces are ready.',
-        title: 'Running in background',
+        context.l10n.batchStillWorkingMessage,
+        title: context.l10n.batchRunningInBackgroundTitle,
       );
     }
     Navigator.pop(context);
@@ -97,21 +98,19 @@ class _BatchExtractionProgressPageState
     final stop = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Stop finding pieces?'),
-        content: const Text(
-          'The scan stops and nothing is saved. Pieces already found stay in your activity until you dismiss them.',
-        ),
+        title: Text(context.l10n.batchStopFindingPiecesTitle),
+        content: Text(context.l10n.batchStopFindingPiecesBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep going'),
+            child: Text(context.l10n.batchKeepGoingAction),
           ),
           TextButton(
             style: TextButton.styleFrom(
               foregroundColor: PaperTokens.of(context).error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Stop'),
+            child: Text(context.l10n.jobsStop),
           ),
         ],
       ),
@@ -138,16 +137,16 @@ class _BatchExtractionProgressPageState
         },
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Add several photos'),
+            title: Text(context.l10n.wardrobeAddSeveralPhotosTitle),
             leading: IconButton(
-              tooltip: 'Run in background',
+              tooltip: context.l10n.batchRunInBackgroundTooltip,
               icon: const Icon(Icons.close_rounded),
               onPressed: _backToPhotos,
             ),
             actions: [
               TextButton(
                 onPressed: () => context.push(Routes.wardrobeJobs),
-                child: const Text('Scans'),
+                child: Text(context.l10n.jobsTitle),
               ),
             ],
           ),
@@ -156,7 +155,9 @@ class _BatchExtractionProgressPageState
               top: false,
               child: failed && !hasItems
                   ? AppErrorState(
-                      error: error.isEmpty ? 'Finding pieces failed.' : error,
+                      error: error.isEmpty
+                          ? context.l10n.batchFindingPiecesFailedBody
+                          : error,
                       onRetry: _backToPhotos,
                     )
                   : Column(
@@ -164,7 +165,7 @@ class _BatchExtractionProgressPageState
                         if (failed)
                           AppErrorBanner(
                             message: error.isEmpty
-                                ? 'Finding pieces stopped early.'
+                                ? context.l10n.batchFindingPiecesStoppedEarlyBody
                                 : error,
                           ),
                         const _ProgressHeader(),
@@ -191,36 +192,41 @@ class _ProgressHeader extends ConsumerWidget {
     final s = ref.watch(batchExtractionProvider);
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final photos = s.images.length;
 
     final (step, title, detail) = switch (s.status) {
       BatchJobStatus.uploading => (
-        'Step 1 of 2',
-        'Uploading photos',
+        l10n.batchStepOneOfTwo,
+        l10n.batchUploadingPhotosTitle,
         '${(s.uploadProgress * photos).round()} of $photos photos prepared',
       ),
       BatchJobStatus.extracting || BatchJobStatus.idle => (
-        'Step 1 of 2',
-        'Finding pieces',
+        l10n.batchStepOneOfTwo,
+        l10n.batchFindingPiecesTitle,
         '${s.extractedCount + s.failedCount} of $photos photos checked'
             '${s.items.isEmpty ? '' : ' · ${s.items.length} pieces so far'}',
       ),
       BatchJobStatus.generating => (
-        'Step 2 of 2',
-        'Making studio photos',
+        l10n.batchStepTwoOfTwo,
+        l10n.batchMakingStudioPhotosTitle,
         '${s.generatedCount} of ${s.totalItems} studio photos ready'
             '${s.totalBatches > 0 && s.currentBatch > 0 ? ' · batch ${s.currentBatch} of ${s.totalBatches}' : ''}',
       ),
-      BatchJobStatus.complete => ('Done', 'All done', 'Opening your pieces'),
+      BatchJobStatus.complete => (
+        l10n.actionDone,
+        l10n.batchAllDoneTitle,
+        l10n.batchOpeningPiecesBody,
+      ),
       BatchJobStatus.failed => (
-        'Stopped',
-        'Finding pieces stopped',
+        l10n.batchStoppedLabel,
+        l10n.batchFindingPiecesStoppedTitle,
         '${s.items.length} pieces found before it stopped',
       ),
       BatchJobStatus.cancelled => (
-        'Stopped',
-        'Cancelled',
-        'Nothing was saved.',
+        l10n.batchStoppedLabel,
+        l10n.batchCancelledLabel,
+        l10n.batchNothingSavedBody,
       ),
     };
 
@@ -307,10 +313,16 @@ class _BottomBar extends ConsumerWidget {
                         : 'Review $count pieces now',
                   ),
                 ),
-                TextButton(onPressed: onCancel, child: const Text('Stop')),
+                TextButton(
+                  onPressed: onCancel,
+                  child: Text(context.l10n.jobsStop),
+                ),
               ],
             )
-          : TextButton(onPressed: onCancel, child: const Text('Stop'));
+          : TextButton(
+              onPressed: onCancel,
+              child: Text(context.l10n.jobsStop),
+            );
     } else if (failed) {
       child = Column(
         mainAxisSize: MainAxisSize.min,
@@ -321,13 +333,16 @@ class _BottomBar extends ConsumerWidget {
                 context.pushReplacement(Routes.wardrobeBatchReview),
             child: Text(count == 1 ? 'Review 1 piece' : 'Review $count pieces'),
           ),
-          TextButton(onPressed: onBack, child: const Text('Try again')),
+          TextButton(
+            onPressed: onBack,
+            child: Text(context.l10n.batchTryAgainAction),
+          ),
         ],
       );
     } else if (cancelled) {
       child = ElevatedButton(
         onPressed: onBack,
-        child: const Text('Back to photos'),
+        child: Text(context.l10n.batchBackToPhotosAction),
       );
     } else {
       return const SizedBox.shrink();

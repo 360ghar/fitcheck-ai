@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI cần quyền truy cập camera để chụp ảnh trang phục và đồ nội y của bạn.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI cần quyền truy cập thư viện ảnh để chọn ảnh trang phục và đồ nội y của bạn.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI cần quyền lưu ảnh trang phục do AI tạo vào thư viện ảnh của bạn.";

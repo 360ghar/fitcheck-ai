@@ -4,30 +4,43 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/directional_icon.dart';
 import '../../outfits/providers/outfit_providers.dart';
 import '../models/calendar_connection_model.dart';
 import '../models/calendar_event_model.dart';
 import '../providers/calendar_providers.dart';
 
-const _weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const _weekdayNames = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-];
+/// Short weekday label for the grid header, Sunday first.
+String _weekdayShort(AppLocalizations l10n, int index) => switch (index) {
+  0 => l10n.calendarWeekdaySunShort,
+  1 => l10n.calendarWeekdayMonShort,
+  2 => l10n.calendarWeekdayTueShort,
+  3 => l10n.calendarWeekdayWedShort,
+  4 => l10n.calendarWeekdayThuShort,
+  5 => l10n.calendarWeekdayFriShort,
+  _ => l10n.calendarWeekdaySatShort,
+};
+
+/// Full weekday name for [weekday] (1 is Monday).
+String _weekdayName(AppLocalizations l10n, int weekday) => switch (weekday) {
+  DateTime.monday => l10n.calendarWeekdayMonday,
+  DateTime.tuesday => l10n.calendarWeekdayTuesday,
+  DateTime.wednesday => l10n.calendarWeekdayWednesday,
+  DateTime.thursday => l10n.calendarWeekdayThursday,
+  DateTime.friday => l10n.calendarWeekdayFriday,
+  DateTime.saturday => l10n.calendarWeekdaySaturday,
+  _ => l10n.calendarWeekdaySunday,
+};
 
 /// "Wednesday, Sep 23".
-String _dayTitle(DateTime d) {
+String _dayTitle(AppLocalizations l10n, DateTime d) {
   final date = AppDateUtils.formatMonthDayYear(d);
-  return '${_weekdayNames[d.weekday - 1]}, ${date.substring(0, date.lastIndexOf(','))}';
+  return '${_weekdayName(l10n, d.weekday)}, ${date.substring(0, date.lastIndexOf(','))}';
 }
 
 /// Month grid, the chosen day's events, and event editing.
@@ -48,10 +61,10 @@ class CalendarPage extends ConsumerWidget {
       stock: PaperStockId.clay,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Calendar'),
+          title: Text(context.l10n.calendarTitle),
           actions: [
             IconButton(
-              tooltip: 'Go to today',
+              tooltip: context.l10n.calendarGoToToday,
               icon: const Icon(Icons.today_outlined),
               onPressed: () {
                 final now = DateTime.now();
@@ -60,7 +73,7 @@ class CalendarPage extends ConsumerWidget {
               },
             ),
             IconButton(
-              tooltip: 'Connect a calendar',
+              tooltip: context.l10n.calendarConnectTooltip,
               icon: const Icon(Icons.link_rounded),
               onPressed: () => showModalBottomSheet<void>(
                 context: context,
@@ -77,7 +90,7 @@ class CalendarPage extends ConsumerWidget {
             : FloatingActionButton.extended(
                 onPressed: () => _editEvent(context, day: day),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Add event'),
+                label: Text(context.l10n.calendarAddEvent),
               ),
         // Root-navigator page: restore the shell tabs below the content.
         bottomNavigationBar: AppBottomNavigationBar.shellBar(
@@ -108,7 +121,7 @@ class CalendarPage extends ConsumerWidget {
                   ),
                   sliver: SliverToBoxAdapter(
                     child: Text(
-                      _dayTitle(day),
+                      _dayTitle(context.l10n, day),
                       style: Theme.of(context).textTheme.headlineSmall,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -165,11 +178,11 @@ class CalendarPage extends ConsumerWidget {
           ),
         ),
       if (dayEvents.isEmpty)
-        const SliverToBoxAdapter(
+        SliverToBoxAdapter(
           child: AppEmptyState(
             scene: PaperScenes.studio,
-            title: 'Nothing planned',
-            message: 'Add an event and plan what to wear.',
+            title: context.l10n.calendarEmptyTitle,
+            message: context.l10n.calendarEmptyBody,
           ),
         )
       else
@@ -236,8 +249,8 @@ class _MonthCard extends ConsumerWidget {
           Row(
             children: [
               IconButton(
-                tooltip: 'Previous month',
-                icon: const Icon(Icons.chevron_left_rounded),
+                tooltip: context.l10n.calendarPreviousMonth,
+                icon: const DirectionalIcon(Icons.chevron_left_rounded),
                 onPressed: () => go(-1),
               ),
               Expanded(
@@ -250,8 +263,8 @@ class _MonthCard extends ConsumerWidget {
                 ),
               ),
               IconButton(
-                tooltip: 'Next month',
-                icon: const Icon(Icons.chevron_right_rounded),
+                tooltip: context.l10n.calendarNextMonth,
+                icon: const DirectionalIcon(Icons.chevron_right_rounded),
                 onPressed: () => go(1),
               ),
             ],
@@ -260,10 +273,10 @@ class _MonthCard extends ConsumerWidget {
           ExcludeSemantics(
             child: Row(
               children: [
-                for (final w in _weekdays)
+                for (var i = 0; i < 7; i++)
                   Expanded(
                     child: Text(
-                      w,
+                      _weekdayShort(context.l10n, i),
                       textAlign: TextAlign.center,
                       style: text.bodySmall?.copyWith(color: tokens.textMuted),
                     ),
@@ -322,9 +335,9 @@ class _DayCell extends ConsumerWidget {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
     final label = [
-      _dayTitle(date),
-      if (today) 'today',
-      if (events == 1) '1 event' else if (events > 1) '$events events',
+      _dayTitle(context.l10n, date),
+      if (today) context.l10n.calendarTodayLabel,
+      if (events > 0) context.l10n.calendarEventCount(events),
     ].join(', ');
     return Semantics(
       button: true,
@@ -396,28 +409,32 @@ class _EventRow extends ConsumerWidget {
     final busy = ref.watch(calendarBusyProvider).contains(event.id);
     final notifier = ref.read(calendarEventsProvider.notifier);
     final hasOutfit = event.outfitId != null;
+    final allDay = context.l10n.calendarAllDay;
     final time = event.isAllDay
-        ? 'All day'
-        : '${AppDateUtils.formatTimeOnly(event.startTime)} to '
-              '${AppDateUtils.formatTimeOnly(event.endTime)}';
+        ? allDay
+        : context.l10n.calendarTimeRange(
+            AppDateUtils.formatTimeOnly(event.startTime),
+            AppDateUtils.formatTimeOnly(event.endTime),
+          );
 
     return PaperSurface(
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing16,
-        AppConstants.spacing12,
-        AppConstants.spacing4,
-        AppConstants.spacing12,
+      padding: const EdgeInsetsDirectional.only(
+        start: AppConstants.spacing16,
+        top: AppConstants.spacing12,
+        end: AppConstants.spacing4,
+        bottom: AppConstants.spacing12,
       ),
       onTap: () => _editEvent(context, event: event),
-      semanticLabel:
-          '${event.title}, $time${hasOutfit ? ', outfit linked' : ''}',
+      semanticLabel: hasOutfit
+          ? context.l10n.calendarEventSemanticWithOutfit(event.title, time)
+          : context.l10n.calendarEventSemantic(event.title, time),
       child: Row(
         children: [
           SizedBox(
             width: 56,
             child: ExcludeSemantics(
               child: event.isAllDay
-                  ? Text('All day', style: text.titleSmall)
+                  ? Text(allDay, style: text.titleSmall)
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -462,12 +479,14 @@ class _EventRow extends ConsumerWidget {
           ),
           if (hasOutfit)
             Padding(
-              padding: const EdgeInsets.only(left: AppConstants.spacing8),
+              padding: const EdgeInsetsDirectional.only(
+                start: AppConstants.spacing8,
+              ),
               child: Icon(
                 Icons.checkroom_outlined,
                 size: 20,
                 color: tokens.stock.accent,
-                semanticLabel: 'Outfit linked',
+                semanticLabel: context.l10n.calendarOutfitLinked,
               ),
             ),
           if (busy)
@@ -483,7 +502,7 @@ class _EventRow extends ConsumerWidget {
             )
           else
             PopupMenuButton<String>(
-              tooltip: 'Event options',
+              tooltip: context.l10n.calendarEventOptions,
               icon: const Icon(Icons.more_vert_rounded),
               onSelected: (action) async {
                 switch (action) {
@@ -508,19 +527,21 @@ class _EventRow extends ConsumerWidget {
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('Delete this event?'),
-                        content: Text('"${event.title}" will be removed.'),
+                        title: Text(context.l10n.calendarDeleteTitle),
+                        content: Text(
+                          context.l10n.calendarDeleteEventBody(event.title),
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
+                            child: Text(context.l10n.actionCancel),
                           ),
                           TextButton(
                             style: TextButton.styleFrom(
                               foregroundColor: PaperTokens.of(context).error,
                             ),
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Delete'),
+                            child: Text(context.l10n.actionDelete),
                           ),
                         ],
                       ),
@@ -529,17 +550,27 @@ class _EventRow extends ConsumerWidget {
                 }
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Text(context.l10n.actionEdit),
+                ),
                 PopupMenuItem(
                   value: 'link',
-                  child: Text(hasOutfit ? 'Change outfit' : 'Link an outfit'),
+                  child: Text(
+                    hasOutfit
+                        ? context.l10n.calendarChangeOutfit
+                        : context.l10n.calendarLinkOutfit,
+                  ),
                 ),
                 if (hasOutfit)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'unlink',
-                    child: Text('Remove outfit'),
+                    child: Text(context.l10n.calendarRemoveOutfit),
                   ),
-                const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(context.l10n.actionDelete),
+                ),
               ],
             ),
         ],
@@ -631,9 +662,9 @@ class _EventDialogState extends ConsumerState<_EventDialog> {
     if (_saving) return;
     final title = _title.text.trim();
     setState(() {
-      _titleError = title.isEmpty ? 'Add a title' : null;
+      _titleError = title.isEmpty ? context.l10n.calendarTitleRequired : null;
       _timeError = !_allDay && !_end.isAfter(_start)
-          ? 'End after the start time'
+          ? context.l10n.calendarEndBeforeStart
           : null;
     });
     if (_titleError != null || _timeError != null) return;
@@ -689,7 +720,11 @@ class _EventDialogState extends ConsumerState<_EventDialog> {
     return PopScope(
       canPop: !_saving,
       child: AlertDialog(
-        title: Text(widget.event == null ? 'New event' : 'Edit event'),
+        title: Text(
+          widget.event == null
+              ? context.l10n.calendarNewEvent
+              : context.l10n.calendarEditEvent,
+        ),
         scrollable: true,
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -700,13 +735,13 @@ class _EventDialogState extends ConsumerState<_EventDialog> {
               autofocus: widget.event == null,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                labelText: 'Title',
+                labelText: context.l10n.calendarTitleLabel,
                 errorText: _titleError,
               ),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('All day'),
+              title: Text(context.l10n.calendarAllDay),
               value: _allDay,
               onChanged: _saving
                   ? null
@@ -716,8 +751,8 @@ class _EventDialogState extends ConsumerState<_EventDialog> {
                     }),
             ),
             if (!_allDay) ...[
-              _timeTile('Starts', _start, start: true),
-              _timeTile('Ends', _end, start: false),
+              _timeTile(context.l10n.calendarStarts, _start, start: true),
+              _timeTile(context.l10n.calendarEnds, _end, start: false),
               if (_timeError != null)
                 Text(
                   _timeError!,
@@ -730,25 +765,31 @@ class _EventDialogState extends ConsumerState<_EventDialog> {
             TextField(
               controller: _location,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Place (optional)'),
+              decoration: InputDecoration(
+                labelText: context.l10n.calendarPlaceOptional,
+              ),
             ),
             const SizedBox(height: AppConstants.spacing12),
             TextField(
               controller: _description,
               maxLines: 3,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Notes (optional)'),
+              decoration: InputDecoration(
+                labelText: context.l10n.calendarNotesOptional,
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: _saving ? null : () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.actionCancel),
           ),
           TextButton(
             onPressed: _saving ? null : _save,
-            child: Text(_saving ? 'Saving' : 'Save'),
+            child: Text(
+              _saving ? context.l10n.itemManualSaving : context.l10n.actionSave,
+            ),
           ),
         ],
       ),
@@ -775,7 +816,7 @@ class _LinkOutfitSheet extends ConsumerWidget {
             AppConstants.spacing8,
           ),
           child: Text(
-            'Link an outfit',
+            context.l10n.calendarLinkOutfit,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
@@ -783,9 +824,9 @@ class _LinkOutfitSheet extends ConsumerWidget {
           child: switch (outfits) {
             AsyncValue(:final value?) when value.items.isEmpty => AppEmptyState(
               scene: PaperScenes.outfits,
-              title: 'No outfits yet',
-              message: 'Build an outfit, then link it to this event.',
-              actionLabel: 'Build an outfit',
+              title: context.l10n.outfitEmptyTitle,
+              message: context.l10n.calendarLinkOutfitEmptyBody,
+              actionLabel: context.l10n.calendarBuildOutfit,
               onAction: () {
                 Navigator.pop(context);
                 context.push(Routes.outfitBuilder);
@@ -836,11 +877,11 @@ class _ConnectSheet extends ConsumerWidget {
     (CalendarProvider.outlook, 'Outlook', Icons.mail_outline_rounded),
   ];
 
-  static String _name(CalendarProvider p) => switch (p) {
+  static String _name(BuildContext context, CalendarProvider p) => switch (p) {
     CalendarProvider.google => 'Google Calendar',
     CalendarProvider.apple => 'Apple Calendar',
     CalendarProvider.outlook => 'Outlook',
-    CalendarProvider.local => 'This app',
+    CalendarProvider.local => context.l10n.calendarThisAppLabel,
   };
 
   @override
@@ -861,10 +902,10 @@ class _ConnectSheet extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Calendars', style: text.headlineSmall),
+            Text(context.l10n.calendarConnectionsTitle, style: text.headlineSmall),
             const SizedBox(height: AppConstants.spacing4),
             Text(
-              'Events you add here stay in FitCheck.',
+              context.l10n.calendarConnectionsBody,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
             const SizedBox(height: AppConstants.spacing16),
@@ -884,7 +925,7 @@ class _ConnectSheet extends ConsumerWidget {
                   children: [
                     for (final c in connected)
                       ListTile(
-                        title: Text(c.displayName ?? _name(c.provider)),
+                        title: Text(c.displayName ?? _name(context, c.provider)),
                         subtitle: c.email.isEmpty ? null : Text(c.email),
                         trailing: busy.contains(c.id)
                             ? const SizedBox.square(
@@ -897,7 +938,7 @@ class _ConnectSheet extends ConsumerWidget {
                                 onPressed: () => ref
                                     .read(calendarConnectionsProvider.notifier)
                                     .disconnect(c.id),
-                                child: const Text('Disconnect'),
+                                child: Text(context.l10n.calendarDisconnect),
                               ),
                       ),
                   ],
@@ -915,13 +956,14 @@ class _ConnectSheet extends ConsumerWidget {
                     ListTile(
                       leading: Icon(icon, color: tokens.textSecondary),
                       title: Text(name),
-                      subtitle: const Text('Not available yet'),
+                      subtitle: Text(context.l10n.calendarNotAvailable),
                       onTap: () {
                         Navigator.pop(context);
                         ErrorHandler.showInfo(
-                          'Syncing with ${_name(provider)} is not available '
-                          'yet. You can still add events here.',
-                          title: 'Not available yet',
+                          context.l10n.calendarSyncUnavailableBody(
+                            _name(context, provider),
+                          ),
+                          title: context.l10n.calendarNotAvailable,
                         );
                       },
                     ),

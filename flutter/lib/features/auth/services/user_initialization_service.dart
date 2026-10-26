@@ -63,7 +63,8 @@ class UserInitializationService {
       }
       ErrorHandler.showInfo(
         'You and your friend both get 1 month of Pro free!',
-        title: 'Referral Applied!',
+        title: ErrorHandler.l10n?.referralAppliedTitle ??
+            'Referral Applied!',
       );
       return const ReferralRedemptionResult(ReferralRedemptionStatus.success);
     } on DioException catch (e) {

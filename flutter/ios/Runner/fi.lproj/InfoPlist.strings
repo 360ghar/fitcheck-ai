@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI tarvitsee kameran käyttöoikeuden ottaakseen valokuvia asuistasi ja vaatekaappisi tuotteista.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI tarvitsee pääsyn kuvakirjastoon valitakseen kuvia asuistasi ja vaatekaappisi tuotteista.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI tarvitsee luvan tallentaa tekoälyllä luodut asukuvat kuvakirjastoosi.";

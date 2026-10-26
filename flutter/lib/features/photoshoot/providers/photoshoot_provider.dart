@@ -270,8 +270,9 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
   Future<void> pickPhotos() async {
     if (state.photos.length >= maxPhotos) {
       ErrorHandler.showValidation(
-        'You can add up to $maxPhotos photos.',
-        title: 'Photo limit',
+        ErrorHandler.l10n?.photoshootPhotoLimit(maxPhotos) ??
+            'You can add up to $maxPhotos photos.',
+        title: ErrorHandler.l10n?.photoshootPhotoLimitTitle ?? 'Photo limit',
       );
       return;
     }
@@ -293,8 +294,9 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
   Future<void> pickFromCamera() async {
     if (state.photos.length >= maxPhotos) {
       ErrorHandler.showValidation(
-        'You can add up to $maxPhotos photos.',
-        title: 'Photo limit',
+        ErrorHandler.l10n?.photoshootPhotoLimit(maxPhotos) ??
+            'You can add up to $maxPhotos photos.',
+        title: ErrorHandler.l10n?.photoshootPhotoLimitTitle ?? 'Photo limit',
       );
       return;
     }
@@ -349,8 +351,9 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
   void goToConfigure() {
     if (state.photos.isEmpty) {
       ErrorHandler.showValidation(
-        'Add at least one photo.',
-        title: 'No photos',
+        ErrorHandler.l10n?.photoshootAddAtLeastOnePhoto ??
+            'Add at least one photo.',
+        title: ErrorHandler.l10n?.photoshootNoPhotosSelectedTitle ?? 'No photos',
       );
       return;
     }
@@ -380,8 +383,10 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     if (s.useCase == PhotoshootUseCase.custom &&
         s.customPrompt.trim().isEmpty) {
       ErrorHandler.showValidation(
-        'Describe the look you want.',
-        title: 'Prompt needed',
+        ErrorHandler.l10n?.photoshootDescribeLookBody ??
+            'Describe the look you want.',
+        title:
+            ErrorHandler.l10n?.photoshootPromptNeededTitle ?? 'Prompt needed',
       );
       return PhotoshootStart.notStarted;
     }
@@ -390,7 +395,11 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     // Third-party AI consent (Apple 5.1.2(i)) before any photo is read.
     if (!await ref
         .read(aiConsentServiceProvider)
-        .ensureConsent(featureLabel: 'AI Photoshoot')) {
+        .ensureConsent(
+          featureLabel:
+              ErrorHandler.l10n?.photoshootConsentFeatureLabel ??
+              'AI Photoshoot',
+        )) {
       return PhotoshootStart.notStarted;
     }
     if (!ref.mounted || state.isGenerating) return PhotoshootStart.notStarted;
@@ -406,7 +415,9 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
       jobId: '',
       error: null,
       progress: 0,
-      status: 'Preparing your photos',
+      status:
+          ErrorHandler.l10n?.photoshootStatusPreparing ??
+          'Preparing your photos',
       currentBatch: 0,
       totalBatches: 0,
       etaSeconds: 0,
@@ -433,7 +444,10 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     try {
       final photos = await _encodePhotos(state.photos);
       if (!ref.mounted) return PhotoshootStart.notStarted;
-      state = state.copyWith(status: 'Starting', progress: 10);
+      state = state.copyWith(
+        status: ErrorHandler.l10n?.photoshootStarting ?? 'Starting',
+        progress: 10,
+      );
       final response = await _repo.startGeneration(
         photos: photos,
         useCase: useCase,
@@ -506,14 +520,19 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     switch (event.type) {
       case 'generation_started':
         state = state.copyWith(
-          status: 'Generating',
+          status: ErrorHandler.l10n?.photoshootStatusGenerating ?? 'Generating',
           totalBatches: _int(data?['total_batches']) ?? 1,
         );
       case 'batch_started':
         final batch = _int(data?['batch_index']) ?? 0;
         state = state.copyWith(
           currentBatch: batch,
-          status: 'Batch ${batch + 1} of ${state.totalBatches}',
+          status:
+              ErrorHandler.l10n?.photoshootStatusBatch(
+                batch + 1,
+                state.totalBatches,
+              ) ??
+              'Batch ${batch + 1} of ${state.totalBatches}',
         );
         final labels = data?['scene_labels'];
         if (labels is Map) {
@@ -547,7 +566,12 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
       case 'job_complete':
         _complete(id, data);
       case 'job_failed':
-        _fail(id, data?['error']?.toString() ?? 'Generation failed.');
+        _fail(
+          id,
+          data?['error']?.toString() ??
+              ErrorHandler.l10n?.photoshootGenerationFailedBody ??
+              'Generation failed.',
+        );
       case 'job_cancelled':
         _stopJobListeners();
         state = state.copyWith(step: PhotoshootStep.configure, jobId: '');
@@ -571,7 +595,12 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     state = state.copyWith(
       images: images,
       progress: 10 + (fraction * 90).toInt(),
-      status: '${images.length} of $denominator done',
+      status:
+          ErrorHandler.l10n?.photoshootStatusImagesDone(
+            images.length,
+            denominator,
+          ) ??
+          '${images.length} of $denominator done',
       etaSeconds: _eta(images.length),
     );
     _updateScene();
@@ -651,7 +680,7 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     final usage = data?['usage'];
     state = state.copyWith(
       progress: 100,
-      status: 'Done',
+      status: ErrorHandler.l10n?.actionDone ?? 'Done',
       etaSeconds: 0,
       sceneLabel: '',
       sessionId: data?['session_id']?.toString() ?? id,
@@ -695,13 +724,18 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     );
     if (s.partialSuccess) {
       ErrorHandler.showWarning(
-        '${s.images.length} ready, ${s.failedCount} failed.',
-        title: 'Partly done',
+        ErrorHandler.l10n?.photoshootPartlyDoneBody(
+              s.images.length,
+              s.failedCount,
+            ) ??
+            '${s.images.length} ready, ${s.failedCount} failed.',
+        title: ErrorHandler.l10n?.photoshootPartlyDoneTitle ?? 'Partly done',
       );
     } else {
       ErrorHandler.showSuccess(
-        '${s.images.length} photos are ready.',
-        title: 'Done',
+        ErrorHandler.l10n?.photoshootPhotosReady(s.images.length) ??
+            '${s.images.length} photos are ready.',
+        title: ErrorHandler.l10n?.actionDone ?? 'Done',
       );
     }
   }
@@ -717,7 +751,11 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
   Future<void> _poll(String id, {int attempt = 0}) async {
     if (!_isCurrent(id)) return;
     if (attempt >= maxPollAttempts) {
-      _fail(id, 'We lost the connection. Please try again.');
+      _fail(
+        id,
+        ErrorHandler.l10n?.photoshootConnectionLostBody ??
+            'We lost the connection. Please try again.',
+      );
       return;
     }
     final PhotoshootJobStatusResponse status;
@@ -752,7 +790,12 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
           if (status.usage != null) 'usage': status.usage!.toJson(),
         });
       case 'failed':
-        _fail(id, status.error ?? 'Generation failed.');
+        _fail(
+          id,
+          status.error ??
+              ErrorHandler.l10n?.photoshootGenerationFailedBody ??
+              'Generation failed.',
+        );
       case 'cancelled':
         _stopJobListeners();
         state = state.copyWith(step: PhotoshootStep.configure, jobId: '');
@@ -772,7 +815,11 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
       await _repo.cancelJob(id);
     } catch (e, stack) {
       if (_isCurrent(id)) state = state.copyWith(cancelling: false);
-      ErrorHandler.showError(e, title: 'Could not cancel', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.photoshootCouldNotCancelTitle ?? 'Could not cancel',
+        stackTrace: stack,
+      );
       return false;
     }
     if (!_isCurrent(id)) return true;
@@ -799,7 +846,11 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     }
     if (!await ref
         .read(aiConsentServiceProvider)
-        .ensureConsent(featureLabel: 'AI Photoshoot')) {
+        .ensureConsent(
+          featureLabel:
+              ErrorHandler.l10n?.photoshootConsentFeatureLabel ??
+              'AI Photoshoot',
+        )) {
       return;
     }
     if (!ref.mounted) return;
@@ -848,8 +899,9 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
         usage: result.usage ?? state.usage,
       );
       ErrorHandler.showSuccess(
-        'Photo ${index + 1} is ready.',
-        title: 'Replaced',
+        ErrorHandler.l10n?.photoshootPhotoReplacedBody(index + 1) ??
+            'Photo ${index + 1} is ready.',
+        title: ErrorHandler.l10n?.photoshootReplacedTitle ?? 'Replaced',
       );
     } catch (e, stack) {
       if (!ref.mounted ||
@@ -858,7 +910,11 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
           !state.failedIndices.contains(index)) {
         return;
       }
-      ErrorHandler.showError(e, title: 'Retry failed', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.photoshootRetryFailedTitle ?? 'Retry failed',
+        stackTrace: stack,
+      );
     } finally {
       // Only clear our own attempt: a newer session's retry flag is not ours.
       if (ref.mounted &&
@@ -881,9 +937,17 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     state = state.copyWith(downloadingIndex: index);
     try {
       await _save(index);
-      ErrorHandler.showSuccess('Saved to your gallery.', title: 'Saved');
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.photoshootSavedToGalleryBody ??
+            'Saved to your gallery.',
+        title: ErrorHandler.l10n?.photoshootSavedTitle ?? 'Saved',
+      );
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.photoshootNotSavedTitle ?? 'Not saved',
+        stackTrace: stack,
+      );
     } finally {
       if (ref.mounted) state = state.copyWith(downloadingIndex: null);
     }
@@ -908,14 +972,22 @@ class PhotoshootNotifier extends Notifier<PhotoshootState> {
     state = state.copyWith(downloadingIndex: null, downloadingAll: false);
     if (failed.isEmpty) {
       ErrorHandler.showSuccess(
-        'All $total photos are in your gallery.',
-        title: 'Saved',
+        ErrorHandler.l10n?.photoshootAllSavedBody(total) ??
+            'All $total photos are in your gallery.',
+        title: ErrorHandler.l10n?.photoshootSavedTitle ?? 'Saved',
       );
     } else {
+      final prefix =
+          ErrorHandler.l10n?.photoshootSomeSavedBody(
+            total - failed.length,
+            total,
+          ) ??
+          '${total - failed.length} of $total saved.';
       ErrorHandler.showError(
-        '${total - failed.length} of $total saved. '
-        '${ErrorHandler.extractMessage(lastError)}',
-        title: 'Some photos not saved',
+        '$prefix ${ErrorHandler.extractMessage(lastError)}',
+        title:
+            ErrorHandler.l10n?.photoshootSomePhotosNotSavedTitle ??
+            'Some photos not saved',
       );
     }
   }

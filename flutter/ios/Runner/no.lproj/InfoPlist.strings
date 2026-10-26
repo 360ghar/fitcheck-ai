@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI trenger kameratilgang for å ta bilder av antrekkene dine og plaggene i garderoben.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI trenger tilgang til bildebiblioteket for å velge bilder av antrekkene dine og plaggene i garderoben.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI må lagre de KI-genererte antrekksbildene dine i bildebiblioteket.";

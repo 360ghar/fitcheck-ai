@@ -16,10 +16,11 @@ import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/theme'
 import { THEMES } from '@/lib/theme'
-import { AISettingsPanel, LocationInput } from '@/components/settings'
+import { AISettingsPanel, LanguageSwitcher, LocationInput } from '@/components/settings'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useCurrentUser } from '../../stores/authStore'
 import { getUserSettings, updateUserSettings } from '@/api/users'
+import { useTranslation } from '@/i18n'
 import type { UserSettings } from '@/types'
 
 const themeIcons = {
@@ -30,22 +31,24 @@ const themeIcons = {
 
 function ThemeSelector() {
   const { theme, setTheme } = useTheme()
+  const { t } = useTranslation()
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-3 border-b border-border">
       <div>
-        <p className="text-sm font-medium text-foreground">Theme</p>
-        <p className="text-sm text-muted-foreground">Choose your preferred theme</p>
+        <p className="text-sm font-medium text-foreground">{t('settings.theme')}</p>
+        <p className="text-sm text-muted-foreground">{t('settings.themeDescription')}</p>
       </div>
       <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-2">
         {THEMES.map((option) => {
           const Icon = themeIcons[option.value]
+          const label = t(option.labelKey)
           return (
             <button
               key={option.value}
               type="button"
               onClick={() => setTheme(option.value)}
-              aria-label={option.label}
+              aria-label={label}
               aria-pressed={theme === option.value}
               className={cn(
                 'px-3 py-2 text-sm rounded-md transition-colors flex items-center justify-center gap-1.5 touch-target sm:flex-none',
@@ -57,8 +60,8 @@ function ThemeSelector() {
               <Icon className="h-4 w-4" />
               {/* Labels wait for sm: (where the grid becomes a flex row) —
                   nowrap text inside grid-cols-3 can blow out the tracks on
-                  375–420px phones. */}
-              <span className="hidden sm:inline whitespace-nowrap">{option.label}</span>
+                  375–420px phones. Two or three words in German needs the room. */}
+              <span className="hidden sm:inline whitespace-nowrap">{label}</span>
             </button>
           )
         })}
@@ -70,6 +73,7 @@ function ThemeSelector() {
 export function AppSettingsPanel() {
   const user = useCurrentUser()
   const { toast } = useToast()
+  const { t } = useTranslation()
   const { state: geoState, requestLocation } = useGeolocation()
 
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
@@ -151,7 +155,7 @@ export function AppSettingsPanel() {
         // server-confirmed values so they are not discarded; stay dirty.
         setSettings((prev) => (prev ? { ...prev, ...updated } : updated))
       }
-      toast({ title: 'Settings saved' })
+      toast({ title: t('common.settingsSaved') })
     } catch {
       // api/client interceptor already toasts the failure.
     } finally {
@@ -162,20 +166,20 @@ export function AppSettingsPanel() {
   return (
     <div className="space-y-6 md:space-y-8">
       <div className="space-y-6">
-        <h3 className="text-base md:text-lg font-medium text-foreground">App Settings</h3>
+        <h3 className="text-base md:text-lg font-medium text-foreground">{t('settings.appSettings')}</h3>
 
         {isLoadingSettings ? (
-          <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">Loading…</div>
+          <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">{t('common.loading')}</div>
         ) : !settings ? (
           <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">
-            Settings are unavailable. Ensure the database schema is initialized.
+            {t('settings.unavailable')}
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-3 border-b border-border">
               <div>
-                <p className="text-sm font-medium text-foreground">Notifications</p>
-                <p className="text-sm text-muted-foreground">Enable in-app notifications</p>
+                <p className="text-sm font-medium text-foreground">{t('settings.notifications')}</p>
+                <p className="text-sm text-muted-foreground">{t('settings.notificationsDescription')}</p>
               </div>
               <Switch
                 checked={settings.notifications_enabled}
@@ -185,8 +189,8 @@ export function AppSettingsPanel() {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-3 border-b border-border">
               <div>
-                <p className="text-sm font-medium text-foreground">Email Marketing</p>
-                <p className="text-sm text-muted-foreground">Receive emails about new features</p>
+                <p className="text-sm font-medium text-foreground">{t('settings.emailMarketing')}</p>
+                <p className="text-sm text-muted-foreground">{t('settings.emailMarketingDescription')}</p>
               </div>
               <Switch
                 checked={settings.email_marketing}
@@ -198,8 +202,8 @@ export function AppSettingsPanel() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-3">
               <div>
-                <p className="text-sm font-medium text-foreground">Measurement Units</p>
-                <p className="text-sm text-muted-foreground">Choose between metric and imperial</p>
+                <p className="text-sm font-medium text-foreground">{t('settings.measurementUnits')}</p>
+                <p className="text-sm text-muted-foreground">{t('settings.measurementUnitsDescription')}</p>
                 <select
                   value={settings.measurement_units}
                   onChange={(e) =>
@@ -207,35 +211,37 @@ export function AppSettingsPanel() {
                       measurement_units: (e.target.value as 'imperial' | 'metric') || 'imperial',
                     })
                   }
-                  aria-label="Measurement units"
-                  className="mt-2 block w-full h-12 px-3 pr-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
+                  aria-label={t('settings.measurementUnits')}
+                  className="mt-2 block w-full h-12 px-3 pe-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
                 >
-                  <option value="imperial">Imperial (lbs, ft)</option>
-                  <option value="metric">Metric (kg, cm)</option>
+                  <option value="imperial">{t('settings.unitsImperial')}</option>
+                  <option value="metric">{t('settings.unitsMetric')}</option>
                 </select>
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">Language</p>
-                <p className="text-sm text-muted-foreground">Interface language</p>
-                <select
-                  value={settings.language}
-                  onChange={(e) => handleUpdateSettings({ language: e.target.value })}
-                  aria-label="Language"
-                  className="mt-2 block w-full h-12 px-3 pr-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
-                >
-                  <option value="en">English</option>
-                </select>
+            </div>
+
+            {/*
+              The language picker is its own full-width row, not the second half
+              of the units grid. It is the one setting with 43 options and a
+              search box; a half-width column on a phone would clip the native
+              name of half the languages.
+            */}
+            <div className="py-3 border-b border-border">
+              <div className="mb-2">
+                <p className="text-sm font-medium text-foreground">{t('settings.language')}</p>
+                <p className="text-sm text-muted-foreground">{t('settings.languageDescription')}</p>
               </div>
+              <LanguageSwitcher />
             </div>
 
             <div className="py-3 border-b border-border">
               <div className="mb-2">
                 <p className="text-sm font-medium text-foreground flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
-                  Weather Location
+                  {t('settings.weatherLocation')}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Used for weather-based outfit recommendations
+                  {t('settings.weatherLocationDescription')}
                 </p>
               </div>
               <LocationInput
@@ -255,14 +261,14 @@ export function AppSettingsPanel() {
                 isAutoDetecting={geoState.isLoading}
                 error={geoState.error}
                 showAutoDetectButton={true}
-                placeholder="Enter city name or coordinates"
+                placeholder={t('settings.locationPlaceholder')}
               />
             </div>
 
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end pt-2">
               {settingsDirty && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 sm:mr-auto">
-                  Unsaved changes — click Save Settings to apply.
+                <p className="text-xs text-amber-600 dark:text-amber-400 sm:me-auto">
+                  {t('common.unsavedChanges')}
                 </p>
               )}
               <Button
@@ -270,7 +276,7 @@ export function AppSettingsPanel() {
                 disabled={isSavingSettings || !settingsDirty}
                 className="w-full sm:w-auto"
               >
-                {isSavingSettings ? 'Saving…' : 'Save Settings'}
+                {isSavingSettings ? t('common.saving') : t('common.saveSettings')}
               </Button>
             </div>
           </div>
@@ -280,7 +286,7 @@ export function AppSettingsPanel() {
       <div className="border-t border-border pt-6 md:pt-8 space-y-4">
         <div className="flex items-center gap-2">
           <Cpu className="h-5 w-5 text-muted-foreground" />
-          <h3 className="text-base md:text-lg font-medium text-foreground">AI Settings</h3>
+          <h3 className="text-base md:text-lg font-medium text-foreground">{t('settings.aiSettings')}</h3>
         </div>
         <AISettingsPanel />
       </div>

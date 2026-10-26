@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/permission_helper.dart';
@@ -16,11 +17,11 @@ import '../providers/feedback_provider.dart';
 const _maxAttachments = 5;
 const _maxAttachmentBytes = 5 * 1024 * 1024;
 
-String _categoryLabel(TicketCategory c) => switch (c) {
-  TicketCategory.bugReport => 'Something broke',
-  TicketCategory.featureRequest => 'An idea',
-  TicketCategory.generalFeedback => 'General',
-  TicketCategory.supportRequest => 'I need help',
+String _categoryLabel(AppLocalizations l10n, TicketCategory c) => switch (c) {
+  TicketCategory.bugReport => l10n.feedbackCategoryBug,
+  TicketCategory.featureRequest => l10n.feedbackCategoryIdea,
+  TicketCategory.generalFeedback => l10n.feedbackCategoryGeneral,
+  TicketCategory.supportRequest => l10n.feedbackCategoryHelp,
 };
 
 /// Send feedback and see what you sent before.
@@ -48,10 +49,12 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
   }
 
   Future<void> _pick(ImageSource source) async {
+    // Captured before the first await: the snackbar outlives the widget.
+    final l10n = context.l10n;
     if (_attachments.length >= _maxAttachments) {
       ErrorHandler.showValidation(
-        'You can add up to 5 images.',
-        title: 'Limit reached',
+        l10n.feedbackAttachmentLimitBody,
+        title: l10n.feedbackAttachmentLimitTitle,
       );
       return;
     }
@@ -72,8 +75,8 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
       final file = File(picked.path);
       if (await file.length() > _maxAttachmentBytes) {
         ErrorHandler.showValidation(
-          'Choose an image under 5 MB.',
-          title: 'Image too large',
+          l10n.feedbackImageTooLargeBody,
+          title: l10n.feedbackImageTooLargeTitle,
         );
         return;
       }
@@ -94,7 +97,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from gallery'),
+              title: Text(context.l10n.itemAddGallery),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _pick(ImageSource.gallery);
@@ -102,7 +105,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take a photo'),
+              title: Text(context.l10n.itemAddCamera),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _pick(ImageSource.camera);
@@ -143,7 +146,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
     return PaperStockScope(
       stock: PaperStockId.stone,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Send feedback')),
+        appBar: AppBar(title: Text(context.l10n.feedbackTitle)),
         body: AppPageBackground(
           child: RefreshIndicator(
             onRefresh: ref.read(feedbackTicketsProvider.notifier).refresh,
@@ -170,11 +173,11 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
   Widget _form(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final hint = switch (_category) {
-      TicketCategory.bugReport =>
-        'What happened, and what did you expect? Steps help us fix it.',
-      TicketCategory.featureRequest => 'What would you like, and why?',
-      _ => 'Tell us what you think, or ask a question.',
+      TicketCategory.bugReport => l10n.feedbackHintBug,
+      TicketCategory.featureRequest => l10n.feedbackHintIdea,
+      _ => l10n.feedbackHintGeneral,
     };
 
     return PaperSurface(
@@ -184,7 +187,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('What is it about?', style: text.headlineSmall),
+            Text(l10n.feedbackAboutLabel, style: text.headlineSmall),
             const SizedBox(height: AppConstants.spacing12),
             Wrap(
               spacing: AppConstants.spacing8,
@@ -192,7 +195,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
               children: [
                 for (final c in TicketCategory.values)
                   ChoiceChip(
-                    label: Text(_categoryLabel(c)),
+                    label: Text(_categoryLabel(l10n, c)),
                     selected: _category == c,
                     showCheckmark: false,
                     onSelected: _submitting
@@ -207,13 +210,13 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
               enabled: !_submitting,
               maxLength: 200,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Subject'),
+              decoration: InputDecoration(labelText: l10n.feedbackSubjectLabel),
               validator: (value) {
                 final text = value?.trim() ?? '';
-                if (text.isEmpty) return 'Add a subject';
+                if (text.isEmpty) return l10n.feedbackSubjectRequired;
                 // Mirrors the backend's min_length=3.
                 if (text.length < 3) {
-                  return 'Subject must be at least 3 characters';
+                  return l10n.feedbackSubjectTooShort;
                 }
                 return null;
               },
@@ -227,16 +230,16 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
               maxLength: 5000,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                labelText: 'Details',
+                labelText: l10n.feedbackDetailsLabel,
                 hintText: hint,
                 alignLabelWithHint: true,
               ),
               validator: (value) {
                 final text = value?.trim() ?? '';
-                if (text.isEmpty) return 'Add some details';
+                if (text.isEmpty) return l10n.feedbackDetailsRequired;
                 // Mirrors the backend's min_length=10.
                 if (text.length < 10) {
-                  return 'Description must be at least 10 characters';
+                  return l10n.feedbackDetailsTooShort;
                 }
                 return null;
               },
@@ -264,7 +267,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
                 TextButton.icon(
                   // Flush with the fields above.
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                    padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
                   ),
                   onPressed:
                       _submitting || _attachments.length >= _maxAttachments
@@ -274,12 +277,12 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
                     Icons.add_photo_alternate_outlined,
                     size: 20,
                   ),
-                  label: const Text('Add a screenshot'),
+                  label: Text(l10n.feedbackAddScreenshot),
                 ),
                 const SizedBox(width: AppConstants.spacing8),
                 Expanded(
                   child: Text(
-                    'Up to 5, 5 MB each',
+                    l10n.feedbackAttachmentHint,
                     style: text.bodySmall?.copyWith(color: tokens.textMuted),
                     textAlign: TextAlign.end,
                     maxLines: 1,
@@ -300,7 +303,7 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Send'),
+                  : Text(l10n.feedbackSend),
             ),
           ],
         ),
@@ -332,7 +335,7 @@ class _Thumbnail extends StatelessWidget {
             top: 0,
             right: 0,
             child: IconButton(
-              tooltip: 'Remove image ${index + 1}',
+              tooltip: context.l10n.feedbackRemoveImageIndex(index + 1),
               onPressed: onRemove,
               icon: const Icon(Icons.close_rounded, size: 18),
               style: IconButton.styleFrom(
@@ -368,18 +371,27 @@ class _Tickets extends ConsumerWidget {
       );
     }
     if (value.isEmpty) {
-      return const AppEmptyState(
+      return AppEmptyState(
         scene: PaperScenes.studio,
-        title: 'Nothing sent yet',
-        message: 'What you send shows up here with its status.',
+        title: context.l10n.feedbackEmptyTitle,
+        message: context.l10n.feedbackEmptyBody,
       );
     }
 
     (String, Color) status(TicketStatus s) => switch (s) {
-      TicketStatus.open => ('Open', tokens.stock.accent),
-      TicketStatus.inProgress => ('In progress', tokens.warning),
-      TicketStatus.resolved => ('Resolved', tokens.success),
-      TicketStatus.closed => ('Closed', tokens.textMuted),
+      TicketStatus.open => (context.l10n.feedbackStatusOpen, tokens.stock.accent),
+      TicketStatus.inProgress => (
+        context.l10n.feedbackStatusInProgress,
+        tokens.warning,
+      ),
+      TicketStatus.resolved => (
+        context.l10n.feedbackStatusResolved,
+        tokens.success,
+      ),
+      TicketStatus.closed => (
+        context.l10n.feedbackStatusClosed,
+        tokens.textMuted,
+      ),
     };
 
     return Column(
@@ -388,7 +400,7 @@ class _Tickets extends ConsumerWidget {
         if (tickets.hasError && !tickets.isLoading)
           AppErrorBanner(error: tickets.error, onRetry: notifier.refresh),
         PaperGroup(
-          title: 'What you sent',
+          title: context.l10n.feedbackHistoryTitle,
           children: [
             for (final ticket in value)
               ListTile(
@@ -398,7 +410,7 @@ class _Tickets extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  '${_categoryLabel(ticket.category)} · '
+                  '${_categoryLabel(context.l10n, ticket.category)} · '
                   '${AppDateUtils.formatDate(ticket.createdAt)}',
                   style: TextStyle(color: tokens.textMuted),
                 ),

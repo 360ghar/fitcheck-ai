@@ -97,7 +97,7 @@ export default function FeaturesIndexPage() {
                 >
                   <Link to={trialRegisterHref()}>
                     Start free
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    <ArrowRight className="ms-2 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 px-6" asChild>
@@ -131,7 +131,7 @@ export default function FeaturesIndexPage() {
                     </p>
                     <span className="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary">
                       Learn more
-                      <ArrowRight className="ml-1 w-4 h-4" />
+                      <ArrowRight className="ms-1 w-4 h-4" />
                     </span>
                   </Link>
                 </AnimatedSection>

@@ -117,7 +117,9 @@ void main() {
       ),
       overrides: [itemRepositoryProvider.overrideWithValue(_Repo(_items))],
     );
-    await tester.tap(find.byTooltip('Show as grid'));
+    // By icon, not tooltip: the tooltip is localized, and a store capture run
+    // renders this screen in a non-English locale.
+    await tester.tap(find.byIcon(Icons.grid_view_rounded));
     await tester.pump(const Duration(milliseconds: 100));
     await expectLater(
       find.byType(MaterialApp),

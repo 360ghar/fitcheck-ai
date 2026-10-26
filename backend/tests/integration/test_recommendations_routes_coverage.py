@@ -781,7 +781,11 @@ async def test_astrology_profile_required_notes_missing_migration():
     assert data["missing_fields"] == ["birth_date", "birth_time", "birth_place"]
     assert data["context"]["weekday"] == "Friday"
     assert data["context"]["ruling_planet"] == "Venus"
-    assert any("Run migration 002_astrology_profile.sql" in note for note in data["notes"])
+    # A missing migration is an operator problem. It used to be appended to
+    # `notes`, which the app renders verbatim, so end users were told to run SQL
+    # in Supabase. It must never appear in the payload again.
+    assert not any("migration" in note.lower() for note in data["notes"])
+    assert not any("Supabase" in note for note in data["notes"])
 
 
 # ---------------------------------------------------------------------------

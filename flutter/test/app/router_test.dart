@@ -3,6 +3,7 @@ import 'package:fitcheck_ai/core/providers.dart';
 import 'package:fitcheck_ai/core/services/notification_service.dart';
 import 'package:fitcheck_ai/features/auth/providers/auth_provider.dart';
 import 'package:fitcheck_ai/features/onboarding/intro_seen_provider.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,6 +112,9 @@ void main() {
     final navigator = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         navigatorKey: navigator,
         scaffoldMessengerKey: scaffoldMessengerKey,
         home: const Scaffold(body: Text('first')),

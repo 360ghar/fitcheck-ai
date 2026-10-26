@@ -1,0 +1,31 @@
+{
+  "_comment": "Identity of the App Store Connect record this pipeline writes to. The ID is the numeric app id from App Store Connect, not the bundle id; findApp() resolves the bundle id at runtime and refuses to continue if the two disagree.",
+  "appId": "6794689012",
+  "bundleId": "com.fitcheckaiapp.fitcheckai",
+  "sku": "fitcheckai-ios",
+  "primaryLocale": "en-US",
+  "marketingVersion": "1.3.0",
+  "platform": "IOS",
+  "subscriptionGroupId": "22286350",
+  "subscriptionGroupReferenceName": "FitCheck Subscriptions",
+  "trial": {
+    "productId": "com.fitcheckaiapp.fitcheckai.pro.monthly",
+    "offerMode": "FREE_TRIAL",
+    "duration": "ONE_MONTH",
+    "numberOfPeriods": 1,
+    "territories": "ALL",
+    "_note": "An introductory offer is per subscription, not per storefront: creating it once with no territory list applies it in every territory Apple supports. New subscribers only, one offer per subscription group."
+  },
+  "urls": {
+    "support": "https://fitcheckaiapp.com/support",
+    "marketing": "https://fitcheckaiapp.com",
+    "privacy": "https://fitcheckaiapp.com/privacy",
+    "terms": "https://fitcheckaiapp.com/terms"
+  },
+  "category": {
+    "primary": "LIFESTYLE",
+    "secondary": "PHOTO_AND_VIDEO"
+  },
+  "copyright": "© 2026 FitCheck AI",
+  "deepLinkScheme": "fitcheck.ai"
+}

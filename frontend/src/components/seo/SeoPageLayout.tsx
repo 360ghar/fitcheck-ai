@@ -140,7 +140,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                 >
                   <Link to={primary.href}>
                     {primary.label}
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    <ArrowRight className="ms-2 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button
@@ -151,7 +151,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                 >
                   {secondary.external ? (
                     <a href={secondary.href} target="_blank" rel="noopener noreferrer">
-                      <Play className="mr-2 h-4 w-4 fill-current" />
+                      <Play className="me-2 h-4 w-4 fill-current" />
                       {secondary.label}
                     </a>
                   ) : (
@@ -287,7 +287,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
               >
                 <Link to={trialRegisterHref()}>
                   Start free
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="ms-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button

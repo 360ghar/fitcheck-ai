@@ -21,28 +21,30 @@ import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { Logo } from '@/components/brand/Logo'
 import { useUserRefresh } from '@/hooks/useUserRefresh'
+import { useTranslation } from '@/i18n'
 
 function AppLayoutContent() {
   const { isCollapsed } = useSidebar()
+  const { t } = useTranslation()
 
   return (
     <>
       <a className="skip-link" href="#main-content">
-        Skip to main content
+        {t('common.skipToContent')}
       </a>
       <div className="flex min-h-[100svh] md:min-h-screen bg-background">
       {/* Desktop sidebar */}
       <Sidebar className="hidden md:flex" />
 
       {/* Mobile header - simplified since we have bottom nav */}
-      <header className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-center border-b border-border bg-background safe-area-top md:hidden pl-[var(--safe-area-left)] pr-[var(--safe-area-right)]">
-        <div className="absolute left-[calc(var(--safe-area-left)+0.5rem)]">
+      <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-center border-b border-border bg-background safe-area-top md:hidden ps-[var(--safe-area-left)] pe-[var(--safe-area-right)]">
+        <div className="absolute start-[calc(var(--safe-area-left)+0.5rem)]">
           <SidebarMobileTrigger />
         </div>
         <Link to="/dashboard">
           <Logo markSize={32} wordmarkClassName="text-lg" />
         </Link>
-        <Button asChild size="icon" className="absolute right-[calc(var(--safe-area-right)+0.5rem)]" aria-label="Add to wardrobe">
+        <Button asChild size="icon" className="absolute end-[calc(var(--safe-area-right)+0.5rem)]" aria-label={t('nav.addToWardrobe')}>
           <Link to="/wardrobe?action=add"><Plus className="h-4 w-4" /></Link>
         </Button>
       </header>
@@ -57,8 +59,9 @@ function AppLayoutContent() {
           // (e.g. the wardrobe chip rail, a flex row summing to ~780px) forced
           // this main to 810px on a 360px phone and the page rendered as a
           // clipped desktop layout under `body`'s `overflow-x-hidden`.
+          // `ms-*` keeps the sidebar offset on the correct side in RTL.
           'min-w-0 flex-1 transition-[margin] duration-200',
-          isCollapsed ? 'md:ml-16' : 'md:ml-60'
+          isCollapsed ? 'md:ms-16' : 'md:ms-60'
         )}
       >
         {/* Content wrapper with padding for mobile header and bottom nav */}
@@ -67,7 +70,7 @@ function AppLayoutContent() {
         </div>
 
         <footer className="py-6 text-center text-xs text-muted-foreground hidden md:block">
-          © {new Date().getFullYear()} FitCheck AI. All rights reserved.
+          {t('common.copyright', { year: new Date().getFullYear() })}
         </footer>
       </main>
 

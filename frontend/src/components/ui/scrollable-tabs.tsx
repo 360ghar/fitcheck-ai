@@ -69,7 +69,7 @@ export function ScrollableTabs({
       {/* Left fade indicator */}
       {showFade && canScrollLeft && (
         <div
-          className={cn('pointer-events-none absolute bottom-0 left-0 top-0 w-8', fadeClassName)}
+          className={cn('pointer-events-none absolute bottom-0 start-0 top-0 w-8', fadeClassName)}
           aria-hidden="true"
         />
       )}
@@ -77,7 +77,7 @@ export function ScrollableTabs({
       {/* Right fade indicator */}
       {showFade && canScrollRight && (
         <div
-          className={cn('pointer-events-none absolute bottom-0 right-0 top-0 w-8', fadeClassName)}
+          className={cn('pointer-events-none absolute bottom-0 end-0 top-0 w-8', fadeClassName)}
           aria-hidden="true"
         />
       )}

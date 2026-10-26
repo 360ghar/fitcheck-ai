@@ -16,6 +16,12 @@ from fastapi import Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.i18n import (
+    DEFAULT_LANGUAGE,
+    is_supported_language_tag,
+    language_from_accept_header,
+    normalize_language,
+)
 from app.core.security import verify_token
 
 logger = logging.getLogger(__name__)
@@ -23,6 +29,80 @@ logger = logging.getLogger(__name__)
 # Context variables for async-safe request context
 _correlation_id: ContextVar[Optional[str]] = ContextVar("correlation_id", default=None)
 _log_context: ContextVar[Dict[str, Any]] = ContextVar("log_context", default={})
+_request_language: ContextVar[str] = ContextVar(
+    "request_language", default=DEFAULT_LANGUAGE
+)
+
+
+def get_request_language() -> str:
+    """The supported language this request asked for, or English.
+
+    Services that generate user-facing text read this instead of threading a
+    language parameter through every signature. It is set from
+    `Accept-Language` per request and defaults to English outside a request.
+    """
+    return _request_language.get()
+
+
+def set_request_language(value: str) -> None:
+    """Set the language for the current request, normalized to a supported code.
+
+    Normalizing on the way in means callers can hand over the raw tag a client
+    sent (`hi-IN`, `pt_BR`, `zh-Hans`) without each of them remembering to
+    normalize first.
+    """
+    _request_language.set(normalize_language(value))
+
+
+def resolve_language(explicit: Optional[str] = None) -> str:
+    """The language generated text should be written in for this call.
+
+    Precedence: the explicit argument (a caller that already knows, e.g. a
+    retry pinned to the language of the job it is resuming) beats the request
+    contextvar, which beats English. Outside a request the contextvar holds the
+    default, so a background job, a startup path or a test gets English rather
+    than an error.
+    """
+    if explicit:
+        return normalize_language(explicit)
+    return normalize_language(get_request_language())
+
+
+def effective_language(stored: Optional[str] = None, *, explicit: bool = False) -> str:
+    """Language to answer in, given what the user saved in settings.
+
+    `explicit` is `user_settings.language_explicit` (migration 065): TRUE when
+    the user opened the picker and chose, FALSE when the app should follow the
+    device.
+
+    An explicit choice always wins, including an explicit `en` — that is the
+    whole point of the flag, and it is what lets a user who picked English on a
+    Japanese phone get English.
+
+    A non-explicit stored value never overrides the header *when it is the
+    default*: `language` ships as `DEFAULT 'en'`, so an untouched row reads 'en'
+    and means "no preference". A non-explicit non-default value (`hi`) is still
+    honoured, because it is a real stored preference from a client that synced
+    the value but did not (yet) send the flag — the pre-065 behaviour, kept
+    deliberately so this migration changes nothing for those users.
+    """
+    if stored and is_supported_language_tag(stored):
+        code = normalize_language(stored)
+        if explicit or code != DEFAULT_LANGUAGE:
+            return code
+    return resolve_language()
+
+
+def apply_user_language(stored: Optional[str] = None, *, explicit: bool = False) -> str:
+    """Upgrade the request's language from the user's stored choice.
+
+    Returns the effective code. Called from the auth dependencies once the
+    profile is loaded, so every service downstream — which reads the
+    contextvar rather than a parameter — sees the user's choice.
+    """
+    language = effective_language(stored, explicit=explicit)
+    set_request_language(language)
+    return language
 
 
 def get_correlation_id() -> str:
@@ -219,6 +299,39 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 f"[{correlation_id}] <-- {method} {path} | EXCEPTION | {duration_ms:.2f}ms | {type(e).__name__}: {str(e)}"
             )
             raise
+
+
+class LanguageMiddleware(BaseHTTPMiddleware):
+    """Resolves the request's language once and makes it available to services.
+
+    `Accept-Language` is transport-level and already carries the user's list in
+    preference order, so the first supported entry is the right answer for an
+    anonymous request. An authenticated request may then be upgraded from the
+    user's stored settings (see `apply_user_language`, called from the auth
+    dependencies), which is why the `Content-Language` header is read back
+    after the handler runs rather than written before it.
+
+    A malformed or unsupported header falls back to English rather than
+    rejecting the request: a display preference must never be an error.
+    """
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        language = language_from_accept_header(request.headers.get("Accept-Language"))
+        request.state.language = language
+        # Set the contextvar for the whole downstream call, then reset it:
+        # Starlette already isolates requests, so this is defence for the
+        # in-process retry paths that reuse the same task.
+        token = _request_language.set(language)
+        try:
+            response = await call_next(request)
+            # A dependency may have replaced this with the user's stored
+            # choice; the header must advertise the language the body is
+            # actually in, not the one the header asked for.
+            effective = _request_language.get()
+        finally:
+            _request_language.reset(token)
+        response.headers["Content-Language"] = effective
+        return response
 
 
 class CorrelationIdLogFilter(logging.Filter):

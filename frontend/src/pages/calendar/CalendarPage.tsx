@@ -27,6 +27,7 @@ import { useOutfitStore } from '@/stores/outfitStore'
 import { getApiError } from '@/lib/errors'
 import { getAccessToken } from '@/lib/auth'
 import { ErrorState } from '@/components/ui/error-state'
+import { formatDateTime, useTranslation } from '@/i18n'
 
 /** Storage key for the local-calendar connected flag, scoped per user. */
 function calendarConnectedKey(): string {
@@ -50,6 +51,7 @@ export function isValidCalendarRange(start: string, end: string): boolean {
 }
 
 export default function CalendarPage() {
+  const { t } = useTranslation()
   const { toast } = useToast()
 
   const outfits = useOutfitStore((s) => s.outfits)
@@ -258,8 +260,8 @@ export default function CalendarPage() {
         /* ignore */
       }
       toast({
-        title: 'Local calendar enabled',
-        description: 'Events stay in FitCheck. External calendar sync may come later.',
+        title: t('calendar.localEnabled'),
+        description: t('calendar.localEnabledBody'),
       })
     } catch {
       // api/client interceptor already toasts the failure.
@@ -284,17 +286,17 @@ export default function CalendarPage() {
   const submitCreate = async () => {
     if (isCreating) return
     if (!createTitle.trim()) {
-      toast({ title: 'Title is required', variant: 'destructive' })
+      toast({ title: t('calendar.titleRequired'), variant: 'destructive' })
       return
     }
     if (!createStart || !createEnd) {
-      toast({ title: 'Start and end time are required', variant: 'destructive' })
+      toast({ title: t('calendar.timesRequired'), variant: 'destructive' })
       return
     }
     if (!isValidCalendarRange(createStart, createEnd)) {
       toast({
-        title: 'End time must be after start time',
-        description: 'Choose a later end time for this event.',
+        title: t('calendar.endAfterStart'),
+        description: t('calendar.endAfterStartBody'),
         variant: 'destructive',
       })
       return
@@ -326,7 +328,7 @@ export default function CalendarPage() {
         },
       ])
       setCreateOpen(false)
-      toast({ title: 'Event created' })
+      toast({ title: t('calendar.eventCreated') })
     } catch {
       // api/client interceptor already toasts the failure.
     } finally {
@@ -411,7 +413,7 @@ export default function CalendarPage() {
       await updateUserSettings({ default_location: location || undefined })
       setUserLocation(location || null)
       setShowLocationDialog(false)
-      toast({ title: 'Location updated', description: 'Weather will now use your new location.' })
+      toast({ title: t('calendar.locationUpdated'), description: t('calendar.locationUpdatedBody') })
     } catch {
       // api/client interceptor already toasts the failure.
     }
@@ -420,7 +422,7 @@ export default function CalendarPage() {
   return (
     <div className="app-page max-w-7xl space-y-4 md:space-y-4">
       <PageHeader
-        title="Calendar"
+        title={t('calendar.title')}
         description="Plan outfits against your schedule."
         leading={<CalendarIcon className="h-5 w-5 md:h-6 md:w-6 text-primary" />}
       >
@@ -432,13 +434,13 @@ export default function CalendarPage() {
         >
           {isConnecting ? (
             <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Connecting…
+              <Loader2 className="h-4 w-4 me-2 animate-spin" />
+              {t('calendar.connecting')}
             </>
           ) : isCalendarConnected ? (
-            'Local calendar active'
+            t('calendar.localActive')
           ) : (
-            'Enable local calendar'
+            t('calendar.enableLocal')
           )}
         </Button>
       </PageHeader>
@@ -474,25 +476,25 @@ export default function CalendarPage() {
             disabled={geoState.isLoading}
             className="text-primary hover:text-primary/80 touch-target"
           >
-            {geoState.isLoading ? 'Detecting...' : 'Set location for weather'}
+            {geoState.isLoading ? t('calendar.detecting') : t('calendar.setLocationForWeather')}
           </button>
         )}
       </div>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 px-4 py-3 md:px-6 md:py-4">
-          <CardTitle className="text-base md:text-lg">Events</CardTitle>
+          <CardTitle className="text-base md:text-lg">{t('calendar.events')}</CardTitle>
           {isLoadingEvents && (
             <div className="text-sm text-muted-foreground flex items-center gap-2" role="status" aria-live="polite">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="hidden md:inline">Loading…</span>
+              <span className="hidden md:inline">{t('common.loading')}</span>
             </div>
           )}
         </CardHeader>
         <CardContent className="p-2 md:p-4 space-y-3">
           {!isLoadingEvents && loadError && (
             <ErrorState
-              title="Couldn't load this month"
+              title={t('calendar.loadError')}
               description={loadError}
               onRetry={() => {
                 failedMonthKeyRef.current = ''
@@ -504,7 +506,7 @@ export default function CalendarPage() {
             <EmptyState
               icon={CalendarIcon}
               tone="blue"
-              title="No events yet"
+              title={t('calendar.noEvents')}
               description="Tap a day to plan your first outfit, or create one now."
               actionLabel="Create event"
               onAction={() => openCreate(new Date())}
@@ -534,12 +536,12 @@ export default function CalendarPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Event</DialogTitle>
-            <DialogDescription>Add a planning event and assign an outfit later.</DialogDescription>
+            <DialogTitle>{t('calendar.createEvent')}</DialogTitle>
+            <DialogDescription>{t('calendar.createEventBody')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="event-title">Title</Label>
+              <Label htmlFor="event-title">{t('calendar.eventTitle')}</Label>
               <Input
                 id="event-title"
                 placeholder="e.g., Team meeting"
@@ -548,26 +550,26 @@ export default function CalendarPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="event-description">Description</Label>
+              <Label htmlFor="event-description">{t('calendar.eventDescription')}</Label>
               <Textarea
                 id="event-description"
-                placeholder="Optional"
+                placeholder={t('common.optional')}
                 value={createDescription}
                 onChange={(e) => setCreateDescription(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="event-location">Location</Label>
+              <Label htmlFor="event-location">{t('calendar.eventLocation')}</Label>
               <Input
                 id="event-location"
-                placeholder="Optional"
+                placeholder={t('common.optional')}
                 value={createLocation}
                 onChange={(e) => setCreateLocation(e.target.value)}
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="event-start">Start</Label>
+                <Label htmlFor="event-start">{t('calendar.eventStart')}</Label>
                 <Input
                   id="event-start"
                   type="datetime-local"
@@ -576,7 +578,7 @@ export default function CalendarPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="event-end">End</Label>
+                <Label htmlFor="event-end">{t('calendar.eventEnd')}</Label>
                 <Input
                   id="event-end"
                   type="datetime-local"
@@ -593,7 +595,7 @@ export default function CalendarPage() {
               disabled={isCreating}
               className="w-full md:w-auto"
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={() => void submitCreate()}
@@ -601,9 +603,9 @@ export default function CalendarPage() {
               className="w-full md:w-auto"
             >
               {isCreating ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 me-2 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4 me-2" />
               )}
               {isCreating ? 'Creating...' : 'Create'}
             </Button>
@@ -623,7 +625,10 @@ export default function CalendarPage() {
             <DialogTitle>{selectedEvent?.title}</DialogTitle>
             <DialogDescription>
               {selectedEvent
-                ? `${new Date(selectedEvent.start_time).toLocaleString()} → ${new Date(selectedEvent.end_time).toLocaleString()}`
+                ? t('calendar.eventRange', {
+                    start: formatDateTime(new Date(selectedEvent.start_time)),
+                    end: formatDateTime(new Date(selectedEvent.end_time)),
+                  })
                 : ''}
             </DialogDescription>
           </DialogHeader>
@@ -634,23 +639,23 @@ export default function CalendarPage() {
 
           {selectedEvent?.outfit_id ? (
             <div className="p-3 rounded-lg bg-muted">
-              <div className="text-sm font-medium text-foreground">Assigned outfit</div>
+              <div className="text-sm font-medium text-foreground">{t('calendar.assignedOutfit')}</div>
               <div className="text-sm text-muted-foreground mt-1">{selectedEvent.outfit_name || selectedEvent.outfit_id}</div>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No outfit assigned yet.</div>
+            <div className="text-sm text-muted-foreground">{t('calendar.noOutfitAssigned')}</div>
           )}
 
           <DialogFooter className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Button variant="outline" onClick={() => setSelectedEvent(null)} className="w-full md:w-auto">
-              Close
+              {t('common.close')}
             </Button>
             <Button
               className="w-full md:w-auto"
               onClick={() => setAssignOutfitOpen(true)}
               disabled={!selectedEvent}
             >
-              {selectedEvent?.outfit_id ? 'Change outfit' : 'Assign outfit'}
+              {selectedEvent?.outfit_id ? t('calendar.changeOutfit') : t('calendar.assignOutfit')}
             </Button>
             {selectedEvent?.outfit_id && (
               <Button
@@ -660,15 +665,15 @@ export default function CalendarPage() {
                   if (!selectedEvent) return
                   try {
                     await handleRemoveOutfit(selectedEvent.id)
-                    toast({ title: 'Outfit removed' })
+                    toast({ title: t('calendar.outfitRemoved') })
                     setSelectedEvent({ ...selectedEvent, outfit_id: undefined, outfit_name: undefined })
                   } catch {
                     // api/client interceptor already toasts the failure.
                   }
                 }}
               >
-                <Unlink className="h-4 w-4 mr-2" />
-                Remove outfit
+                <Unlink className="h-4 w-4 me-2" />
+                {t('calendar.removeOutfit')}
               </Button>
             )}
           </DialogFooter>
@@ -679,8 +684,8 @@ export default function CalendarPage() {
       <Dialog open={assignOutfitOpen} onOpenChange={setAssignOutfitOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign outfit</DialogTitle>
-            <DialogDescription>Pick an outfit for this event.</DialogDescription>
+            <DialogTitle>{t('calendar.assignOutfit')}</DialogTitle>
+            <DialogDescription>{t('calendar.assignOutfitBody')}</DialogDescription>
           </DialogHeader>
           {outfits.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -692,7 +697,7 @@ export default function CalendarPage() {
                 <button
                   key={o.id}
                   type="button"
-                  className="w-full text-left p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-accent/40 transition-colors"
+                  className="w-full text-start-left p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-accent/40 transition-colors"
                   onClick={async () => {
                     if (!selectedEvent) return
                     try {
@@ -710,7 +715,7 @@ export default function CalendarPage() {
                         )
                       )
                       setAssignOutfitOpen(false)
-                      toast({ title: 'Outfit assigned' })
+                      toast({ title: t('calendar.outfitAssigned') })
                     } catch {
                       // api/client interceptor already toasts the failure.
                     }
@@ -726,7 +731,7 @@ export default function CalendarPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignOutfitOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -736,9 +741,9 @@ export default function CalendarPage() {
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Weather Location</DialogTitle>
+            <DialogTitle>{t('calendar.weatherLocation')}</DialogTitle>
             <DialogDescription>
-              Enter a city name or use auto-detect for precise coordinates.
+              {t('calendar.locationHint')}
             </DialogDescription>
           </DialogHeader>
           <LocationInput
@@ -751,10 +756,10 @@ export default function CalendarPage() {
           />
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setShowLocationDialog(false)} className="w-full sm:w-auto">
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleSaveLocation} className="w-full sm:w-auto">
-              Save Location
+              {t('calendar.saveLocation')}
             </Button>
           </DialogFooter>
         </DialogContent>

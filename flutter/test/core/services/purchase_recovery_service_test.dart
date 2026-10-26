@@ -5,6 +5,7 @@ import 'package:fitcheck_ai/features/subscription/models/subscription_model.dart
 import 'package:fitcheck_ai/features/subscription/repositories/subscription_repository.dart';
 import 'package:fitcheck_ai/features/subscription/services/iap_service.dart';
 import 'package:fitcheck_ai/features/subscription/services/purchase_recovery_service.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitcheck_ai/core/services/notification_service.dart'
@@ -176,7 +177,10 @@ Future<void> _settle() => Future<void>.delayed(Duration.zero);
 /// which need a GetMaterialApp overlay — the same shell the paywall tests
 /// pump before exercising UI-presenting paths.
 Future<void> _pumpShell(WidgetTester tester) async {
-  await tester.pumpWidget(MaterialApp(scaffoldMessengerKey: scaffoldMessengerKey, home: Scaffold()));
+  await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),scaffoldMessengerKey: scaffoldMessengerKey, home: Scaffold()));
   await tester.pump();
 }
 

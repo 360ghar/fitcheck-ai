@@ -15,9 +15,10 @@ import 'iap_service.dart';
 /// linked to another account, store credentials unconfigured). The store's
 /// automatic redelivery can never fix these, so the UI must stop promising
 /// "picked up automatically" and point at the only real path: support.
-const String kPurchaseNotAppliedMessage =
+String get kPurchaseNotAppliedMessage =>
+    ErrorHandler.l10n?.purchaseNotAppliedBody ??
     'Your purchase could not be applied to your account. Contact support, '
-    'and do not buy it again.';
+        'and do not buy it again.';
 
 /// How a purchase-verification attempt ended. The paywall maps these
 /// to page state and toasts; the background drain maps them to telemetry and
@@ -292,14 +293,16 @@ class PurchaseRecoveryService {
         // Surface the win: this toast may be the ONLY confirmation the user
         // ever sees for the recovered purchase.
         ErrorHandler.showSuccess(
-          'Your subscription is active.',
-          title: 'Purchase complete',
+          ErrorHandler.l10n?.purchaseRecoveredActiveBody ??
+              'Your subscription is active.',
+          title: ErrorHandler.l10n?.purchaseCompleteTitle ?? 'Purchase complete',
         );
       case PurchaseVerificationOutcome.terminalFailure:
         // The user is charged and NOT entitled; they must hear it.
         ErrorHandler.showError(
           kPurchaseNotAppliedMessage,
-          title: 'Purchase not applied',
+          title:
+              ErrorHandler.l10n?.purchaseNotAppliedTitle ?? 'Purchase not applied',
         );
       case PurchaseVerificationOutcome.transientFailure:
       case PurchaseVerificationOutcome.duplicate:
@@ -328,9 +331,11 @@ class PurchaseRecoveryService {
   }) async {
     final transactionId = iapService.transactionIdFor(details);
     if (transactionId == null || transactionId.isEmpty) {
-      return const PurchaseVerificationResult(
+      return PurchaseVerificationResult(
         outcome: PurchaseVerificationOutcome.invalidTransaction,
-        message: 'The purchase did not include a verifiable transaction ID.',
+        message:
+            ErrorHandler.l10n?.purchaseInvalidTransactionBody ??
+            'The purchase did not include a verifiable transaction ID.',
       );
     }
     // One app-wide claim per transaction: whichever path gets here first —

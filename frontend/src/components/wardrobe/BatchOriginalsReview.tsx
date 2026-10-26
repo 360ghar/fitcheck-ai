@@ -104,7 +104,7 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
               )}
 
               {!hasError && itemCount > 0 && (
-                <div className="absolute top-2 right-2 bg-accent-purple text-white text-xs font-medium px-2 py-1 rounded-md">
+                <div className="absolute top-2 end-2 bg-accent-purple text-white text-xs font-medium px-2 py-1 rounded-md">
                   {itemCount} item{itemCount !== 1 ? 's' : ''}
                 </div>
               )}
@@ -124,7 +124,7 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
               </div>
 
               {items.length > 0 && (
-                <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                <div className="space-y-1 max-h-24 overflow-y-auto pe-1">
                   {items.map((item, index) => (
                     <div key={item.tempId} className="flex items-center gap-2 text-xs">
                       <div

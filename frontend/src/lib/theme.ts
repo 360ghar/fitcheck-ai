@@ -3,10 +3,15 @@ export type ResolvedTheme = 'light' | 'dark';
 
 const THEME_STORAGE_KEY = 'fitcheck-theme';
 
-export const THEMES: { value: Theme; label: string }[] = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'System' },
+/**
+ * `labelKey` rather than `label`: the visible name is a translated message id.
+ * `lib/theme.ts` is imported by the pre-paint theme script path, so it stays
+ * free of React and i18n imports; the caller resolves the key with `t()`.
+ */
+export const THEMES: { value: Theme; labelKey: string }[] = [
+  { value: 'light', labelKey: 'settings.themeLight' },
+  { value: 'dark', labelKey: 'settings.themeDark' },
+  { value: 'system', labelKey: 'settings.themeSystem' },
 ];
 
 /**

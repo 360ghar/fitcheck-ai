@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { useTranslation } from '@/i18n'
 
 export interface DeleteAccountDialogProps {
   open: boolean
@@ -24,6 +25,7 @@ export interface DeleteAccountDialogProps {
 }
 
 export function DeleteAccountDialog({ open, onOpenChange, onConfirm, isDeleting }: DeleteAccountDialogProps) {
+  const { t } = useTranslation()
   return (
     <AlertDialog
       open={open}
@@ -33,14 +35,13 @@ export function DeleteAccountDialog({ open, onOpenChange, onConfirm, isDeleting 
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+          <AlertDialogTitle>{t('settings.deleteAccountConfirmTitle')}</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently deletes your FitCheck AI account, wardrobe, and outfits.
-            This cannot be undone.
+            {t('settings.deleteAccountConfirmBody')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isDeleting}>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             disabled={isDeleting}
@@ -49,7 +50,7 @@ export function DeleteAccountDialog({ open, onOpenChange, onConfirm, isDeleting 
               onConfirm()
             }}
           >
-            {isDeleting ? 'Deleting…' : 'Delete account'}
+            {isDeleting ? t('settings.deleting') : t('settings.deleteAccount')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

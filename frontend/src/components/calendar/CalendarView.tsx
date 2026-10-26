@@ -38,6 +38,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import type { Outfit } from '@/types'
+import { formatDate, formatMonth, getFormattingLocale, useTranslation } from '@/i18n'
 import { thumbnailErrorFallback } from '@/hooks/useImageWithFallback'
 import { useMediaQuery, SPLIT_VIEWPORT_QUERY } from '@/hooks/useMediaQuery'
 
@@ -94,11 +95,36 @@ interface CalendarViewProps {
 // CONSTANTS
 // ============================================================================
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-]
+/**
+ * Weekday and month names come from `Intl` in the active locale — a hardcoded
+ * English table would render "March" in a Japanese calendar. `formatDate`
+ * reads the module-level active locale, so these helpers stay safe to call
+ * during render.
+ */
+function weekdayShort(date: Date): string {
+  return formatDate(date, { weekday: 'short' })
+}
+
+/** Uppercase month abbreviation, cased in the active locale (Turkish "i"). */
+function formatMonthUpper(date: Date): string {
+  return formatMonth(date.getFullYear(), date.getMonth(), 'short').toLocaleUpperCase(
+    getFormattingLocale()
+  )
+}
+
+/**
+ * Sunday-first weekday labels for the current locale, in the same order the
+ * grid lays days out (`getDay()` is 0 = Sunday everywhere, so the *index* stays
+ * fixed and only the text localizes).
+ */
+function weekdayLabels(): string[] {
+  const sunday = new Date(2024, 0, 7) // a Sunday
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(sunday)
+    date.setDate(sunday.getDate() + index)
+    return formatDate(date, { weekday: 'short' })
+  })
+}
 
 /**
  * Event-type index.
@@ -133,13 +159,11 @@ function getWeekRangeString(date: Date): string {
   const endOfWeek = new Date(startOfWeek)
   endOfWeek.setDate(startOfWeek.getDate() + 6)
 
-  const startMonth = MONTHS[startOfWeek.getMonth()]
-  const endMonth = MONTHS[endOfWeek.getMonth()]
-
-  if (startOfWeek.getMonth() === endOfWeek.getMonth()) {
-    return `${startMonth} ${startOfWeek.getDate()} - ${endOfWeek.getDate()}, ${startOfWeek.getFullYear()}`
-  }
-  return `${startMonth} ${startOfWeek.getDate()} - ${endMonth} ${endOfWeek.getDate()}, ${endOfWeek.getFullYear()}`
+  // One `Intl` range rather than two hand-stitched month names, so the
+  // separator and the order are whatever the locale uses.
+  return formatDate(startOfWeek, { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' – '
+    + formatDate(endOfWeek, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // ============================================================================
@@ -184,7 +208,7 @@ function EventBadge({ event, onClick }: EventBadgeProps) {
     <button
       type="button"
       onClick={() => onClick(event)}
-      className="inline-flex w-full min-h-[44px] items-center gap-1.5 truncate rounded border border-border bg-card px-2 py-1 text-left text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex w-full min-h-[44px] items-center gap-1.5 truncate rounded border border-border bg-card px-2 py-1 text-start-left text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       title={event.title}
     >
       {/* Rounded caps: a bare square-capped hairline used as ornament is its own
@@ -222,6 +246,7 @@ interface OutfitAssignDialogProps {
 }
 
 function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: OutfitAssignDialogProps) {
+  const { t } = useTranslation()
   const [isAssigning, setIsAssigning] = useState(false)
   const { toast } = useToast()
 
@@ -246,9 +271,13 @@ function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: Outfi
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Assign Outfit</DialogTitle>
+          <DialogTitle>{t('calendar.assignOutfit')}</DialogTitle>
           <DialogDescription>
-            {event && `Choose an outfit for "${event.title}" on ${new Date(event.start_time).toLocaleDateString()}`}
+            {event &&
+              t('calendar.chooseOutfitFor', {
+                title: event.title,
+                date: formatDate(new Date(event.start_time), { month: 'short', day: 'numeric' }),
+              })}
           </DialogDescription>
         </DialogHeader>
 
@@ -259,7 +288,7 @@ function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: Outfi
               key={outfit.id}
               onClick={() => handleAssign(outfit.id)}
               disabled={isAssigning}
-              className="text-left touch-target"
+              className="text-start-left touch-target"
             >
               <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2">
                 {outfit.images?.length ? (
@@ -293,7 +322,7 @@ function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: Outfi
 
         {outfits.length === 0 && (
           <p className="text-center text-muted-foreground py-8">
-            No outfits available. Create one first!
+            {t('calendar.noOutfitsAvailable')}
           </p>
         )}
       </DialogContent>
@@ -316,6 +345,7 @@ export function CalendarView({
   onMonthChange,
   initialViewMode,
 }: CalendarViewProps) {
+  const { t } = useTranslation()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [assignDialogEvent, setAssignDialogEvent] = useState<CalendarEvent | null>(null)
   const [weatherCache, setWeatherCache] = useState<Map<string, WeatherData>>(new Map())
@@ -569,8 +599,8 @@ export function CalendarView({
             {viewMode === 'week'
               ? getWeekRangeString(currentDate)
               : viewMode === 'agenda'
-              ? 'Upcoming Events'
-              : `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+              ? t('calendar.upcomingEvents')
+              : formatMonth(currentDate.getFullYear(), currentDate.getMonth())
             }
           </h2>
           {viewMode !== 'agenda' && (
@@ -578,7 +608,7 @@ export function CalendarView({
               <Button
                 variant="outline"
                 size="icon"
-                aria-label="Previous period"
+                aria-label={t('calendar.previousPeriod')}
                 onClick={() => navigate('prev')}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -586,7 +616,7 @@ export function CalendarView({
               <Button
                 variant="outline"
                 size="icon"
-                aria-label="Next period"
+                aria-label={t('calendar.nextPeriod')}
                 onClick={() => navigate('next')}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -602,31 +632,31 @@ export function CalendarView({
               variant={viewMode === 'week' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('week')}
-              aria-label="Week view"
+              aria-label={t('calendar.weekView')}
               className="gap-1"
             >
               <CalendarDays className="h-4 w-4" />
-              <span className="hidden xs:inline">Week</span>
+              <span className="hidden xs:inline">{t('calendar.week')}</span>
             </Button>
             <Button
               variant={viewMode === 'agenda' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('agenda')}
-              aria-label="Agenda view"
+              aria-label={t('calendar.agendaView')}
               className="gap-1"
             >
               <List className="h-4 w-4" />
-              <span className="hidden xs:inline">Agenda</span>
+              <span className="hidden xs:inline">{t('calendar.agenda')}</span>
             </Button>
             <Button
               variant={viewMode === 'month' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('month')}
-              aria-label="Month view"
+              aria-label={t('calendar.monthView')}
               className="gap-1"
             >
               <Grid3x3 className="h-4 w-4" />
-              <span className="hidden xs:inline">Month</span>
+              <span className="hidden xs:inline">{t('calendar.month')}</span>
             </Button>
           </div>
 
@@ -663,7 +693,7 @@ export function CalendarView({
           )}
 
           <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())} className="shrink-0">
-            Today
+            {t('calendar.todayLabel')}
           </Button>
         </div>
       </div>
@@ -673,7 +703,7 @@ export function CalendarView({
         <Card>
           <CardContent className="p-2 md:p-4">
             <div className="space-y-2">
-              {weekDays.map((day, index) => (
+              {weekDays.map((day) => (
                 <div
                   key={day.date.getTime()}
                   onClick={() => handleDayClick(day)}
@@ -698,7 +728,7 @@ export function CalendarView({
                     'flex flex-col items-center justify-center w-12 sm:w-14 shrink-0',
                     day.isToday ? 'text-primary' : 'text-muted-foreground'
                   )}>
-                    <span className="text-xs font-medium uppercase">{WEEKDAYS[index]}</span>
+                    <span className="text-xs font-medium uppercase">{weekdayShort(day.date)}</span>
                     <span className={cn(
                       'text-2xl font-bold',
                       day.isToday && 'text-primary'
@@ -734,7 +764,7 @@ export function CalendarView({
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No events</p>
+                      <p className="text-sm text-muted-foreground">{t('calendar.noEvents')}</p>
                     )}
                   </div>
 
@@ -788,10 +818,10 @@ export function CalendarView({
                       {/* Date column */}
                       <div className="flex flex-col items-center justify-center w-14 shrink-0 text-muted-foreground">
                         <span className="text-xs font-medium uppercase">
-                          {WEEKDAYS[eventDate.getDay()]}
+                          {weekdayShort(eventDate)}
                         </span>
                         <span className="text-xl font-bold">{eventDate.getDate()}</span>
-                        <span className="text-xs">{MONTHS[eventDate.getMonth()].slice(0, 3)}</span>
+                        <span className="text-xs">{formatMonthUpper(eventDate)}</span>
                       </div>
 
                       {/* Event details */}
@@ -837,14 +867,14 @@ export function CalendarView({
             ) : (
               <div className="text-center py-8">
                 <CalendarIcon className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium text-foreground">No upcoming events</h3>
+                <h3 className="mt-4 text-lg font-medium text-foreground">{t('calendar.noUpcomingEvents')}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Create an event to start planning your outfits
+                  {t('calendar.createEventHint')}
                 </p>
                 {onCreateEvent && (
                   <Button className="mt-4" onClick={() => onCreateEvent(new Date())}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Event
+                    <Plus className="h-4 w-4 me-2" />
+                    {t('calendar.eventTitleDialog')}
                   </Button>
                 )}
               </div>
@@ -861,8 +891,8 @@ export function CalendarView({
             <div className="w-full min-w-0">
               {/* Weekday headers */}
               <div className="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-2 mb-2">
-                {WEEKDAYS.map((day) => (
-                  <div key={day} className="text-center text-[10px] sm:text-xs md:text-sm font-medium text-muted-foreground">
+                {weekdayLabels().map((day, index) => (
+                  <div key={index} className="text-center text-[10px] sm:text-xs md:text-sm font-medium text-muted-foreground">
                     <span className="hidden md:inline">{day}</span>
                     <span className="md:hidden">{day.charAt(0)}</span>
                   </div>
@@ -940,7 +970,7 @@ export function CalendarView({
                               <button
                                 type="button"
                                 onClick={(e) => handleQuickAssign(e, event)}
-                                className="text-xs text-primary hover:text-primary/80 ml-1 touch-target inline-flex items-center px-2 -my-1"
+                                className="text-xs text-primary hover:text-primary/80 ms-1 touch-target inline-flex items-center px-2 -my-1"
                               >
                                 + Outfit
                               </button>
@@ -948,7 +978,7 @@ export function CalendarView({
                           </div>
                         ))}
                         {day.events.length > 2 && (
-                          <div className="text-xs text-muted-foreground pl-2">
+                          <div className="text-xs text-muted-foreground ps-2">
                             +{day.events.length - 2} more
                           </div>
                         )}
@@ -963,7 +993,7 @@ export function CalendarView({
                           e.stopPropagation()
                           handleCreateEvent(day.date)
                         }}
-                        aria-label={`Add event on ${day.date.toLocaleDateString()}`}
+                        aria-label={t('calendar.addEventOn', { date: formatDate(day.date) })}
                         className="hidden md:flex mt-1 w-full py-1 text-xs text-muted-foreground hover:text-primary items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <Plus className="h-3 w-3" />
@@ -990,7 +1020,7 @@ export function CalendarView({
       {isLoadingWeather && onGetWeather && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading weather…</span>
+          <span>{t('calendar.loadingWeather')}</span>
         </div>
       )}
     </div>

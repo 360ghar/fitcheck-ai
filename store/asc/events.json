@@ -1,0 +1,216 @@
+{
+  "_comment": "In-app events. These appear on the product page, in search results and in the Today/Arcade-adjacent surfaces, and they give a reason to open the app that a static listing cannot. Read by node scripts/asc/grow.mjs events. Every event must be true: an event that promises a sale that does not exist gets rejected in review and, worse, teaches users to ignore the next one.",
+  "primaryLocale": "en-US",
+  "_purchaseComment": "No event here is gated on a subscription, so the badge does not imply a purchase. An event that quietly requires Pro is a review rejection and a bait-and-switch.",
+  "defaultTerritories": [
+    "USA",
+    "GBR",
+    "AUS",
+    "CAN",
+    "ESP",
+    "MEX",
+    "BRA",
+    "PRT",
+    "FRA",
+    "DEU",
+    "ITA",
+    "NLD",
+    "SWE",
+    "NOR",
+    "DNK",
+    "FIN",
+    "POL",
+    "CZE",
+    "SVK",
+    "SVN",
+    "HRV",
+    "ROU",
+    "HUN",
+    "GRC",
+    "TUR",
+    "RUS",
+    "UKR",
+    "SAU",
+    "ISR",
+    "PAK",
+    "IND",
+    "CHN",
+    "TWN",
+    "JPN",
+    "KOR",
+    "THA",
+    "VNM",
+    "IDN",
+    "MYS"
+  ],
+  "_territoriesComment": "ISO 3166-1 alpha-3, the format appEvent.territorySchedules expects. This is the same 40 markets the tier-1 and tier-2 listing effort targets, not a guess at 'everywhere': an event with no localized copy running in a storefront we cannot write for is noise.",
+  "limits": {
+    "name": 30,
+    "shortDescription": 50,
+    "longDescription": 120,
+    "maxDurationDays": 31,
+    "maxLeadDaysBeforeStart": 14
+  },
+  "_limitsComment": "Apple's documented characters-per-field and window limits. They are enforced client-side by grow.mjs so an over-long localized description fails before an API call, not as a 409 that names no field. The server is the real authority; if a value passes here and Apple rejects it, grow.mjs prints Apple's own detail text.",
+  "defaultLocales": [
+    "en-US",
+    "en-GB",
+    "es-ES",
+    "pt-BR",
+    "fr-FR",
+    "de-DE",
+    "ja"
+  ],
+  "_localeComment": "Locales with hand-written copy. An event with English text in a Japanese storefront is worse than no event there.",
+  "events": [
+    {
+      "referenceName": "closet-refresh-2026-11",
+      "slug": "closet-refresh",
+      "badge": "NEW_SEASON",
+      "purpose": "KEEP_ACTIVE_USERS_INFORMED",
+      "priority": "HIGH",
+      "publishStart": "2026-10-27T00:00:00Z",
+      "start": "2026-11-02T00:00:00Z",
+      "end": "2026-11-29T23:59:00Z",
+      "deeplink": "fitcheck.ai://open?path=/wardrobe/batch-add",
+      "reason": "Northern-hemisphere season change is when people physically move clothes between storage and closet. That is the one moment the 'upload the whole closet' promise is obviously useful rather than a nice-to-have.",
+      "localizations": {
+        "en-US": {
+          "name": "Closet Refresh",
+          "shortDescription": "Clear out and rebuild your closet with AI.",
+          "longDescription": "Photograph the pieces you actually wear, archive the rest, and get an outfit for every day of the month."
+        },
+        "en-GB": {
+          "name": "Closet Refresh",
+          "shortDescription": "Clear out and rebuild your closet with AI.",
+          "longDescription": "Photograph the pieces you actually wear, archive the rest, and get an outfit for every day of the month."
+        },
+        "es-ES": {
+          "name": "Renueva tu armario",
+          "shortDescription": "Vacía y reconstruye tu armario con IA.",
+          "longDescription": "Fotografía la ropa que sí te pones, archiva el resto y ten un outfit para cada día del mes."
+        },
+        "pt-BR": {
+          "name": "Renove o armário",
+          "shortDescription": "Esvazie e reconstrua seu armário com IA.",
+          "longDescription": "Fotografe as peças que você realmente usa, arquive o resto e tenha um look para cada dia do mês."
+        },
+        "fr-FR": {
+          "name": "Dressing neuf",
+          "shortDescription": "Videz et reconstruisez votre dressing.",
+          "longDescription": "Photographiez les pièces que vous portez vraiment, archivez le reste et ayez une tenue pour chaque jour du mois."
+        },
+        "de-DE": {
+          "name": "Schrank-Frische",
+          "shortDescription": "Räum deinen Schrank neu auf, mit KI.",
+          "longDescription": "Fotografiere die Teile, die du wirklich trägst, archiviere den Rest und bekomme ein Outfit für jeden Tag des Monats."
+        },
+        "ja": {
+          "name": "クローゼット更新",
+          "shortDescription": "AIでクローゼットを入れ替え。",
+          "longDescription": "実際に着る服だけを撮影し、残りはアーカイブ。毎日のコーデが1か月分そろいます。"
+        }
+      }
+    },
+    {
+      "referenceName": "wardrobe-130-launch",
+      "slug": "batch-upload-launch",
+      "badge": "MAJOR_UPDATE",
+      "purpose": "ATTRACT_NEW_USERS",
+      "priority": "HIGH",
+      "publishStart": "2026-10-27T00:00:00Z",
+      "start": "2026-10-30T00:00:00Z",
+      "end": "2026-11-19T23:59:00Z",
+      "deeplink": "fitcheck.ai://open?path=/wardrobe/batch-add",
+      "reason": "The one-month Pro offer exists because batch upload is expensive. This event is the only surface that says so in a sentence, and it is the hook the ads point at.",
+      "_warning": "Do not start this event before 1.3.0 is released. The deeplink route exists in the shipping app, but the batch upload limits it advertises are the 1.3.0 ones.",
+      "localizations": {
+        "en-US": {
+          "name": "Whole Closet, One Upload",
+          "shortDescription": "Add your entire closet in a single batch.",
+          "longDescription": "Upload up to 50 items at once, get AI tags for each, and see the whole closet in one grid."
+        },
+        "en-GB": {
+          "name": "Whole Closet, One Upload",
+          "shortDescription": "Add your entire closet in a single batch.",
+          "longDescription": "Upload up to 50 items at once, get AI tags for each, and see the whole closet in one grid."
+        },
+        "es-ES": {
+          "name": "Todo el armario, de una vez",
+          "shortDescription": "Sube el armario entero en un lote.",
+          "longDescription": "Sube hasta 50 prendas a la vez, con etiquetas de IA para cada una, y ve todo tu armario en una sola vista."
+        },
+        "pt-BR": {
+          "name": "Armário inteiro, um envio",
+          "shortDescription": "Envie o armário todo em um lote.",
+          "longDescription": "Envie até 50 peças de uma vez, com etiquetas de IA para cada uma, e veja o armário inteiro em uma grade."
+        },
+        "fr-FR": {
+          "name": "Tout le dressing, d'un coup",
+          "shortDescription": "Importez votre dressing en un lot.",
+          "longDescription": "Importez jusqu'à 50 pièces à la fois, avec des étiquettes IA pour chacune, et voyez tout votre dressing."
+        },
+        "de-DE": {
+          "name": "Ganzer Schrank, ein Upload",
+          "shortDescription": "Lade deinen Schrank in einem Stapel.",
+          "longDescription": "Lade bis zu 50 Teile auf einmal hoch, mit KI-Tags für jedes Teil, und sieh den ganzen Schrank in einem Raster."
+        },
+        "ja": {
+          "name": "クローゼットを一括登録",
+          "shortDescription": "まとめて一度に取り込み。",
+          "longDescription": "最大50点を一度にアップロード。AIがタグ付けし、すべての服を一覧で確認できます。"
+        }
+      }
+    },
+    {
+      "referenceName": "style-week-2027-02",
+      "slug": "style-week-challenge",
+      "badge": "SPECIAL_EVENT",
+      "purpose": "BRING_BACK_LAPSED_USERS",
+      "priority": "NORMAL",
+      "publishStart": "2027-02-08T00:00:00Z",
+      "start": "2027-02-11T00:00:00Z",
+      "end": "2027-02-28T23:59:00Z",
+      "deeplink": "fitcheck.ai://open?path=/gamification",
+      "reason": "The show season is the only week of the year when fashion is in the news. The event borrows that attention but claims no partnership and no designer: it is a seven-day prompt challenge using the clothes the user already owns.",
+      "_warning": "The window is provisioned against the February 2027 show season. Confirm the official dates before publishStart; an event that references a week that has moved looks broken.",
+      "localizations": {
+        "en-US": {
+          "name": "Style Week Challenge",
+          "shortDescription": "Seven prompts. Seven outfits. Your clothes.",
+          "longDescription": "One outfit a day for a week, built only from what you own. Keep the streak and see your closet work."
+        },
+        "en-GB": {
+          "name": "Style Week Challenge",
+          "shortDescription": "Seven prompts. Seven outfits. Your clothes.",
+          "longDescription": "One outfit a day for a week, built only from what you own. Keep the streak and see your closet work."
+        },
+        "es-ES": {
+          "name": "Reto Semana de Estilo",
+          "shortDescription": "Siete retos. Siete outfits. Tu ropa.",
+          "longDescription": "Un outfit al día durante una semana, solo con lo que ya tienes. Mantén la racha y haz trabajar tu armario."
+        },
+        "pt-BR": {
+          "name": "Desafio Semana de Estilo",
+          "shortDescription": "Sete desafios. Sete looks. Suas roupas.",
+          "longDescription": "Um look por dia durante uma semana, só com o que você já tem. Mantenha a sequência e faça seu armário trabalhar."
+        },
+        "fr-FR": {
+          "name": "Défi Semaine Mode",
+          "shortDescription": "Sept défis. Sept tenues. Vos vêtements.",
+          "longDescription": "Une tenue par jour pendant une semaine, avec ce que vous possédez. Tenez la série et faites travailler votre dressing."
+        },
+        "de-DE": {
+          "name": "Style-Week-Challenge",
+          "shortDescription": "Sieben Aufgaben. Sieben Outfits.",
+          "longDescription": "Eine Woche lang täglich ein Outfit, nur aus dem, was du besitzt. Halte die Serie und nutze deinen Schrank."
+        },
+        "ja": {
+          "name": "スタイルウィーク挑戦",
+          "shortDescription": "7日間、7コーデ、手持ちの服で。",
+          "longDescription": "1週間、毎日1コーデ。手持ちの服だけで組みます。連続記録を伸ばして、クローゼットを活用しましょう。"
+        }
+      }
+    }
+  ]
+}

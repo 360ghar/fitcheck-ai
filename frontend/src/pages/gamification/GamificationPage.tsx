@@ -20,8 +20,10 @@ import type { AchievementsData, LeaderboardData, LeaderboardEntryData, StreakDat
 import { Leaderboard } from '@/components/gamification'
 import { logger } from '@/lib/logger'
 import { useAuthStore } from '@/stores/authStore'
+import { formatDate, useTranslation } from '@/i18n'
 
 export default function GamificationPage() {
+  const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [streak, setStreak] = useState<StreakData | null>(null)
@@ -80,8 +82,8 @@ export default function GamificationPage() {
     <div className="app-page max-w-7xl space-y-3">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Streaks &amp; Rewards</h1>
-          <p className="text-sm text-muted-foreground">Streaks, achievements, and leaderboard</p>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">{t('gamification.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('gamification.subtitle')}</p>
         </div>
         <Button
           variant="outline"
@@ -89,8 +91,8 @@ export default function GamificationPage() {
           disabled={isLoading}
           className="w-full md:w-auto"
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
+          <RefreshCw className={`h-4 w-4 me-2 ${isLoading ? 'animate-spin' : ''}`} />
+          {t('gamification.refresh')}
         </Button>
       </div>
 
@@ -98,10 +100,10 @@ export default function GamificationPage() {
         <Card className="border-destructive/30">
           <CardContent className="py-10 text-center space-y-3">
             <Trophy className="h-10 w-10 mx-auto text-destructive/60" />
-            <p className="text-lg font-medium text-foreground">Couldn&apos;t load gamification</p>
+            <p className="text-lg font-medium text-foreground">{t('gamification.loadFailed')}</p>
             <p className="text-sm text-muted-foreground">{loadError}</p>
             <Button onClick={() => void load()} disabled={isLoading}>
-              Try again
+              {t('common.retry')}
             </Button>
           </CardContent>
         </Card>
@@ -112,7 +114,7 @@ export default function GamificationPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Flame className="h-5 w-5 text-orange-500" />
-              Streak
+              {t('gamification.streak')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -128,17 +130,17 @@ export default function GamificationPage() {
             ) : (streak?.current_streak ?? 0) === 0 && (streak?.longest_streak ?? 0) === 0 ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Plan or mark an outfit as worn today to start a streak.
+                  {t('gamification.streakHint')}
                 </p>
                 <Button asChild size="sm" variant="outline">
-                  <Link to="/outfits">Mark an outfit worn</Link>
+                  <Link to="/outfits">{t('gamification.markWorn')}</Link>
                 </Button>
               </div>
             ) : (
               <>
                 <p className="text-3xl font-bold text-foreground">
                   {streak?.current_streak ?? 0}
-                  <span className="text-base font-normal text-muted-foreground ml-1">day streak</span>
+                  <span className="text-base font-normal text-muted-foreground ms-1">day streak</span>
                 </p>
                 <p className="text-sm text-muted-foreground">Best: {streak?.longest_streak ?? 0} days</p>
                 {streak?.next_milestone && (
@@ -160,7 +162,7 @@ export default function GamificationPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-yellow-500" />
-              Achievements
+              {t('gamification.achievements')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -192,7 +194,7 @@ export default function GamificationPage() {
                         <EmptyState
                           className="border-0 py-6"
                           icon={Trophy}
-                          title="No achievements yet"
+                          title={t('gamification.noAchievements')}
                           description="Wear outfits and build your wardrobe to unlock rewards."
                         />
                       )
@@ -205,7 +207,7 @@ export default function GamificationPage() {
                           const detail =
                             a.description ||
                             meta?.description ||
-                            `Earned ${new Date(a.earned_at).toLocaleDateString()}`
+                            t('gamification.earnedOn', { date: formatDate(new Date(a.earned_at)) })
                           return (
                             <div
                               key={a.id}

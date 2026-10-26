@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-08
 
-This directory is the **system of record** for product intent, design decisions, execution plans, quality grades, and deep technical notes. Agents should start at root `AGENTS.md` (root `CLAUDE.md` imports it), then `ARCHITECTURE.md`, then the files below.
+This directory is the **system of record** for product intent, design decisions, execution plans, quality grades, and deep technical notes. Agents should start at root `AGENTS.md`, then `ARCHITECTURE.md`, then the files below.
 
 ## Start here
 
@@ -49,7 +49,7 @@ docs/
 1. Prefer linking to a canonical file over duplicating large blocks.
 2. When behavior, env, or API contracts change, update the matching doc in the **same change**.
 3. Non-trivial work uses an exec plan (`PLANS.md`).
-4. Do not grow root `AGENTS.md` / `CLAUDE.md`—update this tree instead.
+4. Do not grow root `AGENTS.md`—update this tree instead.
 5. Mechanical structure is checked by `scripts/check_docs_structure.py`.
 
 ## Reading paths

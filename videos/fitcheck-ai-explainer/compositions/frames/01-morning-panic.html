@@ -1,0 +1,438 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #mp-bg {
+      background: #FCFAF8;
+    }
+    .mp-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .mp-glow-a {
+      width: 620px;
+      height: 620px;
+      left: 380px;
+      top: -180px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.14) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .mp-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -200px;
+      top: 780px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .mp-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 560px;
+      top: 1180px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .mp-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— floating-pill wallpaper (flat — no shadow) ————— */
+    .mp-pill {
+      position: absolute;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 24px;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      background: #FFFFFF;
+      color: #1A1A1A;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 21px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    #mp-p1 { left: 84px;  top: 168px;  background: #51D6B0; }
+    #mp-p2 { right: 72px; top: 252px;  background: #9BFAED; }
+    #mp-p3 { left: 300px; top: 118px;  background: #74DEC0; }
+    #mp-p4 { right: 120px; top: 1150px; background: #5DF7E2; }
+    #mp-p5 { left: 92px;  top: 618px;  background: #89F9EA; }
+    #mp-p6 { right: 84px; top: 700px;  background: #91F9EB; }
+    #mp-p7 {
+      right: 190px;
+      top: 940px;
+      width: 104px;
+      height: 104px;
+      padding: 0;
+      border-radius: 50%;
+      background: #078675;
+      color: #FFFFFF;
+      font-size: 20px;
+    }
+
+    /* ————— beat 1: "Every morning" — centered, y ≈ 0.42 × height ————— */
+    #mp-line1 {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 755px;
+      text-align: center;
+      white-space: nowrap;
+      font-family: "Bodoni Moda", serif;
+      font-size: 96px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.01em;
+      color: #1A1A1A;
+    }
+    #mp-line1 span {
+      display: inline-block;
+    }
+
+    /* ————— the huge display stack (beats 2 + 3 share one slot) ————— */
+    #mp-stack-inner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 246px;
+      height: 516px;
+    }
+    .mp-line {
+      position: absolute;
+      inset: 0;
+    }
+    .mp-word {
+      display: block;
+      text-align: center;
+      white-space: nowrap;
+      font-family: "Bodoni Moda", serif;
+      font-size: 164px;
+      font-weight: 800;
+      line-height: 1.04;
+      letter-spacing: -0.02em;
+      color: #1A1A1A;
+      opacity: 0;
+    }
+    .mp-word em {
+      font-style: italic;
+      font-weight: 800;
+      color: #078675;
+    }
+
+    /* ————— Finn: folded-paper host chip, bottom-left ————— */
+    #mp-finn-inner {
+      position: absolute;
+      left: 56px;
+      bottom: 400px;
+      width: 372px;
+      height: 288px;
+    }
+    #mp-finn-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="01-morning-panic"
+    data-start="0"
+    data-duration="6.02"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="mp-bg" data-start="0" data-duration="6.02" data-track-index="0">
+      <div class="mp-glow mp-glow-a"></div>
+      <div class="mp-glow mp-glow-b"></div>
+      <div class="mp-glow mp-glow-c"></div>
+      <div class="mp-grain"></div>
+    </div>
+
+    <!-- floating-pill wallpaper -->
+    <div class="clip" id="mp-wallpaper" data-start="0" data-duration="6.02" data-track-index="1">
+      <div class="mp-pill" id="mp-p1">New</div>
+      <div class="mp-pill" id="mp-p2">Fresh</div>
+      <div class="mp-pill" id="mp-p3">Now</div>
+      <div class="mp-pill" id="mp-p4">Ever</div>
+      <div class="mp-pill" id="mp-p5">Next</div>
+      <div class="mp-pill" id="mp-p6">Daily</div>
+      <div class="mp-pill" id="mp-p7">More</div>
+    </div>
+
+    <!-- beat 1: "Every morning" -->
+    <div class="clip" id="mp-beat1" data-start="0" data-duration="6.02" data-track-index="2">
+      <div id="mp-line1">
+        <span id="mp-w-every">Every</span> <span id="mp-w-morning">morning</span>
+      </div>
+    </div>
+
+    <!-- beats 2 + 3: the huge display stack, swapped in place -->
+    <div class="clip" id="mp-stack" data-start="0" data-duration="6.02" data-track-index="3">
+      <div id="mp-stack-inner">
+        <div class="mp-line" id="mp-line-a">
+          <span class="mp-word" id="mp-w-two">Two</span>
+          <span class="mp-word" id="mp-w-hundred">hundred</span>
+          <span class="mp-word" id="mp-w-clothes">clothes</span>
+        </div>
+        <div class="mp-line" id="mp-line-b">
+          <span class="mp-word" id="mp-w-nothing"><em>Nothing</em></span>
+          <span class="mp-word" id="mp-w-to">to</span>
+          <span class="mp-word" id="mp-w-wear">wear</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Finn, the folded-paper host -->
+    <div class="clip" id="mp-finn" data-start="0" data-duration="6.02" data-track-index="4">
+      <div id="mp-finn-inner">
+        <svg
+          id="mp-finn-svg"
+          viewBox="6 20 240 186"
+          xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          aria-label="Finn, the folded-paper host"
+        >
+          <!-- mint middle arm, angled like the Facet F mark -->
+          <path
+            d="M54 126 L24 98 Q18 92 18 102 L18 142 Q18 150 26 148 L54 160 Z"
+            fill="#74DEC0"
+            stroke="#1A1A1A"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <!-- feet -->
+          <rect x="74" y="180" width="34" height="18" rx="9" fill="#078675" stroke="#1A1A1A" stroke-width="1.4" />
+          <rect x="132" y="180" width="34" height="18" rx="9" fill="#078675" stroke="#1A1A1A" stroke-width="1.4" />
+          <!-- folded-paper body -->
+          <rect x="46" y="28" width="148" height="160" rx="30" fill="#078675" stroke="#1A1A1A" stroke-width="1.5" />
+          <!-- folded corner in mint -->
+          <path
+            d="M136 28 L164 28 Q194 28 194 58 L194 86 Z"
+            fill="#74DEC0"
+            stroke="#1A1A1A"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <!-- triangular paper-fold facets -->
+          <path d="M48 122 L98 60" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <path d="M72 186 L176 116" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <path d="M48 156 L102 186" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <!-- face -->
+          <circle cx="92" cy="104" r="7.5" fill="#1A1A1A" />
+          <circle cx="138" cy="104" r="7.5" fill="#1A1A1A" />
+          <path d="M98 132 Q115 146 132 132" fill="none" stroke="#1A1A1A" stroke-width="2.1" stroke-linecap="round" />
+          <!-- host chip -->
+          <rect x="170" y="140" width="68" height="28" rx="14" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.4" />
+          <circle cx="185" cy="154" r="4" fill="#078675" />
+          <text
+            x="214"
+            y="159"
+            text-anchor="middle"
+            font-family="Space Grotesk, sans-serif"
+            font-size="13"
+            font-weight="600"
+            letter-spacing="1.5"
+            fill="#1A1A1A"
+          >HOST</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["01-morning-panic"] = tl;
+
+        // One beat array drives every entrance (kinetic-beat-slam doctrine).
+        var BEATS = {
+          every: 0.06,
+          morning: 0.4,
+          finn: 0.44,
+          cut1: 0.9,
+          two: 0.95,
+          hundred: 1.2,
+          clothes: 1.45,
+          confetti: [0.98, 1.22, 1.46],
+          swap: 2.05,
+          swapTo: 2.12,
+          swapWear: 2.19,
+          jitter: 2.6,
+          bob: 3.2,
+        };
+
+        /* ——— Scene 1 (0–0.9s): kinetic beat-slam, two distinct entrances ——— */
+        // "Every" — scale + blur slam (power4.out hard hit)
+        tl.fromTo(
+          "#mp-w-every",
+          { scale: 1.5, filter: "blur(10px)", opacity: 0 },
+          { scale: 1, filter: "blur(0px)", opacity: 1, duration: 0.4, ease: "power4.out" },
+          BEATS.every
+        );
+        // "morning" — side snap (expo.out whip-in, distinct axis)
+        tl.fromTo(
+          "#mp-w-morning",
+          { x: -260, opacity: 0 },
+          { x: 0, opacity: 1, duration: 0.38, ease: "expo.out" },
+          BEATS.morning
+        );
+
+        // Finn springs in from the bottom edge (playful pop — the one overshoot)
+        tl.fromTo(
+          "#mp-finn-inner",
+          { y: 430, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" },
+          BEATS.finn
+        );
+        tl.fromTo(
+          "#mp-finn-inner",
+          { scale: 0.55, transformOrigin: "50% 100%" },
+          { scale: 1, transformOrigin: "50% 100%", duration: 0.55, ease: "back.out(1.8)" },
+          BEATS.finn
+        );
+
+        // Wallpaper pills settle in on the open (quiet, smooth power3 tails)
+        tl.fromTo("#mp-p1", { scale: 0.5, rotation: -26, opacity: 0 }, { scale: 1, rotation: -14, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.04);
+        tl.fromTo("#mp-p2", { scale: 0.5, rotation: 0, opacity: 0 }, { scale: 1, rotation: 12, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.12);
+        tl.fromTo("#mp-p3", { scale: 0.5, rotation: -22, opacity: 0 }, { scale: 1, rotation: -10, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.2);
+        tl.fromTo("#mp-p4", { scale: 0.5, rotation: -24, opacity: 0 }, { scale: 1, rotation: -12, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.28);
+
+        /* ——— Scene 1 → 2 seam: hard cut (discrete state jump, no exit tween) ——— */
+        tl.set("#mp-line1", { opacity: 0 }, BEATS.cut1);
+
+        /* ——— Scene 2 (0.9–2s): "Two hundred clothes" per-word staggered ——— */
+        // "Two" — scale + blur slam
+        tl.fromTo(
+          "#mp-w-two",
+          { scale: 1.35, filter: "blur(10px)", opacity: 0 },
+          { scale: 1, filter: "blur(0px)", opacity: 1, duration: 0.42, ease: "power4.out" },
+          BEATS.two
+        );
+        // "hundred" — rise + blur
+        tl.fromTo(
+          "#mp-w-hundred",
+          { y: 56, filter: "blur(10px)", opacity: 0 },
+          { y: 0, filter: "blur(0px)", opacity: 1, duration: 0.46, ease: "power3.out" },
+          BEATS.hundred
+        );
+        // "clothes" — side snap + blur
+        tl.fromTo(
+          "#mp-w-clothes",
+          { x: 200, filter: "blur(10px)", opacity: 0 },
+          { x: 0, filter: "blur(0px)", opacity: 1, duration: 0.42, ease: "expo.out" },
+          BEATS.clothes
+        );
+
+        // Three tilted floating pills drift in as wardrobe confetti (flat, smooth)
+        tl.fromTo("#mp-p5", { x: 140, y: -90, rotation: -26, opacity: 0 }, { x: 0, y: 0, rotation: -8, opacity: 1, duration: 0.55, ease: "power3.out" }, BEATS.confetti[0]);
+        tl.fromTo("#mp-p6", { x: -140, y: -70, rotation: 28, opacity: 0 }, { x: 0, y: 0, rotation: 16, opacity: 1, duration: 0.55, ease: "power3.out" }, BEATS.confetti[1]);
+        tl.fromTo("#mp-p7", { x: -120, y: 90, rotation: 22, opacity: 0 }, { x: 0, y: 0, rotation: 8, opacity: 1, duration: 0.55, ease: "power3.out" }, BEATS.confetti[2]);
+
+        /* ——— Scene 2 → 3 seam: hard-cut word-swap (discrete-text-sequence) ——— */
+        tl.set("#mp-line-a", { opacity: 0 }, BEATS.swap);
+
+        /* ——— Scene 3 (2–6.02s): "Nothing to wear" scale-pop settle (power3) ——— */
+        // Each word appears instantly (the hard cut) then settles on a power3 long tail.
+        tl.set("#mp-w-nothing", { opacity: 1 }, BEATS.swap);
+        tl.fromTo("#mp-w-nothing", { scale: 0.94 }, { scale: 1, duration: 0.5, ease: "power3.out" }, BEATS.swap);
+        tl.set("#mp-w-to", { opacity: 1 }, BEATS.swapTo);
+        tl.fromTo("#mp-w-to", { scale: 0.94 }, { scale: 1, duration: 0.5, ease: "power3.out" }, BEATS.swapTo);
+        tl.set("#mp-w-wear", { opacity: 1 }, BEATS.swapWear);
+        tl.fromTo("#mp-w-wear", { scale: 0.94 }, { scale: 1, duration: 0.5, ease: "power3.out" }, BEATS.swapWear);
+
+        // Finn bobs once — a single finite, bounded gesture
+        tl.to("#mp-finn-inner", { y: -16, duration: 0.28, ease: "power2.out" }, BEATS.bob);
+        tl.to("#mp-finn-inner", { y: 0, duration: 0.38, ease: "power2.inOut" }, BEATS.bob + 0.28);
+
+        // Hold the read: stillness, no drift — only a subtle deterministic sine jitter
+        var jitEl = document.getElementById("mp-stack-inner");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 2.0,
+            duration: 3.42,
+            ease: "none",
+            onUpdate: function () {
+              var x = 2.0 * Math.sin(jit.p);
+              var y = 1.3 * Math.sin(jit.p * 1.31);
+              jitEl.style.transform = "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

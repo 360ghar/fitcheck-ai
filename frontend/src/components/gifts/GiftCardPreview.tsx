@@ -34,8 +34,8 @@ export function GiftCardPreview({
       )}
     >
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#d8cfc1_0.65px,transparent_0.65px)] [background-size:5px_5px]" />
-      <div className="pointer-events-none absolute -right-[22%] -top-[13%] h-[47%] w-[55%] rounded-full border-[6px] border-[#e00016]" />
-      <div className="pointer-events-none absolute -bottom-[14%] -left-[22%] h-[43%] w-[55%] rounded-full border-[6px] border-[#151411]" />
+      <div className="pointer-events-none absolute --end-[22%] -top-[13%] h-[47%] w-[55%] rounded-full border-[6px] border-[#e00016]" />
+      <div className="pointer-events-none absolute -bottom-[14%] --start-[22%] h-[43%] w-[55%] rounded-full border-[6px] border-[#151411]" />
 
       <div className="relative flex h-full flex-col rounded-md border border-[#d8cfc1] bg-[#fffdf8]/95 p-[8%]">
         <p className="font-display text-[clamp(0.52rem,1.4vw,0.72rem)] font-bold uppercase tracking-[0.26em] text-[#6b655d]">

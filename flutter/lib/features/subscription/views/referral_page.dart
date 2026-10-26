@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/subscription_model.dart';
 import '../providers/subscription_providers.dart';
@@ -90,7 +91,7 @@ class ReferralPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.stone,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Refer a friend')),
+        appBar: AppBar(title: Text(context.l10n.billingReferFriend)),
         body: AppPageBackground(child: body),
       ),
     );
@@ -104,16 +105,17 @@ class _HowItWorks extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
-    const steps = [
-      ('Share your link', 'Send it to a friend.'),
-      ('They sign up', 'Your friend joins from the link.'),
-      ('You both get Pro', 'Each of you gets a month of Pro free.'),
+    final l10n = context.l10n;
+    final steps = [
+      (l10n.billingHowShareTitle, l10n.billingHowShareBody),
+      (l10n.billingHowSignUpTitle, l10n.billingHowSignUpBody),
+      (l10n.billingHowBothTitle, l10n.billingHowBothBody),
     ];
     return PaperSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('How it works', style: text.headlineSmall),
+          Text(l10n.billingHowItWorks, style: text.headlineSmall),
           for (final (i, (title, detail)) in steps.indexed)
             Padding(
               padding: const EdgeInsets.only(top: AppConstants.spacing16),
@@ -169,6 +171,7 @@ class _Stats extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     Widget figure(int value, String label) => Expanded(
       child: Column(
         children: [
@@ -186,14 +189,14 @@ class _Stats extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Your referrals', style: text.headlineSmall),
+          Text(l10n.billingYourReferrals, style: text.headlineSmall),
           const SizedBox(height: AppConstants.spacing16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              figure(stats.totalReferrals, 'Invited'),
-              figure(stats.successfulReferrals, 'Joined'),
-              figure(stats.monthsEarned, 'Months earned'),
+              figure(stats.totalReferrals, l10n.billingInvited),
+              figure(stats.successfulReferrals, l10n.billingJoined),
+              figure(stats.monthsEarned, l10n.billingMonthsEarned),
             ],
           ),
         ],

@@ -1,0 +1,409 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #cw-bg {
+      background: #FCFAF8;
+    }
+    .cw-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .cw-glow-a {
+      width: 640px;
+      height: 640px;
+      left: 360px;
+      top: -200px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.13) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .cw-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -220px;
+      top: 860px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .cw-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 540px;
+      top: 1260px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .cw-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— the headline ————— */
+    #cw-headline {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 180px;
+      text-align: center;
+      font-family: "Bodoni Moda", serif;
+      font-size: 88px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+    #cw-headline .cw-w {
+      display: inline-block;
+    }
+    #cw-headline em {
+      font-style: italic;
+      color: #078675;
+    }
+
+    /* ————— the CALENDAR / WEATHER label pills ————— */
+    .cw-tag {
+      position: absolute;
+      top: 300px;
+      width: 280px;
+      text-align: center;
+      padding: 10px 0 14px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+    #cw-tag-cal { left: 190px; }
+    #cw-tag-wx { right: 190px; }
+    .cw-tag .cw-tag-glow {
+      position: absolute;
+      inset: -14px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.35) 0%, rgba(7, 134, 117, 0) 65%);
+      opacity: 0;
+    }
+
+    /* ————— the day-station strip (masked viewport + camera pan) ————— */
+    #cw-viewport {
+      position: absolute;
+      left: 190px;
+      top: 400px;
+      width: 700px;
+      height: 1146px;
+      overflow: hidden;
+    }
+    #cw-strip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 700px;
+    }
+    .cw-station {
+      position: relative;
+      width: 700px;
+      height: 200px;
+      margin-bottom: 20px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 32px;
+      box-shadow: 6px 6px 0 rgba(26, 26, 26, 0.08);
+      display: flex;
+      align-items: center;
+    }
+    .cw-day {
+      flex: 0 0 170px;
+      text-align: center;
+      font-family: "Bodoni Moda", serif;
+      font-size: 52px;
+      font-weight: 800;
+      color: #1A1A1A;
+    }
+    .wx-pill {
+      margin-left: 30px;
+      width: 240px;
+      height: 96px;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 28px;
+      font-weight: 600;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+    .wx-pill svg {
+      margin-right: 12px;
+      display: block;
+    }
+    #cw-wx-0 { background: #74DEC0; }
+    #cw-wx-1 { background: #74DEC0; }
+    #cw-wx-2 { background: #9BFAED; }
+    #cw-wx-3 { background: #51D6B0; }
+    #cw-wx-4 { background: #74DEC0; }
+    #cw-wx-5 { background: #9BFAED; }
+    #cw-wx-6 { background: #74DEC0; }
+
+    /* the locked THU station: meeting pill + styled outfit tile */
+    #cw-meet {
+      position: absolute;
+      left: 560px;
+      top: 42px;
+      width: 120px;
+      text-align: center;
+      padding: 8px 0 11px;
+      background: #FCFAF8;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: #1A1A1A;
+      white-space: nowrap;
+      opacity: 0;
+    }
+    #cw-outfit-tile {
+      position: absolute;
+      left: 560px;
+      top: 108px;
+      width: 120px;
+      height: 72px;
+      background: #078675;
+      border: 2px solid #1E1E1E;
+      border-radius: 20px;
+      opacity: 0;
+    }
+    #cw-outfit-tile svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* the "never freeze" highlight wrap */
+    #cw-never {
+      position: absolute;
+      left: 240px;
+      top: 1600px;
+      width: 600px;
+      text-align: center;
+      padding: 12px 0 16px;
+      background: #74DEC0;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Bodoni Moda", serif;
+      font-size: 40px;
+      font-weight: 700;
+      color: #1A1A1A;
+      white-space: nowrap;
+      opacity: 0;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="07-calendar-weather"
+    data-start="0"
+    data-duration="7.01"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="cw-bg" data-start="0" data-duration="7.01" data-track-index="0">
+      <div class="cw-glow cw-glow-a"></div>
+      <div class="cw-glow cw-glow-b"></div>
+      <div class="cw-glow cw-glow-c"></div>
+      <div class="cw-grain"></div>
+    </div>
+
+    <!-- headline + tags -->
+    <div class="clip" id="cw-header" data-start="0" data-duration="7.01" data-track-index="1">
+      <div id="cw-headline"><span class="cw-w">Plan</span> <span class="cw-w">the</span> <span class="cw-w"><em>week</em></span></div>
+      <div class="cw-tag" id="cw-tag-cal"><span class="cw-tag-glow"></span>Calendar</div>
+      <div class="cw-tag" id="cw-tag-wx"><span class="cw-tag-glow"></span>Weather</div>
+    </div>
+
+    <!-- the day-station strip: camera pans down to THU -->
+    <div class="clip" id="cw-strip-clip" data-start="0" data-duration="7.01" data-track-index="2">
+      <div id="cw-viewport">
+        <div id="cw-strip">
+          <div class="cw-station" id="cw-st-0"><span class="cw-day">Mon</span><span class="wx-pill" id="cw-wx-0"><svg viewBox="0 0 40 40" width="44" height="44"><circle cx="20" cy="20" r="10" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5"/><g stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"><line x1="20" y1="2" x2="20" y2="7"/><line x1="20" y1="33" x2="20" y2="38"/><line x1="2" y1="20" x2="7" y2="20"/><line x1="33" y1="20" x2="38" y2="20"/><line x1="7" y1="7" x2="10" y2="10"/><line x1="30" y1="30" x2="33" y2="33"/><line x1="33" y1="7" x2="30" y2="10"/><line x1="10" y1="30" x2="7" y2="33"/></g></svg>68°</span></div>
+          <div class="cw-station" id="cw-st-1"><span class="cw-day">Tue</span><span class="wx-pill" id="cw-wx-1"><svg viewBox="0 0 40 40" width="44" height="44"><circle cx="20" cy="20" r="10" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5"/><g stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"><line x1="20" y1="2" x2="20" y2="7"/><line x1="20" y1="33" x2="20" y2="38"/><line x1="2" y1="20" x2="7" y2="20"/><line x1="33" y1="20" x2="38" y2="20"/><line x1="7" y1="7" x2="10" y2="10"/><line x1="30" y1="30" x2="33" y2="33"/><line x1="33" y1="7" x2="30" y2="10"/><line x1="10" y1="30" x2="7" y2="33"/></g></svg>71°</span></div>
+          <div class="cw-station" id="cw-st-2"><span class="cw-day">Wed</span><span class="wx-pill" id="cw-wx-2"><svg viewBox="0 0 40 40" width="44" height="44"><path d="M12 26 Q6 26 6 21 Q6 15 12 15 Q14 9 20 9 Q27 9 28 15 Q34 15 34 21 Q34 26 28 26 Z" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5" stroke-linejoin="round"/></svg>66°</span></div>
+          <div class="cw-station" id="cw-st-3"><span class="cw-day">Thu</span><span class="wx-pill" id="cw-wx-3"><svg viewBox="0 0 40 40" width="44" height="44"><path d="M12 24 Q6 24 6 19 Q6 13 12 13 Q14 7 20 7 Q27 7 28 13 Q34 13 34 19 Q34 24 28 24 Z" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5" stroke-linejoin="round"/><path d="M17 30 L15 35 M23 30 L21 35" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/></svg>64°</span><span id="cw-meet">9:00</span><span id="cw-outfit-tile"><svg viewBox="0 0 120 72"><path d="M38 16 L52 6 L70 6 L84 16 L98 30 L86 39 L86 62 L36 62 L36 39 L24 30 Z" fill="#74DEC0" stroke="#1A1A1A" stroke-width="2.5" stroke-linejoin="round"/></svg></span></div>
+          <div class="cw-station" id="cw-st-4"><span class="cw-day">Fri</span><span class="wx-pill" id="cw-wx-4"><svg viewBox="0 0 40 40" width="44" height="44"><circle cx="20" cy="20" r="10" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5"/><g stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"><line x1="20" y1="2" x2="20" y2="7"/><line x1="20" y1="33" x2="20" y2="38"/><line x1="2" y1="20" x2="7" y2="20"/><line x1="33" y1="20" x2="38" y2="20"/><line x1="7" y1="7" x2="10" y2="10"/><line x1="30" y1="30" x2="33" y2="33"/><line x1="33" y1="7" x2="30" y2="10"/><line x1="10" y1="30" x2="7" y2="33"/></g></svg>70°</span></div>
+          <div class="cw-station" id="cw-st-5"><span class="cw-day">Sat</span><span class="wx-pill" id="cw-wx-5"><svg viewBox="0 0 40 40" width="44" height="44"><path d="M12 26 Q6 26 6 21 Q6 15 12 15 Q14 9 20 9 Q27 9 28 15 Q34 15 34 21 Q34 26 28 26 Z" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5" stroke-linejoin="round"/></svg>65°</span></div>
+          <div class="cw-station" id="cw-st-6"><span class="cw-day">Sun</span><span class="wx-pill" id="cw-wx-6"><svg viewBox="0 0 40 40" width="44" height="44"><circle cx="20" cy="20" r="10" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5"/><g stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"><line x1="20" y1="2" x2="20" y2="7"/><line x1="20" y1="33" x2="20" y2="38"/><line x1="2" y1="20" x2="7" y2="20"/><line x1="33" y1="20" x2="38" y2="20"/><line x1="7" y1="7" x2="10" y2="10"/><line x1="30" y1="30" x2="33" y2="33"/><line x1="33" y1="7" x2="30" y2="10"/><line x1="10" y1="30" x2="7" y2="33"/></g></svg>72°</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- the "never freeze" consequence highlight -->
+    <div class="clip" id="cw-never-clip" data-start="0" data-duration="7.01" data-track-index="3">
+      <div id="cw-never">never freeze in a meeting</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["07-calendar-weather"] = tl;
+
+        var BEATS = {
+          headline: 0.08,
+          tags: 0.5,
+          calGlow: 1.4,
+          wxGlow: 2.16,
+          panStart: 1.0,
+          panEnd: 2.8,
+          wxPops: 1.0,
+          wxPopStep: 0.26,
+          meet: 2.95,
+          tile: 3.25,
+          never: 2.9,
+          jitter: 3.6,
+        };
+
+        /* ——— Scene 1 (0–0.9s): the headline reveals per-word on its VO cues ——— */
+        var headWords = document.querySelectorAll("#cw-headline .cw-w");
+        var headAt = [0.08, 0.25, 0.44];
+        for (var h = 0; h < headWords.length; h++) {
+          (function (el, at) {
+            tl.fromTo(el, { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, ease: "power3.out" }, at);
+          })(headWords[h], headAt[h]);
+        }
+
+        // The CALENDAR / WEATHER tags settle in (quiet power3 tails).
+        tl.fromTo("#cw-tag-cal", { scale: 0.6, rotation: -8, opacity: 0 }, { scale: 1, rotation: -3, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.tags);
+        tl.fromTo("#cw-tag-wx", { scale: 0.6, rotation: 8, opacity: 0 }, { scale: 1, rotation: 3, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.tags + 0.12);
+
+        /* ——— Scene 2 (1–2.8s): the camera pans the week down to Thursday ——— */
+        // The strip starts with MON centered; the pan travels until THU is centered.
+        tl.fromTo("#cw-strip", { y: 473 }, { y: -187, duration: BEATS.panEnd - BEATS.panStart, ease: "power3.inOut" }, BEATS.panStart);
+
+        // Each station's weather pill pops in as the camera centers it (spring-pop).
+        for (var w = 0; w < 7; w++) {
+          (function (el, idx) {
+            tl.fromTo(
+              el,
+              { scale: 0.4, transformOrigin: "50% 50%", opacity: 0 },
+              { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(1.6)" },
+              BEATS.wxPops + idx * BEATS.wxPopStep
+            );
+          })(document.getElementById("cw-wx-" + w), w);
+        }
+
+        // The labels glow on their spoken cues (keyword glow: a jade halo, two bounded pulses).
+        function tagGlow(tagEl, at) {
+          var halo = tagEl.querySelector(".cw-tag-glow");
+          tl.fromTo(halo, { opacity: 0 }, { opacity: 0.9, duration: 0.14, ease: "power1.out" }, at);
+          tl.to(halo, { opacity: 0.15, duration: 0.2, ease: "power2.out" }, at + 0.14);
+          tl.to(halo, { opacity: 0.7, duration: 0.14, ease: "power1.out" }, at + 0.34);
+          tl.to(halo, { opacity: 0, duration: 0.3, ease: "power2.out" }, at + 0.48);
+          tl.fromTo(tagEl, { scale: 1 }, { scale: 1.06, transformOrigin: "50% 50%", duration: 0.14, ease: "power2.out" }, at);
+          tl.to(tagEl, { scale: 1, duration: 0.24, ease: "power3.out" }, at + 0.14);
+        }
+        tagGlow(document.getElementById("cw-tag-cal"), BEATS.calGlow);
+        tagGlow(document.getElementById("cw-tag-wx"), BEATS.wxGlow);
+
+        /* ——— Scene 3 (2.9–6.51s): the camera locks on THU — the consequence lands ——— */
+        // THU's meeting pill and styled outfit tile pop in beside the weather pill.
+        tl.fromTo("#cw-meet", { scale: 0.4, transformOrigin: "50% 50%", opacity: 0 }, { scale: 1, opacity: 1, duration: 0.28, ease: "back.out(1.7)" }, BEATS.meet);
+        tl.fromTo("#cw-outfit-tile", { scale: 0.5, rotation: -10, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.32, ease: "back.out(1.5)" }, BEATS.tile);
+
+        // The consequence highlight: "never freeze in a meeting" lands on its cue.
+        tl.fromTo("#cw-never", { y: 30, scale: 0.92, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.never);
+
+        // Hold the read: stillness — only a subtle deterministic jitter on the strip.
+        var stripEl = document.getElementById("cw-strip");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 1.4,
+            duration: 6.51 - BEATS.jitter,
+            ease: "none",
+            onUpdate: function () {
+              var x = 1.3 * Math.sin(jit.p);
+              var y = 0.9 * Math.sin(jit.p * 1.27);
+              // Compose with the finished pan offset (−187) so the jitter never fights the camera.
+              stripEl.style.transform = "translate3d(" + x.toFixed(2) + "px," + (-187 + y).toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

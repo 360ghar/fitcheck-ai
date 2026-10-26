@@ -190,8 +190,9 @@ class CodePushService with WidgetsBindingObserver {
       // (e.g. context torn down between the check above and the call) leaves
       // the flag false and the next lifecycle event can retry.
       ErrorHandler.showInfo(
-        'Restart FitCheck AI to apply the latest improvements.',
-        title: 'Update ready',
+        ErrorHandler.l10n?.updateReadyBody ??
+            'Restart FitCheck AI to apply the latest improvements.',
+        title: ErrorHandler.l10n?.updateReadyTitle ?? 'Update ready',
       );
       _announced = true;
     });

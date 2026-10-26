@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI 需要相機存取權限，以拍攝您的穿搭與衣櫃物品。";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI 需要相簿存取權限，以選擇您的穿搭與衣櫃物品圖片。";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI 需要將您的 AI 生成穿搭照片儲存至相簿。";

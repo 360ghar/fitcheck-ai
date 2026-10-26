@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
 import 'paper.dart';
+import '../../core/i18n/l10n.dart';
 
 /// Loading skeletons: flat cut-outs in the stock's recessed tone.
 ///
@@ -372,13 +373,13 @@ class SliverLoadingMoreIndicator extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            "Couldn't load more.",
+            context.l10n.skeletonsLoadMoreFailed,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: PaperTokens.of(context).textSecondary,
             ),
           ),
           if (onRetry != null)
-            TextButton(onPressed: onRetry, child: const Text('Try again')),
+            TextButton(onPressed: onRetry, child: Text(context.l10n.actionRetry)),
         ],
       );
     } else if (isLoading) {

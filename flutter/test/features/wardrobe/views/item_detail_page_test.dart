@@ -1,3 +1,4 @@
+import 'package:fitcheck_ai/core/i18n/l10n.dart';
 import 'package:fitcheck_ai/domain/enums/category.dart';
 import 'package:fitcheck_ai/domain/enums/condition.dart';
 import 'package:fitcheck_ai/features/wardrobe/providers/wardrobe_providers.dart';
@@ -78,6 +79,9 @@ void main() {
         container: container,
         child: MaterialApp(
           scaffoldMessengerKey: scaffoldMessengerKey,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
           home: const MediaQuery(
             data: MediaQueryData(disableAnimations: true),
             child: ItemDetailPage(itemId: 'item-1'),

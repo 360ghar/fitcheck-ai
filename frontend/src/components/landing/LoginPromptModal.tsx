@@ -60,7 +60,7 @@ export function LoginPromptModal({ isOpen, onClose, feature }: LoginPromptModalP
             >
               <Link to="/auth/register">
                 Start free
-                <ArrowRight className="w-4 h-4 ml-2" />
+                <ArrowRight className="w-4 h-4 ms-2" />
               </Link>
             </Button>
             <Button variant="ghost" className="w-full text-stone-600 dark:text-stone-400" asChild>

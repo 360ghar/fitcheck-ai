@@ -249,7 +249,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
         {isSelecting && isSelected && (
           <span
             data-testid="item-card-selected-badge"
-            className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+            className="absolute end-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
           >
             <Check className="h-3 w-3" strokeWidth={3} />
           </span>

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/season.dart';
@@ -29,7 +31,7 @@ class OutfitEditPage extends ConsumerWidget {
       child: outfit != null
           ? _EditForm(outfit: outfit)
           : Scaffold(
-              appBar: AppBar(title: const Text('Edit outfit')),
+              appBar: AppBar(title: Text(context.l10n.outfitEditTitle)),
               body: AppPageBackground(
                 child: detail.hasError
                     ? AppErrorState(
@@ -136,6 +138,7 @@ class _EditFormState extends ConsumerState<_EditForm> {
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    final l10n = context.l10n;
     final id = widget.outfit.id;
     final repository = ref.read(outfitRepositoryProvider);
     final description = _description.text.trim();
@@ -179,7 +182,7 @@ class _EditFormState extends ConsumerState<_EditForm> {
       } catch (e, stack) {
         ErrorHandler.showError(
           e,
-          title: 'Details saved, photos not',
+          title: l10n.outfitSavedPhotosFailed,
           stackTrace: stack,
         );
         if (mounted) setState(() => _saving = false);
@@ -187,7 +190,10 @@ class _EditFormState extends ConsumerState<_EditForm> {
       }
     }
     if (!mounted) return;
-    ErrorHandler.showSuccess('Your changes are saved.', title: 'Saved');
+    ErrorHandler.showSuccess(
+      l10n.itemEditSavedBody,
+      title: l10n.itemEditSavedTitle,
+    );
     Navigator.pop(context);
   }
 
@@ -201,18 +207,18 @@ class _EditFormState extends ConsumerState<_EditForm> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit outfit'),
+        title: Text(context.l10n.outfitEditTitle),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: AppConstants.spacing8),
+            padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
             child: TextButton(
               onPressed: _saving ? null : _save,
               child: _saving
-                  ? const InlineProcessingStatus(
+                  ? InlineProcessingStatus(
                       phase: ProcessingPhase.processing,
-                      processingLabel: 'Saving',
+                      processingLabel: context.l10n.itemManualSaving,
                     )
-                  : const Text('Save'),
+                  : Text(context.l10n.actionSave),
             ),
           ),
         ],
@@ -225,14 +231,19 @@ class _EditFormState extends ConsumerState<_EditForm> {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text('Photos', style: text.titleSmall)),
+                  Expanded(
+                    child: Text(
+                      context.l10n.itemPhotos,
+                      style: text.titleSmall,
+                    ),
+                  ),
                   TextButton.icon(
                     onPressed: _addPhoto,
                     icon: const Icon(
                       Icons.add_photo_alternate_outlined,
                       size: 18,
                     ),
-                    label: const Text('Add photo'),
+                    label: Text(context.l10n.tryOnAddPhoto),
                   ),
                 ],
               ),
@@ -242,7 +253,7 @@ class _EditFormState extends ConsumerState<_EditForm> {
                   lift: 0,
                   color: tokens.stock.sunk,
                   child: Text(
-                    'No photos yet. The outfit shows its pieces instead.',
+                    context.l10n.outfitNoPhotosBody,
                     style: text.bodyMedium?.copyWith(
                       color: tokens.textSecondary,
                     ),
@@ -290,16 +301,19 @@ class _EditFormState extends ConsumerState<_EditForm> {
               TextFormField(
                 controller: _name,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Name'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+                decoration: InputDecoration(labelText: context.l10n.authName),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? context.l10n.itemManualEnterName
+                    : null,
               ),
               gap,
               TextFormField(
                 controller: _description,
                 maxLines: 3,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.itemEditDescriptionLabel,
+                ),
               ),
               gap,
               Row(
@@ -308,12 +322,14 @@ class _EditFormState extends ConsumerState<_EditForm> {
                     child: DropdownButtonFormField<Style>(
                       initialValue: _style,
                       isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Style'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.filterStyle,
+                      ),
                       items: [
                         for (final s in Style.values)
                           DropdownMenuItem(
                             value: s,
-                            child: Text(s.displayName),
+                            child: Text(s.label(context.l10n)),
                           ),
                       ],
                       onChanged: (v) => setState(() => _style = v),
@@ -324,12 +340,14 @@ class _EditFormState extends ConsumerState<_EditForm> {
                     child: DropdownButtonFormField<Season>(
                       initialValue: _season,
                       isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Season'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.filterSeason,
+                      ),
                       items: [
                         for (final s in Season.values)
                           DropdownMenuItem(
                             value: s,
-                            child: Text(s.displayName),
+                            child: Text(s.label(context.l10n)),
                           ),
                       ],
                       onChanged: (v) => setState(() => _season = v),
@@ -341,13 +359,18 @@ class _EditFormState extends ConsumerState<_EditForm> {
               DropdownButtonFormField<String?>(
                 initialValue: _occasion,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Occasion'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.outfitOccasionLabel,
+                ),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('None')),
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(context.l10n.outfitOccasionNone),
+                  ),
                   for (final o in occasions)
                     DropdownMenuItem(
                       value: o,
-                      child: Text(o[0].toUpperCase() + o.substring(1)),
+                      child: Text(localizedTaxonomy(context.l10n, o)),
                     ),
                 ],
                 onChanged: (v) => setState(() => _occasion = v),
@@ -355,9 +378,9 @@ class _EditFormState extends ConsumerState<_EditForm> {
               gap,
               TextFormField(
                 controller: _tags,
-                decoration: const InputDecoration(
-                  labelText: 'Tags',
-                  helperText: 'Separate with commas',
+                decoration: InputDecoration(
+                  labelText: context.l10n.itemTags,
+                  helperText: context.l10n.outfitTagsHint,
                 ),
               ),
               const SizedBox(height: AppConstants.spacing20),
@@ -366,19 +389,19 @@ class _EditFormState extends ConsumerState<_EditForm> {
                 child: Column(
                   children: [
                     SwitchListTile(
-                      title: const Text('Favourite'),
+                      title: Text(context.l10n.closetFavourite),
                       value: _favorite,
                       onChanged: (v) => setState(() => _favorite = v),
                     ),
                     SwitchListTile(
-                      title: const Text('Draft'),
-                      subtitle: const Text('Hidden from your main list'),
+                      title: Text(context.l10n.outfitDraft),
+                      subtitle: Text(context.l10n.outfitDraftBody),
                       value: _draft,
                       onChanged: (v) => setState(() => _draft = v),
                     ),
                     SwitchListTile(
-                      title: const Text('Public'),
-                      subtitle: const Text('Anyone with the link can see it'),
+                      title: Text(context.l10n.outfitPublic),
+                      subtitle: Text(context.l10n.outfitPublicBody),
                       value: _public,
                       onChanged: (v) => setState(() => _public = v),
                     ),
@@ -387,7 +410,7 @@ class _EditFormState extends ConsumerState<_EditForm> {
               ),
               const SizedBox(height: AppConstants.spacing24),
               Text(
-                'Delete this outfit from its detail page.',
+                context.l10n.outfitDeleteFromDetail,
                 style: text.bodySmall?.copyWith(color: tokens.textMuted),
                 textAlign: TextAlign.center,
               ),
@@ -415,7 +438,7 @@ class _Thumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.only(right: AppConstants.spacing8),
+      padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
       child: SizedBox.square(
         dimension: 104,
         child: Stack(
@@ -428,7 +451,7 @@ class _Thumb extends StatelessWidget {
                 child: removed
                     ? Center(
                         child: Text(
-                          'Removed',
+                          context.l10n.itemEditRemoved,
                           style: Theme.of(context).textTheme.labelMedium,
                         ),
                       )
@@ -439,7 +462,9 @@ class _Thumb extends StatelessWidget {
               top: 0,
               right: 0,
               child: IconButton(
-                tooltip: removed ? 'Keep photo' : 'Remove photo',
+                tooltip: removed
+                    ? context.l10n.itemEditKeepPhoto
+                    : context.l10n.itemRemovePhoto,
                 onPressed: onAction,
                 style: IconButton.styleFrom(backgroundColor: tokens.stock.card),
                 icon: Icon(

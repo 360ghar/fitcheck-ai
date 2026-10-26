@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/body_profile_model.dart';
 import '../providers/body_profiles_provider.dart';
@@ -26,7 +27,7 @@ class BodyProfilesPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.stone,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Body profiles')),
+        appBar: AppBar(title: Text(context.l10n.profileBodyProfiles)),
         body: AppPageBackground(
           child: RefreshIndicator(
             onRefresh: notifier.refresh,
@@ -41,9 +42,9 @@ class BodyProfilesPage extends ConsumerWidget {
                     ),
                   AppEmptyState(
                     scene: PaperScenes.studio,
-                    title: 'No body profiles yet',
-                    message: 'Add your height and build to get a better fit.',
-                    actionLabel: 'Add a profile',
+                    title: context.l10n.profileBodyEmptyTitle,
+                    message: context.l10n.profileBodyEmptyBody,
+                    actionLabel: context.l10n.profileBodyAdd,
                     actionIcon: Icons.add_rounded,
                     onAction: () => _openSheet(context),
                   ),
@@ -128,17 +129,17 @@ class _ProfileList extends ConsumerWidget {
             AppConstants.spacing16,
           ),
           child: Text(
-            'Your default profile is used for fit and try-on.',
+            context.l10n.profileBodyDefaultNote,
             style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
           ),
         ),
         for (final profile in profiles) ...[
           PaperSurface(
-            padding: const EdgeInsets.fromLTRB(
-              AppConstants.spacing16,
-              AppConstants.spacing12,
-              AppConstants.spacing4,
-              AppConstants.spacing12,
+            padding: const EdgeInsetsDirectional.only(
+              start: AppConstants.spacing16,
+              top: AppConstants.spacing12,
+              end: AppConstants.spacing4,
+              bottom: AppConstants.spacing12,
             ),
             child: Row(
               children: [
@@ -152,7 +153,8 @@ class _ProfileList extends ConsumerWidget {
                           children: [
                             if (profile.isDefault)
                               TextSpan(
-                                text: '  Default',
+                                text:
+                                    '  ${context.l10n.profileBodyDefaultBadge}',
                                 style: text.bodyMedium?.copyWith(
                                   color: tokens.stock.accent,
                                   fontWeight: FontWeight.w600,
@@ -168,14 +170,16 @@ class _ProfileList extends ConsumerWidget {
                       ),
                       const SizedBox(height: AppConstants.spacing4),
                       Text(
-                        '${profile.heightCm.toStringAsFixed(0)} cm · '
-                        '${profile.weightKg.toStringAsFixed(1)} kg',
+                        context.l10n.bodyProfileMeasurements(
+                          profile.heightCm.toStringAsFixed(0),
+                          profile.weightKg.toStringAsFixed(1),
+                        ),
                         style: text.bodyMedium?.copyWith(
                           color: tokens.textSecondary,
                         ),
                       ),
                       Text(
-                        '${profile.bodyShape} build · ${profile.skinTone} skin',
+                        context.l10n.bodyProfileBuildSkin(profile.bodyShape, profile.skinTone),
                         style: text.bodySmall?.copyWith(
                           color: tokens.textMuted,
                         ),
@@ -199,7 +203,7 @@ class _ProfileList extends ConsumerWidget {
                   )
                 else
                   PopupMenuButton<String>(
-                    tooltip: 'Options for ${profile.name}',
+                    tooltip: context.l10n.bodyProfileOptionsFor(profile.name),
                     icon: const Icon(Icons.more_vert_rounded),
                     onSelected: (value) => switch (value) {
                       'edit' => onEdit(profile),
@@ -207,16 +211,19 @@ class _ProfileList extends ConsumerWidget {
                       _ => _confirmDelete(context, ref, profile),
                     },
                     itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text(context.l10n.actionEdit),
+                      ),
                       if (!profile.isDefault)
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'default',
-                          child: Text('Make default'),
+                          child: Text(context.l10n.profileBodyMakeDefault),
                         ),
                       PopupMenuItem(
                         value: 'delete',
                         child: Text(
-                          'Delete',
+                          context.l10n.actionDelete,
                           style: TextStyle(color: tokens.error),
                         ),
                       ),
@@ -231,7 +238,7 @@ class _ProfileList extends ConsumerWidget {
         ElevatedButton.icon(
           onPressed: onAdd,
           icon: const Icon(Icons.add_rounded, size: 20),
-          label: const Text('Add a profile'),
+          label: Text(context.l10n.profileBodyAdd),
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
           ),
@@ -248,19 +255,19 @@ class _ProfileList extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Delete ${profile.name}?'),
-        content: const Text('You cannot undo this.'),
+        title: Text(context.l10n.bodyProfileDeleteTitle(profile.name)),
+        content: Text(context.l10n.profileBodyDeleteBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.actionCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             style: TextButton.styleFrom(
               foregroundColor: PaperTokens.of(dialogContext).error,
             ),
-            child: const Text('Delete'),
+            child: Text(context.l10n.actionDelete),
           ),
         ],
       ),
@@ -311,12 +318,12 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
   }
 
   String? _required(String? value) =>
-      (value?.trim().isEmpty ?? true) ? 'Required' : null;
+      (value?.trim().isEmpty ?? true) ? context.l10n.profileBodyRequired : null;
 
   String? Function(String?) _number(double max) => (value) {
     final n = double.tryParse(value?.trim() ?? '');
-    if (value?.trim().isEmpty ?? true) return 'Required';
-    if (n == null || n <= 0 || n > max) return 'Check this number';
+    if (value?.trim().isEmpty ?? true) return context.l10n.profileBodyRequired;
+    if (n == null || n <= 0 || n > max) return context.l10n.profileBodyCheckNumber;
     return null;
   };
 
@@ -371,7 +378,9 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  widget.profile == null ? 'New body profile' : 'Edit profile',
+                  widget.profile == null
+                      ? context.l10n.profileBodyNew
+                      : context.l10n.profileEditTitle,
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: AppConstants.spacing20),
@@ -379,9 +388,9 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
                   controller: _name,
                   enabled: !_saving,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                    hintText: 'For example, Me',
+                  decoration: InputDecoration(
+                    labelText: context.l10n.authName,
+                    hintText: context.l10n.profileBodyNameHint,
                   ),
                   validator: _required,
                 ),
@@ -396,8 +405,8 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        decoration: const InputDecoration(
-                          labelText: 'Height',
+                        decoration: InputDecoration(
+                          labelText: context.l10n.profileBodyHeight,
                           suffixText: 'cm',
                         ),
                         validator: _number(300),
@@ -411,8 +420,8 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        decoration: const InputDecoration(
-                          labelText: 'Weight',
+                        decoration: InputDecoration(
+                          labelText: context.l10n.profileBodyWeight,
                           suffixText: 'kg',
                         ),
                         validator: _number(500),
@@ -428,7 +437,9 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
                       child: TextFormField(
                         controller: _shape,
                         enabled: !_saving,
-                        decoration: const InputDecoration(labelText: 'Build'),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.profileBodyBuild,
+                        ),
                         validator: _required,
                       ),
                     ),
@@ -437,8 +448,8 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
                       child: TextFormField(
                         controller: _tone,
                         enabled: !_saving,
-                        decoration: const InputDecoration(
-                          labelText: 'Skin tone',
+                        decoration: InputDecoration(
+                          labelText: context.l10n.profileBodySkinTone,
                         ),
                         validator: _required,
                       ),
@@ -457,7 +468,7 @@ class _BodyProfileSheetState extends ConsumerState<_BodyProfileSheet> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Save'),
+                      : Text(context.l10n.actionSave),
                 ),
               ],
             ),

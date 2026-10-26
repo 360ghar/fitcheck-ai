@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import type { SocialImportJobData } from '@/types'
+import { useTranslation } from '@/i18n'
 
 interface SocialImportProgressProps {
   job: SocialImportJobData
@@ -15,19 +16,20 @@ function getCompletionProgress(job: SocialImportJobData): number {
 }
 
 export function SocialImportProgress({ job, isConnected }: SocialImportProgressProps) {
+  const { t } = useTranslation()
   const progress = getCompletionProgress(job)
 
   return (
     <div className="space-y-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-foreground">Social Import Progress</p>
+          <p className="text-sm font-semibold text-foreground">{t('extract.socialImportTitle')}</p>
           {isConnected ? (
             <Badge variant="secondary" className="bg-success-pale text-success">
               Live
             </Badge>
           ) : (
-            <Badge variant="outline">Offline</Badge>
+            <Badge variant="outline">{t('extract.offline')}</Badge>
           )}
         </div>
         <Badge variant="outline">{job.status}</Badge>
@@ -38,19 +40,19 @@ export function SocialImportProgress({ job, isConnected }: SocialImportProgressP
       <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
         <div>
           <p className="font-semibold text-foreground">{job.discovered_photos}</p>
-          <p>Discovered</p>
+          <p>{t('extract.discovered')}</p>
         </div>
         <div>
           <p className="font-semibold text-foreground">{job.processed_photos}</p>
-          <p>Processed</p>
+          <p>{t('extract.processed')}</p>
         </div>
         <div>
           <p className="font-semibold text-foreground">{job.approved_photos}</p>
-          <p>Approved</p>
+          <p>{t('extract.approved')}</p>
         </div>
         <div>
           <p className="font-semibold text-foreground">{job.queued_count}</p>
-          <p>Queued</p>
+          <p>{t('extract.queued')}</p>
         </div>
       </div>
 

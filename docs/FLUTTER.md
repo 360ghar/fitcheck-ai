@@ -218,6 +218,114 @@ so a patch reaching a larger audience simply stops being served. Watch the count
 at console.shorebird.dev. CI needs a `SHOREBIRD_TOKEN` repo secret, created under
 Account → API Keys (`shorebird login:ci` is deprecated).
 
+## Localization (50 locales)
+
+The app ships the 50 locales App Store Connect accepts. The store listing side is
+in `store/asc/`; this section is the in-app side.
+
+### Source of truth
+
+`store/asc/locales.json` decides which locales exist. Every other inventory is a
+mirror of it and the gate fails when one drifts. Six places, not five:
+
+| Inventory | File | Compared as |
+|-----------|------|-------------|
+| Locales (source) | `store/asc/locales.json` | `asc` and `dart` codes |
+| Dart registry | `flutter/lib/core/i18n/locale_registry.dart` | exact `dart` tag |
+| iOS | `flutter/ios/Runner/Info.plist` `CFBundleLocalizations` | base language |
+| Android | `flutter/android/app/src/main/res/xml/locales_config.xml` | base language |
+| Catalogs | `flutter/lib/l10n/app_<dart>.arb` | `dart` code |
+| Backend | `backend/app/core/i18n.py` `SUPPORTED_LANGUAGES` | language only (`zh-Hant` → `zh`) |
+
+`store/asc/locales.json` is authoritative for `asc`, `dart`, `native`, `tier` and
+`rtl`. Only `asc` reaches the store; `dart` is what Flutter resolves against.
+
+### Adding a string
+
+1. Add the key to `flutter/lib/l10n/app_en.arb` with an `@key` description block.
+   Put it under the `@@group<Feature>` comment for its area; `@@group…` keys are
+   comments, not messages, and `gen-l10n` ignores them.
+2. `python3 scripts/i18n/translate_arb.py` — translates only missing or stale keys.
+   The cache is `flutter/lib/l10n/.translations.json`, keyed by locale then key,
+   each row holding the hash of the English it came from. Rewording one English
+   string re-translates one string in all 49 locales, not the whole catalog.
+3. `cd flutter && flutter gen-l10n`
+4. Use it as `context.l10n.myKey` (`lib/core/i18n/l10n.dart`). Never build
+   `AppLocalizations.of(context)` by hand.
+
+Do not hand-edit `app_<locale>.arb`: the files are build artifacts of the cache and
+the next run overwrites them. A bad translation is fixed by fixing the English
+source or editing `.translations.json`, then re-running.
+
+**Placeholders and plurals.** `{name}` and `{count, plural, …}` must survive. Every
+value is checked with the ICU parser in `check_locales.py` (`icu_problems`), not
+just compared placeholder-by-placeholder: shape parity alone let two unbuildable
+plurals through — Polish `few{{{count} …}` and Slovak `=1{…} one{…}` — and one bad
+string fails `gen-l10n` for the whole catalog. A rejected value is retried alone,
+then left as English. `python3 scripts/i18n/translate_arb.py --repair` rewrites
+catalogs from the cache without calling the model, dropping a redundant `=N`
+branch where the language already has that category; anything it cannot fix is
+uncached for the next run.
+
+A catalog below 90% of the English keys is not shipped at all, so a user gets
+consistent English rather than a screen that switches language mid-sentence. A
+literal `{uploads}` in the UI means an ARB was edited by hand.
+
+**Enum-like values** (category, condition, season, style, occasion, colour,
+photoshoot preset, try-on option) store English canonically and localize only the
+display label: `taxonomy_l10n.dart` for the domain enums,
+`features/photoshoot/photoshoot_l10n.dart` and `features/tryon/tryon_l10n.dart`
+for the two feature-local vocabularies. An unmatched value renders unchanged, so
+an API value that arrives before its translation does not disappear.
+
+**Dates, times and numbers** go through `lib/core/i18n/locale_format.dart`
+(`LocaleFormat.date`, `.relativeDay`, `.money`, `.number`) and
+`lib/core/utils/date_utils.dart`. Never concatenate a number with a unit: plurals
+and word order differ.
+
+**RTL.** Use `EdgeInsetsDirectional`, `AlignmentDirectional`,
+`PositionedDirectional` and `TextAlign.start/end`. The three RTL locales (Arabic,
+Hebrew, Urdu) mirror through `Directionality`; `context.isRtl` is for the few
+places that draw by hand.
+
+**No `BuildContext`** (a service, a model, notification text): take
+`AppLocalizations` as a parameter or return a key. Do not import the generated
+class into a service layer.
+
+### Adding a locale
+
+Add the entry to `store/asc/locales.json` first, then mirror it in all five other
+inventories, then `python3 scripts/i18n/translate_arb.py` writes the catalog.
+`check_locales.py` names every inventory still missing the locale, so add the
+entry and re-run until it is clean.
+
+`pt` and `en_*` are special: `flutter gen-l10n` requires a language-only base for
+any locale carrying a country code, and English variants ship the English copy.
+`translate_arb.py` derives both from `FALLBACK_BASES` and the `en_` prefix rule.
+
+### The gate
+
+```bash
+python3 scripts/i18n/check_locales.py             # exit 0 = coherent
+python3 scripts/i18n/check_locales.py --strict    # warnings are errors
+python3 scripts/i18n/check_locales.py --json      # machine-readable
+```
+
+It compares the six inventories, then each catalog against `app_en.arb`: missing
+keys, orphan keys, `@@locale` mismatches, placeholder and ICU block parity, an ICU
+parse per value (the check that catches a message `gen-l10n` would reject), and
+values still byte-identical to English (allowlisted: `FitCheck AI`, `Pro`, `Plus`,
+`AI`). Identical values are a warning naming the keys, because German keeps
+"Orange" and every language keeps "Instagram"; they become an error only when a
+quarter or more of a catalog is still English, which means it was never
+translated. Stdlib only, so CI needs no setup. It runs in `scripts/check_all.sh`.
+
+The Gemini free tier caps `gemini-3.1-flash-lite` at 500 requests per day, and a
+full 49-locale pass costs about 400. When the quota is spent the translator stops,
+prints the locales still missing a catalog, and leaves the cache intact — rerun
+the same command after the reset and it resumes from where it stopped rather than
+starting over.
+
 ## Notes
 
 Deep feature behavior should be documented in `product-specs/` and implementation status. Expand this file when mobile-specific architecture decisions accumulate.

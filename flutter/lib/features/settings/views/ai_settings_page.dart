@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/ai_settings_model.dart';
 import '../providers/ai_settings_provider.dart';
@@ -45,7 +46,7 @@ class AiSettingsPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.stone,
       child: Scaffold(
-        appBar: AppBar(title: const Text('AI provider')),
+        appBar: AppBar(title: Text(context.l10n.settingsAiProvider)),
         body: AppPageBackground(child: body),
       ),
     );
@@ -139,6 +140,7 @@ class _AiSettingsFormState extends ConsumerState<_AiSettingsForm> {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final keySet = _current.providerConfigs[_provider]?.apiKeySet ?? false;
     const gap = SizedBox(height: AppConstants.spacing12);
     final note = text.bodySmall?.copyWith(color: tokens.textMuted);
@@ -156,7 +158,7 @@ class _AiSettingsFormState extends ConsumerState<_AiSettingsForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Provider', style: text.headlineSmall),
+              Text(l10n.settingsAiProviderSection, style: text.headlineSmall),
               const SizedBox(height: AppConstants.spacing12),
               SegmentedButton<String>(
                 showSelectedIcon: false,
@@ -167,9 +169,12 @@ class _AiSettingsFormState extends ConsumerState<_AiSettingsForm> {
                     context,
                   ).stock.onAccent,
                 ),
-                segments: const [
-                  ButtonSegment(value: 'custom', label: Text('Custom')),
-                  ButtonSegment(value: 'openai', label: Text('OpenAI')),
+                segments: [
+                  ButtonSegment(
+                    value: 'custom',
+                    label: Text(l10n.settingsAiCustom),
+                  ),
+                  ButtonSegment(value: 'openai', label: const Text('OpenAI')),
                 ],
                 selected: {_provider},
                 onSelectionChanged: (s) => setState(() {
@@ -179,8 +184,7 @@ class _AiSettingsFormState extends ConsumerState<_AiSettingsForm> {
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
-                'Use a public URL the server can reach. Localhost does not '
-                'work from our servers.',
+                l10n.settingsAiUrlHelper,
                 style: note,
               ),
             ],
@@ -191,13 +195,13 @@ class _AiSettingsFormState extends ConsumerState<_AiSettingsForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Connection', style: text.headlineSmall),
+              Text(l10n.settingsAiConnectionSection, style: text.headlineSmall),
               const SizedBox(height: AppConstants.spacing12),
               TextField(
                 controller: _apiUrl,
                 keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  labelText: 'API URL',
+                decoration: InputDecoration(
+                  labelText: l10n.settingsAiApiUrl,
                   hintText: 'https://your-proxy.example.com/v1',
                 ),
               ),
@@ -206,33 +210,34 @@ class _AiSettingsFormState extends ConsumerState<_AiSettingsForm> {
                 controller: _apiKey,
                 obscureText: true,
                 decoration: InputDecoration(
-                  labelText: 'API key',
-                  hintText: keySet ? 'Saved. Leave blank to keep it.' : null,
+                  labelText: l10n.settingsAiApiKey,
+                  hintText: keySet ? l10n.settingsAiApiKeySaved : null,
                 ),
               ),
               gap,
               TextField(
                 controller: _chatModel,
-                decoration: const InputDecoration(labelText: 'Chat model'),
+                decoration: InputDecoration(
+                  labelText: l10n.settingsAiChatModel,
+                ),
               ),
               gap,
               TextField(
                 controller: _visionModel,
-                decoration: const InputDecoration(
-                  labelText: 'Vision model (optional)',
+                decoration: InputDecoration(
+                  labelText: l10n.settingsAiVisionModel,
                 ),
               ),
               gap,
               TextField(
                 controller: _imageModel,
-                decoration: const InputDecoration(
-                  labelText: 'Image model (optional)',
+                decoration: InputDecoration(
+                  labelText: l10n.settingsAiImageModel,
                 ),
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
-                'Image generation needs OpenAI-compatible chat completions '
-                'with response_modalities.',
+                l10n.settingsAiImageModelNote,
                 style: note,
               ),
             ],
@@ -244,13 +249,15 @@ class _AiSettingsFormState extends ConsumerState<_AiSettingsForm> {
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
           ),
-          child: _saving ? const _Spinner() : const Text('Save'),
+          child: _saving ? const _Spinner() : Text(l10n.actionSave),
         ),
         const SizedBox(height: AppConstants.spacing8),
         TextButton(
           onPressed: _testing ? null : _test,
           style: TextButton.styleFrom(minimumSize: const Size.fromHeight(44)),
-          child: _testing ? const _Spinner() : const Text('Test connection'),
+          child: _testing
+              ? const _Spinner()
+              : Text(l10n.settingsAiTestConnection),
         ),
       ],
     );

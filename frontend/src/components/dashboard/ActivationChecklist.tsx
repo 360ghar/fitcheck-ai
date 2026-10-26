@@ -101,7 +101,7 @@ export function ActivationChecklist({
                 disabled={!action}
                 onClick={() => action?.()}
                 className={cn(
-                  'w-full flex items-center gap-3 px-4 py-3 md:px-6 text-left transition-colors',
+                  'w-full flex items-center gap-3 px-4 py-3 md:px-6 text-start-left transition-colors',
                   action && 'hover:bg-accent/40 touch-target',
                   isNext && !step.done && 'bg-muted/40',
                   !action && 'cursor-default'
@@ -128,7 +128,7 @@ export function ActivationChecklist({
                   >
                     {step.title}
                     {!step.required && !step.done && (
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                      <span className="ms-1.5 text-xs font-normal text-muted-foreground">
                         optional
                       </span>
                     )}

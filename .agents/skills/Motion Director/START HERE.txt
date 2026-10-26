@@ -1,0 +1,20 @@
+MOTION DIRECTOR — START HERE
+
+Turn any idea into a finished 10–20 second video, with original music, in about 10 minutes.
+
+You need:
+  - Claude Code (https://claude.com/claude-code). It comes with a paid Claude plan.
+  - Node.js 18 or newer (https://nodejs.org). If you don't have it, Claude will tell you.
+  - A Mac. (Windows and Linux should work, but haven't been tested yet.)
+
+Install (about 2 minutes, one time):
+  1. Unzip this folder.
+  2. Open a terminal in this folder and type:  claude
+  3. Type:  hi
+     Claude installs Motion Director and checks it works.
+
+Make a video, anytime, in any Claude Code session:
+  Type  /motion-director  (or just ask: "make me a video about ...")
+  Answer a couple of quick questions. Your MP4 appears in the "Motion Director Videos" folder on your Desktop.
+
+More detail: README.md

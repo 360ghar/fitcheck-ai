@@ -1,0 +1,405 @@
+{
+  "generated": "2026-10-26T01:29:10.867Z",
+  "scripts": {
+    "latin": {
+      "chars": 153,
+      "hash": "e6850ea6c2b6",
+      "display": null,
+      "body": {
+        "family": "Inter",
+        "file": "frontend/public/fonts/inter-latin-var.woff2",
+        "local": true
+      }
+    },
+    "greek": {
+      "chars": 87,
+      "hash": "937f571795d9",
+      "display": null,
+      "body": {
+        "family": "Inter",
+        "file": "frontend/public/fonts/inter-latin-var.woff2",
+        "local": true
+      }
+    },
+    "cyrillic": {
+      "chars": 101,
+      "hash": "140bd1b5193f",
+      "display": {
+        "family": "Noto Serif",
+        "file": "store/creative/fonts/cyrillic-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 11112
+      },
+      "body": {
+        "family": "Noto Sans",
+        "file": "store/creative/fonts/cyrillic-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 10164
+      }
+    },
+    "arabic": {
+      "chars": 76,
+      "hash": "d93a572960c8",
+      "display": {
+        "family": "Noto Naskh Arabic",
+        "file": "store/creative/fonts/arabic-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 12788
+      },
+      "body": {
+        "family": "Noto Sans Arabic",
+        "file": "store/creative/fonts/arabic-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 11260
+      }
+    },
+    "hebrew": {
+      "chars": 60,
+      "hash": "683fad6fab0c",
+      "display": {
+        "family": "Noto Serif Hebrew",
+        "file": "store/creative/fonts/hebrew-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 5832
+      },
+      "body": {
+        "family": "Noto Sans Hebrew",
+        "file": "store/creative/fonts/hebrew-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 4480
+      }
+    },
+    "urdu": {
+      "chars": 79,
+      "hash": "dcf54d1ac76a",
+      "display": {
+        "family": "Noto Nastaliq Urdu",
+        "file": "store/creative/fonts/urdu-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 121956
+      },
+      "body": {
+        "family": "Noto Sans Arabic",
+        "file": "store/creative/fonts/urdu-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 12164
+      }
+    },
+    "devanagari": {
+      "chars": 97,
+      "hash": "937d41dc2525",
+      "display": {
+        "family": "Noto Serif Devanagari",
+        "file": "store/creative/fonts/devanagari-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 37156
+      },
+      "body": {
+        "family": "Noto Sans Devanagari",
+        "file": "store/creative/fonts/devanagari-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 33084
+      }
+    },
+    "bengali": {
+      "chars": 79,
+      "hash": "80f86bd9fddf",
+      "display": {
+        "family": "Noto Serif Bengali",
+        "file": "store/creative/fonts/bengali-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 47708
+      },
+      "body": {
+        "family": "Noto Sans Bengali",
+        "file": "store/creative/fonts/bengali-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 35444
+      }
+    },
+    "gujarati": {
+      "chars": 85,
+      "hash": "81500c498944",
+      "display": {
+        "family": "Noto Serif Gujarati",
+        "file": "store/creative/fonts/gujarati-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 26036
+      },
+      "body": {
+        "family": "Noto Sans Gujarati",
+        "file": "store/creative/fonts/gujarati-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 22492
+      }
+    },
+    "kannada": {
+      "chars": 85,
+      "hash": "0339c9463023",
+      "display": {
+        "family": "Noto Serif Kannada",
+        "file": "store/creative/fonts/kannada-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 23736
+      },
+      "body": {
+        "family": "Noto Sans Kannada",
+        "file": "store/creative/fonts/kannada-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 19580
+      }
+    },
+    "malayalam": {
+      "chars": 89,
+      "hash": "b1a7371f396f",
+      "display": {
+        "family": "Noto Serif Malayalam",
+        "file": "store/creative/fonts/malayalam-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 15336
+      },
+      "body": {
+        "family": "Noto Sans Malayalam",
+        "file": "store/creative/fonts/malayalam-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 17144
+      }
+    },
+    "oriya": {
+      "chars": 65,
+      "hash": "be03a94dede0",
+      "display": {
+        "family": "Noto Serif Oriya",
+        "file": "store/creative/fonts/oriya-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 21888
+      },
+      "body": {
+        "family": "Noto Sans Oriya",
+        "file": "store/creative/fonts/oriya-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 27220
+      }
+    },
+    "gurmukhi": {
+      "chars": 70,
+      "hash": "e0d7a1a69c56",
+      "display": {
+        "family": "Noto Serif Gurmukhi",
+        "file": "store/creative/fonts/gurmukhi-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 9580
+      },
+      "body": {
+        "family": "Noto Sans Gurmukhi",
+        "file": "store/creative/fonts/gurmukhi-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 9304
+      }
+    },
+    "tamil": {
+      "chars": 79,
+      "hash": "6141eba30dea",
+      "display": {
+        "family": "Noto Serif Tamil",
+        "file": "store/creative/fonts/tamil-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 13584
+      },
+      "body": {
+        "family": "Noto Sans Tamil",
+        "file": "store/creative/fonts/tamil-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 13172
+      }
+    },
+    "telugu": {
+      "chars": 80,
+      "hash": "ed0bcec98245",
+      "display": {
+        "family": "Noto Serif Telugu",
+        "file": "store/creative/fonts/telugu-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 28200
+      },
+      "body": {
+        "family": "Noto Sans Telugu",
+        "file": "store/creative/fonts/telugu-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 25772
+      }
+    },
+    "hans": {
+      "chars": 160,
+      "hash": "70f84a74c35e",
+      "display": {
+        "family": "Noto Serif SC",
+        "file": "store/creative/fonts/hans-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 27748
+      },
+      "body": {
+        "family": "Noto Sans SC",
+        "file": "store/creative/fonts/hans-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 21624
+      }
+    },
+    "hant": {
+      "chars": 167,
+      "hash": "6db99ceaef43",
+      "display": {
+        "family": "Noto Serif TC",
+        "file": "store/creative/fonts/hant-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 33348
+      },
+      "body": {
+        "family": "Noto Sans TC",
+        "file": "store/creative/fonts/hant-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 25992
+      }
+    },
+    "japanese": {
+      "chars": 174,
+      "hash": "bbedd3cccd39",
+      "display": {
+        "family": "Noto Serif JP",
+        "file": "store/creative/fonts/japanese-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 53680
+      },
+      "body": {
+        "family": "Noto Sans JP",
+        "file": "store/creative/fonts/japanese-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 40848
+      }
+    },
+    "korean": {
+      "chars": 158,
+      "hash": "af488be6f249",
+      "display": {
+        "family": "Noto Serif KR",
+        "file": "store/creative/fonts/korean-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 28196
+      },
+      "body": {
+        "family": "Noto Sans KR",
+        "file": "store/creative/fonts/korean-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 13764
+      }
+    },
+    "thai": {
+      "chars": 82,
+      "hash": "20b57564423c",
+      "display": {
+        "family": "Noto Serif Thai",
+        "file": "store/creative/fonts/thai-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 7952
+      },
+      "body": {
+        "family": "Noto Sans Thai",
+        "file": "store/creative/fonts/thai-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 7012
+      }
+    },
+    "vietnamese": {
+      "chars": 124,
+      "hash": "c67fdff91c06",
+      "display": {
+        "family": "Noto Serif",
+        "file": "store/creative/fonts/vietnamese-display.woff2",
+        "weight": 700,
+        "local": false,
+        "fetched": true,
+        "bytes": 14248
+      },
+      "body": {
+        "family": "Noto Sans",
+        "file": "store/creative/fonts/vietnamese-body.woff2",
+        "weight": 500,
+        "local": false,
+        "fetched": true,
+        "bytes": 13056
+      }
+    }
+  }
+}

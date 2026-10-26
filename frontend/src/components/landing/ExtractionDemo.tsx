@@ -207,7 +207,7 @@ export function ExtractionDemo() {
                 onClick={handleSaveToWardrobe}
               >
                 Save to Closet
-                <ArrowRight className="w-4 h-4 ml-2" />
+                <ArrowRight className="w-4 h-4 ms-2" />
               </Button>
             </div>
           </div>

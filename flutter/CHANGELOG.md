@@ -5,6 +5,34 @@ All notable changes to the FitCheck AI Flutter app will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0+17] - 2026-10-27
+
+This release is the localization release. The interface, the App Store listing
+and the store screenshots are all localized, so the copy a new user reads and the
+screens they see are in their own language.
+
+### Added
+
+- The interface is localized in 43 languages, covering 50 App Store storefronts,
+  including every Indian regional language. Arabic, Hebrew and Urdu get
+  right-to-left layouts, and dates are localized rather than formatted in English.
+- The iOS permission prompts are localized in all 51 catalogs, so the camera and
+  photo-library questions appear in the user's language.
+- New subscribers get one month of Pro free, so a whole closet can be uploaded at
+  once before the subscription starts.
+
+### Changed
+
+- Batch upload runs as a background job with visible progress. A large closet can
+  be added a batch at a time, and the app stays usable while it works.
+- The App Store listing itself is localized in all 50 storefronts, including
+  keywords generated per language rather than translated from English.
+
+### Fixed
+
+- Extraction retries and offline starts recover correctly and keep the queued
+  items instead of dropping them.
+
 ## [1.2.1+15] - 2026-09-30
 
 iOS ships as build 15. Android ships as build 16, because Play rejected

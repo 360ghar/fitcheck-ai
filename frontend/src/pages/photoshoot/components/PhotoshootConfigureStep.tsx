@@ -12,10 +12,12 @@ import { usePhotoshoot, usePhotoshootStore, selectEffectiveMaxImages, selectCanG
 import { USE_CASE_INFO, PhotoshootUseCase } from '@/api/photoshoot';
 import { ReferralBanner } from '@/components/dashboard/ReferralBanner';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/i18n'
 
 const USE_CASES: PhotoshootUseCase[] = ['linkedin', 'dating_app', 'model_portfolio', 'instagram', 'custom'];
 
 export function PhotoshootConfigureStep() {
+  const { t } = useTranslation()
   const navigate = useNavigate();
   const {
     useCase,
@@ -55,14 +57,14 @@ export function PhotoshootConfigureStep() {
         <div className="space-y-3">
           <ReferralBanner variant="urgent" />
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-            <span>Daily limit reached. Comes back at midnight UTC.</span>
+            <span>{t('photoshoot.dailyLimitReached')}</span>
             <Button
               variant="link"
               size="sm"
               className="p-0 h-auto"
               onClick={() => navigate('/profile?tab=plan')}
             >
-              Upgrade
+              {t('photoshoot.upgrade')}
             </Button>
           </div>
         </div>
@@ -70,7 +72,7 @@ export function PhotoshootConfigureStep() {
 
       {/* Use Case Selection */}
       <div>
-        <Label className="text-base font-medium">Choose Your Style</Label>
+        <Label className="text-base font-medium">{t('photoshoot.chooseStyle')}</Label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
           {USE_CASES.map((uc) => {
             const info = USE_CASE_INFO[uc];
@@ -106,13 +108,13 @@ export function PhotoshootConfigureStep() {
       {useCase === 'custom' && (
         <div>
           <Label htmlFor="custom-prompt" className="text-base font-medium">
-            Custom Prompt
+            {t('photoshoot.customPrompt')}
           </Label>
           <Textarea
             id="custom-prompt"
             value={customPrompt}
             onChange={(e) => setCustomPrompt(e.target.value)}
-            placeholder="Describe the style you want..."
+            placeholder={t('photoshoot.customPromptPlaceholder')}
             className="mt-2"
             rows={3}
           />
@@ -124,7 +126,7 @@ export function PhotoshootConfigureStep() {
         <div className="flex justify-between items-center mb-4">
           <div>
             <span className="text-2xl font-bold text-primary">{numImages}</span>
-            <span className="text-muted-foreground ml-1">images</span>
+            <span className="text-muted-foreground ms-1">images</span>
           </div>
           <span className="text-sm text-muted-foreground">
             {remainingToday} remaining today
@@ -163,7 +165,7 @@ export function PhotoshootConfigureStep() {
               <Button
                 variant="link"
                 size="sm"
-                className="ml-auto p-0 h-auto"
+                className="ms-auto p-0 h-auto"
                 onClick={() => navigate('/profile?tab=plan')}
               >
                 Upgrade
@@ -179,11 +181,11 @@ export function PhotoshootConfigureStep() {
       {/* Action Buttons */}
       <div className="flex gap-3">
         <Button variant="outline" onClick={handleBack} className="flex-1">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
+          <ArrowLeft className="w-4 h-4 me-2" />
+          {t('common.back')}
         </Button>
         <Button onClick={handleGenerate} disabled={!canGenerate} className="flex-[2]">
-          Generate {numImages} Images
+          {t('photoshoot.generateImages', { count: numImages })}
         </Button>
       </div>
     </div>

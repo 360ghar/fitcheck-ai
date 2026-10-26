@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react'
 import { imageFetchOptions } from '@/lib/sessionCookie'
 import { downloadBlob } from '@/lib/utils'
+import { useTranslation } from '@/i18n'
 import {
   Share2,
   Link as LinkIcon,
@@ -76,6 +77,7 @@ export function ShareOutfitDialog({
   outfit,
   onShare,
 }: ShareOutfitDialogProps) {
+  const { t } = useTranslation()
   const [shareOptions, setShareOptions] = useState<ShareOptions>({
     isPublic: true,
     allowFeedback: true,
@@ -239,7 +241,7 @@ export function ShareOutfitDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
-            Share Outfit
+            {t('share.title')}
           </DialogTitle>
           <DialogDescription>
             Share your style with the world or get feedback from friends
@@ -259,7 +261,7 @@ export function ShareOutfitDialog({
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground/70">
-                    No image
+                    {t('share.noImage')}
                   </div>
                 )}
               </div>
@@ -294,11 +296,11 @@ export function ShareOutfitDialog({
           <Tabs defaultValue="social" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="social">
-                <span className="hidden xs:inline">Social Media</span>
-                <span className="xs:hidden">Social</span>
+                <span className="hidden xs:inline">{t('share.socialMedia')}</span>
+                <span className="xs:hidden">{t('share.social')}</span>
               </TabsTrigger>
-              <TabsTrigger value="link">Share Link</TabsTrigger>
-              <TabsTrigger value="options">Options</TabsTrigger>
+              <TabsTrigger value="link">{t('share.shareLink')}</TabsTrigger>
+              <TabsTrigger value="options">{t('share.options')}</TabsTrigger>
             </TabsList>
 
             {/* Social Media Tab */}
@@ -311,7 +313,7 @@ export function ShareOutfitDialog({
                   disabled={isSharing}
                 >
                   <Twitter className="h-6 w-6 text-tint-blue" />
-                  <span>Twitter</span>
+                  <span>{t('share.twitter')}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -320,7 +322,7 @@ export function ShareOutfitDialog({
                   disabled={isSharing}
                 >
                   <Facebook className="h-6 w-6 text-tint-blue" />
-                  <span>Facebook</span>
+                  <span>{t('share.facebook')}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -329,7 +331,7 @@ export function ShareOutfitDialog({
                   disabled={isSharing}
                 >
                   <Share2 className="h-6 w-6 text-pink-500" />
-                  <span>Instagram</span>
+                  <span>{t('share.instagram')}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -338,7 +340,7 @@ export function ShareOutfitDialog({
                   disabled={isSharing}
                 >
                   <MessageCircle className="h-6 w-6 text-tint-teal" />
-                  <span>WhatsApp</span>
+                  <span>{t('share.whatsapp')}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -347,7 +349,7 @@ export function ShareOutfitDialog({
                   disabled={isSharing}
                 >
                   <Mail className="h-6 w-6 text-muted-foreground" />
-                  <span>Email</span>
+                  <span>{t('share.email')}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -355,7 +357,7 @@ export function ShareOutfitDialog({
                   onClick={handleDownloadImage}
                 >
                   <Download className="h-6 w-6 text-muted-foreground" />
-                  <span>Download</span>
+                  <span>{t('share.download')}</span>
                 </Button>
               </div>
             </TabsContent>
@@ -364,7 +366,7 @@ export function ShareOutfitDialog({
             <TabsContent value="link" className="space-y-4">
               <Card>
                 <CardContent className="pt-6">
-                  <Label htmlFor="shareable-outfit-link">Shareable Link</Label>
+                  <Label htmlFor="shareable-outfit-link">{t('share.shareableLink')}</Label>
                   <div className="flex gap-2 mt-2">
                     <Input
                       id="shareable-outfit-link"
@@ -376,19 +378,19 @@ export function ShareOutfitDialog({
                     <Button onClick={handleCopyLink} variant="outline">
                       {copiedLink ? (
                         <>
-                          <Check className="h-4 w-4 mr-2" />
+                          <Check className="h-4 w-4 me-2" />
                           Copied
                         </>
                       ) : (
                         <>
-                          <LinkIcon className="h-4 w-4 mr-2" />
+                          <LinkIcon className="h-4 w-4 me-2" />
                           Copy
                         </>
                       )}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Anyone with this link can view your outfit
+                    {t('share.linkAnyone')}
                   </p>
                 </CardContent>
               </Card>
@@ -400,9 +402,9 @@ export function ShareOutfitDialog({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label className="text-foreground">Public Outfit</Label>
+                    <Label className="text-foreground">{t('share.publicOutfit')}</Label>
                     <p className="text-sm text-muted-foreground">
-                      Allow anyone to find and view this outfit
+                      {t('share.publicAnyone')}
                     </p>
                   </div>
                   <Switch
@@ -427,9 +429,9 @@ export function ShareOutfitDialog({
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label className="text-foreground">Allow Feedback</Label>
+                    <Label className="text-foreground">{t('share.allowFeedback')}</Label>
                     <p className="text-sm text-muted-foreground">
-                      Let others rate and comment on your outfit
+                      {t('share.allowComments')}
                     </p>
                   </div>
                   <Switch
@@ -441,10 +443,10 @@ export function ShareOutfitDialog({
                 </div>
 
                 <div>
-                  <Label htmlFor="caption">Caption (Optional)</Label>
+                  <Label htmlFor="caption">{t('share.captionOptional')}</Label>
                   <Textarea
                     id="caption"
-                    placeholder="Tell others about this outfit..."
+                    placeholder={t('share.captionPlaceholder')}
                     value={shareOptions.caption}
                     onChange={(e) =>
                       setShareOptions((prev) => ({ ...prev, caption: e.target.value }))

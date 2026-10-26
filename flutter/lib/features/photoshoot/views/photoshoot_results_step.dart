@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/review/review_milestones.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
 import '../models/photoshoot_models.dart';
@@ -23,9 +27,9 @@ class PhotoshootResultsStep extends ConsumerWidget {
     if (s.images.isEmpty && failed.isEmpty) {
       return AppEmptyState(
         scene: PaperScenes.studio,
-        title: 'No photos came back',
-        message: 'The shoot finished without images. Try again.',
-        actionLabel: 'Try again',
+        title: context.l10n.photoshootNoPhotosTitle,
+        message: context.l10n.photoshootNoPhotosBody,
+        actionLabel: context.l10n.tryOnTryAgain,
         onAction: () => notifier.reset(keepPhotos: true),
       );
     }
@@ -40,6 +44,14 @@ class PhotoshootResultsStep extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // The first finished photoshoot is the best moment this app has.
+        // Nothing here decides whether to ask; ReviewPrompt owns every rule
+        // (first session, cooldown, once per milestone) and this call is
+        // idempotent, so a rebuild cannot produce a second sheet.
+        _ReviewMoment(
+          imageCount: count,
+          partialSuccess: s.partialSuccess,
+        ),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -83,19 +95,19 @@ class PhotoshootResultsStep extends ConsumerWidget {
           children: [
             TextButton(
               onPressed: () => notifier.reset(keepPhotos: true),
-              child: const Text('New style'),
+              child: Text(context.l10n.photoshootNewStyle),
             ),
             const SizedBox(width: AppConstants.spacing8),
             TextButton(
               onPressed: notifier.reset,
-              child: const Text('New photos'),
+              child: Text(context.l10n.photoshootNewPhotos),
             ),
           ],
         ),
         if (s.usage != null) ...[
           const SizedBox(height: AppConstants.spacing4),
           Text(
-            '${s.usage!.remaining} left today',
+            context.l10n.photoshootImagesLeftToday(s.usage!.remaining),
             textAlign: TextAlign.center,
             style: text.bodySmall?.copyWith(color: tokens.textSecondary),
           ),
@@ -130,7 +142,7 @@ class _ImageCard extends ConsumerWidget {
         children: [
           Semantics(
             button: true,
-            label: 'Open photo ${index + 1}',
+            label: context.l10n.photoshootOpenPhoto(index + 1),
             child: GestureDetector(
               onTap: () => _showFullScreen(context, ref),
               child: PhotoshootImage(image: image),
@@ -141,10 +153,10 @@ class _ImageCard extends ConsumerWidget {
             top: 0,
             right: 0,
             child: IconButton(
-              tooltip: 'Report photo',
+              tooltip: context.l10n.photoshootReportPhoto,
               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
               onPressed: () => showReportContentSheet(
-                contentType: 'AI photoshoot image',
+                contentType: ReportContentType.photoshootImage,
                 contentId: image.id,
               ),
               icon: const Icon(
@@ -159,7 +171,7 @@ class _ImageCard extends ConsumerWidget {
             bottom: 0,
             right: 0,
             child: IconButton(
-              tooltip: 'Save to gallery',
+              tooltip: context.l10n.photoshootSaveToGallery,
               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
               onPressed: busy ? null : () => notifier.downloadImage(index),
               icon: saving
@@ -204,7 +216,7 @@ class _ImageCard extends ConsumerWidget {
                 top: 0,
                 right: 0,
                 child: IconButton(
-                  tooltip: 'Close',
+                  tooltip: context.l10n.actionClose,
                   onPressed: () => Navigator.pop(dialogContext),
                   icon: const Icon(
                     Icons.close_rounded,
@@ -223,7 +235,7 @@ class _ImageCard extends ConsumerWidget {
                     Navigator.pop(dialogContext);
                   },
                   icon: const Icon(Icons.download_rounded, size: 20),
-                  label: const Text('Save to gallery'),
+                  label: Text(context.l10n.photoshootSaveToGallery),
                 ),
               ),
             ],
@@ -232,6 +244,50 @@ class _ImageCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Reports a finished photoshoot to the review prompt once, after the frame
+/// that shows the results is on screen.
+///
+/// A widget rather than a call in `build` because the ask must land after the
+/// images are painted: `InAppReview.requestReview()` is a system sheet, and
+/// presenting it while the gallery is still laying out shows it over a
+/// half-drawn screen.
+class _ReviewMoment extends ConsumerStatefulWidget {
+  const _ReviewMoment({required this.imageCount, required this.partialSuccess});
+
+  final int imageCount;
+  final bool partialSuccess;
+
+  @override
+  ConsumerState<_ReviewMoment> createState() => _ReviewMomentState();
+}
+
+class _ReviewMomentState extends ConsumerState<_ReviewMoment> {
+  bool _reported = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.imageCount == 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _reported) return;
+      _reported = true;
+      // Partial success is not an error, but the user is looking at missing
+      // slots, so it is not the delight moment either.
+      unawaited(
+        ref
+            .read(reviewMilestonesProvider)
+            .photoshootFinished(
+              imageCount: widget.imageCount,
+              partialSuccess: widget.partialSuccess,
+            ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _FailedCard extends ConsumerWidget {
@@ -257,7 +313,7 @@ class _FailedCard extends ConsumerWidget {
           Icon(Icons.broken_image_outlined, size: 28, color: tokens.textMuted),
           const SizedBox(height: AppConstants.spacing8),
           Text(
-            'Photo ${index + 1} failed',
+            context.l10n.photoshootPhotoNumberFailed(index + 1),
             textAlign: TextAlign.center,
             style: text.titleSmall?.copyWith(color: tokens.textPrimary),
           ),
@@ -273,7 +329,7 @@ class _FailedCard extends ConsumerWidget {
                     dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Retry'),
+                : Text(context.l10n.actionRetry),
           ),
         ],
       ),

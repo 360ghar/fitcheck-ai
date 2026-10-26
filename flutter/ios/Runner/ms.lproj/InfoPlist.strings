@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI perlu akses kamera untuk merakamkan gambar set gaya dan item almari anda.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI perlu akses galeri foto untuk memilih gambar set gaya dan item almari anda.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI perlu menyimpan gambar set gaya yang dijana AI anda ke dalam galeri foto.";

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Motion Director film</title>
+<style>
+  html, body { margin: 0; background: #111; color: #ddd; font: 13px/1.4 -apple-system, system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; }
+  canvas { display: block; max-width: 96vw; max-height: 86vh; width: auto; height: auto; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+  #ui { display: flex; gap: 12px; align-items: center; width: min(96vw, 900px); }
+  #ui input { flex: 1; }
+  body.render #ui, body.render #wrap { padding: 0; }
+  body.render #ui { display: none; }
+  body.render canvas { max-width: none; max-height: none; box-shadow: none; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="ui"><button id="play">play</button><input id="scrub" type="range" min="0" value="0"><span id="fn">0</span></div>
+</div>
+<!-- order matters: config -> engine -> audio engine -> the film -->
+<script src="film/config.js"></script>
+<script src="engine/motion.js"></script>
+<script src="engine/audio.js"></script>
+<script src="film/scenes.js"></script>
+<script src="film/score.js"></script>
+<script>
+  // Preview controls only. The renderer never uses real time; frames are pure functions of n.
+  if (new URLSearchParams(location.search).has('render')) document.body.classList.add('render');
+  window.__reelReady.then(() => {
+    if (document.body.classList.contains('render')) return;
+    const scrub = document.getElementById('scrub'), fn = document.getElementById('fn'), btn = document.getElementById('play');
+    scrub.max = FRAMES - 1;
+    const show = (n) => { window.__reel.renderFrame(n); scrub.value = n; fn.textContent = n + ' / ' + (n / FPS).toFixed(2) + 's'; };
+    scrub.oninput = () => show(+scrub.value);
+    let playing = false, n = 0, t0 = 0;
+    btn.onclick = () => { playing = !playing; btn.textContent = playing ? 'pause' : 'play'; t0 = performance.now() - n / FPS * 1000; if (playing) requestAnimationFrame(step); };
+    function step(now) { if (!playing) return; n = Math.floor((now - t0) / 1000 * FPS) % FRAMES; show(n); requestAnimationFrame(step); }
+    show(0);
+  }).catch((e) => { document.body.insertAdjacentHTML('beforeend', '<pre style="color:#f66;padding:12px">' + e.stack + '</pre>'); });
+</script>
+</body>
+</html>

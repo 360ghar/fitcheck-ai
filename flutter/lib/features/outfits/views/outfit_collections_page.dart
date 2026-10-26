@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/outfit_model.dart';
@@ -29,11 +30,11 @@ class OutfitCollectionsPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.marigold,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Collections')),
+        appBar: AppBar(title: Text(context.l10n.outfitCollections)),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _edit(context, ref),
           icon: const Icon(Icons.add_rounded),
-          label: const Text('New collection'),
+          label: Text(context.l10n.outfitNewCollection),
         ),
         body: AppPageBackground(
           child: RefreshIndicator(
@@ -43,9 +44,9 @@ class OutfitCollectionsPage extends ConsumerWidget {
                 children: [
                   AppEmptyState(
                     scene: PaperScenes.outfits,
-                    title: 'No collections yet',
-                    message: 'Group outfits by trip, season or mood.',
-                    actionLabel: 'Create a collection',
+                    title: context.l10n.outfitNoCollectionsTitle,
+                    message: context.l10n.outfitNoCollectionsBody,
+                    actionLabel: context.l10n.outfitCreateCollection,
                     onAction: () => _edit(context, ref),
                   ),
                 ],
@@ -134,14 +135,14 @@ class OutfitCollectionsPage extends ConsumerWidget {
                 ],
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
-                  count == 1 ? '1 outfit' : '$count outfits',
+                  context.l10n.outfitCount(count),
                   style: text.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
                 const SizedBox(height: AppConstants.spacing20),
                 ElevatedButton.icon(
                   onPressed: () => Navigator.pop(context, 'add'),
                   icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add outfits'),
+                  label: Text(context.l10n.outfitAddOutfits),
                 ),
                 const SizedBox(height: AppConstants.spacing8),
                 Row(
@@ -149,12 +150,12 @@ class OutfitCollectionsPage extends ConsumerWidget {
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, 'edit'),
-                      child: const Text('Rename'),
+                      child: Text(context.l10n.outfitRename),
                     ),
                     TextButton(
                       style: TextButton.styleFrom(foregroundColor: tokens.error),
                       onPressed: () => Navigator.pop(context, 'delete'),
-                      child: const Text('Delete'),
+                      child: Text(context.l10n.actionDelete),
                     ),
                   ],
                 ),
@@ -174,19 +175,19 @@ class OutfitCollectionsPage extends ConsumerWidget {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Delete "${_name(collection)}"?'),
-            content: const Text('The outfits in it are kept.'),
+            title: Text(context.l10n.outfitDeleteNamedTitle(_name(collection))),
+            content: Text(context.l10n.outfitCollectionDeleteBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(context.l10n.actionCancel),
               ),
               TextButton(
                 style: TextButton.styleFrom(
                   foregroundColor: PaperTokens.of(context).error,
                 ),
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
+                child: Text(context.l10n.actionDelete),
               ),
             ],
           ),
@@ -203,6 +204,7 @@ class OutfitCollectionsPage extends ConsumerWidget {
     Map<String, dynamic> collection,
   ) async {
     final notifier = ref.read(collectionsProvider.notifier);
+    final l10n = context.l10n;
     final existing = {
       for (final id in (collection['outfit_ids'] as List? ?? const [])) '$id',
     };
@@ -213,14 +215,18 @@ class OutfitCollectionsPage extends ConsumerWidget {
           if (!existing.contains(o.id)) o,
       ];
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Outfits not loaded', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: l10n.outfitCollectionsNotLoaded,
+        stackTrace: stack,
+      );
       return;
     }
     if (!context.mounted) return;
     final chosen = await showDialog<List<String>>(
       context: context,
       builder: (_) => _PickOutfitsDialog(
-        title: 'Add to "${_name(collection)}"',
+        title: context.l10n.outfitAddToNamed(_name(collection)),
         outfits: candidates,
       ),
     );
@@ -244,7 +250,9 @@ class _CollectionCard extends StatelessWidget {
     return PaperSurface(
       onTap: onTap,
       deckle: PaperEdge.bottom,
-      semanticLabel: '${OutfitCollectionsPage._name(collection)}, $count outfits',
+      semanticLabel:
+          '${OutfitCollectionsPage._name(collection)}, '
+          '${context.l10n.outfitCount(count)}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -267,7 +275,7 @@ class _CollectionCard extends StatelessWidget {
           else
             const Spacer(),
           Text(
-            count == 1 ? '1 outfit' : '$count outfits',
+            context.l10n.outfitCount(count),
             style: text.labelLarge?.copyWith(color: tokens.stock.accent),
           ),
         ],
@@ -310,7 +318,11 @@ class _CollectionDialogState extends State<_CollectionDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.collection == null ? 'New collection' : 'Rename collection'),
+      title: Text(
+        widget.collection == null
+            ? context.l10n.outfitNewCollection
+            : context.l10n.outfitRenameCollection,
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -318,7 +330,9 @@ class _CollectionDialogState extends State<_CollectionDialog> {
             controller: _name,
             autofocus: true,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(
+              labelText: context.l10n.authName,
+            ),
             onSubmitted: (_) => _submit(),
           ),
           const SizedBox(height: AppConstants.spacing12),
@@ -326,16 +340,21 @@ class _CollectionDialogState extends State<_CollectionDialog> {
             controller: _description,
             maxLines: 2,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Description (optional)'),
+            decoration: InputDecoration(
+              labelText: context.l10n.outfitDescriptionOptional,
+            ),
           ),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.actionCancel),
         ),
-        TextButton(onPressed: _submit, child: const Text('Save')),
+        TextButton(
+          onPressed: _submit,
+          child: Text(context.l10n.actionSave),
+        ),
       ],
     );
   }
@@ -361,7 +380,7 @@ class _PickOutfitsDialogState extends State<_PickOutfitsDialog> {
       content: SizedBox(
         width: double.maxFinite,
         child: widget.outfits.isEmpty
-            ? const Text('Every outfit is already in this collection.')
+            ? Text(context.l10n.outfitAllInCollection)
             : ListView.builder(
                 shrinkWrap: true,
                 itemCount: widget.outfits.length,
@@ -370,7 +389,9 @@ class _PickOutfitsDialogState extends State<_PickOutfitsDialog> {
                   return CheckboxListTile(
                     value: _chosen.contains(outfit.id),
                     title: Text(outfit.name),
-                    subtitle: Text('${outfit.itemIds.length} pieces'),
+                    subtitle: Text(
+                      context.l10n.closetPieceCount(outfit.itemIds.length),
+                    ),
                     onChanged: (on) => setState(
                       () => on == true
                           ? _chosen.add(outfit.id)
@@ -383,13 +404,17 @@ class _PickOutfitsDialogState extends State<_PickOutfitsDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.actionCancel),
         ),
         TextButton(
           onPressed: _chosen.isEmpty
               ? null
               : () => Navigator.pop(context, _chosen.toList()),
-          child: Text(_chosen.isEmpty ? 'Add' : 'Add ${_chosen.length}'),
+          child: Text(
+            _chosen.isEmpty
+                ? context.l10n.itemEditAddUseCaseAction
+                : 'Add ${_chosen.length}',
+          ),
         ),
       ],
     );

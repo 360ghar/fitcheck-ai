@@ -53,7 +53,7 @@ export default function BlogPostPage() {
             to="/blog"
             className="inline-flex items-center text-primary hover:underline font-medium"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="w-4 h-4 me-2" />
             Back to blog
           </Link>
         ) : (
@@ -110,7 +110,7 @@ export default function BlogPostPage() {
                 to="/blog"
                 className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary mb-6 transition-colors"
               >
-                <ArrowLeft className="w-4 h-4 mr-1" />
+                <ArrowLeft className="w-4 h-4 me-1" />
                 Back to Blog
               </Link>
 
@@ -127,20 +127,20 @@ export default function BlogPostPage() {
               {/* Meta */}
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <span className="flex items-center">
-                  <User className="w-4 h-4 mr-2" />
+                  <User className="w-4 h-4 me-2" />
                   {post.author}
                   {post.author_title && (
-                    <span className="text-gray-400 dark:text-gray-500 ml-1">
+                    <span className="text-gray-400 dark:text-gray-500 ms-1">
                       — {post.author_title}
                     </span>
                   )}
                 </span>
                 <span className="flex items-center">
-                  <Calendar className="w-4 h-4 mr-2" />
+                  <Calendar className="w-4 h-4 me-2" />
                   {formatDate(post.date)}
                 </span>
                 <span className="flex items-center">
-                  <Clock className="w-4 h-4 mr-2" />
+                  <Clock className="w-4 h-4 me-2" />
                   {post.read_time}
                 </span>
               </div>

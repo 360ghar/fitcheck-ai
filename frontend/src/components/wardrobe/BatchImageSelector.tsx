@@ -11,6 +11,7 @@ import { Upload, X, ImagePlus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { BatchImageInput } from '@/types';
+import { useTranslation } from '@/i18n'
 
 interface BatchImageSelectorProps {
   /** Currently selected images */
@@ -41,6 +42,7 @@ export function BatchImageSelector({
   error,
   onContinue,
 }: BatchImageSelectorProps) {
+  const { t } = useTranslation()
   const remainingSlots = maxImages - selectedImages.length;
 
   const onDrop = useCallback(
@@ -133,8 +135,8 @@ export function BatchImageSelector({
                 onClick={onClearAll}
                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
               >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Clear all
+                <Trash2 className="h-4 w-4 me-1" />
+                {t('filters.clearAll')}
               </Button>
             )}
           </div>
@@ -160,7 +162,7 @@ export function BatchImageSelector({
                 <button
                   type="button"
                   onClick={() => onImageRemove(image.imageId)}
-                  className="absolute top-2 right-2 touch-target p-2 rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                  className="absolute top-2 end-2 touch-target p-2 rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/70"
                   disabled={disabled}
                   aria-label={`Remove ${image.file.name}`}
                 >
@@ -170,7 +172,7 @@ export function BatchImageSelector({
                 {image.status === 'failed' && (
                   <div className="absolute inset-0 bg-destructive/20 flex items-center justify-center">
                     <div className="bg-destructive text-destructive-foreground text-xs px-2 py-1 rounded-md">
-                      Failed
+                      {t('extract.statusFailed')}
                     </div>
                   </div>
                 )}
@@ -190,11 +192,11 @@ export function BatchImageSelector({
                   disabled && 'opacity-50 cursor-not-allowed'
                 )}
                 disabled={disabled}
-                aria-label="Add more images"
+                aria-label={t('extract.addMoreImages')}
               >
                 <ImagePlus className="h-8 w-8 text-muted-foreground/70 mb-1" />
                 <span className="text-xs text-muted-foreground">
-                  Add more
+                  {t('extract.addMore')}
                 </span>
               </button>
             )}
@@ -210,7 +212,7 @@ export function BatchImageSelector({
             disabled={disabled || selectedImages.length === 0}
             className="min-w-[120px]"
           >
-            Continue
+            {t('common.continue')}
           </Button>
         </div>
       )}

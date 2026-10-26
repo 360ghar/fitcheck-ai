@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Per-app language list for Android 13+ (Settings > Apps > FitCheck AI >
+  Language). Flutter reads the same preference through the locale controller,
+  so the two stay in agreement. Keep in sync with store/asc/locales.json;
+  scripts/i18n/check_locales.py verifies it.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="ar" />
+    <locale android:name="bn" />
+    <locale android:name="ca" />
+    <locale android:name="cs" />
+    <locale android:name="da" />
+    <locale android:name="de" />
+    <locale android:name="el" />
+    <locale android:name="en" />
+    <locale android:name="en-AU" />
+    <locale android:name="en-CA" />
+    <locale android:name="en-GB" />
+    <locale android:name="es" />
+    <locale android:name="es-MX" />
+    <locale android:name="fi" />
+    <locale android:name="fr" />
+    <locale android:name="fr-CA" />
+    <locale android:name="gu" />
+    <locale android:name="he" />
+    <locale android:name="hi" />
+    <locale android:name="hr" />
+    <locale android:name="hu" />
+    <locale android:name="id" />
+    <locale android:name="it" />
+    <locale android:name="ja" />
+    <locale android:name="kn" />
+    <locale android:name="ko" />
+    <locale android:name="ml" />
+    <locale android:name="mr" />
+    <locale android:name="ms" />
+    <locale android:name="nl" />
+    <locale android:name="no" />
+    <locale android:name="or" />
+    <locale android:name="pa" />
+    <locale android:name="pl" />
+    <locale android:name="pt" />
+    <locale android:name="pt-PT" />
+    <locale android:name="ro" />
+    <locale android:name="ru" />
+    <locale android:name="sk" />
+    <locale android:name="sl" />
+    <locale android:name="sv" />
+    <locale android:name="ta" />
+    <locale android:name="te" />
+    <locale android:name="th" />
+    <locale android:name="tr" />
+    <locale android:name="uk" />
+    <locale android:name="ur" />
+    <locale android:name="vi" />
+    <locale android:name="zh-Hans" />
+    <locale android:name="zh-Hant" />
+</locale-config>

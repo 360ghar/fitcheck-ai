@@ -18,6 +18,7 @@ import { getSupabase } from '@/lib/supabase';
 import { API_BASE_URL } from '@/lib/apiBaseUrl';
 import { trackEvent } from '@/lib/analytics';
 import { useAuthStore } from '@/stores/authStore';
+import { useTranslation } from '@/i18n'
 
 type Phase = 'connecting' | 'needs_login' | 'error';
 
@@ -37,6 +38,7 @@ function tokenExpiresSoon(token: string): boolean {
 }
 
 export default function OAuthBridgePage() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams();
   const state = searchParams.get('state') ?? '';
   const [phase, setPhase] = useState<Phase>('connecting');
@@ -135,13 +137,13 @@ export default function OAuthBridgePage() {
         {phase === 'connecting' && (
           <div role="status" aria-live="polite">
             <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-primary" />
-            <p className="text-muted-foreground">Connecting FitCheck to your AI app…</p>
+            <p className="text-muted-foreground">{t('oauth.connecting')}</p>
           </div>
         )}
 
         {phase === 'needs_login' && (
           <div>
-            <h1 className="mb-2 text-xl font-semibold">Sign in to continue</h1>
+            <h1 className="mb-2 text-xl font-semibold">{t('oauth.signInToContinue')}</h1>
             <p className="text-muted-foreground mb-6 text-sm">
               Your AI app wants to connect to FitCheck. Sign in to approve access to
               your wardrobe, outfits, and plans.
@@ -150,17 +152,17 @@ export default function OAuthBridgePage() {
               to={resumeAfterLogin()}
               className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-h-11 items-center justify-center rounded-md px-6 py-2.5 text-sm font-medium"
             >
-              Sign in to FitCheck
+              {t('oauth.signIn')}
             </Link>
           </div>
         )}
 
         {phase === 'error' && (
           <div role="alert">
-            <h1 className="mb-2 text-xl font-semibold text-red-500">Authorization failed</h1>
+            <h1 className="mb-2 text-xl font-semibold text-red-500">{t('oauth.failed')}</h1>
             <p className="text-muted-foreground mb-6 text-sm">{errorMessage}</p>
             <p className="text-muted-foreground text-xs">
-              Go back to your AI app and try connecting again.
+              {t('oauth.failedHint')}
             </p>
           </div>
         )}

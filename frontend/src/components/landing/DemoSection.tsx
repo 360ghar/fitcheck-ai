@@ -33,7 +33,7 @@ export default function DemoSection() {
         <div className="min-w-0 max-w-full overflow-hidden [contain:paint]">
           <div
             data-testid="demo-rail"
-            className="reveal-steps flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4 pr-4 lg:grid lg:grid-cols-3 lg:gap-6 lg:overflow-visible lg:pb-0 lg:pr-0"
+            className="reveal-steps flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4 pe-4 lg:grid lg:grid-cols-3 lg:gap-6 lg:overflow-visible lg:pb-0 lg:pe-0"
           >
             <AnimatedSection
               delay={80}

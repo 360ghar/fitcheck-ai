@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../outfits/providers/outfit_providers.dart';
 import '../../wardrobe/providers/wardrobe_providers.dart';
@@ -20,6 +21,7 @@ class SnapshotCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
 
     if (stats.totalItems == 0) {
       return PaperSurface(
@@ -35,10 +37,10 @@ class SnapshotCard extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Start your closet', style: text.headlineSmall),
+                  Text(l10n.dashboardStartClosetTitle, style: text.headlineSmall),
                   const SizedBox(height: AppConstants.spacing4),
                   Text(
-                    'Photograph a few pieces. We tag them for you.',
+                    l10n.dashboardStartClosetBody,
                     style: text.bodyMedium?.copyWith(
                       color: tokens.textSecondary,
                     ),
@@ -47,7 +49,7 @@ class SnapshotCard extends ConsumerWidget {
                   ElevatedButton.icon(
                     onPressed: () => context.push(Routes.wardrobeAdd),
                     icon: const Icon(Icons.add_a_photo_outlined, size: 20),
-                    label: const Text('Add your first piece'),
+                    label: Text(l10n.wardrobeAddFirst),
                   ),
                 ],
               ),
@@ -59,7 +61,7 @@ class SnapshotCard extends ConsumerWidget {
 
     final streak = this.streak;
     return PaperSurface(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         AppConstants.spacing8,
         AppConstants.spacing16,
         AppConstants.spacing8,
@@ -73,20 +75,24 @@ class SnapshotCard extends ConsumerWidget {
             children: [
               _Figure(
                 value: stats.totalItems,
-                label: 'pieces',
-                note: '+${stats.itemsAddedThisMonth} this month',
+                label: l10n.dashboardPieces,
+                note: l10n.dashboardAddedThisMonth(stats.itemsAddedThisMonth),
                 onTap: () => context.go(Routes.wardrobe),
               ),
               _Figure(
                 value: stats.totalOutfits,
-                label: 'outfits',
-                note: '+${stats.outfitsCreatedThisMonth} this month',
+                label: l10n.dashboardOutfits,
+                note: l10n.dashboardAddedThisMonth(
+                  stats.outfitsCreatedThisMonth,
+                ),
                 onTap: () => context.go(Routes.outfits),
               ),
               _Figure(
                 value: streak?.currentStreak,
-                label: 'day streak',
-                note: streak == null ? '' : 'Best ${streak.longestStreak}',
+                label: l10n.dashboardDayStreak,
+                note: streak == null
+                    ? ''
+                    : l10n.dashboardBestStreak(streak.longestStreak),
                 onTap: () => context.push(Routes.gamification),
               ),
             ],
@@ -102,7 +108,7 @@ class SnapshotCard extends ConsumerWidget {
                       .setFavoritesOnly(true);
                 },
                 icon: const Icon(Icons.favorite_border_rounded, size: 18),
-                label: Text('${stats.favoriteItemsCount} favourites'),
+                label: Text(l10n.dashboardFavourites(stats.favoriteItemsCount)),
               ),
               TextButton.icon(
                 onPressed: () {
@@ -110,20 +116,22 @@ class SnapshotCard extends ConsumerWidget {
                   ref.read(outfitFiltersProvider.notifier).setFavoritesOnly(true);
                 },
                 icon: const Icon(Icons.bookmark_border_rounded, size: 18),
-                label: Text('${stats.favoriteOutfitsCount} saved outfits'),
+                label: Text(
+                  l10n.dashboardSavedOutfits(stats.favoriteOutfitsCount),
+                ),
               ),
             ],
           ),
           if (stats.mostWornItem case final worn?)
             Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: const EdgeInsetsDirectional.fromSTEB(
                 AppConstants.spacing12,
                 0,
                 AppConstants.spacing12,
                 AppConstants.spacing8,
               ),
               child: Text(
-                'Most worn: ${worn.name}, ${worn.timesWorn} times',
+                l10n.dashboardMostWorn(worn.name, worn.timesWorn),
                 style: text.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ),
@@ -153,7 +161,9 @@ class _Figure extends StatelessWidget {
     return Expanded(
       child: Semantics(
         button: true,
-        label: '${value ?? 'No'} $label',
+        // The figure and its label are two nodes on screen but one fact to a
+        // screen reader. `value` is null while the streak is still loading.
+        label: value == null ? label : '${value!} $label',
         excludeSemantics: true,
         // excludeSemantics drops the InkWell's tap action: without this the
         // node is announced as a button screen readers cannot activate.

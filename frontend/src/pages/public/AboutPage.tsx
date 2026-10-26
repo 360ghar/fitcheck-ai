@@ -143,7 +143,7 @@ export default function AboutPage() {
             <Button asChild size="lg" className="bg-primary hover:bg-primary-pressed text-white">
               <Link to={trialRegisterHref()}>
                 Start free
-                <ArrowRight className="ml-2 h-4 w-4" />
+                <ArrowRight className="ms-2 h-4 w-4" />
               </Link>
             </Button>
           </div>

@@ -14,6 +14,7 @@ import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { ItemImage } from '@/components/ui/item-image'
 import { GeneratingSurface } from '@/components/jobs'
 import type { Item, Outfit } from '@/types'
+import { useTranslation } from '@/i18n'
 
 export interface OutfitDetailBodyProps {
   outfit: Outfit
@@ -42,6 +43,7 @@ export function OutfitDetailBody({
   generationStageLabel,
   notice,
 }: OutfitDetailBodyProps) {
+  const { t } = useTranslation()
   const compositionItems: Item[] = useMemo(() => {
     if (outfit.items?.length) return outfit.items
     return outfit.item_ids
@@ -77,9 +79,9 @@ export function OutfitDetailBody({
         ) : (
           <div className="flex aspect-[3/4] flex-col items-center justify-center gap-sm px-lg text-center">
             <Sparkles className="h-8 w-8 text-ash" aria-hidden="true" />
-            <p className="text-sm font-semibold text-foreground">No AI look yet</p>
+            <p className="text-sm font-semibold text-foreground">{t('outfits.noLookYet')}</p>
             <p className="text-xs text-muted-foreground">
-              Generate one to see this outfit worn.
+              {t('outfits.noLookYetBody')}
             </p>
           </div>
         )}
@@ -103,10 +105,10 @@ export function OutfitDetailBody({
             row. Stacking keeps the figure right-ranged instead of crushing it. */}
         <div className="flex items-end justify-between gap-lg md:max-lg:flex-col md:max-lg:items-stretch md:max-lg:gap-md">
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Last worn</p>
+            <p className="text-xs text-muted-foreground">{t('outfits.lastWorn')}</p>
             <p className="mt-xxs text-sm text-foreground">{lastWorn || 'Not yet'}</p>
           </div>
-          <div className="shrink-0 text-right">
+          <div className="shrink-0 text-end-right">
             <span className="block font-display text-[40px] font-bold leading-none tracking-[-0.01em] tabular-nums text-foreground">
               {wornCount}
             </span>
@@ -167,7 +169,7 @@ export function OutfitDetailBody({
 
       {generationStatus === 'failed' && !isGenerating && (
         <p className="mt-lg text-sm text-destructive">
-          Generation failed. Use Retry look to try again.
+          {t('outfits.generationFailed')}
         </p>
       )}
     </div>

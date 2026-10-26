@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../providers/item_add_provider.dart';
 import '../widgets/ai_extraction_widget.dart';
@@ -97,10 +98,10 @@ class _ItemAddPageState extends ConsumerState<ItemAddPage> {
         child: Scaffold(
           appBar: AppBar(
             title: Text(switch (view) {
-              _AddView.manual => 'Add details',
-              _AddView.processing => 'Scanning',
-              _AddView.results => 'Review pieces',
-              _ => 'Add a piece',
+              _AddView.manual => context.l10n.wardrobeAddDetailsTitle,
+              _AddView.processing => context.l10n.wardrobeScanningTitle,
+              _AddView.results => context.l10n.batchReviewPiecesTitle,
+              _ => context.l10n.wardrobeAddPieceTitle,
             }),
           ),
           body: AppPageBackground(child: SafeArea(top: false, child: body)),
@@ -126,7 +127,7 @@ class _StartOptions extends StatelessWidget {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         AppConstants.spacing16,
         AppConstants.spacing16,
         AppConstants.spacing16,
@@ -138,49 +139,51 @@ class _StartOptions extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Snap a piece', style: text.headlineMedium),
+              Text(context.l10n.itemAddSnapTitle, style: text.headlineMedium),
               const SizedBox(height: AppConstants.spacing8),
               Text(
-                'We find every piece in the photo and make a clean studio shot of each.',
+                context.l10n.itemAddSnapBody,
                 style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
               const SizedBox(height: AppConstants.spacing20),
               ElevatedButton.icon(
                 onPressed: onCamera,
                 icon: const Icon(Icons.photo_camera_outlined, size: 20),
-                label: const Text('Take a photo'),
+                label: Text(context.l10n.itemAddCamera),
               ),
               const SizedBox(height: AppConstants.spacing4),
               TextButton.icon(
                 onPressed: onGallery,
                 icon: const Icon(Icons.photo_library_outlined, size: 20),
-                label: const Text('Choose from gallery'),
+                label: Text(context.l10n.itemAddGallery),
               ),
             ],
           ),
         ),
         const SizedBox(height: AppConstants.spacing24),
         Padding(
-          padding: const EdgeInsets.only(left: AppConstants.spacing4),
-          child: Text('Other ways to add', style: text.titleSmall),
+          padding: const EdgeInsetsDirectional.only(
+            start: AppConstants.spacing4,
+          ),
+          child: Text(context.l10n.itemAddOtherWays, style: text.titleSmall),
         ),
         const SizedBox(height: AppConstants.spacing8),
         _OptionRow(
           icon: Icons.collections_outlined,
-          title: 'Add several photos',
-          subtitle: 'Up to 50 at once',
+          title: context.l10n.itemAddSeveral,
+          subtitle: context.l10n.itemAddSeveralBody,
           onTap: () => context.push(Routes.wardrobeBatchAdd),
         ),
         _OptionRow(
           icon: Icons.link_rounded,
-          title: 'Import from a profile',
-          subtitle: 'Instagram or Facebook',
+          title: context.l10n.itemAddImportProfile,
+          subtitle: context.l10n.itemAddImportProfileBody,
           onTap: () => context.push(Routes.wardrobeBatchAddSocial),
         ),
         _OptionRow(
           icon: Icons.edit_note_rounded,
-          title: 'Enter details yourself',
-          subtitle: 'No photo needed',
+          title: context.l10n.itemAddEnterDetails,
+          subtitle: context.l10n.itemAddEnterDetailsBody,
           onTap: onManual,
         ),
       ],

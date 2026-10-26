@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
@@ -32,7 +34,7 @@ class ItemEditPage extends ConsumerWidget {
       child: item != null
           ? _EditForm(item: item)
           : Scaffold(
-              appBar: AppBar(title: const Text('Edit piece')),
+              appBar: AppBar(title: Text(context.l10n.itemEditPieceTitle)),
               body: AppPageBackground(
                 child: detail.hasError
                     ? AppErrorState(
@@ -136,7 +138,10 @@ class _EditFormState extends ConsumerState<_EditForm> {
         ..clear()
         ..addAll(next.colors ?? const <String>[]);
     }
-    if (setEquals(_useCases, UseCases.normalizeList(prev.occasionTags).toSet())) {
+    if (setEquals(
+      _useCases,
+      UseCases.normalizeList(prev.occasionTags).toSet(),
+    )) {
       _useCases
         ..clear()
         ..addAll(UseCases.normalizeList(next.occasionTags));
@@ -174,6 +179,8 @@ class _EditFormState extends ConsumerState<_EditForm> {
 
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
+    // Read once: the dialogs below run after awaits.
+    final l10n = context.l10n;
     setState(() => _saving = true);
     final repository = ref.read(itemRepositoryProvider);
     final id = widget.item.id;
@@ -199,7 +206,11 @@ class _EditFormState extends ConsumerState<_EditForm> {
         ),
       );
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: l10n.itemEditNotSaved,
+        stackTrace: stack,
+      );
       if (mounted) setState(() => _saving = false);
       return;
     }
@@ -222,7 +233,7 @@ class _EditFormState extends ConsumerState<_EditForm> {
       if (mounted) {
         ErrorHandler.showError(
           e,
-          title: 'Saved — photos may be out of date',
+          title: l10n.itemEditSavedStalePhotos,
           stackTrace: stack,
         );
         Navigator.pop(context);
@@ -230,7 +241,10 @@ class _EditFormState extends ConsumerState<_EditForm> {
       return;
     }
     if (!mounted) return;
-    ErrorHandler.showSuccess('Your changes are saved.', title: 'Saved');
+    ErrorHandler.showSuccess(
+      l10n.itemEditSavedBody,
+      title: l10n.itemEditSavedTitle,
+    );
     Navigator.pop(context);
   }
 
@@ -242,18 +256,20 @@ class _EditFormState extends ConsumerState<_EditForm> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit piece'),
+        title: Text(context.l10n.itemEditPieceTitle),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: AppConstants.spacing8),
+            padding: const EdgeInsetsDirectional.only(
+              end: AppConstants.spacing8,
+            ),
             child: TextButton(
               onPressed: _saving ? null : _save,
               child: _saving
-                  ? const InlineProcessingStatus(
+                  ? InlineProcessingStatus(
                       phase: ProcessingPhase.processing,
-                      processingLabel: 'Saving',
+                      processingLabel: context.l10n.itemManualSaving,
                     )
-                  : const Text('Save'),
+                  : Text(context.l10n.actionSave),
             ),
           ),
         ],
@@ -281,27 +297,38 @@ class _EditFormState extends ConsumerState<_EditForm> {
               TextFormField(
                 controller: _name,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Name'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+                decoration: InputDecoration(labelText: context.l10n.authName),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? context.l10n.itemManualEnterName
+                    : null,
               ),
               gap,
               DropdownButtonFormField<Category>(
                 initialValue: _category,
-                decoration: const InputDecoration(labelText: 'Category'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.closetCategoryLabel,
+                ),
                 items: [
                   for (final c in Category.values)
-                    DropdownMenuItem(value: c, child: Text(c.displayName)),
+                    DropdownMenuItem(
+                      value: c,
+                      child: Text(c.label(context.l10n)),
+                    ),
                 ],
                 onChanged: (v) => setState(() => _category = v ?? _category),
               ),
               gap,
               DropdownButtonFormField<domain.Condition>(
                 initialValue: _condition,
-                decoration: const InputDecoration(labelText: 'Condition'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.filterConditionLabel,
+                ),
                 items: [
                   for (final c in domain.Condition.values)
-                    DropdownMenuItem(value: c, child: Text(c.displayName)),
+                    DropdownMenuItem(
+                      value: c,
+                      child: Text(c.label(context.l10n)),
+                    ),
                 ],
                 onChanged: (v) => setState(() => _condition = v ?? _condition),
               ),
@@ -310,10 +337,12 @@ class _EditFormState extends ConsumerState<_EditForm> {
                 controller: _description,
                 maxLines: 3,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.itemEditDescriptionLabel,
+                ),
               ),
               const SizedBox(height: AppConstants.spacing20),
-              Text('Colours', style: text.titleSmall),
+              Text(context.l10n.itemColours, style: text.titleSmall),
               const SizedBox(height: AppConstants.spacing8),
               Wrap(
                 spacing: AppConstants.spacing8,
@@ -321,7 +350,7 @@ class _EditFormState extends ConsumerState<_EditForm> {
                 children: [
                   for (final color in {..._commonColors, ..._colors})
                     FilterChip(
-                      label: Text(color),
+                      label: Text(localizedTaxonomy(context.l10n, color)),
                       selected: _colors.contains(color),
                       onSelected: (on) => setState(
                         () => on ? _colors.add(color) : _colors.remove(color),
@@ -330,7 +359,7 @@ class _EditFormState extends ConsumerState<_EditForm> {
                 ],
               ),
               const SizedBox(height: AppConstants.spacing20),
-              Text('Use cases', style: text.titleSmall),
+              Text(context.l10n.itemUseCases, style: text.titleSmall),
               const SizedBox(height: AppConstants.spacing8),
               Wrap(
                 spacing: AppConstants.spacing8,
@@ -338,7 +367,7 @@ class _EditFormState extends ConsumerState<_EditForm> {
                 children: [
                   for (final useCase in {...UseCases.defaults, ..._useCases})
                     FilterChip(
-                      label: Text(UseCases.displayLabel(useCase)),
+                      label: Text(localizedTaxonomy(context.l10n, useCase)),
                       selected: _useCases.contains(useCase),
                       onSelected: (on) => setState(
                         () => on
@@ -354,10 +383,10 @@ class _EditFormState extends ConsumerState<_EditForm> {
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _addCustomUseCase(),
                 decoration: InputDecoration(
-                  labelText: 'Add a use case',
-                  hintText: 'For example, brunch',
+                  labelText: context.l10n.itemManualAddUseCase,
+                  hintText: context.l10n.closetOtherUseCaseHint,
                   suffixIcon: IconButton(
-                    tooltip: 'Add',
+                    tooltip: context.l10n.itemEditAddUseCaseAction,
                     icon: const Icon(Icons.add_rounded),
                     onPressed: _addCustomUseCase,
                   ),
@@ -369,14 +398,18 @@ class _EditFormState extends ConsumerState<_EditForm> {
                   Expanded(
                     child: TextFormField(
                       controller: _brand,
-                      decoration: const InputDecoration(labelText: 'Brand'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.itemManualBrand,
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppConstants.spacing12),
                   Expanded(
                     child: TextFormField(
                       controller: _size,
-                      decoration: const InputDecoration(labelText: 'Size'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.itemManualSize,
+                      ),
                     ),
                   ),
                 ],
@@ -387,14 +420,18 @@ class _EditFormState extends ConsumerState<_EditForm> {
                   Expanded(
                     child: TextFormField(
                       controller: _material,
-                      decoration: const InputDecoration(labelText: 'Material'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.itemMaterial,
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppConstants.spacing12),
                   Expanded(
                     child: TextFormField(
                       controller: _pattern,
-                      decoration: const InputDecoration(labelText: 'Pattern'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.itemPattern,
+                      ),
                     ),
                   ),
                 ],
@@ -408,12 +445,14 @@ class _EditFormState extends ConsumerState<_EditForm> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: const InputDecoration(labelText: 'Price'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.itemPrice,
+                      ),
                       validator: (v) {
                         final value = v?.trim() ?? '';
                         if (value.isEmpty) return null;
                         return double.tryParse(value) == null
-                            ? 'Enter a number'
+                            ? context.l10n.itemManualEnterNumber
                             : null;
                       },
                     ),
@@ -422,14 +461,16 @@ class _EditFormState extends ConsumerState<_EditForm> {
                   Expanded(
                     child: TextFormField(
                       controller: _location,
-                      decoration: const InputDecoration(labelText: 'Kept in'),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.itemKeptIn,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: AppConstants.spacing32),
               Text(
-                'Delete this piece from the item page.',
+                context.l10n.itemEditRemovePieceHint,
                 style: text.bodySmall?.copyWith(color: tokens.textMuted),
                 textAlign: TextAlign.center,
               ),
@@ -471,16 +512,18 @@ class _PhotoStrip extends ConsumerWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text('Photos', style: text.titleSmall)),
+            Expanded(
+              child: Text(context.l10n.itemPhotos, style: text.titleSmall),
+            ),
             TextButton.icon(
               onPressed: onGallery,
               icon: const Icon(Icons.photo_library_outlined, size: 18),
-              label: const Text('Gallery'),
+              label: Text(context.l10n.wardrobeGalleryAction),
             ),
             TextButton.icon(
               onPressed: onCamera,
               icon: const Icon(Icons.photo_camera_outlined, size: 18),
-              label: const Text('Camera'),
+              label: Text(context.l10n.wardrobeCameraAction),
             ),
           ],
         ),
@@ -490,7 +533,7 @@ class _PhotoStrip extends ConsumerWidget {
             lift: 0,
             color: tokens.stock.sunk,
             child: Text(
-              'No photos yet. Add one from your gallery or camera.',
+              context.l10n.itemEditNoPhotos,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           )
@@ -504,8 +547,8 @@ class _PhotoStrip extends ConsumerWidget {
                   _Thumb(
                     removed: toDelete.contains(image.id),
                     actionTooltip: toDelete.contains(image.id)
-                        ? 'Keep photo'
-                        : 'Remove photo',
+                        ? context.l10n.itemEditKeepPhoto
+                        : context.l10n.itemRemovePhoto,
                     actionIcon: toDelete.contains(image.id)
                         ? Icons.undo_rounded
                         : Icons.close_rounded,
@@ -521,8 +564,8 @@ class _PhotoStrip extends ConsumerWidget {
                   ),
                 for (final (i, file) in added.indexed)
                   _Thumb(
-                    label: 'New',
-                    actionTooltip: 'Remove photo',
+                    label: context.l10n.wardrobeNewBadge,
+                    actionTooltip: context.l10n.itemRemovePhoto,
                     actionIcon: Icons.close_rounded,
                     onAction: () => onRemoveAdded(i),
                     child: Image.file(file, fit: BoxFit.cover, cacheWidth: 300),
@@ -556,7 +599,7 @@ class _Thumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.only(right: AppConstants.spacing8),
+      padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
       child: SizedBox.square(
         dimension: 104,
         child: Stack(
@@ -569,7 +612,7 @@ class _Thumb extends StatelessWidget {
                 child: removed
                     ? Center(
                         child: Text(
-                          'Removed',
+                          context.l10n.itemEditRemoved,
                           style: Theme.of(context).textTheme.labelMedium,
                         ),
                       )

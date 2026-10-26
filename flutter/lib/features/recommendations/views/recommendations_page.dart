@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../widgets/astrology_tab.dart';
 import '../widgets/complete_look_tab.dart';
@@ -23,16 +24,16 @@ class RecommendationsPage extends StatelessWidget {
         initialIndex: initialTab,
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('For you'),
-            bottom: const TabBar(
+            title: Text(context.l10n.quickForYou),
+            bottom: TabBar(
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               tabs: [
-                Tab(text: 'Matches'),
-                Tab(text: 'Complete'),
-                Tab(text: 'Weather'),
-                Tab(text: 'Colours'),
-                Tab(text: 'Shop'),
+                Tab(text: context.l10n.recommendTabMatches),
+                Tab(text: context.l10n.recommendTabComplete),
+                Tab(text: context.l10n.recommendTabWeather),
+                Tab(text: context.l10n.recommendTabColours),
+                Tab(text: context.l10n.recommendTabShop),
               ],
             ),
           ),

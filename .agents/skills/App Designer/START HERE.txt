@@ -1,0 +1,20 @@
+APP DESIGNER: START HERE
+
+Design iPhone apps that don't look like AI made them.
+
+You need:
+  - Claude Code (https://claude.com/claude-code). It comes with a paid Claude plan.
+  - A Mac with Google Chrome. App Designer renders your screens with Apple's own fonts, which live on a Mac.
+  - Node.js 18 or newer (https://nodejs.org). If you don't have it, Claude will tell you.
+
+Install (about a minute, one time):
+  1. Unzip this folder.
+  2. Open a terminal in this folder and type:  claude
+  3. Type:  hi
+     Claude installs App Designer and checks it works.
+
+Design an app, anytime, in any Claude Code session:
+  Type  /app-designer  (or just ask: "design my app ...")
+  Say what the app does and who it is for. Your screens appear as images you can open.
+
+More detail: README.md

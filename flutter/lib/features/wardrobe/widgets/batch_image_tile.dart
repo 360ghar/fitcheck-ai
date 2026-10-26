@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/batch_extraction_models.dart';
 
@@ -66,7 +67,7 @@ class BatchImageTile extends StatelessWidget {
               top: 0,
               right: 0,
               child: IconButton(
-                tooltip: 'Remove photo',
+                tooltip: context.l10n.wardrobeRemovePhotoTooltip,
                 onPressed: onRemove,
                 style: IconButton.styleFrom(
                   minimumSize: const Size(44, 44),

@@ -279,11 +279,11 @@ class AppErrorBanner extends StatelessWidget {
         lift: 0,
         color: tokens.stock.tint,
         grain: false,
-        padding: const EdgeInsets.fromLTRB(
-          AppConstants.spacing12,
-          AppConstants.spacing4,
-          AppConstants.spacing4,
-          AppConstants.spacing4,
+        padding: const EdgeInsetsDirectional.only(
+          start: AppConstants.spacing12,
+          top: AppConstants.spacing4,
+          end: AppConstants.spacing4,
+          bottom: AppConstants.spacing4,
         ),
         child: Row(
           children: [

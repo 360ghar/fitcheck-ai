@@ -20,7 +20,19 @@ _cache: Dict[str, Dict[str, Any]] = {}
 
 
 class ExtractionCacheService:
-    """Service for caching extraction results by image hash."""
+    """Service for caching extraction results by image hash.
+
+    The key is `user_id:sha256(image)` and carries NO language dimension on
+    purpose. Extraction output is canonical English (category, sub_category,
+    colors, material, pattern, brand, description) and the client localizes it
+    at display time, so one cached row is correct for every language a user can
+    switch to. Adding language here would multiply cache entries by 44 and
+    store the same English JSON 44 times.
+
+    Anything that caches *generated prose* instead must key on language: a
+    Hindi outfit rationale served from an English request's cache entry is the
+    silent failure mode this distinction exists to prevent.
+    """
 
     # Cache TTL: 24 hours. Enforced lazily on read only (get_cached_result drops
     # an entry it finds expired); nothing sweeps the dict on a timer.

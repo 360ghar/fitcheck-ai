@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/photoshoot_models.dart';
 import '../providers/photoshoot_provider.dart';
+import '../photoshoot_l10n.dart';
 import 'referral_limit_dialog.dart';
 
 /// Step 2: style, format and image count.
@@ -35,6 +37,7 @@ class _PhotoshootConfigureStepState
   Widget build(BuildContext context) {
     final s = ref.watch(photoshootProvider);
     final notifier = ref.read(photoshootProvider.notifier);
+    final l10n = context.l10n;
     final text = Theme.of(context).textTheme;
     final tokens = PaperTokens.of(context);
     // A reset clears the prompt in the state; mirror it in the field.
@@ -54,7 +57,7 @@ class _PhotoshootConfigureStepState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        title('Style'),
+        title(context.l10n.filterStyle),
         _StyleGrid(selected: s.useCase, onSelect: notifier.setUseCase),
         if (s.useCase == PhotoshootUseCase.custom) ...[
           const SizedBox(height: AppConstants.spacing16),
@@ -64,17 +67,17 @@ class _PhotoshootConfigureStepState
             maxLines: 3,
             minLines: 2,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Your prompt',
-              hintText: 'Golden hour on a rooftop, linen shirt',
+            decoration: InputDecoration(
+              labelText: context.l10n.photoshootYourPrompt,
+              hintText: context.l10n.photoshootPromptHint,
             ),
           ),
         ],
         const SizedBox(height: AppConstants.spacing24),
-        title('Format'),
+        title(context.l10n.photoshootFormat),
         _FormatRow(selected: s.aspectRatio, onSelect: notifier.setAspectRatio),
         const SizedBox(height: AppConstants.spacing24),
-        title('How many'),
+        title(context.l10n.photoshootHowMany),
         _CountCard(state: s, onChanged: notifier.setNumImages),
         const SizedBox(height: AppConstants.spacing12),
         _UsageLine(state: s, onRetry: notifier.fetchUsage),
@@ -84,7 +87,7 @@ class _PhotoshootConfigureStepState
             TextButton(
               onPressed: notifier.backToUpload,
               style: TextButton.styleFrom(minimumSize: const Size(88, 52)),
-              child: const Text('Back'),
+              child: Text(context.l10n.actionBack),
             ),
             const SizedBox(width: AppConstants.spacing12),
             Expanded(
@@ -95,10 +98,7 @@ class _PhotoshootConfigureStepState
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(52),
                 ),
-                child: Text(
-                  'Create ${s.numImages} '
-                  '${s.numImages == 1 ? 'photo' : 'photos'}',
-                ),
+                child: Text(l10n.photoshootCreatePhotos(s.numImages)),
               ),
             ),
           ],
@@ -133,14 +133,16 @@ class _StyleGrid extends StatelessWidget {
         final on = useCase == selected;
         return PaperSurface(
           onTap: () => onSelect(useCase),
-          semanticLabel: '${useCase.label}${on ? ', selected' : ''}',
+          semanticLabel:
+              '${useCase.localizedLabel(context.l10n)}'
+              '${on ? ', ${context.l10n.languageCurrent}' : ''}',
           color: on ? tokens.stock.tint : null,
           lift: on ? 0.4 : 1,
-          padding: const EdgeInsets.fromLTRB(
-            AppConstants.spacing12,
-            AppConstants.spacing12,
-            AppConstants.spacing8,
-            AppConstants.spacing12,
+          padding: const EdgeInsetsDirectional.only(
+            start: AppConstants.spacing12,
+            top: AppConstants.spacing12,
+            end: AppConstants.spacing8,
+            bottom: AppConstants.spacing12,
           ),
           child: Row(
             children: [
@@ -150,7 +152,7 @@ class _StyleGrid extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      useCase.label,
+                      useCase.localizedLabel(context.l10n),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.titleSmall?.copyWith(
@@ -160,7 +162,7 @@ class _StyleGrid extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      useCase.description,
+                      useCase.localizedDescription(context.l10n),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: text.bodySmall?.copyWith(
@@ -290,7 +292,7 @@ class _CountCard extends StatelessWidget {
               const SizedBox(width: AppConstants.spacing8),
               Expanded(
                 child: Text(
-                  state.numImages == 1 ? 'photo' : 'photos',
+                  context.l10n.photoshootCountPhoto(state.numImages),
                   style: text.bodyLarge?.copyWith(color: tokens.textSecondary),
                 ),
               ),
@@ -326,7 +328,7 @@ class _UsageLine extends StatelessWidget {
     if (usage == null && state.usageLoading) {
       return const SkeletonPulse(
         child: Align(
-          alignment: Alignment.centerLeft,
+          alignment: AlignmentDirectional.centerStart,
           child: SkeletonBox(width: 220, height: 14),
         ),
       );
@@ -335,9 +337,9 @@ class _UsageLine extends StatelessWidget {
       return Row(
         children: [
           Expanded(
-            child: Text("We couldn't check today's limit.", style: style),
+            child: Text(context.l10n.photoshootLimitUnknown, style: style),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          TextButton(onPressed: onRetry, child: Text(context.l10n.actionRetry)),
         ],
       );
     }
@@ -349,8 +351,13 @@ class _UsageLine extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            '${isPro ? 'Pro' : 'Free'} plan: ${usage.remaining} of '
-            '${usage.limitToday} left today',
+            context.l10n.photoshootUsagePlan(
+              isPro
+                  ? context.l10n.photoshootPlanPro
+                  : context.l10n.photoshootPlanFree,
+              usage.remaining,
+              usage.limitToday,
+            ),
             style: style,
           ),
         ),
@@ -358,7 +365,7 @@ class _UsageLine extends StatelessWidget {
         if (!isPro && EnvConfig.paywallEnabled)
           TextButton(
             onPressed: () => context.push(Routes.subscription),
-            child: const Text('Upgrade'),
+            child: Text(context.l10n.actionUpgrade),
           ),
       ],
     );

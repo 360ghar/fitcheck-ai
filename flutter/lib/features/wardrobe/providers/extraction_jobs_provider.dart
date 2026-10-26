@@ -14,6 +14,7 @@ import '../../../core/services/persistence_service.dart';
 import '../models/batch_extraction_models.dart';
 import 'batch_extraction_provider.dart' show batchExtractionRepositoryProvider;
 import 'wardrobe_providers.dart' show itemRepositoryProvider;
+import '../../../core/utils/error_handler.dart';
 
 /// Persistence of the tracked extraction jobs (same pattern as the social
 /// import job: a JSON blob under one key).
@@ -713,7 +714,8 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
       final count = job.total > 0 ? '${job.total} pieces' : 'pieces';
       await notifications.showJobComplete(
         jobId: job.jobId,
-        title: 'Your pieces are ready',
+        title:
+            ErrorHandler.l10n?.jobsPiecesReadyTitle ?? 'Your pieces are ready',
         body: job.kind == TrackedJobKind.batch
             ? 'Review $count from ${job.label}.'
             : 'Review $count.',
@@ -721,7 +723,8 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
     } else if (job.status == TrackedJobStatus.failed) {
       await notifications.showJobFailed(
         jobId: job.jobId,
-        title: 'The scan stopped',
+        title:
+            ErrorHandler.l10n?.jobsScanStoppedTitle ?? 'The scan stopped',
         body: job.error.isEmpty ? 'Open the app to try again.' : job.error,
       );
     }
@@ -806,8 +809,10 @@ class ExtractionJobsNotifier extends Notifier<ExtractionJobsState> {
           await JobNotifications.instance.showFinishedWhileAway(
             jobId: fresh.jobId,
             title: fresh.isComplete
-                ? 'Your pieces are ready'
-                : 'The scan stopped',
+                ? ErrorHandler.l10n?.jobsPiecesReadyTitle ??
+                    'Your pieces are ready'
+                : ErrorHandler.l10n?.jobsScanStoppedTitle ??
+                    'The scan stopped',
             body: fresh.isComplete
                 ? 'Review ${fresh.total > 0 ? '${fresh.total} pieces' : 'your pieces'}.'
                 : (fresh.error.isEmpty

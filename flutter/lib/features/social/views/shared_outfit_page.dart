@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/services/persistence_service.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
@@ -73,22 +74,20 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
   void _retry() => setState(() => _loadFuture = _load());
 
   Future<void> _hideContent() async {
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Hide this outfit?'),
-        content: const Text(
-          'It stays hidden on this device. You can also report it so our '
-          'team can review and remove it.',
-        ),
+        title: Text(l10n.sharedOutfitHideTitle),
+        content: Text(l10n.sharedOutfitHideBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.actionCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Hide'),
+            child: Text(l10n.sharedOutfitHideAction),
           ),
         ],
       ),
@@ -100,29 +99,30 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
       _loadFuture = Future.value(const _SharedLoadResult.hidden());
     });
     ErrorHandler.showInfo(
-      'This outfit will not show on this device again.',
-      title: 'Outfit hidden',
+      l10n.sharedOutfitHiddenInfo,
+      title: l10n.sharedOutfitHiddenToast,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return PaperStockScope(
       stock: PaperStockId.marigold,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Shared outfit'),
+          title: Text(l10n.sharedOutfitTitle),
           actions: [
             IconButton(
               icon: const Icon(Icons.visibility_off_outlined),
-              tooltip: 'Hide this outfit',
+              tooltip: l10n.sharedOutfitHideTooltip,
               onPressed: _hideContent,
             ),
             IconButton(
               icon: const Icon(Icons.flag_outlined),
-              tooltip: 'Report this outfit',
+              tooltip: l10n.sharedOutfitReportTooltip,
               onPressed: () => showReportContentSheet(
-                contentType: 'shared outfit',
+                contentType: ReportContentType.sharedOutfit,
                 contentId: widget.shareId,
               ),
             ),
@@ -139,21 +139,21 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                 return const SkeletonDetailPage();
               }
               return switch (result.status) {
-                _SharedStatus.missing => const AppEmptyState(
+                _SharedStatus.missing => AppEmptyState(
                   scene: PaperScenes.oops,
-                  title: "This outfit isn't here anymore",
-                  message: 'It may have been removed, or the link is wrong.',
+                  title: l10n.sharedOutfitMissingTitle,
+                  message: l10n.sharedOutfitMissingBody,
                 ),
                 _SharedStatus.error => AppErrorState(
                   error: result.error,
                   onRetry: _retry,
                 ),
-                _SharedStatus.hidden => const AppEmptyState(
+                _SharedStatus.hidden => AppEmptyState(
                   scene: PaperScenes.outfits,
-                  title: 'You hid this outfit',
-                  message:
-                      'If it was objectionable, report it from Privacy and '
-                      'terms or email ${AppConstants.supportEmail}.',
+                  title: l10n.sharedOutfitHiddenStateTitle,
+                  message: l10n.sharedOutfitHiddenStateBody(
+                    AppConstants.supportEmail,
+                  ),
                 ),
                 _SharedStatus.ok => _SharedOutfitView(
                   outfit: result.outfit!,
@@ -178,6 +178,7 @@ class _SharedOutfitView extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final description = outfit.description;
     final images = <String>[
       ...?outfit.outfitImages?.where((u) => u.isNotEmpty),
@@ -241,16 +242,16 @@ class _SharedOutfitView extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Like this look?', style: text.headlineSmall),
+              Text(l10n.sharedOutfitCtaTitle, style: text.headlineSmall),
               const SizedBox(height: AppConstants.spacing4),
               Text(
-                'Build outfits like it from your own closet.',
+                l10n.sharedOutfitCtaBody,
                 style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
               const SizedBox(height: AppConstants.spacing16),
               ElevatedButton(
                 onPressed: () => context.go(Routes.login),
-                child: const Text('Get FitCheck AI'),
+                child: Text(l10n.sharedOutfitCtaButton),
               ),
             ],
           ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
@@ -68,11 +70,19 @@ class _ShoppingTabState extends ConsumerState<ShoppingTab>
               child: DropdownButtonFormField<Category?>(
                 initialValue: _category,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Category'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.closetCategoryLabel,
+                ),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('Any')),
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(context.l10n.closetAnyUseCase),
+                  ),
                   for (final c in Category.values)
-                    DropdownMenuItem(value: c, child: Text(c.displayName)),
+                    DropdownMenuItem(
+                      value: c,
+                      child: Text(c.label(context.l10n)),
+                    ),
                 ],
                 onChanged: (c) => setState(() => _category = c),
               ),
@@ -82,11 +92,19 @@ class _ShoppingTabState extends ConsumerState<ShoppingTab>
               child: DropdownButtonFormField<Style?>(
                 initialValue: _style,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Style'),
+                decoration: InputDecoration(
+                  labelText: context.l10n.filterStyle,
+                ),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('Any')),
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(context.l10n.closetAnyUseCase),
+                  ),
                   for (final s in Style.values)
-                    DropdownMenuItem(value: s, child: Text(s.displayName)),
+                    DropdownMenuItem(
+                      value: s,
+                      child: Text(s.label(context.l10n)),
+                    ),
                 ],
                 onChanged: (s) => setState(() => _style = s),
               ),
@@ -96,7 +114,12 @@ class _ShoppingTabState extends ConsumerState<ShoppingTab>
         const SizedBox(height: AppConstants.spacing16),
         Row(
           children: [
-            Expanded(child: Text('Budget up to', style: text.bodyLarge)),
+            Expanded(
+              child: Text(
+                context.l10n.recommendBudgetLabel,
+                style: text.bodyLarge,
+              ),
+            ),
             Text('\$${_budget.round()}', style: text.titleMedium),
           ],
         ),
@@ -111,7 +134,11 @@ class _ShoppingTabState extends ConsumerState<ShoppingTab>
         const SizedBox(height: AppConstants.spacing8),
         ElevatedButton(
           onPressed: loading ? null : _fetch,
-          child: Text(loading ? 'Looking' : 'Find what to buy'),
+          child: Text(
+            loading
+                ? context.l10n.recommendLooking
+                : context.l10n.recommendFindWhatToBuy,
+          ),
         ),
       ],
     );
@@ -138,26 +165,25 @@ class _ShoppingTabState extends ConsumerState<ShoppingTab>
       ];
     }
     if (value == null) {
-      return const [
+      return [
         SliverFillRemaining(
           hasScrollBody: false,
           child: AppEmptyState(
             scene: PaperScenes.closet,
-            title: 'Fill the gaps',
-            message:
-                "Set a budget and we'll suggest what your closet is missing.",
+            title: context.l10n.recommendFillGapsTitle,
+            message: context.l10n.recommendFillGapsBody,
           ),
         ),
       ];
     }
     if (value.isEmpty) {
-      return const [
+      return [
         SliverFillRemaining(
           hasScrollBody: false,
           child: AppEmptyState(
             scene: PaperScenes.closet,
-            title: 'No gaps found',
-            message: 'Try a bigger budget or another category.',
+            title: context.l10n.recommendNoGapsTitle,
+            message: context.l10n.recommendNoGapsBody,
           ),
         ),
       ];
@@ -215,7 +241,7 @@ class _GapCard extends StatelessWidget {
                   priority == 'medium' ||
                   priority == 'low')
                 Text(
-                  '${capitalizeWords(priority!)} priority',
+                  context.l10n.recommendPriorityLabel(capitalizeWords(priority!)),
                   style: text.labelLarge?.copyWith(
                     color: priority == 'high'
                         ? tokens.stock.accent

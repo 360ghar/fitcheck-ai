@@ -1,0 +1,540 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #sw-bg {
+      background: #FCFAF8;
+    }
+    .sw-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .sw-glow-a {
+      width: 620px;
+      height: 620px;
+      left: 360px;
+      top: -180px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.14) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .sw-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -200px;
+      top: 760px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.1) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .sw-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 540px;
+      top: 1180px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.09) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .sw-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— floating-pill wallpaper (flat — no shadow) ————— */
+    .sw-pill {
+      position: absolute;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 24px;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      background: #FFFFFF;
+      color: #1A1A1A;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 21px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    #sw-p1 { left: 66px;  top: 128px;  background: #51D6B0; }
+    #sw-p2 { right: 60px; top: 216px;  background: #9BFAED; }
+    #sw-p3 { left: 60px;  top: 1350px; background: #74DEC0; }
+    #sw-p4 { right: 56px; top: 1440px; background: #89F9EA; }
+
+    /* ————— Scene 1: section-headline "your wardrobe", top center ————— */
+    #sw-headline-inner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 228px;
+      text-align: center;
+      white-space: nowrap;
+      font-family: "Bodoni Moda", serif;
+      font-size: 92px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.01em;
+      color: #1A1A1A;
+    }
+    .sw-hword {
+      display: inline-block;
+    }
+
+    /* ————— the 2×3 grid: hairline empty slots + pill-cards ————— */
+    #sw-grid-inner {
+      position: absolute;
+      inset: 0;
+    }
+    #sw-grid-slots {
+      position: absolute;
+      inset: 0;
+    }
+    .sw-slot {
+      position: absolute;
+      width: 372px;
+      height: 276px;
+      border: 1.5px solid rgba(26, 26, 26, 0.28);
+      border-radius: 32px;
+    }
+    #sw-s1 { left: 152px; top: 402px; }
+    #sw-s2 { left: 556px; top: 402px; }
+    #sw-s3 { left: 152px; top: 710px; }
+    #sw-s4 { left: 556px; top: 710px; }
+    #sw-s5 { left: 152px; top: 1018px; }
+    #sw-s6 { left: 556px; top: 1018px; }
+
+    /* Tiles are laid out at the grid center (540, 848) by margin centering;
+       the timeline tweens x/y outward to each slot (center-outward-expansion).
+       No CSS transform anywhere — GSAP owns every transform on these. */
+    .sw-tile {
+      position: absolute;
+      left: 540px;
+      top: 848px;
+      width: 372px;
+      height: 276px;
+      margin-left: -186px;
+      margin-top: -138px;
+    }
+    .sw-card {
+      width: 372px;
+      height: 276px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 32px;
+      box-shadow: 6px 6px 0 rgba(26, 26, 26, 0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    .sw-icon {
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      border: 2px solid #1E1E1E;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sw-icon svg {
+      width: 56px;
+      height: 56px;
+      display: block;
+    }
+    #sw-icon-1 { background: #078675; } /* shirts — jade, primary accent */
+    #sw-icon-2 { background: #74DEC0; } /* denim — brand mint */
+    #sw-icon-3 { background: #51D6B0; } /* dresses — lime */
+    #sw-icon-4 { background: #89F9EA; } /* favorites — sky (pale: the jade heart pops) */
+    #sw-icon-5 { background: #9BFAED; } /* filters — lavender */
+    #sw-icon-6 { background: #5DF7E2; } /* matches — violet */
+    .sw-card-head {
+      font-family: "Bodoni Moda", serif;
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1.1;
+      color: #1A1A1A;
+    }
+
+    /* ————— traveling glow sweep (ambient-glow-bloom, one pass) ————— */
+    #sw-sweep-glow {
+      position: absolute;
+      left: 540px;
+      top: 848px;
+      width: 480px;
+      height: 480px;
+      margin-left: -240px;
+      margin-top: -240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.55) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+
+    /* ————— Scene 3 payoff: "your style" in a mint quote-highlight pill ————— */
+    #sw-payoff-stage {
+      position: absolute;
+      left: 180px;
+      top: 1337px;
+      width: 720px;
+      height: 190px;
+    }
+    #sw-style-plain,
+    #sw-style-pill {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      font-family: "Bodoni Moda", serif;
+      font-size: 108px;
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      color: #1A1A1A;
+    }
+    #sw-style-pill span {
+      padding: 14px 50px;
+      background: #74DEC0;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      box-shadow: 6px 6px 0 rgba(26, 26, 26, 0.08);
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="05-smart-wardrobe"
+    data-start="0"
+    data-duration="8.16"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="sw-bg" data-start="0" data-duration="8.16" data-track-index="0">
+      <div class="sw-glow sw-glow-a"></div>
+      <div class="sw-glow sw-glow-b"></div>
+      <div class="sw-glow sw-glow-c"></div>
+      <div class="sw-grain"></div>
+    </div>
+
+    <!-- floating-pill wallpaper -->
+    <div class="clip" id="sw-wallpaper" data-start="0" data-duration="8.16" data-track-index="1">
+      <div class="sw-pill" id="sw-p1">New</div>
+      <div class="sw-pill" id="sw-p2">Daily</div>
+      <div class="sw-pill" id="sw-p3">Next</div>
+      <div class="sw-pill" id="sw-p4">Ever</div>
+    </div>
+
+    <!-- Scene 1: section-headline, per-word reveal -->
+    <div class="clip" id="sw-headline" data-start="0" data-duration="8.16" data-track-index="2">
+      <div id="sw-headline-inner">
+        <span class="sw-hword" id="sw-w-your">your</span> <span class="sw-hword" id="sw-w-wardrobe">wardrobe</span>
+      </div>
+    </div>
+
+    <!-- the self-assembling wardrobe grid -->
+    <div class="clip" id="sw-grid" data-start="0" data-duration="8.16" data-track-index="3">
+      <div id="sw-grid-inner">
+        <div id="sw-grid-slots">
+          <div class="sw-slot" id="sw-s1"></div>
+          <div class="sw-slot" id="sw-s2"></div>
+          <div class="sw-slot" id="sw-s3"></div>
+          <div class="sw-slot" id="sw-s4"></div>
+          <div class="sw-slot" id="sw-s5"></div>
+          <div class="sw-slot" id="sw-s6"></div>
+        </div>
+
+        <!-- tile 1: shirts -->
+        <div class="sw-tile" id="sw-t1">
+          <div class="sw-card">
+            <div class="sw-icon" id="sw-icon-1">
+              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M31 30 L41 24 C45 29 47 31 50 31 C53 31 55 29 59 24 L69 30 L77 41 L67 47 L67 75 L33 75 L33 47 L23 41 Z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="sw-card-head">shirts</div>
+          </div>
+        </div>
+
+        <!-- tile 2: denim -->
+        <div class="sw-tile" id="sw-t2">
+          <div class="sw-card">
+            <div class="sw-icon" id="sw-icon-2">
+              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M50 27 C48 20 58 18 59 24 C60 29 54 30 50 33" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M50 33 L16 62 Q50 78 84 62 Z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="sw-card-head">denim</div>
+          </div>
+        </div>
+
+        <!-- tile 3: dresses -->
+        <div class="sw-tile" id="sw-t3">
+          <div class="sw-card">
+            <div class="sw-icon" id="sw-icon-3">
+              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M43 23 L57 23 L55 35 L69 46 L77 76 L23 76 L31 46 L45 35 Z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="sw-card-head">dresses</div>
+          </div>
+        </div>
+
+        <!-- tile 4: favorites — the heart fills jade on the word "Favorites" -->
+        <div class="sw-tile" id="sw-t4">
+          <div class="sw-card">
+            <div class="sw-icon" id="sw-icon-4">
+              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path id="sw-heart" d="M50 80 C26 64 16 48 22 34 C27 23 41 21 50 33 C59 21 73 23 78 34 C84 48 74 64 50 80 Z" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="sw-card-head">favorites</div>
+          </div>
+        </div>
+
+        <!-- tile 5: filters -->
+        <div class="sw-tile" id="sw-t5">
+          <div class="sw-card">
+            <div class="sw-icon" id="sw-icon-5">
+              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M27 25 L73 25 L57 47 L57 73 L43 73 L43 47 Z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="sw-card-head">filters</div>
+          </div>
+        </div>
+
+        <!-- tile 6: matches -->
+        <div class="sw-tile" id="sw-t6">
+          <div class="sw-card">
+            <div class="sw-icon" id="sw-icon-6">
+              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M50 21 C52 37 56 43 72 46 C56 49 52 55 50 71 C48 55 44 49 28 46 C44 43 48 37 50 21 Z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="sw-card-head">matches</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- traveling glow sweep -->
+    <div class="clip" id="sw-sweep" data-start="0" data-duration="8.16" data-track-index="4">
+      <div id="sw-sweep-glow"></div>
+    </div>
+
+    <!-- Scene 3 payoff: scale-swap into the mint quote-highlight -->
+    <div class="clip" id="sw-payoff" data-start="0" data-duration="8.16" data-track-index="5">
+      <div id="sw-payoff-stage">
+        <div id="sw-style-plain">your style</div>
+        <div id="sw-style-pill"><span>your style</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["05-smart-wardrobe"] = tl;
+
+        // Beats are keyed to the real voice timing (assets/voice/05.wav):
+        // Your .05 · wardrobe .27 · cataloged .90 · searchable 1.61–2.54 ·
+        // Favorites 2.59 · filters 3.15 · matches 3.86 · learn 4.47 · style 5.14
+        var BEATS = {
+          slots: 0.08,
+          pills: [0.04, 0.1, 0.16, 0.22],
+          cascade: 0.92,
+          sweepIn: 2.55,
+          sweepOut: 2.97,
+          heart: 2.62,
+          pair: 3.95,
+          plain: 4.45,
+          swap: 4.98,
+          pillIn: 5.18,
+          jitter: 4.6,
+        };
+
+        /* ——— Scene 1 (0–0.9s): atmosphere, hairline slot outline, per-word headline ——— */
+        // Six empty pill-card slots exist as a hairline vertical grid outline.
+        tl.fromTo("#sw-grid-slots", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, BEATS.slots);
+
+        // Floating-pill wallpaper settles in quietly (flat — no shadow).
+        var PILLS = [
+          { id: "#sw-p1", rot: -12 },
+          { id: "#sw-p2", rot: 10 },
+          { id: "#sw-p3", rot: -8 },
+          { id: "#sw-p4", rot: 12 },
+        ];
+        PILLS.forEach(function (p, i) {
+          tl.fromTo(
+            p.id,
+            { scale: 0.5, rotation: p.rot * 2.2, opacity: 0 },
+            { scale: 1, rotation: p.rot, opacity: 1, duration: 0.4, ease: "power3.out" },
+            BEATS.pills[i]
+          );
+        });
+
+        // Section-headline reveals per-word — dynamic-content-sequencing:
+        // each word's window is pre-computed once from its content length
+        // (BASE + chars × SEC_PER_CHAR), never recomputed per frame.
+        var SEQ = { base: 0.16, perChar: 0.045, min: 0.3, max: 0.55 };
+        var WORDS = [
+          { id: "#sw-w-your", cue: 0.05, len: 4, axis: "y" },
+          { id: "#sw-w-wardrobe", cue: 0.27, len: 8, axis: "x" },
+        ];
+        WORDS.forEach(function (w) {
+          var dur = Math.min(SEQ.max, Math.max(SEQ.min, SEQ.base + w.len * SEQ.perChar));
+          var from = w.axis === "y"
+            ? { y: 36, opacity: 0, filter: "blur(6px)" }
+            : { x: -34, opacity: 0, filter: "blur(6px)" };
+          var to = w.axis === "y"
+            ? { y: 0, opacity: 1, filter: "blur(0px)" }
+            : { x: 0, opacity: 1, filter: "blur(0px)" };
+          to.duration = dur;
+          to.ease = "power3.out";
+          tl.fromTo(w.id, from, to, w.cue);
+        });
+
+        /* ——— Scene 2 (0.9–3.9s): center-outward cascade into the grid ——— */
+        // Final slot offsets from the grid center (540, 848). Six items begin
+        // partially spread (START_PROGRESS 0.3 — a full cluster piles up at 6+),
+        // then radiate outward to their slots, center ring first.
+        var TILES = [
+          { id: "#sw-t3", x: -202, y: 0 },
+          { id: "#sw-t4", x: 202, y: 0 },
+          { id: "#sw-t1", x: -202, y: -308 },
+          { id: "#sw-t2", x: 202, y: -308 },
+          { id: "#sw-t5", x: -202, y: 308 },
+          { id: "#sw-t6", x: 202, y: 308 },
+        ];
+        var EXPAND = { entry: BEATS.cascade, stagger: 0.075, dur: 1.15, spread: 0.3 };
+        TILES.forEach(function (t, i) {
+          tl.fromTo(
+            t.id,
+            {
+              x: t.x * EXPAND.spread,
+              y: t.y * EXPAND.spread,
+              scale: 0.6,
+              opacity: 0,
+              transformOrigin: "50% 50%",
+            },
+            { x: t.x, y: t.y, scale: 1, opacity: 1, duration: EXPAND.dur, ease: "power3.out" },
+            EXPAND.entry + i * EXPAND.stagger
+          );
+        });
+
+        // One-pass traveling glow sweep across the assembled array.
+        tl.fromTo("#sw-sweep-glow", { x: -280, y: -130, opacity: 0 }, { x: 0, y: 0, opacity: 0.4, duration: 0.42, ease: "power2.out" }, BEATS.sweepIn);
+        tl.to("#sw-sweep-glow", { x: 280, y: 140, opacity: 0, duration: 0.55, ease: "power2.in" }, BEATS.sweepOut);
+
+        // The favorites heart fills jade on the word "Favorites" — the accent
+        // marker pops (back.out spring is the sanctioned playful overshoot).
+        tl.fromTo("#sw-heart", { scale: 0.72, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.45, ease: "back.out(1.8)" }, BEATS.heart);
+        tl.fromTo("#sw-heart", { attr: { fill: "#FFFFFF" } }, { attr: { fill: "#078675" }, duration: 0.4, ease: "power2.out" }, BEATS.heart);
+
+        /* ——— Scene 3 (3.9–7.66s): a pair slides together, the payoff swaps in ——— */
+        // On "matches" the filters + matches tiles slide together as a matched pair.
+        tl.set("#sw-t6", { zIndex: 6, immediateRender: false }, BEATS.pair);
+        tl.fromTo("#sw-t5", { x: -202, y: 308, scale: 1, transformOrigin: "50% 50%" }, { x: -162, y: 308, scale: 1.05, duration: 0.55, ease: "power3.out" }, BEATS.pair);
+        tl.fromTo("#sw-t6", { x: 202, y: 308, scale: 1, transformOrigin: "50% 50%" }, { x: 162, y: 308, scale: 1.05, duration: 0.55, ease: "power3.out" }, BEATS.pair);
+
+        // On "that learn" the phrase lands plain…
+        tl.fromTo("#sw-style-plain", { y: 46, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, BEATS.plain);
+
+        // …then the scale-swap transition: the plain phrase shrinks out
+        // (power2.in) while the mint quote-highlight pill pops in (back.out).
+        tl.to("#sw-style-plain", { scale: 0.72, opacity: 0, duration: 0.32, ease: "power2.in", transformOrigin: "50% 50%" }, BEATS.swap);
+        tl.fromTo("#sw-style-pill", { scale: 0.72, opacity: 0, transformOrigin: "50% 50%" }, { scale: 1, opacity: 1, duration: 0.55, ease: "back.out(1.4)" }, BEATS.pillIn);
+
+        // Hold: the only aliveness is a subtle deterministic jitter on the grid
+        // (sine-wave-loop, onUpdate form — phase 0 starts at sin(0) = 0, so no
+        // jump off the pair-slide settle; the last 18% fades the amplitude out).
+        var jitEl = document.getElementById("sw-grid-inner");
+        var jit = { p: 0 };
+        var JIT = { cycles: 1.3, dur: 3.06, fade: 0.18 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * JIT.cycles,
+            duration: JIT.dur,
+            ease: "none",
+            onUpdate: function () {
+              var t = jit.p / (Math.PI * 2 * JIT.cycles);
+              var env = t < 1 - JIT.fade ? 1 : (1 - t) / JIT.fade;
+              var jx = 2.0 * Math.sin(jit.p) * env;
+              var jy = 1.4 * Math.sin(jit.p * 1.31) * env;
+              jitEl.style.transform = "translate3d(" + jx.toFixed(2) + "px," + jy.toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

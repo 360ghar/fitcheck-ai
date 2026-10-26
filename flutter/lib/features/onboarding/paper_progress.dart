@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/widgets/app_ui.dart';
+import '../../core/i18n/l10n.dart';
 
 /// Paper strips, one per step. The current one is a longer strip of brand
 /// red on its slab; the rest are short strips of the stock's accent.
@@ -17,13 +18,13 @@ class PaperProgress extends StatelessWidget {
         ? Duration.zero
         : const Duration(milliseconds: 260);
     return Semantics(
-      label: 'Step ${index + 1} of $count',
+      label: context.l10n.onboardingStepOf(index + 1, count),
       excludeSemantics: true,
       child: Row(
         children: [
           for (var i = 0; i < count; i++)
             Padding(
-              padding: const EdgeInsets.only(right: AppConstants.spacing8),
+              padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
               child: AnimatedContainer(
                 duration: duration,
                 curve: Curves.easeOutCubic,

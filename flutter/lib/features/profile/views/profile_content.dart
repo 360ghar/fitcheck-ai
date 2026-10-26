@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/app_version_label.dart';
+import '../../../core/widgets/directional_icon.dart';
 import '../../auth/models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../dashboard/providers/dashboard_provider.dart';
@@ -38,7 +40,9 @@ class ProfileContent extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             if (showHeader)
-              const SliverToBoxAdapter(child: AppTabHeader(title: 'More')),
+              SliverToBoxAdapter(
+                child: AppTabHeader(title: context.l10n.tabMore),
+              ),
             SliverSafeArea(
               top: !showHeader,
               sliver: SliverPadding(
@@ -55,78 +59,78 @@ class ProfileContent extends ConsumerWidget {
                     const _Stats(),
                     gap,
                     PaperGroup(
-                      title: 'Explore',
+                      title: context.l10n.profileSectionExplore,
                       children: [
                         PaperNavRow(
                           icon: Icons.accessibility_new_rounded,
-                          title: 'Try-on',
+                          title: context.l10n.profileNavTryOn,
                           onTap: () => context.push(Routes.tryOn),
                         ),
                         PaperNavRow(
                           icon: Icons.explore_outlined,
-                          title: 'For you',
+                          title: context.l10n.quickForYou,
                           onTap: () => context.push(Routes.recommendations),
                         ),
                         PaperNavRow(
                           icon: Icons.calendar_month_outlined,
-                          title: 'Calendar',
+                          title: context.l10n.calendarTitle,
                           onTap: () => context.push(Routes.calendar),
                         ),
                         PaperNavRow(
                           icon: Icons.emoji_events_outlined,
-                          title: 'Rewards',
+                          title: context.l10n.profileNavRewards,
                           onTap: () => context.push(Routes.gamification),
                         ),
                       ],
                     ),
                     gap,
                     PaperGroup(
-                      title: 'Account',
+                      title: context.l10n.settingsAccountSection,
                       children: [
                         PaperNavRow(
                           icon: Icons.straighten_rounded,
-                          title: 'Body profiles',
+                          title: context.l10n.profileBodyProfiles,
                           onTap: () => context.push(Routes.bodyProfiles),
                         ),
                         PaperNavRow(
                           icon: Icons.workspace_premium_outlined,
-                          title: 'Plan and billing',
+                          title: context.l10n.settingsPlanBilling,
                           onTap: () => context.push(Routes.subscription),
                         ),
                         PaperNavRow(
                           icon: Icons.card_giftcard_outlined,
-                          title: 'Invite friends',
+                          title: context.l10n.settingsInviteFriends,
                           onTap: () => context.push(Routes.referral),
                         ),
                         PaperNavRow(
                           icon: Icons.tune_rounded,
-                          title: 'Settings',
+                          title: context.l10n.settingsTitle,
                           onTap: () => context.push(Routes.settings),
                         ),
                       ],
                     ),
                     gap,
                     PaperGroup(
-                      title: 'Support',
+                      title: context.l10n.profileSupport,
                       children: [
                         PaperNavRow(
                           icon: Icons.help_outline_rounded,
-                          title: 'Help',
+                          title: context.l10n.profileHelp,
                           onTap: () => context.push(Routes.help),
                         ),
                         PaperNavRow(
                           icon: Icons.rate_review_outlined,
-                          title: 'Send feedback',
+                          title: context.l10n.feedbackTitle,
                           onTap: () => context.push(Routes.feedback),
                         ),
                         PaperNavRow(
                           icon: Icons.shield_outlined,
-                          title: 'Privacy and terms',
+                          title: context.l10n.settingsPrivacyTerms,
                           onTap: () => context.push(Routes.legal),
                         ),
                         PaperNavRow(
                           icon: Icons.info_outline_rounded,
-                          title: 'About',
+                          title: context.l10n.profileAbout,
                           onTap: () => _showAbout(context),
                         ),
                       ],
@@ -136,7 +140,7 @@ class ProfileContent extends ConsumerWidget {
                       children: [
                         PaperNavRow(
                           icon: Icons.logout_rounded,
-                          title: 'Sign out',
+                          title: context.l10n.settingsSignOut,
                           color: tokens.error,
                           trailing: const SizedBox.shrink(),
                           onTap: () => _confirmSignOut(context),
@@ -158,12 +162,12 @@ class ProfileContent extends ConsumerWidget {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('FitCheck AI'),
+        title: Text(dialogContext.l10n.appName),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Your closet, outfits and plans in one place.'),
+            Text(dialogContext.l10n.profileAboutBody),
             const SizedBox(height: AppConstants.spacing12),
             AppVersionLabel(
               prefix: 'Version ',
@@ -174,7 +178,7 @@ class ProfileContent extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
+            child: Text(dialogContext.l10n.actionClose),
           ),
         ],
       ),
@@ -191,14 +195,14 @@ class ProfileContent extends ConsumerWidget {
             authProvider.select((s) => s.busy == AuthBusy.logout),
           );
           return AlertDialog(
-            title: const Text('Sign out?'),
-            content: const Text('You can sign back in at any time.'),
+            title: Text(context.l10n.profileSignOutTitle),
+            content: Text(context.l10n.profileSignOutBody),
             actions: [
               TextButton(
                 onPressed: signingOut
                     ? null
                     : () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
+                child: Text(context.l10n.actionCancel),
               ),
               TextButton(
                 onPressed: signingOut
@@ -213,7 +217,7 @@ class ProfileContent extends ConsumerWidget {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Sign out'),
+                    : Text(context.l10n.settingsSignOut),
               ),
             ],
           );
@@ -237,14 +241,14 @@ class _IdentityCard extends ConsumerWidget {
         : null;
 
     return PaperSurface(
-      semanticLabel: 'Edit profile',
+      semanticLabel: context.l10n.profileEditTitle,
       onTap: () => context.push(Routes.profileEdit),
       // Right inset matches ListTile's, so every chevron shares one axis.
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing16,
-        AppConstants.spacing16,
-        AppConstants.spacing24,
-        AppConstants.spacing16,
+      padding: const EdgeInsetsDirectional.only(
+        start: AppConstants.spacing16,
+        top: AppConstants.spacing16,
+        end: AppConstants.spacing24,
+        bottom: AppConstants.spacing16,
       ),
       child: Row(
         children: [
@@ -255,7 +259,7 @@ class _IdentityCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name ?? 'Your profile',
+                  name ?? context.l10n.profileYourProfile,
                   style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -270,7 +274,7 @@ class _IdentityCard extends ConsumerWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_right_rounded, color: tokens.textMuted),
+          DirectionalIcon(Icons.chevron_right_rounded, color: tokens.textMuted),
         ],
       ),
     );
@@ -375,7 +379,7 @@ class _Stats extends ConsumerWidget {
                     ),
                     _Figure(
                       value: streak?.currentStreak,
-                      label: 'day streak',
+                      label: context.l10n.dashboardDayStreak,
                       onTap: () => context.push(Routes.gamification),
                     ),
                   ],
@@ -389,7 +393,7 @@ class _Stats extends ConsumerWidget {
                       0,
                     ),
                     child: Text(
-                      'Most worn: ${worn.name}, ${worn.timesWorn} times',
+                      context.l10n.profileMostWorn(worn.name, worn.timesWorn),
                       style: Theme.of(
                         context,
                       ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
@@ -423,7 +427,10 @@ class _Figure extends StatelessWidget {
     return Expanded(
       child: Semantics(
         button: true,
-        label: '${value ?? 'No'} $label',
+        label: context.l10n.profileFieldUnsetLabel(
+          value?.toString() ?? context.l10n.profileFieldNotSet,
+          label,
+        ),
         excludeSemantics: true,
         child: InkWell(
           onTap: onTap,

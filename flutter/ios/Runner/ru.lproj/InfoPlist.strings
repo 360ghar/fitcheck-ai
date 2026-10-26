@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI нужен доступ к камере для съемки ваших образов и вещей.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI нужен доступ к галерее для выбора фото ваших вещей и образов.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI нужно сохранять созданные образы в вашу галерею.";

@@ -1,7 +1,7 @@
 name: fitcheck_ai
 description: "AI Wardrobe Organizer & Outfit Planner - Virtual Closet with AI Try-On, Photoshoot Generator & Style Recommendations"
 publish_to: 'none'
-version: 1.2.1+16
+version: 1.3.0+17
 
 environment:
   sdk: ^3.9.2
@@ -67,6 +67,10 @@ dependencies:
   in_app_purchase: ^3.3.0
   go_router: ^18.0.1
   flutter_local_notifications: ^22.3.1
+  flutter_localizations:
+    sdk: flutter
+  intl: any
+  in_app_review: ^2.0.12
 
 dev_dependencies:
   flutter_test:
@@ -94,6 +98,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Generates AppLocalizations from lib/l10n/*.arb (see l10n.yaml) on every
+  # `flutter pub get` / build, so the generated code can never drift behind the
+  # ARB files without the build noticing.
+  generate: true
 
   assets:
     - .env

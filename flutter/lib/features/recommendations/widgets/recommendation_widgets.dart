@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../wardrobe/models/item_model.dart';
@@ -53,11 +54,11 @@ class _PiecePickerSheet extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppConstants.spacing20,
-            AppConstants.spacing16,
-            AppConstants.spacing8,
-            AppConstants.spacing8,
+          padding: const EdgeInsetsDirectional.only(
+            start: AppConstants.spacing20,
+            top: AppConstants.spacing16,
+            end: AppConstants.spacing8,
+            bottom: AppConstants.spacing8,
           ),
           child: Row(
             children: [
@@ -65,9 +66,15 @@ class _PiecePickerSheet extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Pick up to three pieces', style: text.headlineSmall),
                     Text(
-                      '${selection.length} of ${RecommendationSelection.maxPieces} picked',
+                      context.l10n.recommendPickUpToThree,
+                      style: text.headlineSmall,
+                    ),
+                    Text(
+                      context.l10n.recommendPickedCount(
+                    selection.length,
+                    RecommendationSelection.maxPieces,
+                  ),
                       style: text.bodySmall?.copyWith(
                         color: tokens.textSecondary,
                       ),
@@ -77,7 +84,7 @@ class _PiecePickerSheet extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Done'),
+                child: Text(context.l10n.actionDone),
               ),
             ],
           ),
@@ -86,8 +93,8 @@ class _PiecePickerSheet extends ConsumerWidget {
           child: switch (items) {
             AsyncValue(:final value?) when value.isEmpty => AppEmptyState(
               scene: PaperScenes.closet,
-              title: 'Your closet is empty',
-              message: 'Add a few pieces first, then come back for matches.',
+              title: context.l10n.wardrobeEmptyTitle,
+              message: context.l10n.recommendEmptyClosetBody,
             ),
             AsyncValue(:final value?) => GridView.builder(
               padding: const EdgeInsets.fromLTRB(
@@ -143,7 +150,7 @@ class SelectionBar extends ConsumerWidget {
     final selection = ref.watch(recommendationSelectionProvider);
     final notifier = ref.read(recommendationSelectionProvider.notifier);
     Widget thumb(ItemModel item) => Tooltip(
-      message: 'Remove ${item.name}',
+      message: context.l10n.recommendRemoveItem(item.name),
       child: SizedBox(
         width: 56,
         child: PaperSurface(
@@ -198,7 +205,7 @@ class SelectionBar extends ConsumerWidget {
         TextButton.icon(
           onPressed: () => showPiecePicker(context),
           icon: const Icon(Icons.swap_horiz_rounded, size: 20),
-          label: const Text('Change'),
+          label: Text(context.l10n.settingsChangeAction),
         ),
       ],
     );
@@ -286,11 +293,11 @@ class PieceCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppConstants.spacing12,
-                AppConstants.spacing8,
-                AppConstants.spacing8,
-                AppConstants.spacing8,
+              padding: const EdgeInsetsDirectional.only(
+                start: AppConstants.spacing12,
+                top: AppConstants.spacing8,
+                end: AppConstants.spacing8,
+                bottom: AppConstants.spacing8,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

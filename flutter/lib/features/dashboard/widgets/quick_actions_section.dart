@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 
 /// Four shortcuts, each cut from the paper of the feature it opens.
@@ -10,31 +11,32 @@ class QuickActionsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const actions = [
+    // Built per build, not const: the titles are translated.
+    final actions = [
       (
-        'Add a piece',
-        'Photograph and tag',
+        context.l10n.quickAddPiece,
+        context.l10n.quickAddPieceBody,
         Icons.add_a_photo_outlined,
         PaperStockId.moss,
         Routes.wardrobeAdd,
       ),
       (
-        'Build an outfit',
-        'Mix your pieces',
+        context.l10n.quickBuildOutfit,
+        context.l10n.quickBuildOutfitBody,
         Icons.style_outlined,
         PaperStockId.marigold,
         Routes.outfitBuilder,
       ),
       (
-        'For you',
-        'Picks for today',
+        context.l10n.quickForYou,
+        context.l10n.quickForYouBody,
         Icons.explore_outlined,
         PaperStockId.ink,
         Routes.recommendations,
       ),
       (
-        'Plan the week',
-        'Outfits by date',
+        context.l10n.quickPlanWeek,
+        context.l10n.quickPlanWeekBody,
         Icons.calendar_month_outlined,
         PaperStockId.clay,
         Routes.calendar,

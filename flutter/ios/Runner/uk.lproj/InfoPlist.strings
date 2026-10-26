@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI потрібен доступ до камери для зйомки образів та речей гардероба.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI потрібен доступ до медіатеки для вибору фото образів та речей.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI потрібно зберігати створені ШІ фото образів у вашу медіатеку.";

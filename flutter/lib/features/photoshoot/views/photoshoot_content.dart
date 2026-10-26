@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../providers/photoshoot_provider.dart';
+import '../photoshoot_l10n.dart';
 import 'photoshoot_configure_step.dart';
 import 'photoshoot_generating_step.dart';
 import 'photoshoot_results_step.dart';
@@ -14,20 +16,23 @@ import 'referral_limit_dialog.dart';
 class PhotoshootContent extends ConsumerWidget {
   const PhotoshootContent({super.key});
 
-  static String _subtitle(PhotoshootState s) => switch (s.step) {
-    PhotoshootStep.upload => 'Studio portraits from your own photos',
-    PhotoshootStep.configure => 'Pick a style, a format and a count',
-    PhotoshootStep.generating => 'This takes a minute or two',
-    PhotoshootStep.results =>
-      s.failedCount > 0
-          ? '${s.images.length} ready, ${s.failedCount} failed'
-          : '${s.images.length} photos ready',
-  };
+  static String _subtitle(AppLocalizations l10n, PhotoshootState s) =>
+      switch (s.step) {
+        PhotoshootStep.upload => l10n.photoshootSubtitleUpload,
+        PhotoshootStep.configure => l10n.photoshootSubtitleConfigure,
+        PhotoshootStep.generating => l10n.photoshootSubtitleGenerating,
+        PhotoshootStep.results =>
+          s.failedCount > 0
+              ? '${s.images.length} ready, ${s.failedCount} failed'
+              : '${s.images.length} photos ready',
+      };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final step = ref.watch(photoshootProvider.select((s) => s.step));
-    final subtitle = ref.watch(photoshootProvider.select(_subtitle));
+    final subtitle = ref.watch(
+      photoshootProvider.select((s) => _subtitle(context.l10n, s)),
+    );
     final error = ref.watch(photoshootProvider.select((s) => s.error));
     final failed = ref.watch(photoshootProvider.select((s) => s.failedCount));
     final banner = switch (step) {
@@ -37,8 +42,8 @@ class PhotoshootContent extends ConsumerWidget {
       ),
       PhotoshootStep.results when failed > 0 => AppErrorBanner(
         message: failed == 1
-            ? 'One photo failed. Retry it below.'
-            : '$failed photos failed. Retry each one below.',
+            ? context.l10n.photoshootOneFailed
+            : context.l10n.photoshootManyFailed(failed),
       ),
       _ => null,
     };
@@ -48,7 +53,7 @@ class PhotoshootContent extends ConsumerWidget {
         slivers: [
           SliverToBoxAdapter(
             child: AppTabHeader(
-              title: 'Photoshoot',
+              title: context.l10n.tabPhotoshoot,
               subtitle: subtitle,
               scene: PaperScenes.studio,
               sceneHeight: 112,
@@ -88,22 +93,25 @@ class _StepTrack extends StatelessWidget {
 
   final PhotoshootStep step;
 
-  static const _names = ['Photos', 'Setup', 'Creating', 'Results'];
-
   @override
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
     final index = step.index;
+    final names = photoshootStepNames(context.l10n);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         AppConstants.spacing20,
         AppConstants.spacing12,
         AppConstants.spacing20,
         0,
       ),
       child: Semantics(
-        label: 'Step ${index + 1} of 4, ${_names[index]}',
+        label: context.l10n.photoshootStepOf(
+          index + 1,
+          names.length,
+          names[index],
+        ),
         excludeSemantics: true,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -111,7 +119,7 @@ class _StepTrack extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  _names[index],
+                  names[index],
                   style: text.titleSmall?.copyWith(
                     color: tokens.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -119,7 +127,7 @@ class _StepTrack extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'Step ${index + 1} of 4',
+                  context.l10n.photoshootStepOfFour(index + 1),
                   style: text.bodySmall?.copyWith(color: tokens.textSecondary),
                 ),
               ],

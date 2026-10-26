@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { normalizeBoundingBoxPercent } from '@/lib/crop-from-bounding-box'
 import { ExtractedItemCard } from './ExtractedItemCard'
 import type { DetectedItem } from '@/types'
+import { useTranslation } from '@/i18n'
 
 interface ExtractedItemsGridProps {
   /** All detected items */
@@ -53,6 +54,7 @@ export function ExtractedItemsGrid({
   backLabel,
   isGenerationRunning = false,
 }: ExtractedItemsGridProps) {
+  const { t } = useTranslation()
   const activeItems = items.filter((item) => item.status !== 'deleted')
   const includedItems = activeItems.filter((item) => item.includeInWardrobe !== false)
   const failedCount = includedItems.filter((item) => item.status === 'failed').length
@@ -115,10 +117,10 @@ export function ExtractedItemsGrid({
       {/* Header with stats */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-          <h3 className="text-lg font-semibold text-foreground">Review Extracted Items</h3>
+          <h3 className="text-lg font-semibold text-foreground">{t('extract.reviewExtracted')}</h3>
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary" className="bg-success-pale text-success">
-              <Check className="h-3 w-3 mr-1" />
+              <Check className="h-3 w-3 me-1" />
               {successCount} studio ready
             </Badge>
             {polishingCount > 0 && (
@@ -128,7 +130,7 @@ export function ExtractedItemsGrid({
             )}
             {lowConfidenceCount > 0 && (
               <Badge variant="secondary" className="bg-tint-amber-pale text-tint-amber">
-                <AlertTriangle className="h-3 w-3 mr-1" />
+                <AlertTriangle className="h-3 w-3 me-1" />
                 {lowConfidenceCount} needs review
               </Badge>
             )}
@@ -147,7 +149,7 @@ export function ExtractedItemsGrid({
 
       {personGroups.length > 0 && (
         <div className="mb-4 p-3 rounded-lg border border-border bg-muted/20">
-          <p className="text-sm font-medium text-foreground mb-2">People in photo</p>
+          <p className="text-sm font-medium text-foreground mb-2">{t('extract.peopleInPhoto')}</p>
           <div className="flex flex-wrap gap-2">
             {personGroups.map((group) => (
               <div
@@ -183,7 +185,7 @@ export function ExtractedItemsGrid({
                     })
                   }}
                 >
-                  Exclude
+                  {t('extract.exclude')}
                 </Button>
               </div>
             ))}
@@ -198,13 +200,13 @@ export function ExtractedItemsGrid({
           <div className="w-full lg:w-64 lg:flex-shrink-0">
             <Card className="sticky top-0">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Original Image</CardTitle>
+                <CardTitle className="text-sm">{t('extract.originalImage')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="relative">
                   <ZoomableImage
                     src={originalImageUrl}
-                    alt="Original"
+                    alt={t('extract.original')}
                     className="block w-full h-auto rounded-lg"
                   />
                   {/* Bounding box overlays */}
@@ -285,7 +287,7 @@ export function ExtractedItemsGrid({
         <div className="min-w-0">
           {activeItems.length === 0 ? (
             <EmptyState
-              title="No items to save"
+              title={t('extract.noItemsToSave')}
               secondaryLabel={backLabel || 'Upload Different Image'}
               onSecondary={onBack}
             />
@@ -312,14 +314,14 @@ export function ExtractedItemsGrid({
           is stuck. */}
       <div className="sticky bottom-0 z-10 bg-background flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 pb-4 border-t border-border mt-4">
         <Button variant="outline" onClick={onBack} disabled={isSaving}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeft className="h-4 w-4 me-2" />
           Back
         </Button>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           {failedCount > 0 && (
             <p className="text-sm text-tint-amber flex items-center">
-              <AlertTriangle className="h-4 w-4 mr-1" />
+              <AlertTriangle className="h-4 w-4 me-1" />
               {failedCount} studio photo{failedCount !== 1 ? 's' : ''} failed — originals
               will be saved if available
             </p>
@@ -335,7 +337,7 @@ export function ExtractedItemsGrid({
             className="gap-2"
           >
             {isSaving ? (
-              <>Saving…</>
+              <>{t('common.saving')}</>
             ) : (
               <>
                 <Save className="h-4 w-4" />

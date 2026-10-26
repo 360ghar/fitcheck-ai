@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../i18n/l10n.dart';
 import '../providers.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -13,10 +14,8 @@ class PermissionHelper {
   static Future<bool> confirmCameraRationale() {
     return _confirmRationale(
       icon: Icons.camera_alt_outlined,
-      title: 'Camera Access',
-      message:
-          'FitCheck AI uses your camera to capture photos of your clothing '
-          'and outfits for AI try-on and closet organization.',
+      title: (l10n) => l10n.permissionCameraTitle,
+      message: (l10n) => l10n.permissionCameraRationale,
     );
   }
 
@@ -25,10 +24,8 @@ class PermissionHelper {
   static Future<bool> confirmPhotoRationale() {
     return _confirmRationale(
       icon: Icons.photo_library_outlined,
-      title: 'Photo Access',
-      message:
-          'FitCheck AI needs access to your photos so you can select clothing '
-          'and outfit images for AI features and your closet.',
+      title: (l10n) => l10n.permissionPhotoTitle,
+      message: (l10n) => l10n.permissionPhotoRationale,
     );
   }
 
@@ -42,15 +39,14 @@ class PermissionHelper {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('$permissionName Access Needed'),
+        title: Text(context.l10n.permissionAccessNeededTitle(permissionName)),
         content: Text(
-          'Access to $permissionName is currently denied. Open Settings to '
-          'enable it so you can continue.',
+          context.l10n.permissionAccessDeniedBody(permissionName),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Not Now'),
+            child: Text(context.l10n.permissionNotNow),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -60,7 +56,7 @@ class PermissionHelper {
                 await launchUrl(uri);
               }
             },
-            child: const Text('Open Settings'),
+            child: Text(context.l10n.permissionOpenSettings),
           ),
         ],
       ),
@@ -69,11 +65,12 @@ class PermissionHelper {
 
   static Future<bool> _confirmRationale({
     required IconData icon,
-    required String title,
-    required String message,
+    required String Function(AppLocalizations) title,
+    required String Function(AppLocalizations) message,
   }) async {
     final context = rootNavigatorKey.currentContext;
     if (context == null) return false;
+    final l10n = context.l10n;
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -82,18 +79,18 @@ class PermissionHelper {
           children: [
             Icon(icon),
             const SizedBox(width: 12),
-            Expanded(child: Text(title)),
+            Expanded(child: Text(title(l10n))),
           ],
         ),
-        content: Text(message),
+        content: Text(message(l10n)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.actionCancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Continue'),
+            child: Text(l10n.actionContinue),
           ),
         ],
       ),

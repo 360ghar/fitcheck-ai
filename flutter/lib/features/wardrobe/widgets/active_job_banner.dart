@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/directional_icon.dart';
 import '../providers/extraction_jobs_provider.dart';
 import 'extraction_progress_card.dart' show PaperProgressTrack;
 
@@ -40,11 +42,11 @@ class ActiveJobBanner extends ConsumerWidget {
       child: PaperSurface(
         onTap: () => _resume(context, job),
         semanticLabel: 'Resume ${job.label}',
-        padding: const EdgeInsets.fromLTRB(
-          AppConstants.spacing16,
-          AppConstants.spacing12,
-          AppConstants.spacing8,
-          AppConstants.spacing12,
+        padding: const EdgeInsetsDirectional.only(
+          start: AppConstants.spacing16,
+          top: AppConstants.spacing12,
+          end: AppConstants.spacing8,
+          bottom: AppConstants.spacing12,
         ),
         child: Row(
           children: [
@@ -90,10 +92,13 @@ class ActiveJobBanner extends ConsumerWidget {
             if (active.length > 1)
               TextButton(
                 onPressed: () => context.push(Routes.wardrobeJobs),
-                child: const Text('All'),
+                child: Text(context.l10n.actionAll),
               )
             else
-              Icon(Icons.chevron_right_rounded, color: tokens.textMuted),
+              DirectionalIcon(
+                Icons.chevron_right_rounded,
+                color: tokens.textMuted,
+              ),
           ],
         ),
       ),

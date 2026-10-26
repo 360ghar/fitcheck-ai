@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/directional_icon.dart';
 import '../../wardrobe/repositories/item_repository.dart';
 import '../models/dashboard_models.dart';
 
@@ -28,7 +30,7 @@ class SuggestionsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Today', style: text.headlineSmall),
+          Text(context.l10n.dashboardRailToday, style: text.headlineSmall),
           if (weather != null) ...[
             const SizedBox(height: AppConstants.spacing12),
             Row(
@@ -48,7 +50,7 @@ class SuggestionsSection extends StatelessWidget {
                         TextSpan(
                           text:
                               weather.recommendation ??
-                              'Dress for the day ahead.',
+                              context.l10n.dashboardDressForDay,
                         ),
                       ],
                     ),
@@ -96,13 +98,13 @@ class SuggestionsSection extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Outfit of the day',
+                          context.l10n.dashboardOutfitOfDay,
                           style: text.bodySmall?.copyWith(
                             color: tokens.textMuted,
                           ),
                         ),
                         Text(
-                          outfit.name ?? 'A fresh look',
+                          outfit.name ?? context.l10n.dashboardFreshLook,
                           style: text.titleMedium,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -110,7 +112,7 @@ class SuggestionsSection extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Icon(Icons.chevron_right_rounded, color: tokens.textMuted),
+                  DirectionalIcon(Icons.chevron_right_rounded, color: tokens.textMuted),
                 ],
               ),
             ),

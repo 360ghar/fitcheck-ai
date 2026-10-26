@@ -1,6 +1,10 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { imageFetchOptions } from './sessionCookie';
+import {
+  formatCurrencyFromCents as formatCurrencyFromCentsLocalized,
+  formatDate as formatDateLocalized,
+} from '@/i18n/runtime';
 
 /**
  * Merge Tailwind CSS classes with proper precedence
@@ -9,31 +13,29 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric'
-});
-
 /**
- * Format a date to a human-readable string
+ * Format a date to a human-readable string in the active locale.
+ *
+ * These three helpers used to pin `'en-US'`. That is the whole bug: a French
+ * user saw "Mar 4, 2025" and a Japanese user saw a US date order, because the
+ * `Intl` instance was frozen at module load with the wrong locale. They now
+ * delegate to `i18n/runtime`, which reads the active locale at call time — so a
+ * language switch changes the output of an already-mounted component on its next
+ * render, without threading a locale argument through two hundred call sites.
  */
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return dateFormatter.format(d);
+  return formatDateLocalized(date);
 }
 
-const usdFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0
-});
-
 /**
- * Format a cents amount as whole-dollar USD ("$13")
+ * Format a cents amount as localized whole-currency USD ("$13", "13 $US").
+ *
+ * The currency is USD because that is what Stripe charges; only the *format* is
+ * localized. Rendering a USD amount in the user's local currency would be a
+ * pricing change, not a translation.
  */
 export function formatUsd(cents: number): string {
-  return usdFormatter.format(cents / 100);
+  return formatCurrencyFromCentsLocalized(cents);
 }
 
 /**

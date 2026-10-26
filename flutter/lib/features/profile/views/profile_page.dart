@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/paper.dart';
 import 'profile_content.dart';
 
@@ -13,7 +14,7 @@ class ProfilePage extends StatelessWidget {
     return PaperStockScope(
       stock: PaperStockId.stone,
       child: Scaffold(
-        appBar: AppBar(title: const Text('More')),
+        appBar: AppBar(title: Text(context.l10n.tabMore)),
         body: const ProfileContent(showHeader: false),
       ),
     );

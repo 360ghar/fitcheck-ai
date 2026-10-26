@@ -1,0 +1,1107 @@
+{
+  "group": "wardrobe",
+  "files": [
+    "features/wardrobe/views/batch_extraction_progress_page.dart",
+    "features/wardrobe/views/batch_image_selector_page.dart",
+    "features/wardrobe/views/batch_item_review_page.dart",
+    "features/wardrobe/views/item_add_page.dart",
+    "features/wardrobe/views/item_edit_page.dart",
+    "features/wardrobe/widgets/active_job_banner.dart",
+    "features/wardrobe/widgets/ai_extraction_widget.dart",
+    "features/wardrobe/widgets/batch_image_tile.dart",
+    "features/wardrobe/widgets/extracted_item_card.dart"
+  ],
+  "keys": [
+    {
+      "key": "wardrobeSomePhotosSkipped",
+      "value": "Some photos skipped",
+      "description": "Snackbar title after adding photos when some files were rejected (too large or unsupported). The body text comes from the validation error.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobePhotosNotAdded",
+      "value": "Photos not added",
+      "description": "Snackbar title when picking photos from the gallery failed, for example after a denied permission.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobePhotoNotAdded",
+      "value": "Photo not added",
+      "description": "Snackbar title when taking a single photo with the camera failed.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobeNotStartedTitle",
+      "value": "Not started",
+      "description": "Snackbar title when the AI scan of the selected photos could not be started at all.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobeNoRoomTitle",
+      "value": "No room",
+      "description": "Snackbar title shown when the user taps the camera button but the batch already holds the maximum number of photos.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobeAddPhotosSemantic",
+      "value": "Add photos",
+      "description": "Screen-reader label of the tile with the plus icon in the photo grid; it opens the add-photo sheet.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchAddTileLabel",
+      "value": "Add",
+      "description": "Short visible label under the plus icon in that same tile. Keep it very short; it must fit a 120pt tile.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchProfileLinkLabel",
+      "value": "Profile link",
+      "description": "Label of the segmented switch that opens social-profile import, and the label of the field where the link is pasted.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobeImportFromProfileTitle",
+      "value": "Import from a profile",
+      "description": "App bar title of the batch screen while the social-profile tab is selected.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobeAddSeveralPhotosTitle",
+      "value": "Add several photos",
+      "description": "App bar title of the screen where several photos are selected at once; also used on the progress screen for the same job.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobeClearAction",
+      "value": "Clear",
+      "description": "App bar button that empties the selected photos before the scan starts.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobeRefreshTooltip",
+      "value": "Refresh",
+      "description": "Tooltip of the refresh icon that re-checks the state of a profile import.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchNoPhotosYetTitle",
+      "value": "No photos yet",
+      "description": "Empty state title on the batch screen before any photo is added.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchChoosePhotosAction",
+      "value": "Choose photos",
+      "description": "Primary button of that empty state; opens the OS photo picker.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchWeFindEachPieceBody",
+      "value": "We find each piece and make a studio photo of it.",
+      "description": "Reassurance line directly above the button that starts the batch scan.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchPreparingPhotosSemantic",
+      "value": "Preparing photos",
+      "description": "Screen-reader label of the progress bar shown while the selected photos upload.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchPhotosProcessedSemantic",
+      "value": "Photos processed",
+      "description": "Screen-reader label of the progress bar showing how many imported photos have been scanned.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchPasteProfileLinkTitle",
+      "value": "Paste a profile link",
+      "description": "Heading of the card where an Instagram or Facebook profile link is pasted.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchPasteProfileLinkBody",
+      "value": "A public Instagram or Facebook profile. We scan its photos, and you choose what goes in your closet.",
+      "description": "Explanation under the paste-a-profile-link heading. Says whose photos are scanned and who decides what is kept.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchClearLinkTooltip",
+      "value": "Clear link",
+      "description": "Tooltip of the X icon inside the profile-link field.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchStartingButton",
+      "value": "Starting",
+      "description": "Import button label while the import request is in flight. States, not an action.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchStartImportAction",
+      "value": "Start import",
+      "description": "Primary button that starts scanning the pasted profile.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchReviewEveryPhotoTitle",
+      "value": "You review every photo",
+      "description": "Heading of the first explanation card on the profile import screen.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchReviewEveryPhotoBody",
+      "value": "Nothing is added until you approve it.",
+      "description": "Body of the first explanation card: the user approves every photo before it is saved.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchPrivateProfilesTitle",
+      "value": "Private profiles",
+      "description": "Heading of the second explanation card on the profile import screen, about private accounts.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchPrivateProfilesBody",
+      "value": "Connect your account. Instagram also takes a username and password.",
+      "description": "Body of the second explanation card: explains why a sign-in may be needed.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchUseAnotherLinkAction",
+      "value": "Use another link",
+      "description": "Back button at the top of the sign-in step; returns to the profile-link form.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchSignInNeededTitle",
+      "value": "Sign-in needed",
+      "description": "Heading when the pasted profile is private and the platform asks for a sign-in.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchEnterYourCodeTitle",
+      "value": "Enter your code",
+      "description": "Heading of the two-step verification step and title of the dialog where the 6-digit code is typed.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchUseUsernamePasswordAction",
+      "value": "Use username and password",
+      "description": "Link that opens a manual Instagram login dialog instead of the in-browser sign-in.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchAlreadyConnectedAction",
+      "value": "I already connected in the browser",
+      "description": "Link the user taps after finishing the sign-in in their browser; it re-checks the connection.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchEnterCodeAction",
+      "value": "Enter code",
+      "description": "Button on the two-step verification step that opens the code entry dialog.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchTryAnotherWayAction",
+      "value": "Try another way",
+      "description": "Link that abandons this two-step verification attempt and offers a different sign-in method.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchLiveStatus",
+      "value": "Live",
+      "description": "Small status chip meaning the connection to the social platform is working. Must stay one short word.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchReconnectingStatus",
+      "value": "Reconnecting",
+      "description": "Small status chip meaning the connection dropped and is retrying. Must stay one short word.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchSignInToInstagramTitle",
+      "value": "Sign in to Instagram",
+      "description": "Title of the manual sign-in dialog. The platform name is part of the copy, not a placeholder.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchUsernameLabel",
+      "value": "Username",
+      "description": "Field label in the manual Instagram sign-in dialog.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchCodeIfTwoStepLabel",
+      "value": "Code, if you use two-step sign-in",
+      "description": "Optional field label in the manual sign-in dialog for the 6-digit code.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchAuthenticatorCodeBody",
+      "value": "Use the 6-digit code from your authenticator app. Codes change quickly.",
+      "description": "Explanation inside the two-step verification dialog.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchVerifyAction",
+      "value": "Verify",
+      "description": "Confirm button of the two-step verification dialog; enabled once six digits are entered.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchFindingPhotosTitle",
+      "value": "Finding photos",
+      "description": "Heading while the app lists the photos available on the pasted profile.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchImportPausedTitle",
+      "value": "Import paused",
+      "description": "Heading when the platform rate-limited the import; it resumes on its own, so this is not an error.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchProcessingPhotosTitle",
+      "value": "Processing photos",
+      "description": "Heading while each imported photo is scanned for pieces.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchWaitingNextPhoto",
+      "value": "Waiting for the next photo",
+      "description": "Status line while the import waits for the next photo to arrive.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchCancelImportAction",
+      "value": "Cancel import",
+      "description": "Button at the bottom of the import screens that stops the running import.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchNoPiecesInPhotoBody",
+      "value": "No pieces found in this photo.",
+      "description": "Shown under a photo during review when the scan detected no clothing in it.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchEditPieceColoursLabel",
+      "value": "Colours, separated by commas",
+      "description": "Label of the field where piece colours are typed as a comma-separated list.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchAddToClosetAction",
+      "value": "Add to closet",
+      "description": "Primary button that approves the pieces found in the reviewed photo.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchSkipPhotoAction",
+      "value": "Skip this photo",
+      "description": "Secondary button that rejects the reviewed photo and moves to the next one.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchImportCompleteTitle",
+      "value": "Import complete",
+      "description": "Title of the end screen when the profile import finished.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchImportFailedTitle",
+      "value": "Import failed",
+      "description": "Title of the end screen when the profile import failed.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchImportCancelledTitle",
+      "value": "Import cancelled",
+      "description": "Title of the end screen when the user cancelled the profile import.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchImportErrorBody",
+      "value": "Something went wrong while importing.",
+      "description": "Fallback message on the failed end screen when the platform returned no error text.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchNothingMoreImportedBody",
+      "value": "Nothing more is imported from this profile.",
+      "description": "Message on the cancelled end screen.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchViewClosetAction",
+      "value": "View closet",
+      "description": "Button on the completed end screen that opens the closet.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "batchStartOverAction",
+      "value": "Start over",
+      "description": "Button that resets the flow, on the cancelled import screen and on the single-photo results screen.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart"
+    },
+    {
+      "key": "wardrobeAddPieceTitle",
+      "value": "Add a piece",
+      "description": "App bar title of the add-item screen on its first step, where the user picks camera, gallery or another route.",
+      "file": "features/wardrobe/views/item_add_page.dart"
+    },
+    {
+      "key": "wardrobeAddDetailsTitle",
+      "value": "Add details",
+      "description": "App bar title of the add-item screen while the manual details form is open.",
+      "file": "features/wardrobe/views/item_add_page.dart"
+    },
+    {
+      "key": "wardrobeScanningTitle",
+      "value": "Scanning",
+      "description": "App bar title of the add-item screen while the photo is being analysed.",
+      "file": "features/wardrobe/views/item_add_page.dart"
+    },
+    {
+      "key": "batchReviewPiecesTitle",
+      "value": "Review pieces",
+      "description": "App bar title of the batch review screen, and of the add-item screen while scan results are shown.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "wardrobeGalleryAction",
+      "value": "Gallery",
+      "description": "Short button label that adds more photos from the photo library in the edit-piece photo strip.",
+      "file": "features/wardrobe/views/item_edit_page.dart"
+    },
+    {
+      "key": "wardrobeCameraAction",
+      "value": "Camera",
+      "description": "Short button label that adds a photo from the camera in the edit-piece photo strip.",
+      "file": "features/wardrobe/views/item_edit_page.dart"
+    },
+    {
+      "key": "wardrobeNewBadge",
+      "value": "New",
+      "description": "Badge on the thumbnail of a photo that was just added and is not saved yet.",
+      "file": "features/wardrobe/views/item_edit_page.dart"
+    },
+    {
+      "key": "wardrobeRemovePhotoTooltip",
+      "value": "Remove photo",
+      "description": "Tooltip of the close button on a selected photo thumbnail, before the batch scan starts.",
+      "file": "features/wardrobe/widgets/batch_image_tile.dart"
+    },
+    {
+      "key": "batchRunInBackgroundTooltip",
+      "value": "Run in background",
+      "description": "Tooltip of the close icon on the scan progress screen; keeps the scan running and returns to the photos.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchStepOneOfTwo",
+      "value": "Step 1 of 2",
+      "description": "Step counter above the progress heading: finding pieces in each photo.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchStepTwoOfTwo",
+      "value": "Step 2 of 2",
+      "description": "Step counter above the progress heading: generating studio photos.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchUploadingPhotosTitle",
+      "value": "Uploading photos",
+      "description": "Progress heading while the selected photos upload.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchFindingPiecesTitle",
+      "value": "Finding pieces",
+      "description": "Progress heading while the AI looks for clothing in each photo.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchMakingStudioPhotosTitle",
+      "value": "Making studio photos",
+      "description": "Progress heading while clean studio images are generated for each piece.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchStoppedLabel",
+      "value": "Stopped",
+      "description": "Step label on the progress screen when the job failed or was cancelled.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchFindingPiecesStoppedTitle",
+      "value": "Finding pieces stopped",
+      "description": "Progress heading when the scan failed part-way.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchCancelledLabel",
+      "value": "Cancelled",
+      "description": "Progress heading when the user cancelled the batch scan.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchAllDoneTitle",
+      "value": "All done",
+      "description": "Progress heading shown momentarily when the scan completes, just before the review screen opens.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchOpeningPiecesBody",
+      "value": "Opening your pieces",
+      "description": "Progress detail shown for the instant before the review screen opens.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchNothingSavedBody",
+      "value": "Nothing was saved.",
+      "description": "Progress detail on the cancelled screen.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchFindingPiecesFailedBody",
+      "value": "Finding pieces failed.",
+      "description": "Error state body when the scan failed before any piece was found.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchFindingPiecesStoppedEarlyBody",
+      "value": "Finding pieces stopped early.",
+      "description": "Error banner above the photo list when the scan failed after some pieces were already found.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchStopFindingPiecesTitle",
+      "value": "Stop finding pieces?",
+      "description": "Title of the confirmation dialog before cancelling a running batch scan.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchStopFindingPiecesBody",
+      "value": "The scan stops and nothing is saved. Pieces already found stay in your activity until you dismiss them.",
+      "description": "Body of the confirmation dialog: explains what cancelling the scan does with pieces already found.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchKeepGoingAction",
+      "value": "Keep going",
+      "description": "Dialog button that dismisses the stop-scan confirmation without cancelling.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchTryAgainAction",
+      "value": "Try again",
+      "description": "Retry button on the scan error state and on the scan failure screens.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchBackToPhotosAction",
+      "value": "Back to photos",
+      "description": "Button on the cancelled scan screen that returns to photo selection.",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart"
+    },
+    {
+      "key": "batchSkipAllAction",
+      "value": "Skip all",
+      "description": "App bar button that excludes every piece found in the batch.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchIncludeAllAction",
+      "value": "Include all",
+      "description": "App bar button that re-includes every piece found in the batch.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchNoPiecesFoundTitle",
+      "value": "No pieces found",
+      "description": "Empty state and failure title when the scan found no clothing.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchNoPiecesFoundBody",
+      "value": "We found no clothes in these photos.",
+      "description": "Empty state body on the batch review screen when nothing was detected.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchChooseOtherPhotosAction",
+      "value": "Choose other photos",
+      "description": "Button on the empty batch review state that goes back to photo selection.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchUseCaseHelper",
+      "value": "Added to every piece you save.",
+      "description": "Helper line under the occasion picker on the review screens.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchDiscardPiecesTitle",
+      "value": "Discard these pieces?",
+      "description": "Confirmation dialog title before leaving the batch review and losing the pieces.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchDiscardPiecesBody",
+      "value": "Nothing from this batch is saved.",
+      "description": "Body of the discard confirmation dialog.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchKeepAction",
+      "value": "Keep",
+      "description": "Dialog button that keeps the pieces and stays on the review screen.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchDiscardAction",
+      "value": "Discard",
+      "description": "Dialog button that throws the batch away. Rendered in the destructive colour.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchRemovePieceTitle",
+      "value": "Remove this piece?",
+      "description": "Confirmation dialog title before removing one piece from the review grid.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchRemovePieceBody",
+      "value": "It is not saved to your closet.",
+      "description": "Body of the remove-piece confirmation dialog.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchRemoveAction",
+      "value": "Remove",
+      "description": "Confirm button of the remove-piece dialog. Rendered in the destructive colour.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchChoosePiecesToSave",
+      "value": "Choose pieces to save",
+      "description": "Save button label while no piece is selected on the review screen, so the button is disabled.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchDiscardAllAction",
+      "value": "Discard all",
+      "description": "Bottom bar button that discards every reviewed piece.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchNothingSavedRetryBody",
+      "value": "Nothing was saved. Try again.",
+      "description": "Snackbar message when saving the reviewed pieces failed and nothing was stored.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchNotSavedTitle",
+      "value": "Not saved",
+      "description": "Snackbar title for a failed save.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart"
+    },
+    {
+      "key": "batchSavingLabel",
+      "value": "Saving",
+      "description": "Save button label while the selected pieces are being saved. States, not an action.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchSendToBackgroundAction",
+      "value": "Send to background",
+      "description": "Button on the scan progress view that keeps the scan running while the user navigates away.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchStillWorkingMessage",
+      "value": "Still working. We will let you know when your pieces are ready.",
+      "description": "Snackbar message shown when the user leaves a scan running in the background.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchRunningInBackgroundTitle",
+      "value": "Running in background",
+      "description": "Snackbar title for the same message.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchStudioPhotosStoppedBody",
+      "value": "Studio photos stopped early. You can still save these pieces.",
+      "description": "Error banner above the piece grid when studio-photo generation failed but pieces exist.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchTapPieceToSkip",
+      "value": "Tap a piece to skip it.",
+      "description": "Hint under the results heading explaining how to exclude a piece.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchStudioPhotosOnWayBody",
+      "value": "Studio photos still on their way. You can leave — we will let you know.",
+      "description": "Banner above the piece grid while studio photos are still generating. The em dash is intentional.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchLeaveAction",
+      "value": "Leave",
+      "description": "Button in that banner that navigates away while generation continues.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchPeopleInPhotosTitle",
+      "value": "People in the photos",
+      "description": "Title of the per-person grouping block, shown when a photo contains more than one person.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchIncludeAction",
+      "value": "Include",
+      "description": "Per-person button that includes every piece belonging to that person.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchSkipAction",
+      "value": "Skip",
+      "description": "Per-person button that excludes every piece belonging to that person.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchYourPhotoIsUsedLabel",
+      "value": "Your photo is used",
+      "description": "Caption on a piece card whose studio photo failed, so the original photo is shown instead.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchMakingStudioPhotoLabel",
+      "value": "Making studio photo",
+      "description": "Caption on a piece card while its studio photo is still generating.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchNoStudioPhotoBody",
+      "value": "No studio photo. Your photo is used.",
+      "description": "Caption on a review card whose studio photo could not be generated.",
+      "file": "features/wardrobe/widgets/extracted_item_card.dart"
+    },
+    {
+      "key": "batchEnterDetailsYourselfAction",
+      "value": "Enter details yourself",
+      "description": "Secondary action on the scan failure screens that opens the manual entry form.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchChooseAnotherPhotoAction",
+      "value": "Choose another photo",
+      "description": "Secondary action that returns to the photo picker after a failed or empty scan.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchConnectionLostTitle",
+      "value": "Connection lost",
+      "description": "Failure screen title when the scan could not reach the server.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchConnectionLostBody",
+      "value": "Check your connection, then try again.",
+      "description": "Failure screen body for a network failure.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchDailyLimitTitle",
+      "value": "Daily limit reached",
+      "description": "Failure screen title when the free daily scan allowance is used up.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchDailyLimitBodyPaywall",
+      "value": "Upgrade to Pro for more scans, or enter the details yourself.",
+      "description": "Daily limit body shown only when the paywall is enabled.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchDailyLimitBodyFree",
+      "value": "Your scans reset tomorrow. You can enter the details yourself now.",
+      "description": "Daily limit body shown when the paywall is disabled.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchSeePlansAction",
+      "value": "See plans",
+      "description": "Button on the daily limit screen that opens the subscription plans; paywall builds only.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchAiBusyTitle",
+      "value": "Our AI is busy",
+      "description": "Failure screen title when the AI service is overloaded.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchAiBusyBody",
+      "value": "This is on our side. Try again in a few minutes.",
+      "description": "Failure screen body when the AI service is overloaded.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchNoPiecesBody",
+      "value": "Try a clearer photo, or enter the details yourself.",
+      "description": "Failure screen body when no clothing was detected in the photo.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchScanningUnavailableTitle",
+      "value": "Scanning is unavailable",
+      "description": "Failure screen title when AI scanning is switched off or unavailable.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchScanningUnavailableBody",
+      "value": "Enter the details yourself for now.",
+      "description": "Failure screen body when scanning is unavailable.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchScanDidNotFinishTitle",
+      "value": "The scan did not finish",
+      "description": "Failure screen title for any other scan error.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    },
+    {
+      "key": "batchTryAgainBody",
+      "value": "Try again.",
+      "description": "Generic fallback body on the unknown-error failure screen. A sentence, unlike the button label.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart"
+    }
+  ],
+  "deferred": [
+    {
+      "value": "You can add up to ${BatchExtractionNotifier.maxImages} photos.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated with the max-photos constant; needs an ARB placeholder."
+    },
+    {
+      "value": "Pick up to ${BatchExtractionNotifier.maxImages} photos. We find the pieces.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated with the max-photos constant; needs an ARB placeholder."
+    },
+    {
+      "value": "${images.length} of ${BatchExtractionNotifier.maxImages} photos",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Counter with two runtime values; needs ARB placeholders."
+    },
+    {
+      "value": "https://instagram.com/username",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Example URL used as a field hint. Left literal so it stays copy-pasteable."
+    },
+    {
+      "value": "Preparing photo ${done.clamp(1, count)} of $count",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated progress text; needs ARB placeholders."
+    },
+    {
+      "value": "Find pieces in 1 photo / Find pieces in $count photos",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "Your $platform account uses two-step sign-in. Enter the 6-digit code from your authenticator app.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated with the platform name (Instagram, Facebook); needs an ARB placeholder."
+    },
+    {
+      "value": "This $platform profile is private or needs a sign-in to show its photos.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated with the platform name; needs an ARB placeholder."
+    },
+    {
+      "value": "Connect with $platform",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated with the platform name; needs an ARB placeholder."
+    },
+    {
+      "value": "1 photo found so far / ${job.discoveredPhotos} photos found so far",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "${job.processedPhotos} of ${job.totalPhotos} processed · ${job.approvedPhotos} added · ${job.queuedCount} waiting · ${job.rejectedPhotos} skipped",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Status line built from four runtime counters; needs ARB placeholders and rethinking as one ICU message."
+    },
+    {
+      "value": "Scanning photo ${processing.ordinal}",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated ordinal; needs an ARB placeholder."
+    },
+    {
+      "value": "Photo ${buffered.ordinal} is next",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated ordinal; needs an ARB placeholder."
+    },
+    {
+      "value": "Photo ${photo.ordinal}",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Interpolated ordinal; needs an ARB placeholder."
+    },
+    {
+      "value": "1 piece found / ${photo.items.length} pieces found",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "1 photo was added to your closet. / ${job.approvedPhotos} photos were added to your closet.",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "000000",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Numeric placeholder in the code field. A format token, not copy."
+    },
+    {
+      "value": "Photos / Camera (permissionName arguments)",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Permission names passed to PermissionHelper.showDeniedRecovery, which renders them inside a shared dialog. Localizing them means changing that shared helper, which is outside this file scope."
+    },
+    {
+      "value": "Update background/foreground or reconnect copy inside PermissionHelper",
+      "file": "features/wardrobe/views/batch_image_selector_page.dart",
+      "reason": "Not a wardrobe string: rendered by the shared permission helper."
+    },
+    {
+      "value": "${(s.uploadProgress * photos).round()} of $photos photos prepared",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart",
+      "reason": "Interpolated counters; needs ARB placeholders."
+    },
+    {
+      "value": "${s.extractedCount + s.failedCount} of $photos photos checked · ${s.items.length} pieces so far",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart",
+      "reason": "Interpolated counters appended conditionally; needs ARB placeholders."
+    },
+    {
+      "value": "${s.generatedCount} of ${s.totalItems} studio photos ready · batch ${s.currentBatch} of ${s.totalBatches}",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart",
+      "reason": "Interpolated counters and an optional batch segment; needs ARB placeholders."
+    },
+    {
+      "value": "${s.items.length} pieces found before it stopped",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart",
+      "reason": "Interpolated counter; needs an ARB placeholder."
+    },
+    {
+      "value": "Review 1 piece now / Review $count pieces now",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "Review 1 piece / Review $count pieces",
+      "file": "features/wardrobe/views/batch_extraction_progress_page.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "1 piece is in your closet. / ${saved.length} pieces are in your closet.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "1 more studio photo on the way. You can save what is ready, or leave — we will let you know. / $pending more studio photos on the way...",
+      "file": "features/wardrobe/views/batch_item_review_page.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "Not saved yet: ${failures.join(', ')}.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart",
+      "reason": "Interpolated with a list of piece names; needs an ARB placeholder."
+    },
+    {
+      "value": "$total ${total == 1 ? 'piece' : 'pieces'} from $photos ${photos == 1 ? 'photo' : 'photos'}",
+      "file": "features/wardrobe/views/batch_item_review_page.dart",
+      "reason": "Two counts, each with an inline plural; needs a nested ARB plural."
+    },
+    {
+      "value": "$selected chosen. Tap a piece to skip it.",
+      "file": "features/wardrobe/views/batch_item_review_page.dart",
+      "reason": "Interpolated count; needs an ARB placeholder."
+    },
+    {
+      "value": "Saving $count ${count == 1 ? 'piece' : 'pieces'}",
+      "file": "features/wardrobe/views/batch_item_review_page.dart",
+      "reason": "Interpolated count with an inline plural; needs an ARB plural."
+    },
+    {
+      "value": "Save $count ${count == 1 ? 'piece' : 'pieces'}",
+      "file": "features/wardrobe/views/batch_item_review_page.dart",
+      "reason": "Interpolated count with an inline plural; needs an ARB plural."
+    },
+    {
+      "value": "Uploading your photo / This takes a few seconds.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Returned by the static helper ExtractionProcessingView.phaseCopy, which has no BuildContext. Deferred rather than restructured: the helper needs to take AppLocalizations."
+    },
+    {
+      "value": "Uploading your photo / Connected. Starting the scan.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Same static phaseCopy helper; no BuildContext."
+    },
+    {
+      "value": "Looking at your photo / Finding each piece you wear.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Same static phaseCopy helper; no BuildContext."
+    },
+    {
+      "value": "Pieces found / Getting the details of each one.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Same static phaseCopy helper; no BuildContext."
+    },
+    {
+      "value": "Making studio photos / A clean photo of each piece.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Same static phaseCopy helper; no BuildContext."
+    },
+    {
+      "value": "Done / Your pieces are ready.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Same static phaseCopy helper; no BuildContext."
+    },
+    {
+      "value": "Working on it / This takes up to a minute.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Fallback arm of the same static phaseCopy helper; no BuildContext."
+    },
+    {
+      "value": "$done of ${statuses.length} studio photos ready",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Interpolated counters; needs ARB placeholders."
+    },
+    {
+      "value": "1 piece found / $count pieces found",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "$ready of $count studio photos ready. Tap a piece to skip it.",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Interpolated counters; needs ARB placeholders."
+    },
+    {
+      "value": "Save 1 piece / Save $included pieces",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "You / Person",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Built by the free function personGroups, which has no BuildContext. Deferred rather than restructured: it needs to take AppLocalizations."
+    },
+    {
+      "value": "  ${g.included} of ${g.total}",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Per-person counter rendered inside a rich text span; needs ARB placeholders."
+    },
+    {
+      "value": "$name, ${included ? 'included' : 'skipped'}",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Interpolated screen-reader label for a piece card; needs an ARB placeholder."
+    },
+    {
+      "value": "Skip $name / Include $name",
+      "file": "features/wardrobe/widgets/ai_extraction_widget.dart",
+      "reason": "Interpolated screen-reader labels for the include checkbox; need ARB placeholders."
+    },
+    {
+      "value": "$person (you)",
+      "file": "features/wardrobe/widgets/extracted_item_card.dart",
+      "reason": "Interpolated with a person's name; needs an ARB placeholder."
+    },
+    {
+      "value": "$name, ${included ? 'included' : 'skipped'}",
+      "file": "features/wardrobe/widgets/extracted_item_card.dart",
+      "reason": "Interpolated screen-reader label for the card; needs an ARB placeholder."
+    },
+    {
+      "value": "Skip ${item.name} / Include ${item.name}",
+      "file": "features/wardrobe/widgets/extracted_item_card.dart",
+      "reason": "Interpolated screen-reader labels for the include checkbox; need ARB placeholders."
+    },
+    {
+      "value": "1 piece / $count pieces",
+      "file": "features/wardrobe/widgets/batch_image_tile.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "Finding pieces (${active.length} scans)",
+      "file": "features/wardrobe/widgets/active_job_banner.dart",
+      "reason": "Interpolated count; needs an ARB plural."
+    },
+    {
+      "value": "Finding pieces in ${job.label}",
+      "file": "features/wardrobe/widgets/active_job_banner.dart",
+      "reason": "Interpolated with the job label supplied by the provider; needs an ARB placeholder."
+    },
+    {
+      "value": "Resume ${job.label}",
+      "file": "features/wardrobe/widgets/active_job_banner.dart",
+      "reason": "Interpolated screen-reader label; needs an ARB placeholder."
+    },
+    {
+      "value": "Waiting / Uploading / Looking for pieces / Pieces found / Making studio photos / Done / Skipped",
+      "file": "features/wardrobe/widgets/extraction_progress_card.dart",
+      "reason": "Produced by a String getter (ExtractionProgressCard._label) that has no BuildContext. Deferred rather than restructured: the getter needs to take AppLocalizations."
+    },
+    {
+      "value": "1 piece found / $count pieces found",
+      "file": "features/wardrobe/widgets/extraction_progress_card.dart",
+      "reason": "Singular/plural pair chosen by a Dart ternary; needs an ARB plural."
+    },
+    {
+      "value": "piece / pieces",
+      "file": "features/wardrobe/views/wardrobe_stats_page.dart",
+      "reason": "Figure caption on the stats screen; singular/plural pair chosen by a Dart ternary, needs an ARB plural."
+    },
+    {
+      "value": "${job.label}, ${job.progressText}",
+      "file": "features/wardrobe/views/extraction_jobs_page.dart",
+      "reason": "Interpolated screen-reader label for a job row; needs an ARB placeholder."
+    },
+    {
+      "value": "Extra photo upload failed",
+      "file": "features/wardrobe/widgets/manual_entry_form.dart",
+      "reason": "Telemetry context passed to ErrorHandler.reportError, not shown to the user. ErrorHandler documents that error text stays English for Sentry grouping."
+    },
+    {
+      "value": "Choose at least one photo. (+ about 20 more error strings)",
+      "file": "features/wardrobe/providers/batch_extraction_provider.dart",
+      "reason": "Provider layer has no BuildContext. It holds roughly 20 user-facing strings (social URL validation errors, 'No pieces found in this photo.', sign-in prompts, snackbar titles). Needs an l10n accessor passed into the notifier as a separate change."
+    },
+    {
+      "value": "Batch item save failed (+ snackbar titles)",
+      "file": "features/wardrobe/providers/item_add_provider.dart",
+      "reason": "Provider layer has no BuildContext; carries snackbar titles such as 'Saved', 'Some pieces not saved', 'Not saved', 'Not cancelled'."
+    },
+    {
+      "value": "Ready to review (+ status labels)",
+      "file": "features/wardrobe/providers/extraction_jobs_provider.dart",
+      "reason": "Provider layer has no BuildContext; produces the job status labels shown in the activity list and banner, including plurals such as '$total pieces found so far'."
+    },
+    {
+      "value": "Logged as worn today. (+ 6 more)",
+      "file": "features/wardrobe/providers/wardrobe_providers.dart",
+      "reason": "Provider layer has no BuildContext; carries snackbar copy for favourite, worn, delete and delete-selected flows plus their titles."
+    }
+  ]
+}

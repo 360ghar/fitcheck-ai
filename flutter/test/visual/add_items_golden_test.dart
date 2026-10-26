@@ -361,6 +361,9 @@ void main() {
       overrides: _batch(
         BatchState(
           status: BatchJobStatus.failed,
+          // A job id, like a real failed scan: without one the page has
+          // nothing to resume and closes itself.
+          jobId: 'job-1',
           error: 'We lost the connection while working. Try again.',
           images: _images([BatchImageStatus.failed, BatchImageStatus.failed]),
         ),

@@ -11,8 +11,11 @@ import { useToast } from '@/components/ui/use-toast'
 import { useAuthStore, useCurrentUser, useUserDisplayName, useUserAvatar } from '../../stores/authStore'
 import { uploadAvatar } from '@/api/users'
 import { logger } from '@/lib/logger'
+import { useFormattingLocale, useTranslation } from '@/i18n'
 
 export function AvatarSection() {
+  const { t } = useTranslation()
+  const formattingLocale = useFormattingLocale()
   const user = useCurrentUser()
   const userDisplayName = useUserDisplayName()
   const userAvatar = useUserAvatar()
@@ -38,7 +41,7 @@ export function AvatarSection() {
       if (current) {
         setUser({ ...current, avatar_url })
       }
-      toast({ title: 'Avatar updated' })
+      toast({ title: t('profile.avatarUpdated') })
     } catch (err) {
       // api/client interceptor already toasts the failure for Axios errors.
       // Log non-Axios errors so they aren't invisible.
@@ -55,13 +58,15 @@ export function AvatarSection() {
           {userAvatar ? (
             <img loading="lazy" decoding="async"
               src={userAvatar}
-              alt={`${userDisplayName} avatar`}
+              alt={t('profile.avatarAlt', { name: userDisplayName })}
               className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover"
             />
           ) : (
             <div className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-primary/10 flex items-center justify-center">
               <span className="text-2xl md:text-3xl font-bold text-primary">
-                {userDisplayName.charAt(0).toUpperCase()}
+                {/* Locale-aware: Turkish "ilknur" uppercases to "İ". A plain
+                    toUpperCase() would render "I" and look like a bug to the user. */}
+                {userDisplayName.charAt(0).toLocaleUpperCase(formattingLocale)}
               </span>
             </div>
           )}
@@ -76,14 +81,14 @@ export function AvatarSection() {
             type="button"
             onClick={handleAvatarClick}
             disabled={isUploadingAvatar}
-            className="absolute bottom-0 right-0 p-2 md:p-2.5 bg-primary rounded-full text-primary-foreground hover:bg-primary/90 disabled:opacity-60 touch-target"
-            aria-label="Change avatar"
-            title="Change avatar"
+            className="absolute bottom-0 end-0 p-2 md:p-2.5 bg-primary rounded-full text-primary-foreground hover:bg-primary/90 disabled:opacity-60 touch-target"
+            aria-label={t('profile.changeAvatar')}
+            title={t('profile.changeAvatar')}
           >
             <Camera className="h-4 w-4 md:h-5 md:w-5" />
           </button>
         </div>
-        <div className="mt-3 xs:mt-0 xs:ml-4 md:ml-6 min-w-0 text-center xs:text-left">
+        <div className="mt-3 xs:mt-0 xs:ms-4 md:ms-6 min-w-0 text-center xs:text-start">
           <h2 className="text-lg md:text-xl font-medium text-foreground truncate">{userDisplayName}</h2>
           <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
         </div>

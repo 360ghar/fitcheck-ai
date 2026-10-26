@@ -14,6 +14,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Home, Shirt, Plus, Layers, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/i18n'
 
 // ============================================================================
 // TYPES
@@ -22,7 +23,8 @@ import { cn } from '@/lib/utils'
 interface NavItem {
   href: string
   icon: React.ElementType
-  label: string
+  /** Message id — resolved at render so a language switch repaints the bar. */
+  labelKey: string
 }
 
 // ============================================================================
@@ -30,11 +32,11 @@ interface NavItem {
 // ============================================================================
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', icon: Home, label: 'Home' },
-  { href: '/wardrobe', icon: Shirt, label: 'Closet' },
+  { href: '/dashboard', icon: Home, labelKey: 'nav.home' },
+  { href: '/wardrobe', icon: Shirt, labelKey: 'nav.closet' },
   // FAB placeholder will be in the middle
-  { href: '/outfits', icon: Layers, label: 'Outfits' },
-  { href: '/profile', icon: User, label: 'Profile' },
+  { href: '/outfits', icon: Layers, labelKey: 'nav.outfits' },
+  { href: '/profile', icon: User, labelKey: 'nav.profile' },
 ]
 
 // ============================================================================
@@ -44,32 +46,34 @@ const navItems: NavItem[] = [
 export function BottomNav() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   // Determine context-aware FAB action
   const getFabAction = () => {
     if (location.pathname.startsWith('/wardrobe')) {
-      return { action: '/wardrobe?action=add', label: 'Add Item' }
+      return { action: '/wardrobe?action=add', label: t('nav.addItem') }
     }
     if (location.pathname.startsWith('/outfits')) {
-      return { action: '/outfits/new', label: 'Create Outfit' }
+      return { action: '/outfits/new', label: t('nav.createOutfit') }
     }
-    return { action: '/wardrobe?action=add', label: 'Add' }
+    return { action: '/wardrobe?action=add', label: t('nav.add') }
   }
 
   const fabAction = getFabAction()
 
   return (
     <nav
-      aria-label="Primary navigation"
+      aria-label={t('nav.primaryNavigation')}
       className={cn(
-        // Fixed to bottom with safe area padding
-        'fixed bottom-0 left-0 right-0 z-30 max-w-[100vw]',
+        // Fixed to bottom with safe area padding. `inset-x-0` rather than
+        // `start-0 end-0` so the bar spans the viewport in either direction.
+        'fixed bottom-0 inset-x-0 z-30 max-w-[100vw]',
         'bg-background',
         // Border
         'border-t border-border/50',
         // Safe area for notched devices
         'pb-[var(--safe-area-bottom)]',
-        'pl-[var(--safe-area-left)] pr-[var(--safe-area-right)]',
+        'ps-[var(--safe-area-left)] pe-[var(--safe-area-right)]',
         // Only show on mobile
         'md:hidden'
       )}
@@ -130,6 +134,7 @@ interface NavItemProps {
 }
 
 function NavItem({ item, location }: NavItemProps) {
+  const { t } = useTranslation()
   const isActive =
     location.pathname === item.href ||
     location.pathname.startsWith(`${item.href}/`)
@@ -173,7 +178,7 @@ function NavItem({ item, location }: NavItemProps) {
           isActive ? 'text-primary font-semibold' : 'text-muted-foreground'
         )}
       >
-        {item.label}
+        {t(item.labelKey)}
       </span>
     </NavLink>
   )

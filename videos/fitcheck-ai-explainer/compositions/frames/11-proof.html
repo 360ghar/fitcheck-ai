@@ -1,0 +1,307 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #pf-bg {
+      background: #FCFAF8;
+    }
+    .pf-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .pf-glow-a {
+      width: 640px;
+      height: 640px;
+      left: 360px;
+      top: -200px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.13) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .pf-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -220px;
+      top: 900px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .pf-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 540px;
+      top: 1300px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .pf-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— the quote cards (titlecard-reveal, one stage slot) ————— */
+    .pf-card {
+      position: absolute;
+      left: 90px;
+      top: 520px;
+      width: 900px;
+      height: 800px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 48px;
+      box-shadow: 10px 10px 0 rgba(26, 26, 26, 0.08);
+      opacity: 0;
+    }
+    .pf-stat {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 600px;
+      text-align: center;
+      font-family: "Bodoni Moda", serif;
+      font-size: 190px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+    .pf-stat-c0 { color: #078675; }
+    .pf-stat-c1 { color: #51D6B0; }
+    .pf-stat-c2 { color: #065B50; }
+    .pf-quote {
+      position: absolute;
+      left: 130px;
+      right: 130px;
+      top: 900px;
+      text-align: center;
+      font-family: "Bodoni Moda", serif;
+      font-size: 46px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: #1A1A1A;
+    }
+    .pf-quote .pf-hl {
+      display: inline-block;
+      background: #74DEC0;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      padding: 2px 20px 6px;
+      margin: 0 4px;
+      white-space: nowrap;
+    }
+    .pf-attr {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 1190px;
+      text-align: center;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      opacity: 0.7;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="11-proof"
+    data-start="0"
+    data-duration="10.45"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="pf-bg" data-start="0" data-duration="10.45" data-track-index="0">
+      <div class="pf-glow pf-glow-a"></div>
+      <div class="pf-glow pf-glow-b"></div>
+      <div class="pf-glow pf-glow-c"></div>
+      <div class="pf-grain"></div>
+    </div>
+
+    <!-- card 1: Emma — fifty new outfits -->
+    <div class="clip" id="pf-card-1-clip" data-start="0" data-duration="10.45" data-track-index="1">
+      <div class="pf-card" id="pf-card-1">
+        <div class="pf-stat pf-stat-c0" id="pf-stat-1">50+</div>
+        <div class="pf-quote" id="pf-quote-1">
+          <span class="pf-hl" id="pf-hl-1">new outfits</span> from the<br>clothes she already owned
+        </div>
+        <div class="pf-attr" id="pf-attr-1">Emma · wardrobe rebuilt</div>
+      </div>
+    </div>
+
+    <!-- card 2: Marcus — two hours saved every week -->
+    <div class="clip" id="pf-card-2-clip" data-start="0" data-duration="10.45" data-track-index="2">
+      <div class="pf-card" id="pf-card-2">
+        <div class="pf-stat pf-stat-c1" id="pf-stat-2">2h</div>
+        <div class="pf-quote" id="pf-quote-2">
+          saved <span class="pf-hl" id="pf-hl-2">every week</span>
+        </div>
+        <div class="pf-attr" id="pf-attr-2">Marcus · busy executive</div>
+      </div>
+    </div>
+
+    <!-- card 3: Priya — engagement up forty percent -->
+    <div class="clip" id="pf-card-3-clip" data-start="0" data-duration="10.45" data-track-index="3">
+      <div class="pf-card" id="pf-card-3">
+        <div class="pf-stat pf-stat-c2" id="pf-stat-3">40%</div>
+        <div class="pf-quote" id="pf-quote-3">
+          <span class="pf-hl" id="pf-hl-3">engagement up</span>
+        </div>
+        <div class="pf-attr" id="pf-attr-3">Priya · content creator</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["11-proof"] = tl;
+
+        var BEATS = {
+          card1: 0.1,
+          stat1: 0.63,
+          hl1: 0.89,
+          quote1: 1.5,
+          attr1: 2.9,
+          cut1: 3.3,
+          card2: 3.4,
+          stat2: 4.09,
+          hl2: 4.66,
+          cut2: 5.6,
+          card3: 5.7,
+          hl3: 6.17,
+          stat3: 6.7,
+          rePulse: 8.6,
+          jitter: 7.5,
+        };
+
+        /* ——— Card 1 — Emma (0–3.3s): rises, the numeral lands on "fifty" ——— */
+        tl.fromTo(
+          "#pf-card-1",
+          { y: 60, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.55, ease: "power3.out" },
+          BEATS.card1
+        );
+        tl.fromTo("#pf-stat-1", { scale: 0.4, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.4, ease: "back.out(1.6)" }, BEATS.stat1);
+        tl.fromTo("#pf-hl-1", { scale: 0.5, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.32, ease: "back.out(1.7)" }, BEATS.hl1);
+        tl.fromTo("#pf-quote-1", { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.quote1);
+        tl.fromTo("#pf-attr-1", { y: 12, opacity: 0 }, { y: 0, opacity: 0.7, duration: 0.35, ease: "power3.out" }, BEATS.attr1);
+
+        /* ——— Hard cut → Card 2 — Marcus (3.4–5.6s) ——— */
+        tl.set("#pf-card-1", { opacity: 0 }, BEATS.cut1);
+        tl.fromTo(
+          "#pf-card-2",
+          { y: 60, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.55, ease: "power3.out" },
+          BEATS.card2
+        );
+        tl.fromTo("#pf-stat-2", { scale: 0.4, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.4, ease: "back.out(1.6)" }, BEATS.stat2);
+        tl.fromTo("#pf-hl-2", { scale: 0.5, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.32, ease: "back.out(1.7)" }, BEATS.hl2);
+        tl.fromTo("#pf-quote-2", { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.card2 + 0.15);
+        tl.fromTo("#pf-attr-2", { y: 12, opacity: 0 }, { y: 0, opacity: 0.7, duration: 0.35, ease: "power3.out" }, BEATS.card2 + 0.3);
+
+        /* ——— Hard cut → Card 3 — Priya (5.7–10.45s), the chain's long hold ——— */
+        tl.set("#pf-card-2", { opacity: 0 }, BEATS.cut2);
+        tl.fromTo(
+          "#pf-card-3",
+          { y: 60, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.55, ease: "power3.out" },
+          BEATS.card3
+        );
+        tl.fromTo("#pf-hl-3", { scale: 0.5, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.32, ease: "back.out(1.7)" }, BEATS.hl3);
+        tl.fromTo("#pf-quote-3", { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.hl3 + 0.1);
+        tl.fromTo("#pf-stat-3", { scale: 0.4, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.4, ease: "back.out(1.6)" }, BEATS.stat3);
+        tl.fromTo("#pf-attr-3", { y: 12, opacity: 0 }, { y: 0, opacity: 0.7, duration: 0.35, ease: "power3.out" }, BEATS.stat3 + 0.25);
+
+        // The closer breathes: one bounded re-pulse of the numeral, then stillness.
+        tl.to("#pf-stat-3", { scale: 1.05, transformOrigin: "50% 50%", duration: 0.16, ease: "power2.out" }, BEATS.rePulse);
+        tl.to("#pf-stat-3", { scale: 1, duration: 0.3, ease: "power3.out" }, BEATS.rePulse + 0.16);
+
+        // Hold the read: stillness — only a subtle deterministic jitter on the card.
+        var card3 = document.getElementById("pf-card-3");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 2.2,
+            duration: 10.45 - BEATS.jitter,
+            ease: "none",
+            onUpdate: function () {
+              var x = 1.5 * Math.sin(jit.p);
+              var y = 1.1 * Math.sin(jit.p * 1.31);
+              card3.style.transform = "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

@@ -126,7 +126,10 @@ class CalendarEventsNotifier extends AsyncNotifier<List<CalendarEventModel>> {
       location: location,
       isAllDay: isAllDay,
     );
-    ErrorHandler.showSuccess('Event added', title: 'Planned');
+    ErrorHandler.showSuccess(
+      ErrorHandler.l10n?.calendarEventAddedBody ?? 'Event added',
+      title: ErrorHandler.l10n?.calendarEventPlannedTitle ?? 'Planned',
+    );
     return event;
   });
 
@@ -149,7 +152,10 @@ class CalendarEventsNotifier extends AsyncNotifier<List<CalendarEventModel>> {
       location: location,
       isAllDay: isAllDay,
     );
-    ErrorHandler.showSuccess('Event saved', title: 'Saved');
+    ErrorHandler.showSuccess(
+      ErrorHandler.l10n?.calendarEventSavedBody ?? 'Event saved',
+      title: ErrorHandler.l10n?.calendarSavedTitle ?? 'Saved',
+    );
     return event;
   });
 
@@ -163,7 +169,11 @@ class CalendarEventsNotifier extends AsyncNotifier<List<CalendarEventModel>> {
       if (ref.mounted) _put(event);
       return event;
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Event not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.calendarEventNotSavedTitle ?? 'Event not saved',
+        stackTrace: stack,
+      );
       return null;
     } finally {
       _saving = false;
@@ -183,12 +193,17 @@ class CalendarEventsNotifier extends AsyncNotifier<List<CalendarEventModel>> {
                 if (e.id != id) e,
             ]);
           }
-          ErrorHandler.showSuccess('Event removed', title: 'Deleted');
+          ErrorHandler.showSuccess(
+            ErrorHandler.l10n?.calendarEventRemovedBody ?? 'Event removed',
+            title: ErrorHandler.l10n?.calendarEventDeletedTitle ?? 'Deleted',
+          );
           return true;
         } catch (e, stack) {
           ErrorHandler.showError(
             e,
-            title: 'Event not deleted',
+            title:
+                ErrorHandler.l10n?.calendarEventNotDeletedTitle ??
+                'Event not deleted',
             stackTrace: stack,
           );
           return false;
@@ -198,20 +213,32 @@ class CalendarEventsNotifier extends AsyncNotifier<List<CalendarEventModel>> {
     return done ?? false;
   }
 
-  Future<void> linkOutfit(String eventId, String outfitId) =>
-      _changeOutfit(eventId, 'Outfit not linked', () async {
-        final linked = await _repository.linkOutfit(eventId, outfitId);
-        ErrorHandler.showSuccess('Outfit linked', title: 'Linked');
-        return (CalendarEventModel e) => e.copyWith(outfitId: linked);
-      });
+  Future<void> linkOutfit(String eventId, String outfitId) => _changeOutfit(
+    eventId,
+    ErrorHandler.l10n?.calendarOutfitNotLinkedTitle ?? 'Outfit not linked',
+    () async {
+      final linked = await _repository.linkOutfit(eventId, outfitId);
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.calendarOutfitLinked ?? 'Outfit linked',
+        title: ErrorHandler.l10n?.calendarLinkedTitle ?? 'Linked',
+      );
+      return (CalendarEventModel e) => e.copyWith(outfitId: linked);
+    },
+  );
 
-  Future<void> removeOutfit(String eventId) =>
-      _changeOutfit(eventId, 'Outfit not removed', () async {
-        await _repository.removeOutfit(eventId);
-        ErrorHandler.showSuccess('Outfit removed', title: 'Removed');
-        return (CalendarEventModel e) =>
-            e.copyWith(clearOutfitId: true, clearOutfitImageUrl: true);
-      });
+  Future<void> removeOutfit(String eventId) => _changeOutfit(
+    eventId,
+    ErrorHandler.l10n?.calendarOutfitNotRemovedTitle ?? 'Outfit not removed',
+    () async {
+      await _repository.removeOutfit(eventId);
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.calendarOutfitRemovedBody ?? 'Outfit removed',
+        title: ErrorHandler.l10n?.itemEditRemoved ?? 'Removed',
+      );
+      return (CalendarEventModel e) =>
+          e.copyWith(clearOutfitId: true, clearOutfitImageUrl: true);
+    },
+  );
 
   Future<void> _changeOutfit(
     String eventId,
@@ -255,13 +282,15 @@ class CalendarConnectionsNotifier
           ]);
         }
         ErrorHandler.showSuccess(
-          'Calendar disconnected',
-          title: 'Disconnected',
+          ErrorHandler.l10n?.calendarDisconnectedBody ?? 'Calendar disconnected',
+          title: ErrorHandler.l10n?.calendarDisconnectedTitle ?? 'Disconnected',
         );
       } catch (e, stack) {
         ErrorHandler.showError(
           e,
-          title: 'Calendar not disconnected',
+          title:
+              ErrorHandler.l10n?.calendarNotDisconnectedTitle ??
+              'Calendar not disconnected',
           stackTrace: stack,
         );
       }

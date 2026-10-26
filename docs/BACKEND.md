@@ -2,7 +2,7 @@
 
 Last updated: 2026-09-30
 
-Deep guide for the FastAPI app under `backend/`. Architecture layers: root `ARCHITECTURE.md`. Package-local agent entry: `backend/CLAUDE.md` (thin pointer here).
+Deep guide for the FastAPI app under `backend/`. Architecture layers: root `ARCHITECTURE.md`. Package-local agent entry: `backend/AGENTS.md` (thin pointer here).
 
 ## Commands
 
@@ -302,7 +302,9 @@ response flows back out in reverse:
 
 1. `CORSMiddleware` (outermost — added first)  
 2. `RequestLoggingMiddleware`  
-3. `CorrelationIdMiddleware` (innermost — added last, runs closest to the route)
+3. `CorrelationIdMiddleware`  
+4. `LanguageMiddleware` (innermost — resolves `Accept-Language`, sets the request language
+   contextvar, writes `Content-Language`)
 
 ## AI provider system
 
@@ -356,6 +358,117 @@ Provider dispatch is registry-driven: `AIProvider` (enum) → concrete class, vi
 User AI settings: `user_ai_settings` with encrypted keys (`AI_ENCRYPTION_KEY`).
 
 Services: `ai_service.py` (embeddings only), `ai_provider_service.py` (OpenAI-compatible provider + shared factories), `ai_provider_interface.py` (common interface + registry), `gemini_provider.py` (native Gemini provider), `ai_settings_service.py`, `ai_provider_health_service.py`.
+
+## Language contract (generated text)
+
+The app ships 50 App Store locales (`store/asc/locales.json`; 44 base language codes in
+`app/core/i18n.py`). The backend never translates UI copy — that is the client's job
+(`flutter/lib/core/i18n/taxonomy_l10n.dart`) — but it does decide which language an LLM writes
+in. Three classes of model output, three rules:
+
+| Class | Examples | Rule |
+|-------|----------|------|
+| **Canonical data** | `category`, `sub_category`, `colors`, `material`, `pattern`, `brand`, item `description` / `detailed_description`, outfit composition, style/season/occasion tags | **English, always.** Persisted, then rendered through the client's taxonomy tables; also the text embedded into Pinecone and pasted into image prompts. Never localized. |
+| **Generated prose** | Free text a human reads that the client cannot translate: outfit rationale, styling notes, weekly summary, gift copy | **User's language.** Every such prompt must carry `language_instruction(code, subject=...)`. |
+| **Image prompts** | outfit / try-on / photoshoot scene bodies, garment references, matte instructions | **English.** The output is a picture, so there is no prose to localize, and each prompt is a fidelity contract (identity lock + item inventory) that translation loosens. |
+
+Localizing canonical data would duplicate a user's wardrobe on every language switch, split one
+user's embeddings into 44 unrelated vector spaces and hand a non-English garment description to
+the image model. The extraction, image-generation and photoshoot planners therefore carry
+explicit "do not localize" comments (`agents/item_extraction_agent.py`,
+`agents/image_generation_agent.py`, `services/photoshoot_service.py`), and
+`tests/unit/test_services/test_ai_prompt_language.py` asserts their prompts are identical
+whatever the request language is.
+
+**Audit result (2026-10): there is no user-visible prose path yet.** Every LLM text call site is
+canonical extraction (`item_extraction_agent`: multi-item, single-item, color detection), an
+image prompt (`image_generation_agent`, `photoshoot_service.generate_prompts`) or a connectivity
+probe (`ai_provider_service.test_connection`). The instruction machinery is therefore implemented
+and tested but not injected anywhere; the first prose path must use the shape pinned in that test
+file (instruction appended after the JSON skeleton, which also keeps keys and enum values English
+inside a localized response).
+
+Server-generated prose that is *not* model output — weather `notes`, astrology `notes`,
+recommendation `reasons`, photoshoot use-case `description`s — is still English and still
+returned to the client. Moving it into the client's own locale files is the fix; do not add a
+second translation system here. The complete list, with the Flutter file that renders each one,
+is `store/i18n/backend-strings.json` (46 strings: 22 prose, 12 label, 9 template, 3 `freetext`).
+**Rule: any new user-visible English literal added to a response payload gets a row in that
+inventory in the same change.** `freetext` entries are model output (`image_description`,
+`person_label`, item `description`) and cannot be ARB entries at all; the inventory says what the
+client should do with each.
+
+### Resolution precedence
+
+Highest wins:
+
+1. An explicit `language=` argument to the service (a caller that already knows the language).
+2. `user_settings.language`, read by the auth dependencies.
+3. `Accept-Language`, resolved by `LanguageMiddleware`.
+4. `DEFAULT_LANGUAGE` (`en`) — including completely outside a request, so background jobs,
+   startup paths and tests never raise over a missing preference.
+
+Implementation: `app/core/middleware.py` owns the `_request_language` contextvar and the four
+helpers `get_request_language()` / `set_request_language()` / `resolve_language(explicit=None)` /
+`apply_user_language(stored)`. Services call `resolve_language()` (or `language_instruction(
+resolve_language(), subject=...)`) and **never** reach into `request.state` — the contextvar is
+the boundary between the transport layer and domain code.
+
+The stored column is read where the profile is already loaded, with no extra roundtrip:
+`deps.get_current_user` selects `*, user_settings(language)` and `deps.get_active_user_id`
+selects `is_active, user_settings(language)`; both then call `apply_user_language(...)`.
+`PUT /api/v1/users/settings` invalidates `user_profile_cache` so a language switch applies to the
+next request rather than the next 30 s cache window. `GET /api/v1/i18n/resolve` without a `tag`
+reports the effective language (same value as the `Content-Language` response header).
+
+A stored value wins **only when it is a supported non-default language, or when
+`user_settings.language_explicit` is TRUE.** The column is `DEFAULT 'en'`
+(`001_full_schema.sql`), so an untouched row cannot be told apart from a deliberate English
+choice on `language` alone; letting that default outrank the header would pin every
+auto-provisioned profile (and every web user) to English. `language_explicit` (migration 065) is
+the missing bit: `TRUE` means the user picked `language` in the app, including English, and that
+pick beats `Accept-Language`. A non-explicit non-default value still wins, so a client that syncs
+a language without the flag keeps its preference.
+
+**Migration 065 is written but NOT applied** — it ships in the next production write batch:
+
+```
+psql "$SUPABASE_DB_URL" -f backend/db/supabase/migrations/065_language_explicit.sql
+```
+
+(or paste it into the hosted Supabase SQL editor). Until it is applied the embed fails with
+PGRST200/201/202 and `_select_user_row` retries a plain select, so behaviour is exactly the
+pre-065 behaviour: stored non-default wins, explicit English cannot. Nothing breaks; the flag
+simply has no effect.
+
+The client contract for `PUT /api/v1/users/settings`:
+
+| Payload | Meaning | Stored |
+|---------|---------|--------|
+| `{"language": "hi"}` | user picked Hindi | `language='hi'`, `language_explicit=TRUE` |
+| `{"language": null}` | follow the device | `language='en'` (column default), `language_explicit=FALSE` |
+| no `language` key | picker untouched | both columns left alone |
+| `{"language_explicit": false}` | client states the intent itself | honoured verbatim |
+
+`flutter/lib/core/i18n/locale_controller.dart` does not satisfy this yet: `setLocale` sends
+`{'language': asc ?? 'en'}`, so "cleared" and "picked English" both write `'en'`. It must send
+`language: null` when cleared and rely on the derivation (or send the flag). That file belongs to
+the mobile agent.
+
+### Cache keying
+
+- **Canonical caches stay language-free** — deliberately: `ExtractionCacheService`
+  (`user_id:sha256(image)`), the Pinecone vectors (keyed by item id, embedded from English text),
+  `user_profile_cache` (a row, not text). One entry is correct for all 44 languages; adding a
+  language dimension would multiply entries and store the same English JSON 44 times.
+- **A prose cache must key on language.** None exists today. The day one is added, a Hindi
+  rationale served out of an English request's entry is the silent failure this rule exists to
+  prevent — and a regeneration after a language switch must not hit the old-language row.
+- **Generated prose is not persisted per language.** No table stores model prose in a column that
+  a user reads back, so there is no "one language per row" decision to make yet. If prose is
+  persisted (weekly summary, saved styling note), store the canonical English row plus the
+  language code it was generated in, and regenerate on read when the request language differs —
+  do not write one row per language.
 
 ## Runtime flows
 

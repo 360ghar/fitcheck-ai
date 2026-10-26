@@ -5,11 +5,12 @@ Provides commonly used dependencies like database client and current user.
 
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import Depends
 from supabase import Client
 
 from app.db.connection import get_db, SupabaseDB
+from app.core.middleware import apply_user_language
 from app.core.security import verify_token, TokenData
 from app.core.exceptions import AuthenticationError, PermissionDeniedError
 from app.core import user_profile_cache
@@ -17,6 +18,31 @@ from app.utils.datetime_util import utcnow_iso
 from app.utils.db import execute_with_reconnect, maybe_single_data
 
 logger = logging.getLogger(__name__)
+
+
+def _stored_language(profile: Dict[str, Any]) -> tuple[Optional[str], bool]:
+    """The user's saved language and whether they picked it.
+
+    Both auth lookups embed `user_settings(language, language_explicit)` on the
+    profile query, so this costs no extra roundtrip. PostgREST returns the
+    one-to-one embed as a dict (a list is tolerated because a schema change
+    could make it one-to-many), and a profile created before this embed existed
+    simply has no key — the request then keeps the language `Accept-Language`
+    resolved to.
+
+    `language_explicit` comes from migration 065. Before that migration is
+    applied the embed fails (PostgREST PGRST200/201/202) and `_select_user_row`
+    retries a plain select, so this returns `(None, False)` and the request
+    falls back to the header — degraded, never broken.
+    """
+    settings = profile.get("user_settings")
+    if isinstance(settings, list):
+        settings = settings[0] if settings else None
+    if not isinstance(settings, dict):
+        return None, False
+    value = settings.get("language")
+    explicit = settings.get("language_explicit")
+    return (str(value) if value else None), explicit is True
 
 
 def _is_missing_profile_error(error: Exception) -> bool:
@@ -27,6 +53,92 @@ def _is_missing_profile_error(error: Exception) -> bool:
     auto-provisioning.
     """
     return getattr(error, "code", None) == "PGRST116"
+
+
+# The embed token both auth selects carry. The stored language is read from it,
+# never from a second query (see _stored_language).
+_LANGUAGE_EMBED = ", user_settings(language, language_explicit)"
+
+# PostgREST answers an embed it cannot resolve (stale schema cache, missing FK
+# in a self-hosted build) with one of these. Retrying without the embed keeps a
+# display preference from turning into a 401/500 on every authenticated route.
+#
+# `42703` is the case that matters for migration 065. When the embedded table
+# lacks the COLUMN — not the relationship — PostgREST passes Postgres' error
+# through verbatim, and the live project answers:
+#
+#   HTTP 400  {"code":"42703",
+#              "message":"column user_settings_1.language_explicit does not exist"}
+#
+# That is checked against the real project, not inferred: the PGRST2xx codes
+# above are for a relationship PostgREST cannot resolve, and a missing column
+# produces `42703` instead. Without it, deploying this code ahead of the
+# migration makes every authenticated request raise — the failure lands on the
+# hot path of auth, not on a settings screen.
+_EMBED_UNSUPPORTED_CODES = frozenset({"PGRST200", "PGRST201", "PGRST202", "42703"})
+
+# `postgrest-py` does not guarantee a `code` attribute on every error shape, so
+# the code alone is not a reliable test. The message is the fallback signal, but
+# it has to name the column: every Postgres "something does not exist" error
+# reads the same, so matching on `does not exist` alone would swallow a missing
+# TABLE — a broken schema — and quietly drop the language preference instead of
+# failing loudly.
+_EMBED_COLUMN_NAME = "language_explicit"
+
+
+def _embed_is_unsupported(error: Exception) -> bool:
+    if getattr(error, "code", None) in _EMBED_UNSUPPORTED_CODES:
+        return True
+    text = str(error)
+    return _EMBED_COLUMN_NAME in text and "does not exist" in text
+
+
+async def _select_user_row(db: Client, *, columns: str, user_id: str, operation: str) -> Any:
+    """Select one ``users`` row, degrading gracefully if the embed is rejected."""
+    try:
+        return await execute_with_reconnect(
+            lambda d: d.table("users").select(columns).eq("id", user_id).maybe_single().execute(),
+            db,
+            extra={"operation": operation, "user_id": user_id},
+        )
+    except Exception as error:
+        if not _embed_is_unsupported(error):
+            raise
+        logger.warning(
+            "user_settings embed rejected by PostgREST; language falls back to Accept-Language",
+            extra={
+                "operation": operation,
+                "user_id": user_id,
+                "code": getattr(error, "code", None),
+            },
+        )
+        # Drop only the column migration 065 adds, keeping `language`. The
+        # stored preference still works; what is lost is the distinction
+        # between "picked English" and "never picked", which is exactly the
+        # bit the missing column was meant to carry. Stripping the whole embed
+        # would throw away a working language preference to recover from a
+        # missing column, which is a much worse trade.
+        reduced = columns.replace(", language_explicit", "")
+        try:
+            return await execute_with_reconnect(
+                lambda d: d.table("users").select(reduced).eq("id", user_id).maybe_single().execute(),
+                db,
+                extra={"operation": operation, "user_id": user_id, "embed": "reduced"},
+            )
+        except Exception as reduced_error:
+            if not _embed_is_unsupported(reduced_error):
+                raise
+            logger.warning(
+                "user_settings embed rejected even without the new column; "
+                "dropping it entirely",
+                extra={"operation": operation, "user_id": user_id},
+            )
+            plain_columns = columns.replace(_LANGUAGE_EMBED, "")
+            return await execute_with_reconnect(
+                lambda d: d.table("users").select(plain_columns).eq("id", user_id).maybe_single().execute(),
+                db,
+                extra={"operation": operation, "user_id": user_id, "embed": "none"},
+            )
 
 
 async def _provision_profile(token_data: TokenData, db: Client) -> Dict[str, Any]:
@@ -142,10 +254,11 @@ async def get_current_user(
         async def _load_profile():
             # Unwrap .data here so the cache stores plain profile dicts
             # (or None), not postgrest response objects.
-            result = await execute_with_reconnect(
-                lambda d: d.table("users").select("*").eq("id", token_data.sub).maybe_single().execute(),
+            result = await _select_user_row(
                 db,
-                extra={"operation": "get_current_user.lookup", "user_id": token_data.sub},
+                columns="*" + _LANGUAGE_EMBED,
+                user_id=token_data.sub,
+                operation="get_current_user.lookup",
             )
             return maybe_single_data(result)
 
@@ -212,6 +325,11 @@ async def get_current_user(
     # Add email from token if not in database.
     if not user.get("email") and token_data.email:
         user["email"] = token_data.email
+    # AI text is generated in the user's own language: an explicit settings
+    # choice (including an explicit English) outranks `Accept-Language`.
+    # Services read this from the contextvar.
+    stored, explicit = _stored_language(user)
+    apply_user_language(stored, explicit=explicit)
     return user
 
 
@@ -250,14 +368,11 @@ async def get_active_user_id(
         AuthenticationError: If the profile is missing or the account is
             suspended.
     """
-    result = await execute_with_reconnect(
-        lambda d: d.table("users")
-        .select("is_active")
-        .eq("id", token_data.sub)
-        .maybe_single()
-        .execute(),
+    result = await _select_user_row(
         db,
-        extra={"operation": "get_active_user_id.lookup", "user_id": token_data.sub},
+        columns="is_active" + _LANGUAGE_EMBED,
+        user_id=token_data.sub,
+        operation="get_active_user_id.lookup",
     )
     row = maybe_single_data(result)
     if row is None:
@@ -272,6 +387,11 @@ async def get_active_user_id(
             message="Account is suspended",
             error_code="ACCOUNT_SUSPENDED",
         )
+    # Same stored-language upgrade as get_current_user: this dependency backs
+    # the upload/extraction/generation routes, which are exactly the ones that
+    # write user-visible text.
+    stored, explicit = _stored_language(row)
+    apply_user_language(stored, explicit=explicit)
     return token_data.sub
 
 

@@ -16,6 +16,7 @@
 // That hands a working session credential to someone else's CDN. The guard is
 // now a host allowlist.
 
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -132,7 +133,10 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
           home: Scaffold(
             body: AppNetworkImage('data:image/png;base64,$_tinyPngBase64'),
           ),

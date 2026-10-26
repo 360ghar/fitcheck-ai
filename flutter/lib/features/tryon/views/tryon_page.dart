@@ -4,13 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
 import '../providers/tryon_provider.dart';
-
-String _sentence(String s) =>
-    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+import '../tryon_l10n.dart';
 
 /// Virtual try-on: one garment photo on the user's own photo.
 class TryOnPage extends ConsumerWidget {
@@ -24,10 +23,10 @@ class TryOnPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.clay,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Virtual try-on')),
+        appBar: AppBar(title: Text(context.l10n.tryOnAppBar)),
         body: AppPageBackground(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(
+            padding: const EdgeInsetsDirectional.fromSTEB(
               AppConstants.spacing16,
               AppConstants.spacing8,
               AppConstants.spacing16,
@@ -90,11 +89,11 @@ class _AvatarCard extends ConsumerWidget {
           const SizedBox(width: AppConstants.spacing12),
           Expanded(
             child: Text(
-              "We couldn't load your photo.",
+              context.l10n.tryOnPhotoLoadFailed,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
           ),
-          TextButton(onPressed: notifier.refresh, child: const Text('Retry')),
+          TextButton(onPressed: notifier.refresh, child: Text(context.l10n.actionRetry)),
         ],
       );
     } else if (value == null) {
@@ -146,10 +145,10 @@ class _AvatarCard extends ConsumerWidget {
               children: [
                 Text(
                   value.isUploading
-                      ? 'Uploading your photo'
+                      ? context.l10n.tryOnUploadingPhoto
                       : url == null
-                      ? 'Add a full-body photo of yourself'
-                      : 'A full-body photo works best',
+                      ? context.l10n.tryOnAddPhotoPrompt
+                      : context.l10n.tryOnBodyPhotoHint,
                   style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
                 ),
                 const SizedBox(height: AppConstants.spacing4),
@@ -166,7 +165,11 @@ class _AvatarCard extends ConsumerWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.photo_camera_outlined, size: 20),
-                  label: Text(url == null ? 'Add photo' : 'Change photo'),
+                  label: Text(
+                    url == null
+                        ? context.l10n.tryOnAddPhoto
+                        : context.l10n.tryOnChangePhoto,
+                  ),
                 ),
               ],
             ),
@@ -179,7 +182,7 @@ class _AvatarCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _Title('Your photo'),
+          _Title(context.l10n.tryOnYourPhoto),
           const SizedBox(height: AppConstants.spacing12),
           body,
         ],
@@ -220,12 +223,12 @@ class _GarmentCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _Title('Garment'),
+          _Title(context.l10n.tryOnGarment),
           const SizedBox(height: AppConstants.spacing12),
           if (garment == null)
             PaperSurface(
               onTap: notifier.pickGarment,
-              semanticLabel: 'Choose a garment photo',
+              semanticLabel: context.l10n.tryOnChooseGarment,
               lift: 0,
               color: tokens.stock.sunk,
               padding: const EdgeInsets.symmetric(
@@ -241,7 +244,7 @@ class _GarmentCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: AppConstants.spacing8),
                   Text(
-                    'Choose one garment photo',
+                    context.l10n.tryOnChooseOneGarment,
                     textAlign: TextAlign.center,
                     style: text.bodyMedium?.copyWith(
                       color: tokens.textPrimary,
@@ -250,7 +253,7 @@ class _GarmentCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'A flat lay or a hanger shot works best',
+                    context.l10n.tryOnGarmentHint,
                     textAlign: TextAlign.center,
                     style: text.bodySmall?.copyWith(
                       color: tokens.textSecondary,
@@ -279,19 +282,23 @@ class _GarmentCard extends ConsumerWidget {
               TextButton.icon(
                 onPressed: generating ? null : notifier.pickGarment,
                 icon: const Icon(Icons.photo_library_outlined, size: 20),
-                label: Text(garment == null ? 'Gallery' : 'Change'),
+                label: Text(
+                  garment == null
+                      ? context.l10n.photoshootGallery
+                      : context.l10n.tryOnChange,
+                ),
               ),
               TextButton.icon(
                 onPressed: generating ? null : notifier.pickGarmentFromCamera,
                 icon: const Icon(Icons.photo_camera_outlined, size: 20),
-                label: const Text('Camera'),
+                label: Text(context.l10n.tryOnCamera),
               ),
               if (garment != null)
                 TextButton(
                   onPressed: generating
                       ? null
                       : () => notifier.setGarment(null),
-                  child: const Text('Remove'),
+                  child: Text(context.l10n.tryOnRemove),
                 ),
             ],
           ),
@@ -322,7 +329,10 @@ class _OptionsCard extends ConsumerWidget {
       decoration: InputDecoration(labelText: label),
       items: [
         for (final o in options)
-          DropdownMenuItem(value: o, child: Text(_sentence(o))),
+          DropdownMenuItem(
+            value: o,
+            child: Text(tryOnOptionLabel(context.l10n, o)),
+          ),
       ],
       onChanged: s.generating
           ? null
@@ -335,18 +345,28 @@ class _OptionsCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _Title('Look'),
+          _Title(context.l10n.tryOnLookTitle),
           const SizedBox(height: AppConstants.spacing16),
-          dropdown('Style', s.style, TryOnNotifier.styles, notifier.setStyle),
+          dropdown(
+            context.l10n.tryOnStyle,
+            s.style,
+            TryOnNotifier.styles,
+            notifier.setStyle,
+          ),
           const SizedBox(height: AppConstants.spacing12),
           dropdown(
-            'Background',
+            context.l10n.tryOnBackground,
             s.background,
             TryOnNotifier.backgrounds,
             notifier.setBackground,
           ),
           const SizedBox(height: AppConstants.spacing12),
-          dropdown('Pose', s.pose, TryOnNotifier.poses, notifier.setPose),
+          dropdown(
+            context.l10n.tryOnPose,
+            s.pose,
+            TryOnNotifier.poses,
+            notifier.setPose,
+          ),
         ],
       ),
     );
@@ -374,7 +394,7 @@ class _ResultCard extends ConsumerWidget {
             ),
             const SizedBox(height: AppConstants.spacing12),
             Text(
-              'Dressing you up. This takes about half a minute.',
+              context.l10n.tryOnDressingUp,
               textAlign: TextAlign.center,
               style: text.bodySmall?.copyWith(color: tokens.textSecondary),
             ),
@@ -396,7 +416,7 @@ class _ResultCard extends ConsumerWidget {
             Icon(Icons.image_outlined, size: 32, color: tokens.textMuted),
             const SizedBox(height: AppConstants.spacing8),
             Text(
-              'Your try-on appears here',
+              context.l10n.tryOnEmptyResult,
               textAlign: TextAlign.center,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
@@ -432,14 +452,14 @@ class _ResultCard extends ConsumerWidget {
           children: [
             image,
             // Apple Guideline 1.2: generated images must be reportable.
-            Positioned(
+            PositionedDirectional(
               top: 0,
-              right: 0,
+              end: 0,
               child: IconButton(
-                tooltip: 'Report image',
+                tooltip: context.l10n.tryOnReportImage,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 onPressed: () => showReportContentSheet(
-                  contentType: 'AI try-on image',
+                  contentType: ReportContentType.tryOnImage,
                   contentId: s.resultUrl ?? 'tryon-result',
                 ),
                 icon: const Icon(
@@ -501,7 +521,7 @@ class _BottomBar extends StatelessWidget {
               onPressed: onSave,
               style: TextButton.styleFrom(minimumSize: const Size(0, 52)),
               icon: const Icon(Icons.download_rounded, size: 20),
-              label: const Text('Save'),
+              label: Text(context.l10n.actionSave),
             ),
             const SizedBox(width: AppConstants.spacing8),
           ],
@@ -513,10 +533,10 @@ class _BottomBar extends StatelessWidget {
               ),
               child: Text(
                 generating
-                    ? 'Creating'
+                    ? context.l10n.tryOnCreating
                     : hasResult
-                    ? 'Try again'
-                    : 'Create try-on',
+                    ? context.l10n.tryOnTryAgain
+                    : context.l10n.tryOnCreate,
               ),
             ),
           ),

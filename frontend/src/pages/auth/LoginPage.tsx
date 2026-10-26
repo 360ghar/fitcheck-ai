@@ -10,9 +10,11 @@ import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PENDING_PROMO_KEY, stashPromoCode } from '@/lib/promo'
 import SEO from '@/components/seo/SEO'
+import { useTranslation } from '@/i18n'
 import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const selectedPlan = searchParams.get('plan_type')
@@ -101,7 +103,7 @@ export default function LoginPage() {
       />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h1 className="text-xl md:text-2xl font-extrabold text-foreground">
-          Sign in to your account
+          {t('auth.signInTitle')}
         </h1>
       </div>
 
@@ -112,7 +114,7 @@ export default function LoginPage() {
               role="alert"
               className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start"
             >
-              <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />
+              <AlertCircle className="h-5 w-5 text-destructive mt-0.5 me-2 flex-shrink-0" />
               <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
@@ -126,9 +128,9 @@ export default function LoginPage() {
             disabled={googleLoading || isLoading}
           >
             {googleLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="me-2 h-4 w-4 animate-spin" />
             ) : (
-              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+              <svg className="me-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -147,7 +149,7 @@ export default function LoginPage() {
                 />
               </svg>
             )}
-            Continue with Google
+            {t('auth.continueWithGoogle')}
           </Button>
 
           {/* Divider */}
@@ -156,7 +158,7 @@ export default function LoginPage() {
               <span className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+              <span className="bg-card px-2 text-muted-foreground">{t('auth.orContinueWithEmail')}</span>
             </div>
           </div>
 
@@ -164,10 +166,10 @@ export default function LoginPage() {
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-foreground">
-                Email address
+                {t('auth.emailLabel')}
               </label>
               <div className="mt-1 relative rounded-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -178,8 +180,8 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-3 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
-                  placeholder="you@example.com"
+                  className="block w-full h-12 ps-10 pe-3 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  placeholder={t('auth.emailPlaceholder')}
                 />
               </div>
             </div>
@@ -187,10 +189,10 @@ export default function LoginPage() {
             {/* Password */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-foreground">
-                Password
+                {t('auth.passwordLabel')}
               </label>
               <div className="mt-1 relative rounded-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -201,14 +203,14 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
-                  placeholder="••••••••"
+                  className="block w-full h-12 ps-10 pe-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  placeholder={t('auth.passwordPlaceholder')}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground touch-target"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute inset-y-0 end-0 pe-3 flex items-center text-muted-foreground hover:text-foreground touch-target"
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -222,7 +224,7 @@ export default function LoginPage() {
                   to={withAuthContext('/auth/forgot-password', undefined, returnTo)}
                   className="font-medium text-primary hover:text-primary/80"
                 >
-                  Forgot password?
+                  {t('auth.forgotPassword')}
                 </Link>
               </div>
             </div>
@@ -234,7 +236,7 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="w-full h-12"
               >
-                {isLoading ? 'Signing in...' : 'Sign in'}
+                {isLoading ? t('auth.signingIn') : t('auth.signIn')}
               </Button>
             </div>
           </form>
@@ -242,12 +244,12 @@ export default function LoginPage() {
           {/* Sign up link */}
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
-              Don't have an account?{' '}
+              {t('auth.noAccount')}{' '}
               <Link
                 to={withAuthContext('/auth/register', selectedPlan, returnTo)}
                 className="font-medium text-primary hover:text-primary/80"
               >
-                Sign up
+                {t('auth.signUp')}
               </Link>
             </p>
           </div>

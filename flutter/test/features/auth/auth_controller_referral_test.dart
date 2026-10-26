@@ -7,6 +7,7 @@ import 'package:fitcheck_ai/features/auth/models/user_model.dart';
 import 'package:fitcheck_ai/features/auth/services/auth_service.dart';
 import 'package:fitcheck_ai/features/auth/services/referral_service.dart';
 import 'package:fitcheck_ai/features/auth/services/user_initialization_service.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitcheck_ai/core/services/notification_service.dart'
@@ -132,6 +133,9 @@ void main() {
   Future<void> pumpApp(WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         scaffoldMessengerKey: scaffoldMessengerKey,
         home: const Scaffold(body: SizedBox()),
       ),

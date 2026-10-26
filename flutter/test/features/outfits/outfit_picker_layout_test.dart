@@ -6,6 +6,7 @@ import 'package:fitcheck_ai/domain/enums/condition.dart' as domain;
 import 'package:fitcheck_ai/features/outfits/providers/outfit_builder_provider.dart';
 import 'package:fitcheck_ai/features/outfits/views/outfit_builder_page.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +28,9 @@ void main() {
             builderPickerItemsProvider.overrideWith((ref) => items.future),
           ],
           child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context).copyWith(disableAnimations: true),
               child: child!,

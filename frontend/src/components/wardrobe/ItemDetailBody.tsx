@@ -30,31 +30,42 @@ import {
 } from '@/components/ui/select'
 import {
   DEFAULT_USE_CASES,
-  formatUseCaseLabel,
   normalizeUseCase,
   normalizeUseCases,
 } from '@/lib/use-cases'
 import type { Category, Condition, Item } from '@/types'
 import type { ItemEditor } from './useItemEditor'
 import { thumbnailErrorFallback } from '@/hooks/useImageWithFallback'
+import {
+  categoryLabel,
+  conditionLabel,
+  describeUseCase,
+  formatCurrency,
+  formatDate,
+  styleLabel,
+  seasonLabel,
+  colorLabel,
+  useTranslation,
+  useFormattingLocale,
+} from '@/i18n'
 
-const CATEGORIES: { value: Category; label: string }[] = [
-  { value: 'tops', label: 'Tops' },
-  { value: 'bottoms', label: 'Bottoms' },
-  { value: 'shoes', label: 'Shoes' },
-  { value: 'accessories', label: 'Accessories' },
-  { value: 'outerwear', label: 'Outerwear' },
-  { value: 'swimwear', label: 'Swimwear' },
-  { value: 'activewear', label: 'Activewear' },
-  { value: 'other', label: 'Other' },
+const CATEGORIES: Category[] = [
+  'tops',
+  'bottoms',
+  'shoes',
+  'accessories',
+  'outerwear',
+  'swimwear',
+  'activewear',
+  'other',
 ]
 
-const CONDITIONS: { value: Condition; label: string }[] = [
-  { value: 'clean', label: 'Clean' },
-  { value: 'dirty', label: 'Dirty' },
-  { value: 'laundry', label: 'In laundry' },
-  { value: 'repair', label: 'Needs repair' },
-  { value: 'donate', label: 'To donate' },
+const CONDITIONS: Condition[] = [
+  'clean',
+  'dirty',
+  'laundry',
+  'repair',
+  'donate',
 ]
 
 // Garment colour data, not a theme surface: these hexes describe the physical
@@ -109,20 +120,25 @@ function swatchFor(color: string): string | null {
   return COLOR_SWATCHES[color.trim().toLowerCase()] ?? null
 }
 
+// Localized currency formatting: `Intl` places the symbol per locale ("$1,300",
+// "1 300 $US", "US$ 1.300") instead of assuming a leading "$". The currency
+// itself stays USD — that is what the card is charged — but the *format* is the
+// user's. The old version also rounded through `toLocaleString(undefined, …)`,
+// which took the browser locale while hardcoding an English symbol.
 function formatMoney(value: number): string {
   const rounded = Math.round(value * 100) / 100
   const decimals = Number.isInteger(rounded) ? 0 : 2
-  return `$${rounded.toLocaleString(undefined, {
+  return formatCurrency(rounded, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  })}`
+  })
 }
 
 function formatDay(value?: string | null): string | null {
   if (!value) return null
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  return formatDate(date, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 /**
@@ -132,7 +148,9 @@ function formatDay(value?: string | null): string | null {
  * itself and tells you which number to move. Every branch is a real, finite
  * statement — there is no path to NaN, Infinity or "$NaN".
  */
-function resolveLedger(item: Item): { figure: string; label: string; note: string } {
+type Translate = ReturnType<typeof useTranslation>['t']
+
+function resolveLedger(item: Item, t: Translate): { figure: string; label: string; note: string } {
   const rawPrice = item.price ?? item.purchase_price
   const price = typeof rawPrice === 'number' && Number.isFinite(rawPrice) && rawPrice > 0
     ? rawPrice
@@ -142,17 +160,19 @@ function resolveLedger(item: Item): { figure: string; label: string; note: strin
   if (price !== null && wears > 0) {
     return {
       figure: formatMoney(price / wears),
-      label: 'cost per wear',
-      note: `${formatMoney(price)} ÷ ${wears} ${wears === 1 ? 'wear' : 'wears'}`,
+      label: t('item.costPerWear'),
+      // A real ICU plural, not `${n} wears`: Polish, Arabic and Russian each
+      // need categories English does not have.
+      note: t('item.wearMath', { price: formatMoney(price), count: wears }),
     }
   }
   if (price !== null) {
-    return { figure: formatMoney(price), label: 'paid', note: 'Not worn yet' }
+    return { figure: formatMoney(price), label: t('item.paid'), note: t('item.notWornYet') }
   }
   return {
     figure: String(wears),
-    label: wears === 1 ? 'time worn' : 'times worn',
-    note: 'Add a price to see cost per wear',
+    label: t('item.timeWorn', { count: wears }),
+    note: t('item.addPriceForCostPerWear'),
   }
 }
 
@@ -160,7 +180,7 @@ function SpecRow({ label, children }: { label: string; children: React.ReactNode
   return (
     <div className="flex items-start justify-between gap-lg border-b border-border py-md">
       <dt className="shrink-0 text-xs text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right text-sm text-foreground">{children}</dd>
+      <dd className="min-w-0 text-end-right text-sm text-foreground">{children}</dd>
     </div>
   )
 }
@@ -175,6 +195,8 @@ export interface ItemDetailBodyProps {
 }
 
 export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailBodyProps) {
+  const { t } = useTranslation()
+  const formattingLocale = useFormattingLocale()
   const { isEditing, form, setField, customUseCase, setCustomUseCase } = editor
 
   // Similar items — the API has existed for a while; this is its first
@@ -225,11 +247,12 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
     (tag) => !DEFAULT_USE_CASES.includes(tag as (typeof DEFAULT_USE_CASES)[number])
   )
 
-  const conditionLabel = CONDITIONS.find((c) => c.value === item.condition)?.label
+  // The chip shows a condition only when it is not the default 'clean'.
+  const conditionText = item.condition ? conditionLabel(t, item.condition) : ''
   const addedOn = formatDay(item.created_at)
   const lastWorn = formatDay(item.usage_last_worn)
   const purchaseDay = formatDay(item.purchase_date)
-  const ledger = resolveLedger(item)
+  const ledger = resolveLedger(item, t)
 
   return (
     <div className="pb-lg">
@@ -254,7 +277,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
       {isEditing ? (
         <div className="mt-lg space-y-lg">
           <div>
-            <Label htmlFor="item-edit-name">Name</Label>
+            <Label htmlFor="item-edit-name">{t('item.name')}</Label>
             <Input
               id="item-edit-name"
               value={form.name ?? ''}
@@ -263,7 +286,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
           </div>
 
           <div>
-            <Label htmlFor="item-edit-category">Category</Label>
+            <Label htmlFor="item-edit-category">{t('item.category')}</Label>
             <Select
               value={form.category}
               onValueChange={(value) => setField('category', value as Category)}
@@ -273,8 +296,8 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
               </SelectTrigger>
               <SelectContent>
                 {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>
-                    {cat.label}
+                  <SelectItem key={cat} value={cat}>
+                    {categoryLabel(t, cat)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -282,7 +305,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
           </div>
 
           <div>
-            <Label htmlFor="item-edit-condition">Condition</Label>
+            <Label htmlFor="item-edit-condition">{t('item.condition')}</Label>
             <Select
               value={form.condition}
               onValueChange={(value) => setField('condition', value as Condition)}
@@ -292,8 +315,8 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
               </SelectTrigger>
               <SelectContent>
                 {CONDITIONS.map((cond) => (
-                  <SelectItem key={cond.value} value={cond.value}>
-                    {cond.label}
+                  <SelectItem key={cond} value={cond}>
+                    {conditionLabel(t, cond)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -301,17 +324,17 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
           </div>
 
           <div>
-            <Label htmlFor="item-edit-brand">Brand</Label>
+            <Label htmlFor="item-edit-brand">{t('item.brand')}</Label>
             <Input
               id="item-edit-brand"
               value={form.brand || ''}
-              placeholder="Optional"
+              placeholder={t('common.optional')}
               onChange={(e) => setField('brand', e.target.value)}
             />
           </div>
 
           <div>
-            <Label htmlFor="item-edit-size">Size</Label>
+            <Label htmlFor="item-edit-size">{t('item.size')}</Label>
             <Input
               id="item-edit-size"
               value={form.size || ''}
@@ -321,7 +344,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
           </div>
 
           <div>
-            <Label htmlFor="item-edit-notes">Notes</Label>
+            <Label htmlFor="item-edit-notes">{t('item.notes')}</Label>
             <Textarea
               id="item-edit-notes"
               rows={3}
@@ -331,7 +354,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
           </div>
 
           <div>
-            <Label className="mb-sm block">Use cases</Label>
+            <Label className="mb-sm block">{t('item.useCases')}</Label>
             <div className="flex flex-wrap gap-sm">
               {DEFAULT_USE_CASES.map((useCase) => (
                 <FilterChip
@@ -339,14 +362,14 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
                   active={activeOccasionTags.includes(useCase)}
                   onClick={() => toggleOccasionTag(useCase)}
                 >
-                  {formatUseCaseLabel(useCase)}
+                  {describeUseCase(t, useCase, formattingLocale)}
                 </FilterChip>
               ))}
             </div>
             <div className="mt-sm flex gap-sm">
               <Input
                 value={customUseCase}
-                placeholder="Add your own"
+                placeholder={t('item.addYourOwn')}
                 onChange={(e) => setCustomUseCase(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -359,7 +382,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
                 type="button"
                 variant="tertiary"
                 size="icon"
-                aria-label="Add use case"
+                aria-label={t('item.addUseCase')}
                 onClick={addCustomOccasionTag}
                 className="shrink-0"
               >
@@ -373,10 +396,10 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
                     key={tag}
                     active
                     onClick={() => toggleOccasionTag(tag)}
-                    aria-label={`Remove ${formatUseCaseLabel(tag)}`}
+                    aria-label={t('item.removeUseCase', { name: describeUseCase(t, tag, formattingLocale) })}
                     className="gap-xs"
                   >
-                    {formatUseCaseLabel(tag)}
+                    {describeUseCase(t, tag, formattingLocale)}
                     <X className="h-3 w-3" aria-hidden="true" />
                   </FilterChip>
                 ))}
@@ -388,35 +411,37 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
         <>
           <div className="mt-lg">
             <p className="text-xs text-muted-foreground">
-              {addedOn ? `Added ${addedOn}` : 'Added recently'}
+              {addedOn ? t('item.addedOn', { date: addedOn }) : t('item.addedRecently')}
             </p>
             {/* Condition only shows when it is not the default — one ink word and a
                 dot, in place of five hardcoded coloured pills. */}
-            {item.condition && item.condition !== 'clean' && conditionLabel && (
+            {item.condition && item.condition !== 'clean' && conditionText && (
               <p className="mt-sm flex items-center gap-xs text-sm font-semibold text-foreground">
                 <span className="h-1.5 w-1.5 rounded-full bg-foreground" aria-hidden="true" />
-                {conditionLabel}
+                {conditionText}
               </p>
             )}
           </div>
 
           <dl className="mt-lg border-t border-border">
-            <SpecRow label="Category">
-              <span className="capitalize">
-                {item.category}
+            <SpecRow label={t('item.category')}>
+              <span>
+                {categoryLabel(t, item.category)}
+                {/* `sub_category` is AI-generated free text, not an enum, so it
+                    is shown as written rather than translated. */}
                 {item.sub_category ? ` · ${item.sub_category}` : ''}
               </span>
             </SpecRow>
-            {item.brand && <SpecRow label="Brand">{item.brand}</SpecRow>}
-            {item.size && <SpecRow label="Size">{item.size}</SpecRow>}
+            {item.brand && <SpecRow label={t('item.brand')}>{item.brand}</SpecRow>}
+            {item.size && <SpecRow label={t('item.size')}>{item.size}</SpecRow>}
             {item.style && (
-              <SpecRow label="Style">
-                <span className="capitalize">{item.style}</span>
+              <SpecRow label={t('item.style')}>
+                <span>{styleLabel(t, item.style)}</span>
               </SpecRow>
             )}
             {(item.material || item.materials.length > 0) && (
-              <SpecRow label="Material">
-                <span className="capitalize">
+              <SpecRow label={t('item.material')}>
+                <span>
                   {[item.material, ...item.materials]
                     .filter((m, idx, arr) => m && arr.indexOf(m) === idx)
                     .join(', ')}
@@ -424,7 +449,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
               </SpecRow>
             )}
             {item.pattern && (
-              <SpecRow label="Pattern">
+              <SpecRow label={t('item.pattern')}>
                 <span className="capitalize">{item.pattern}</span>
               </SpecRow>
             )}
@@ -433,10 +458,10 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
                 when a real season or a tag exists, or it renders with an empty
                 value. */}
             {((item.season && item.season !== 'all-season') || item.seasonal_tags.length > 0) && (
-              <SpecRow label="Season">
+              <SpecRow label={t('item.season')}>
                 <span className="capitalize">
                   {[
-                    item.season && item.season !== 'all-season' ? item.season.replace('-', ' ') : null,
+                    item.season && item.season !== 'all-season' ? seasonLabel(t, item.season) : null,
                     ...item.seasonal_tags,
                   ]
                     .filter(Boolean)
@@ -445,7 +470,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
               </SpecRow>
             )}
             {item.colors.length > 0 && (
-              <SpecRow label="Colours">
+              <SpecRow label={t('item.colours')}>
                 <span className="flex flex-wrap items-center justify-end gap-x-md gap-y-xxs">
                   {item.colors.map((color) => {
                     const swatch = swatchFor(color)
@@ -461,31 +486,33 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
                             aria-hidden="true"
                           />
                         )}
-                        {color}
+                        {colorLabel(t, color)}
                       </span>
                     )
                   })}
                 </span>
               </SpecRow>
             )}
-            {item.tags.length > 0 && <SpecRow label="Tags">{item.tags.join(', ')}</SpecRow>}
+            {item.tags.length > 0 && <SpecRow label={t('item.tags')}>{item.tags.join(', ')}</SpecRow>}
             {item.occasion_tags?.length > 0 && (
-              <SpecRow label="Use cases">
-                {item.occasion_tags.map(formatUseCaseLabel).join(', ')}
+              <SpecRow label={t('item.useCases')}>
+                {item.occasion_tags
+                  .map((tag) => describeUseCase(t, tag, formattingLocale))
+                  .join(', ')}
               </SpecRow>
             )}
             {(item.price != null || item.purchase_price != null) && (
-              <SpecRow label="Price">
+              <SpecRow label={t('item.price')}>
                 {formatMoney((item.price ?? item.purchase_price) as number)}
               </SpecRow>
             )}
-            {purchaseDay && <SpecRow label="Purchased">{purchaseDay}</SpecRow>}
-            {item.purchase_location && <SpecRow label="From">{item.purchase_location}</SpecRow>}
+            {purchaseDay && <SpecRow label={t('item.purchased')}>{purchaseDay}</SpecRow>}
+            {item.purchase_location && <SpecRow label={t('item.from')}>{item.purchase_location}</SpecRow>}
           </dl>
 
           {item.notes && (
             <div className="mt-lg">
-              <p className="text-xs text-muted-foreground">Notes</p>
+              <p className="text-xs text-muted-foreground">{t('item.notes')}</p>
               <p className="mt-xxs whitespace-pre-line text-sm text-foreground">{item.notes}</p>
             </div>
           )}
@@ -494,7 +521,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
               said "No additional images" nine times out of ten was dead chrome. */}
           {extraImages.length > 0 && (
             <div className="mt-xl">
-              <p className="text-xs text-muted-foreground">More photos</p>
+              <p className="text-xs text-muted-foreground">{t('item.morePhotos')}</p>
               <div className="mt-sm grid grid-cols-2 xs:grid-cols-3 gap-sm">
                 {extraImages.map((image) => (
                   <div key={image.id} className="overflow-hidden rounded-md bg-card">
@@ -517,7 +544,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
               entirely while loading or when the API comes back empty/fails. */}
           {similarItems && similarItems.length > 0 && onOpenItem && (
             <div className="mt-xl">
-              <p className="text-xs text-muted-foreground">Similar in your closet</p>
+              <p className="text-xs text-muted-foreground">{t('item.similarItems')}</p>
               <div className="mt-sm grid grid-cols-3 xs:grid-cols-4 gap-sm">
                 {similarItems.slice(0, 8).map((sim) => {
                   // Same primary-image rule as the hero: images[0] can be a
@@ -530,7 +557,7 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
                       key={sim.id}
                       type="button"
                       onClick={() => onOpenItem(sim.id)}
-                      aria-label={`Open ${sim.name}`}
+                      aria-label={t('item.openItem', { name: sim.name })}
                       className="group overflow-hidden rounded-md bg-card transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {simSrc ? (
@@ -559,10 +586,10 @@ export function ItemDetailBody({ item, editor, notice, onOpenItem }: ItemDetailB
                 a row. Stacking keeps the figure right-ranged instead of crushing it. */}
             <div className="flex items-end justify-between gap-lg md:max-lg:flex-col md:max-lg:items-stretch md:max-lg:gap-md">
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Last worn</p>
-                <p className="mt-xxs text-sm text-foreground">{lastWorn || 'Not yet'}</p>
+                <p className="text-xs text-muted-foreground">{t('item.lastWorn')}</p>
+                <p className="mt-xxs text-sm text-foreground">{lastWorn || t('item.notYetWorn')}</p>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 text-end-right">
                 <span className="block font-display text-[40px] font-bold leading-none tracking-[-0.01em] tabular-nums text-foreground">
                   {ledger.figure}
                 </span>

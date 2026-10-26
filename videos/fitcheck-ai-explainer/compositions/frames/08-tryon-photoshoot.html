@@ -1,0 +1,482 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #ty-bg {
+      background: #FCFAF8;
+    }
+    .ty-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .ty-glow-a {
+      width: 640px;
+      height: 640px;
+      left: 360px;
+      top: -180px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.13) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .ty-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -200px;
+      top: 900px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .ty-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 540px;
+      top: 1300px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .ty-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— the headline ————— */
+    #ty-headline {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 150px;
+      text-align: center;
+      font-family: "Bodoni Moda", serif;
+      font-size: 76px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+    #ty-headline .ty-w {
+      display: inline-block;
+    }
+    #ty-headline em {
+      font-style: italic;
+      color: #078675;
+    }
+
+    /* ————— the paired cards (stacked split: mirrored tilts) ————— */
+    .ty-card {
+      position: absolute;
+      left: 90px;
+      width: 900px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 48px;
+      box-shadow: 10px 10px 0 rgba(26, 26, 26, 0.08);
+    }
+    #ty-card-a { top: 300px; height: 560px; }
+    #ty-card-b { top: 1060px; height: 460px; }
+    .ty-card-label {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 36px;
+      text-align: center;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+    }
+
+    /* card A: the paper figure that dresses itself */
+    #ty-figure {
+      position: absolute;
+      left: 330px;
+      top: 110px;
+      width: 240px;
+      height: 400px;
+    }
+    #ty-figure path,
+    #ty-figure line {
+      stroke-dasharray: 900;
+      stroke-dashoffset: 900;
+    }
+    #ty-figure {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .ty-dress {
+      position: absolute;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      opacity: 0;
+    }
+    #ty-dress-1 {
+      left: 60px;
+      top: 120px;
+      width: 120px;
+      height: 130px;
+      background: #74DEC0;
+    }
+    #ty-dress-2 {
+      left: 45px;
+      top: 270px;
+      width: 150px;
+      height: 110px;
+      background: #51D6B0;
+    }
+
+    /* card B: the three-frame photo strip that blooms */
+    .ty-photo {
+      position: absolute;
+      top: 110px;
+      width: 240px;
+      height: 240px;
+      border: 2px solid #1E1E1E;
+      border-radius: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+    }
+    #ty-photo-1 { left: 90px; background: #74DEC0; }
+    #ty-photo-2 { left: 330px; background: #51D6B0; }
+    #ty-photo-3 { left: 570px; background: #9BFAED; }
+    #ty-shutter {
+      position: absolute;
+      left: 345px;
+      top: 380px;
+      width: 210px;
+      text-align: center;
+      padding: 12px 0 16px;
+      background: #078675;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #FFFFFF;
+    }
+
+    /* ————— inner-edge pill badges ————— */
+    .ty-badge {
+      position: absolute;
+      width: 240px;
+      text-align: center;
+      padding: 10px 0 14px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      box-shadow: 5px 5px 0 rgba(26, 26, 26, 0.08);
+    }
+    #ty-badge-a { left: 170px; top: 830px; }
+    #ty-badge-b { right: 170px; top: 1010px; }
+
+    /* ————— Finn peeking between the cards ————— */
+    #ty-finn-inner {
+      position: absolute;
+      left: 420px;
+      top: 884px;
+      width: 240px;
+      height: 190px;
+      opacity: 0;
+    }
+    #ty-finn-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="08-tryon-photoshoot"
+    data-start="0"
+    data-duration="8.08"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="ty-bg" data-start="0" data-duration="8.08" data-track-index="0">
+      <div class="ty-glow ty-glow-a"></div>
+      <div class="ty-glow ty-glow-b"></div>
+      <div class="ty-glow ty-glow-c"></div>
+      <div class="ty-grain"></div>
+    </div>
+
+    <!-- headline -->
+    <div class="clip" id="ty-header" data-start="0" data-duration="8.08" data-track-index="1">
+      <div id="ty-headline"><span class="ty-w">see</span> <span class="ty-w">it</span> <span class="ty-w">before</span> <span class="ty-w">you</span> <span class="ty-w"><em>wear</em></span> <span class="ty-w">it</span></div>
+    </div>
+
+    <!-- card A: virtual try-on -->
+    <div class="clip" id="ty-card-a-clip" data-start="0" data-duration="8.08" data-track-index="2">
+      <div class="ty-card" id="ty-card-a">
+        <div class="ty-card-label">Try it on</div>
+        <div id="ty-figure">
+          <svg viewBox="0 0 240 400" xmlns="http://www.w3.org/2000/svg">
+            <!-- paper-doll figure outline -->
+            <path d="M120 30 Q100 30 96 52 L92 78 L60 104 L74 128 L100 112 L100 160 L84 240 L104 240 L112 176 L128 176 L136 240 L156 240 L140 160 L140 112 L166 128 L180 104 L148 78 L144 52 Q140 30 120 30 Z"
+              fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+            <line x1="120" y1="160" x2="120" y2="240" stroke="#1A1A1A" stroke-width="1.6" opacity="0.4" />
+          </svg>
+        </div>
+        <div class="ty-dress" id="ty-dress-1"></div>
+        <div class="ty-dress" id="ty-dress-2"></div>
+      </div>
+    </div>
+
+    <!-- Finn, peeking between the cards -->
+    <div class="clip" id="ty-finn" data-start="0" data-duration="8.08" data-track-index="3">
+      <div id="ty-finn-inner">
+        <svg
+          id="ty-finn-svg"
+          viewBox="6 20 240 186"
+          xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          aria-label="Finn, the folded-paper host"
+        >
+          <path
+            d="M54 126 L24 98 Q18 92 18 102 L18 142 Q18 150 26 148 L54 160 Z"
+            fill="#74DEC0"
+            stroke="#1A1A1A"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <rect x="74" y="180" width="34" height="18" rx="9" fill="#078675" stroke="#1A1A1A" stroke-width="1.4" />
+          <rect x="132" y="180" width="34" height="18" rx="9" fill="#078675" stroke="#1A1A1A" stroke-width="1.4" />
+          <rect x="46" y="28" width="148" height="160" rx="30" fill="#078675" stroke="#1A1A1A" stroke-width="1.5" />
+          <path
+            d="M136 28 L164 28 Q194 28 194 58 L194 86 Z"
+            fill="#74DEC0"
+            stroke="#1A1A1A"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <path d="M48 122 L98 60" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <path d="M72 186 L176 116" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <path d="M48 156 L102 186" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <circle cx="92" cy="104" r="7.5" fill="#1A1A1A" />
+          <circle cx="138" cy="104" r="7.5" fill="#1A1A1A" />
+          <path d="M98 132 Q115 146 132 132" fill="none" stroke="#1A1A1A" stroke-width="2.1" stroke-linecap="round" />
+          <rect x="170" y="140" width="68" height="28" rx="14" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.4" />
+          <circle cx="185" cy="154" r="4" fill="#078675" />
+          <text
+            x="214"
+            y="159"
+            text-anchor="middle"
+            font-family="Space Grotesk, sans-serif"
+            font-size="13"
+            font-weight="600"
+            letter-spacing="1.5"
+            fill="#1A1A1A"
+          >HOST</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- card B: photoshoot-ready -->
+    <div class="clip" id="ty-card-b-clip" data-start="0" data-duration="8.08" data-track-index="4">
+      <div class="ty-card" id="ty-card-b">
+        <div class="ty-card-label">Shoot it</div>
+        <div class="ty-photo" id="ty-photo-1">
+          <svg viewBox="0 0 120 90" width="150" height="112"><path d="M38 14 L52 6 L68 14 L86 30 L74 40 L74 78 L46 78 L46 40 L34 40 Z" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="ty-photo" id="ty-photo-2">
+          <svg viewBox="0 0 120 90" width="150" height="112"><path d="M40 12 L54 4 L66 4 L80 12 L94 28 L80 36 L80 78 L40 78 L40 36 L26 28 Z" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="ty-photo" id="ty-photo-3">
+          <svg viewBox="0 0 120 90" width="150" height="112"><path d="M40 8 L54 2 L66 2 L80 8 L92 24 L80 32 L80 84 L40 84 L40 32 L28 24 Z" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="ty-shutter">Shoot</div>
+      </div>
+    </div>
+
+    <!-- inner-edge pill badges -->
+    <div class="clip" id="ty-badges" data-start="0" data-duration="8.08" data-track-index="5">
+      <div class="ty-badge" id="ty-badge-a">Realistic</div>
+      <div class="ty-badge" id="ty-badge-b">Ready</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["08-tryon-photoshoot"] = tl;
+
+        var BEATS = {
+          headline: 0.1,
+          headStagger: 0.16,
+          cardA: 0.5,
+          cardB: 0.8,
+          figure: 1.5,
+          figureDraw: 0.9,
+          dress1: 2.0,
+          dress2: 2.3,
+          photos: 2.7,
+          photoStagger: 0.22,
+          shutter: 3.2,
+          snap: 3.4,
+          badgeA: 3.6,
+          badgeB: 3.9,
+          finn: 4.2,
+          jitter: 4.6,
+        };
+
+        /* ——— Scene 1 (0–1.4s): the headline reveals per-word on its VO cues ——— */
+        var headWords = document.querySelectorAll("#ty-headline .ty-w");
+        var headAt = [0.1, 0.18, 0.34, 0.67, 0.85, 1.05];
+        for (var h = 0; h < headWords.length; h++) {
+          (function (el, at) {
+            tl.fromTo(el, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.32, ease: "power3.out" }, at);
+          })(headWords[h], headAt[h]);
+        }
+
+        /* ——— Scene 2 (1.5–3.4s): the paired cards enter from top and bottom wings with mirrored tilts ——— */
+        tl.fromTo(
+          "#ty-card-a",
+          { y: -320, rotationY: -18, transformOrigin: "50% 100%", opacity: 0 },
+          { y: 0, rotationY: 0, opacity: 1, duration: 0.65, ease: "power3.out" },
+          BEATS.cardA
+        );
+        tl.fromTo(
+          "#ty-card-b",
+          { y: 320, rotationY: 18, transformOrigin: "50% 0%", opacity: 0 },
+          { y: 0, rotationY: 0, opacity: 1, duration: 0.65, ease: "power3.out" },
+          BEATS.cardB
+        );
+
+        // Card A: the paper figure draws itself in (svg-path-draw), then the outfit drops on.
+        var figPaths = document.querySelectorAll("#ty-figure path, #ty-figure line");
+        for (var p = 0; p < figPaths.length; p++) {
+          (function (el, idx) {
+            tl.to(el, { strokeDashoffset: 0, duration: BEATS.figureDraw, ease: "power2.inOut" }, BEATS.figure + idx * 0.2);
+          })(figPaths[p], p);
+        }
+        tl.fromTo("#ty-dress-1", { y: -80, scale: 0.75, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.dress1);
+        tl.fromTo("#ty-dress-2", { y: -100, scale: 0.75, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.dress2);
+
+        // Card B: the three-frame photo strip blooms (center-outward expansion) from the card's center.
+        var photoX = [90, 330, 570];
+        var cardBCenterX = 90 + 450;
+        var cardBCenterY = 1060 + 190;
+        for (var s = 0; s < 3; s++) {
+          (function (el, left, idx) {
+            var dx = left + 120 - cardBCenterX;
+            tl.fromTo(
+              el,
+              { x: -dx, y: -(110 + 120 - cardBCenterY), scale: 0.25, opacity: 0 },
+              { x: 0, y: 0, scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" },
+              BEATS.photos + idx * BEATS.photoStagger
+            );
+          })(document.getElementById("ty-photo-" + (s + 1)), photoX[s], s);
+        }
+
+        // The shutter pill springs in, then fires a press-release spring.
+        tl.fromTo("#ty-shutter", { scale: 0.4, transformOrigin: "50% 50%", opacity: 0 }, { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(1.7)" }, BEATS.shutter);
+        tl.to("#ty-shutter", { scale: 0.86, transformOrigin: "50% 50%", duration: 0.09, ease: "power2.in" }, BEATS.snap);
+        tl.to("#ty-shutter", { scale: 1.05, duration: 0.12, ease: "power2.out" }, BEATS.snap + 0.09);
+        tl.to("#ty-shutter", { scale: 1, duration: 0.14, ease: "power3.out" }, BEATS.snap + 0.21);
+
+        /* ——— Scene 3 (3.5–7.58s): inner-edge badges spring-pop; Finn peeks in; the pair holds ——— */
+        tl.fromTo("#ty-badge-a", { scale: 0.4, rotation: -6, transformOrigin: "50% 50%", opacity: 0 }, { scale: 1, rotation: -3, opacity: 1, duration: 0.3, ease: "back.out(1.7)" }, BEATS.badgeA);
+        tl.fromTo("#ty-badge-b", { scale: 0.4, rotation: 6, transformOrigin: "50% 50%", opacity: 0 }, { scale: 1, rotation: 3, opacity: 1, duration: 0.3, ease: "back.out(1.7)" }, BEATS.badgeB);
+
+        // Finn peeks up between the cards (a single bounded rise — no loop).
+        tl.fromTo("#ty-finn-inner", { y: 90, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, BEATS.finn);
+        tl.to("#ty-finn-inner", { y: -6, duration: 0.2, ease: "power2.out" }, BEATS.finn + 0.45);
+        tl.to("#ty-finn-inner", { y: 0, duration: 0.24, ease: "power2.inOut" }, BEATS.finn + 0.65);
+
+        // Hold the read: stillness — only a subtle deterministic jitter on the badges row.
+        var badgesEl = document.getElementById("ty-badges");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 1.6,
+            duration: 7.58 - BEATS.jitter,
+            ease: "none",
+            onUpdate: function () {
+              var x = 1.4 * Math.sin(jit.p);
+              var y = 1.0 * Math.sin(jit.p * 1.31);
+              badgesEl.style.transform = "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

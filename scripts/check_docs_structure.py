@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Validate knowledge-base structure, relative markdown links, and freshness.
 
-Fails when required harness files are missing, CLAUDE.md does not import
-AGENTS.md, internal .md links break, or docs carrying a 'Last updated'
+Fails when required harness files are missing, internal .md links break, or docs carrying a 'Last updated'
 header are stale relative to their last git commit.
 """
 
@@ -19,7 +18,6 @@ DOCS = ROOT / "docs"
 
 REQUIRED = [
     ROOT / "AGENTS.md",
-    ROOT / "CLAUDE.md",
     ROOT / "ARCHITECTURE.md",
     DOCS / "README.md",
     DOCS / "BACKEND.md",
@@ -60,34 +58,6 @@ def check_required() -> None:
     for path in REQUIRED:
         if not path.is_file():
             errors.append(f"missing required file: {path.relative_to(ROOT)}")
-
-
-def check_claude_imports_agents() -> None:
-    """CLAUDE.md must exist and import AGENTS.md via a single '@AGENTS.md' line."""
-    claude = ROOT / "CLAUDE.md"
-    if not claude.is_file():
-        errors.append(
-            "CLAUDE.md is missing; it must exist and start with '@AGENTS.md' to "
-            "import the shared agent map. "
-            "REMEDIATE: restore CLAUDE.md as a single '@AGENTS.md' import line."
-        )
-        return
-    first_non_empty = next(
-        (
-            line
-            for line in claude.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ),
-        None,
-    )
-    if first_non_empty != "@AGENTS.md":
-        errors.append(
-            f"CLAUDE.md first non-empty line is {first_non_empty!r}, "
-            "expected '@AGENTS.md'. "
-            "REMEDIATE: CLAUDE.md must start with '@AGENTS.md' to import the "
-            "shared agent map."
-        )
-    # AGENTS.md existence is enforced by check_required()
 
 
 def check_schema_doc_freshness() -> None:
@@ -209,7 +179,7 @@ def check_last_updated_freshness() -> None:
 
 def check_markdown_links() -> None:
     """Fail when a relative markdown link (root agent files + docs/) is broken."""
-    md_files = [ROOT / "AGENTS.md", ROOT / "CLAUDE.md", ROOT / "ARCHITECTURE.md"]
+    md_files = [ROOT / "AGENTS.md", ROOT / "ARCHITECTURE.md"]
     md_files.extend(DOCS.rglob("*.md"))
     for path in md_files:
         if not path.is_file():
@@ -296,11 +266,10 @@ def check_docs_path_references() -> None:
     # Primary markdown / agent map sources — backtick-wrapped docs paths
     md_scan: list[Path] = [
         ROOT / "AGENTS.md",
-        ROOT / "CLAUDE.md",
-        ROOT / "ARCHITECTURE.md",
+            ROOT / "ARCHITECTURE.md",
         ROOT / "README.md",
-        ROOT / "backend" / "CLAUDE.md",
-        ROOT / "frontend" / "CLAUDE.md",
+        ROOT / "backend" / "AGENTS.md",
+        ROOT / "frontend" / "AGENTS.md",
     ]
     if DOCS.is_dir():
         md_scan.extend(DOCS.rglob("*.md"))
@@ -332,7 +301,6 @@ def check_docs_path_references() -> None:
 def main() -> int:
     """Run every docs-structure check; exit 1 with a report when anything fails."""
     check_required()
-    check_claude_imports_agents()
     check_schema_doc_freshness()
     check_last_updated_freshness()
     check_markdown_links()

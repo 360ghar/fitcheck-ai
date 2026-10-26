@@ -133,7 +133,7 @@ export function FeaturePageTemplate({
                 <Button asChild size="lg" className="h-12 px-6">
                   <Link to={trialRegisterHref()}>
                     Start free
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    <ArrowRight className="ms-2 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="h-12 px-6">
@@ -216,7 +216,7 @@ export function FeaturePageTemplate({
             </div>
             <ol className="mt-10 grid overflow-hidden rounded-2xl border border-stone-200 dark:border-stone-800 md:grid-cols-4">
               {steps.map((step, index) => (
-                <li key={step.title} className="border-b border-stone-200 p-6 last:border-b-0 dark:border-stone-800 md:border-b-0 md:border-r md:last:border-r-0">
+                <li key={step.title} className="border-b border-stone-200 p-6 last:border-b-0 dark:border-stone-800 md:border-b-0 md:border-r md:last:border-e-r-0">
                   <p className="text-xs font-semibold tracking-[0.14em] text-primary">0{index + 1}</p>
                   <h3 className="mt-4 text-lg font-semibold text-stone-900 dark:text-stone-50">{step.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{step.description}</p>
@@ -240,7 +240,7 @@ export function FeaturePageTemplate({
               <h2 className="landing-display text-3xl font-semibold">Make the next choice easier</h2>
               <p className="mt-4 leading-relaxed text-stone-300">Create an account to use this capability with your wardrobe. You can keep working while supported tasks run and return to clear results or recovery actions.</p>
               <Button asChild size="lg" className="mt-7 h-12 bg-white px-6 text-stone-900 hover:bg-stone-100">
-                <Link to={trialRegisterHref()}>Create your free account <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                <Link to={trialRegisterHref()}>Create your free account <ArrowRight className="ms-2 h-4 w-4" /></Link>
               </Button>
             </div>
           </div>
@@ -254,7 +254,7 @@ export function FeaturePageTemplate({
                 <Link key={feature.href} to={feature.href} className="group rounded-2xl border border-stone-200 p-6 transition-colors hover:border-primary/40 dark:border-stone-800">
                   <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-50">{feature.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{feature.description}</p>
-                  <span className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-primary group-hover:text-primary-pressed">Explore <ArrowRight className="ml-1 h-4 w-4" /></span>
+                  <span className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-primary group-hover:text-primary-pressed">Explore <ArrowRight className="ms-1 h-4 w-4" /></span>
                 </Link>
               ))}
             </div>

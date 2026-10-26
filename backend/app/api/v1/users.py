@@ -842,11 +842,41 @@ _SETTINGS_DEFAULTS = {
     "default_location": None,
     "timezone": None,
     "language": "en",
+    "language_explicit": False,
     "measurement_units": "imperial",
     "notifications_enabled": True,
     "email_marketing": False,
     "dark_mode": False,
 }
+
+
+def _derive_language_explicit(update_data: Any) -> None:
+    """Make `language_explicit` follow the payload in place.
+
+    The client's wire contract (migration 065):
+
+    - `language: "hi"` → the user picked Hindi: ``language_explicit = TRUE``.
+    - `language: null` → "follow the device": the column keeps its default
+      `'en'` (it is what `UserSettingsBase` reads back) and the flag is
+      cleared, so `Accept-Language` decides again.
+    - no `language` key at all → the client did not touch the picker; the
+      stored pair is left exactly as it was.
+
+    An explicit `language_explicit` in the payload overrides the derivation,
+    so a client that states its intent directly (and can therefore distinguish
+    the three cases itself) is not second-guessed.
+    """
+    fields_set = getattr(update_data, "model_fields_set", set())
+    if "language" not in fields_set:
+        return
+    stated = update_data.language_explicit
+    if update_data.language is None:
+        # "Follow the device": never write NULL into the column (the response
+        # model types it `str`), clear the flag instead.
+        update_data.language = _SETTINGS_DEFAULTS["language"]
+        update_data.language_explicit = False if stated is None else stated
+    elif stated is None:
+        update_data.language_explicit = True
 
 
 @router.get("/settings", response_model=Dict[str, Any])
@@ -873,9 +903,18 @@ async def update_user_settings(
     db: Client = Depends(get_db),
 ):
     try:
+        # `language: null` means "follow the device"; this turns that into
+        # `language_explicit = FALSE` so the next request defers to
+        # `Accept-Language` instead of pinning the stored default 'en'.
+        _derive_language_explicit(update_data)
         settings_data = _upsert_record(
             db, "user_settings", user_id, update_data, UserSettings, _SETTINGS_DEFAULTS
         )
+        # The profile embed (`user_settings(language)`) that the auth
+        # dependencies read their AI language from is cached for 30 s; drop it
+        # so a language switch applies to the very next request instead of the
+        # next cache window.
+        user_profile_cache.invalidate(user_id)
         return {"data": settings_data, "message": "Updated"}
 
     except (UserNotFoundError, ValidationError, DatabaseError):

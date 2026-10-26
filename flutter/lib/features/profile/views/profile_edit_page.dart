@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -97,11 +98,13 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
 
   Future<void> _saveChanges() async {
     if (_saving || !_formKey.currentState!.validate()) return;
+    // Captured before the first await: the snackbar outlives the widget.
+    final l10n = context.l10n;
     if (_birthDateController.text.trim().isEmpty &&
         _birthTimeController.text.trim().isNotEmpty) {
       ErrorHandler.showValidation(
-        'Add a date of birth to go with the birth time.',
-        title: 'Date of birth needed',
+        l10n.profileBirthDateNeededBody,
+        title: l10n.profileBirthDateNeededTitle,
       );
       return;
     }
@@ -130,17 +133,23 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
         (f) => f == 'birth_date' || f == 'birth_time' || f == 'birth_place',
       )) {
         ErrorHandler.showWarning(
-          'We saved your name and photo. Birth details did not save; try '
-          'again later.',
-          title: 'Partly saved',
+          l10n.profilePartlySavedBody,
+          title: l10n.profilePartlySavedTitle,
         );
         setState(() => _saving = false);
         return;
       }
-      ErrorHandler.showSuccess('Your profile is saved.', title: 'Saved');
+      ErrorHandler.showSuccess(
+        l10n.profileSavedBody,
+        title: l10n.itemEditSavedTitle,
+      );
       Navigator.pop(context);
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: l10n.itemEditNotSaved,
+        stackTrace: stack,
+      );
       if (mounted) setState(() => _saving = false);
     }
   }
@@ -149,6 +158,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     final user = ref.watch(authProvider.select((s) => s.user));
     const gap = SizedBox(height: AppConstants.spacing16);
     final avatar = _newAvatar;
@@ -158,10 +168,10 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
       stock: PaperStockId.stone,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Edit profile'),
+          title: Text(l10n.profileEditTitle),
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: AppConstants.spacing8),
+              padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
               child: TextButton(
                 onPressed: _saving ? null : _saveChanges,
                 child: _saving
@@ -170,7 +180,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Save'),
+                    : Text(l10n.actionSave),
               ),
             ),
           ],
@@ -189,7 +199,7 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   PaperSurface(
-                    semanticLabel: 'Change profile photo',
+                    semanticLabel: l10n.profileChangePhoto,
                     onTap: _saving ? null : _pickAvatar,
                     child: Row(
                       children: [
@@ -212,9 +222,9 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Profile photo', style: text.titleMedium),
+                              Text(l10n.profilePhotoLabel, style: text.titleMedium),
                               Text(
-                                'Tap to choose a new one',
+                                l10n.profilePhotoHint,
                                 style: text.bodySmall?.copyWith(
                                   color: tokens.textMuted,
                                 ),
@@ -234,9 +244,9 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                     controller: _nameController,
                     enabled: !_saving,
                     textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(labelText: 'Name'),
+                    decoration: InputDecoration(labelText: l10n.authName),
                     validator: (value) => (value?.trim().isEmpty ?? true)
-                        ? 'Enter your name'
+                        ? l10n.authEnterName
                         : null,
                   ),
                   gap,
@@ -245,8 +255,8 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                     readOnly: true,
                     enabled: !_saving,
                     onTap: () => _pickBirthDate(context),
-                    decoration: const InputDecoration(
-                      labelText: 'Date of birth (optional)',
+                    decoration: InputDecoration(
+                      labelText: l10n.profileBirthDateLabel,
                       suffixIcon: Icon(Icons.calendar_today_outlined),
                     ),
                   ),
@@ -256,9 +266,9 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                     readOnly: true,
                     enabled: !_saving,
                     onTap: () => _pickBirthTime(context),
-                    decoration: const InputDecoration(
-                      labelText: 'Birth time (optional)',
-                      helperText: 'Makes Vedic suggestions more exact',
+                    decoration: InputDecoration(
+                      labelText: l10n.profileBirthTimeLabel,
+                      helperText: l10n.profileBirthTimeHelper,
                       suffixIcon: Icon(Icons.schedule_outlined),
                     ),
                   ),
@@ -267,9 +277,9 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                     controller: _birthPlaceController,
                     enabled: !_saving,
                     textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Birth place (optional)',
-                      hintText: 'For example, New Delhi, India',
+                    decoration: InputDecoration(
+                      labelText: l10n.profileBirthPlaceLabel,
+                      hintText: l10n.profileBirthPlaceHint,
                     ),
                   ),
                 ],

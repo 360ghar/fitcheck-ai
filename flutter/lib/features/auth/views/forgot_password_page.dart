@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../providers/auth_provider.dart';
 import 'widgets/auth_ui.dart';
@@ -46,9 +47,9 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AuthHeading(
-            title: 'Reset your password',
-            subtitle: 'We will email you a link to choose a new one.',
+          AuthHeading(
+            title: context.l10n.authResetTitle,
+            subtitle: context.l10n.authResetBody,
           ),
           const SizedBox(height: AppConstants.spacing20),
           if (sentTo == null) ...[
@@ -61,19 +62,23 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                 autofillHints: const [AutofillHints.email],
                 onFieldSubmitted: (_) => _submit(),
                 decoration: AuthFormStyles.inputDecoration(
-                  label: 'Email',
+                  label: context.l10n.authEmail,
                   icon: Icons.mail_outline_rounded,
                 ),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Enter your email';
-                  if (!isValidEmail(v.trim())) return 'Enter a valid email';
+                  if (v == null || v.trim().isEmpty) {
+                    return context.l10n.authEnterEmail;
+                  }
+                  if (!isValidEmail(v.trim())) {
+                    return context.l10n.authEnterValidEmail;
+                  }
                   return null;
                 },
               ),
             ),
             const SizedBox(height: AppConstants.spacing20),
             AuthPrimaryButton(
-              label: 'Send reset link',
+              label: context.l10n.authSendResetLink,
               isLoading: busy == AuthBusy.reset,
               onPressed: _submit,
             ),
@@ -87,7 +92,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                   const SizedBox(width: AppConstants.spacing12),
                   Expanded(
                     child: Text(
-                      'Sent to $sentTo. Open the link on this phone.',
+                      context.l10n.authResetSent(sentTo),
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
@@ -98,7 +103,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
           const SizedBox(height: AppConstants.spacing16),
           TextButton(
             onPressed: () => Navigator.maybePop(context),
-            child: const Text('Back to sign in'),
+            child: Text(context.l10n.authBackToSignIn),
           ),
           const AuthFooterText(),
         ],

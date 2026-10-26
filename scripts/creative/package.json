@@ -1,0 +1,16 @@
+{
+  "name": "fitcheck-creative",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Localized App Store screenshot frames, header and search creative for FitCheck AI.",
+  "type": "module",
+  "scripts": {
+    "fonts": "node fonts.mjs",
+    "render": "node render.mjs",
+    "check": "node check.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.63.0",
+    "pngjs": "7.0.0"
+  }
+}

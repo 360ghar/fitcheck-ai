@@ -10,6 +10,7 @@ import 'package:fitcheck_ai/core/services/notification_service.dart'
     show scaffoldMessengerKey;
 import 'package:fitcheck_ai/features/tryon/providers/tryon_provider.dart';
 import 'package:fitcheck_ai/features/tryon/repositories/tryon_repository.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -225,6 +226,9 @@ void main() {
   testWidgets('the gallery picks exactly one garment image', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         navigatorKey: rootNavigatorKey,
         scaffoldMessengerKey: scaffoldMessengerKey,
         home: const Scaffold(),

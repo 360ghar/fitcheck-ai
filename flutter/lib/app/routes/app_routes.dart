@@ -32,6 +32,7 @@ class Routes {
   static const profileEdit = '/profile/edit';
   static const settings = '/settings';
   static const aiSettings = '/settings/ai';
+  static const language = '/settings/language';
   static const tryOn = '/try-on';
   static const photoshoot = '/photoshoot';
   static const more = '/more';

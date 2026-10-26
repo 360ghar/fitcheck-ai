@@ -43,7 +43,7 @@ class PaperProgressTrack extends StatelessWidget {
                 borderRadius: radius,
               ),
               child: Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: AnimatedContainer(
                   duration: MediaQuery.disableAnimationsOf(context)
                       ? Duration.zero

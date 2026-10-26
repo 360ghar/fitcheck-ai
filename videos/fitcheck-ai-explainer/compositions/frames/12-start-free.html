@@ -1,0 +1,359 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #ct-bg {
+      background: #FCFAF8;
+    }
+    .ct-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .ct-glow-a {
+      width: 620px;
+      height: 620px;
+      left: 380px;
+      top: -160px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.13) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .ct-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -200px;
+      top: 860px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .ct-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 560px;
+      top: 1280px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .ct-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— the resting "free" pill-card → the jade CTA (scale-swap pair) ————— */
+    .ct-stage {
+      position: absolute;
+      left: 290px;
+      top: 560px;
+      width: 500px;
+      height: 420px;
+    }
+    .ct-card {
+      position: absolute;
+      inset: 0;
+      border: 2px solid #1E1E1E;
+      border-radius: 48px;
+      box-shadow: 10px 10px 0 rgba(26, 26, 26, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Bodoni Moda", serif;
+      font-size: 150px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+    #ct-resting {
+      background: #FFFFFF;
+      opacity: 0;
+    }
+    #ct-cta {
+      background: #078675;
+      color: #FFFFFF;
+      font-size: 88px;
+      letter-spacing: 0.04em;
+      opacity: 0;
+    }
+
+    /* tier satellite pills (stacked beneath the card) */
+    .ct-tier {
+      position: absolute;
+      left: 390px;
+      width: 300px;
+      text-align: center;
+      padding: 12px 0 16px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Bodoni Moda", serif;
+      font-size: 52px;
+      font-weight: 700;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+    #ct-tier-plus { top: 1040px; }
+    #ct-tier-pro { top: 1128px; background: #9BFAED; }
+
+    /* the three unlock pills with jade checks */
+    .ct-unlock {
+      position: absolute;
+      left: 240px;
+      width: 600px;
+      height: 88px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      box-shadow: 6px 6px 0 rgba(26, 26, 26, 0.08);
+      display: flex;
+      align-items: center;
+    }
+    #ct-unlock-1 { top: 1260px; }
+    #ct-unlock-2 { top: 1366px; }
+    #ct-unlock-3 { top: 1472px; }
+    .ct-unlock svg {
+      flex: 0 0 84px;
+      margin-left: 26px;
+      margin-right: 18px;
+      display: block;
+    }
+    .ct-unlock span {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+
+    /* the yearly billing pill */
+    #ct-yearly {
+      position: absolute;
+      left: 240px;
+      top: 1610px;
+      width: 600px;
+      text-align: center;
+      padding: 12px 0 16px;
+      background: #74DEC0;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      white-space: nowrap;
+      opacity: 0;
+    }
+
+    /* the confirm ripple ring */
+    #ct-ripple {
+      position: absolute;
+      left: 290px;
+      top: 560px;
+      width: 500px;
+      height: 420px;
+      border: 3px solid #078675;
+      border-radius: 48px;
+      opacity: 0;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="12-start-free"
+    data-start="0"
+    data-duration="8.53"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="ct-bg" data-start="0" data-duration="8.53" data-track-index="0">
+      <div class="ct-glow ct-glow-a"></div>
+      <div class="ct-glow ct-glow-b"></div>
+      <div class="ct-glow ct-glow-c"></div>
+      <div class="ct-grain"></div>
+    </div>
+
+    <!-- the resting card → the jade CTA -->
+    <div class="clip" id="ct-stage-clip" data-start="0" data-duration="8.53" data-track-index="1">
+      <div class="ct-stage">
+        <div class="ct-card" id="ct-resting">free</div>
+        <div class="ct-card" id="ct-cta">Start free</div>
+        <div id="ct-ripple"></div>
+      </div>
+    </div>
+
+    <!-- tier satellites -->
+    <div class="clip" id="ct-tiers" data-start="0" data-duration="8.53" data-track-index="2">
+      <div class="ct-tier" id="ct-tier-plus">plus</div>
+      <div class="ct-tier" id="ct-tier-pro">pro</div>
+    </div>
+
+    <!-- the three unlock pills -->
+    <div class="clip" id="ct-unlocks" data-start="0" data-duration="8.53" data-track-index="3">
+      <div class="ct-unlock" id="ct-unlock-1">
+        <svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5"/><path d="M17 29 L25 37 L40 21" fill="none" stroke="#078675" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Virtual try-on</span>
+      </div>
+      <div class="ct-unlock" id="ct-unlock-2">
+        <svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5"/><path d="M17 29 L25 37 L40 21" fill="none" stroke="#078675" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Analytics</span>
+      </div>
+      <div class="ct-unlock" id="ct-unlock-3">
+        <svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5"/><path d="M17 29 L25 37 L40 21" fill="none" stroke="#078675" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Calendar planning</span>
+      </div>
+    </div>
+
+    <!-- the yearly billing pill -->
+    <div class="clip" id="ct-yearly-clip" data-start="0" data-duration="8.53" data-track-index="4">
+      <div id="ct-yearly">Yearly = 2 months free</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["12-start-free"] = tl;
+
+        var BEATS = {
+          resting: 0.1,
+          plus: 0.88,
+          pro: 1.26,
+          unlock1: 1.88,
+          unlock2: 2.47,
+          unlock3: 3.28,
+          swap: 3.85,
+          yearly: 3.95,
+          press: 4.68,
+          ripple: 4.75,
+          jitter: 5.6,
+        };
+
+        /* ——— Scene 1 (0–1.4s): the resting "free" card; plus / pro satellites ——— */
+        tl.fromTo(
+          "#ct-resting",
+          { scale: 0.92, y: 40, opacity: 0 },
+          { scale: 1, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" },
+          BEATS.resting
+        );
+        tl.fromTo("#ct-tier-plus", { scale: 0.4, rotation: -8, transformOrigin: "50% 50%", opacity: 0 }, { scale: 1, rotation: -3, opacity: 1, duration: 0.35, ease: "back.out(1.6)" }, BEATS.plus);
+        tl.fromTo("#ct-tier-pro", { scale: 0.4, rotation: 8, transformOrigin: "50% 50%", opacity: 0 }, { scale: 1, rotation: 3, opacity: 1, duration: 0.35, ease: "back.out(1.6)" }, BEATS.pro);
+
+        /* ——— Scene 2 (1.5–3.9s): the three unlocks cascade in ——— */
+        var unlockAt = [BEATS.unlock1, BEATS.unlock2, BEATS.unlock3];
+        for (var u = 0; u < 3; u++) {
+          (function (sel, at) {
+            tl.fromTo(sel, { y: 44, scale: 0.85, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.45, ease: "power3.out" }, at);
+            var tick = sel.querySelector("path");
+            tl.fromTo(tick, { scale: 0, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.28, ease: "back.out(1.7)" }, at + 0.16);
+          })("#ct-unlock-" + (u + 1), unlockAt[u]);
+        }
+
+        /* ——— Scene 3 (4–8.03s): the card condenses into the jade CTA (scale-swap) ——— */
+        tl.to("#ct-resting", { scale: 0.7, opacity: 0, transformOrigin: "50% 50%", duration: 0.35, ease: "power2.in" }, BEATS.swap);
+        tl.fromTo("#ct-cta", { scale: 0.7, opacity: 0, transformOrigin: "50% 50%" }, { scale: 1, opacity: 1, duration: 0.45, ease: "back.out(1.5)" }, BEATS.swap + 0.05);
+
+        // The yearly billing pill lands on "yearly".
+        tl.fromTo("#ct-yearly", { y: 26, scale: 0.9, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.yearly);
+
+        // The press lands on "gets" — a press-release spring on the CTA.
+        tl.to("#ct-cta", { scale: 0.9, transformOrigin: "50% 50%", duration: 0.1, ease: "power2.in" }, BEATS.press);
+        tl.to("#ct-cta", { scale: 1.04, duration: 0.13, ease: "power2.out" }, BEATS.press + 0.1);
+        tl.to("#ct-cta", { scale: 1, duration: 0.16, ease: "power3.out" }, BEATS.press + 0.23);
+
+        // The confirm ripple expands and fades (finite, one ring).
+        tl.fromTo(
+          "#ct-ripple",
+          { scale: 0.98, opacity: 0.55 },
+          { scale: 1.14, opacity: 0, transformOrigin: "50% 50%", duration: 0.7, ease: "power2.out" },
+          BEATS.ripple
+        );
+
+        // Hold the read: stillness — only a subtle deterministic jitter on the stage.
+        var stageEl = document.getElementById("ct-stage-clip");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 1.7,
+            duration: 8.03 - BEATS.jitter,
+            ease: "none",
+            onUpdate: function () {
+              var x = 1.4 * Math.sin(jit.p);
+              var y = 1.0 * Math.sin(jit.p * 1.31);
+              stageEl.style.transform = "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

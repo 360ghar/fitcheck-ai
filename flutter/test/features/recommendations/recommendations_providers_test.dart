@@ -13,6 +13,7 @@ import 'package:fitcheck_ai/features/settings/repositories/settings_repository.d
 import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
 import 'package:fitcheck_ai/features/wardrobe/providers/wardrobe_providers.dart';
 import 'package:fitcheck_ai/features/wardrobe/repositories/item_repository.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -260,6 +261,9 @@ void main() {
         UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
             theme: AppTheme.lightTheme,
             home: const MediaQuery(
               data: MediaQueryData(disableAnimations: true),

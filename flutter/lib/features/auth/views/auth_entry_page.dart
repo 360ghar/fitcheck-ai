@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import 'widgets/auth_ui.dart';
 
@@ -21,21 +22,20 @@ class AuthEntryPage extends StatelessWidget {
           const BrandWordmark(size: 40),
           const SizedBox(height: AppConstants.spacing16),
           Text(
-            'Every piece you own, styled by AI. Plan outfits, try them on, '
-            'shoot them.',
+            context.l10n.authEntryBody,
             style: text.bodyLarge?.copyWith(color: tokens.textSecondary),
           ),
           const Spacer(),
           const SizedBox(height: AppConstants.spacing24),
           AuthPrimaryButton(
-            label: 'Create your closet',
+            label: context.l10n.authCreateCloset,
             onPressed: () => context.push(Routes.register),
           ),
           const SizedBox(height: AppConstants.spacing8),
           TextButton(
             onPressed: () => context.push(Routes.login),
             style: TextButton.styleFrom(foregroundColor: tokens.textPrimary),
-            child: const Text('I already have an account'),
+            child: Text(context.l10n.introHaveAccount),
           ),
           const SizedBox(height: AppConstants.spacing8),
           const AuthFooterText(),

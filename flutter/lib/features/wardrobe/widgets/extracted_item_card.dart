@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/batch_extraction_models.dart';
@@ -159,7 +160,7 @@ class ExtractedItemCard extends StatelessWidget {
                           ),
                           const SizedBox(height: AppConstants.spacing8),
                           Text(
-                            'Making studio photo',
+                            context.l10n.batchMakingStudioPhotoLabel,
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: Colors.white),
                           ),
@@ -168,11 +169,11 @@ class ExtractedItemCard extends StatelessWidget {
                     ),
                   ),
                 if (onRemove != null)
-                  Positioned(
+                  PositionedDirectional(
                     top: 0,
-                    right: 0,
+                    end: 0,
                     child: IconButton(
-                      tooltip: 'Remove piece',
+                      tooltip: context.l10n.itemRemovePiece,
                       onPressed: onRemove,
                       style: IconButton.styleFrom(
                         minimumSize: const Size(44, 44),
@@ -189,11 +190,11 @@ class ExtractedItemCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppConstants.spacing12,
-              AppConstants.spacing8,
-              AppConstants.spacing4,
-              AppConstants.spacing8,
+            padding: const EdgeInsetsDirectional.only(
+              start: AppConstants.spacing12,
+              top: AppConstants.spacing8,
+              end: AppConstants.spacing4,
+              bottom: AppConstants.spacing8,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,7 +234,7 @@ class ExtractedItemCard extends StatelessWidget {
                         ),
                       if (item.status == BatchItemStatus.failed)
                         Text(
-                          'No studio photo. Your photo is used.',
+                          context.l10n.batchNoStudioPhotoBody,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: text.bodySmall?.copyWith(

@@ -107,7 +107,10 @@ class RecommendationMatch {
     final reasons = match['reasons'];
     final category = item['category']?.toString().toLowerCase();
     return RecommendationMatch(
-      name: item['name']?.toString() ?? 'Unnamed piece',
+      name:
+          item['name']?.toString() ??
+          ErrorHandler.l10n?.recommendUnnamedPiece ??
+          'Unnamed piece',
       brand: item['brand']?.toString(),
       category: category == null ? null : Category.fromString(category),
       imageUrl: image.$1,
@@ -335,8 +338,9 @@ class WeatherNotifier extends RequestNotifier<WeatherReport> {
     final city = location.trim();
     if (city.isEmpty) {
       ErrorHandler.showValidation(
-        'Enter your city to get picks for the weather.',
-        title: 'Which city?',
+        ErrorHandler.l10n?.recommendEnterCityBody ??
+            'Enter your city to get picks for the weather.',
+        title: ErrorHandler.l10n?.recommendWhichCityTitle ?? 'Which city?',
       );
       return false;
     }
