@@ -2,7 +2,10 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/deeplinks/deep_link_router.dart';
 import '../core/providers.dart';
+import '../core/review/review_app_start.dart';
+import '../core/review/review_prompt.dart';
 import '../core/services/analytics_service.dart';
 import '../core/services/supabase_service.dart';
 import '../core/widgets/paper.dart';
@@ -31,6 +34,7 @@ import '../features/profile/views/profile_edit_page.dart';
 import '../features/profile/views/profile_page.dart';
 import '../features/recommendations/views/recommendations_page.dart';
 import '../features/settings/views/ai_settings_page.dart';
+import '../features/settings/views/language_page.dart';
 import '../features/settings/views/settings_page.dart';
 import '../features/shell/views/main_shell_page.dart';
 import '../features/social/views/shared_outfit_page.dart';
@@ -111,7 +115,16 @@ GoRouter buildRouter({ProviderContainer? container}) {
   );
   String id(GoRouterState s) => s.pathParameters['id'] ?? '';
 
-  return GoRouter(
+  late final GoRouter router;
+  // Campaign links (`fitcheck.ai://<route>`) navigate the router. Started from
+  // the navigator observer below rather than here, so a test that only reads
+  // the route table never constructs the platform plugin.
+  final deepLinks = DeepLinkController(
+    onNavigate: (location) => router.go(location),
+    navigateTo: () => router.routerDelegate.currentConfiguration.uri.path,
+  );
+
+  router = GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: Routes.splash,
     refreshListenable: Listenable.merge([
@@ -119,7 +132,13 @@ GoRouter buildRouter({ProviderContainer? container}) {
       SupabaseService.instance.isAuthenticated,
     ]),
     redirect: (context, state) => authRedirect(c, state.matchedLocation),
-    observers: [_ScreenTracker()],
+    observers: [
+      _ScreenTracker(),
+      DeepLinkStarter(deepLinks),
+      // Counts the launch once, which is what keeps the review prompt out of
+      // the first session.
+      ReviewAppStartObserver(c.read(reviewPromptProvider)),
+    ],
     routes: [
       GoRoute(path: Routes.splash, builder: (_, _) => const SplashPage()),
       GoRoute(path: Routes.intro, builder: (_, _) => const IntroPage()),
@@ -187,6 +206,7 @@ GoRouter buildRouter({ProviderContainer? container}) {
       _page(Routes.bodyProfiles, (_) => const BodyProfilesPage()),
       _page(Routes.settings, (_) => const SettingsPage()),
       _page(Routes.aiSettings, (_) => const AiSettingsPage()),
+      _page(Routes.language, (_) => const LanguagePage()),
       _page(Routes.gamification, (_) => const GamificationPage()),
       _page(Routes.subscription, (_) => const SubscriptionPage()),
       _page(Routes.referral, (_) => const ReferralPage()),
@@ -200,6 +220,7 @@ GoRouter buildRouter({ProviderContainer? container}) {
       _page(Routes.sharedOutfit, (s) => SharedOutfitPage(shareId: id(s))),
     ],
   );
+  return router;
 }
 
 /// The app's router.

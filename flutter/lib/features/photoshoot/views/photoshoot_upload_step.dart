@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../providers/photoshoot_provider.dart';
 
@@ -25,7 +26,7 @@ class PhotoshootUploadStep extends ConsumerWidget {
         if (photos.isEmpty)
           PaperSurface(
             onTap: notifier.pickPhotos,
-            semanticLabel: 'Add photos from your gallery',
+            semanticLabel: context.l10n.photoshootAddPhotosSemantic,
             padding: const EdgeInsets.symmetric(
               horizontal: AppConstants.spacing24,
               vertical: AppConstants.spacing32,
@@ -39,7 +40,7 @@ class PhotoshootUploadStep extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppConstants.spacing12),
                 Text(
-                  'Add 1 to 4 photos of yourself',
+                  context.l10n.photoshootUploadTitle,
                   style: text.titleMedium?.copyWith(
                     color: tokens.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -48,7 +49,7 @@ class PhotoshootUploadStep extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
-                  'Tap to choose from your gallery',
+                  context.l10n.photoshootUploadBody,
                   style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
                   textAlign: TextAlign.center,
                 ),
@@ -65,12 +66,12 @@ class PhotoshootUploadStep extends ConsumerWidget {
               TextButton.icon(
                 onPressed: full ? null : notifier.pickPhotos,
                 icon: const Icon(Icons.photo_library_outlined, size: 20),
-                label: const Text('Gallery'),
+                label: Text(context.l10n.photoshootGallery),
               ),
             TextButton.icon(
               onPressed: full ? null : notifier.pickFromCamera,
               icon: const Icon(Icons.photo_camera_outlined, size: 20),
-              label: const Text('Use camera'),
+              label: Text(context.l10n.photoshootUseCamera),
             ),
           ],
         ),
@@ -84,7 +85,7 @@ class PhotoshootUploadStep extends ConsumerWidget {
           ),
           child: Text(
             photos.isEmpty
-                ? 'Add a photo to continue'
+                ? context.l10n.photoshootAddToContinue
                 : 'Continue with ${photos.length} '
                       '${photos.length == 1 ? 'photo' : 'photos'}',
           ),
@@ -109,7 +110,10 @@ class _Thumbnails extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${photos.length} of ${PhotoshootNotifier.maxPhotos} photos',
+          context.l10n.photoshootSelectedOfMax(
+        photos.length,
+        PhotoshootNotifier.maxPhotos,
+      ),
           style: text.bodySmall?.copyWith(color: tokens.textSecondary),
         ),
         const SizedBox(height: AppConstants.spacing8),
@@ -133,7 +137,7 @@ class _Thumbnails extends ConsumerWidget {
                       top: 0,
                       right: 0,
                       child: IconButton(
-                        tooltip: 'Remove photo ${i + 1}',
+                        tooltip: context.l10n.photoshootRemovePhotoNumber(i + 1),
                         onPressed: () => notifier.removePhoto(i),
                         constraints: const BoxConstraints(
                           minWidth: 44,
@@ -158,7 +162,7 @@ class _Thumbnails extends ConsumerWidget {
             if (canAdd)
               PaperSurface(
                 onTap: notifier.pickPhotos,
-                semanticLabel: 'Add another photo',
+                semanticLabel: context.l10n.photoshootAddAnotherPhoto,
                 padding: EdgeInsets.zero,
                 color: tokens.stock.sunk,
                 lift: 0,
@@ -202,7 +206,7 @@ class _Tips extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'For the best results',
+                  context.l10n.photoshootTipsTitle,
                   style: text.titleSmall?.copyWith(
                     color: tokens.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -210,8 +214,7 @@ class _Tips extends StatelessWidget {
                 ),
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
-                  'Use clear, well-lit photos of your face from a few angles. '
-                  'Skip sunglasses and hats.',
+                  context.l10n.photoshootTipsBody,
                   style: text.bodySmall?.copyWith(color: tokens.textSecondary),
                 ),
               ],

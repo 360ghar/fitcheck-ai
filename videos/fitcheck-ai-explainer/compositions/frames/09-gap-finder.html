@@ -1,0 +1,378 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #gf-bg {
+      background: #FCFAF8;
+    }
+    .gf-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .gf-glow-a {
+      width: 640px;
+      height: 640px;
+      left: 360px;
+      top: -180px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.13) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .gf-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -200px;
+      top: 900px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .gf-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 540px;
+      top: 1300px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .gf-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— the constellation hub ————— */
+    #gf-hub {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 560px;
+    }
+    #gf-orbit-guide {
+      position: absolute;
+      left: 210px;
+      top: -210px;
+      width: 660px;
+      height: 420px;
+      border: 2px solid #1A1A1A;
+      border-radius: 50%;
+      opacity: 0.12;
+    }
+    #gf-center {
+      position: absolute;
+      left: 330px;
+      top: -160px;
+      width: 420px;
+      height: 320px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      box-shadow: 8px 8px 0 rgba(26, 26, 26, 0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    #gf-center-label {
+      font-family: "Bodoni Moda", serif;
+      font-size: 52px;
+      font-weight: 800;
+      color: #1A1A1A;
+      line-height: 1.05;
+    }
+    #gf-center-sub {
+      margin-top: 8px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      opacity: 0.7;
+    }
+
+    /* satellites on the orbit */
+    .gf-sat {
+      position: absolute;
+      width: 220px;
+      height: 64px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+    #gf-sat-0 { left: 254px; top: 655px; }
+    #gf-sat-1 { left: 826px; top: 655px; }
+    #gf-sat-2 { left: 826px; top: 865px; }
+    #gf-sat-3 { left: 254px; top: 865px; }
+    .gf-sat-dim {
+      opacity: 0.45;
+    }
+    #gf-sat-4 { left: 430px; top: 550px; }
+    #gf-sat-5 { left: 870px; top: 765px; }
+    #gf-sat-6 { left: -20px; top: 765px; }
+
+    /* the gap node's jade halo (keyword glow) */
+    #gf-gap-halo {
+      position: absolute;
+      left: 214px;
+      top: 615px;
+      width: 300px;
+      height: 150px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.4) 0%, rgba(7, 134, 117, 0) 65%);
+      opacity: 0;
+    }
+
+    /* ————— the wardrobe score bar-track ————— */
+    #gf-score {
+      position: absolute;
+      left: 190px;
+      top: 1180px;
+      width: 700px;
+    }
+    #gf-score-label {
+      text-align: center;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      margin-bottom: 18px;
+    }
+    #gf-bartrack {
+      width: 700px;
+      height: 22px;
+      background: #EDE8DE;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+    #gf-barfill {
+      width: 100%;
+      height: 100%;
+      background: #078675;
+      border-radius: 9999px;
+      transform: scaleX(0);
+      transform-origin: 0 50%;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="09-gap-finder"
+    data-start="0"
+    data-duration="7.91"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="gf-bg" data-start="0" data-duration="7.91" data-track-index="0">
+      <div class="gf-glow gf-glow-a"></div>
+      <div class="gf-glow gf-glow-b"></div>
+      <div class="gf-glow gf-glow-c"></div>
+      <div class="gf-grain"></div>
+    </div>
+
+    <!-- the constellation hub: orbit center + satellites -->
+    <div class="clip" id="gf-hub-clip" data-start="0" data-duration="7.91" data-track-index="1">
+      <div id="gf-hub">
+        <div id="gf-orbit-guide"></div>
+        <div id="gf-center">
+          <div id="gf-center-label">your<br>style</div>
+          <div id="gf-center-sub">the hub</div>
+        </div>
+        <div class="gf-sat gf-sat-dim" id="gf-sat-4">daily fit</div>
+        <div class="gf-sat gf-sat-dim" id="gf-sat-5">favorites</div>
+        <div class="gf-sat gf-sat-dim" id="gf-sat-6">filters</div>
+        <div class="gf-sat" id="gf-sat-0">missing jacket</div>
+        <div class="gf-sat" id="gf-sat-1">better alternative</div>
+        <div class="gf-sat" id="gf-sat-2">similar finds</div>
+        <div class="gf-sat" id="gf-sat-3">sustainability score</div>
+        <div id="gf-gap-halo"></div>
+      </div>
+    </div>
+
+    <!-- the wardrobe score bar-track -->
+    <div class="clip" id="gf-score-clip" data-start="0" data-duration="7.91" data-track-index="2">
+      <div id="gf-score">
+        <div id="gf-score-label">Wardrobe score</div>
+        <div id="gf-bartrack"><div id="gf-barfill"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["09-gap-finder"] = tl;
+
+        var BEATS = {
+          hub: 0.08,
+          guide: 0.3,
+          dimSats: 0.4,
+          gapPulse: 0.61,
+          sat1: 1.21,
+          sat2: 2.32,
+          sat3: 2.75,
+          sat4: 3.6,
+          pushIn: 3.7,
+          blur: 4.1,
+          score: 3.9,
+          scoreEnd: 5.6,
+          jitter: 4.4,
+        };
+
+        /* ——— Scene 1 (0–0.6s): the hub opens — orbit guide draws, the center badge settles ——— */
+        tl.fromTo(
+          "#gf-center",
+          { scale: 0.8, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" },
+          BEATS.hub
+        );
+        tl.fromTo("#gf-orbit-guide", { scale: 0.85, opacity: 0 }, { scale: 1, opacity: 0.12, duration: 0.6, ease: "power2.out" }, BEATS.guide);
+
+        // Three resident satellites sit dim around the orbit.
+        var dimSats = ["#gf-sat-4", "#gf-sat-5", "#gf-sat-6"];
+        for (var d = 0; d < dimSats.length; d++) {
+          (function (sel, idx) {
+            tl.fromTo(sel, { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 0.45, duration: 0.4, ease: "power3.out" }, BEATS.dimSats + idx * 0.1);
+          })(dimSats[d], d);
+        }
+
+        /* ——— Scene 2 (0.7–3.6s): the gap pulses jade; suggestion satellites spring into orbit ——— */
+        // The gap node pulses jade — two bounded halo pulses (keyword glow, finite).
+        var halo = document.getElementById("gf-gap-halo");
+        var gapSat = document.getElementById("gf-sat-0");
+        function pulse(at) {
+          tl.fromTo(halo, { opacity: 0, scale: 0.9 }, { opacity: 0.95, scale: 1.06, transformOrigin: "50% 50%", duration: 0.16, ease: "power1.out" }, at);
+          tl.to(halo, { opacity: 0.2, scale: 1, duration: 0.24, ease: "power2.out" }, at + 0.16);
+          tl.fromTo(gapSat, { scale: 1 }, { scale: 1.07, transformOrigin: "50% 50%", duration: 0.14, ease: "power2.out" }, at);
+          tl.to(gapSat, { scale: 1, duration: 0.22, ease: "power3.out" }, at + 0.14);
+        }
+        pulse(BEATS.gapPulse);
+        pulse(BEATS.gapPulse + 0.62);
+        pulse(BEATS.gapPulse + 1.24);
+
+        // Four suggestion satellites spring into their orbit slots (orbit-3d-entry: scale + rotation settles).
+        var satAt = [BEATS.sat1, BEATS.sat2, BEATS.sat3, BEATS.sat4];
+        var satSels = ["#gf-sat-0", "#gf-sat-1", "#gf-sat-2", "#gf-sat-3"];
+        for (var s = 0; s < 4; s++) {
+          (function (sel, at) {
+            tl.fromTo(
+              sel,
+              { scale: 0.2, rotation: -30, opacity: 0 },
+              { scale: 1, rotation: 0, opacity: 1, duration: 0.55, ease: "back.out(1.4)" },
+              at
+            );
+          })(satSels[s], satAt[s]);
+        }
+
+        /* ——— Scene 3 (3.7–7.41s): the camera pushes in, depth collapses, the score fills ——— */
+        // Multi-phase camera: a slow power3.inOut push-in on the whole hub.
+        tl.fromTo("#gf-hub-clip", { scale: 1 }, { scale: 1.06, transformOrigin: "50% 46%", duration: BEATS.blur - BEATS.pushIn + 1.1, ease: "power3.inOut" }, BEATS.pushIn);
+
+        // Depth-of-field collapse: the satellites soften while the center stays sharp.
+        var satAll = document.querySelectorAll(".gf-sat");
+        for (var f = 0; f < satAll.length; f++) {
+          tl.to(satAll[f], { filter: "blur(2.5px)", duration: 0.8, ease: "power2.inOut" }, BEATS.blur);
+        }
+
+        // The wardrobe score bar-track fills in jade (stat-bars-and-fills, left origin, no numeral).
+        tl.fromTo("#gf-barfill", { scaleX: 0 }, { scaleX: 1, duration: BEATS.scoreEnd - BEATS.score, ease: "power3.out" }, BEATS.score);
+        tl.fromTo("#gf-score-label", { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, ease: "power3.out" }, BEATS.score - 0.1);
+
+        // Hold the read: stillness — only a subtle deterministic jitter on the score block.
+        var scoreEl = document.getElementById("gf-score");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 1.5,
+            duration: 7.41 - BEATS.jitter,
+            ease: "none",
+            onUpdate: function () {
+              var x = 1.4 * Math.sin(jit.p);
+              var y = 1.0 * Math.sin(jit.p * 1.31);
+              scoreEl.style.transform = "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

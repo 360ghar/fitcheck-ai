@@ -1,0 +1,96 @@
+{
+  "_comment": "The screenshot frame plan and the copy that is not derivable from store/asc/listings.json. Each frame names the listing block its headline comes from (see scripts/creative/lib/copy.mjs for the mapping) and the app screen it shows. `overrides` is the only place copy is authored by hand; every entry needs a native review before it ships, which is why `reviewed` is recorded per locale and surfaced in manifest.json.",
+  "_override_semantics": "An override is a FALLBACK, not a replacement. render.mjs always tries the locale's own listing copy first and only uses an override when that copy cannot be used: the headline needs more lines than the frame allows, the section is missing from the locale's description, or the line is still English. This matters because store/asc/listings.json is being translated by another workstream while this pipeline runs — a header that was untranslated when an override was written may be finished copy by the next render, and the listing then wins on its own without anyone editing this file.",
+  "_copy_sources": {
+    "description": "store/asc/listings.json → description is a fixed 12-block template. Block 1 is the trial headline, block 2 is the free tier, blocks 3-7 are the five feature sections. Headlines are each block's first line; supporting lines are the first sentence of its body. Blocks are resolved by anchor, not by index: ta-IN has 10 blocks and pa-IN has 11 because their listings never wrote the 'know what you actually wear' section, so a positional lookup slides and reads the wrong section (see scripts/creative/lib/copy.mjs → sectionsFor).",
+    "subtitle": "store/asc/listings.json → subtitle, used only when a locale's description section is missing or still English.",
+    "override": "this file, authored by hand, pending native review. Used as a fallback only."
+  },
+  "frames": [
+    {
+      "index": 1,
+      "id": "closet",
+      "layout": "standard",
+      "stock": "moss",
+      "screen": "closet",
+      "headlineBlock": 3,
+      "supportBlock": 3,
+      "supportStyle": "sentence",
+      "why": "The product's core promise and the reason the offer works: your whole closet becomes searchable data. The wardrobe grid is the only screenshot that shows dozens of real garments at once, so it earns slot 1 where most installs are decided."
+    },
+    {
+      "index": 2,
+      "id": "daily",
+      "layout": "standard",
+      "stock": "ink",
+      "screen": "today",
+      "headlineBlock": 6,
+      "supportBlock": 6,
+      "supportStyle": "sentence",
+      "why": "The daily habit loop. Home shows today's suggestion against live weather, which is why someone opens the app again tomorrow — the retention promise sits in slot 2."
+    },
+    {
+      "index": 3,
+      "id": "tryon",
+      "layout": "standard",
+      "stock": "marigold",
+      "screen": "tryon",
+      "headlineBlock": 4,
+      "supportBlock": 4,
+      "supportStyle": "sentence",
+      "why": "The feature nobody else has: the same outfit rendered on one body, six times. The outfits screen is a wall of AI try-ons, which is exactly the proof this claim needs."
+    },
+    {
+      "index": 4,
+      "id": "photoshoot",
+      "layout": "collage",
+      "stock": "clay",
+      "screen": "photoshoot",
+      "headlineBlock": 5,
+      "supportBlock": 5,
+      "supportStyle": "sentence",
+      "art": "photoshoot-example",
+      "why": "A second, different reason to pay: studio photos from selfies. The app screen is the upload step, so the frame carries the output beside it as a taped paper photo — the promise made visible without faking app UI."
+    },
+    {
+      "index": 5,
+      "id": "wear",
+      "layout": "standard",
+      "stock": "stone",
+      "screen": "more",
+      "headlineBlock": 7,
+      "supportBlock": 7,
+      "supportStyle": "sentence",
+      "why": "Proof the closet pays off: the More tab carries Your Progress, Calendar and Rewards, so this is the frame that answers 'why digitise anything'. It closes the loop slot 1 opens. The parent brief asked for a calendar frame in this slot; the live capture set has no calendar screen and the paper-UI calendar golden belongs to a different UI generation, so this frame uses the shipping More screen and the calendar move is recorded as a gap in docs/store/creative.md."
+    },
+    {
+      "index": 6,
+      "id": "offer",
+      "layout": "offer",
+      "stock": "marigold",
+      "screen": "matches",
+      "headlineBlock": 1,
+      "supportBlock": 2,
+      "supportStyle": "none",
+      "freeBlock": 2,
+      "why": "The money frame. It states the offer as three numbers with the trial headline above, so nobody has to read a paragraph to learn the deal. The rows come from the listing's own FREE FOREVER block, so the numbers cannot drift from the store copy."
+    }
+  ],
+  "overrides": {
+    "_comment": "Authoring happens here only when a locale's own store copy cannot be set legibly. Two locales need it: or-IN (Odia) because its App Store description still carries English section headers, and ta-IN because the Tamil header for 'digitize your whole closet' runs to four lines at the legibility floor. Both reuse the listing's own vocabulary; `reviewed: false` marks copy that has not had a native read, and manifest.json carries the flag so it cannot quietly ship as reviewed.",
+    "or-IN": {
+      "1": { "headline": "ସମସ୍ତ ପୋଷାକ, ଏକ କ୍ଲୋଜେଟରେ", "reviewed": false },
+      "2": { "headline": "ପାଣିପାଗ ଅନୁଯାୟୀ ଆଉଟଫିଟ୍", "reviewed": false },
+      "3": { "headline": "ନିଜ ଉପରେ ଦେଖନ୍ତୁ", "reviewed": false },
+      "4": { "headline": "AI ଫଟୋଶୁଟ୍", "reviewed": false },
+      "5": { "headline": "କଣ ପିନ୍ଧୁଛନ୍ତି ଜାଣନ୍ତୁ", "reviewed": false },
+      "6": { "headline": "ପ୍ରଥମ ମାସ Pro ମାଗଣା", "reviewed": false }
+    },
+    "ta-IN": {
+      "_note": "Tamil is the longest-script locale in the set and three of its listing headlines run to four lines at the 1320px legibility floor, which fails the frame. Each override below keeps the listing's own verb and noun and drops only a qualifier the screenshot itself already shows, so the claim is unchanged while it fits two lines. `reviewed: false` because no native speaker has read these yet.",
+      "1": { "headline": "அலமாரியை டிஜிட்டல் மயமாக்குங்கள்", "reviewed": false },
+      "2": { "headline": "விநாடிகளில் தயாராகுங்கள்", "reviewed": false },
+      "5": { "headline": "என்ன அணிகிறீர்கள் என்பதை அறியுங்கள்", "reviewed": false }
+    }
+  }
+}

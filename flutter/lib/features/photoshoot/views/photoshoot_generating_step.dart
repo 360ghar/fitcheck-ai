@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/photoshoot_models.dart';
 import '../providers/photoshoot_provider.dart';
@@ -41,7 +42,9 @@ class PhotoshootGeneratingStep extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      s.status.isEmpty ? 'Starting' : s.status,
+                      s.status.isEmpty
+                          ? context.l10n.photoshootStarting
+                          : s.status,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.titleMedium?.copyWith(
@@ -106,7 +109,11 @@ class PhotoshootGeneratingStep extends ConsumerWidget {
                 ? null
                 : () => ref.read(photoshootProvider.notifier).cancel(),
             style: TextButton.styleFrom(minimumSize: const Size(120, 48)),
-            child: Text(s.cancelling ? 'Cancelling' : 'Cancel'),
+            child: Text(
+              s.cancelling
+                  ? context.l10n.photoshootCancelling
+                  : context.l10n.actionCancel,
+            ),
           ),
         ),
       ],
@@ -136,7 +143,7 @@ class _Slot extends StatelessWidget {
         lift: 0,
         color: tokens.stock.sunk,
         padding: EdgeInsets.zero,
-        semanticLabel: 'Failed',
+        semanticLabel: context.l10n.photoshootFailed,
         child: Center(
           child: Icon(
             Icons.broken_image_outlined,

@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI membutuhkan akses kamera untuk memotret gaya busana dan item lemari kamu.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI membutuhkan akses galeri foto untuk memilih gambar gaya busana dan item lemari kamu.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI perlu menyimpan foto busana hasil AI ke galeri foto kamu.";

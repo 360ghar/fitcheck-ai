@@ -3,11 +3,12 @@
 **Work stream:** WS6 — App Store listing metadata, App Privacy, age rating, review notes & screenshot plan
 **Bundle identifier:** `com.fitcheckaiapp.fitcheckai`
 **Privacy Policy URL:** `https://fitcheckaiapp.com/privacy`
-**Last updated:** 2026-08-08
+**Last updated:** 2026-10-26
 
 > This document is the source of truth for everything that goes into App Store Connect (ASC) for
 > the FitCheck AI iOS app. Every field below is drafted and ready to paste. Companion docs:
 > - `docs/store/app-store-screenshots.md` — screenshot dimensions, screen list, and capture workflow.
+> - `docs/store/deep-links.md` — the `fitcheck.ai://` routes custom product pages may point at.
 > - `flutter/scripts/capture_ios_screenshots.sh` — helper to boot simulators and capture screenshots.
 > - `docs/store/play-store-aso.md` — Android/Google Play copy (this iOS copy is adapted from it).
 
@@ -261,24 +262,97 @@ re-answer the new questionnaire by **2026-01-31**. Complete this in
 | Graphic Sexual Content and Nudity | None | — |
 | Contests | None | (Streaks/achievements are personal gamification, not prize contests.) |
 | **User-Generated Content** | **Yes** | Users upload photos and can share outfits / public outfit links. |
-| ↳ Is UGC moderated / can users report & block? | Yes — describe controls | See note below; you must be able to attest to moderation/report controls. |
+| ↳ Report controls | **Yes** | `showReportContentSheet` (`flutter/lib/core/widgets/report_content_sheet.dart`) is wired to the shared-outfit page, the try-on result and the photoshoot result. It files a real support ticket with a stable English reason token. Fully localized. |
+| ↳ Block controls | **No — gap** | No block/mute endpoint or UI exists anywhere in the backend or the app. Guideline 1.2 also asks for the ability to block abusive users. Tracked as TD-125. |
 | **AI-Generated Content / Generative AI** | **Yes** | App generates images (try-on visualizations, AI photoshoot, recommendations). |
 | Unrestricted Web Access | No | App does not embed an open web browser. |
 | In-app controls / parental gating needed | No | — |
 | Medical or Wellness topics | No | — |
 | Gambling capabilities | No | — |
 
-### Expected resulting rating
+### Resulting rating: 12+
 
-With **UGC = Yes** and **AI-generated content = Yes** but **no mature/sexual/violent content**, Apple's
-2025+ system yields approximately **13+** (this is the new floor that replaced the old "12+" — there is
-no "12+" anymore). Final rating is computed by Apple from the questionnaire and may vary slightly by
-region. Confirm the computed rating in ASC after submitting answers.
+Apple's 2025+ system computes **4+** from the honest content answers, because with **UGC = Yes** and
+**AI-generated content = Yes** but **no mature/sexual/violent content**, the questionnaire has no input
+that raises the rating. `userGeneratedContent` is a descriptor, not a floor. That is the observed
+result, not a guess: with only `userGeneratedContent: true` and `unrestrictedWebAccess: false` the
+draft `appInfo` read `appStoreAgeRating: FOUR_PLUS`.
+
+**4+ is nevertheless the wrong declaration for this app**, so the draft carries an explicit override.
+The computed rating ignores the fact that one user's shared outfit page renders *another* user's
+content, and that there is no block or mute control (TD-125). Declaring 4+ while that is true
+mis-states the audience. `ageRatingOverrideV2: THIRTEEN_PLUS` is now set and the draft reads
+`appStoreAgeRating: TWELVE_PLUS`. Raising a rating is permitted; lowering it is not, so this is the
+allowed direction.
+
+The open risk here is **not** the number. It is that Guideline 1.2's moderation controls are
+incomplete (no blocking, see the row above), which App Review can enforce regardless of the declared
+rating.
+
+The open risk here is **not** the number. It is that Guideline 1.2's moderation controls are
+incomplete (no blocking, see the row above), which App Review can enforce regardless of the declared
+rating.
 
 > Action: Because UGC = Yes, the app should ship with (a) a content/abuse reporting path and (b) the
 > ability to block users / hide shared content, and an EULA, to satisfy App Store Review Guideline 1.2.
 > If those controls are not yet present, coordinate with the app team — they are owned by another work
 > stream, but they are a hard gate for approval.
+
+### History: the shipped rating was 17+, and one flag was why
+
+**Checked 2026-10-26 against the live App Store Connect record (`appId 6794689012`).** At that time
+the shipped 1.2.1 listing showed **17+**, not the 13+ predicted above, because a single field on the
+draft declaration was set incorrectly. The draft is now fixed (see "Applied" below); this table is
+kept as the record of what was wrong and why, because the same mistake is easy to reintroduce.
+
+| Field | Was | Correct | Why the old value was wrong |
+|---|---|---|---|
+| `unrestrictedWebAccess` | `true` | `false` | The app ships no WebView and no in-app browser. Every outbound link opens Safari (or the Play equivalent) as a **separate app**, which Apple does not count as in-app web access. This one flag was the whole reason for 17+. |
+| `userGeneratedContent` | `true` | `true` | Correct: users upload their own photos, and `/shared/:id` renders another user's outfit. Keep it. |
+| All other fields | already `NONE` / `false` | unchanged | Verified against the code, see below. |
+
+Do **not** lower anything else on the way past: a rating that is too *low* is an App Review rejection
+plus a re-review cycle (about a week), while a rating that is too *high* only costs installs.
+
+Diagnose and apply with:
+
+```bash
+node scripts/asc/age-rating.mjs            # report + field-by-field diff, no writes
+node scripts/asc/age-rating.mjs --apply    # PATCH the declaration
+```
+
+`age-rating.mjs` refuses to write `unrestrictedWebAccess: false` unless the source backs the claim.
+It greps `flutter/lib` for `webview_flutter` / `flutter_inappwebview` / `WebViewController` /
+`InAppWebView` / `ChromeSafariBrowser`, walks all 18 `url_launcher` call sites and requires each one
+to be `LaunchMode.externalApplication` or a non-http OS intent (`mailto`, `app-settings`), and greps
+for `Follow` / `Like` / `Comment` / `Feed` types and any ad SDK before asserting `socialMedia: false`
+and `advertising: false`. If any assertion fails it exits non-zero with the offending file and line.
+
+**Sequencing:** the PATCH may be refused as a state conflict while the app has no editable version
+(all three shipped versions are `READY_FOR_SALE`). Create the 1.3.0 version first
+(`node scripts/asc/publish.mjs prepare`), then run `--apply`.
+
+**Applied 2026-10-26.** The draft `appInfo` `0aafcb65-a215-44a9-a6e1-7745d284c1d4` now reads
+`appStoreAgeRating: FOUR_PLUS`; all 30 declaration fields match the proposal and the source
+assertions pass. `node scripts/asc/age-rating.mjs` is idempotent and reports "No PATCH needed".
+
+The live, shipped version still reads **17+** — that is the published 1.2.1 record and it only
+changes when 1.3.0 is released. Regional ratings on the shipped version (Brazil
+`SELF_RATED_SIXTEEN`, France `EIGHTEEN`) are computed from that same wrong flag and will move with
+it.
+
+### What each remaining field is backed by
+
+| Field | Value | Backed by |
+|---|---|---|
+| `healthOrWellnessTopics` | `false` | Body profiles store height, weight, body shape and skin tone, used **only** to fit garments on a try-on render. No health, fitness, nutrition, medical or wellbeing content, no HealthKit. |
+| `medicalOrTreatmentInformation` | `NONE` | No medical content. |
+| `socialMedia` / `socialMediaAgeRestricted` | `false` / `false` | No feed, follows, likes, comments or user-to-user contact. Sharing is the OS share sheet (`share_plus`) handing a link or image to another app, plus one read-only page at `/shared/:id`. |
+| `messagingAndChat` | `false` | No chat surface. The feedback form posts a ticket to support, which is developer-bound. |
+| `advertising` | `false` | No ad SDK in `flutter/pubspec.yaml`. |
+| `contests` / `lootBox` / `gamblingSimulated` | `NONE` / `false` / `NONE` | Referral credit and gift vouchers are paid features, not prize draws. Streaks and badges are not chance-based. |
+| `sexualContentOrNudity` | `NONE` | Try-on renders the user's **own** photo in clothing; the generation prompt is garment-bound. No nudity is produced or displayed. |
+| `userGeneratedContent` | `true` | Users upload camera-roll photos of their own clothes and bodies; `/shared/:id` renders another user's content. Guideline 1.2 obligations apply. |
 
 ---
 

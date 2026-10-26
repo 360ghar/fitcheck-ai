@@ -193,6 +193,12 @@ class EmbeddingService:
         Combines name, category, colors, brand, tags, and material
         into a single embedding vector for similarity matching.
 
+        Language-free by design: the text is canonical English (see
+        docs/BACKEND.md → "Language contract"), and the vector is stored against
+        the item's row id. Embedding the same wardrobe in a second language
+        would put one user's items in two unrelated vector spaces, so nothing
+        here may ever read the request language.
+
         Args:
             item: Item dict with name, category, colors, brand, etc.
 

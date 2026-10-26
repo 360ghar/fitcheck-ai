@@ -104,7 +104,10 @@ function resolveResultSrc(result: TryOnResult | null | undefined): string | null
   return null;
 }
 
+import { useTranslation } from '@/i18n'
+
 export default function TryOnPage() {
+  const { t } = useTranslation()
   const userAvatar = useUserAvatar();
   const setUser = useAuthStore((s) => s.setUser);
   const user = useCurrentUser();
@@ -406,7 +409,7 @@ export default function TryOnPage() {
   return (
     <div className="app-page max-w-4xl">
       <div className="mb-4">
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Try My Look</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">{t('tryOn.title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Upload a picture of clothes to see how you would look wearing them.
         </p>
@@ -418,7 +421,7 @@ export default function TryOnPage() {
           <CardHeader className="px-4 py-3 md:px-6 md:py-4">
             <CardTitle className="text-base md:text-lg flex items-center gap-2">
               <Camera className="h-5 w-5" />
-              Add a photo of you
+              {t('tryOn.addPhoto')}
             </CardTitle>
             <CardDescription>
               A clear full-body or waist-up photo is required for try-on. Good lighting, face and
@@ -443,20 +446,20 @@ export default function TryOnPage() {
             >
               {avatarPhase === 'uploading' ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 me-2 animate-spin" />
                   {avatarUploadPercent != null
                     ? `Uploading photo… ${avatarUploadPercent}%`
                     : 'Uploading photo…'}
                 </>
               ) : avatarPhase === 'processing' ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 me-2 animate-spin" />
                   {`Processing… (${avatarElapsed}s elapsed)`}
                 </>
               ) : (
                 <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload photo
+                  <Upload className="h-4 w-4 me-2" />
+                  {t('tryOn.uploadPhoto')}
                 </>
               )}
             </Button>
@@ -485,7 +488,7 @@ export default function TryOnPage() {
       {step === 'upload' && (
         <Card>
           <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-            <CardTitle className="text-base md:text-lg">Upload Clothing Image</CardTitle>
+            <CardTitle className="text-base md:text-lg">{t('tryOn.uploadClothing')}</CardTitle>
             <CardDescription>
               Upload a photo of the clothes you want to try on. Works best with clear, well-lit images.
             </CardDescription>
@@ -518,27 +521,27 @@ export default function TryOnPage() {
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
               <CardTitle className="flex items-center justify-between text-base md:text-lg">
-                Clothing Preview
+                {t('tryOn.clothingPreview')}
                 <Button variant="ghost" size="sm" onClick={handleReset}>
-                  <X className="h-4 w-4 mr-1" />
-                  Change
+                  <X className="h-4 w-4 me-1" />
+                  {t('tryOn.change')}
                 </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 md:px-6 md:pb-6 space-y-3">
               <ZoomableImage
                 src={clothingPreview}
-                alt="Clothing preview"
+                alt={t('tryOn.previewAlt')}
                 className="w-full h-48 md:h-64 object-contain rounded-lg bg-muted"
               />
               {userAvatar && (
                 <div className="flex items-center gap-3">
                   <img loading="lazy" decoding="async"
                     src={userAvatar}
-                    alt="You"
+                    alt={t('tryOn.youAlt')}
                     className="h-12 w-12 rounded-full object-cover border border-border"
                   />
-                  <p className="text-xs text-muted-foreground">Using this photo of you</p>
+                  <p className="text-xs text-muted-foreground">{t('tryOn.usingThisPhoto')}</p>
                 </div>
               )}
             </CardContent>
@@ -546,14 +549,14 @@ export default function TryOnPage() {
 
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">Generation Options</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t('tryOn.generationOptions')}</CardTitle>
               <CardDescription>
-                Customize how your try-on image will look.
+                {t('tryOn.customizeHint')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
+                <Label htmlFor="description">{t('tryOn.descriptionOptional')}</Label>
                 <Input
                   id="description"
                   placeholder="e.g., Blue denim jacket with brass buttons"
@@ -561,12 +564,12 @@ export default function TryOnPage() {
                   onChange={(e) => setClothingDescription(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Adding a description helps improve accuracy.
+                  {t('tryOn.descriptionHint')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="tryon-style">Style</Label>
+                <Label htmlFor="tryon-style">{t('tryOn.style')}</Label>
                 <Select value={style} onValueChange={setStyle}>
                   <SelectTrigger id="tryon-style">
                     <SelectValue />
@@ -582,7 +585,7 @@ export default function TryOnPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="tryon-background">Background</Label>
+                <Label htmlFor="tryon-background">{t('tryOn.background')}</Label>
                 <Select value={background} onValueChange={setBackground}>
                   <SelectTrigger id="tryon-background">
                     <SelectValue />
@@ -598,7 +601,7 @@ export default function TryOnPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="tryon-pose">Pose</Label>
+                <Label htmlFor="tryon-pose">{t('tryOn.pose')}</Label>
                 <Select value={pose} onValueChange={setPose}>
                   <SelectTrigger id="tryon-pose">
                     <SelectValue />
@@ -622,8 +625,8 @@ export default function TryOnPage() {
                 onClick={() => void handleGenerate()}
                 disabled={isGenerating || !userAvatar}
               >
-                <Sparkles className="h-4 w-4 mr-2" />
-                Generate Try-On
+                <Sparkles className="h-4 w-4 me-2" />
+                {t('tryOn.generate')}
               </Button>
             </CardContent>
           </Card>
@@ -646,17 +649,17 @@ export default function TryOnPage() {
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
               <CardTitle className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-base md:text-lg">
-                Your Try-On Result
+                {t('tryOn.resultTitle')}
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={handleRegenerate}>
-                    <RefreshCw className="h-4 w-4 mr-1" />
-                    <span className="hidden xs:inline">Regenerate</span>
-                    <span className="xs:hidden">Retry</span>
+                    <RefreshCw className="h-4 w-4 me-1" />
+                    <span className="hidden xs:inline">{t('actions.regenerate')}</span>
+                    <span className="xs:hidden">{t('actions.retry')}</span>
                   </Button>
                   <Button variant="outline" size="sm" onClick={handleDownload}>
-                    <Download className="h-4 w-4 mr-1" />
-                    <span className="hidden xs:inline">Download</span>
-                    <span className="xs:hidden">Save</span>
+                    <Download className="h-4 w-4 me-1" />
+                    <span className="hidden xs:inline">{t('actions.download')}</span>
+                    <span className="xs:hidden">{t('actions.save')}</span>
                   </Button>
                 </div>
               </CardTitle>
@@ -669,14 +672,14 @@ export default function TryOnPage() {
                     regenerating for a fresh one.
                   </p>
                   <Button variant="outline" size="sm" onClick={handleRegenerate}>
-                    <RefreshCw className="h-4 w-4 mr-1" />
-                    Regenerate
+                    <RefreshCw className="h-4 w-4 me-1" />
+                    {t('actions.regenerate')}
                   </Button>
                 </div>
               ) : (
                 <ZoomableImage
                   src={resultImageSrc ?? resolveResultSrc(result) ?? undefined}
-                  alt="Try-on result"
+                  alt={t('tryOn.resultAlt')}
                   className="w-full max-h-[50dvh] md:max-h-[600px] object-contain rounded-lg bg-muted"
                   onError={handleResultImageError}
                 />
@@ -686,8 +689,8 @@ export default function TryOnPage() {
 
           <div className="flex justify-center">
             <Button onClick={handleReset} className="w-full sm:w-auto">
-              <Upload className="h-4 w-4 mr-2" />
-              Try Another Look
+              <Upload className="h-4 w-4 me-2" />
+              {t('tryOn.tryAnother')}
             </Button>
           </div>
         </div>

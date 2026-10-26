@@ -14,7 +14,7 @@ FitCheck AI is a multi-platform wardrobe intelligence product with AI-assisted i
 
 ## Agent / contributor maps
 
-- **Agents:** `AGENTS.md` (`CLAUDE.md` imports it)
+- **Agents:** `AGENTS.md`
 - **Architecture layers:** `ARCHITECTURE.md`
 - **Knowledge hub:** `docs/README.md`
 
@@ -90,7 +90,7 @@ Workspace `.env` values are expected to be provisioned. Templates:
 
 | Need | Location |
 |------|----------|
-| Agent map | `AGENTS.md` / `CLAUDE.md` |
+| Agent map | `AGENTS.md` |
 | Architecture | `ARCHITECTURE.md` |
 | Knowledge hub | `docs/README.md` |
 | Backend depth | `docs/BACKEND.md` |
@@ -117,4 +117,4 @@ Harness CI: docs structure + architecture (`.github/workflows/docs-ci.yml`); bac
 
 - Keep business logic in services; keep routes thin.
 - Update docs in the same change as behavior/API/env changes.
-- Do not grow `AGENTS.md`/`CLAUDE.md`—update `docs/` instead.
+- Do not grow `AGENTS.md`—update `docs/` instead.

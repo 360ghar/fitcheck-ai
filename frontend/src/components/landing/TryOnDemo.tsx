@@ -265,7 +265,7 @@ export function TryOnDemo() {
                 onClick={() => setShowLoginModal(true)}
               >
                 Save & continue free
-                <ArrowRight className="w-4 h-4 ml-2" />
+                <ArrowRight className="w-4 h-4 ms-2" />
               </Button>
             </div>
           </div>

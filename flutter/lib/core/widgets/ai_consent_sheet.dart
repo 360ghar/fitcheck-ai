@@ -3,6 +3,7 @@ import '../providers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../constants/app_constants.dart';
 import 'app_ui.dart';
+import '../../core/i18n/l10n.dart';
 
 /// Reusable bottom sheet that requests explicit consent before sharing user
 /// photos with third-party AI providers (Apple Guideline 5.1.2(i)).
@@ -56,7 +57,7 @@ class _AiConsentSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Sharing photos with an AI service',
+                          context.l10n.aiConsentSheetTitle,
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
                                 fontWeight: FontWeight.w700,
@@ -76,13 +77,7 @@ class _AiConsentSheet extends StatelessWidget {
               ),
               const SizedBox(height: AppConstants.spacing16),
               Text(
-                'To create your try-on and photoshoot images, FitCheck AI sends '
-                'the photos you provide (including images of your face and body) '
-                'to a trusted third-party AI provider (such as OpenAI or '
-                'Google Gemini) for processing. '
-                'They generate your images and do not use them to train their '
-                'models under our terms. Photos are transmitted securely and '
-                'never shared for advertising.',
+                context.l10n.aiConsentSheetBody,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: tokens.textSecondary,
                   height: 1.4,
@@ -90,8 +85,7 @@ class _AiConsentSheet extends StatelessWidget {
               ),
               const SizedBox(height: AppConstants.spacing16),
               Text(
-                'By continuing, you give explicit permission to share your '
-                'photos with these AI providers for image generation.',
+                context.l10n.aiConsentSheetPermission,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: tokens.textPrimary,
                   fontWeight: FontWeight.w600,
@@ -100,10 +94,10 @@ class _AiConsentSheet extends StatelessWidget {
               ),
               const SizedBox(height: AppConstants.spacing8),
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: TextButton(
                   onPressed: _openPrivacyPolicy,
-                  child: const Text('View Privacy Policy'),
+                  child: Text(context.l10n.legalViewPrivacyPolicy),
                 ),
               ),
               const SizedBox(height: AppConstants.spacing16),
@@ -114,7 +108,7 @@ class _AiConsentSheet extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                   ),
-                  child: const Text('I Agree & Continue'),
+                  child: Text(context.l10n.aiConsentAgree),
                 ),
               ),
               const SizedBox(height: AppConstants.spacing8),
@@ -122,7 +116,7 @@ class _AiConsentSheet extends StatelessWidget {
                 width: double.infinity,
                 child: TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Not Now'),
+                  child: Text(context.l10n.aiConsentNotNow),
                 ),
               ),
             ],

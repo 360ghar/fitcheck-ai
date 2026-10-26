@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../providers/extraction_jobs_provider.dart';
@@ -33,11 +34,17 @@ class ExtractionJobsPage extends ConsumerWidget {
 
   /// The registry stops the job locally even when the server call fails;
   /// the failure is shown instead of escaping as an unhandled async error.
-  Future<void> _cancel(WidgetRef ref, String jobId) async {
+  Future<void> _cancel(
+    BuildContext context,
+    WidgetRef ref,
+    String jobId,
+  ) async {
+    // Read before the await: the dialog is shown after the request fails.
+    final title = context.l10n.jobsNotCancelled;
     try {
       await ref.read(extractionJobsProvider.notifier).cancel(jobId);
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not cancelled', stackTrace: stack);
+      ErrorHandler.showError(e, title: title, stackTrace: stack);
     }
   }
 
@@ -48,17 +55,16 @@ class ExtractionJobsPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.moss,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Scans')),
+        appBar: AppBar(title: Text(context.l10n.jobsTitle)),
         body: AppPageBackground(
           child: SafeArea(
             top: false,
             child: jobs.isEmpty
                 ? AppEmptyState(
                     scene: PaperScenes.closet,
-                    title: 'No scans yet',
-                    message:
-                        'Snap a piece and send it to the background — it keeps working here.',
-                    actionLabel: 'Add a piece',
+                    title: context.l10n.jobsEmptyTitle,
+                    message: context.l10n.jobsEmptyBody,
+                    actionLabel: context.l10n.quickAddPiece,
                     onAction: () => context.push(Routes.wardrobeAdd),
                   )
                 : ListView.separated(
@@ -75,7 +81,7 @@ class ExtractionJobsPage extends ConsumerWidget {
                       job: jobs[i],
                       onOpen: () => _open(context, ref, jobs[i]),
                       onCancel: jobs[i].isActive
-                          ? () => _cancel(ref, jobs[i].jobId)
+                          ? () => _cancel(context, ref, jobs[i].jobId)
                           : null,
                       onDismiss: jobs[i].isActive
                           ? null
@@ -106,6 +112,7 @@ class _JobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
     final statusIcon = switch (job.status) {
@@ -134,22 +141,21 @@ class _JobCard extends StatelessWidget {
       ),
     };
     final actionLabel = switch (job.status) {
-      TrackedJobStatus.running => 'Resume',
-      TrackedJobStatus.complete => 'Review',
-      TrackedJobStatus.failed => job.kind == TrackedJobKind.single
-          ? 'Retry'
-          : null,
+      TrackedJobStatus.running => l10n.jobsResume,
+      TrackedJobStatus.complete => l10n.jobsReview,
+      TrackedJobStatus.failed =>
+        job.kind == TrackedJobKind.single ? l10n.actionRetry : null,
       TrackedJobStatus.cancelled => null,
     };
 
     return PaperSurface(
       onTap: actionLabel == null ? null : onOpen,
       semanticLabel: '${job.label}, ${job.progressText}',
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing16,
-        AppConstants.spacing12,
-        AppConstants.spacing8,
-        AppConstants.spacing12,
+      padding: const EdgeInsetsDirectional.only(
+        start: AppConstants.spacing16,
+        top: AppConstants.spacing12,
+        end: AppConstants.spacing8,
+        bottom: AppConstants.spacing12,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,7 +177,7 @@ class _JobCard extends StatelessWidget {
               ),
               if (onDismiss != null)
                 IconButton(
-                  tooltip: 'Dismiss',
+                  tooltip: context.l10n.jobsDismiss,
                   icon: Icon(Icons.close_rounded, color: tokens.textMuted),
                   onPressed: onDismiss,
                 ),
@@ -197,7 +203,10 @@ class _JobCard extends StatelessWidget {
                 ),
               ),
               if (onCancel != null)
-                TextButton(onPressed: onCancel, child: const Text('Stop'))
+                TextButton(
+                  onPressed: onCancel,
+                  child: Text(context.l10n.jobsStop),
+                )
               else if (actionLabel != null)
                 TextButton(onPressed: onOpen, child: Text(actionLabel)),
             ],
@@ -217,9 +226,7 @@ class _ProgressLine extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Re-read the live job so the bar animates with the registry.
     final live =
-        ref.watch(
-          extractionJobsProvider.select((s) => s.job(job.jobId)),
-        ) ??
+        ref.watch(extractionJobsProvider.select((s) => s.job(job.jobId))) ??
         job;
     return PaperProgressTrack(
       value: live.progress,

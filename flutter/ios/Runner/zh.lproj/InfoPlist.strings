@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI 需要相机权限，以拍摄您的穿搭和衣橱物品。";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI 需要访问您的照片图库，以选择您的穿搭和衣橱物品图片。";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI 需要将 AI 生成的穿搭照片保存至您的照片图库。";

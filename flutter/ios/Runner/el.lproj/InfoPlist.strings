@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "Το FitCheck AI χρειάζεται πρόσβαση στην κάμερα για να φωτογραφίζετε τα ρούχα σας.";
+"NSPhotoLibraryUsageDescription" = "Το FitCheck AI χρειάζεται πρόσβαση στις φωτογραφίες για να επιλέξετε items.";
+"NSPhotoLibraryAddUsageDescription" = "Το FitCheck AI χρειάζεται άδεια αποθήκευσης των νέων σας outfits.";

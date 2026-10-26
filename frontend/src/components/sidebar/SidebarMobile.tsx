@@ -12,9 +12,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { useTranslation } from '@/i18n'
 
 export function SidebarMobileTrigger() {
   const { toggleMobile } = useSidebar()
+  const { t } = useTranslation()
 
   return (
     <Button
@@ -22,7 +24,7 @@ export function SidebarMobileTrigger() {
       size="icon"
       onClick={toggleMobile}
       className="md:hidden"
-      aria-label="Open navigation menu"
+      aria-label={t('nav.mainNavigation')}
     >
       <Menu className="h-6 w-6" />
     </Button>
@@ -31,12 +33,15 @@ export function SidebarMobileTrigger() {
 
 export function SidebarMobile() {
   const { isMobileOpen, setIsMobileOpen } = useSidebar()
+  const { t } = useTranslation()
 
   return (
     <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-      <SheetContent side="left" className="flex w-72 flex-col px-0 pb-[calc(1.5rem+var(--safe-area-bottom))] pt-[calc(1rem+var(--safe-area-top))]">
+      {/* `start`, not `left`: in an RTL locale the drawer has to slide in from
+          the right, where the sidebar actually is. */}
+      <SheetContent side="start" className="flex w-72 flex-col px-0 pb-[calc(1.5rem+var(--safe-area-bottom))] pt-[calc(1rem+var(--safe-area-top))]">
         <SheetHeader className="border-b border-border px-2 py-3">
-          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
+          <SheetTitle className="sr-only">{t('nav.mainNavigation')}</SheetTitle>
           <SidebarLogo />
         </SheetHeader>
 
@@ -48,7 +53,7 @@ export function SidebarMobile() {
                 key={item.href}
                 href={item.href}
                 icon={item.icon}
-                label={item.name}
+                label={t(item.labelKey)}
                 badge={item.badge}
               />
             ))}

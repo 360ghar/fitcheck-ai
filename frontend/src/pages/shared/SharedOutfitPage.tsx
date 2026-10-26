@@ -16,8 +16,10 @@ import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { SEO, OutfitJsonLd } from '@/components/seo'
 import { useIsAuthenticated } from '@/stores/authStore'
 import { withAuthContext } from '@/pages/auth/authRedirect'
+import { useTranslation } from '@/i18n'
 
 export default function SharedOutfitPage() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const isAuthenticated = useIsAuthenticated()
   const [outfit, setOutfit] = useState<PublicOutfit | null>(null)
@@ -77,10 +79,10 @@ export default function SharedOutfitPage() {
       )}
 
       <div className="min-h-svh bg-background">
-      <div className="max-w-4xl mx-auto pl-[max(1rem,var(--safe-area-left))] pr-[max(1rem,var(--safe-area-right))] sm:px-6 lg:px-8 pt-[calc(1.5rem+var(--safe-area-top))] pb-6 md:py-10">
+      <div className="max-w-4xl mx-auto ps-[max(1rem,var(--safe-area-left))] pe-[max(1rem,var(--safe-area-right))] sm:px-6 lg:px-8 pt-[calc(1.5rem+var(--safe-area-top))] pb-6 md:py-10">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <Link to="/" className="text-xl font-bold text-primary">
-            FitCheck<span className="font-light text-muted-foreground ml-1">AI</span>
+            FitCheck<span className="font-light text-muted-foreground ms-1">AI</span>
           </Link>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <Button variant="outline" asChild className="w-full sm:w-auto">
@@ -94,7 +96,7 @@ export default function SharedOutfitPage() {
                     authenticated users to /dashboard and discards returnTo;
                     link straight to the outfit when already signed in. */}
                 <Link to={isAuthenticated ? `/outfits/${id}` : withAuthContext('/auth/login', undefined, `/outfits/${id}`)}>
-                  Open in app
+                  {t('shared.openInApp')}
                 </Link>
               </Button>
             )}
@@ -103,13 +105,13 @@ export default function SharedOutfitPage() {
 
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin inline-block mr-2" />
-            Loading shared outfit…
+            <Loader2 className="h-6 w-6 animate-spin inline-block me-2" />
+            {t('shared.loading')}
           </div>
         ) : error ? (
           <div className="bg-card rounded-lg p-6 text-center sm:p-8">
             <Layers className="mx-auto h-12 w-12 text-muted-foreground/60" />
-            <h1 className="mt-4 text-lg font-semibold text-foreground">Outfit not available</h1>
+            <h1 className="mt-4 text-lg font-semibold text-foreground">{t('shared.unavailable')}</h1>
             <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           </div>
         ) : outfit ? (
@@ -147,7 +149,7 @@ export default function SharedOutfitPage() {
 
               {outfit.items?.length > 0 && (
                 <div>
-                  <div className="text-sm font-semibold text-foreground mb-2">Items</div>
+                  <div className="text-sm font-semibold text-foreground mb-2">{t('shared.items')}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {outfit.items.map((it) => (
                       <div key={it.id} className="p-3 rounded-lg border">

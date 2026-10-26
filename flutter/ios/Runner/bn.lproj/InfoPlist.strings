@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "আপনার পোশাক এবং ওয়ারড্রোবের ছবি তুলতে FitCheck AI-এর ক্যামেরা ব্যবহারের অনুমতি প্রয়োজন।";
+"NSPhotoLibraryUsageDescription" = "আপনার পোশাক এবং ওয়ারড্রোবের ছবি বেছে নিতে FitCheck AI-এর ফটো লাইব্রেরি অ্যাক্সেস প্রয়োজন।";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI-এর এআই-জেনারেটেড পোশাকের ছবিগুলো আপনার ফটো লাইব্রেরিতে সংরক্ষণ করা প্রয়োজন।";

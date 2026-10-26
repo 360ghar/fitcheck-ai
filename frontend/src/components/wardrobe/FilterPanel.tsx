@@ -29,8 +29,9 @@ import {
   BottomSheetFooter,
   BottomSheetTrigger,
 } from '@/components/ui/bottom-sheet'
-import { DEFAULT_USE_CASES, formatUseCaseLabel, normalizeUseCase } from '@/lib/use-cases'
+import { DEFAULT_USE_CASES, normalizeUseCase } from '@/lib/use-cases'
 import { cn } from '@/lib/utils'
+import { colorLabel, useTranslation, describeUseCase, useFormattingLocale } from '@/i18n'
 import type { Category, Condition } from '@/types'
 
 // ============================================================================
@@ -64,49 +65,53 @@ interface FilterPanelProps {
 // CONSTANTS
 // ============================================================================
 
-const CATEGORIES: { value: Category | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Categories' },
-  { value: 'tops', label: 'Tops' },
-  { value: 'bottoms', label: 'Bottoms' },
-  { value: 'shoes', label: 'Shoes' },
-  { value: 'accessories', label: 'Accessories' },
-  { value: 'outerwear', label: 'Outerwear' },
-  { value: 'swimwear', label: 'Swimwear' },
-  { value: 'activewear', label: 'Activewear' },
+// `value` is the canonical stored enum and never changes; `labelKey` is what
+// the user reads. Resolved at render, not here, so a language switch repaints.
+const CATEGORIES: { value: Category | 'all'; labelKey: string }[] = [
+  { value: 'all', labelKey: 'filters.allCategories' },
+  { value: 'tops', labelKey: 'taxonomy.category.tops' },
+  { value: 'bottoms', labelKey: 'taxonomy.category.bottoms' },
+  { value: 'shoes', labelKey: 'taxonomy.category.shoes' },
+  { value: 'accessories', labelKey: 'taxonomy.category.accessories' },
+  { value: 'outerwear', labelKey: 'taxonomy.category.outerwear' },
+  { value: 'swimwear', labelKey: 'taxonomy.category.swimwear' },
+  { value: 'activewear', labelKey: 'taxonomy.category.activewear' },
 ]
 
-const CONDITIONS: { value: Condition | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Conditions' },
-  { value: 'clean', label: 'Clean' },
-  { value: 'dirty', label: 'Dirty' },
-  { value: 'laundry', label: 'In Laundry' },
-  { value: 'repair', label: 'Needs Repair' },
-  { value: 'donate', label: 'To Donate' },
+const CONDITIONS: { value: Condition | 'all'; labelKey: string }[] = [
+  { value: 'all', labelKey: 'filters.allConditions' },
+  { value: 'clean', labelKey: 'taxonomy.condition.clean' },
+  { value: 'dirty', labelKey: 'taxonomy.condition.dirty' },
+  { value: 'laundry', labelKey: 'taxonomy.condition.laundry' },
+  { value: 'repair', labelKey: 'taxonomy.condition.repair' },
+  { value: 'donate', labelKey: 'taxonomy.condition.donate' },
 ]
 
 const SORT_OPTIONS = [
-  { value: 'date_added', label: 'Date Added' },
-  { value: 'name', label: 'Name' },
-  { value: 'category', label: 'Category' },
-  { value: 'times_worn', label: 'Times Worn' },
+  { value: 'date_added', labelKey: 'filters.dateAdded' },
+  { value: 'name', labelKey: 'filters.name' },
+  { value: 'category', labelKey: 'filters.category' },
+  { value: 'times_worn', labelKey: 'filters.timesWorn' },
 ]
 
-const COMMON_COLORS = [
-  { value: 'all', label: 'All Colors', color: null },
-  { value: 'Black', label: 'Black', color: '#000000' },
-  { value: 'White', label: 'White', color: '#FFFFFF' },
-  { value: 'Gray', label: 'Gray', color: '#6B7280' },
-  { value: 'Navy', label: 'Navy', color: '#1E3A5F' },
-  { value: 'Brown', label: 'Brown', color: '#92400E' },
-  { value: 'Beige', label: 'Beige', color: '#D4C4B0' },
-  { value: 'Red', label: 'Red', color: '#DC2626' },
-  { value: 'Blue', label: 'Blue', color: '#2563EB' },
-  { value: 'Green', label: 'Green', color: '#16A34A' },
-  { value: 'Yellow', label: 'Yellow', color: '#EAB308' },
-  { value: 'Pink', label: 'Pink', color: '#EC4899' },
-  { value: 'Purple', label: 'Purple', color: '#9333EA' },
-  { value: 'Orange', label: 'Orange', color: '#EA580C' },
-  { value: 'Tan', label: 'Tan', color: '#D2B48C' },
+// Colour names are translated by `colorLabel(t, value)`, which is keyed on the
+// stored value; a colour the AI invented falls through as itself.
+const COMMON_COLORS: { value: string; color: string | null }[] = [
+  { value: 'all', color: null },
+  { value: 'Black', color: '#000000' },
+  { value: 'White', color: '#FFFFFF' },
+  { value: 'Gray', color: '#6B7280' },
+  { value: 'Navy', color: '#1E3A5F' },
+  { value: 'Brown', color: '#92400E' },
+  { value: 'Beige', color: '#D4C4B0' },
+  { value: 'Red', color: '#DC2626' },
+  { value: 'Blue', color: '#2563EB' },
+  { value: 'Green', color: '#16A34A' },
+  { value: 'Yellow', color: '#EAB308' },
+  { value: 'Pink', color: '#EC4899' },
+  { value: 'Purple', color: '#9333EA' },
+  { value: 'Orange', color: '#EA580C' },
+  { value: 'Tan', color: '#D2B48C' },
 ]
 
 // ============================================================================
@@ -120,6 +125,8 @@ export function FilterPanel({
   onSortChange,
   onResetFilters,
 }: FilterPanelProps) {
+  const { t } = useTranslation()
+  const formattingLocale = useFormattingLocale()
   const [isOpen, setIsOpen] = useState(false)
   const [customUseCase, setCustomUseCase] = useState('')
 
@@ -157,10 +164,10 @@ export function FilterPanel({
         {/* Search */}
         <div className="min-w-0 flex-[1_1_0%] md:flex-[1_1_18rem]">
           <SearchBar
-            placeholder="Search items..."
+            placeholder={t('filters.searchPlaceholder')}
             value={filters.search}
             onChange={(e) => onFilterChange('search', e.target.value)}
-            aria-label="Search items"
+            aria-label={t('filters.searchLabel')}
           />
         </div>
 
@@ -183,7 +190,7 @@ export function FilterPanel({
               >
                 <SlidersHorizontal className="h-4 w-4" />
                 {activeFilterCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 --end-1 w-4 h-4 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
                     {activeFilterCount}
                   </span>
                 )}
@@ -194,16 +201,16 @@ export function FilterPanel({
               footer={
                 <BottomSheetFooter>
                   <Button variant="outline" onClick={onResetFilters} className="flex-1">
-                    Clear All
+                    {t('filters.clearAll')}
                   </Button>
                   <Button onClick={() => setIsOpen(false)} className="flex-1">
-                    Apply Filters
+                    {t('filters.apply')}
                   </Button>
                 </BottomSheetFooter>
               }
             >
               <BottomSheetHeader>
-                <BottomSheetTitle>Filters & Sort</BottomSheetTitle>
+                <BottomSheetTitle>{t('filters.filtersAndSort')}</BottomSheetTitle>
                 <BottomSheetDescription className="sr-only">
                   Choose wardrobe filters, sorting, and grid or list view.
                 </BottomSheetDescription>
@@ -212,18 +219,18 @@ export function FilterPanel({
               <div className="py-4 space-y-6">
                 {/* Category Section */}
                 <div className="space-y-2">
-                  <label htmlFor="filter-category-mobile" className="text-sm font-medium text-foreground">Category</label>
+                  <label htmlFor="filter-category-mobile" className="text-sm font-medium text-foreground">{t('filters.category')}</label>
                   <Select
                     value={filters.category}
                     onValueChange={(value) => onFilterChange('category', value as ItemFilters['category'])}
                   >
                     <SelectTrigger id="filter-category-mobile" className="w-full">
-                      <SelectValue placeholder="Category" />
+                      <SelectValue placeholder={t('filters.category')} />
                     </SelectTrigger>
                     <SelectContent>
                       {CATEGORIES.map((cat) => (
                         <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
+                          {t(cat.labelKey)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -232,7 +239,7 @@ export function FilterPanel({
 
                 {/* Color Section */}
                 <div className="space-y-3">
-                  <span id="filter-color-label-mobile" className="text-sm font-medium text-foreground">Color</span>
+                  <span id="filter-color-label-mobile" className="text-sm font-medium text-foreground">{t('filters.color')}</span>
                   <div role="group" aria-labelledby="filter-color-label-mobile" className="flex flex-wrap gap-2">
                     {COMMON_COLORS.map((c) => (
                       <button
@@ -253,7 +260,7 @@ export function FilterPanel({
                             style={{ backgroundColor: c.color }}
                           />
                         )}
-                        <span>{c.label}</span>
+                        <span>{colorLabel(t, c.value)}</span>
                       </button>
                     ))}
                   </div>
@@ -261,18 +268,18 @@ export function FilterPanel({
 
                 {/* Condition Section */}
                 <div className="space-y-2">
-                  <label htmlFor="filter-condition-mobile" className="text-sm font-medium text-foreground">Condition</label>
+                  <label htmlFor="filter-condition-mobile" className="text-sm font-medium text-foreground">{t('filters.condition')}</label>
                   <Select
                     value={filters.condition}
                     onValueChange={(value) => onFilterChange('condition', value as ItemFilters['condition'])}
                   >
                     <SelectTrigger id="filter-condition-mobile" className="w-full">
-                      <SelectValue placeholder="Condition" />
+                      <SelectValue placeholder={t('filters.condition')} />
                     </SelectTrigger>
                     <SelectContent>
                       {CONDITIONS.map((cond) => (
                         <SelectItem key={cond.value} value={cond.value}>
-                          {cond.label}
+                          {t(cond.labelKey)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -281,7 +288,7 @@ export function FilterPanel({
 
                 {/* Use Case Section */}
                 <div className="space-y-3">
-                  <span id="filter-usecase-label-mobile" className="text-sm font-medium text-foreground">Use Case</span>
+                  <span id="filter-usecase-label-mobile" className="text-sm font-medium text-foreground">{t('filters.useCase')}</span>
                   <div role="group" aria-labelledby="filter-usecase-label-mobile" className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -307,18 +314,18 @@ export function FilterPanel({
                             : 'border-border hover:border-primary/50'
                         )}
                       >
-                        {formatUseCaseLabel(useCase)}
+                        {describeUseCase(t, useCase, formattingLocale)}
                       </button>
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <label htmlFor="wardrobe-custom-use-case" className="sr-only">Custom use case</label>
+                    <label htmlFor="wardrobe-custom-use-case" className="sr-only">{t('filters.customUseCase')}</label>
                     <Input
                       id="wardrobe-custom-use-case"
                       name="custom_use_case"
                       autoComplete="off"
                       className="min-w-0 flex-1"
-                      placeholder="Custom use case…"
+                      placeholder={t('filters.customUseCasePlaceholder')}
                       value={customUseCase}
                       onChange={(e) => setCustomUseCase(e.target.value)}
                       onKeyDown={(e) => {
@@ -336,7 +343,7 @@ export function FilterPanel({
 
                 {/* Favorites Toggle */}
                 <div className="space-y-2">
-                  <span className="text-sm font-medium text-foreground">Quick Filters</span>
+                  <span className="text-sm font-medium text-foreground">{t('filters.quickFilters')}</span>
                   <button
                     type="button"
                     onClick={() => onFilterChange('isFavorite', !filters.isFavorite)}
@@ -349,25 +356,25 @@ export function FilterPanel({
                     )}
                   >
                     <Heart className={cn('h-5 w-5', filters.isFavorite && 'fill-current')} />
-                    <span className="font-medium">Favorites Only</span>
+                    <span className="font-medium">{t('filters.favoritesOnly')}</span>
                   </button>
                 </div>
 
                 {/* Sort Section */}
                 <div className="space-y-2">
-                  <label htmlFor="filter-sortby-mobile" className="text-sm font-medium text-foreground">Sort By</label>
+                  <label htmlFor="filter-sortby-mobile" className="text-sm font-medium text-foreground">{t('filters.sortBy')}</label>
                   <div className="flex gap-2">
                     <Select
                       value={sort.sortBy}
                       onValueChange={(value) => onSortChange('sortBy', value as SortOptions['sortBy'])}
                     >
                       <SelectTrigger id="filter-sortby-mobile" className="flex-1">
-                        <SelectValue placeholder="Sort by" />
+                        <SelectValue placeholder={t('filters.sortBy')} />
                       </SelectTrigger>
                       <SelectContent>
                         {SORT_OPTIONS.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
+                            {t(opt.labelKey)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -375,7 +382,7 @@ export function FilterPanel({
                     <Button
                       variant="outline"
                       size="icon"
-                      aria-label={sort.sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+                      aria-label={sort.sortOrder === 'asc' ? t('filters.sortAscending') : t('filters.sortDescending')}
                       onClick={() => onSortChange('sortOrder', sort.sortOrder === 'asc' ? 'desc' : 'asc')}
                     >
                       {sort.sortOrder === 'asc' ? (
@@ -389,23 +396,23 @@ export function FilterPanel({
 
                 {/* View Toggle */}
                 <div className="space-y-2">
-                  <span id="filter-view-label-mobile" className="text-sm font-medium text-foreground">View</span>
+                  <span id="filter-view-label-mobile" className="text-sm font-medium text-foreground">{t('filters.view')}</span>
                   <div role="group" aria-labelledby="filter-view-label-mobile" className="flex gap-2">
                     <Button
                       variant={sort.isGridView ? 'default' : 'outline'}
                       className="flex-1"
                       onClick={() => onSortChange('isGridView', true)}
                     >
-                      <Grid3x3 className="h-4 w-4 mr-2" />
-                      Grid
+                      <Grid3x3 className="h-4 w-4 me-2" />
+                      {t('common.grid')}
                     </Button>
                     <Button
                       variant={!sort.isGridView ? 'default' : 'outline'}
                       className="flex-1"
                       onClick={() => onSortChange('isGridView', false)}
                     >
-                      <List className="h-4 w-4 mr-2" />
-                      List
+                      <List className="h-4 w-4 me-2" />
+                      {t('common.list')}
                     </Button>
                   </div>
                 </div>
@@ -423,12 +430,12 @@ export function FilterPanel({
             onValueChange={(value) => onFilterChange('category', value as ItemFilters['category'])}
           >
             <SelectTrigger className="w-[160px] lg:w-[180px]">
-              <SelectValue placeholder="Category" />
+              <SelectValue placeholder={t('filters.category')} />
             </SelectTrigger>
             <SelectContent>
               {CATEGORIES.map((cat) => (
                 <SelectItem key={cat.value} value={cat.value}>
-                  {cat.label}
+                  {t(cat.labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -440,7 +447,7 @@ export function FilterPanel({
             onValueChange={(value) => onFilterChange('color', value === 'all' ? '' : value)}
           >
             <SelectTrigger className="w-[160px] lg:w-[180px]">
-              <SelectValue placeholder="Color" />
+              <SelectValue placeholder={t('filters.color')} />
             </SelectTrigger>
             <SelectContent>
               {COMMON_COLORS.map((c) => (
@@ -452,7 +459,7 @@ export function FilterPanel({
                         style={{ backgroundColor: c.color }}
                       />
                     )}
-                    <span>{c.label}</span>
+                    <span>{colorLabel(t, c.value)}</span>
                   </div>
                 </SelectItem>
               ))}
@@ -465,12 +472,12 @@ export function FilterPanel({
             onValueChange={(value) => onFilterChange('condition', value as ItemFilters['condition'])}
           >
             <SelectTrigger className="w-[160px] lg:w-[180px]">
-              <SelectValue placeholder="Condition" />
+              <SelectValue placeholder={t('filters.condition')} />
             </SelectTrigger>
             <SelectContent>
               {CONDITIONS.map((cond) => (
                 <SelectItem key={cond.value} value={cond.value}>
-                  {cond.label}
+                  {t(cond.labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -483,12 +490,12 @@ export function FilterPanel({
               onValueChange={(value) => onSortChange('sortBy', value as SortOptions['sortBy'])}
             >
               <SelectTrigger className="w-[160px] lg:w-[180px]">
-                <SelectValue placeholder="Sort by" />
+                <SelectValue placeholder={t('filters.sortBy')} />
               </SelectTrigger>
               <SelectContent>
                 {SORT_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -498,7 +505,7 @@ export function FilterPanel({
               size="icon"
               onClick={() => onSortChange('sortOrder', sort.sortOrder === 'asc' ? 'desc' : 'asc')}
               title={sort.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-              aria-label={sort.sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+              aria-label={sort.sortOrder === 'asc' ? t('filters.sortAscending') : t('filters.sortDescending')}
             >
               {sort.sortOrder === 'asc' ? (
                 <SortAsc className="h-5 w-5" />
@@ -528,7 +535,7 @@ export function FilterPanel({
             <Button
               variant={sort.isGridView ? 'default' : 'outline'}
               size="icon"
-              aria-label="Grid view"
+              aria-label={t('filters.gridView')}
               onClick={() => onSortChange('isGridView', true)}
             >
               <Grid3x3 className="h-5 w-5" />
@@ -536,7 +543,7 @@ export function FilterPanel({
             <Button
               variant={!sort.isGridView ? 'default' : 'outline'}
               size="icon"
-              aria-label="List view"
+              aria-label={t('filters.listView')}
               onClick={() => onSortChange('isGridView', false)}
             >
               <List className="h-5 w-5" />
@@ -546,7 +553,7 @@ export function FilterPanel({
       </div>
 
       <div className="hidden md:block mt-3 pt-3 border-t border-border">
-        <span id="filter-usecase-label-desktop" className="text-sm font-medium text-foreground">Use Case</span>
+        <span id="filter-usecase-label-desktop" className="text-sm font-medium text-foreground">{t('filters.useCase')}</span>
         <div role="group" aria-labelledby="filter-usecase-label-desktop" className="mt-2 flex flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -564,17 +571,17 @@ export function FilterPanel({
               size="sm"
               onClick={() => setOccasionFilter(useCase)}
             >
-              {formatUseCaseLabel(useCase)}
+              {describeUseCase(t, useCase, formattingLocale)}
             </Button>
           ))}
           <div className="flex items-center gap-2">
-            <label htmlFor="wardrobe-custom-use-case-mobile" className="sr-only">Custom use case</label>
+            <label htmlFor="wardrobe-custom-use-case-mobile" className="sr-only">{t('filters.customUseCase')}</label>
             <Input
               id="wardrobe-custom-use-case-mobile"
               name="custom_use_case"
               autoComplete="off"
               className="h-9 w-[180px]"
-              placeholder="Custom use case…"
+              placeholder={t('filters.customUseCasePlaceholder')}
               value={customUseCase}
               onChange={(e) => setCustomUseCase(e.target.value)}
               onKeyDown={(e) => {
@@ -594,15 +601,15 @@ export function FilterPanel({
       {/* Active filters */}
       {hasActiveFilters && (
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border overflow-x-auto scrollbar-hide">
-          <span className="text-sm text-muted-foreground shrink-0">Active:</span>
+          <span className="text-sm text-muted-foreground shrink-0">{t('filters.active')}</span>
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
             {filters.category !== 'all' && (
               <Badge variant="secondary" className="gap-1 shrink-0">
-                {CATEGORIES.find((c) => c.value === filters.category)?.label}
+                {t(CATEGORIES.find((c) => c.value === filters.category)?.labelKey ?? 'filters.category')}
                 <button
                   type="button"
                   onClick={() => onFilterChange('category', 'all')}
-                  aria-label="Remove category filter"
+                  aria-label={t('filters.removeCategory')}
                   className="hover:text-foreground touch-target flex items-center justify-center"
                 >
                   <X className="h-3 w-3" />
@@ -619,7 +626,7 @@ export function FilterPanel({
                 <button
                   type="button"
                   onClick={() => onFilterChange('color', '')}
-                  aria-label="Remove color filter"
+                  aria-label={t('filters.removeColor')}
                   className="hover:text-foreground touch-target flex items-center justify-center"
                 >
                   <X className="h-3 w-3" />
@@ -628,11 +635,11 @@ export function FilterPanel({
             )}
             {filters.occasion && (
               <Badge variant="secondary" className="gap-1 shrink-0">
-                {formatUseCaseLabel(filters.occasion)}
+                {describeUseCase(t, filters.occasion, formattingLocale)}
                 <button
                   type="button"
                   onClick={() => onFilterChange('occasion', '')}
-                  aria-label="Remove use case filter"
+                  aria-label={t('filters.removeUseCase')}
                   className="hover:text-foreground touch-target flex items-center justify-center"
                 >
                   <X className="h-3 w-3" />
@@ -641,11 +648,11 @@ export function FilterPanel({
             )}
             {filters.condition !== 'all' && (
               <Badge variant="secondary" className="gap-1 shrink-0">
-                {CONDITIONS.find((c) => c.value === filters.condition)?.label}
+                {t(CONDITIONS.find((c) => c.value === filters.condition)?.labelKey ?? 'filters.condition')}
                 <button
                   type="button"
                   onClick={() => onFilterChange('condition', 'all')}
-                  aria-label="Remove condition filter"
+                  aria-label={t('filters.removeCondition')}
                   className="hover:text-foreground touch-target flex items-center justify-center"
                 >
                   <X className="h-3 w-3" />
@@ -655,11 +662,11 @@ export function FilterPanel({
             {filters.isFavorite && (
               <Badge variant="secondary" className="gap-1 shrink-0 text-primary">
                 <Heart className="h-3 w-3 fill-current" />
-                Favorites
+                {t('common.favorites')}
                 <button
                   type="button"
                   onClick={() => onFilterChange('isFavorite', false)}
-                  aria-label="Remove favorites filter"
+                  aria-label={t('filters.removeFavorites')}
                   className="hover:text-foreground touch-target flex items-center justify-center"
                 >
                   <X className="h-3 w-3" />
@@ -671,9 +678,9 @@ export function FilterPanel({
             variant="ghost"
             size="sm"
             onClick={onResetFilters}
-            className="ml-auto shrink-0"
+            className="ms-auto shrink-0"
           >
-            Clear all
+            {t('filters.clearAll')}
           </Button>
         </div>
       )}

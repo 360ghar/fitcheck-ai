@@ -59,7 +59,7 @@ function Option({ label, value, selected, onSelect }: OptionProps) {
       />
       <span
         className={cn(
-          'block min-h-[44px] rounded-md border px-4 py-2.5 text-left text-sm font-semibold transition-colors',
+          'block min-h-[44px] rounded-md border px-4 py-2.5 text-start-left text-sm font-semibold transition-colors',
           'peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2',
           selected
             ? 'border-foreground bg-foreground text-background'
@@ -94,7 +94,11 @@ function StepShell({ titleId, title, description, children, footer }: StepShellP
   )
 }
 
+import { describeUseCase, styleLabel, useFormattingLocale, useTranslation } from '@/i18n'
+
 export default function WelcomePage() {
+  const { t } = useTranslation()
+  const formattingLocale = useFormattingLocale()
   const navigate = useNavigate()
   const location = useLocation()
   const requested = getSafeReturnTo(new URLSearchParams(location.search).get('returnTo'))
@@ -159,11 +163,11 @@ export default function WelcomePage() {
 
   return (
     <div className="flex min-h-svh flex-col bg-background px-4 pb-[calc(var(--safe-area-bottom)+1.5rem)] pt-[calc(var(--safe-area-top)+1rem)] sm:px-6">
-      <SEO title="Welcome | FitCheck AI" noIndex={true} />
+      <SEO title={`${t('welcome.metaTitle')} | FitCheck AI`} noIndex={true} />
       <header className="mx-auto flex w-full max-w-xl items-center justify-between">
         <Logo markSize={36} wordmarkClassName="text-lg" />
         <Button variant="ghost" onClick={() => finish()}>
-          Skip setup
+          {t('welcome.skipSetup')}
         </Button>
       </header>
 
@@ -173,15 +177,15 @@ export default function WelcomePage() {
         {step === 'who' && (
           <StepShell
             titleId="welcome-who"
-            title="Who are we styling?"
-            description="Sets the model for try-on and photoshoots. You can change it in your profile."
+            title={t('welcome.whoAreWeStyling')}
+            description={t('welcome.whoDescription')}
             footer={
               <>
                 <Button variant="ghost" onClick={() => setStep('style')}>
-                  Skip
+                  {t('welcome.skip')}
                 </Button>
                 <Button onClick={saveGender} disabled={!gender || saving} className="min-w-[8rem]">
-                  {saving ? 'Saving…' : 'Continue'}
+                  {saving ? t('common.saving') : t('common.continue')}
                 </Button>
               </>
             }
@@ -203,35 +207,35 @@ export default function WelcomePage() {
         {step === 'style' && (
           <StepShell
             titleId="welcome-style"
-            title="What do you wear most?"
-            description="Pick any. Outfit ideas start from these."
+            title={t('welcome.whatDoYouWearMost')}
+            description={t('welcome.styleDescription')}
             footer={
               <>
                 <Button variant="ghost" onClick={() => setStep('closet')}>
-                  Skip
+                  {t('welcome.skip')}
                 </Button>
                 <Button
                   onClick={saveStyle}
                   disabled={saving || (styles.length === 0 && occasions.length === 0)}
                   className="min-w-[8rem]"
                 >
-                  {saving ? 'Saving…' : 'Continue'}
+                  {saving ? t('common.saving') : t('common.continue')}
                 </Button>
               </>
             }
           >
             <h2 id="welcome-styles" className="mt-8 text-sm font-semibold text-foreground">
-              Styles
+              {t('welcome.styles')}
             </h2>
             <div role="group" aria-labelledby="welcome-styles" className="mt-3 flex flex-wrap gap-2">
               {STYLE_SUGGESTIONS.map((s) => (
                 <FilterChip key={s} active={styles.includes(s)} onClick={() => { preferencesEdited.current = true; setStyles(toggle(styles, s)) }}>
-                  {s}
+                  {styleLabel(t, s)}
                 </FilterChip>
               ))}
             </div>
             <h2 id="welcome-occasions" className="mt-8 text-sm font-semibold text-foreground">
-              Occasions
+              {t('welcome.occasions')}
             </h2>
             <div role="group" aria-labelledby="welcome-occasions" className="mt-3 flex flex-wrap gap-2">
               {OCCASION_SUGGESTIONS.map((o) => (
@@ -240,7 +244,7 @@ export default function WelcomePage() {
                   active={occasions.includes(o)}
                   onClick={() => { preferencesEdited.current = true; setOccasions(toggle(occasions, o)) }}
                 >
-                  {o}
+                  {describeUseCase(t, o, formattingLocale)}
                 </FilterChip>
               ))}
             </div>
@@ -250,15 +254,15 @@ export default function WelcomePage() {
         {step === 'closet' && (
           <StepShell
             titleId="welcome-closet"
-            title="Add your first pieces."
-            description="Photograph a few clothes, or a pile of them. Each piece is cut out and filed for you."
+            title={t('welcome.addFirstPieces')}
+            description={t('welcome.closetDescription')}
             footer={
               <>
                 <Button variant="ghost" onClick={() => finish()}>
-                  Later
+                  {t('welcome.later')}
                 </Button>
                 <Button onClick={() => finish('/wardrobe?action=add')} className="min-w-[8rem]">
-                  Add clothes
+                  {t('welcome.addClothes')}
                 </Button>
               </>
             }
@@ -269,7 +273,7 @@ export default function WelcomePage() {
               sizes="(min-width: 640px) 576px, 100vw"
               width={640}
               height={480}
-              alt="A cream sweater, jeans and white sneakers laid flat"
+              alt={t('welcome.heroAlt')}
               className="mt-8 aspect-[4/3] w-full rounded-2xl object-cover shadow-pressed"
             />
           </StepShell>

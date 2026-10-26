@@ -32,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type { Season, Style } from '@/types'
 import { DEFAULT_SEASON, DEFAULT_STYLE, SEASONS, STYLES } from './constants'
+import { seasonLabel, styleLabel, useTranslation } from '@/i18n'
 
 export interface OutfitMetaBarProps {
   name: string
@@ -64,6 +65,7 @@ export function OutfitMetaBar({
   onDescriptionChange,
   disabled,
 }: OutfitMetaBarProps) {
+  const { t } = useTranslation()
   const [isNoteOpen, setIsNoteOpen] = React.useState(description.trim().length > 0)
   const [tagsValue, setTagsValue] = React.useState(() => tags.join(', '))
 
@@ -78,13 +80,13 @@ export function OutfitMetaBar({
       <div className="grid grid-cols-1 gap-md md:grid-cols-12 md:items-end">
         <div className="md:col-span-4">
           <Label htmlFor="outfit-name" className="sr-only">
-            Outfit name
+            {t('outfits.nameLabel')}
           </Label>
           <Input
             id="outfit-name"
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
-            placeholder="Name this look"
+            placeholder={t('outfits.namePlaceholder')}
             disabled={disabled}
             autoComplete="off"
           />
@@ -92,20 +94,20 @@ export function OutfitMetaBar({
 
         <div className="md:col-span-2">
           <Label htmlFor="outfit-style" className="sr-only">
-            Style
+            {t('outfits.style')}
           </Label>
           <Select
             value={style || DEFAULT_STYLE}
             onValueChange={(value) => onStyleChange(value as Style)}
             disabled={disabled}
           >
-            <SelectTrigger id="outfit-style" className="capitalize">
-              <SelectValue placeholder="Style" />
+            <SelectTrigger id="outfit-style">
+              <SelectValue placeholder={t('outfits.style')} />
             </SelectTrigger>
             <SelectContent>
               {STYLES.map((option) => (
-                <SelectItem key={option} value={option} className="capitalize">
-                  {option}
+                <SelectItem key={option} value={option}>
+                  {styleLabel(t, option)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -114,20 +116,20 @@ export function OutfitMetaBar({
 
         <div className="md:col-span-2">
           <Label htmlFor="outfit-season" className="sr-only">
-            Season
+            {t('outfits.season')}
           </Label>
           <Select
             value={season || DEFAULT_SEASON}
             onValueChange={(value) => onSeasonChange(value as Season)}
             disabled={disabled}
           >
-            <SelectTrigger id="outfit-season" className="capitalize">
-              <SelectValue placeholder="Season" />
+            <SelectTrigger id="outfit-season">
+              <SelectValue placeholder={t('outfits.season')} />
             </SelectTrigger>
             <SelectContent>
               {SEASONS.map((option) => (
-                <SelectItem key={option} value={option} className="capitalize">
-                  {option}
+                <SelectItem key={option} value={option}>
+                  {seasonLabel(t, option)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -136,13 +138,13 @@ export function OutfitMetaBar({
 
         <div className="md:col-span-2">
           <Label htmlFor="outfit-occasion" className="sr-only">
-            Occasion
+            {t('outfits.occasion')}
           </Label>
           <Input
             id="outfit-occasion"
             value={occasion}
             onChange={(e) => onOccasionChange(e.target.value)}
-            placeholder="Occasion"
+            placeholder={t('outfits.occasion')}
             disabled={disabled}
             autoComplete="off"
           />
@@ -150,7 +152,7 @@ export function OutfitMetaBar({
 
         <div className="md:col-span-2">
           <Label htmlFor="outfit-tags" className="sr-only">
-            Tags, comma separated
+            {t('outfits.tagsPlaceholder')}
           </Label>
           <Input
             id="outfit-tags"
@@ -164,7 +166,7 @@ export function OutfitMetaBar({
                   .filter(Boolean)
               )
             }
-            placeholder="Tags"
+            placeholder={t('outfits.tags')}
             disabled={disabled}
             autoComplete="off"
           />
@@ -186,17 +188,17 @@ export function OutfitMetaBar({
             className={cn('h-4 w-4 transition-transform', isNoteOpen && 'rotate-180')}
             aria-hidden="true"
           />
-          {isNoteOpen ? 'Hide note' : 'Add a note'}
+          {isNoteOpen ? t('outfits.hideNote') : t('outfits.addNote')}
         </CollapsibleTrigger>
         <CollapsibleContent>
           <Label htmlFor="outfit-description" className="sr-only">
-            Note
+            {t('outfits.note')}
           </Label>
           <Textarea
             id="outfit-description"
             value={description}
             onChange={(e) => onDescriptionChange(e.target.value)}
-            placeholder="Anything worth remembering about this look"
+            placeholder={t('outfits.notePlaceholder')}
             rows={2}
             disabled={disabled}
             className="mt-sm"

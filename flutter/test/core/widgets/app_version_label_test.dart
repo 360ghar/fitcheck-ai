@@ -1,5 +1,6 @@
 import 'package:fitcheck_ai/core/services/code_push_service.dart';
 import 'package:fitcheck_ai/core/widgets/app_version_label.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -19,7 +20,10 @@ void main() {
 
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Widget host() => const MaterialApp(home: Scaffold(body: AppVersionLabel()));
+  Widget host() => MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'), home: Scaffold(body: AppVersionLabel()));
 
   testWidgets('shows a placeholder before the platform read resolves',
       (tester) async {

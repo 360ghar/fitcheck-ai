@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI potrzebuje dostępu do aparatu, aby robić zdjęcia Twoich stylizacji i ubrań.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI potrzebuje dostępu do biblioteki zdjęć, aby wybrać zdjęcia Twoich stylizacji i ubrań.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI potrzebuje możliwości zapisu wygenerowanych przez sztuczną inteligencję zdjęć stylizacji do Twojej biblioteki.";

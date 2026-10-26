@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "A FitCheck AI-nak a kamerához kell hozzáférnie, hogy fotókat készíthess az öltözékeidről és ruháidról.";
+"NSPhotoLibraryUsageDescription" = "A FitCheck AI-nak a fotókönyvtárhoz kell hozzáférnie, hogy képeket választhass ki az öltözékeidről és ruháidról.";
+"NSPhotoLibraryAddUsageDescription" = "A FitCheck AI-nak mentenie kell az MI által generált öltözékfotókat a fotókönyvtáradba.";

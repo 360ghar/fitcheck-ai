@@ -20,6 +20,7 @@ import 'dart:io' show HttpStatus;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file/file.dart' as fs;
 import 'package:fitcheck_ai/core/widgets/app_image.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,6 +58,9 @@ class _NoDiskFileSystem implements FileSystem {
 
 Widget _appImageHarness(AppImage image, {BaseCacheManager? cacheManager}) {
   return MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
     home: Scaffold(
       body: Center(
         child: AppImage(

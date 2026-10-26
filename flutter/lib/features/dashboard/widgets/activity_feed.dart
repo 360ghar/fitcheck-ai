@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../wardrobe/repositories/item_repository.dart';
@@ -21,11 +22,11 @@ class ActivityFeed extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Recently', style: text.headlineSmall),
+          Text(context.l10n.dashboardRailRecently, style: text.headlineSmall),
           const SizedBox(height: AppConstants.spacing8),
           if (activities.isEmpty)
             Text(
-              'New pieces and outfits show up here.',
+              context.l10n.dashboardActivityEmpty,
               style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             )
           else
@@ -96,7 +97,9 @@ class _ActivityRow extends StatelessWidget {
           ),
           if (activity.timestamp case final at?)
             Padding(
-              padding: const EdgeInsets.only(left: AppConstants.spacing8),
+              padding: const EdgeInsetsDirectional.only(
+                start: AppConstants.spacing8,
+              ),
               child: Text(
                 AppDateUtils.formatRelativeTime(at.toLocal()),
                 style: text.bodySmall?.copyWith(color: tokens.textMuted),

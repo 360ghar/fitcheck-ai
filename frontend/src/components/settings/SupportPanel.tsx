@@ -42,20 +42,23 @@ import { useToast } from '@/components/ui/use-toast'
 import { submitFeedback, getMyTickets, type TicketCategory, type TicketListItem } from '@/api/feedback'
 
 const CATEGORIES = [
-  { value: 'bug_report', label: 'Bug Report', icon: Bug, color: 'text-tint-coral' },
-  { value: 'feature_request', label: 'Feature Request', icon: Lightbulb, color: 'text-tint-amber' },
-  { value: 'general_feedback', label: 'General Feedback', icon: MessageSquare, color: 'text-tint-blue' },
-  { value: 'support_request', label: 'Support Request', icon: HelpCircle, color: 'text-tint-teal' },
+  { value: 'bug_report', labelKey: 'support.cat.bugReport', icon: Bug, color: 'text-tint-coral' },
+  { value: 'feature_request', labelKey: 'support.cat.featureRequest', icon: Lightbulb, color: 'text-tint-amber' },
+  { value: 'general_feedback', labelKey: 'support.cat.generalFeedback', icon: MessageSquare, color: 'text-tint-blue' },
+  { value: 'support_request', labelKey: 'support.cat.supportRequest', icon: HelpCircle, color: 'text-tint-teal' },
 ] as const
 
-const STATUS_BADGES: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
-  open: { label: 'Open', variant: 'default' },
-  in_progress: { label: 'In Progress', variant: 'secondary' },
-  resolved: { label: 'Resolved', variant: 'outline' },
-  closed: { label: 'Closed', variant: 'outline' },
+const STATUS_BADGES: Record<string, { labelKey: string; variant: 'default' | 'secondary' | 'outline' }> = {
+  open: { labelKey: 'support.status.open', variant: 'default' },
+  in_progress: { labelKey: 'support.status.inProgress', variant: 'secondary' },
+  resolved: { labelKey: 'support.status.resolved', variant: 'outline' },
+  closed: { labelKey: 'support.status.closed', variant: 'outline' },
 }
 
+import { formatDate, useTranslation } from '@/i18n'
+
 export function SupportPanel() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -147,9 +150,9 @@ export function SupportPanel() {
   return (
     <div className="space-y-4 md:space-y-6">
       <div>
-        <h3 className="text-base md:text-lg font-medium text-foreground">Support & Feedback</h3>
+        <h3 className="text-base md:text-lg font-medium text-foreground">{t('support.title')}</h3>
         <p className="text-sm text-muted-foreground">
-          Report bugs, request features, or share your feedback
+          {t('support.subtitle')}
         </p>
       </div>
 
@@ -158,8 +161,8 @@ export function SupportPanel() {
         <div className="p-4 bg-success-pale border border-success/30 rounded-lg flex items-center gap-3">
           <CheckCircle className="h-5 w-5 text-success" />
           <div>
-            <p className="text-success font-medium">Thank you for your feedback!</p>
-            <p className="text-success text-sm">We'll review it and get back to you if needed.</p>
+            <p className="text-success font-medium">{t('support.thanks')}</p>
+            <p className="text-success text-sm">{t('support.thanksBody')}</p>
           </div>
         </div>
       )}
@@ -169,10 +172,10 @@ export function SupportPanel() {
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-primary" />
-            Submit Feedback
+            {t('support.submit')}
           </CardTitle>
           <CardDescription>
-            We value your input and read every submission
+            {t('support.submitValue')}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
@@ -180,7 +183,7 @@ export function SupportPanel() {
             {/* Category Selection */}
             <div>
               <label htmlFor="support-category" className="block text-sm font-medium text-foreground mb-2">
-                Category *
+                {t('support.categoryLabel')}
               </label>
               <Select value={category} onValueChange={(v) => setCategory(v as TicketCategory)}>
                 <SelectTrigger id="support-category">
@@ -191,7 +194,7 @@ export function SupportPanel() {
                     <SelectItem key={cat.value} value={cat.value}>
                       <div className="flex items-center gap-2">
                         <cat.icon className={`h-4 w-4 ${cat.color}`} />
-                        {cat.label}
+                        {t(cat.labelKey)}
                       </div>
                     </SelectItem>
                   ))}
@@ -202,13 +205,13 @@ export function SupportPanel() {
             {/* Subject */}
             <div>
               <label htmlFor="support-subject" className="block text-sm font-medium text-foreground mb-2">
-                Subject *
+                {t('support.subjectLabel')}
               </label>
               <Input
                 id="support-subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="Brief summary of your feedback"
+                placeholder={t('support.subjectPlaceholder')}
                 maxLength={200}
                 disabled={isSubmitting}
               />
@@ -217,7 +220,7 @@ export function SupportPanel() {
             {/* Description */}
             <div>
               <label htmlFor="support-description" className="block text-sm font-medium text-foreground mb-2">
-                Description *
+                {t('support.descriptionLabel')}
               </label>
               <Textarea
                 id="support-description"
@@ -225,24 +228,24 @@ export function SupportPanel() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={
                   category === 'bug_report'
-                    ? "Describe the bug: What happened? What did you expect? Steps to reproduce?"
+                    ? t('support.bugPlaceholder')
                     : category === 'feature_request'
-                    ? "Describe the feature you'd like and how it would help you"
-                    : "Share your thoughts, suggestions, or questions"
+                    ? t('support.featurePlaceholder')
+                    : t('support.generalPlaceholder')
                 }
                 rows={5}
                 maxLength={5000}
                 disabled={isSubmitting}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                {description.length}/5000 characters
+                {t('support.charCount', { count: description.length })}
               </p>
             </div>
 
             {/* Attachments */}
             <div>
               <label htmlFor="support-attachments" className="block text-sm font-medium text-foreground mb-2">
-                Attachments (optional)
+                {t('support.attachments')}
               </label>
               <input
                 id="support-attachments"
@@ -265,7 +268,7 @@ export function SupportPanel() {
                       type="button"
                       onClick={() => removeAttachment(index)}
                       className="touch-target flex items-center justify-center text-muted-foreground hover:text-foreground"
-                      aria-label={`Remove attachment ${file.name}`}
+                      aria-label={t('support.removeAttachment', { name: file.name })}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -279,13 +282,13 @@ export function SupportPanel() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isSubmitting}
                   >
-                    <Paperclip className="h-4 w-4 mr-2" />
-                    Add Screenshot
+                    <Paperclip className="h-4 w-4 me-2" />
+                    {t('support.addScreenshot')}
                   </Button>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Up to 5 images, max 5MB each
+                {t('support.attachmentHint')}
               </p>
             </div>
 
@@ -294,13 +297,13 @@ export function SupportPanel() {
               <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Submitting...
+                    <Loader2 className="h-4 w-4 me-2 animate-spin" />
+                    {t('support.submitting')}
                   </>
                 ) : (
                   <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Submit Feedback
+                    <Send className="h-4 w-4 me-2" />
+                    {t('support.submit')}
                   </>
                 )}
               </Button>
@@ -315,7 +318,7 @@ export function SupportPanel() {
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
-              Your Submissions
+              {t('support.yourSubmissions')}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
@@ -338,12 +341,12 @@ export function SupportPanel() {
                         <div className="min-w-0">
                           <p className="font-medium truncate">{ticket.subject}</p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(ticket.created_at).toLocaleDateString()}
+                            {formatDate(new Date(ticket.created_at))}
                           </p>
                         </div>
                       </div>
                       <Badge variant={status?.variant || 'default'} className="shrink-0 whitespace-nowrap">
-                        {status?.label || ticket.status}
+                        {status?.labelKey ? t(status.labelKey) : ticket.status}
                       </Badge>
                     </div>
                   )
@@ -359,10 +362,10 @@ export function SupportPanel() {
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            Legal
+            {t('support.legal')}
           </CardTitle>
           <CardDescription>
-            Privacy policy and terms of service
+            {t('support.legalDesc')}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
@@ -374,7 +377,7 @@ export function SupportPanel() {
               className="touch-target flex w-full items-center gap-2 px-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
-              Privacy Policy
+              {t('support.privacyPolicy')}
             </a>
             <a
               href="/terms"
@@ -383,14 +386,14 @@ export function SupportPanel() {
               className="touch-target flex w-full items-center gap-2 px-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
-              Terms of Service
+              {t('support.termsOfService')}
             </a>
             <a
               href="mailto:info@fitcheckaiapp.com?subject=Account%20Deletion%20Request&body=Please%20delete%20my%20account%20and%20all%20associated%20data."
               className="touch-target flex w-full items-center gap-2 px-2 py-2 text-sm text-destructive/80 hover:text-destructive transition-colors"
             >
               <Trash2 className="h-4 w-4" />
-              Request Account Deletion
+              {t('support.requestDeletion')}
             </a>
           </div>
         </CardContent>

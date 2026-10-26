@@ -1,0 +1,412 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #lk-bg {
+      background: #FCFAF8;
+    }
+    .lk-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .lk-glow-a {
+      width: 660px;
+      height: 660px;
+      left: 350px;
+      top: -140px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.14) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .lk-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -200px;
+      top: 920px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .lk-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 540px;
+      top: 1320px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .lk-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— the Facet F mark (the real brand geometry) ————— */
+    #lk-mark {
+      position: absolute;
+      left: 280px;
+      top: 400px;
+      width: 520px;
+      height: 520px;
+    }
+    #lk-mark svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #lk-mark .lk-draw {
+      fill: none;
+      stroke: #1A1A1A;
+      stroke-width: 6;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+    #lk-mark .lk-fill {
+      opacity: 0;
+    }
+
+    /* ————— the closing wordmark ————— */
+    #lk-wordmark {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 1000px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    #lk-wordmark .lk-l {
+      display: inline-block;
+      font-family: "Bodoni Moda", serif;
+      font-size: 120px;
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      color: #1A1A1A;
+    }
+    #lk-wordmark .lk-ai {
+      font-style: italic;
+      color: #078675;
+      margin-left: 12px;
+    }
+
+    /* ————— the sign-off pill ————— */
+    #lk-signoff {
+      position: absolute;
+      left: 130px;
+      top: 1210px;
+      width: 820px;
+      text-align: center;
+      padding: 22px 10px 26px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      box-shadow: 8px 8px 0 rgba(26, 26, 26, 0.08);
+      opacity: 0;
+    }
+    #lk-signoff .lk-w {
+      display: inline-block;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+    #lk-signoff .lk-hl {
+      display: inline-block;
+      background: #74DEC0;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      padding: 2px 22px 6px;
+      margin: 0 4px;
+      white-space: nowrap;
+    }
+
+    /* ————— Finn, the folded-paper host ————— */
+    #lk-finn-inner {
+      position: absolute;
+      left: 56px;
+      bottom: 280px;
+      width: 340px;
+      height: 276px;
+      opacity: 0;
+    }
+    #lk-finn-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="13-lockup"
+    data-start="0"
+    data-duration="7.00"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="lk-bg" data-start="0" data-duration="7.00" data-track-index="0">
+      <div class="lk-glow lk-glow-a"></div>
+      <div class="lk-glow lk-glow-b"></div>
+      <div class="lk-glow lk-glow-c"></div>
+      <div class="lk-grain"></div>
+    </div>
+
+    <!-- the Facet F mark draws itself on -->
+    <div class="clip" id="lk-mark-clip" data-start="0" data-duration="7.00" data-track-index="1">
+      <div id="lk-mark">
+        <svg viewBox="240 225 800 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FitCheck AI — Facet F">
+          <defs>
+            <linearGradient id="lk-stem-fill" x1="365" y1="700" x2="555" y2="655" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#079B86"/><stop offset=".62" stop-color="#087F70"/><stop offset="1" stop-color="#064F47"/>
+            </linearGradient>
+            <linearGradient id="lk-top-fill" x1="459" y1="265" x2="851" y2="449" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#10A18C"/><stop offset=".55" stop-color="#159983"/><stop offset="1" stop-color="#078675"/>
+            </linearGradient>
+            <linearGradient id="lk-crease-fill" x1="542" y1="630" x2="649" y2="727" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#119983"/><stop offset="1" stop-color="#04594F"/>
+            </linearGradient>
+            <linearGradient id="lk-arm-fill" x1="568" y1="584" x2="821" y2="716" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#74DEC0"/><stop offset=".58" stop-color="#8AE8D0"/><stop offset="1" stop-color="#71DBC2"/>
+            </linearGradient>
+          </defs>
+          <g id="lk-facet-f">
+            <!-- stem: stroke draws on, then the gradient fill lands -->
+            <path class="lk-draw" id="lk-draw-stem" d="M376 367 C385 359 395 370 411 378 L543 444 V1003 Q543 1018 529 1018 H400 Q363 1018 363 982 V389 Q363 376 376 367Z"/>
+            <path class="lk-fill" id="lk-fill-stem" fill="url(#lk-stem-fill)" d="M376 367 C385 359 395 370 411 378 L543 444 V1003 Q543 1018 529 1018 H400 Q363 1018 363 982 V389 Q363 376 376 367Z"/>
+            <!-- top -->
+            <path class="lk-draw" id="lk-draw-top" d="M376 367 L470 266 Q483 252 502 252 H901 Q917 252 917 268 V379 Q917 392 907 402 L871 437 Q863 445 851 445 H543 L411 378 Q387 360 376 367Z"/>
+            <path class="lk-fill" id="lk-fill-top" fill="url(#lk-top-fill)" d="M376 367 L470 266 Q483 252 502 252 H901 Q917 252 917 268 V379 Q917 392 907 402 L871 437 Q863 445 851 445 H543 L411 378 Q387 360 376 367Z"/>
+            <!-- crease -->
+            <path class="lk-draw" id="lk-draw-crease" d="M543 594 L654 722 L543 770Z"/>
+            <path class="lk-fill" id="lk-fill-crease" fill="url(#lk-crease-fill)" d="M543 594 L654 722 L543 770Z"/>
+            <!-- arm -->
+            <path class="lk-draw" id="lk-draw-arm" d="M543 594 L576 570 Q591 558 610 558 H844 Q860 558 860 574 V662 Q860 678 849 689 L829 709 Q816 722 798 722 H654Z"/>
+            <path class="lk-fill" id="lk-fill-arm" fill="url(#lk-arm-fill)" d="M543 594 L576 570 Q591 558 610 558 H844 Q860 558 860 574 V662 Q860 678 849 689 L829 709 Q816 722 798 722 H654Z"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- the closing wordmark -->
+    <div class="clip" id="lk-wordmark-clip" data-start="0" data-duration="7.00" data-track-index="2">
+      <div id="lk-wordmark"><span class="lk-l" id="lk-l0">F</span><span class="lk-l" id="lk-l1">i</span><span class="lk-l" id="lk-l2">t</span><span class="lk-l" id="lk-l3">C</span><span class="lk-l" id="lk-l4">h</span><span class="lk-l" id="lk-l5">e</span><span class="lk-l" id="lk-l6">c</span><span class="lk-l" id="lk-l7">k</span><span class="lk-l lk-ai" id="lk-ai">AI</span></div>
+    </div>
+
+    <!-- the sign-off pill -->
+    <div class="clip" id="lk-signoff-clip" data-start="0" data-duration="7.00" data-track-index="3">
+      <div id="lk-signoff"><span class="lk-w" id="lk-w0">Worn</span> <span class="lk-w" id="lk-w1">yesterday.</span> <span class="lk-hl" id="lk-hl"><span class="lk-w" id="lk-w2">Decided</span> <span class="lk-w" id="lk-w3">in</span> <span class="lk-w" id="lk-w4">seconds.</span></span></div>
+    </div>
+
+    <!-- Finn, waving — the host's goodbye -->
+    <div class="clip" id="lk-finn" data-start="0" data-duration="7.00" data-track-index="4">
+      <div id="lk-finn-inner">
+        <svg
+          id="lk-finn-svg"
+          viewBox="6 20 240 186"
+          xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          aria-label="Finn, the folded-paper host"
+        >
+          <path
+            d="M54 126 L24 98 Q18 92 18 102 L18 142 Q18 150 26 148 L54 160 Z"
+            fill="#74DEC0"
+            stroke="#1A1A1A"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <rect x="74" y="180" width="34" height="18" rx="9" fill="#078675" stroke="#1A1A1A" stroke-width="1.4" />
+          <rect x="132" y="180" width="34" height="18" rx="9" fill="#078675" stroke="#1A1A1A" stroke-width="1.4" />
+          <rect x="46" y="28" width="148" height="160" rx="30" fill="#078675" stroke="#1A1A1A" stroke-width="1.5" />
+          <path
+            d="M136 28 L164 28 Q194 28 194 58 L194 86 Z"
+            fill="#74DEC0"
+            stroke="#1A1A1A"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <path d="M48 122 L98 60" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <path d="M72 186 L176 116" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <path d="M48 156 L102 186" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <circle cx="92" cy="104" r="7.5" fill="#1A1A1A" />
+          <circle cx="138" cy="104" r="7.5" fill="#1A1A1A" />
+          <path d="M98 132 Q115 146 132 132" fill="none" stroke="#1A1A1A" stroke-width="2.1" stroke-linecap="round" />
+          <rect x="170" y="140" width="68" height="28" rx="14" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.4" />
+          <circle cx="185" cy="154" r="4" fill="#078675" />
+          <text
+            x="214"
+            y="159"
+            text-anchor="middle"
+            font-family="Space Grotesk, sans-serif"
+            font-size="13"
+            font-weight="600"
+            letter-spacing="1.5"
+            fill="#1A1A1A"
+          >HOST</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["13-lockup"] = tl;
+
+        // Per-path draw lengths (viewBox units) — the real Facet F geometry.
+        var DRAW = [
+          { id: "#lk-draw-stem", len: 1700, at: 0.1 },
+          { id: "#lk-draw-top", len: 1200, at: 0.28 },
+          { id: "#lk-draw-crease", len: 480, at: 0.46 },
+          { id: "#lk-draw-arm", len: 760, at: 0.64 },
+        ];
+        var FILL = [
+          { id: "#lk-fill-stem", at: 0.6 },
+          { id: "#lk-fill-top", at: 0.75 },
+          { id: "#lk-fill-crease", at: 0.9 },
+          { id: "#lk-fill-arm", at: 1.05 },
+        ];
+
+        var BEATS = {
+          wordmark: 1.42,
+          wordStagger: 0.045,
+          ai: 1.85,
+          finn: 1.35,
+          wave: 1.5,
+          signoff: 1.25,
+          w0: 1.32,
+          w1: 1.52,
+          hl: 2.25,
+          w2: 2.25,
+          w3: 2.7,
+          w4: 2.85,
+          jitter: 3.2,
+        };
+
+        /* ——— Scene 1 (0–1.3s): the Facet F draws itself on (svg-path-draw) ——— */
+        for (var d = 0; d < DRAW.length; d++) {
+          (function (spec) {
+            var el = document.querySelector(spec.id);
+            el.style.strokeDasharray = spec.len;
+            el.style.strokeDashoffset = spec.len;
+            tl.to(el, { strokeDashoffset: 0, duration: 0.5, ease: "power2.inOut" }, spec.at);
+          })(DRAW[d]);
+        }
+        for (var f = 0; f < FILL.length; f++) {
+          (function (spec) {
+            tl.to(spec.id, { opacity: 1, duration: 0.35, ease: "power2.out" }, spec.at);
+          })(FILL[f]);
+        }
+
+        /* ——— Scene 2 (1.4–2.2s): the wordmark resolves; Finn waves ——— */
+        for (var l = 0; l < 8; l++) {
+          (function (idx) {
+            tl.fromTo("#lk-l" + idx, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, ease: "power3.out" }, BEATS.wordmark + idx * BEATS.wordStagger);
+          })(l);
+        }
+        tl.fromTo("#lk-ai", { y: 30, scale: 0.6, transformOrigin: "50% 50%", opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.4, ease: "back.out(1.5)" }, BEATS.ai);
+
+        // Finn steps in and waves once — a single finite, bounded gesture.
+        tl.fromTo("#lk-finn-inner", { y: 80, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, BEATS.finn);
+        tl.to("#lk-finn-inner", { rotation: -7, transformOrigin: "50% 92%", duration: 0.16, ease: "power1.out" }, BEATS.wave);
+        tl.to("#lk-finn-inner", { rotation: 5, duration: 0.2, ease: "power1.inOut" }, BEATS.wave + 0.16);
+        tl.to("#lk-finn-inner", { rotation: 0, duration: 0.24, ease: "power2.out" }, BEATS.wave + 0.36);
+
+        /* ——— Scene 3 (2.3–7.0s): the sign-off types on its VO cues ——— */
+        tl.fromTo("#lk-signoff", { scale: 0.94, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" }, BEATS.signoff);
+        var wAt = [BEATS.w0, BEATS.w1, BEATS.w2, BEATS.w3, BEATS.w4];
+        var wIds = ["#lk-w0", "#lk-w1", "#lk-w2", "#lk-w3", "#lk-w4"];
+        for (var w = 0; w < 5; w++) {
+          (function (sel, at) {
+            tl.fromTo(sel, { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.28, ease: "power3.out" }, at);
+          })(wIds[w], wAt[w]);
+        }
+        // The mint highlight wraps "decided in seconds" as it lands.
+        tl.fromTo("#lk-hl", { scale: 0.85, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.3, ease: "back.out(1.6)" }, BEATS.hl);
+
+        // Hold the read: stillness — only a subtle deterministic jitter on the mark.
+        var markEl = document.getElementById("lk-mark-clip");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 2.0,
+            duration: 7.00 - BEATS.jitter,
+            ease: "none",
+            onUpdate: function () {
+              var x = 1.4 * Math.sin(jit.p);
+              var y = 1.0 * Math.sin(jit.p * 1.31);
+              markEl.style.transform = "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

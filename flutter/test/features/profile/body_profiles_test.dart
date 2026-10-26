@@ -4,6 +4,7 @@ import 'package:fitcheck_ai/features/profile/models/body_profile_model.dart';
 import 'package:fitcheck_ai/features/profile/providers/body_profiles_provider.dart';
 import 'package:fitcheck_ai/features/profile/repositories/body_profile_repository.dart';
 import 'package:fitcheck_ai/features/profile/views/body_profiles_page.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,7 +47,10 @@ Future<void> _pump(WidgetTester tester, _Repo repo) async {
     ProviderScope(
       retry: noRetry,
       overrides: [bodyProfileRepositoryProvider.overrideWithValue(repo)],
-      child: const MaterialApp(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: MediaQuery(
           data: MediaQueryData(disableAnimations: true),
           child: BodyProfilesPage(),

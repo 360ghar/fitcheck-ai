@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../subscription/repositories/subscription_repository.dart';
 import '../providers/auth_provider.dart';
@@ -99,9 +100,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AuthHeading(
-            title: 'Create your closet',
-            subtitle: 'It takes a minute. Your first items are free.',
+          AuthHeading(
+            title: context.l10n.authCreateCloset,
+            subtitle: context.l10n.authCreateClosetBody,
           ),
           const SizedBox(height: AppConstants.spacing20),
           AutofillGroup(
@@ -116,11 +117,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     textCapitalization: TextCapitalization.words,
                     autofillHints: const [AutofillHints.name],
                     decoration: AuthFormStyles.inputDecoration(
-                      label: 'Name',
+                      label: context.l10n.authName,
                       icon: Icons.person_outline_rounded,
                     ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Enter your name' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? context.l10n.authEnterName
+                        : null,
                   ),
                   const SizedBox(height: AppConstants.spacing12),
                   TextFormField(
@@ -129,13 +131,15 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     textInputAction: TextInputAction.next,
                     autofillHints: const [AutofillHints.email],
                     decoration: AuthFormStyles.inputDecoration(
-                      label: 'Email',
+                      label: context.l10n.authEmail,
                       icon: Icons.mail_outline_rounded,
                     ),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Enter your email';
+                      if (v == null || v.trim().isEmpty) {
+                        return context.l10n.authEnterEmail;
+                      }
                       if (!isValidEmail(v.trim())) {
-                        return 'Enter a valid email';
+                        return context.l10n.authEnterValidEmail;
                       }
                       return null;
                     },
@@ -147,12 +151,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     textInputAction: TextInputAction.next,
                     autofillHints: const [AutofillHints.newPassword],
                     decoration: AuthFormStyles.inputDecoration(
-                      label: 'Password',
+                      label: context.l10n.authPassword,
                       icon: Icons.lock_outline_rounded,
                       suffixIcon: IconButton(
                         tooltip: _passwordVisible
-                            ? 'Hide password'
-                            : 'Show password',
+                            ? context.l10n.authHidePassword
+                            : context.l10n.authShowPassword,
                         icon: Icon(
                           _passwordVisible
                               ? Icons.visibility_off_outlined
@@ -164,8 +168,10 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                       ),
                     ),
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'Choose a password';
-                      if (v.length < 6) return 'At least 6 characters';
+                      if (v == null || v.isEmpty) {
+                        return context.l10n.authChoosePassword;
+                      }
+                      if (v.length < 6) return context.l10n.authPasswordTooShort;
                       return null;
                     },
                   ),
@@ -175,11 +181,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     obscureText: !_passwordVisible,
                     textInputAction: TextInputAction.next,
                     decoration: AuthFormStyles.inputDecoration(
-                      label: 'Confirm password',
+                      label: context.l10n.authConfirmPassword,
                       icon: Icons.lock_outline_rounded,
                     ),
                     validator: (v) => v != _passwordController.text
-                        ? 'Passwords do not match'
+                        ? context.l10n.authPasswordsDoNotMatch
                         : null,
                   ),
                   const SizedBox(height: AppConstants.spacing12),
@@ -190,7 +196,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     onChanged: _onReferralChanged,
                     onFieldSubmitted: (_) => _submit(),
                     decoration: AuthFormStyles.inputDecoration(
-                      label: 'Referral code (optional)',
+                      label: context.l10n.authReferralCode,
                       icon: Icons.redeem_outlined,
                       suffixIcon: referral == null
                           ? null
@@ -202,17 +208,17 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                                   ? tokens.success
                                   : tokens.error,
                               semanticLabel: referral.valid
-                                  ? 'Code accepted'
-                                  : 'Code not found',
+                                  ? context.l10n.authCodeAccepted
+                                  : context.l10n.authCodeNotFound,
                             ),
                     ).copyWith(
                       helperText: referral == null
                           ? null
                           : referral.valid && referral.referrer != null
-                          ? 'From ${referral.referrer}. You both get a month free.'
+                          ? context.l10n.authReferralFrom(referral.referrer!)
                           : referral.valid
                           ? null
-                          : 'We could not find this code.',
+                          : context.l10n.authReferralInvalid,
                     ),
                   ),
                 ],
@@ -221,7 +227,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           ),
           const SizedBox(height: AppConstants.spacing20),
           AuthPrimaryButton(
-            label: 'Create account',
+            label: context.l10n.authSignUp,
             isLoading: busy == AuthBusy.email,
             onPressed: _submit,
           ),
@@ -247,14 +253,14 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Have an account?',
+                context.l10n.authHaveAccount,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: tokens.textSecondary,
                 ),
               ),
               TextButton(
                 onPressed: () => context.pushReplacement(Routes.login),
-                child: const Text('Sign in'),
+                child: Text(context.l10n.authSignIn),
               ),
             ],
           ),

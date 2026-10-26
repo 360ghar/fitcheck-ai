@@ -66,10 +66,10 @@ export function LocationInput({
             ) : (
               <MapPin className="h-4 w-4" />
             )}
-            <span className="ml-2 sm:hidden">
+            <span className="ms-2 sm:hidden">
               {isAutoDetecting ? 'Detecting…' : 'Detect'}
             </span>
-            <span className="ml-2 hidden sm:inline">
+            <span className="ms-2 hidden sm:inline">
               {isAutoDetecting ? 'Detecting…' : 'Use my location'}
             </span>
           </Button>

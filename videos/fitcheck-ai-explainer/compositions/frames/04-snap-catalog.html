@@ -1,0 +1,582 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: normal;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 700;
+      src: url("assets/fonts/bodoni-moda-700-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Bodoni Moda";
+      font-style: italic;
+      font-weight: 800;
+      src: url("assets/fonts/bodoni-moda-800-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 500;
+      src: url("assets/fonts/space-grotesk-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 600;
+      src: url("assets/fonts/space-grotesk-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-weight: 700;
+      src: url("assets/fonts/space-grotesk-700.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      container-type: size;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ————— atmosphere: cream ground + radial candy glows + 4% grain ————— */
+    #sn-bg {
+      background: #FCFAF8;
+    }
+    .sn-glow {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .sn-glow-a {
+      width: 620px;
+      height: 620px;
+      left: 380px;
+      top: -180px;
+      background: radial-gradient(circle, rgba(7, 134, 117, 0.13) 0%, rgba(7, 134, 117, 0) 62%);
+    }
+    .sn-glow-b {
+      width: 560px;
+      height: 560px;
+      left: -200px;
+      top: 860px;
+      background: radial-gradient(circle, rgba(116, 222, 192, 0.11) 0%, rgba(116, 222, 192, 0) 62%);
+    }
+    .sn-glow-c {
+      width: 600px;
+      height: 600px;
+      left: 560px;
+      top: 1260px;
+      background: radial-gradient(circle, rgba(155, 250, 237, 0.1) 0%, rgba(155, 250, 237, 0) 62%);
+    }
+    .sn-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ————— floating-pill wallpaper (flat — no shadow) ————— */
+    .sn-pill {
+      position: absolute;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 24px;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      background: #FFFFFF;
+      color: #1A1A1A;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 21px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    #sn-wp1 { left: 88px;  top: 170px;  background: #51D6B0; }
+    #sn-wp2 { right: 80px; top: 220px;  background: #9BFAED; }
+    #sn-wp3 { left: 72px;  top: 1120px; background: #74DEC0; }
+    #sn-wp4 { right: 96px; top: 1500px; background: #5DF7E2; }
+
+    /* ————— the camera pill-card ————— */
+    #sn-card {
+      position: absolute;
+      left: 120px;
+      top: 230px;
+      width: 840px;
+      height: 800px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 48px;
+      box-shadow: 10px 10px 0 rgba(26, 26, 26, 0.08);
+    }
+
+    /* status header — mono pill-text, hard-cut token cycle */
+    #sn-status {
+      position: absolute;
+      left: 210px;
+      top: 278px;
+      width: 420px;
+      text-align: center;
+      padding: 10px 0 14px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      white-space: nowrap;
+    }
+
+    /* progress bar-track + jade fill (stat-bars-and-fills) */
+    #sn-bartrack {
+      position: absolute;
+      left: 190px;
+      top: 340px;
+      width: 460px;
+      height: 14px;
+      background: #EDE8DE;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+    #sn-barfill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      background: #078675;
+      border-radius: 9999px;
+      transform: scaleX(0);
+      transform-origin: 0 50%;
+    }
+
+    /* photo tiles cascading into the card */
+    .sn-tile {
+      position: absolute;
+      left: 190px;
+      width: 460px;
+      height: 150px;
+      border: 2px solid #1E1E1E;
+      border-radius: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #sn-tile-1 { top: 410px; background: #74DEC0; }
+    #sn-tile-2 { top: 580px; background: #51D6B0; }
+    #sn-tile-3 { top: 750px; background: #9BFAED; }
+    .sn-tile svg {
+      display: block;
+    }
+
+    /* the jade shutter pill-button */
+    #sn-shutter {
+      position: absolute;
+      left: 330px;
+      top: 915px;
+      width: 180px;
+      text-align: center;
+      padding: 16px 0 20px;
+      background: #078675;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #FFFFFF;
+    }
+    #sn-shutter-dot {
+      position: absolute;
+      left: 26px;
+      top: 30px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #FFFFFF;
+    }
+
+    /* ————— the receipt: item pills checking off ————— */
+    .sn-item {
+      position: absolute;
+      left: 316px;
+      width: 448px;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      box-shadow: 6px 6px 0 rgba(26, 26, 26, 0.08);
+      padding: 16px 26px 20px;
+      display: flex;
+      align-items: center;
+    }
+    #sn-item-1 { top: 1110px; }
+    #sn-item-2 { top: 1235px; }
+    #sn-item-3 { top: 1360px; }
+    .sn-check {
+      flex: 0 0 56px;
+      width: 56px;
+      height: 56px;
+      margin-right: 20px;
+    }
+    .sn-item-body {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .sn-item-name {
+      font-family: "Bodoni Moda", serif;
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.1;
+      color: #1A1A1A;
+    }
+    .sn-chip {
+      margin-top: 8px;
+      padding: 4px 16px 7px;
+      border: 2px solid #1E1E1E;
+      border-radius: 9999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+    }
+    .sn-chip-c0 { background: #74DEC0; }
+    .sn-chip-c1 { background: #51D6B0; }
+    .sn-chip-c2 { background: #9BFAED; }
+
+    /* ————— Finn + his checkmark badge, bottom-left ————— */
+    #sn-finn-inner {
+      position: absolute;
+      left: 40px;
+      top: 1320px;
+      width: 260px;
+      height: 202px;
+      opacity: 0;
+    }
+    #sn-finn-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #sn-badge {
+      position: absolute;
+      left: 228px;
+      top: 1298px;
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      border: 2px solid #1E1E1E;
+      box-shadow: 4px 4px 0 rgba(26, 26, 26, 0.08);
+      opacity: 0;
+    }
+    #sn-badge svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
+  <div
+    id="root"
+    data-composition-id="04-snap-catalog"
+    data-start="0"
+    data-duration="8.68"
+    data-width="1080"
+    data-height="1920"
+  >
+    <!-- atmosphere ground -->
+    <div class="clip" id="sn-bg" data-start="0" data-duration="8.68" data-track-index="0">
+      <div class="sn-glow sn-glow-a"></div>
+      <div class="sn-glow sn-glow-b"></div>
+      <div class="sn-glow sn-glow-c"></div>
+      <div class="sn-grain"></div>
+    </div>
+
+    <!-- floating-pill wallpaper -->
+    <div class="clip" id="sn-wallpaper" data-start="0" data-duration="8.68" data-track-index="1">
+      <div class="sn-pill" id="sn-wp1">Capture</div>
+      <div class="sn-pill" id="sn-wp2">Extract</div>
+      <div class="sn-pill" id="sn-wp3">Catalog</div>
+      <div class="sn-pill" id="sn-wp4">Search</div>
+    </div>
+
+    <!-- the camera pill-card -->
+    <div class="clip" id="sn-card-clip" data-start="0" data-duration="8.68" data-track-index="2">
+      <div id="sn-card">
+        <div id="sn-status">Ready</div>
+        <div id="sn-bartrack"><div id="sn-barfill"></div></div>
+        <div class="sn-tile" id="sn-tile-1">
+          <svg viewBox="0 0 120 90" width="150" height="112" aria-label="shirt photo">
+            <path d="M38 14 L52 6 L68 14 L86 30 L74 40 L74 78 L46 78 L46 40 L34 40 Z"
+              fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" />
+            <path d="M52 14 L52 78" fill="none" stroke="#1A1A1A" stroke-width="1.6" opacity="0.35" />
+          </svg>
+        </div>
+        <div class="sn-tile" id="sn-tile-2">
+          <svg viewBox="0 0 120 90" width="150" height="112" aria-label="jacket photo">
+            <path d="M40 12 L54 4 L66 4 L80 12 L94 28 L80 36 L80 78 L40 78 L40 36 L26 28 Z"
+              fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" />
+            <path d="M54 12 L54 78 M66 12 L66 78" fill="none" stroke="#1A1A1A" stroke-width="1.6" opacity="0.35" />
+            <path d="M40 44 L80 44" fill="none" stroke="#1A1A1A" stroke-width="1.6" opacity="0.35" />
+          </svg>
+        </div>
+        <div class="sn-tile" id="sn-tile-3">
+          <svg viewBox="0 0 120 90" width="150" height="112" aria-label="coat photo">
+            <path d="M40 8 L54 2 L66 2 L80 8 L92 24 L80 32 L80 84 L40 84 L40 32 L28 24 Z"
+              fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" />
+            <path d="M54 8 L54 84 M66 8 L66 84" fill="none" stroke="#1A1A1A" stroke-width="1.6" opacity="0.35" />
+            <path d="M40 52 L80 52" fill="none" stroke="#1A1A1A" stroke-width="2" opacity="0.5" />
+          </svg>
+        </div>
+        <div id="sn-shutter"><span id="sn-shutter-dot"></span>Snap</div>
+      </div>
+    </div>
+
+    <!-- the receipt: three item pills checking off -->
+    <div class="clip" id="sn-receipt" data-start="0" data-duration="8.68" data-track-index="3">
+      <div class="sn-item" id="sn-item-1">
+        <svg class="sn-check" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="24" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5" />
+          <path class="sn-tick" d="M17 29 L25 37 L40 21" fill="none" stroke="#078675" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <div class="sn-item-body">
+          <span class="sn-item-name">silk shirt</span>
+          <span class="sn-chip sn-chip-c0">Color</span>
+        </div>
+      </div>
+      <div class="sn-item" id="sn-item-2">
+        <svg class="sn-check" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="24" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5" />
+          <path class="sn-tick" d="M17 29 L25 37 L40 21" fill="none" stroke="#078675" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <div class="sn-item-body">
+          <span class="sn-item-name">denim jacket</span>
+          <span class="sn-chip sn-chip-c1">Fabric</span>
+        </div>
+      </div>
+      <div class="sn-item" id="sn-item-3">
+        <svg class="sn-check" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="24" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5" />
+          <path class="sn-tick" d="M17 29 L25 37 L40 21" fill="none" stroke="#078675" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <div class="sn-item-body">
+          <span class="sn-item-name">wool coat</span>
+          <span class="sn-chip sn-chip-c2">Pattern</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Finn with his checkmark badge -->
+    <div class="clip" id="sn-finn" data-start="0" data-duration="8.68" data-track-index="4">
+      <div id="sn-finn-inner">
+        <svg
+          id="sn-finn-svg"
+          viewBox="6 20 240 186"
+          xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          aria-label="Finn, the folded-paper host"
+        >
+          <path
+            d="M54 126 L24 98 Q18 92 18 102 L18 142 Q18 150 26 148 L54 160 Z"
+            fill="#74DEC0"
+            stroke="#1A1A1A"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <rect x="74" y="180" width="34" height="18" rx="9" fill="#078675" stroke="#1A1A1A" stroke-width="1.4" />
+          <rect x="132" y="180" width="34" height="18" rx="9" fill="#078675" stroke="#1A1A1A" stroke-width="1.4" />
+          <rect x="46" y="28" width="148" height="160" rx="30" fill="#078675" stroke="#1A1A1A" stroke-width="1.5" />
+          <path
+            d="M136 28 L164 28 Q194 28 194 58 L194 86 Z"
+            fill="#74DEC0"
+            stroke="#1A1A1A"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <path d="M48 122 L98 60" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <path d="M72 186 L176 116" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <path d="M48 156 L102 186" fill="none" stroke="#1A1A1A" stroke-width="0.9" opacity="0.2" />
+          <circle cx="92" cy="104" r="7.5" fill="#1A1A1A" />
+          <circle cx="138" cy="104" r="7.5" fill="#1A1A1A" />
+          <path d="M98 132 Q115 146 132 132" fill="none" stroke="#1A1A1A" stroke-width="2.1" stroke-linecap="round" />
+          <rect x="170" y="140" width="68" height="28" rx="14" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="1.4" />
+          <circle cx="185" cy="154" r="4" fill="#078675" />
+          <text
+            x="214"
+            y="159"
+            text-anchor="middle"
+            font-family="Space Grotesk, sans-serif"
+            font-size="13"
+            font-weight="600"
+            letter-spacing="1.5"
+            fill="#1A1A1A"
+          >HOST</text>
+        </svg>
+      </div>
+      <div id="sn-badge">
+        <svg viewBox="0 0 92 92">
+          <path d="M26 48 L40 62 L68 32" fill="none" stroke="#078675" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var build = function () {
+        if (typeof gsap === "undefined" || !gsap.timeline) {
+          setTimeout(build, 20);
+          return;
+        }
+
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["04-snap-catalog"] = tl;
+
+        var STATUS = ["Uploading…", "Extracting items…", "3 of 6 processed"];
+        var BEATS = {
+          card: 0.06,
+          shutter: 0.1,
+          snap: 0.3,
+          tiles: 0.45,
+          tileStagger: 0.18,
+          status1: 2.2,
+          status2: 2.55,
+          status3: 2.95,
+          barEnd: 3.35,
+          item1: 3.38,
+          item2: 3.79,
+          item3: 4.36,
+          finn: 4.6,
+          badge: 5.2,
+          jitter: 5.3,
+        };
+
+        /* ——— Scene 1 (0–2.1s): the camera card opens, the shutter fires, tiles cascade in ——— */
+        tl.fromTo(
+          "#sn-card",
+          { scale: 0.94, y: 24, opacity: 0 },
+          { scale: 1, y: 0, opacity: 1, duration: 0.5, ease: "power3.out" },
+          BEATS.card
+        );
+
+        // The jade shutter pill springs in (spring-pop entrance).
+        tl.fromTo(
+          "#sn-shutter",
+          { scale: 0.4, transformOrigin: "50% 50%", opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(1.7)" },
+          BEATS.shutter
+        );
+
+        // On "snap": a press-release spring fires (press-release-spring).
+        tl.to("#sn-shutter", { scale: 0.86, transformOrigin: "50% 50%", duration: 0.09, ease: "power2.in" }, BEATS.snap);
+        tl.to("#sn-shutter", { scale: 1.05, duration: 0.12, ease: "power2.out" }, BEATS.snap + 0.09);
+        tl.to("#sn-shutter", { scale: 1, duration: 0.14, ease: "power3.out" }, BEATS.snap + 0.21);
+
+        // Three photo tiles cascade into the card (center-outward expansion: from the card's center at 30% scale).
+        var tileTops = [410, 580, 750];
+        var cardCenterY = 230 + 400;
+        for (var t = 0; t < 3; t++) {
+          (function (el, top, idx) {
+            var dy = top + 75 - cardCenterY;
+            tl.fromTo(
+              el,
+              { y: -dy, scale: 0.3, opacity: 0 },
+              { y: 0, scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" },
+              BEATS.tiles + idx * BEATS.tileStagger
+            );
+          })(document.getElementById("sn-tile-" + (t + 1)), tileTops[t], t);
+        }
+
+        // Wallpaper pills settle in on the open (quiet power3 tails).
+        tl.fromTo("#sn-wp1", { scale: 0.5, rotation: -22, opacity: 0 }, { scale: 1, rotation: -10, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.05);
+        tl.fromTo("#sn-wp2", { scale: 0.5, rotation: 20, opacity: 0 }, { scale: 1, rotation: 11, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.13);
+        tl.fromTo("#sn-wp3", { scale: 0.5, rotation: -18, opacity: 0 }, { scale: 1, rotation: -9, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.21);
+        tl.fromTo("#sn-wp4", { scale: 0.5, rotation: 24, opacity: 0 }, { scale: 1, rotation: 12, opacity: 1, duration: 0.4, ease: "power3.out" }, 0.29);
+
+        /* ——— Scene 2 (2.2–3.4s): honest phase theater — the status header hard-cut swaps, the bar fills ——— */
+        var statusEl = document.getElementById("sn-status");
+        function swapStatus(at, text) {
+          tl.call(function () { statusEl.textContent = text; }, null, at);
+          tl.fromTo(statusEl, { opacity: 0.35 }, { opacity: 1, duration: 0.15, ease: "power1.out" }, at);
+        }
+        swapStatus(BEATS.status1, STATUS[0]);
+        swapStatus(BEATS.status2, STATUS[1]);
+        swapStatus(BEATS.status3, STATUS[2]);
+
+        // The bar-track fills in jade across the phase (stat-bars-and-fills, left origin).
+        tl.fromTo("#sn-barfill", { scaleX: 0 }, { scaleX: 1, duration: BEATS.barEnd - BEATS.status1, ease: "power3.out" }, BEATS.status1);
+
+        /* ——— Scene 3 (3.5–8.18s): the receipt cascades — item pills check off on their VO cues ——— */
+        var itemAt = [BEATS.item1, BEATS.item2, BEATS.item3];
+        for (var i = 0; i < 3; i++) {
+          (function (itemEl, tickEl, chipEl, at) {
+            // The pill rises in (power3 settle).
+            tl.fromTo(itemEl, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, at);
+            // Its check pops off a beat later (spring-pop).
+            tl.fromTo(tickEl, { scale: 0, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.28, ease: "back.out(1.7)" }, at + 0.14);
+            // Its candy attribute chip sprouts (spring-pop).
+            tl.fromTo(chipEl, { scale: 0.5, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.26, ease: "back.out(1.6)" }, at + 0.2);
+          })(
+            document.getElementById("sn-item-" + (i + 1)),
+            document.querySelectorAll("#sn-item-" + (i + 1) + " .sn-tick")[0],
+            document.querySelectorAll("#sn-item-" + (i + 1) + " .sn-chip")[0],
+            itemAt[i]
+          );
+        }
+
+        // Finn steps in, holding the moment; his checkmark badge pops.
+        tl.fromTo("#sn-finn-inner", { y: 60, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, BEATS.finn);
+        tl.fromTo("#sn-badge", { scale: 0, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.3, ease: "back.out(1.7)" }, BEATS.badge);
+
+        // Hold the read: stillness — only a subtle deterministic sine jitter on the receipt.
+        var receiptEl = document.getElementById("sn-receipt");
+        var jit = { p: 0 };
+        tl.to(
+          jit,
+          {
+            p: Math.PI * 2 * 2.0,
+            duration: 8.18 - BEATS.jitter,
+            ease: "none",
+            onUpdate: function () {
+              var x = 1.6 * Math.sin(jit.p);
+              var y = 1.2 * Math.sin(jit.p * 1.27);
+              receiptEl.style.transform = "translate3d(" + x.toFixed(2) + "px," + y.toFixed(2) + "px,0)";
+            },
+          },
+          BEATS.jitter
+        );
+
+        tl.seek(0);
+      };
+      build();
+    })();
+  </script>
+</template>

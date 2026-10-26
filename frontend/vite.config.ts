@@ -62,6 +62,13 @@ export default defineConfig(({ isSsrBuild }) => ({
               'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],
               'query-vendor': ['@tanstack/react-query', 'axios'],
               'state-vendor': ['zustand'],
+              // FormatJS: the ICU parser, message formatter and react-intl's
+              // context. Isolated so its ~25 kB gzip is cached across deploys
+              // independently of app code, and so the cost of ICU support is
+              // visible as its own line rather than buried in the entry chunk.
+              // The locale catalogs themselves are NOT here — they are separate
+              // per-language `import()` chunks (see src/i18n/loadLocale.ts).
+              'i18n-vendor': ['react-intl', 'intl-messageformat', '@formatjs/icu-messageformat-parser'],
             },
       },
     },

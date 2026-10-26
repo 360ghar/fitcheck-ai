@@ -12,7 +12,7 @@
  * 2. Every tile is `w-24` with a FIXED `h-24` image box and a single-line
  *    truncated name, so the tiles are identical in height and every rail's
  *    bottom edge lands on the same line. Ragged parallel rows are a tell.
- * 3. Each scroller gets `-mx-4 px-4 pr-8`, so the last tile is never shaved by
+ * 3. Each scroller gets `-mx-4 px-4 pe-8`, so the last tile is never shaved by
  *    the container edge — clear the cut.
  * 4. Images are `object-contain`, not `object-cover`. These are matted cutouts
  *    now; `cover` centre-cropped the silhouette of every portrait garment.
@@ -35,6 +35,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { compareCategories, type AvailableItem } from './constants'
+import { categoryLabel, useTranslation } from '@/i18n'
 
 export interface OutfitItemRailsProps {
   items: AvailableItem[]
@@ -55,6 +56,7 @@ export function OutfitItemRails({
   onRetry,
   disabled,
 }: OutfitItemRailsProps) {
+  const { t } = useTranslation()
   const [search, setSearch] = React.useState('')
   const [category, setCategory] = React.useState('all')
 
@@ -88,34 +90,34 @@ export function OutfitItemRails({
       <div className="mt-lg flex flex-col gap-sm sm:flex-row">
         <div className="relative flex-1">
           <Label htmlFor="outfit-item-search" className="sr-only">
-            Search your closet
+            {t('outfits.searchCloset')}
           </Label>
           <Search
-            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ash"
+            className="pointer-events-none absolute start-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ash"
             aria-hidden="true"
           />
           <Input
             id="outfit-item-search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search your closet"
-            className="pl-11"
+            placeholder={t('outfits.searchCloset')}
+            className="ps-11"
             autoComplete="off"
           />
         </div>
         <div className="sm:w-48">
           <Label htmlFor="outfit-item-category" className="sr-only">
-            Filter by category
+            {t('outfits.filterByCategory')}
           </Label>
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger id="outfit-item-category" className="capitalize">
-              <SelectValue placeholder="All categories" />
+            <SelectTrigger id="outfit-item-category">
+              <SelectValue placeholder={t('outfits.allCategories')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="all">{t('outfits.allCategories')}</SelectItem>
               {categories.map((option) => (
-                <SelectItem key={option} value={option} className="capitalize">
-                  {option}
+                <SelectItem key={option} value={option}>
+                  {categoryLabel(t, option)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -145,7 +147,7 @@ export function OutfitItemRails({
         <div className="mt-xl">
           <p className="text-sm text-destructive">{error}</p>
           <Button variant="tertiary" onClick={onRetry} className="mt-sm px-0">
-            Try again
+            {t('common.retry')}
           </Button>
         </div>
       ) : grouped.length === 0 ? (
@@ -165,10 +167,10 @@ export function OutfitItemRails({
                 </span>
               </p>
 
-              {/* pr-8 is the "clear the cut" allowance: the last tile scrolls
+              {/* pe-8 is the "clear the cut" allowance: the last tile scrolls
                   fully clear of the container's right edge instead of being
                   shaved by it. */}
-              <div className="-mx-4 mt-sm flex snap-x gap-sm overflow-x-auto px-4 pb-xxs pr-8">
+              <div className="-mx-4 mt-sm flex snap-x gap-sm overflow-x-auto px-4 pb-xxs pe-8">
                 {categoryItems.map((item) => {
                   const isSelected = selectedIds.has(item.id)
                   return (
@@ -179,7 +181,7 @@ export function OutfitItemRails({
                       disabled={disabled}
                       aria-pressed={isSelected}
                       className={cn(
-                        'relative w-24 shrink-0 snap-start overflow-hidden rounded-md text-left',
+                        'relative w-24 shrink-0 snap-start overflow-hidden rounded-md text-start-left',
                         // border-2 in both states: the box never changes size,
                         // only its colour, so a rail cannot twitch on select.
                         'border-2 transition-colors',
@@ -203,7 +205,7 @@ export function OutfitItemRails({
                         ) : (
                           <div className="flex h-full w-full items-center justify-center px-xs text-center">
                             <span className="text-[10px] leading-tight text-muted-foreground">
-                              No photo
+                              {t('outfits.noPhoto')}
                             </span>
                           </div>
                         )}
@@ -219,7 +221,7 @@ export function OutfitItemRails({
                         // Same disc as the tray's remove control, opposite verb.
                         // flex centring on a square puts the check dead-centre.
                         <span
-                          className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-on-dark"
+                          className="absolute end-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-on-dark"
                           aria-hidden="true"
                         >
                           <Check className="h-3 w-3" strokeWidth={3} />

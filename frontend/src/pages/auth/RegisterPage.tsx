@@ -13,6 +13,7 @@ import { validateReferralCode } from '@/api/subscription'
 import { PENDING_PROMO_KEY, stashPromoCode } from '@/lib/promo'
 import { trackEvent } from '@/lib/analytics'
 import SEO from '@/components/seo/SEO'
+import { useTranslation } from '@/i18n'
 import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
 function getPasswordStrength(pwd: string) {
@@ -26,6 +27,7 @@ function getPasswordStrength(pwd: string) {
 }
 
 export default function RegisterPage() {
+  const { t, tRich } = useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const selectedPlan = searchParams.get('plan_type')
@@ -151,8 +153,8 @@ export default function RegisterPage() {
       if (!auth?.access_token) {
         // Email confirmation required
         toast({
-          title: 'Confirm your email',
-          description: 'Check your inbox for a confirmation email, then sign in to continue.',
+          title: t('auth.confirmEmailTitle'),
+          description: t('auth.confirmEmailBody'),
         })
         navigate(withAuthContext('/auth/login', selectedPlan, returnTo))
         return
@@ -161,7 +163,7 @@ export default function RegisterPage() {
       // Show toast if referral was processed by backend
       if (auth?.referral) {
         toast({
-          title: auth.referral.success ? 'Welcome!' : 'Referral not applied',
+          title: auth.referral.success ? t('auth.welcome') : t('auth.referralNotApplied'),
           description: auth.referral.message,
           variant: auth.referral.success ? undefined : 'destructive',
         })
@@ -222,16 +224,15 @@ export default function RegisterPage() {
       />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h1 className="text-xl md:text-2xl font-extrabold text-foreground">
-          Create your account
+          {t('auth.registerTitle')}
         </h1>
         {promoCode ? (
           <p className="mt-2 text-sm font-medium text-primary">
-            Your first month of Pro is free — no credit card. Code{' '}
-            <span className="font-mono">{promoCode}</span> is applied after signup.
+            {t('auth.promoFirstMonthFree', { code: promoCode })}
           </p>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">
-            First month of Pro free. No credit card required.
+            {t('auth.firstMonthFree')}
           </p>
         )}
       </div>
@@ -243,7 +244,7 @@ export default function RegisterPage() {
               role="alert"
               className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start"
             >
-              <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />
+              <AlertCircle className="h-5 w-5 text-destructive mt-0.5 me-2 flex-shrink-0" />
               <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
@@ -257,9 +258,9 @@ export default function RegisterPage() {
             disabled={googleLoading || isLoading}
           >
             {googleLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="me-2 h-4 w-4 animate-spin" />
             ) : (
-              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+              <svg className="me-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -278,7 +279,7 @@ export default function RegisterPage() {
                 />
               </svg>
             )}
-            Continue with Google
+            {t('auth.continueWithGoogle')}
           </Button>
 
           {/* Divider */}
@@ -287,7 +288,7 @@ export default function RegisterPage() {
               <span className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or register with email</span>
+              <span className="bg-card px-2 text-muted-foreground">{t('auth.orRegisterWithEmail')}</span>
             </div>
           </div>
 
@@ -295,11 +296,10 @@ export default function RegisterPage() {
             {/* Full Name */}
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-foreground">
-                Full name{' '}
-                <span className="font-normal text-muted-foreground">(optional)</span>
+                {t('auth.fullNameOptional')}
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <User className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -309,8 +309,8 @@ export default function RegisterPage() {
                   autoComplete="name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-3 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
-                  placeholder="John Doe"
+                  className="block w-full h-12 ps-10 pe-3 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  placeholder={t('auth.fullNamePlaceholder')}
                 />
               </div>
             </div>
@@ -318,10 +318,10 @@ export default function RegisterPage() {
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-foreground">
-                Email address
+                {t('auth.emailLabel')}
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -332,8 +332,8 @@ export default function RegisterPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-3 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
-                  placeholder="you@example.com"
+                  className="block w-full h-12 ps-10 pe-3 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  placeholder={t('auth.emailPlaceholder')}
                 />
               </div>
             </div>
@@ -341,10 +341,10 @@ export default function RegisterPage() {
             {/* Password */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-foreground">
-                Password
+                {t('auth.passwordLabel')}
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -356,15 +356,15 @@ export default function RegisterPage() {
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  className="block w-full h-12 ps-10 pe-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
                   placeholder="••••••••"
                   aria-describedby="password-hint"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground touch-target"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute inset-y-0 end-0 pe-3 flex items-center text-muted-foreground hover:text-foreground touch-target"
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -387,12 +387,18 @@ export default function RegisterPage() {
                       />
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : 'Strong'}
+                      {passwordStrength <= 2
+                        ? t('auth.passwordStrengthWeak')
+                        : passwordStrength <= 3
+                          ? t('auth.passwordStrengthFair')
+                          : t('auth.passwordStrengthStrong')}
                     </span>
                   </div>
                   <p className="mt-1.5 text-xs text-muted-foreground">
-                    At least 8 characters required.
-                    {password.length < 8 ? ' Keep typing…' : ' Optional: mix upper/lowercase, numbers, and symbols for a stronger password.'}
+                    {t('auth.passwordHintMin')}{' '}
+                    {password.length < 8
+                      ? t('auth.passwordHintKeepTyping')
+                      : t('auth.passwordHintOptional')}
                   </p>
                 </div>
               )}
@@ -401,10 +407,10 @@ export default function RegisterPage() {
             {/* Confirm Password */}
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground">
-                Confirm password
+                {t('auth.confirmPasswordLabel')}
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -415,10 +421,10 @@ export default function RegisterPage() {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-20 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  className="block w-full h-12 ps-10 pe-20 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
                   placeholder="••••••••"
                 />
-                <div className="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                <div className="absolute inset-y-0 end-0 pe-2 flex items-center gap-1">
                   {confirmPassword.length > 0 && (
                     passwordsMatch ? (
                       <CheckCircle className="h-5 w-5 text-green-500" />
@@ -430,24 +436,24 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => setShowConfirmPassword((v) => !v)}
                     className="p-1.5 text-muted-foreground hover:text-foreground touch-target"
-                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                   >
                     {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
               {!passwordsMatch && confirmPassword.length > 0 && (
-                <p className="mt-1 text-sm text-destructive">Passwords do not match</p>
+                <p className="mt-1 text-sm text-destructive">{t('auth.passwordMismatch')}</p>
               )}
             </div>
 
             {/* Referral Code (Optional) */}
             <div>
               <label htmlFor="referralCode" className="block text-sm font-medium text-foreground">
-                Referral code <span className="text-muted-foreground">(optional)</span>
+                {t('auth.referralCodeLabel')} <span className="text-muted-foreground">({t('common.optional')})</span>
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <Gift className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -457,11 +463,11 @@ export default function RegisterPage() {
                   value={referralCode}
                   onChange={(e) => handleReferralChange(e.target.value)}
                   onBlur={handleReferralBlur}
-                  className="block w-full h-12 pl-10 pr-10 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
-                  placeholder="e.g., john-abc123"
+                  className="block w-full h-12 ps-10 pe-10 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  placeholder={t('auth.referralPlaceholder')}
                 />
                 {(validatingReferral || referralValid !== null) && (
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                  <div className="absolute inset-y-0 end-0 pe-3 flex items-center">
                     {validatingReferral ? (
                       <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
                     ) : referralValid ? (
@@ -474,11 +480,11 @@ export default function RegisterPage() {
               </div>
               {referralValid && referralReferrer && (
                 <p className="mt-1 text-sm text-green-600 dark:text-green-400">
-                  Referred by {referralReferrer} - you both get 1 month of Pro free!
+                  {t('auth.referralApplied', { name: referralReferrer })}
                 </p>
               )}
               {referralValid === false && referralCode.length > 0 && (
-                <p className="mt-1 text-sm text-destructive">Invalid referral code</p>
+                <p className="mt-1 text-sm text-destructive">{t('auth.referralInvalid')}</p>
               )}
             </div>
 
@@ -486,8 +492,7 @@ export default function RegisterPage() {
             {promoCode && (
               <div className="rounded-md border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-3 py-2">
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  🎁 Promo code <code className="font-mono">{promoCode}</code> found —
-                  it will be applied to your account after signup.
+                  {t('auth.promoFound', { code: promoCode })}
                 </p>
               </div>
             )}
@@ -505,16 +510,20 @@ export default function RegisterPage() {
                   className="h-5 w-5 text-primary focus:ring-primary border-border rounded bg-background"
                 />
               </div>
-              <div className="ml-3 text-sm">
+              <div className="ms-3 text-sm">
                 <label htmlFor="terms" className="text-foreground">
-                  I agree to the{' '}
-                  <Link to="/terms" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary/80">
-                    Terms of Service
-                  </Link>{' '}
-                  and{' '}
-                  <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary/80">
-                    Privacy Policy
-                  </Link>
+                  {tRich('auth.agreeToTerms', {
+                    terms: (
+                      <Link to="/terms" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary/80">
+                        {t('common.termsOfService')}
+                      </Link>
+                    ),
+                    privacy: (
+                      <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:text-primary/80">
+                        {t('common.privacyPolicy')}
+                      </Link>
+                    ),
+                  })}
                 </label>
               </div>
             </div>
@@ -526,7 +535,7 @@ export default function RegisterPage() {
                 disabled={!isFormValid || isLoading}
                 className="w-full h-12"
               >
-                {isLoading ? 'Creating account...' : 'Create account'}
+                {isLoading ? t('auth.creatingAccount') : t('auth.createAccount')}
               </Button>
             </div>
           </form>
@@ -538,18 +547,18 @@ export default function RegisterPage() {
                 <div className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-card text-muted-foreground">Or</span>
+                <span className="px-2 bg-card text-muted-foreground">{t('auth.or')}</span>
               </div>
             </div>
 
             <div className="mt-6 text-center">
               <p className="text-sm text-muted-foreground">
-                Already have an account?{' '}
+                {t('auth.haveAccount')}{' '}
                 <Link
                   to={withAuthContext('/auth/login', selectedPlan, returnTo)}
                   className="font-medium text-primary hover:text-primary/80"
                 >
-                  Sign in
+                  {t('auth.signIn')}
                 </Link>
               </p>
             </div>

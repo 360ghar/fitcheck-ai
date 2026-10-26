@@ -63,8 +63,7 @@ fitcheck-ai/
 │   ├── FRONTEND.md         # Web deep dive
 │   └── …                   # DESIGN, PLANS, PRODUCT_SENSE, QUALITY, etc.
 ├── scripts/                # Harness checks (architecture, docs structure)
-├── AGENTS.md               # Repo map / agent entry (identical to CLAUDE.md)
-├── CLAUDE.md               # Same as AGENTS.md
+├── AGENTS.md               # Repo map / agent entry
 ├── ARCHITECTURE.md         # Domains and allowed dependency edges
 ├── README.md
 └── .gitignore

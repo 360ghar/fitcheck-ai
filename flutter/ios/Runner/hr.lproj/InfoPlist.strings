@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI treba pristup kameri za fotografiranje vaših odjevnih kombinacija i komada odjeće.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI treba pristup galeriji fotografija za odabir slika vaše odjeće i modnih dodataka.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI treba spremiti vaše AI-generirane fotografije odjevnih kombinacija u vašu galeriju.";

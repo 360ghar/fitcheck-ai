@@ -1,0 +1,1000 @@
+{
+  "group": "billing",
+  "files": [
+    "features/subscription/views/subscription_page.dart",
+    "features/subscription/views/referral_page.dart",
+    "features/subscription/views/widgets/referral_share_card.dart",
+    "features/subscription/views/widgets/subscription_disclosure.dart",
+    "features/gifts/views/gift_vouchers_page.dart",
+    "features/gifts/views/widgets/gift_priority_banner.dart",
+    "features/settings/views/ai_settings_page.dart"
+  ],
+  "keys": [
+    {
+      "key": "billingTitle",
+      "value": "Subscription",
+      "description": "App bar title of the subscription screen (plan, usage, upgrade, referral).",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingUpgradeHeading",
+      "value": "Upgrade your plan",
+      "description": "Paywall headline shown to an existing Plus subscriber who can still move up to Pro.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingUpgradeOnPlusBody",
+      "value": "Same features, higher limits.",
+      "description": "One-line subtitle under billingUpgradeHeading for a Plus subscriber.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingUpgradeBody",
+      "value": "Plus and Pro have the same features. Pick the limits you need.",
+      "description": "Subtitle under the paywall headline for a user not yet subscribed.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingWebUnavailableBody",
+      "value": "Online upgrades aren't available yet. A promo or referral code still unlocks Plus or Pro. Invite friends below to earn free months.",
+      "description": "Message replacing the paywall on web when online checkout is not configured; points at promo codes and referrals instead.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingPlansStale",
+      "value": "Couldn't load the latest plans. Prices may be out of date.",
+      "description": "Inline error banner above the plan cards when the /plans request failed and cached prices are shown.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingMonthly",
+      "value": "Monthly",
+      "description": "Left segment of the monthly/yearly billing period switch on the paywall.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingYearly",
+      "value": "Yearly",
+      "description": "Right segment of the monthly/yearly billing period switch on the paywall.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingCurrentPlan",
+      "value": "Current plan",
+      "description": "Small caption above the plan name on the current-plan card of the subscription screen.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingActive",
+      "value": "Active",
+      "description": "Small filled label next to the plan name when the subscription is active and not cancelled.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingThisMonth",
+      "value": "This month",
+      "description": "Heading of the usage card that shows remaining monthly allowances.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingItemExtractions",
+      "value": "Item extractions",
+      "description": "Usage row label for the monthly AI item-extraction allowance.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingOutfitVisualizations",
+      "value": "Outfit visualizations",
+      "description": "Usage row label for the monthly AI outfit-visualization allowance.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingNearLimitUpgrade",
+      "value": "You're close to this month's limit. Upgrade for more.",
+      "description": "Warning under the usage bars, shown when the paywall is enabled and an allowance is above 80 percent.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingNearLimitResets",
+      "value": "You're close to this month's limit. It resets at the start of next month.",
+      "description": "Warning under the usage bars when upgrades are disabled, so the only path is waiting for the monthly reset.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingStoreUnavailable",
+      "value": "Upgrades aren't available in the store yet. Check back soon.",
+      "description": "Banner above the plan cards when the App Store or Play Store serves no products.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingManageHeading",
+      "value": "Manage your plan",
+      "description": "Heading of the card explaining that a store-billed plan is changed in the store.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingCancelPlan",
+      "value": "Cancel subscription",
+      "description": "Heading of the cancel card and the destructive button inside it, for a plan billed directly (not through a store).",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingCancelKeepsAccess",
+      "value": "You keep access until the end of this billing period.",
+      "description": "Body of the cancel card and the confirmation dialog: access continues until the paid period ends.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingCancelConfirmTitle",
+      "value": "Cancel your subscription?",
+      "description": "Title of the dialog that asks the user to confirm cancelling their plan.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingKeepPlan",
+      "value": "Keep plan",
+      "description": "Dismiss button in the cancel-confirmation dialog; the safe choice.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingCancelPlanAction",
+      "value": "Cancel plan",
+      "description": "Destructive confirm button in the cancel-confirmation dialog.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingBilledMonthly",
+      "value": "Billed monthly",
+      "description": "Note under the price on a plan card when the monthly period is selected.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingBilledYearly",
+      "value": "Billed yearly",
+      "description": "Note under the price on a plan card when the yearly period is selected and no saving can be computed.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingVirtualTryOn",
+      "value": "Virtual try-on",
+      "description": "Feature line on the paid plan cards.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingPrioritySupport",
+      "value": "Priority support",
+      "description": "Feature line on the paid plan cards.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingDisclosureProRenewing",
+      "value": "Pro is an auto-renewing subscription",
+      "description": "LEGAL: opening clause of the App Review 3.1.2 subscription disclosure, shown when a Plus subscriber is only offered Pro.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingDisclosureBothRenewing",
+      "value": "Plus and Pro are auto-renewing subscriptions",
+      "description": "LEGAL: opening clause of the App Review 3.1.2 subscription disclosure when both Plus and Pro are purchasable.",
+      "file": "features/subscription/views/subscription_page.dart"
+    },
+    {
+      "key": "billingDisclosureAppleBilling",
+      "value": "Payment is charged to your Apple ID at confirmation of purchase.",
+      "description": "LEGAL: required iOS disclosure sentence stating when the user is charged. Do not shorten or reword.",
+      "file": "features/subscription/views/widgets/subscription_disclosure.dart"
+    },
+    {
+      "key": "billingDisclosureGoogleBilling",
+      "value": "Payment is charged to your Google Play account at confirmation of purchase.",
+      "description": "LEGAL: required Android disclosure sentence stating when the user is charged. Do not shorten or reword.",
+      "file": "features/subscription/views/widgets/subscription_disclosure.dart"
+    },
+    {
+      "key": "billingDisclosureRenewalTerms",
+      "value": "Your subscription renews automatically for the same period at the same price unless you turn off auto-renew at least 24 hours before the current period ends.",
+      "description": "LEGAL: the auto-renewal and 24-hour cancellation sentence in the subscription disclosure. App Review rejects shortened versions.",
+      "file": "features/subscription/views/widgets/subscription_disclosure.dart"
+    },
+    {
+      "key": "billingDisclosureAppleManage",
+      "value": "Manage or cancel any time in Settings › your Apple ID › Subscriptions.",
+      "description": "LEGAL: iOS path for managing or cancelling, with the exact menu names. Keep the › separators and the Apple menu names untranslated where they are UI labels.",
+      "file": "features/subscription/views/widgets/subscription_disclosure.dart"
+    },
+    {
+      "key": "billingDisclosureGoogleManage",
+      "value": "Manage or cancel any time in Google Play › Payments and subscriptions.",
+      "description": "LEGAL: Android path for managing or cancelling, with the exact Play menu names. Keep the › separators.",
+      "file": "features/subscription/views/widgets/subscription_disclosure.dart"
+    },
+    {
+      "key": "billingReferFriend",
+      "value": "Refer a friend",
+      "description": "App bar title of the referral screen.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingHowItWorks",
+      "value": "How it works",
+      "description": "Heading of the three-step explanation of the referral programme.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingHowShareTitle",
+      "value": "Share your link",
+      "description": "Referral step 1, title.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingHowShareBody",
+      "value": "Send it to a friend.",
+      "description": "Referral step 1, description under billingHowShareTitle.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingHowSignUpTitle",
+      "value": "They sign up",
+      "description": "Referral step 2, title.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingHowSignUpBody",
+      "value": "Your friend joins from the link.",
+      "description": "Referral step 2, description under billingHowSignUpTitle.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingHowBothTitle",
+      "value": "You both get Pro",
+      "description": "Referral step 3, title.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingHowBothBody",
+      "value": "Each of you gets a month of Pro free.",
+      "description": "Referral step 3, description under billingHowBothTitle.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingYourReferrals",
+      "value": "Your referrals",
+      "description": "Heading of the referral totals card.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingInvited",
+      "value": "Invited",
+      "description": "Statistic label under the number of friends the user has invited.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingJoined",
+      "value": "Joined",
+      "description": "Statistic label under the number of invited friends who signed up.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingMonthsEarned",
+      "value": "Months earned",
+      "description": "Statistic label under the number of free Pro months earned through referrals.",
+      "file": "features/subscription/views/referral_page.dart"
+    },
+    {
+      "key": "billingInviteFriend",
+      "value": "Invite a friend",
+      "description": "Heading of the referral share card.",
+      "file": "features/subscription/views/widgets/referral_share_card.dart"
+    },
+    {
+      "key": "billingInviteBody",
+      "value": "You and your friend each get a month of Pro.",
+      "description": "One-line explanation under billingInviteFriend on the referral share card.",
+      "file": "features/subscription/views/widgets/referral_share_card.dart"
+    },
+    {
+      "key": "billingYourCode",
+      "value": "Your code",
+      "description": "Caption above the user's referral code inside the share card.",
+      "file": "features/subscription/views/widgets/referral_share_card.dart"
+    },
+    {
+      "key": "billingCopyLink",
+      "value": "Copy link",
+      "description": "Tooltip/accessibility label of the copy icon next to the referral code.",
+      "file": "features/subscription/views/widgets/referral_share_card.dart"
+    },
+    {
+      "key": "billingShareInvite",
+      "value": "Share invite",
+      "description": "Button on the referral share card that opens the system share sheet.",
+      "file": "features/subscription/views/widgets/referral_share_card.dart"
+    },
+    {
+      "key": "giftUnavailable",
+      "value": "Gift invitations are not available in this build.",
+      "description": "Full-screen message shown when gift vouchers are switched off in this build.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftPageTitle",
+      "value": "Gift FitCheck Pro",
+      "description": "App bar title of the gift vouchers screen. 'FitCheck Pro' is the product name and stays untranslated.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftNoAllowances",
+      "value": "No free gift invitations are available right now.",
+      "description": "Shown instead of the gift form when the user has no free invitations left.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFormTitle",
+      "value": "Send a free invitation",
+      "description": "Heading of the form that creates a free gift invitation.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFormBody",
+      "value": "Your recipient claims the gift with this verified email. We don't send the email for you.",
+      "description": "Explains under the form heading that the app does not email the recipient.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFieldFrom",
+      "value": "From",
+      "description": "Text field label for the sender's name on the gift form.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFieldRecipientName",
+      "value": "Recipient name",
+      "description": "Text field label for the recipient's name on the gift form.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFieldRecipientEmail",
+      "value": "Recipient email",
+      "description": "Text field label for the recipient's email address on the gift form.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFieldOccasion",
+      "value": "Occasion (optional)",
+      "description": "Dropdown label for the gift card occasion on the gift form.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftNoOccasion",
+      "value": "No occasion",
+      "description": "First option of the occasion dropdown: no greeting is printed on the card.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftOccasionBirthday",
+      "value": "Birthday",
+      "description": "Occasion dropdown option: birthday greeting.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftOccasionAnniversary",
+      "value": "Anniversary",
+      "description": "Occasion dropdown option: anniversary greeting.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftOccasionOther",
+      "value": "Other",
+      "description": "Occasion dropdown option that reveals a free-text card greeting field.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFieldCardGreeting",
+      "value": "Card greeting",
+      "description": "Text field label for a custom greeting typed by the sender.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFieldCardGreetingHelper",
+      "value": "This appears on the card exactly as written.",
+      "description": "Helper text under the card greeting field; no editing happens on our side.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftFieldPrivateNote",
+      "value": "Private note (optional)",
+      "description": "Label of the optional message the sender can attach to the gift.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftCreateAction",
+      "value": "Create free gift",
+      "description": "Submit button of the gift form.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftClaimedTitle",
+      "value": "Gift claimed",
+      "description": "Toast title shown after the user claims an incoming gift.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftClaimedActive",
+      "value": "Your FitCheck Pro gift is active.",
+      "description": "Toast body after claiming a gift that starts immediately.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftClaimedQueued",
+      "value": "Your FitCheck Pro gift starts after your current access.",
+      "description": "Toast body after claiming a gift that queues behind a paid subscription.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftLinkCopied",
+      "value": "Gift link copied to the clipboard.",
+      "description": "Toast shown when the share sheet failed and the gift link was copied instead.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftErrorName",
+      "value": "Enter a name.",
+      "description": "Validation error under the From and Recipient name fields.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftErrorEmail",
+      "value": "Enter a valid email address.",
+      "description": "Validation error under the recipient email field.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftErrorGreeting",
+      "value": "Enter the card greeting.",
+      "description": "Validation error when the occasion is Other but the greeting is empty.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftErrorGreetingLength",
+      "value": "Use no more than 80 characters.",
+      "description": "Validation error when the custom card greeting exceeds 80 characters.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftClaimAction",
+      "value": "Claim gift",
+      "description": "Button on an incoming gift row that claims the gift for the signed-in user.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftCardPreview",
+      "value": "Card preview",
+      "description": "Caption above the live preview of the card the recipient will see.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftGiftForYou",
+      "value": "A gift for you",
+      "description": "Default card heading when the sender chose no occasion.",
+      "file": "features/gifts/views/gift_vouchers_page.dart"
+    },
+    {
+      "key": "giftGiftWaiting",
+      "value": "A gift is waiting for you",
+      "description": "Home banner title when exactly one incoming gift is waiting.",
+      "file": "features/gifts/views/widgets/gift_priority_banner.dart"
+    },
+    {
+      "key": "giftOpenBody",
+      "value": "Open your gifts to claim them with your verified email.",
+      "description": "Home banner body when several incoming gifts are waiting.",
+      "file": "features/gifts/views/widgets/gift_priority_banner.dart"
+    },
+    {
+      "key": "giftOpenGifts",
+      "value": "Open gifts",
+      "description": "Home banner action that opens the gifts screen when a gift is waiting.",
+      "file": "features/gifts/views/widgets/gift_priority_banner.dart"
+    },
+    {
+      "key": "giftSendInvitation",
+      "value": "Send invitation",
+      "description": "Home banner action that opens the gifts screen when the user has a free invitation to give.",
+      "file": "features/gifts/views/widgets/gift_priority_banner.dart"
+    },
+    {
+      "key": "settingsAiProviderSection",
+      "value": "Provider",
+      "description": "Heading of the card that picks the AI provider (Custom vs OpenAI).",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiCustom",
+      "value": "Custom",
+      "description": "Segment selecting a user-supplied, OpenAI-compatible AI endpoint.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiUrlHelper",
+      "value": "Use a public URL the server can reach. Localhost does not work from our servers.",
+      "description": "Helper note under the provider picker explaining that a local URL cannot be reached.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiConnectionSection",
+      "value": "Connection",
+      "description": "Heading of the card holding the endpoint, key and model fields.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiApiUrl",
+      "value": "API URL",
+      "description": "Text field label for the AI endpoint URL.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiApiKey",
+      "value": "API key",
+      "description": "Text field label for the bearer key sent to the AI endpoint.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiApiKeySaved",
+      "value": "Saved. Leave blank to keep it.",
+      "description": "Placeholder in the API key field when a key is already stored and is never shown again.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiChatModel",
+      "value": "Chat model",
+      "description": "Text field label for the model used for text generation.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiVisionModel",
+      "value": "Vision model (optional)",
+      "description": "Text field label for the model used to tag photos.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiImageModel",
+      "value": "Image model (optional)",
+      "description": "Text field label for the model used to generate images.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiImageModelNote",
+      "value": "Image generation needs OpenAI-compatible chat completions with response_modalities.",
+      "description": "Note under the model fields; 'response_modalities' is an API parameter name and stays untranslated.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    },
+    {
+      "key": "settingsAiTestConnection",
+      "value": "Test connection",
+      "description": "Button that sends a probe request to the configured AI endpoint.",
+      "file": "features/settings/views/ai_settings_page.dart"
+    }
+  ],
+  "deferred": [
+    {
+      "value": "Your plan ends on ${AppDateUtils.formatDate(periodEnd)}.",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Interpolated with a locale-dependent date; needs an ARB placeholder and a date skeleton."
+    },
+    {
+      "value": "$credit month${credit == 1 ? '' : 's'} of referral credit",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Plural selected inline in Dart; needs an ARB plural rule."
+    },
+    {
+      "value": "Save $symbol${save.toStringAsFixed(0)} a year",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Interpolates a currency symbol and a computed saving; needs currency formatting plus a placeholder."
+    },
+    {
+      "value": "${_count(plan?.monthlyExtractions ?? fallbackExtractions)} item extractions",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Number formatted with thousands separators plus a plural noun; needs an ARB placeholder with number formatting."
+    },
+    {
+      "value": "${_count(plan?.monthlyGenerations ?? fallbackGenerations)} outfit visualizations",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Number formatted with thousands separators plus a plural noun; needs an ARB placeholder with number formatting."
+    },
+    {
+      "value": "Pro is ${price('pro_monthly', r'$20')} a month or ${price('pro_yearly', r'$200')} a year.",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Price summary built from two StoreKit prices; needs an ARB placeholder per price. Price text itself is localized by the store."
+    },
+    {
+      "value": "Plus is ${price('plus_monthly', r'$10')} a month or ${price('plus_yearly', r'$100')} a year; $pro",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Composes the Plus sentence with the Pro sentence above; two placeholders and punctuation order vary by language."
+    },
+    {
+      "value": "This plan is billed through the $store. Change or cancel it in your $store account settings.",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Interpolated twice with the resolved store name (App Store / Play Store); needs an ARB placeholder."
+    },
+    {
+      "value": "Manage in the $store",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Interpolated with the resolved store name; needs an ARB placeholder."
+    },
+    {
+      "value": "App Store",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Store name chosen at runtime ('Play Store' is the other branch); brand names, supplied by the platform and used inside other strings."
+    },
+    {
+      "value": "Plus",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Plan tier brand name passed as the card title ('Pro' is the other tier); also mirrored in the backend /plans payload and store product IDs."
+    },
+    {
+      "value": "/year",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Period suffix rendered next to a StoreKit price string ('/month' is the other branch); needs to follow the price format, not a bare literal."
+    },
+    {
+      "value": "${o.title}, ${o.price} ${o.period == '/year' ? 'a year' : 'a month'}. ${o.features.join(', ')}.${selected ? ' Selected.' : ''}",
+      "file": "features/subscription/views/subscription_page.dart",
+      "reason": "Accessibility label assembled from a plan's title, price, period and features; needs several ARB placeholders and list joins."
+    },
+    {
+      "value": "a year",
+      "file": "features/subscription/views/widgets/plan_card.dart",
+      "reason": "Period word inside the plan-card accessibility label ('a month' is the other branch); depends on price grammar, needs a placeholder."
+    },
+    {
+      "value": " Selected.",
+      "file": "features/subscription/views/widgets/plan_card.dart",
+      "reason": "Trailing state suffix inside the plan-card accessibility label; must be composed with the label above, not dropped."
+    },
+    {
+      "value": "Plus and Pro are auto-renewing subscriptions",
+      "file": "features/subscription/views/widgets/subscription_disclosure.dart",
+      "reason": "Default value of the const SubscriptionDisclosure constructor parameter; a constructor default has no BuildContext. LEGAL copy. Callers now pass the localized billingDisclosureBothRenewing instead."
+    },
+    {
+      "value": "$label: $current of $max used",
+      "file": "features/subscription/views/widgets/usage_progress.dart",
+      "reason": "Accessibility label interpolating three values; needs an ARB placeholder variant for screen readers."
+    },
+    {
+      "value": "$current / $max",
+      "file": "features/subscription/views/widgets/usage_progress.dart",
+      "reason": "Number pair rendered with tabular figures; the separator and digit shaping are locale-sensitive."
+    },
+    {
+      "value": "1 friend has used your code.",
+      "file": "features/subscription/views/widgets/referral_share_card.dart",
+      "reason": "Plural branch built with a Dart ternary ('$timesUsed friends have used your code.' is the other branch); needs an ARB plural."
+    },
+    {
+      "value": "Plus monthly",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "planName getter in a provider, no BuildContext in scope. Plan display names (Plus yearly / Pro monthly / Pro yearly / Free) are rendered on the current-plan card."
+    },
+    {
+      "value": "This plan is billed through the store. Manage it in your store account settings.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "ErrorHandler message raised from a provider method; no BuildContext in scope."
+    },
+    {
+      "value": "Your plan stays active until the end of this billing period.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Success toast raised from a provider method (title 'Subscription cancelled'); no BuildContext in scope."
+    },
+    {
+      "value": "Could not open billing management.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Validation toast raised from a provider method (title 'Could not open'); no BuildContext in scope."
+    },
+    {
+      "value": "Could not open the link.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Validation toast shown when the billing portal cannot be launched; no BuildContext in scope."
+    },
+    {
+      "value": "Could not load your referral link. Try again.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Error toast fallback in the referral notifier (title 'Could not load your link'); no BuildContext in scope."
+    },
+    {
+      "value": "Referral link copied.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Success toast in the referral notifier (title 'Copied'); no BuildContext in scope."
+    },
+    {
+      "value": "Join FitCheck AI and we both get a month of Pro. ${code.shareUrl}",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Share-sheet text built in a provider with the referral URL appended; needs an ARB placeholder and no BuildContext available."
+    },
+    {
+      "value": "Try FitCheck AI",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Subject line of the referral share sheet; set in a provider with no BuildContext."
+    },
+    {
+      "value": "Sharing is not available, so we copied the link.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Fallback toast when the share sheet fails; provider, no BuildContext."
+    },
+    {
+      "value": "Copy the link from the referral page instead.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Fallback validation toast in the referral notifier; provider, no BuildContext."
+    },
+    {
+      "value": "Store prices are available. You can upgrade now.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Success toast after the store product retry (title 'Store ready'); provider, no BuildContext."
+    },
+    {
+      "value": "In-app purchases are not available on this device.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Purchase validation message (title 'Purchase unavailable'); provider, no BuildContext."
+    },
+    {
+      "value": "This plan is not available for purchase yet.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Purchase validation message for a plan with no store product ID; provider, no BuildContext."
+    },
+    {
+      "value": "The purchase could not start. Try again.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Purchase validation message; provider, no BuildContext."
+    },
+    {
+      "value": "Checkout did not return a payment link.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Stripe checkout failure message; provider, no BuildContext."
+    },
+    {
+      "value": "Your purchase is waiting for approval. You'll get access as soon as it's approved.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Ask-to-Buy toast (title 'Purchase pending'); provider, no BuildContext."
+    },
+    {
+      "value": "The purchase failed. Try again.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Purchase error toast (title 'Purchase failed'); provider, no BuildContext."
+    },
+    {
+      "value": "Your purchases are restored.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Restore success toast, one branch of a Dart ternary ('Your subscription is active. Welcome.' is the other); provider, no BuildContext."
+    },
+    {
+      "value": "Sign in to finish your purchase.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Validation toast when the purchase has no signed-in user; provider, no BuildContext."
+    },
+    {
+      "value": "The purchase did not include a verifiable transaction ID.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Purchase error toast; also produced by the recovery service; no BuildContext."
+    },
+    {
+      "value": "We couldn't verify your purchase with the store right now. It will finish automatically, and you won't be charged twice.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Verification-pending toast (title 'Verification pending'); provider, no BuildContext."
+    },
+    {
+      "value": "Could not restore purchases. Try again.",
+      "file": "features/subscription/providers/subscription_providers.dart",
+      "reason": "Restore failure message (title 'Restore failed'); provider, no BuildContext."
+    },
+    {
+      "value": "This plan is not available in the store yet. Please check back soon.",
+      "file": "features/subscription/services/iap_service.dart",
+      "reason": "Const kPlanNotAvailableInStoreMessage shared by the store lookup and checkout; a service constant has no BuildContext. Also shown via the paywall's store-unavailable banner."
+    },
+    {
+      "value": "The store couldn't be reached for this plan right now. Please try again in a moment.",
+      "file": "features/subscription/services/iap_service.dart",
+      "reason": "Store query failure message; service, no BuildContext."
+    },
+    {
+      "value": "Store purchases are not available on this device.",
+      "file": "features/subscription/services/iap_service.dart",
+      "reason": "IapException message thrown by a service; no BuildContext."
+    },
+    {
+      "value": "This purchase is still being processed. Reopen the app in a moment and it will finish automatically.",
+      "file": "features/subscription/services/iap_service.dart",
+      "reason": "IapException message for StoreKit's duplicate-product state; service, no BuildContext."
+    },
+    {
+      "value": "Your purchase could not be applied to your account. Contact support, and do not buy it again.",
+      "file": "features/subscription/services/purchase_recovery_service.dart",
+      "reason": "Const kPurchaseNotAppliedMessage used by the recovery drain; service, no BuildContext."
+    },
+    {
+      "value": "Your subscription is active.",
+      "file": "features/subscription/services/purchase_recovery_service.dart",
+      "reason": "Recovery toast (title 'Purchase complete'); service, no BuildContext."
+    },
+    {
+      "value": "The purchase did not include a verifiable transaction ID.",
+      "file": "features/subscription/services/purchase_recovery_service.dart",
+      "reason": "Invalid-transaction result message returned by the recovery service; no BuildContext."
+    },
+    {
+      "value": "A gift for you",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Plural header chosen by a Dart ternary: 'A gift for you' vs '${incoming.length} gifts for you'; needs an ARB plural."
+    },
+    {
+      "value": "${_term(allowance.durationMonths)}, ${allowance.remainingCount} left",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Chip label combining a duration phrase and a remaining count with plural; needs two ARB placeholders."
+    },
+    {
+      "value": "${greeting == null ? '' : '$greeting. '}${voucher.fromName} sent you ${_term(voucher.durationMonths)} of FitCheck Pro. $link",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Share-sheet text with three interpolations (optional greeting, sender, duration, link); needs ARB placeholders."
+    },
+    {
+      "value": "A FitCheck Pro gift for ${voucher.toName}",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Share-sheet subject interpolating the recipient name; needs an ARB placeholder."
+    },
+    {
+      "value": "From ${voucher.fromName}",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Incoming gift row prefix with the sender name; needs an ARB placeholder."
+    },
+    {
+      "value": "${_term(voucher.durationMonths)} of FitCheck Pro",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Duration phrase composed at runtime by the top-level _term() helper; no BuildContext in that helper."
+    },
+    {
+      "value": "For $to",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Card preview recipient line; interpolated name needs an ARB placeholder."
+    },
+    {
+      "value": "From $from",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Card preview sender line; interpolated name needs an ARB placeholder."
+    },
+    {
+      "value": "your recipient",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Fallback name used inside the card preview when the recipient field is empty; grammatical slot depends on the surrounding interpolated sentence."
+    },
+    {
+      "value": "you",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Fallback sender name inside the card preview; grammatical slot depends on the surrounding interpolated sentence."
+    },
+    {
+      "value": "1 month",
+      "file": "features/gifts/views/gift_vouchers_page.dart",
+      "reason": "Duration phrase returned by the top-level _term() helper ('1 year' and '$months months' are the other branches); plural and no BuildContext."
+    },
+    {
+      "value": "$incomingCount gifts are waiting for you",
+      "file": "features/gifts/views/widgets/gift_priority_banner.dart",
+      "reason": "Plural banner title with a count; needs an ARB plural."
+    },
+    {
+      "value": "Send a free ${_term(allowance!.durationMonths)} invitation",
+      "file": "features/gifts/views/widgets/gift_priority_banner.dart",
+      "reason": "Banner title composed with the duration helper; needs an ARB placeholder."
+    },
+    {
+      "value": "${greeting == null ? '' : '$greeting. '}${incoming!.fromName} sent you ${_term(incoming!.durationMonths)} of FitCheck Pro.",
+      "file": "features/gifts/views/widgets/gift_priority_banner.dart",
+      "reason": "Banner body with optional greeting, sender name and duration; needs several ARB placeholders."
+    },
+    {
+      "value": "$remaining free ${_term(allowance!.durationMonths)} invitation${remaining == 1 ? '' : 's'} left.",
+      "file": "features/gifts/views/widgets/gift_priority_banner.dart",
+      "reason": "Banner body with count, duration and an inline plural suffix; needs an ARB plural with a placeholder."
+    },
+    {
+      "value": "Happy Birthday",
+      "file": "features/gifts/models/gift_models.dart",
+      "reason": "Fixed card greeting the backend also renders into the gift artwork (backend/app/models/gift.py and frontend/src/api/gifts.ts hold the same copy); translating only the app copy would desync the printed card."
+    },
+    {
+      "value": "Could not create the gift",
+      "file": "features/gifts/providers/gift_providers.dart",
+      "reason": "Error toast title in a provider; no BuildContext in scope."
+    },
+    {
+      "value": "Could not claim the gift",
+      "file": "features/gifts/providers/gift_providers.dart",
+      "reason": "Error toast title in a provider; no BuildContext in scope."
+    },
+    {
+      "value": "OpenAI",
+      "file": "features/settings/views/ai_settings_page.dart",
+      "reason": "Vendor brand name; must not be translated."
+    },
+    {
+      "value": "https://your-proxy.example.com/v1",
+      "file": "features/settings/views/ai_settings_page.dart",
+      "reason": "Example URL used as a field hint; a URL, not prose."
+    },
+    {
+      "value": "Your preferences are saved.",
+      "file": "features/settings/providers/settings_provider.dart",
+      "reason": "Success toast in a provider (title 'Saved'); no BuildContext in scope."
+    },
+    {
+      "value": "This account signs in with Google or Apple. Use \"Forgot password\" to set a password first.",
+      "file": "features/settings/providers/settings_provider.dart",
+      "reason": "Password-change error toast (title 'Password not changed'); provider, no BuildContext."
+    },
+    {
+      "value": "Current password is incorrect.",
+      "file": "features/settings/providers/settings_provider.dart",
+      "reason": "Password-change error toast; provider, no BuildContext."
+    },
+    {
+      "value": "Your data export is ready to download.",
+      "file": "features/settings/providers/settings_provider.dart",
+      "reason": "Export success toast (title 'Export ready'); provider, no BuildContext."
+    },
+    {
+      "value": "We could not open your browser, so we copied the download link. Paste it into a browser soon: it expires.",
+      "file": "features/settings/providers/settings_provider.dart",
+      "reason": "Export fallback toast (title 'Link copied'); provider, no BuildContext."
+    },
+    {
+      "value": "Choose a provider.",
+      "file": "features/settings/providers/ai_settings_provider.dart",
+      "reason": "AI settings validation toast (title 'Not saved'); provider, no BuildContext."
+    },
+    {
+      "value": "A custom provider needs an API URL.",
+      "file": "features/settings/providers/ai_settings_provider.dart",
+      "reason": "AI settings validation toast; provider, no BuildContext."
+    },
+    {
+      "value": "Enter an API key.",
+      "file": "features/settings/providers/ai_settings_provider.dart",
+      "reason": "AI settings validation toast; provider, no BuildContext."
+    },
+    {
+      "value": "Your AI settings are saved.",
+      "file": "features/settings/providers/ai_settings_provider.dart",
+      "reason": "AI settings success toast (title 'Saved'); provider, no BuildContext."
+    },
+    {
+      "value": "Enter an API URL and a chat model to test.",
+      "file": "features/settings/providers/ai_settings_provider.dart",
+      "reason": "Connection-test validation toast (title 'Missing details'); provider, no BuildContext."
+    },
+    {
+      "value": "Enter your API key to test. Your saved key stays private.",
+      "file": "features/settings/providers/ai_settings_provider.dart",
+      "reason": "Connection-test validation toast (title 'API key needed'), one branch of a Dart ternary; provider, no BuildContext."
+    },
+    {
+      "value": "The connection works.",
+      "file": "features/settings/providers/ai_settings_provider.dart",
+      "reason": "Connection-test success toast (title 'Connected'); provider, no BuildContext."
+    },
+    {
+      "value": "°C",
+      "file": "features/settings/views/settings_page.dart",
+      "reason": "Unit symbol in the temperature segmented control ('°F' is the other option); symbols, not prose."
+    },
+    {
+      "value": "Casual",
+      "file": "features/settings/views/settings_page.dart",
+      "reason": "Const list of style values sent to the API; already rendered through localizedTaxonomy(l10n, value), so translating the literal would break the stored value."
+    },
+    {
+      "value": "Black",
+      "file": "features/settings/views/settings_page.dart",
+      "reason": "Const list of colour values sent to the API; already rendered through localizedTaxonomy(l10n, value)."
+    }
+  ]
+}

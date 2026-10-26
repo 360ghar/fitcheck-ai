@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/locale_registry.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/app_version_label.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -52,7 +55,7 @@ class SettingsPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.stone,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Settings')),
+        appBar: AppBar(title: Text(context.l10n.settingsTitle)),
         body: AppPageBackground(
           child: RefreshIndicator(
             onRefresh: notifier.fetchPreferences,
@@ -111,13 +114,17 @@ class _SettingsList extends ConsumerWidget {
     final theme =
         prefs.themeMode ?? ref.read(themeServiceProvider).appThemeMode;
     final fahrenheit = prefs.temperatureUnit == TemperatureUnit.fahrenheit;
+    final l10n = context.l10n;
 
-    String summary(List<String>? values) =>
-        values == null || values.isEmpty ? 'None chosen' : values.join(', ');
+    // The stored values stay English (they are sent to the API); only the way
+    // they are shown is translated.
+    String summary(List<String>? values) => values == null || values.isEmpty
+        ? l10n.settingsNoneChosen
+        : values.map((value) => localizedTaxonomy(l10n, value)).join(', ');
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(
+      padding: EdgeInsetsDirectional.fromSTEB(
         AppConstants.spacing16,
         AppConstants.spacing8,
         AppConstants.spacing16,
@@ -129,20 +136,29 @@ class _SettingsList extends ConsumerWidget {
           const SizedBox(height: AppConstants.spacing8),
         ],
         PaperGroup(
-          title: 'Appearance',
+          title: context.l10n.settingsAppearance,
           children: [
+            PaperNavRow(
+              icon: Icons.translate_rounded,
+              title: context.l10n.settingsLanguage,
+              subtitle: LocaleRegistry.forLocale(
+                    Localizations.localeOf(context),
+                  )?.nativeName ??
+                  context.localeNativeName,
+              onTap: () => context.push(Routes.language),
+            ),
             _ChoiceRow<AppThemeMode>(
-              label: 'Theme',
+              label: l10n.settingsTheme,
               value: theme,
-              options: const {
-                AppThemeMode.system: 'System',
-                AppThemeMode.light: 'Light',
-                AppThemeMode.dark: 'Dark',
+              options: {
+                AppThemeMode.system: l10n.settingsThemeSystem,
+                AppThemeMode.light: l10n.settingsThemeLight,
+                AppThemeMode.dark: l10n.settingsThemeDark,
               },
               onChanged: notifier.updateThemeMode,
             ),
             _ChoiceRow<TemperatureUnit>(
-              label: 'Temperature',
+              label: l10n.settingsTemperature,
               value: fahrenheit
                   ? TemperatureUnit.fahrenheit
                   : TemperatureUnit.celsius,
@@ -156,30 +172,30 @@ class _SettingsList extends ConsumerWidget {
         ),
         gap,
         PaperGroup(
-          title: 'Notifications',
+          title: context.l10n.settingsNotifications,
           children: [
             SwitchListTile(
-              title: const Text('Email updates'),
+              title: Text(l10n.settingsEmailUpdates),
               subtitle: Text(
-                'News and tips by email',
+                l10n.settingsEmailUpdatesBody,
                 style: TextStyle(color: tokens.textMuted),
               ),
               value: prefs.emailNotificationsEnabled ?? true,
               onChanged: notifier.toggleEmailNotifications,
             ),
             SwitchListTile(
-              title: const Text('Outfit reminders'),
+              title: Text(l10n.settingsOutfitReminders),
               subtitle: Text(
-                'A nudge to log what you wore',
+                l10n.settingsOutfitRemindersBody,
                 style: TextStyle(color: tokens.textMuted),
               ),
               value: prefs.outfitRemindersEnabled ?? true,
               onChanged: notifier.toggleOutfitReminders,
             ),
             SwitchListTile(
-              title: const Text('Weekly summary'),
+              title: Text(l10n.settingsWeeklySummary),
               subtitle: Text(
-                'Your week in outfits',
+                l10n.settingsWeeklySummaryBody,
                 style: TextStyle(color: tokens.textMuted),
               ),
               value: prefs.weeklySummaryEnabled ?? true,
@@ -189,15 +205,15 @@ class _SettingsList extends ConsumerWidget {
         ),
         gap,
         PaperGroup(
-          title: 'Style',
+          title: l10n.settingsStyleSection,
           children: [
             PaperNavRow(
               icon: Icons.style_outlined,
-              title: 'Styles you like',
+              title: l10n.settingsPreferredStyles,
               subtitle: summary(prefs.preferredStyles),
               onTap: () => _openChoices(
                 context,
-                title: 'Styles you like',
+                title: l10n.settingsPreferredStyles,
                 options: _styles,
                 selected: prefs.preferredStyles ?? const [],
                 onToggle: (value, on) => on
@@ -207,11 +223,11 @@ class _SettingsList extends ConsumerWidget {
             ),
             PaperNavRow(
               icon: Icons.palette_outlined,
-              title: 'Colours you like',
+              title: l10n.settingsPreferredColours,
               subtitle: summary(prefs.preferredColors),
               onTap: () => _openChoices(
                 context,
-                title: 'Colours you like',
+                title: l10n.settingsPreferredColours,
                 options: _colors,
                 selected: prefs.preferredColors ?? const [],
                 onToggle: (value, on) => on
@@ -223,60 +239,60 @@ class _SettingsList extends ConsumerWidget {
         ),
         gap,
         PaperGroup(
-          title: 'Plan and AI',
+          title: l10n.settingsPlanAiSection,
           children: [
             PaperNavRow(
               icon: Icons.workspace_premium_outlined,
-              title: 'Plan and billing',
+              title: l10n.settingsPlanBilling,
               subtitle: EnvConfig.paywallEnabled
-                  ? 'Plan, usage and upgrades'
-                  : 'Plan and usage',
+                  ? l10n.settingsPlanBillingBody
+                  : l10n.settingsPlanUsageBody,
               onTap: () => context.push(Routes.subscription),
             ),
             PaperNavRow(
               icon: Icons.card_giftcard_outlined,
-              title: 'Invite friends',
-              subtitle: 'A free month for each friend who joins',
+              title: l10n.settingsInviteFriends,
+              subtitle: l10n.settingsInviteFriendsBody,
               onTap: () => context.push(Routes.referral),
             ),
             PaperNavRow(
               icon: Icons.auto_awesome_outlined,
-              title: 'AI provider',
-              subtitle: 'Use your own model for tagging and images',
+              title: l10n.settingsAiProvider,
+              subtitle: l10n.settingsAiProviderBody,
               onTap: () => context.push(Routes.aiSettings),
             ),
           ],
         ),
         gap,
         PaperGroup(
-          title: 'About',
+          title: l10n.settingsAboutSection,
           children: [
             ListTile(
               leading: const Icon(Icons.info_outline_rounded),
-              title: const Text('App version'),
+              title: Text(l10n.settingsAppVersion),
               subtitle: AppVersionLabel(
                 style: text.bodyMedium?.copyWith(color: tokens.textMuted),
               ),
             ),
             PaperNavRow(
               icon: Icons.shield_outlined,
-              title: 'Privacy and terms',
+              title: l10n.settingsPrivacyTerms,
               onTap: () => context.push(Routes.legal),
             ),
             PaperNavRow(
               icon: Icons.flag_outlined,
-              title: 'Report a problem',
+              title: l10n.settingsReportProblem,
               onTap: () => context.push(Routes.feedback),
             ),
           ],
         ),
         gap,
         PaperGroup(
-          title: 'Account',
+          title: l10n.settingsAccountSection,
           children: [
             PaperNavRow(
               icon: Icons.lock_outline_rounded,
-              title: 'Change password',
+              title: l10n.settingsChangePassword,
               onTap: () => showDialog<void>(
                 context: context,
                 barrierDismissible: false,
@@ -285,7 +301,7 @@ class _SettingsList extends ConsumerWidget {
             ),
             PaperNavRow(
               icon: Icons.download_outlined,
-              title: 'Export your data',
+              title: l10n.settingsExportData,
               onTap: () => showDialog<void>(
                 context: context,
                 barrierDismissible: false,
@@ -294,7 +310,7 @@ class _SettingsList extends ConsumerWidget {
             ),
             PaperNavRow(
               icon: Icons.delete_outline_rounded,
-              title: 'Delete account',
+              title: l10n.settingsDeleteAccount,
               color: tokens.error,
               onTap: () => showDialog<void>(
                 context: context,
@@ -345,7 +361,7 @@ class _ChoiceRow<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         AppConstants.spacing16,
         AppConstants.spacing12,
         AppConstants.spacing16,
@@ -402,7 +418,7 @@ class _ChoiceSheetState extends State<_ChoiceSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
+        padding: const EdgeInsetsDirectional.fromSTEB(
           AppConstants.spacing24,
           AppConstants.spacing24,
           AppConstants.spacing24,
@@ -423,7 +439,7 @@ class _ChoiceSheetState extends State<_ChoiceSheet> {
               children: [
                 for (final option in widget.options)
                   FilterChip(
-                    label: Text(option),
+                    label: Text(localizedTaxonomy(context.l10n, option)),
                     selected: _selected.contains(option),
                     onSelected: (on) {
                       setState(
@@ -438,10 +454,10 @@ class _ChoiceSheetState extends State<_ChoiceSheet> {
             ),
             const SizedBox(height: AppConstants.spacing8),
             Align(
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerEnd,
               child: TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Done'),
+                child: Text(context.l10n.actionDone),
               ),
             ),
           ],
@@ -474,13 +490,21 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
     super.dispose();
   }
 
-  String? _validateNew(String? value) {
+  /// Takes the localizations rather than reading them off a context: the
+  /// validator runs from the form, which is below this widget's own context.
+  String? _validateNew(AppLocalizations l10n, String? value) {
     final password = value ?? '';
-    if (password.isEmpty) return 'Enter a new password';
-    if (password.length < 8) return 'Use at least 8 characters';
-    if (!password.contains(RegExp(r'[A-Z]'))) return 'Add an uppercase letter';
-    if (!password.contains(RegExp(r'[a-z]'))) return 'Add a lowercase letter';
-    if (!password.contains(RegExp(r'[0-9]'))) return 'Add a number';
+    if (password.isEmpty) return l10n.settingsEnterNewPassword;
+    if (password.length < 8) return l10n.settingsPasswordMin8;
+    if (!password.contains(RegExp(r'[A-Z]'))) {
+      return l10n.settingsPasswordNeedsUpper;
+    }
+    if (!password.contains(RegExp(r'[a-z]'))) {
+      return l10n.settingsPasswordNeedsLower;
+    }
+    if (!password.contains(RegExp(r'[0-9]'))) {
+      return l10n.settingsPasswordNeedsDigit;
+    }
     return null;
   }
 
@@ -503,8 +527,9 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
   Widget build(BuildContext context) {
     final busy =
         _busy || ref.watch(authProvider.select((s) => s.busy)) != AuthBusy.none;
+    final l10n = context.l10n;
     return AlertDialog(
-      title: const Text('Change password'),
+      title: Text(l10n.settingsChangePassword),
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
@@ -516,11 +541,12 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                 obscureText: true,
                 enabled: !busy,
                 autofillHints: const [AutofillHints.password],
-                decoration: const InputDecoration(
-                  labelText: 'Current password',
+                decoration: InputDecoration(
+                  labelText: l10n.settingsCurrentPassword,
                 ),
-                validator: (v) =>
-                    (v ?? '').isEmpty ? 'Enter your current password' : null,
+                validator: (v) => (v ?? '').isEmpty
+                    ? l10n.settingsEnterCurrentPassword
+                    : null,
               ),
               const SizedBox(height: AppConstants.spacing12),
               TextFormField(
@@ -528,19 +554,19 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
                 obscureText: true,
                 enabled: !busy,
                 autofillHints: const [AutofillHints.newPassword],
-                decoration: const InputDecoration(labelText: 'New password'),
-                validator: _validateNew,
+                decoration: InputDecoration(labelText: l10n.settingsNewPassword),
+                validator: (v) => _validateNew(l10n, v),
               ),
               const SizedBox(height: AppConstants.spacing12),
               TextFormField(
                 controller: _confirm,
                 obscureText: true,
                 enabled: !busy,
-                decoration: const InputDecoration(
-                  labelText: 'Confirm new password',
+                decoration: InputDecoration(
+                  labelText: l10n.settingsConfirmNewPassword,
                 ),
                 validator: (v) =>
-                    v != _next.text ? 'The passwords do not match' : null,
+                    v != _next.text ? l10n.settingsPasswordsNoMatch : null,
               ),
             ],
           ),
@@ -549,11 +575,11 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
       actions: [
         TextButton(
           onPressed: busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.actionCancel),
         ),
         ElevatedButton(
           onPressed: busy ? null : _submit,
-          child: busy ? const _ButtonSpinner() : const Text('Change'),
+          child: busy ? const _ButtonSpinner() : Text(l10n.settingsChangeAction),
         ),
       ],
     );
@@ -578,19 +604,18 @@ class _ExportDialogState extends ConsumerState<_ExportDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AlertDialog(
-      title: const Text('Export your data'),
-      content: const Text(
-        'We prepare a file with everything you saved and open the download.',
-      ),
+      title: Text(l10n.settingsExportData),
+      content: Text(l10n.settingsExportBody),
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.actionCancel),
         ),
         ElevatedButton(
           onPressed: _busy ? null : _export,
-          child: _busy ? const _ButtonSpinner() : const Text('Export'),
+          child: _busy ? const _ButtonSpinner() : Text(l10n.settingsExportAction),
         ),
       ],
     );
@@ -618,21 +643,19 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
   @override
   Widget build(BuildContext context) {
     final error = PaperTokens.of(context).error;
+    final l10n = context.l10n;
     return AlertDialog(
-      title: const Text('Delete your account?'),
-      content: const Text(
-        'This removes your closet, outfits and photos for good. '
-        'You cannot undo it.',
-      ),
+      title: Text(l10n.settingsDeleteAccountTitle),
+      content: Text(l10n.settingsDeleteAccountBody),
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.actionCancel),
         ),
         TextButton(
           onPressed: _busy ? null : _delete,
           style: TextButton.styleFrom(foregroundColor: error),
-          child: _busy ? const _ButtonSpinner() : const Text('Delete'),
+          child: _busy ? const _ButtonSpinner() : Text(l10n.actionDelete),
         ),
       ],
     );

@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "アウトライトと衣類を撮影するためにカメラへのアクセスが必要です。";
+"NSPhotoLibraryUsageDescription" = "アウトライトと衣類を選択するために写真ライブラリへのアクセスが必要です。";
+"NSPhotoLibraryAddUsageDescription" = "AIで生成したコーディネート写真を保存するために写真ライブラリへのアクセスが必要です。";

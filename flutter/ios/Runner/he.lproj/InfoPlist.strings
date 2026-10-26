@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI זקוק לגישה למצלמה כדי לצלם את התלבושות ופריטי המלתחה שלך.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI זקוק לגישה לספריית התמונות כדי לבחור תמונות של התלבושות ופריטי המלתחה שלך.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI זקוק לאפשרות לשמור את תמונות התלבושות שנוצרו בספריית התמונות שלך.";

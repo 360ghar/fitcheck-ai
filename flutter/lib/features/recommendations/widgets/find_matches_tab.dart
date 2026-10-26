@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../providers/recommendations_providers.dart';
 import 'recommendation_widgets.dart';
@@ -32,11 +33,11 @@ class _FindMatchesTabState extends ConsumerState<FindMatchesTab>
         slivers: [
           if (selection.isNotEmpty)
             const SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                AppConstants.spacing16,
-                AppConstants.spacing16,
-                AppConstants.spacing8,
-                AppConstants.spacing4,
+              padding: EdgeInsetsDirectional.only(
+                start: AppConstants.spacing16,
+                top: AppConstants.spacing16,
+                end: AppConstants.spacing8,
+                bottom: AppConstants.spacing4,
               ),
               sliver: SliverToBoxAdapter(child: SelectionBar()),
             ),
@@ -57,9 +58,9 @@ class _FindMatchesTabState extends ConsumerState<FindMatchesTab>
           hasScrollBody: false,
           child: AppEmptyState(
             scene: PaperScenes.closet,
-            title: 'No matches yet',
-            message: "Pick a piece and we'll find what goes with it.",
-            actionLabel: 'Pick a piece',
+            title: context.l10n.recommendNoMatchesTitle,
+            message: context.l10n.recommendNoMatchesBody,
+            actionLabel: context.l10n.recommendPickPiece,
             onAction: () => showPiecePicker(context),
           ),
         ),
@@ -88,9 +89,9 @@ class _FindMatchesTabState extends ConsumerState<FindMatchesTab>
           hasScrollBody: false,
           child: AppEmptyState(
             scene: PaperScenes.closet,
-            title: 'Nothing matches these yet',
-            message: 'Try other pieces, or add more to your closet.',
-            actionLabel: 'Change pieces',
+            title: context.l10n.recommendNothingMatchesTitle,
+            message: context.l10n.recommendNothingMatchesBody,
+            actionLabel: context.l10n.recommendChangePieces,
             onAction: () => showPiecePicker(context),
           ),
         ),
@@ -148,15 +149,15 @@ class _FindMatchesTabState extends ConsumerState<FindMatchesTab>
                   ),
                 const SizedBox(height: AppConstants.spacing16),
                 Text(
-                  match.reason ?? 'It suits the pieces you picked.',
+                  match.reason ?? context.l10n.recommendDefaultReason,
                   style: text.bodyLarge,
                 ),
                 const SizedBox(height: AppConstants.spacing20),
                 Align(
-                  alignment: Alignment.centerRight,
+                  alignment: AlignmentDirectional.centerEnd,
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
+                    child: Text(context.l10n.actionClose),
                   ),
                 ),
               ],

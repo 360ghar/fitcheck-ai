@@ -1,3 +1,4 @@
+import 'package:fitcheck_ai/core/i18n/l10n.dart';
 import 'package:fitcheck_ai/core/services/notification_service.dart'
     show scaffoldMessengerKey;
 import 'package:fitcheck_ai/domain/enums/category.dart';
@@ -73,6 +74,9 @@ void main() {
           },
           child: MaterialApp(
             scaffoldMessengerKey: scaffoldMessengerKey,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
             home: const Scaffold(body: WardrobeContent()),
           ),
         ),

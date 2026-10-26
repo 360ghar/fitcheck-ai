@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import type { BatchImageInput } from '@/types';
+import { useTranslation } from '@/i18n'
 
 interface BatchExtractionProgressProps {
   /** All images being processed */
@@ -46,7 +47,7 @@ function getStatusIndicator(status: BatchImageInput['status']) {
     // pairs inverse correctly (`--success`/`--success-pale` swap roles in dark).
     case 'completed':
       return (
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-2 end-2">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success-pale text-success">
             <CheckCircle2 className="h-4 w-4" />
           </span>
@@ -90,6 +91,7 @@ export function BatchExtractionProgress({
   onCancel,
   error,
 }: BatchExtractionProgressProps) {
+  const { t } = useTranslation()
   const totalImages = images.length;
   const processedCount = imagesCompleted + imagesFailed;
 
@@ -100,10 +102,10 @@ export function BatchExtractionProgress({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-foreground">
-              Analyzing Images
+              {t('extract.analyzingImages')}
             </h3>
             <p className="text-sm text-muted-foreground">
-              Detecting clothing items in your photos...
+              {t('extract.analyzingImagesBody')}
             </p>
           </div>
           {isProcessing && (
@@ -117,7 +119,7 @@ export function BatchExtractionProgress({
             <span className="text-muted-foreground">
               {processedCount} of {totalImages} images processed
               {imagesFailed > 0 && (
-                <span className="text-error ml-1">
+                <span className="text-error ms-1">
                   ({imagesFailed} failed)
                 </span>
               )}
@@ -144,7 +146,7 @@ export function BatchExtractionProgress({
           <AlertCircle className="h-5 w-5 text-error flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-error">
-              Error during extraction
+              {t('extract.extractionError')}
             </p>
             <p className="text-sm text-error mt-1">
               {error}
@@ -180,7 +182,7 @@ export function BatchExtractionProgress({
 
               {/* Items count badge for completed images */}
               {image.status === 'completed' && image.detectedItems && image.detectedItems.length > 0 && (
-                <div className="absolute bottom-2 left-2 bg-accent-purple text-white text-xs font-medium px-1.5 py-0.5 rounded-md">
+                <div className="absolute bottom-2 start-2 bg-accent-purple text-white text-xs font-medium px-1.5 py-0.5 rounded-md">
                   {image.detectedItems.length} item{image.detectedItems.length !== 1 ? 's' : ''}
                 </div>
               )}
@@ -195,19 +197,19 @@ export function BatchExtractionProgress({
           <p className="text-2xl font-bold text-foreground">
             {images.filter((i) => i.status === 'pending' || i.status === 'uploading').length}
           </p>
-          <p className="text-xs text-muted-foreground">Pending</p>
+          <p className="text-xs text-muted-foreground">{t('extract.pending')}</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-success">
             {imagesCompleted}
           </p>
-          <p className="text-xs text-muted-foreground">Completed</p>
+          <p className="text-xs text-muted-foreground">{t('extract.completed')}</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-error">
             {imagesFailed}
           </p>
-          <p className="text-xs text-muted-foreground">Failed</p>
+          <p className="text-xs text-muted-foreground">{t('extract.statusFailed')}</p>
         </div>
       </div>
 
@@ -219,7 +221,7 @@ export function BatchExtractionProgress({
             onClick={onCancel}
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
           >
-            Cancel Extraction
+            {t('extract.cancelExtraction')}
           </Button>
         </div>
       )}

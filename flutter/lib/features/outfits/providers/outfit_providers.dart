@@ -196,11 +196,17 @@ class OutfitsNotifier extends PagedNotifier<OutfitModel> {
         }
         ErrorHandler.showInfo(
           updated.isFavorite
-              ? 'Saved to favourites'
-              : 'Removed from favourites',
+              ? ErrorHandler.l10n?.outfitSavedToFavouritesBody ??
+                    'Saved to favourites'
+              : ErrorHandler.l10n?.outfitRemovedFromFavouritesBody ??
+                    'Removed from favourites',
         );
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.outfitNotSavedTitle ?? 'Not saved',
+          stackTrace: stack,
+        );
       }
     });
   }
@@ -213,9 +219,16 @@ class OutfitsNotifier extends PagedNotifier<OutfitModel> {
         if (ref.exists(wearHistoryProvider(id))) {
           ref.invalidate(wearHistoryProvider(id));
         }
-        ErrorHandler.showSuccess('Logged as worn today.', title: 'Nice pick');
+        ErrorHandler.showSuccess(
+          ErrorHandler.l10n?.outfitLoggedAsWornBody ?? 'Logged as worn today.',
+          title: ErrorHandler.l10n?.outfitNicePickTitle ?? 'Nice pick',
+        );
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.outfitNotSavedTitle ?? 'Not saved',
+          stackTrace: stack,
+        );
       }
     });
   }
@@ -233,10 +246,17 @@ class OutfitsNotifier extends PagedNotifier<OutfitModel> {
           ],
           totalDelta: -1,
         );
-        ErrorHandler.showSuccess('Outfit removed.', title: 'Deleted');
+        ErrorHandler.showSuccess(
+          ErrorHandler.l10n?.outfitRemovedBody ?? 'Outfit removed.',
+          title: ErrorHandler.l10n?.outfitDeletedTitle ?? 'Deleted',
+        );
         return true;
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Not deleted', stackTrace: stack);
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.outfitNotDeletedTitle ?? 'Not deleted',
+          stackTrace: stack,
+        );
         return false;
       }
     });
@@ -251,12 +271,17 @@ class OutfitsNotifier extends PagedNotifier<OutfitModel> {
           final copy = await _repository.duplicateOutfit(id);
           add(copy);
           ErrorHandler.showSuccess(
-            'A copy is in your outfits.',
-            title: 'Duplicated',
+            ErrorHandler.l10n?.outfitDuplicatedBody ??
+                'A copy is in your outfits.',
+            title: ErrorHandler.l10n?.outfitDuplicatedTitle ?? 'Duplicated',
           );
           return copy;
         } catch (e, stack) {
-          ErrorHandler.showError(e, title: 'Not duplicated', stackTrace: stack);
+          ErrorHandler.showError(
+            e,
+            title: ErrorHandler.l10n?.outfitNotDuplicatedTitle ?? 'Not duplicated',
+            stackTrace: stack,
+          );
           return null;
         }
       },
@@ -270,7 +295,11 @@ class OutfitsNotifier extends PagedNotifier<OutfitModel> {
       replace(updated);
       return updated;
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.outfitNotSavedTitle ?? 'Not saved',
+        stackTrace: stack,
+      );
       rethrow;
     }
   }
@@ -280,7 +309,11 @@ class OutfitsNotifier extends PagedNotifier<OutfitModel> {
     try {
       return await _repository.shareOutfit(id);
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not shared', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.outfitNotSharedTitle ?? 'Not shared',
+        stackTrace: stack,
+      );
       return null;
     }
   }
@@ -365,8 +398,12 @@ class CollectionsNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   Future<bool> create(String name, String description) => _mutate(
     () =>
         _repository.createCollection(name, const [], description: description),
-    success: '"$name" is ready.',
-    failure: 'Collection not created',
+    success:
+        ErrorHandler.l10n?.outfitCollectionReadyBody(name) ??
+        '"$name" is ready.',
+    failure:
+        ErrorHandler.l10n?.outfitCollectionNotCreatedTitle ??
+        'Collection not created',
   );
 
   Future<bool> rename(
@@ -377,23 +414,31 @@ class CollectionsNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
     () => _repository.updateCollection(collection['id'].toString(), name, [
       for (final id in (collection['outfit_ids'] as List? ?? const [])) '$id',
     ], description: description),
-    success: 'Collection updated.',
-    failure: 'Collection not updated',
+    success: ErrorHandler.l10n?.outfitCollectionUpdatedBody ?? 'Collection updated.',
+    failure:
+        ErrorHandler.l10n?.outfitCollectionNotUpdatedTitle ??
+        'Collection not updated',
   );
 
   Future<bool> delete(Map<String, dynamic> collection) => _mutate(
     () => _repository.deleteCollection(collection['id'].toString()),
-    success: 'Collection deleted.',
-    failure: 'Collection not deleted',
+    success: ErrorHandler.l10n?.outfitCollectionDeletedBody ?? 'Collection deleted.',
+    failure:
+        ErrorHandler.l10n?.outfitCollectionNotDeletedTitle ??
+        'Collection not deleted',
   );
 
   Future<bool> addOutfits(String collectionId, List<String> outfitIds) =>
       _mutate(
         () => _repository.addOutfitsToCollection(collectionId, outfitIds),
-        success: outfitIds.length == 1
-            ? '1 outfit added.'
-            : '${outfitIds.length} outfits added.',
-        failure: 'Outfits not added',
+        success:
+            ErrorHandler.l10n?.outfitAddedToCollection(outfitIds.length) ??
+            (outfitIds.length == 1
+                ? '1 outfit added.'
+                : '${outfitIds.length} outfits added.'),
+        failure:
+            ErrorHandler.l10n?.outfitNotAddedToCollectionTitle ??
+            'Outfits not added',
       );
 
   /// Every outfit for the add picker, capped at 10 pages of 100 so a bad

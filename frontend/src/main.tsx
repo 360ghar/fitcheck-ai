@@ -8,6 +8,8 @@ import { captureException, initErrorReporting } from './lib/error-reporting'
 import { captureGiftClaimCredentialFromLocation } from './lib/gift-claim-credential'
 import { hydratePrerenderedState } from './lib/prerenderState'
 import { preloadRoute } from './routes/publicRoutes'
+import { preloadInitialLocale } from './i18n'
+import { I18nProvider } from './i18n'
 import App from './App'
 import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -89,11 +91,16 @@ const tree = (
         <ThemeProvider defaultTheme="light">
           <QueryClientProvider client={queryClient}>
             <BrowserRouter>
-              <TooltipProvider delayDuration={0}>
-                <App />
-                <Toaster />
-                <UpgradePromptDialog />
-              </TooltipProvider>
+              {/* Inside the router (it reads the account's language from the
+                  user store) and above every route, so the Toaster and the
+                  upgrade dialog are translated too. */}
+              <I18nProvider>
+                <TooltipProvider delayDuration={0}>
+                  <App />
+                  <Toaster />
+                  <UpgradePromptDialog />
+                </TooltipProvider>
+              </I18nProvider>
             </BrowserRouter>
           </QueryClientProvider>
         </ThemeProvider>
@@ -121,9 +128,15 @@ function mount() {
 // controls and every button are inert, with no spinner or error to explain it.
 // Mounting is never gated on the network — the preload is an optimisation, and
 // past this deadline Suspense + ErrorBoundary handle the chunk as usual.
+//
+// The locale catalog rides the same race. It is ~10 kB and it decides what
+// language the first React render is in, so fetching it after mount would mean
+// an English frame for a Hindi visitor on every prerendered marketing page.
+// `preloadInitialLocale` never rejects and also sets <html lang/dir> before
+// paint, so an Arabic visitor's first frame is already right-to-left.
 const PRELOAD_BUDGET_MS = 1500
 
 Promise.race([
-  preloadRoute(window.location.pathname),
+  Promise.all([preloadRoute(window.location.pathname), preloadInitialLocale()]),
   new Promise((resolve) => setTimeout(resolve, PRELOAD_BUDGET_MS)),
 ]).finally(mount)

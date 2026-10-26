@@ -152,7 +152,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           <div className="flex items-center gap-2">
             {hasAiImage && (
               <Badge className="row-cq-secondary bg-accent-purple text-white text-[10px]">
-                <Sparkles className="h-3 w-3 mr-1" />
+                <Sparkles className="h-3 w-3 me-1" />
                 AI
               </Badge>
             )}
@@ -278,11 +278,11 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
         {hasAiImage && !isGenerating && (
           <Badge
             className={cn(
-              'absolute top-2.5 left-2.5 z-10',
+              'absolute top-2.5 start-2.5 z-10',
               'bg-accent-purple text-white text-[10px]'
             )}
           >
-            <Sparkles className="h-3 w-3 mr-1" />
+            <Sparkles className="h-3 w-3 me-1" />
             AI
           </Badge>
         )}
@@ -292,7 +292,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           <button
             type="button"
             className={cn(
-              'absolute top-2.5 right-2.5 z-10',
+              'absolute top-2.5 end-2.5 z-10',
               'w-9 h-9 rounded-full',
               'flex items-center justify-center',
               'transition-colors duration-200',
@@ -324,7 +324,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             NO photo and NO scrim, so white here painted white-on-light — the
             outfit name and its meta row were simply invisible in light mode.
             Those states use the page ink instead. */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
+        <div className="absolute bottom-0 start-0 end-0 p-3 z-10">
           <h3
             className={cn(
               'font-semibold text-sm truncate',

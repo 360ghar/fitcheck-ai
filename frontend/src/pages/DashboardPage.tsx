@@ -41,32 +41,35 @@ import { ErrorState } from '@/components/ui/error-state'
 import { thumbnailErrorFallback } from '@/hooks/useImageWithFallback'
 import { getGiftDashboardSummary, type GiftDashboardSummary } from '@/api/gifts'
 import { FEATURES } from '@/lib/feature-flags'
+import { categoryLabel, useTranslation, formatDate } from '@/i18n'
 
+// Message ids, not English: module scope, so resolving here would freeze the
+// grid in the language active at import time.
 const aiTools = [
   {
-    name: 'Photoshoot',
-    description: 'Pro-style portraits',
+    nameKey: 'dashboard.toolPhotoshoot',
+    descriptionKey: 'dashboard.toolPhotoshootDescription',
     icon: Camera,
     link: '/photoshoot',
     tone: 'coral',
   },
   {
-    name: 'Try On',
-    description: 'See clothes on you',
+    nameKey: 'dashboard.toolTryOn',
+    descriptionKey: 'dashboard.toolTryOnDescription',
     icon: Wand2,
     link: '/try-on',
     tone: 'teal',
   },
   {
-    name: 'What to wear',
-    description: 'Daily outfit ideas',
+    nameKey: 'dashboard.toolWhatToWear',
+    descriptionKey: 'dashboard.toolWhatToWearDescription',
     icon: Sparkles,
     link: '/recommendations',
     tone: 'violet',
   },
   {
-    name: 'Calendar',
-    description: 'Plan looks ahead',
+    nameKey: 'dashboard.toolCalendar',
+    descriptionKey: 'dashboard.toolCalendarDescription',
     icon: Calendar,
     link: '/calendar',
     tone: 'blue',
@@ -85,6 +88,7 @@ const AI_TOOL_TILE: Record<AiToolTone, string> = {
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation()
   const userDisplayName = useUserDisplayName()
   const user = useCurrentUser()
   const userAvatar = useUserAvatar()
@@ -283,28 +287,28 @@ export default function DashboardPage() {
 
   const stats = [
     {
-      name: 'Total Items',
+      name: t('dashboard.statItems'),
       value: closetTotalItems,
       icon: Shirt,
       gradient: 'teal' as const,
       link: '/wardrobe',
     },
     {
-      name: 'Outfits Created',
+      name: t('dashboard.statOutfits'),
       value: outfitTotalCount,
       icon: Layers,
       gradient: 'violet' as const,
       link: '/outfits',
     },
     {
-      name: 'Total Wears',
+      name: t('dashboard.statWears'),
       value: totalWears,
       icon: TrendingUp,
       gradient: 'coral' as const,
       link: '/wardrobe',
     },
     {
-      name: 'Favorites',
+      name: t('dashboard.statFavorites'),
       value: favoriteItems,
       icon: Heart,
       gradient: 'amber' as const,
@@ -314,20 +318,20 @@ export default function DashboardPage() {
 
   const quickActions = [
     {
-      name: 'Add Item',
-      description: 'Upload photos — AI catalogs each piece',
+      name: t('dashboard.toolAddItem'),
+      description: t('dashboard.toolAddItemDescription'),
       icon: Shirt,
       onClick: () => setIsUploadModalOpen(true),
     },
     {
-      name: 'Create Outfit',
-      description: 'Combine items into a wearable look',
+      name: t('dashboard.toolCreateOutfit'),
+      description: t('dashboard.toolCreateOutfitDescription'),
       icon: Layers,
       link: '/outfits/new',
     },
     {
-      name: 'What to wear',
-      description: 'AI outfit ideas from your closet',
+      name: t('dashboard.toolWhatToWear'),
+      description: t('dashboard.toolWhatToWearDescription'),
       icon: Sparkles,
       link: '/recommendations',
     },
@@ -337,10 +341,10 @@ export default function DashboardPage() {
     return (
       <div className="app-page max-w-7xl">
         <ErrorState
-          title="Couldn't load your closet"
+          title={t('dashboard.loadErrorTitle')}
           // Friendly copy only: the store error can carry backend detail (SQL
           // function names, migration numbers) that must not reach the UI.
-          description="We couldn't reach the server. Check your connection and try again."
+          description={t('dashboard.loadErrorBody')}
           onRetry={() => {
             // Explicit user retry: force a fresh read.
             void fetchItems(true)
@@ -356,17 +360,17 @@ export default function DashboardPage() {
       {/* Welcome header */}
       <div className="mb-3 md:mb-4">
         <h1 className="text-xl md:text-3xl font-bold text-foreground">
-          {isWelcomeEmpty ? `Welcome, ${userDisplayName}` : `Welcome back, ${userDisplayName}`}
+          {isWelcomeEmpty
+            ? t('dashboard.welcome', { name: userDisplayName })
+            : t('dashboard.welcomeBack', { name: userDisplayName })}
         </h1>
         <p className="mt-1 md:mt-2 text-xs md:text-base text-muted-foreground">
-          {isWelcomeEmpty
-            ? 'Start with a few clothing photos. AI finds each item so you can build outfits today.'
-            : "Here's what's happening with your closet today."}
+          {isWelcomeEmpty ? t('dashboard.emptySubtitle') : t('dashboard.subtitle')}
         </p>
         {isEmpty && (
           <Button className="mt-4 w-full sm:w-auto" onClick={() => setIsUploadModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add your first photos
+            <Plus className="h-4 w-4 me-2" />
+            {t('dashboard.addFirstPhotos')}
           </Button>
         )}
       </div>
@@ -407,19 +411,19 @@ export default function DashboardPage() {
       {/* How it works — empty accounts only */}
       {isEmpty && (
         <div className="mb-3 md:mb-4 rounded-xl border border-border bg-muted/20 px-4 py-3 md:px-6">
-          <h2 className="text-sm font-semibold text-foreground mb-2">How it works</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-2">{t('dashboard.howItWorks')}</h2>
           <ol className="space-y-2 text-sm text-muted-foreground">
             <li>
-              <span className="font-medium text-foreground">1. Upload</span> — closet shots or
-              outfit photos
+              <span className="font-medium text-foreground">{t('dashboard.stepUpload')}</span>{' — '}
+              {t('dashboard.stepUploadBody')}
             </li>
             <li>
-              <span className="font-medium text-foreground">2. Extract</span> — AI catalogs each
-              item (studio photos polish in the background)
+              <span className="font-medium text-foreground">{t('dashboard.stepExtract')}</span>{' — '}
+              {t('dashboard.stepExtractBody')}
             </li>
             <li>
-              <span className="font-medium text-foreground">3. Outfit</span> — mix pieces and
-              generate looks
+              <span className="font-medium text-foreground">{t('dashboard.stepOutfit')}</span>{' — '}
+              {t('dashboard.stepOutfitBody')}
             </li>
           </ol>
         </div>
@@ -445,12 +449,12 @@ export default function DashboardPage() {
       {/* AI tools */}
       <div className="mb-3 md:mb-4">
         <div className="flex items-center justify-between mb-2 md:mb-3 px-1">
-          <h2 className="text-base md:text-lg font-semibold text-foreground">AI tools</h2>
+          <h2 className="text-base md:text-lg font-semibold text-foreground">{t('dashboard.aiTools')}</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
           {aiTools.map((tool) => (
             <Link
-              key={tool.name}
+              key={tool.link}
               to={tool.link}
               className={cn(
                 // Clay treatment: pressed at rest, hard offset shadow on
@@ -470,8 +474,8 @@ export default function DashboardPage() {
                 <tool.icon className="h-5 w-5" aria-hidden="true" />
               </span>
               <div>
-                <p className="text-sm font-semibold text-foreground">{tool.name}</p>
-                <p className="text-xs text-muted-foreground line-clamp-1">{tool.description}</p>
+                <p className="text-sm font-semibold text-foreground">{t(tool.nameKey)}</p>
+                <p className="text-xs text-muted-foreground line-clamp-1">{t(tool.descriptionKey)}</p>
               </div>
             </Link>
           ))}
@@ -481,13 +485,13 @@ export default function DashboardPage() {
       {/* Quick actions — tonal cards, not purple gradient slabs */}
       <div className="mb-3 md:mb-4">
         <div className="flex items-center justify-between mb-2 md:mb-3 px-1">
-          <h2 className="text-base md:text-lg font-semibold text-foreground">Quick actions</h2>
+          <h2 className="text-base md:text-lg font-semibold text-foreground">{t('dashboard.quickActions')}</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {quickActions.map((action) => {
             const commonClassName = cn(
-              'group relative rounded-xl border border-border bg-card p-3 md:p-4 text-left w-full',
+              'group relative rounded-xl border border-border bg-card p-3 md:p-4 text-start w-full',
               'card-interactive',
               'touch-target'
             )
@@ -540,14 +544,14 @@ export default function DashboardPage() {
         <div className="bg-card border border-border rounded-xl overflow-hidden shadow-pressed">
           <div className="px-4 py-3 md:px-6 border-b border-border">
             <div className="flex items-center justify-between">
-              <h3 className="text-base md:text-lg font-semibold text-foreground">Recent items</h3>
+              <h3 className="text-base md:text-lg font-semibold text-foreground">{t('dashboard.recentItems')}</h3>
               {totalItems > 0 && totalOutfits === 0 && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => navigate('/outfits/new')}
                 >
-                  Create outfit
+                  {t('dashboard.createOutfit')}
                 </Button>
               )}
             </div>
@@ -576,15 +580,19 @@ export default function DashboardPage() {
                       <Shirt className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground" />
                     </div>
                   )}
-                  <div className="ml-3 md:ml-4 flex-1 min-w-0">
+                  <div className="ms-3 md:ms-4 flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                    <p className="text-xs md:text-sm text-muted-foreground capitalize">
-                      {item.category}
+                    {/* Canonical value is English and stays English; only the
+                        word on screen is translated. `capitalize` is dropped
+                        because it is not locale-aware — the message carries its
+                        own capitalization per language. */}
+                    <p className="text-xs md:text-sm text-muted-foreground">
+                      {categoryLabel(t, item.category)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="hidden sm:inline text-xs text-muted-foreground shrink-0">
-                      {new Date(item.created_at).toLocaleDateString()}
+                      {formatDate(item.created_at)}
                     </span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>

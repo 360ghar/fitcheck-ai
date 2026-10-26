@@ -5,6 +5,7 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../constants/app_constants.dart';
 import 'app_network_image.dart';
+import '../../core/i18n/l10n.dart';
 
 /// A full-screen image viewer with zoom and pan capabilities.
 ///
@@ -163,7 +164,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
             Positioned(
               top: MediaQuery.of(context).padding.top + AppConstants.spacing8,
               right: AppConstants.spacing16,
-              child: Opacity(opacity: opacity, child: _buildCloseButton()),
+              child: Opacity(opacity: opacity, child: _buildCloseButton(context)),
             ),
 
             // Page indicator for galleries
@@ -237,7 +238,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
     );
   }
 
-  Widget _buildCloseButton() {
+  Widget _buildCloseButton(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.5),
@@ -245,7 +246,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
       ),
       child: IconButton(
         icon: const Icon(Icons.close, color: Colors.white),
-        tooltip: 'Close image viewer',
+        tooltip: context.l10n.imageViewerCloseTooltip,
         onPressed: _close,
         padding: const EdgeInsets.all(AppConstants.spacing8),
         constraints: const BoxConstraints.tightFor(width: 44, height: 44),

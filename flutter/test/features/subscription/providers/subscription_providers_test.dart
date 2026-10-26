@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fitcheck_ai/app/themes/app_theme.dart';
+import 'package:fitcheck_ai/core/i18n/l10n.dart';
 import 'package:fitcheck_ai/core/providers.dart' show noRetry;
 import 'package:fitcheck_ai/core/services/notification_service.dart'
     show scaffoldMessengerKey;
@@ -776,6 +777,13 @@ void main() {
           child: MaterialApp(
             scaffoldMessengerKey: scaffoldMessengerKey,
             theme: AppTheme.lightTheme,
+            // The paywall reads `context.l10n` (the trial copy), and the real
+            // app always installs these delegates in main.dart. Without them
+            // the page fails to build and every assertion here reads the
+            // error state instead.
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context).copyWith(disableAnimations: true),
               child: child!,
@@ -938,6 +946,9 @@ void main() {
       repo.subscriptionError = null;
       await tester.tap(find.text('Try again'));
       await tester.pumpAndSettle();
+      // The offer leads the page now, so the plan card sits below the fold on
+      // a phone screen and has to be scrolled to before it is built.
+      await scrollTo(tester, find.text('Current plan'));
       expect(find.text('Current plan'), findsOneWidget);
     });
 

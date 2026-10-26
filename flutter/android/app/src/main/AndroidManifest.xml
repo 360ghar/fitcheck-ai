@@ -31,6 +31,7 @@
         android:label="FitCheck AI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:localeConfig="@xml/locales_config"
         android:allowBackup="false">
         <!-- Placeholder for OAuth redirect scheme (used by flutter_appauth) -->
         <meta-data

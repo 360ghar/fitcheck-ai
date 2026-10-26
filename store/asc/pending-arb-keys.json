@@ -1,0 +1,29 @@
+{
+  "_comment": "ARB keys the trial paywall, review prompt and deep-link work need that are NOT yet in flutter/lib/l10n/app_en.arb. This file is a handoff, not a locale source: a parallel agent is regenerating all 50 ARBs, so nothing here is written into an ARB by this change. Merge these into app_en.arb (and translate) before the 1.3.0 submission, then delete each entry here. Placeholders use the same ARB syntax as the existing keys.",
+
+  "paywallTrialThenPrice": {
+    "en": "Then {price} a month, unless you cancel.",
+    "description": "One line under the free-month headline stating the price that begins when the trial ends. {price} is the localized StoreKit price for Pro Monthly, e.g. $19.99. Currently the same information ships inside paywallTrialEligibleOnly, which is a full sentence and reads as fine print; this key would let the post-trial price sit directly under the free-month headline in a legible weight. Deliberately not shipped yet: the key does not exist in the ARB.",
+    "placeholders": {
+      "price": { "type": "String" }
+    }
+  },
+
+  "paywallTrialCancelAnytime": {
+    "en": "Cancel any time in your App Store settings.",
+    "description": "Cancellation affordance on the free-month card itself, so the exit is stated next to the offer rather than only in the 3.1.2 disclosure further down the page. Apple requires the purchase screen to state that the subscription can be cancelled; the disclosure already does, this makes it visible above the fold.",
+    "placeholders": {}
+  },
+
+  "paywallTrialClosetOnce": {
+    "en": "Photograph your whole rail once and it all lands in your closet together.",
+    "description": "Optional sharper replacement for the second sentence of paywallTrialBody. The current body ('Upload your whole closet at once. Add pieces as you go after that.') is already translated, so this is an ASO/copy experiment, not a gap.",
+    "placeholders": {}
+  },
+
+  "paywallFreeForeverNoCard": {
+    "en": "No card, no trial, no countdown.",
+    "description": "Optional eyebrow above paywallFreeForeverTitle. Reinforces that the free tier is unconditional, which is the retention story for a user who scrolls past the trial.",
+    "placeholders": {}
+  }
+}

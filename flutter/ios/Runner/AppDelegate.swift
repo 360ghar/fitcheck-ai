@@ -15,5 +15,8 @@ import UserNotifications
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // StoreKit 2 intro-offer eligibility. Registered after the generated
+    // plugins so it cannot shadow a plugin channel of the same name.
+    TrialEligibilityChannel.register(with: engineBridge.pluginRegistry)
   }
 }

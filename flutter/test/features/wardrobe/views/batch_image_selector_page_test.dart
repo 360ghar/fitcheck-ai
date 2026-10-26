@@ -6,6 +6,7 @@ import 'package:fitcheck_ai/core/services/persistence_service.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/social_import_models.dart';
 import 'package:fitcheck_ai/features/wardrobe/providers/batch_extraction_provider.dart';
 import 'package:fitcheck_ai/features/wardrobe/views/batch_image_selector_page.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,6 +96,9 @@ Future<ProviderContainer> _pumpSocialSelector(
         data: const MediaQueryData(disableAnimations: true),
         child: MaterialApp.router(
           scaffoldMessengerKey: scaffoldMessengerKey,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
           routerConfig: GoRouter(
             routes: [
               GoRoute(

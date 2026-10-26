@@ -236,10 +236,18 @@ class WardrobeNotifier extends PagedNotifier<ItemModel> {
         final updated = await _repository.toggleFavorite(id);
         replace(updated);
         ErrorHandler.showInfo(
-          updated.isFavorite ? 'Added to favourites' : 'Removed from favourites',
+          updated.isFavorite
+              ? ErrorHandler.l10n?.wardrobeAddedToFavouritesBody ??
+                    'Added to favourites'
+              : ErrorHandler.l10n?.wardrobeRemovedFromFavouritesBody ??
+                    'Removed from favourites',
         );
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.wardrobeNotSavedTitle ?? 'Not saved',
+          stackTrace: stack,
+        );
       }
     });
   }
@@ -249,9 +257,15 @@ class WardrobeNotifier extends PagedNotifier<ItemModel> {
     await ref.read(wardrobeBusyProvider.notifier).run(id, () async {
       try {
         replace(await _repository.markAsWorn(id));
-        ErrorHandler.showInfo('Logged as worn today.');
+        ErrorHandler.showInfo(
+          ErrorHandler.l10n?.wardrobeLoggedAsWornBody ?? 'Logged as worn today.',
+        );
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.wardrobeNotSavedTitle ?? 'Not saved',
+          stackTrace: stack,
+        );
       }
     });
   }
@@ -266,10 +280,18 @@ class WardrobeNotifier extends PagedNotifier<ItemModel> {
           (items) => [for (final i in items) if (i.id != id) i],
           totalDelta: -1,
         );
-        ErrorHandler.showSuccess('Removed from your closet.', title: 'Deleted');
+        ErrorHandler.showSuccess(
+          ErrorHandler.l10n?.wardrobeRemovedFromClosetBody ??
+              'Removed from your closet.',
+          title: ErrorHandler.l10n?.wardrobeDeletedTitle ?? 'Deleted',
+        );
         return true;
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Not deleted', stackTrace: stack);
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.wardrobeNotDeletedTitle ?? 'Not deleted',
+          stackTrace: stack,
+        );
         return false;
       }
     });
@@ -288,12 +310,17 @@ class WardrobeNotifier extends PagedNotifier<ItemModel> {
       );
       ref.read(wardrobeSelectionProvider.notifier).clear();
       ErrorHandler.showSuccess(
-        '${ids.length} pieces removed from your closet.',
-        title: 'Deleted',
+        ErrorHandler.l10n?.wardrobePiecesRemovedBody(ids.length) ??
+            '${ids.length} pieces removed from your closet.',
+        title: ErrorHandler.l10n?.wardrobeDeletedTitle ?? 'Deleted',
       );
       return true;
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not deleted', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.wardrobeNotDeletedTitle ?? 'Not deleted',
+        stackTrace: stack,
+      );
       return false;
     }
   }

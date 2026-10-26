@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../providers/photoshoot_provider.dart';
 
@@ -53,20 +54,19 @@ class ReferralLimitDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     return AlertDialog(
-      title: const Text("You've used today's photos"),
+      title: Text(context.l10n.referralLimitTitle),
       content: Text(
-        'Your free photos come back tomorrow. Refer a friend and you both '
-        'get a month of Pro free.',
+        context.l10n.referralLimitBody,
         style: Theme.of(
           context,
         ).textTheme.bodyMedium?.copyWith(color: tokens.textSecondary),
       ),
       actions: [
         if (onUpgrade != null)
-          TextButton(onPressed: onUpgrade, child: const Text('Upgrade')),
+          TextButton(onPressed: onUpgrade, child: Text(context.l10n.actionUpgrade)),
         ElevatedButton(
           onPressed: onReferFriend,
-          child: const Text('Refer a friend'),
+          child: Text(context.l10n.referralLimitRefer),
         ),
       ],
     );

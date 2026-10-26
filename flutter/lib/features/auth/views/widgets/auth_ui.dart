@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/i18n/l10n.dart';
 import '../../../../core/widgets/app_ui.dart';
 
 /// Shared frame for the sign-in screens: a paper landscape across the top of
@@ -74,7 +75,7 @@ class AuthScaffold extends StatelessWidget {
                                     AppConstants.spacing4,
                                   ),
                                   child: IconButton(
-                                    tooltip: 'Back',
+                                    tooltip: context.l10n.actionBack,
                                     icon: const Icon(Icons.arrow_back_rounded),
                                     onPressed: () =>
                                         Navigator.maybePop(context),
@@ -145,7 +146,7 @@ class AuthDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     return Text(
-      'or',
+      context.l10n.authOrDivider,
       textAlign: TextAlign.center,
       style: Theme.of(
         context,
@@ -179,12 +180,12 @@ class GoogleSignInButton extends StatelessWidget {
                 height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Row(
+            : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  GoogleMark(),
-                  SizedBox(width: AppConstants.spacing12),
-                  Text('Continue with Google'),
+                  const GoogleMark(),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Text(context.l10n.authContinueGoogle),
                 ],
               ),
       ),
@@ -309,13 +310,13 @@ class AuthFooterText extends StatelessWidget {
         TextButton(
           style: style,
           onPressed: () => _openUrl(privacyPolicyUrl),
-          child: const Text('Privacy policy'),
+          child: Text(context.l10n.paywallPrivacy),
         ),
         Text('·', style: TextStyle(color: tokens.textMuted)),
         TextButton(
           style: style,
           onPressed: () => _openUrl(termsOfServiceUrl),
-          child: const Text('Terms of service'),
+          child: Text(context.l10n.paywallTerms),
         ),
       ],
     );

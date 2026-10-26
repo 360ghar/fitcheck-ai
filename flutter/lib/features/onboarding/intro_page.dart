@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/routes/app_routes.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/i18n/l10n.dart';
 import '../../core/widgets/app_ui.dart';
 import '../auth/views/widgets/auth_ui.dart';
 import 'intro_seen_provider.dart';
@@ -18,24 +19,26 @@ class _Slide {
   final String body;
 }
 
-const _slides = [
+/// Built per build rather than held as a const: the copy is translated, and a
+/// const list would freeze the language it was first read in.
+List<_Slide> _slidesFor(AppLocalizations l10n) => [
   _Slide(
     PaperStockId.moss,
     PaperScenes.closet,
-    'Snap your closet once.',
-    'Photograph a pile of clothes. Every piece is cut out and filed for you.',
+    l10n.introSlide1Title,
+    l10n.introSlide1Body,
   ),
   _Slide(
     PaperStockId.marigold,
     PaperScenes.outfits,
-    'Get dressed faster.',
-    'Outfits from what you own, matched to your plans and the weather.',
+    l10n.introSlide2Title,
+    l10n.introSlide2Body,
   ),
   _Slide(
     PaperStockId.clay,
     PaperScenes.studio,
-    'See it before you wear it.',
-    'Try looks on your own photo, or shoot them like a campaign.',
+    l10n.introSlide3Title,
+    l10n.introSlide3Body,
   ),
 ];
 
@@ -52,7 +55,7 @@ class _IntroPageState extends ConsumerState<IntroPage> {
   final _pages = PageController();
   int _index = 0;
 
-  bool get _last => _index == _slides.length - 1;
+  bool get _last => _index == _slidesFor(context.l10n).length - 1;
 
   @override
   void dispose() {
@@ -84,9 +87,10 @@ class _IntroPageState extends ConsumerState<IntroPage> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: PaperStockScope(
-        stock: _slides[_index].stock,
+        stock: _slidesFor(context.l10n)[_index].stock,
         child: Builder(
           builder: (context) {
+            final l10n = context.l10n;
             final tokens = PaperTokens.of(context);
             final gutter = MediaQuery.sizeOf(context).width < 360
                 ? AppConstants.spacing16
@@ -99,13 +103,13 @@ class _IntroPageState extends ConsumerState<IntroPage> {
                     controller: _pages,
                     onPageChanged: (i) => setState(() => _index = i),
                     children: [
-                      for (final slide in _slides)
+                      for (final slide in _slidesFor(l10n))
                         _IntroSheet(slide: slide, gutter: gutter),
                     ],
                   ),
                   SafeArea(
                     child: Align(
-                      alignment: Alignment.topRight,
+                      alignment: AlignmentDirectional.topEnd,
                       child: Padding(
                         padding: const EdgeInsets.all(AppConstants.spacing4),
                         child: AnimatedOpacity(
@@ -118,7 +122,7 @@ class _IntroPageState extends ConsumerState<IntroPage> {
                               style: TextButton.styleFrom(
                                 foregroundColor: tokens.textPrimary,
                               ),
-                              child: const Text('Skip'),
+                              child: Text(l10n.introSkip),
                             ),
                           ),
                         ),
@@ -130,7 +134,7 @@ class _IntroPageState extends ConsumerState<IntroPage> {
                     child: SafeArea(
                       top: false,
                       child: Padding(
-                        padding: EdgeInsets.fromLTRB(
+                        padding: EdgeInsetsDirectional.fromSTEB(
                           gutter,
                           0,
                           gutter,
@@ -140,10 +144,15 @@ class _IntroPageState extends ConsumerState<IntroPage> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            PaperProgress(index: _index, count: _slides.length),
+                            PaperProgress(
+                              index: _index,
+                              count: _slidesFor(l10n).length,
+                            ),
                             const SizedBox(height: AppConstants.spacing24),
                             AuthPrimaryButton(
-                              label: _last ? 'Get started' : 'Next',
+                              label: _last
+                                  ? l10n.introStart
+                                  : l10n.actionNext,
                               onPressed: _next,
                             ),
                           ],

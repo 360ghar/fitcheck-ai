@@ -32,8 +32,10 @@ import { OutfitSelectionTray } from '@/components/outfits/create/OutfitSelection
 import { OutfitItemRails } from '@/components/outfits/create/OutfitItemRails'
 import { OutfitPreviewStage } from '@/components/outfits/create/OutfitPreviewStage'
 import { compareCategories, type AvailableItem } from '@/components/outfits/create/constants'
+import { useTranslation } from '@/i18n'
 
 export default function OutfitCreatePage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { toast } = useToast()
   const [searchParams] = useSearchParams()
@@ -233,10 +235,10 @@ export default function OutfitCreatePage() {
               onClick={() => void handleGenerate()}
               disabled={!canRender}
             >
-              Generate again
+              {t('outfits.generateAgain')}
             </Button>
             <Button variant="tertiary" onClick={discardOutfitPreview} disabled={isSaving}>
-              Discard look
+              {t('outfits.discardLook')}
             </Button>
           </>
         ) : (
@@ -246,7 +248,7 @@ export default function OutfitCreatePage() {
             disabled={!canSave}
             title="Creates the outfit with no AI look. You can generate one later."
           >
-            Save without a preview
+            {t('outfits.saveWithoutPreview')}
           </Button>
         )}
       </div>
@@ -262,9 +264,9 @@ export default function OutfitCreatePage() {
   return (
     <div className="app-page max-w-7xl">
       <div className="mb-lg flex items-center justify-between gap-md">
-        <h1 className="type-heading-xl text-foreground">Create outfit</h1>
+        <h1 className="type-heading-xl text-foreground">{t('outfits.create')}</h1>
         <Button variant="tertiary" onClick={() => navigate('/outfits')} disabled={isSaving}>
-          Cancel
+          {t('common.cancel')}
         </Button>
       </div>
 

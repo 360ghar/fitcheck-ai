@@ -1,0 +1,430 @@
+{
+  "_comment": "Custom product page plan. Each page is a separate, reviewable App Store product page with its own URL, screenshots and search keyword set, reachable only from a link you control — an ad, a creator video, a landing page. The point of a CPP is that it captures a search term or a promise the main page does not win, so the keyword sets here are deliberately disjoint from the single words already in store/asc/listings.json (which owns fashion, closet, organizer, virtual, headshot, capsule, planner, ootd and their translations). Consumed by: node scripts/asc/grow.mjs cpp. Also readable by node scripts/asc/publish.mjs cpp, which uses only name/locales/promotionalText.",
+  "templateVersion": "1.2.1",
+  "_templateComment": "The product page template a new CPP copies its layout and inherited screenshots from. Must be a version that is READY_FOR_SALE or in PREPARE_FOR_SUBMISSION. grow.mjs resolves this at run time and refuses to guess.",
+  "defaultLocales": [
+    "en-US",
+    "en-GB",
+    "es-ES",
+    "pt-BR",
+    "fr-FR",
+    "de-DE",
+    "ja"
+  ],
+  "_localeComment": "Seven locales with hand-written promotional copy, not machine output. A CPP localized with English fallback text shows a foreign-language promise to a user who searched in their own language, which converts worse than the main page it replaced. Grow this list when the copy is written, not before.",
+  "frameSemantics": {
+    "1": "closet  - wardrobe grid, the whole closet as searchable data",
+    "2": "daily   - home screen, today's outfit from live weather",
+    "3": "tryon   - the outfit rendered on your own body",
+    "4": "photoshoot - studio photos from your selfies",
+    "5": "wear    - cost per wear, what you actually use",
+    "6": "offer   - one month of Pro free, then free forever"
+  },
+  "_frameComment": "Frame ids and order come from store/creative/copy.json, which the render pipeline reads. That file defines six frames, not ten: Apple accepts up to ten screenshots, and the pipeline does not produce four of them yet. Every page below is written against the six that exist, and grow.mjs resolves each id against store/creative/manifest.json, refusing to place a frame that was never rendered. The rule each page follows: the LEAD frame must depict the promise in the page's name. A virtual-try-on page whose first screenshot is a wardrobe grid pays for the click and loses the install.",
+  "pages": [
+    {
+      "name": "Outfit Ideas",
+      "slug": "outfit-ideas",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "outfit ideas",
+      "searchTerms": [
+        "outfit ideas",
+        "outfit inspiration",
+        "new outfit combinations from clothes I own",
+        "daily outfit look"
+      ],
+      "keywords": [
+        "ideas",
+        "combination",
+        "inspo",
+        "looks"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "tryon",
+        "closet"
+      ],
+      "framesWhy": "Frame 8 (outfit detail) shows a finished look, which is what the search intent asks for. Frame 5 adds variety, frame 1 proves the looks come from clothes the user already owns.",
+      "deeplink": "fitcheck.ai://open?path=/outfits",
+      "promotionalText": {
+        "default": "New outfit ideas from the clothes you already own. AI builds the looks, you decide what to wear.",
+        "es-ES": "Nuevas ideas de outfits con la ropa que ya tienes. La IA crea los looks, tú eliges qué ponerte.",
+        "pt-BR": "Novas ideias de looks com as roupas que você já tem. A IA monta, você escolhe o que vestir.",
+        "fr-FR": "De nouvelles idées de tenues avec les vêtements que vous possédez déjà. L'IA compose, vous choisissez.",
+        "de-DE": "Neue Outfit-Ideen aus Kleidung, die du schon hast. Die KI stellt die Looks zusammen, du wählst.",
+        "ja": "手持ちの服から新しいコーデを。AIが組み合わせ、選ぶのはあなたです。"
+      }
+    },
+    {
+      "name": "Closet Organizer",
+      "slug": "closet-organizer",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "closet organizer",
+      "searchTerms": [
+        "closet organizer app",
+        "catalog my wardrobe",
+        "see everything I own",
+        "wardrobe inventory"
+      ],
+      "keywords": [
+        "inventory",
+        "catalog",
+        "rails",
+        "organiser"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "closet",
+        "wear"
+      ],
+      "framesWhy": "Frame 1 is the organized closet, which is the literal promise. Frame 2 explains how it got organized without manual entry. Frame 7 shows the closet paying off.",
+      "deeplink": "fitcheck.ai://open?path=/wardrobe",
+      "promotionalText": {
+        "default": "Photograph your closet once. AI catalogs every piece, so you can finally see what you own.",
+        "es-ES": "Fotografía tu armario una vez. La IA cataloga cada prenda para que por fin veas lo que tienes.",
+        "pt-BR": "Fotografe seu armário uma vez. A IA cataloga cada peça para você finalmente ver o que tem.",
+        "fr-FR": "Photographiez votre dressing une fois. L'IA catalogue chaque pièce pour que vous voyiez enfin ce que vous possédez.",
+        "de-DE": "Fotografiere deinen Schrank einmal. Die KI erfasst jedes Teil, damit du endlich siehst, was du hast.",
+        "ja": "クローゼットを一度撮影するだけ。AIがすべての服を整理し、手持ちが一目で分かります。"
+      }
+    },
+    {
+      "name": "What To Wear",
+      "slug": "what-to-wear",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "what to wear",
+      "searchTerms": [
+        "what to wear today",
+        "what should I wear",
+        "outfit for the weather",
+        "decide my outfit"
+      ],
+      "keywords": [
+        "weather",
+        "todays",
+        "commute",
+        "decide"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "daily",
+        "tryon",
+        "closet"
+      ],
+      "framesWhy": "Frame 5 is the decision already made — one outfit, today. Frame 6 shows it planned ahead, frame 3 shows it on a body.",
+      "deeplink": "fitcheck.ai://open?path=/recommendations",
+      "promotionalText": {
+        "default": "Stop staring at your closet. Get one outfit for today, built from your clothes and the weather.",
+        "es-ES": "Deja de mirar el armario sin saber qué ponerte. Un outfit para hoy, con tu ropa y el tiempo.",
+        "pt-BR": "Pare de encarar o armário sem saber o que vestir. Um look para hoje, com suas roupas e o clima.",
+        "fr-FR": "Arrêtez de fixer votre dressing. Une tenue pour aujourd'hui, avec vos vêtements et la météo.",
+        "de-DE": "Schluss mit dem Starren in den Schrank. Ein Outfit für heute, aus deiner Kleidung und dem Wetter.",
+        "ja": "クローゼットの前で悩まない。今日の服を1着、手持ちと天気から提案します。"
+      }
+    },
+    {
+      "name": "Virtual Try On",
+      "slug": "virtual-try-on",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "virtual try on",
+      "searchTerms": [
+        "virtual try on clothes",
+        "see an outfit on me before buying",
+        "virtual fitting room",
+        "preview outfit on my body"
+      ],
+      "keywords": [
+        "fitting",
+        "preview",
+        "tryon",
+        "beforebuy"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "tryon",
+        "photoshoot",
+        "closet"
+      ],
+      "framesWhy": "Frame 3 is the only frame that shows a body wearing the outfit — that is the entire promise. Frame 4 proves the same engine renders a person convincingly; frame 1 supplies the source material.",
+      "deeplink": "fitcheck.ai://open?path=/try-on",
+      "promotionalText": {
+        "default": "See the outfit on you before you commit. Try on any combination from your closet.",
+        "es-ES": "Mira el outfit en tu cuerpo antes de decidir. Pruébate cualquier combinación de tu armario.",
+        "pt-BR": "Veja o look em você antes de decidir. Prove qualquer combinação do seu armário.",
+        "fr-FR": "Voyez la tenue sur vous avant de choisir. Essayez n'importe quelle combinaison de votre dressing.",
+        "de-DE": "Sieh das Outfit an dir, bevor du dich entscheidest. Probier jede Kombination aus deinem Schrank an.",
+        "ja": "決める前に、自分の姿で確認。手持ちの服を自由に組み合わせて試着できます。"
+      }
+    },
+    {
+      "name": "AI Headshot",
+      "slug": "ai-headshot",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "AI headshot",
+      "searchTerms": [
+        "AI headshot from my selfies",
+        "professional photo without a studio",
+        "AI photoshoot of me",
+        "new profile picture"
+      ],
+      "keywords": [
+        "portrait",
+        "studio",
+        "selfie",
+        "glamour"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "photoshoot",
+        "tryon",
+        "closet"
+      ],
+      "framesWhy": "Frame 4 is the finished headshot, which is the exact thing searched for. Frame 2 shows the only input required (a photo), frame 3 shows the same engine on full outfits so the page does not read as a one-trick filter.",
+      "deeplink": "fitcheck.ai://open?path=/photoshoot",
+      "promotionalText": {
+        "default": "Studio-grade headshots from your own selfies. 10 free photo renders every day.",
+        "es-ES": "Fotos de estudio a partir de tus selfies. 10 imágenes gratis cada día.",
+        "pt-BR": "Fotos de estúdio a partir das suas selfies. 10 imagens grátis por dia.",
+        "fr-FR": "Des portraits studio à partir de vos selfies. 10 rendus gratuits par jour.",
+        "de-DE": "Studio-Porträts aus deinen Selfies. Täglich 10 kostenlose Bilder.",
+        "ja": "自撮りからスタジオ品質のポートレートを。1日10枚まで無料。"
+      }
+    },
+    {
+      "name": "Wardrobe Planner",
+      "slug": "wardrobe-planner",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "wardrobe planner",
+      "searchTerms": [
+        "plan outfits for the week",
+        "outfit calendar",
+        "pack for a trip",
+        "weekly wardrobe plan"
+      ],
+      "keywords": [
+        "weekly",
+        "packing",
+        "trip",
+        "agenda"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "daily",
+        "closet",
+        "wear"
+      ],
+      "framesWhy": "Frame 6 is the calendar, which is what planning means. Frame 8 shows the outfit that lands on a day, frame 5 shows the decision being made for you.",
+      "deeplink": "fitcheck.ai://open?path=/calendar",
+      "promotionalText": {
+        "default": "Plan the week's outfits in one sitting. Your calendar, your closet, no morning decisions.",
+        "es-ES": "Planifica los outfits de la semana de una vez. Tu calendario y tu armario, sin dudas por la mañana.",
+        "pt-BR": "Planeje os looks da semana de uma vez. Seu calendário e seu armário, sem decidir de manhã.",
+        "fr-FR": "Planifiez les tenues de la semaine d'un coup. Votre agenda et votre dressing, sans hésiter le matin.",
+        "de-DE": "Plane die Outfits der Woche in einem Zug. Dein Kalender, dein Schrank, keine Morgenentscheidung.",
+        "ja": "1週間のコーデをまとめて計画。カレンダーと手持ちの服で、朝の迷いがなくなります。"
+      }
+    },
+    {
+      "name": "Capsule Wardrobe",
+      "slug": "capsule-wardrobe",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "capsule wardrobe",
+      "searchTerms": [
+        "build a capsule wardrobe",
+        "fewer pieces more outfits",
+        "cost per wear",
+        "minimal closet"
+      ],
+      "keywords": [
+        "minimal",
+        "fewer",
+        "costperwear",
+        "basics"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "wear",
+        "closet",
+        "daily"
+      ],
+      "framesWhy": "Frame 7 (cost per wear, most-worn and never-worn) is the argument a capsule-wardrobe searcher is persuaded by. Frame 1 shows the small closet, frame 8 shows the outfits it still produces.",
+      "deeplink": "fitcheck.ai://open?path=/wardrobe/stats",
+      "promotionalText": {
+        "default": "Fewer pieces, more outfits. See cost per wear and what you never actually wear.",
+        "es-ES": "Menos prendas, más outfits. Descubre el coste por uso y lo que nunca te pones.",
+        "pt-BR": "Menos peças, mais looks. Veja o custo por uso e o que você nunca veste.",
+        "fr-FR": "Moins de pièces, plus de tenues. Voyez le coût par port et ce que vous ne mettez jamais.",
+        "de-DE": "Weniger Teile, mehr Outfits. Sieh Kosten pro Tragen und was du nie anziehst.",
+        "ja": "服は少なく、コーデは多く。1回あたりのコストと、着ていない服が分かります。"
+      }
+    },
+    {
+      "name": "Fashion App",
+      "slug": "fashion-app",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "fashion app",
+      "searchTerms": [
+        "fashion app for my own clothes",
+        "personal stylist app",
+        "style app with AI",
+        "outfit maker"
+      ],
+      "keywords": [
+        "aistylist",
+        "lookbook",
+        "inspiration",
+        "combinations"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "closet",
+        "tryon",
+        "photoshoot",
+        "offer"
+      ],
+      "framesWhy": "A broad fashion-app search has no specific promise to match, so lead with the whole product (frame 9) and prove three capabilities in three frames rather than one.",
+      "deeplink": "fitcheck.ai://open?path=/home",
+      "promotionalText": {
+        "default": "Your closet, your stylist, your photographer. One app for what you already own.",
+        "es-ES": "Tu armario, tu estilista, tu fotógrafo. Una app para la ropa que ya tienes.",
+        "pt-BR": "Seu armário, seu estilista, seu fotógrafo. Um app para as roupas que você já tem.",
+        "fr-FR": "Votre dressing, votre styliste, votre photographe. Une app pour ce que vous possédez déjà.",
+        "de-DE": "Dein Schrank, dein Stylist, dein Fotograf. Eine App für das, was du schon hast.",
+        "ja": "クローゼットも、スタイリストも、カメラマンも。手持ちの服のためのアプリ。"
+      }
+    },
+    {
+      "name": "Free Month",
+      "slug": "free-month",
+      "locales": [
+        "en-US",
+        "en-GB",
+        "es-ES",
+        "pt-BR",
+        "fr-FR",
+        "de-DE",
+        "ja"
+      ],
+      "intent": "free wardrobe app",
+      "searchTerms": [
+        "free closet app",
+        "wardrobe app free trial",
+        "free outfit app no subscription",
+        "upload whole closet free"
+      ],
+      "keywords": [
+        "trial",
+        "nosub",
+        "affordable",
+        "budget"
+      ],
+      "keywordsLocales": [
+        "en-US",
+        "en-GB"
+      ],
+      "frames": [
+        "offer",
+        "tryon",
+        "closet"
+      ],
+      "framesWhy": "The offer is one month of Pro to upload the entire closet at once, so frame 2 (batch extraction) is the literal thing being given away. Frame 3 shows the payoff of a full closet, frame 1 shows the result that stays free forever.",
+      "deeplink": "fitcheck.ai://open?path=/subscription",
+      "promotionalText": {
+        "default": "One month of Pro free: upload your whole closet at once. Then free forever, 50 AI uploads a month.",
+        "es-ES": "Un mes de Pro gratis: sube todo tu armario de una vez. Después gratis para siempre, 50 subidas al mes.",
+        "pt-BR": "Um mês de Pro grátis: envie o armário inteiro de uma vez. Depois grátis para sempre, 50 envios por mês.",
+        "fr-FR": "Un mois de Pro offert : importez tout votre dressing d'un coup. Ensuite gratuit à vie, 50 imports par mois.",
+        "de-DE": "Ein Monat Pro gratis: lade deinen ganzen Schrank auf einmal hoch. Danach für immer kostenlos, 50 Uploads pro Monat.",
+        "ja": "Proを1か月無料。クローゼットをまとめて取り込み。その後はずっと無料、月50回のAI取り込み。"
+      }
+    }
+  ]
+}

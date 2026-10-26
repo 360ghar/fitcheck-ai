@@ -1,8 +1,8 @@
 # Frontend
 
-Last updated: 2026-10-01
+Last updated: 2026-10-26
 
-React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/CLAUDE.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
+React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/AGENTS.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
 
 ## Commands
 
@@ -252,6 +252,217 @@ The session-cached user's `avatar_url` is the one image URL the client persists 
 - Do **not** render `getApiError(error).message` (or Axios's `error.message`)
   directly: it can leak SQL function names, migration numbers, and provider
   internals. Map to friendly copy instead.
+
+## Internationalization (43 languages)
+
+The authenticated app UI ships in the same 43 base languages as the Flutter
+client. Source of truth and tooling:
+
+| Piece | Path |
+|-------|------|
+| Language registry (code, endonym, English name, `rtl`) | `frontend/src/i18n/localeMeta.ts` |
+| English source catalog (flat `id → ICU message`) | `frontend/src/i18n/locales/en.json` |
+| Generated catalogs, one per language | `frontend/src/i18n/locales/<code>.json` |
+| Translation cache keyed by locale then id, each row carrying `_src` | `frontend/src/i18n/cache` → `frontend/src/i18n/.translations.json` |
+| Translator | `scripts/i18n/translate_web.py` |
+| CI gate | `scripts/i18n/check_web_locales.py` |
+
+### Library: react-intl (FormatJS)
+
+Chosen for ICU MessageFormat. A wardrobe app is full of counts —
+`{count, plural, one {# item} other {# items}}` — and English has 2 plural
+categories, Polish 4, Arabic 6, Welsh 4; Russian "1 файл / 2 файла / 5 файлов"
+cannot be expressed as string concatenation at all. FormatJS implements ICU
+natively, so plural selection comes from `Intl.PluralRules` for every language
+with no per-language code, and the message text a translator edits is the text
+that ships. i18next reaches the same place only with an ICU plugin plus a custom
+formatter. The cost is ~11 kB gzip of runtime in the entry chunk.
+
+### Rules
+
+1. **Canonical data stays English.** `category: "tops"`, `style: "casual"`,
+   stored outfit composition, occasions — all English. Localization happens at
+   display time through `i18n/taxonomy.ts` (`categoryLabel(t, item.category)`),
+   which translates a *known* enum value and passes anything else through
+   unchanged (a user-typed brand must not render a message id). Writing a
+   translated value to the database would fork a wardrobe per language and break
+   outfit matching.
+2. **One sentence is one message id.** Never concatenate a sentence from JSX
+   fragments — word order differs in every language. Use ICU placeholders
+   (`common.copyright` → `© {year} FitCheck AI. …`) and `tRich()` when the
+   message must embed a `<Link>` (`auth.agreeToTerms`).
+3. **Reuse ids.** `common.save`, `common.cancel`, `common.loading` exist so 40
+   panels do not ship 40 near-duplicates.
+4. **No locale-blind casing.** `toUpperCase()` and CSS `capitalize` are wrong for
+   display: Turkish `i` uppercases to `İ`. Use
+   `str.toLocaleUpperCase(useFormattingLocale())` or let the message carry its
+   own capitalization.
+5. **No hardcoded `en-US`, no string concatenation for numbers/dates/currency.**
+   Use `i18n/runtime.ts` (`formatDate`, `formatNumber`, `formatCurrency`,
+   `formatList`, `formatRelativeTime`, `pluralCategory`) or the `useTranslation()`
+   equivalents. `lib/utils.ts`'s `formatDate`/`formatUsd` delegate to the runtime
+   so existing call sites became locale-aware for free. Prices stay **USD** — the
+   card is charged in USD; only the format is localized.
+
+### Resolution order
+
+`i18n/resolveLocale.ts`, pure and unit-tested:
+
+1. **Explicit choice** (persisted in `fitcheck.locale`). Wins forever, over
+   everything, including the account.
+2. **The account's language** (`user_settings.language`), adopted only when the
+   user has never chosen on this browser.
+3. **`navigator.languages`**, walked in the user's stated priority order — not
+   just `[0]`, so `[ta-IN, en-US]` gets Tamil.
+4. **English.**
+
+### Phone ↔ web agreement
+
+The Flutter client persists `app_locale_asc` locally and mirrors it with
+`PUT /api/v1/users/settings` `{"language": "<base>"}`. The web does both halves:
+
+- **Web → backend.** Changing the language calls `updateUserSettings({ language })`
+  with the **base** code (`hi`, never `hi-IN`) — `backend/app/core/i18n.py`
+  normalizes anything with a region back to `en`, so sending the full tag would
+  silently reset the account to English. The local choice is persisted *before*
+  the request, and a failure never rolls the UI back.
+- **Backend → web.** `i18n/accountLanguage.ts` reads `GET /users/settings` once
+  per session and, when the user has no local choice, adopts it.
+
+**When they disagree:** an explicit local web choice wins (this browser is the
+user's current intent) and is pushed to the backend on the next language change.
+No local choice means the phone's stored language wins over the browser's
+default. The user is never shown a picker that disagrees with what they see.
+
+### Lazy loading and bundle size
+
+`i18n/loadLocale.ts` statically imports only English and gives each of the other
+42 catalogs its own `import()` so Vite emits one chunk per language. A template
+string (`import(\`./locales/${code}.json\`)`) would defeat this — Rollup can only
+code-split on static specifiers. `i18n/preload.ts` warms the active catalog inside
+the same `Promise.race` in `main.tsx` that already waits for the public route
+chunk before mounting, so a non-English visitor's first React render is already
+in their language (and `<html dir>` is set before paint) without blanking the
+prerendered HTML. A stalled chunk cannot block mount: the race is capped at
+`PRELOAD_BUDGET_MS`.
+
+**Measured cost** (`npm run build`, initial JS = entry + its five
+`modulepreload`ed vendor chunks):
+
+| | before i18n | after | delta |
+|---|---|---|---|
+| raw | 574.6 kB | 682.1 kB | **+107.5 kB** |
+| gzip | 180.4 kB | 212.6 kB | **+32.3 kB (+17.9 %)** |
+
+Of that increase, `i18n-vendor` (react-intl + ICU parser) is 59.0 kB raw /
+16.9 kB gzip and the English source catalog is 40.9 kB raw / 11.7 kB gzip — the
+latter is imported statically because it is the fallback for every missing
+translation and for the unit-test `Intl` instance. The other 42 catalogs are
+separate chunks (7–15 kB each) that **no page references**: `dist/index.html`
+lists zero locale chunks, so a French visitor downloads `fr-*.js` and a Japanese
+visitor never does.
+
+The entry chunk is therefore **not** flat — it carries the ICU runtime plus the
+English catalog, and no amount of code-splitting removes that, because English
+must be available synchronously for the first paint and for the fallback path.
+The alternative (fetch English too) trades 11.7 kB of initial JS for a waterfall
+before any text renders.
+
+### Direction (RTL)
+
+`dir="rtl"` is set on `<html>` for Arabic, Hebrew and Urdu before first paint
+(`i18n/preload.ts`), then kept in step by `I18nProvider`. Layout is mirrored by
+using **logical** utilities at the source — `ps-*`/`pe-*`, `ms-*`/`me-*`,
+`start-*`/`end-*`, `border-s`/`border-e`, `text-start`/`text-end`, and
+`inset-inline` in raw CSS — not by a `[dir='rtl']` override block, which would be
+a second layout to keep in sync forever. The two deliberate exceptions are
+documented in `index.css`: the `.sig-*` marketing collage is pinned LTR, and
+`.font-mono`/`code` are isolated LTR inside RTL text.
+
+Audit result: **279** physical Tailwind utilities across **84** files were
+rewritten to their logical equivalents (`ml-`→`ms-`, `mr-`→`me-`, `pl-`→`ps-`,
+`pr-`→`pe-`, `text-left`→`text-start`, `text-right`→`text-end`,
+`border-l`→`border-s`, `rounded-l*`→`rounded-s*`, `left-*`→`start-*`,
+`right-*`→`end-*`), plus `left-4` in `.skip-link` and four `.paper-tear*`
+`left`/`right` pairs → `inset-inline: 0`. Remaining physical declarations: **13**
+`left:`/`right:` in `src/index.css`, all inside the LTR-pinned `.sig-*` block,
+and **3** animation names (`slide-in-from-left-1/2`, `slide-out-to-right-full` in
+`ui/dialog.tsx` and `ui/toast.tsx`) which Tailwind has no logical form for —
+those keyframes still travel left-to-right in RTL and are the known gap.
+
+### Adding or changing a string
+
+```bash
+# 1. edit frontend/src/i18n/locales/en.json (add/change the id)
+# 2. translate only what changed (the cache re-translates one key, not a locale)
+python3 scripts/i18n/translate_web.py
+# 3. gate it
+python3 scripts/i18n/check_web_locales.py
+```
+
+`translate_web.py` is resumable (the cache is the resume point), rotates across
+the workspace's Gemini keys, backs off on 429/503, validates ICU placeholder and
+plural parity per message, retries a failing message alone once, and **refuses to
+write a locale that still fails** rather than shipping a literal `{count}`.
+Flags: `--locale hi,ja`, `--force`, `--dry-run`, `--sleep`, `--batch`.
+
+`check_web_locales.py` (stdlib only, `--strict`, `--json`) fails on: a language
+present in one of {backend, `store/asc/locales.json`, `localeMeta.ts`, the
+catalog directory} but not the others; a missing or orphan key; ICU
+placeholder/plural drift; unbalanced braces; a `t('…')` id used in the source but
+absent from `en.json`; a catalog that is a copy of English; and a wrong `rtl`
+flag. Warnings cover unreferenced keys, native-name drift from the store table,
+and a stale translation cache. When a catalog is more than
+`WIDE_GAP_MAX_KEYS` short it reports the locale's coverage as a single error with
+the resume command instead of one line per key.
+
+### Translation state
+
+`en.json` holds 844 messages. Coverage today:
+
+| Locale group | Codes | Keys translated |
+|---|---|---|
+| English (source) | `en` | 844 / 844 |
+| Partially translated | `ar de fi fr gu he hi hu it kn mr no pa pl pt ru sl sv ta te uk ur` (22) | 296 / 844 (35 %) |
+| Not yet translated | `bn ca cs da el es hr id ja ko ml ms nl or ro sk th tr vi zh` (20) | 0 / 844 |
+
+Nothing renders a raw message id: `loadLocale.ts` merges each catalog over
+`SOURCE_MESSAGES`, so an untranslated key shows its English text. The gap is
+Gemini quota (all models returned `daily quota exhausted`, retry ~6 h), not a
+pipeline defect — the ICU validator in `translate_web.py` refuses to write a key
+whose placeholders or plural branches drift, which is why the 22 partial catalogs
+are structurally clean and only *incomplete*.
+
+Resume: `python3 scripts/i18n/translate_web.py` (resumable from
+`.translations.json`; `--locale` to take one language, `--batch` to tune chunk
+size). `check_web_locales.py` exits non-zero until every locale reaches 844.
+
+### Not localized in this pass
+
+Still English, ordered by what to do next:
+
+1. `pages/gifts/GiftsPage.tsx` — the gift builder (~50 strings, mostly dynamic
+   sentences built from `formatUsd` and voucher state).
+2. `components/wardrobe/BatchExtractionFlow.tsx`,
+   `SocialImportQueueReview.tsx`, `BatchGenerationProgress.tsx` — the
+   extraction pipeline's progress copy.
+3. `components/outfits/create/OutfitMetaBar.tsx` and
+   `components/calendar/CalendarView.tsx` remainder.
+4. Marketing surfaces: `pages/public/*` (except what `SharedOutfitPage` needs),
+   `pages/seo/IntentSeoPage.tsx`, `pages/tools`, `pages/blog`, `pages/features`,
+   `components/landing/*`.
+
+**SEO localization was deliberately not done here.** It is a routing change, not
+a translation change: it needs `frontend/src/routes/publicRoutes.ts` to carry a
+`/:locale?` segment or a per-language path prefix, `components/seo/SEO.tsx` and
+`components/seo/seo-config.ts` to emit reciprocal `hreflang` plus `x-default`,
+`frontend/scripts/prerender-meta.mjs` to write one `<html lang>` per built page
+(it currently inherits the single `lang="en"` in `index.html`),
+`frontend/scripts/generate-sitemap.mjs` to emit 128 URLs × 43 languages with
+alternates, and `frontend/public/sitemap.xml` (tracked, build-written) to grow
+from 128 to ~5 500 `<url>` entries before any of it can be crawled correctly.
+Shipping the translation half without the routing half produces 43 copies of the
+same English page at one URL — worse than not shipping it.
 
 ## Environment
 

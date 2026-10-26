@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../settings/widgets/paper_group.dart';
 
@@ -21,11 +22,12 @@ class LegalPage extends StatelessWidget {
     }
   }
 
-  Future<void> _openSupportEmail() async {
+  Future<void> _openSupportEmail(BuildContext context) async {
     final uri = Uri(
       scheme: 'mailto',
       path: AppConstants.supportEmail,
-      query: 'subject=${Uri.encodeComponent('Report a problem or abuse')}',
+      query:
+          'subject=${Uri.encodeComponent(context.l10n.legalReportAbuse)}',
     );
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
@@ -33,13 +35,14 @@ class LegalPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
+    final l10n = context.l10n;
     Widget external(IconData icon) =>
         Icon(icon, color: tokens.textMuted, size: 20);
 
     return PaperStockScope(
       stock: PaperStockId.stone,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Privacy and terms')),
+        appBar: AppBar(title: Text(l10n.settingsPrivacyTerms)),
         body: AppPageBackground(
           child: ListView(
             padding: EdgeInsets.fromLTRB(
@@ -57,59 +60,57 @@ class LegalPage extends StatelessWidget {
                   AppConstants.spacing16,
                 ),
                 child: Text(
-                  'How we protect your data, and the terms for using '
-                  'FitCheck AI.',
+                  l10n.legalIntro,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: tokens.textSecondary,
                   ),
                 ),
               ),
               PaperGroup(
-                title: 'Policies',
+                title: l10n.legalPolicies,
                 children: [
                   PaperNavRow(
                     icon: Icons.privacy_tip_outlined,
-                    title: 'Privacy policy',
-                    subtitle: 'What we collect and why',
+                    title: l10n.paywallPrivacy,
+                    subtitle: l10n.legalPrivacySubtitle,
                     trailing: external(Icons.open_in_new_rounded),
                     onTap: () => _openUrl(privacyPolicyUrl),
                   ),
                   PaperNavRow(
                     icon: Icons.description_outlined,
-                    title: 'Terms of service',
-                    subtitle: 'The rules for using the app',
+                    title: l10n.legalTermsTitle,
+                    subtitle: l10n.legalTermsSubtitle,
                     trailing: external(Icons.open_in_new_rounded),
                     onTap: () => _openUrl(termsOfServiceUrl),
                   ),
                   PaperNavRow(
                     icon: Icons.code_rounded,
-                    title: 'Open-source licences',
+                    title: l10n.legalLicences,
                     onTap: () => showLicensePage(
                       context: context,
-                      applicationName: 'FitCheck AI',
+                      applicationName: l10n.appName,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: AppConstants.spacing24),
               PaperGroup(
-                title: 'Support',
+                title: l10n.profileSupport,
                 children: [
                   PaperNavRow(
                     icon: Icons.support_agent_outlined,
-                    title: 'Support',
-                    subtitle: 'Help, contact and privacy requests',
+                    title: l10n.profileSupport,
+                    subtitle: l10n.legalSupportSubtitle,
                     trailing: external(Icons.open_in_new_rounded),
                     onTap: () => _openUrl(AppConstants.supportUrl),
                   ),
                   PaperNavRow(
                     icon: Icons.flag_outlined,
-                    title: 'Report a problem or abuse',
+                    title: l10n.legalReportAbuse,
                     subtitle:
-                        'Email ${AppConstants.supportEmail}. We review '
-                        'reports within 24 hours.',
+                        context.l10n.legalSupportEmailBody(AppConstants.supportEmail),
                     trailing: external(Icons.mail_outline_rounded),
-                    onTap: _openSupportEmail,
+                    onTap: () => _openSupportEmail(context),
                   ),
                 ],
               ),

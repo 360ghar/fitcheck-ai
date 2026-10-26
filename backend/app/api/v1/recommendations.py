@@ -938,9 +938,15 @@ async def astrology_recommendations(
         weekday = effective_date.strftime("%A")
         notes = ["Add your date of birth in profile settings to unlock astrology recommendations."]
         if users_profile_columns_missing:
-            notes.append(
-                "Database astrology columns are missing; using auth-metadata fallback for now. "
-                "Run migration 002_astrology_profile.sql in Supabase."
+            # This is an operator problem, not a user one: the astrology columns
+            # were never added to the database. It used to be appended to `notes`,
+            # which the app renders verbatim in the astrology tab, so a paying
+            # user on a phone was told to run a SQL migration in Supabase. Log it
+            # for whoever deploys instead.
+            logger.warning(
+                "Astrology columns missing from the users table; falling back to "
+                "auth metadata. Apply migration 002_astrology_profile.sql.",
+                extra={"missing_columns": True},
             )
         return {
             "data": {

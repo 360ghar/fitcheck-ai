@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI heeft toegang tot de camera nodig om foto's van je outfits en kledingstukken te maken.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI heeft toegang tot je fotobibliotheek nodig om foto's van je outfits en kledingstukken te selecteren.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI moet door AI gegenereerde outfitfoto's kunnen opslaan in je fotobibliotheek.";

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/directional_icon.dart';
 
 /// A labelled sheet of paper holding list rows (ListTile, SwitchListTile),
 /// with hairline dividers between them.
@@ -104,7 +105,7 @@ class PaperNavRow extends StatelessWidget {
             ),
       trailing:
           trailing ??
-          Icon(Icons.chevron_right_rounded, color: tokens.textMuted),
+          DirectionalIcon(Icons.chevron_right_rounded, color: tokens.textMuted),
       onTap: onTap,
     );
   }

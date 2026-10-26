@@ -25,11 +25,11 @@ FitCheck AI is a monorepo for AI-assisted wardrobe management, outfit generation
 | `ARCHITECTURE.md` | Domains and allowed dependency edges |
 | `run-dev.sh` | Backend `:8000` + frontend `:3000` |
 
-Package-local notes: `backend/CLAUDE.md`, `frontend/CLAUDE.md`, `admin/CLAUDE.md` (thin; deep content in `docs/`).
+Package-local notes: `backend/AGENTS.md`, `frontend/AGENTS.md`, `admin/AGENTS.md` (thin; deep content in `docs/`).
 
 ## Progressive disclosure (read in order)
 
-1. This map (`CLAUDE.md` imports `AGENTS.md`).
+1. This map (`AGENTS.md`).
 2. `ARCHITECTURE.md` — layers and forbidden imports.
 3. Domain doc for the change:
    - Backend / API / AI: `docs/BACKEND.md`

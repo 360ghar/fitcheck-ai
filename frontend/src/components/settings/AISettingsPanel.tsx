@@ -73,11 +73,13 @@ interface TestResult {
 // CONSTANTS
 // ============================================================================
 
+// `nameKey`/`descriptionKey` are message ids resolved at render time so the
+// module-level list never bakes in English.
 const PROVIDERS = [
   {
     id: "openai",
     name: "OpenAI",
-    description: "OpenAI API - GPT and DALL-E models",
+    descriptionKey: "ai.openaiDesc",
     defaultUrl: "https://api.openai.com/v1",
     models: {
       chat: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
@@ -88,8 +90,8 @@ const PROVIDERS = [
   },
   {
     id: "custom",
-    name: "Custom Provider",
-    description: "OpenAI-compatible API endpoint (local proxy, etc.)",
+    nameKey: "ai.customProvider",
+    descriptionKey: "ai.customDesc",
     defaultUrl: "http://localhost:8317/v1",
     models: {
       chat: [],
@@ -109,7 +111,10 @@ const PROVIDER_SHORT_LABELS: Record<string, string> = {
 // COMPONENT
 // ============================================================================
 
+import { useTranslation } from '@/i18n'
+
 export function AISettingsPanel() {
+  const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
@@ -168,7 +173,7 @@ export function AISettingsPanel() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to load AI settings",
+        description: t('ai.loadFailed'),
         variant: "destructive",
       });
     } finally {
@@ -207,8 +212,8 @@ export function AISettingsPanel() {
       });
 
       toast({
-        title: "Settings saved",
-        description: "Your AI provider settings have been updated",
+        title: t('ai.settingsSaved'),
+        description: t('ai.settingsUpdated'),
       });
 
       // Reload settings to get updated display
@@ -216,7 +221,7 @@ export function AISettingsPanel() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to save settings",
+        description: t('ai.saveFailed'),
         variant: "destructive",
       });
     } finally {
@@ -228,8 +233,8 @@ export function AISettingsPanel() {
     const config = providerConfigs[providerId];
     if (!config.api_url) {
       toast({
-        title: "Missing API URL",
-        description: "Please enter an API URL to test",
+        title: t('ai.missingApiUrl'),
+        description: t('ai.missingApiUrlDesc'),
         variant: "destructive",
       });
       return;
@@ -241,8 +246,8 @@ export function AISettingsPanel() {
       (displayConfigs[providerId]?.api_key_set ? "stored" : "");
     if (!apiKey && providerId !== "custom") {
       toast({
-        title: "Missing API Key",
-        description: "Please enter an API key to test",
+        title: t('ai.missingApiKey'),
+        description: t('ai.missingApiKeyDesc'),
         variant: "destructive",
       });
       return;
@@ -271,18 +276,18 @@ export function AISettingsPanel() {
       }));
 
       toast({
-        title: result.success ? "Connection successful" : "Connection failed",
+        title: result.success ? t('ai.connectionSuccessful') : t('ai.connectionFailed'),
         description: result.message,
         variant: result.success ? "default" : "destructive",
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Test failed";
+      const message = error instanceof Error ? error.message : t('ai.testFailed');
       setTestResults((prev) => ({
         ...prev,
         [providerId]: { success: false, message },
       }));
       toast({
-        title: "Test failed",
+        title: t('ai.testFailed'),
         description: message,
         variant: "destructive",
       });
@@ -295,14 +300,14 @@ export function AISettingsPanel() {
     try {
       await resetProviderConfig(providerId);
       toast({
-        title: "Provider reset",
+        title: t('ai.providerReset'),
         description: `${providerId} configuration has been reset to defaults`,
       });
       await loadSettings();
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to reset provider",
+        description: t('ai.resetFailed'),
         variant: "destructive",
       });
     }
@@ -341,7 +346,7 @@ export function AISettingsPanel() {
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <Cpu className="h-5 w-5 text-primary" />
-            Default AI Provider
+            {t('ai.defaultProvider')}
           </CardTitle>
           <CardDescription>
             Choose which AI provider to use for image analysis and generation
@@ -356,10 +361,10 @@ export function AISettingsPanel() {
               {PROVIDERS.map((provider) => (
                 <SelectItem key={provider.id} value={provider.id}>
                   <div className="flex items-center gap-2">
-                    {provider.name}
+                    {provider.nameKey ? t(provider.nameKey) : provider.name}
                     {displayConfigs[provider.id]?.api_key_set && (
-                      <Badge variant="secondary" className="ml-2 text-xs">
-                        Configured
+                      <Badge variant="secondary" className="ms-2 text-xs">
+                        {t('ai.configured')}
                       </Badge>
                     )}
                   </div>
@@ -375,10 +380,10 @@ export function AISettingsPanel() {
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <Key className="h-5 w-5 text-primary" />
-            Provider Configuration
+            {t('ai.providerConfiguration')}
           </CardTitle>
           <CardDescription>
-            Configure API keys and endpoints for each provider
+            {t('ai.providerConfigurationHint')}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
@@ -391,9 +396,9 @@ export function AISettingsPanel() {
                   className="min-w-[120px] flex-1 px-2 text-xs sm:min-w-0 sm:px-3 sm:text-sm"
                 >
                   <span className="sm:hidden">
-                    {PROVIDER_SHORT_LABELS[provider.id] || provider.name}
+                    {PROVIDER_SHORT_LABELS[provider.id] || (provider.nameKey ? t(provider.nameKey) : provider.name)}
                   </span>
-                  <span className="hidden sm:inline">{provider.name}</span>
+                  <span className="hidden sm:inline">{provider.nameKey ? t(provider.nameKey) : provider.name}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -405,13 +410,13 @@ export function AISettingsPanel() {
                 className="space-y-4 pt-4"
               >
                 <div className="text-sm text-muted-foreground mb-4">
-                  {provider.description}
+                  {t(provider.descriptionKey)}
                 </div>
 
-                {/* API URL */}
+                {/* {t('ai.apiUrl')} */}
                 <div className="space-y-2">
                   <Label htmlFor={`${provider.id}-url`}>
-                    <Server className="h-4 w-4 inline mr-2" />
+                    <Server className="h-4 w-4 inline me-2" />
                     API URL
                   </Label>
                   <Input
@@ -431,11 +436,11 @@ export function AISettingsPanel() {
                 {/* API Key */}
                 <div className="space-y-2">
                   <Label htmlFor={`${provider.id}-key`}>
-                    <Key className="h-4 w-4 inline mr-2" />
+                    <Key className="h-4 w-4 inline me-2" />
                     API Key
                     {displayConfigs[provider.id]?.api_key_set && (
-                      <Badge variant="secondary" className="ml-2 text-xs">
-                        Stored
+                      <Badge variant="secondary" className="ms-2 text-xs">
+                        {t('ai.stored')}
                       </Badge>
                     )}
                   </Label>
@@ -454,14 +459,14 @@ export function AISettingsPanel() {
                         }
                         placeholder={
                           displayConfigs[provider.id]?.api_key_set
-                            ? "Enter new key to replace stored key"
-                            : "Enter your API key"
+                            ? t('ai.replaceStoredKey')
+                            : t('ai.enterApiKey')
                         }
                       />
                       <button
                         type="button"
-                        aria-label={showApiKeys[provider.id] ? "Hide API key" : "Show API key"}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 touch-target text-muted-foreground hover:text-foreground"
+                        aria-label={showApiKeys[provider.id] ? t('ai.hideApiKey') : t('ai.showApiKey')}
+                        className="absolute end-1 top-1/2 -translate-y-1/2 touch-target text-muted-foreground hover:text-foreground"
                         onClick={() =>
                           setShowApiKeys((prev) => ({
                             ...prev,
@@ -484,7 +489,7 @@ export function AISettingsPanel() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor={`${provider.id}-model`}>
-                        Chat/Vision Model
+                        {t('ai.chatVisionModel')}
                       </Label>
                       <Input
                         id={`${provider.id}-model`}
@@ -501,7 +506,7 @@ export function AISettingsPanel() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`${provider.id}-image-model`}>
-                        Image Generation Model
+                        {t('ai.imageGenerationModel')}
                       </Label>
                       <Input
                         id={`${provider.id}-image-model`}
@@ -520,7 +525,7 @@ export function AISettingsPanel() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`${provider.id}-embedding-model`}>
-                        Embedding Model
+                        {t('ai.embeddingModelLabel')}
                       </Label>
                       <Input
                         id={`${provider.id}-embedding-model`}
@@ -542,7 +547,7 @@ export function AISettingsPanel() {
                   <div className="space-y-4">
                     {provider.models.chat.length > 0 && (
                       <div className="space-y-2">
-                        <Label>Chat Model (Optional Override)</Label>
+                        <Label>{t('ai.chatModelOverride')}</Label>
                         <Select
                           value={providerConfigs[provider.id]?.model || "default"}
                           onValueChange={(value) =>
@@ -550,10 +555,10 @@ export function AISettingsPanel() {
                           }
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Use default model" />
+                            <SelectValue placeholder={t('ai.useDefaultModel')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="default">Use default</SelectItem>
+                            <SelectItem value="default">{t('ai.useDefault')}</SelectItem>
                             {provider.models.chat.map((model) => (
                               <SelectItem key={model} value={model}>
                                 {model}
@@ -565,7 +570,7 @@ export function AISettingsPanel() {
                     )}
                     {provider.models.embedding.length > 0 && (
                       <div className="space-y-2">
-                        <Label>Embedding Model</Label>
+                        <Label>{t('ai.embeddingModel')}</Label>
                         <Select
                           value={providerConfigs[provider.id]?.embedding_model || "default"}
                           onValueChange={(value) =>
@@ -573,10 +578,10 @@ export function AISettingsPanel() {
                           }
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Use default model" />
+                            <SelectValue placeholder={t('ai.useDefaultModel')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="default">Use default</SelectItem>
+                            <SelectItem value="default">{t('ai.useDefault')}</SelectItem>
                             {provider.models.embedding.map((model) => (
                               <SelectItem key={model} value={model}>
                                 {model}
@@ -585,7 +590,7 @@ export function AISettingsPanel() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          Used for duplicate detection and similarity search
+                          {t('ai.embeddingHint')}
                         </p>
                       </div>
                     )}
@@ -628,9 +633,9 @@ export function AISettingsPanel() {
                     className="w-full sm:w-auto"
                   >
                     {testingProvider === provider.id ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <Loader2 className="h-4 w-4 me-2 animate-spin" />
                     ) : (
-                      <TestTube2 className="h-4 w-4 mr-2" />
+                      <TestTube2 className="h-4 w-4 me-2" />
                     )}
                     Test Connection
                   </Button>
@@ -639,8 +644,8 @@ export function AISettingsPanel() {
                     onClick={() => handleResetProvider(provider.id)}
                     className="w-full sm:w-auto"
                   >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Reset to Defaults
+                    <RefreshCw className="h-4 w-4 me-2" />
+                    {t('ai.resetToDefaults')}
                   </Button>
                 </div>
               </TabsContent>
@@ -649,7 +654,7 @@ export function AISettingsPanel() {
         </CardContent>
       </Card>
 
-      {/* Usage Statistics */}
+      {/* {t('ai.usageStatistics')} */}
       {usage && (
         <Card>
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
@@ -657,13 +662,13 @@ export function AISettingsPanel() {
               <BarChart3 className="h-5 w-5 text-primary" />
               Usage Statistics
             </CardTitle>
-            <CardDescription>Your AI usage and rate limits</CardDescription>
+            <CardDescription>{t('ai.usageAndLimits')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 px-4 pb-4 md:px-6 md:pb-6">
             {/* Extractions */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Item Extractions (Today)</Label>
+                <Label>{t('ai.itemExtractionsToday')}</Label>
                 <span className="text-sm text-muted-foreground">
                   {usage.daily.extractions} / {usage.limits.daily_extractions}
                 </span>
@@ -683,7 +688,7 @@ export function AISettingsPanel() {
             {/* Generations */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Image Generations (Today)</Label>
+                <Label>{t('ai.imageGenerationsToday')}</Label>
                 <span className="text-sm text-muted-foreground">
                   {usage.daily.generations} / {usage.limits.daily_generations}
                 </span>
@@ -704,7 +709,7 @@ export function AISettingsPanel() {
             {usage.limits.daily_embeddings > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Embeddings (Today)</Label>
+                  <Label>{t('ai.embeddingsToday')}</Label>
                   <span className="text-sm text-muted-foreground">
                     {usage.daily.embeddings} / {usage.limits.daily_embeddings}
                   </span>
@@ -725,7 +730,7 @@ export function AISettingsPanel() {
             {/* Total Usage */}
             <div className="pt-4 border-t border-border">
               <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">Total Usage:</span>{" "}
+                <span className="font-medium text-foreground">{t('ai.totalUsage')}</span>{" "}
                 {usage.total.extractions} extractions, {usage.total.generations}{" "}
                 generations{usage.total.embeddings > 0 && `, ${usage.total.embeddings} embeddings`}
               </p>
@@ -740,15 +745,15 @@ export function AISettingsPanel() {
           onClick={handleSave}
           disabled={isSaving}
           size="lg"
-          className="w-full sm:w-auto sm:ml-auto"
+          className="w-full sm:w-auto sm:ms-auto"
         >
           {isSaving ? (
             <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
+              <Loader2 className="h-4 w-4 me-2 animate-spin" />
+              {t('ai.saving')}
             </>
           ) : (
-            "Save Settings"
+            t('ai.saveSettings')
           )}
         </Button>
       </div>

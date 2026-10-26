@@ -15,11 +15,13 @@ import { useCurrentUser } from '../../stores/authStore'
 import { getUserPreferences, updateUserPreferences } from '@/api/users'
 import type { UserPreferences } from '@/types'
 import { OCCASION_SUGGESTIONS, STYLE_SUGGESTIONS } from '@/lib/style-options'
+import { useTranslation } from '@/i18n'
 
 const COLOR_SUGGESTIONS = ['Black', 'White', 'Navy', 'Gray', 'Beige', 'Brown', 'Red', 'Blue', 'Green', 'Pink', 'Olive']
 const PATTERN_SUGGESTIONS = ['Plaid', 'Stripes', 'Polka dots', 'Floral', 'Camo', 'Animal print', 'Logo']
 
 export function PreferencesPanel() {
+  const { t } = useTranslation()
   const user = useCurrentUser()
   const { toast } = useToast()
 
@@ -62,7 +64,7 @@ export function PreferencesPanel() {
       .catch((err) => {
         logger.warn('Failed to load preferences:', err)
         setPreferencesError(
-          err instanceof Error ? err.message : 'Try again to load your style preferences.'
+          err instanceof Error ? err.message : t('preferences.loadErrorFallback')
         )
       })
       .finally(() => {
@@ -92,7 +94,7 @@ export function PreferencesPanel() {
         style_personality: stylePersonality || null,
       })
       setPreferences(updated)
-      toast({ title: 'Preferences saved' })
+      toast({ title: t('preferences.saved') })
     } catch {
       // api/client interceptor already toasts the failure.
     } finally {
@@ -103,80 +105,80 @@ export function PreferencesPanel() {
   return (
     <div className="space-y-4 md:space-y-6">
       <div>
-        <h3 className="text-base md:text-lg font-medium text-foreground">Style Preferences</h3>
+        <h3 className="text-base md:text-lg font-medium text-foreground">{t('preferences.title')}</h3>
         <p className="text-sm text-muted-foreground">
-          Tap suggestions or add your own chips for better recommendations.
+          {t('preferences.subtitle')}
         </p>
       </div>
 
       {preferencesError ? (
         <ErrorState
-          title="Style preferences could not be loaded"
+          title={t('preferences.loadError')}
           description={preferencesError}
           onRetry={() => setPreferencesRetryKey((key) => key + 1)}
         />
       ) : isLoadingPreferences ? (
-        <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">Loading…</div>
+        <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">{t('common.loading')}</div>
       ) : (
         <div className="space-y-5">
           <ChipGroup
-            label="Favorite colors"
+            label={t('preferences.favoriteColors')}
             value={favoriteColors}
             onChange={setFavoriteColors}
             suggestions={COLOR_SUGGESTIONS}
-            placeholder="Add a color"
+            placeholder={t('preferences.favoriteColorsPlaceholder')}
           />
           <ChipGroup
-            label="Preferred styles"
+            label={t('preferences.preferredStyles')}
             value={preferredStyles}
             onChange={setPreferredStyles}
             suggestions={STYLE_SUGGESTIONS}
-            placeholder="Add a style"
+            placeholder={t('preferences.preferredStylesPlaceholder')}
           />
           <ChipGroup
-            label="Preferred occasions"
+            label={t('preferences.preferredOccasions')}
             value={preferredOccasions}
             onChange={setPreferredOccasions}
             suggestions={OCCASION_SUGGESTIONS}
-            placeholder="Add an occasion"
+            placeholder={t('preferences.preferredOccasionsPlaceholder')}
           />
           <ChipGroup
-            label="Liked brands"
+            label={t('preferences.likedBrands')}
             value={likedBrands}
             onChange={setLikedBrands}
-            placeholder="e.g. Uniqlo"
+            placeholder={t('preferences.likedBrandsPlaceholder')}
           />
           <ChipGroup
-            label="Disliked patterns"
+            label={t('preferences.dislikedPatterns')}
             value={dislikedPatterns}
             onChange={setDislikedPatterns}
             suggestions={PATTERN_SUGGESTIONS}
-            placeholder="Add a pattern"
+            placeholder={t('preferences.dislikedPatternsPlaceholder')}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="color-temp" className="block text-sm font-medium text-foreground">Color temperature</label>
+              <label htmlFor="color-temp" className="block text-sm font-medium text-foreground">{t('preferences.colorTemperature')}</label>
               <select
                 id="color-temp"
                 value={colorTemperature}
                 onChange={(e) => setColorTemperature(e.target.value)}
-                className="mt-1 block w-full h-12 px-3 pr-10 text-base md:text-sm border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
+                className="mt-1 block w-full h-12 px-3 pe-10 text-base md:text-sm border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
               >
-                <option value="">Not set</option>
-                <option value="warm">Warm</option>
-                <option value="cool">Cool</option>
-                <option value="neutral">Neutral</option>
+                <option value="">{t('preferences.colorTempNotSet')}</option>
+                <option value="warm">{t('preferences.colorTempWarm')}</option>
+                <option value="cool">{t('preferences.colorTempCool')}</option>
+                <option value="neutral">{t('preferences.colorTempNeutral')}</option>
               </select>
             </div>
             <div>
-              <label htmlFor="style-personality" className="block text-sm font-medium text-foreground">Style personality</label>
+              <label htmlFor="style-personality" className="block text-sm font-medium text-foreground">{t('preferences.stylePersonality')}</label>
               <input
                 id="style-personality"
                 value={stylePersonality}
                 onChange={(e) => setStylePersonality(e.target.value)}
                 className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
-                placeholder="e.g. minimalist, bold, classic"
+                placeholder={t('preferences.stylePersonalityPlaceholder')}
               />
             </div>
           </div>
@@ -187,13 +189,13 @@ export function PreferencesPanel() {
               disabled={isSavingPreferences}
               className="w-full sm:w-auto"
             >
-              {isSavingPreferences ? 'Saving…' : 'Save Preferences'}
+              {isSavingPreferences ? t('common.saving') : t('preferences.save')}
             </Button>
           </div>
 
           {!preferences && (
             <p className="text-xs text-muted-foreground">
-              Preferences will be created automatically after your first save.
+              {t('preferences.autoCreated')}
             </p>
           )}
         </div>

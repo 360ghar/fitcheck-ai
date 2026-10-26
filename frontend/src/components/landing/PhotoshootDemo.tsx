@@ -434,7 +434,7 @@ export function PhotoshootDemo() {
                   type="button"
                   onClick={() => handleDownload(getImageSrc(img), idx)}
                   aria-label={`Download image ${idx + 1}`}
-                  className="absolute bottom-2 right-2 p-2 bg-on-image/90 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
+                  className="absolute bottom-2 end-2 p-2 bg-on-image/90 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
                 >
                   <Download className="w-4 h-4 text-on-image-foreground" />
                 </button>
@@ -458,7 +458,7 @@ export function PhotoshootDemo() {
                   disabled={retryingFailedIndex !== null}
                   onClick={() => void retryFailedSlot(failedIndex)}
                 >
-                  <RotateCcw className="w-4 h-4 mr-2" />
+                  <RotateCcw className="w-4 h-4 me-2" />
                   {retryingFailedIndex === failedIndex ? 'Retrying...' : 'Retry'}
                 </Button>
               </div>
@@ -476,7 +476,7 @@ export function PhotoshootDemo() {
               onClick={() => setShowLoginModal(true)}
             >
               Get More Images
-              <ArrowRight className="w-4 h-4 ml-2" />
+              <ArrowRight className="w-4 h-4 ms-2" />
             </Button>
           </div>
         </div>

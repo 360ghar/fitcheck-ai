@@ -50,11 +50,13 @@ import { ErrorState } from '@/components/ui/error-state'
 import { LoadingGrid } from '@/components/ui/loading-grid'
 import { PageHeader } from '@/components/ui/page-header'
 import { useColumnCount } from '@/hooks/useColumnCount'
+import { useTranslation } from '@/i18n'
 import type { Outfit } from '@/types'
 
 const LIST_PATH = '/outfits'
 
 export default function OutfitsPage() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const requestedAction = searchParams.get('action')
@@ -325,7 +327,7 @@ export default function OutfitsPage() {
   ) : error ? (
     <ErrorState
       icon={Layers}
-      title="Couldn't load outfits"
+      title={t('outfits.loadError')}
       description={error.message || 'Something went wrong. Please try again.'}
       onRetry={() => {
         clearError()
@@ -411,22 +413,22 @@ export default function OutfitsPage() {
   return (
     <div className="app-page max-w-7xl">
       <PageHeader
-        title="Outfits"
+        title={t('outfits.title')}
         description={`${displayedOutfits.length} ${displayedOutfits.length === 1 ? 'outfit' : 'outfits'}`}
       >
         <Button variant="outline" onClick={() => navigate('/try-on')} className="w-full md:w-auto">
-          <Camera className="h-4 w-4 mr-2" />
+          <Camera className="h-4 w-4 me-2" />
           Try My Look
         </Button>
         <Button onClick={() => navigate('/outfits/new')} className="w-full md:w-auto hidden md:inline-flex">
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4 me-2" />
           Create Outfit
         </Button>
       </PageHeader>
 
       <div className="md:hidden mb-4">
         <Button onClick={() => navigate('/outfits/new')} className="w-full">
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4 me-2" />
           Create Outfit
         </Button>
       </div>
@@ -438,8 +440,8 @@ export default function OutfitsPage() {
           <SearchBar
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search outfits…"
-            aria-label="Search outfits"
+            placeholder={t('outfits.searchPlaceholder')}
+            aria-label={t('outfits.searchLabel')}
           />
         </div>
         <div className="flex gap-2">
@@ -448,7 +450,7 @@ export default function OutfitsPage() {
             variant={favoritesOnly ? 'default' : 'outline'}
             size="icon"
             className="touch-target"
-            aria-label="Favorites only"
+            aria-label={t('outfits.favoritesOnly')}
             aria-pressed={favoritesOnly}
             onClick={() => setFavoritesOnly((v) => !v)}
           >
@@ -459,7 +461,7 @@ export default function OutfitsPage() {
             variant={isGridView ? 'default' : 'outline'}
             size="icon"
             className="touch-target"
-            aria-label="Grid view"
+            aria-label={t('filters.gridView')}
             onClick={() => setGridView(true)}
           >
             <Grid3x3 className="h-4 w-4" />
@@ -469,7 +471,7 @@ export default function OutfitsPage() {
             variant={!isGridView ? 'default' : 'outline'}
             size="icon"
             className="touch-target"
-            aria-label="List view"
+            aria-label={t('filters.listView')}
             onClick={() => setGridView(false)}
           >
             <List className="h-4 w-4" />
@@ -532,15 +534,15 @@ export default function OutfitsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete outfit?</AlertDialogTitle>
+            <AlertDialogTitle>{t('outfits.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
               {selectedOutfit
-                ? `"${selectedOutfit.name}" will be permanently deleted. This cannot be undone.`
-                : 'This outfit will be permanently deleted.'}
+                ? t('outfits.deleteNamed', { name: selectedOutfit.name })
+                : t('outfits.deleteBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isManaging}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isManaging}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isManaging || !selectedOutfit}

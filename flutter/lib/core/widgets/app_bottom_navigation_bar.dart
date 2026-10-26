@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../app/routes/app_routes.dart';
+import '../i18n/l10n.dart';
 import 'paper.dart';
 
 /// Bottom navigation: a torn strip of the active tab's paper with a paper
@@ -21,6 +22,11 @@ class AppBottomNavigationBar extends StatelessWidget {
   /// Height of the bar above the bottom safe-area inset.
   static const double barHeight = 72;
 
+  /// The tab set: icons and routes, with English labels.
+  ///
+  /// The labels here are a fallback for code paths without a [BuildContext]
+  /// (route-to-tab mapping). Everything rendered goes through [itemsFor], so a
+  /// translated label is never one refactor away from reverting to English.
   static const List<NavigationItem> navigationItems = [
     NavigationItem(
       icon: Icons.home_outlined,
@@ -54,6 +60,26 @@ class AppBottomNavigationBar extends StatelessWidget {
     ),
   ];
 
+  /// The five tabs with labels in the current locale.
+  static List<NavigationItem> itemsFor(AppLocalizations l10n) {
+    final labels = [
+      l10n.tabHome,
+      l10n.tabPhotoshoot,
+      l10n.tabCloset,
+      l10n.tabOutfits,
+      l10n.tabMore,
+    ];
+    return [
+      for (final (index, item) in navigationItems.indexed)
+        NavigationItem(
+          icon: item.icon,
+          activeIcon: item.activeIcon,
+          label: labels[index],
+          route: item.route,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return PaperStockScope(
@@ -65,7 +91,8 @@ class AppBottomNavigationBar extends StatelessWidget {
   Widget _buildBar(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final stock = tokens.stock;
-    final count = navigationItems.length;
+    final items = itemsFor(context.l10n);
+    final count = items.length;
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 240);
@@ -115,7 +142,7 @@ class AppBottomNavigationBar extends StatelessWidget {
                 ),
                 Row(
                   children: [
-                    for (final (index, item) in navigationItems.indexed)
+                    for (final (index, item) in items.indexed)
                       Expanded(
                         child: _NavTab(
                           item: item,

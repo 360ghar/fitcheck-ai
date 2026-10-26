@@ -144,7 +144,7 @@ export default function CostPerWearCalculatorPage() {
               <Button asChild size="lg" className="h-12 px-6">
                 <Link to={trialRegisterHref()}>
                   Track wears automatically
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="ms-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="h-12 px-6">

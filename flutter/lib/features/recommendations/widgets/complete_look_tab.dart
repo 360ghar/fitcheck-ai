@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/style.dart';
 import '../providers/recommendations_providers.dart';
@@ -40,9 +42,9 @@ class _CompleteLookTabState extends ConsumerState<CompleteLookTab>
                   hasScrollBody: false,
                   child: AppEmptyState(
                     scene: PaperScenes.outfits,
-                    title: 'Complete a look',
-                    message: "Pick a piece and we'll fill in the rest.",
-                    actionLabel: 'Pick a piece',
+                    title: context.l10n.recommendCompleteTitle,
+                    message: context.l10n.recommendCompleteBody,
+                    actionLabel: context.l10n.recommendPickPiece,
                     onAction: () => showPiecePicker(context),
                   ),
                 ),
@@ -73,10 +75,15 @@ class _CompleteLookTabState extends ConsumerState<CompleteLookTab>
           Expanded(
             child: DropdownButtonFormField<Style>(
               initialValue: _style,
-              decoration: const InputDecoration(labelText: 'Style'),
+              decoration: InputDecoration(
+                labelText: context.l10n.filterStyle,
+              ),
               items: [
                 for (final s in Style.values)
-                  DropdownMenuItem(value: s, child: Text(s.displayName)),
+                  DropdownMenuItem(
+                    value: s,
+                    child: Text(s.label(context.l10n)),
+                  ),
               ],
               onChanged: (s) => setState(() => _style = s ?? _style),
             ),
@@ -86,7 +93,11 @@ class _CompleteLookTabState extends ConsumerState<CompleteLookTab>
             onPressed: loading
                 ? null
                 : () => _looks.generate(style: _style.name),
-            child: Text(loading ? 'Working' : 'Generate'),
+            child: Text(
+              loading
+                  ? context.l10n.recommendWorking
+                  : context.l10n.recommendGenerate,
+            ),
           ),
         ],
       ),
@@ -122,7 +133,7 @@ class _CompleteLookTabState extends ConsumerState<CompleteLookTab>
           child: Padding(
             padding: tabPadding,
             child: Text(
-              'Choose a style, then generate.',
+              context.l10n.recommendChooseStyleBody,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: PaperTokens.of(context).textSecondary,
               ),
@@ -132,13 +143,13 @@ class _CompleteLookTabState extends ConsumerState<CompleteLookTab>
       ];
     }
     if (value.isEmpty) {
-      return const [
+      return [
         SliverFillRemaining(
           hasScrollBody: false,
           child: AppEmptyState(
             scene: PaperScenes.outfits,
-            title: 'No looks for these pieces',
-            message: 'Try another style or other pieces.',
+            title: context.l10n.recommendNoLooksTitle,
+            message: context.l10n.recommendNoLooksBody,
           ),
         ),
       ];
@@ -180,14 +191,14 @@ class _LookCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  look.description ?? 'A look for your pieces',
+                  look.description ?? context.l10n.recommendDefaultLook,
                   style: text.titleMedium,
                 ),
               ),
               if (score != null) ...[
                 const SizedBox(width: AppConstants.spacing12),
                 Text(
-                  '${score.round()}% match',
+                  context.l10n.recommendMatchPercent(score.round()),
                   style: text.labelLarge?.copyWith(color: tokens.stock.accent),
                 ),
               ],
@@ -196,7 +207,7 @@ class _LookCard extends StatelessWidget {
           const SizedBox(height: AppConstants.spacing12),
           if (look.items.isEmpty)
             Text(
-              'No pieces came back for this look.',
+              context.l10n.recommendNoPiecesBody,
               style: text.bodySmall?.copyWith(color: tokens.textSecondary),
             )
           else

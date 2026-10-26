@@ -1,0 +1,932 @@
+{
+  "group": "outfits",
+  "files": [
+    "features/dashboard/widgets/suggestions_section.dart",
+    "features/outfits/views/outfit_builder_page.dart",
+    "features/outfits/views/outfit_collections_page.dart",
+    "features/outfits/views/outfit_detail_page.dart",
+    "features/outfits/views/outfit_edit_page.dart",
+    "features/photoshoot/views/photoshoot_configure_step.dart",
+    "features/photoshoot/views/photoshoot_content.dart",
+    "features/photoshoot/views/photoshoot_generating_step.dart",
+    "features/photoshoot/views/photoshoot_upload_step.dart",
+    "features/recommendations/views/recommendations_page.dart",
+    "features/recommendations/widgets/astrology_tab.dart",
+    "features/recommendations/widgets/complete_look_tab.dart",
+    "features/recommendations/widgets/find_matches_tab.dart",
+    "features/recommendations/widgets/recommendation_widgets.dart",
+    "features/recommendations/widgets/shopping_tab.dart",
+    "features/recommendations/widgets/weather_based_tab.dart"
+  ],
+  "keys": [
+    {
+      "key": "outfitPreviewWithAi",
+      "value": "Preview with AI",
+      "description": "Bottom-bar button in the outfit builder that asks the AI to render a preview of the chosen pieces.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitNewPreview",
+      "value": "Make a new preview",
+      "description": "Bottom-bar button in the outfit builder once a preview exists; regenerates the AI preview.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitBuilderClosetHeading",
+      "value": "Your closet",
+      "description": "Section heading above the piece picker in the outfit builder.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitBuilderSearchHint",
+      "value": "Search pieces",
+      "description": "Placeholder of the search field that filters the closet pieces in the outfit builder.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitClearSearch",
+      "value": "Clear search",
+      "description": "Tooltip on the clear button of the outfit builder search field.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitBuilderAddPiecesTitle",
+      "value": "Add pieces first",
+      "description": "Empty-state title in the outfit builder when the closet has no pieces.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitBuilderAddPiecesBody",
+      "value": "Outfits are made from the pieces in your closet.",
+      "description": "Explanation under the empty-state title in the outfit builder.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitBuilderNoMatches",
+      "value": "No pieces match.",
+      "description": "Shown in the outfit builder when the search text or category filter returns no pieces.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitNameLabel",
+      "value": "Outfit name",
+      "description": "Label of the text field where the outfit is named in the builder.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitNameHint",
+      "value": "For example, Weekend linen",
+      "description": "Example placeholder inside the outfit name field in the builder.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitPreviewSemantic",
+      "value": "AI preview of the outfit",
+      "description": "Screen-reader label for the AI-generated outfit preview image in the builder.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitChoosePieces",
+      "value": "Choose pieces",
+      "description": "Heading above the chosen-pieces row in the outfit builder when nothing is selected yet.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitTapPiecesHint",
+      "value": "Tap pieces below to add them.",
+      "description": "Hint under the chosen-pieces row when no piece is selected.",
+      "file": "features/outfits/views/outfit_builder_page.dart"
+    },
+    {
+      "key": "outfitShareTooltip",
+      "value": "Share",
+      "description": "Tooltip on the share icon in the outfit detail app bar.",
+      "file": "features/outfits/views/outfit_detail_page.dart"
+    },
+    {
+      "key": "outfitSaveFavourite",
+      "value": "Save to favourites",
+      "description": "Tooltip on the heart icon when the outfit is not a favourite yet.",
+      "file": "features/outfits/views/outfit_detail_page.dart"
+    },
+    {
+      "key": "outfitPiecesHeading",
+      "value": "Pieces",
+      "description": "Heading above the horizontal strip of pieces that make up the outfit.",
+      "file": "features/outfits/views/outfit_detail_page.dart"
+    },
+    {
+      "key": "outfitWearHistoryEmpty",
+      "value": "Wear it once and the dates show up here.",
+      "description": "Shown in the wear-history card before the outfit has been worn.",
+      "file": "features/outfits/views/outfit_detail_page.dart"
+    },
+    {
+      "key": "outfitWearHistoryTitle",
+      "value": "Wear history",
+      "description": "Title of the dialog listing every date the outfit was worn.",
+      "file": "features/outfits/views/outfit_detail_page.dart"
+    },
+    {
+      "key": "outfitWearHistoryError",
+      "value": "Couldn't load the dates.",
+      "description": "Shown when the wear-history request fails; a Retry button follows it.",
+      "file": "features/outfits/views/outfit_detail_page.dart"
+    },
+    {
+      "key": "outfitWornOn",
+      "value": "Worn on",
+      "description": "Heading of the card that lists the dates the outfit was worn.",
+      "file": "features/outfits/views/outfit_detail_page.dart"
+    },
+    {
+      "key": "outfitEditTitle",
+      "value": "Edit outfit",
+      "description": "App bar title of the edit-outfit screen, also shown on its loading scaffold.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitSavedPhotosFailed",
+      "value": "Details saved, photos not",
+      "description": "Error title when the outfit fields were saved but the photo changes failed.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitNoPhotosBody",
+      "value": "No photos yet. The outfit shows its pieces instead.",
+      "description": "Placeholder in the photo strip on the edit-outfit screen.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitOccasionLabel",
+      "value": "Occasion",
+      "description": "Label of the occasion dropdown in the outfit edit form.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitOccasionNone",
+      "value": "None",
+      "description": "Dropdown option that clears the outfit's occasion.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitTagsHint",
+      "value": "Separate with commas",
+      "description": "Helper text under the tags field of the outfit edit form.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitDraftBody",
+      "value": "Hidden from your main list",
+      "description": "Subtitle of the Draft switch in the outfit edit form.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitPublic",
+      "value": "Public",
+      "description": "Title of the switch that makes an outfit shareable by link.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitPublicBody",
+      "value": "Anyone with the link can see it",
+      "description": "Subtitle of the Public switch in the outfit edit form.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitDeleteFromDetail",
+      "value": "Delete this outfit from its detail page.",
+      "description": "Footnote on the edit screen saying deletion happens on the detail page.",
+      "file": "features/outfits/views/outfit_edit_page.dart"
+    },
+    {
+      "key": "outfitNewCollection",
+      "value": "New collection",
+      "description": "Floating action button on the Collections page and the title of the create-collection dialog.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitNoCollectionsTitle",
+      "value": "No collections yet",
+      "description": "Empty-state title on the Collections page.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitNoCollectionsBody",
+      "value": "Group outfits by trip, season or mood.",
+      "description": "Explanation under the Collections empty state.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitCreateCollection",
+      "value": "Create a collection",
+      "description": "Action button in the Collections empty state.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitAddOutfits",
+      "value": "Add outfits",
+      "description": "Button in a collection sheet that opens the outfit picker.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitRename",
+      "value": "Rename",
+      "description": "Button in a collection sheet that opens the rename dialog.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitCollectionDeleteBody",
+      "value": "The outfits in it are kept.",
+      "description": "Body of the confirm-delete dialog for a collection.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitCollectionsNotLoaded",
+      "value": "Outfits not loaded",
+      "description": "Error snackbar title when a collection's outfit list cannot be fetched.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitRenameCollection",
+      "value": "Rename collection",
+      "description": "Title of the collection dialog when renaming an existing collection.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitDescriptionOptional",
+      "value": "Description (optional)",
+      "description": "Label of the optional description field in the collection dialog.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "outfitAllInCollection",
+      "value": "Every outfit is already in this collection.",
+      "description": "Shown in the outfit picker when there is no outfit left to add.",
+      "file": "features/outfits/views/outfit_collections_page.dart"
+    },
+    {
+      "key": "photoshootSubtitleUpload",
+      "value": "Studio portraits from your own photos",
+      "description": "Subtitle under the Photoshoot tab header on the upload step.",
+      "file": "features/photoshoot/views/photoshoot_content.dart"
+    },
+    {
+      "key": "photoshootSubtitleConfigure",
+      "value": "Pick a style, a format and a count",
+      "description": "Subtitle under the Photoshoot tab header on the configure step.",
+      "file": "features/photoshoot/views/photoshoot_content.dart"
+    },
+    {
+      "key": "photoshootSubtitleGenerating",
+      "value": "This takes a minute or two",
+      "description": "Subtitle under the Photoshoot tab header while images generate.",
+      "file": "features/photoshoot/views/photoshoot_content.dart"
+    },
+    {
+      "key": "photoshootAddPhotosSemantic",
+      "value": "Add photos from your gallery",
+      "description": "Screen-reader label on the empty photo upload card.",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart"
+    },
+    {
+      "key": "photoshootUploadTitle",
+      "value": "Add 1 to 4 photos of yourself",
+      "description": "Heading on the empty photo upload card on the upload step.",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart"
+    },
+    {
+      "key": "photoshootUploadBody",
+      "value": "Tap to choose from your gallery",
+      "description": "Second line on the empty photo upload card.",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart"
+    },
+    {
+      "key": "photoshootAddToContinue",
+      "value": "Add a photo to continue",
+      "description": "Continue button on the upload step when no photo has been chosen yet.",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart"
+    },
+    {
+      "key": "photoshootAddAnotherPhoto",
+      "value": "Add another photo",
+      "description": "Screen-reader label on the plus tile that adds one more photo to the grid.",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart"
+    },
+    {
+      "key": "photoshootTipsTitle",
+      "value": "For the best results",
+      "description": "Heading of the photo tips card on the upload step.",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart"
+    },
+    {
+      "key": "photoshootTipsBody",
+      "value": "Use clear, well-lit photos of your face from a few angles. Skip sunglasses and hats.",
+      "description": "Body of the photo tips card on the upload step.",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart"
+    },
+    {
+      "key": "photoshootStarting",
+      "value": "Starting",
+      "description": "Fallback status line at the top of the generating step before the server sends a status.",
+      "file": "features/photoshoot/views/photoshoot_generating_step.dart"
+    },
+    {
+      "key": "photoshootCancelling",
+      "value": "Cancelling",
+      "description": "Cancel button label while a photoshoot is being cancelled.",
+      "file": "features/photoshoot/views/photoshoot_generating_step.dart"
+    },
+    {
+      "key": "photoshootFailed",
+      "value": "Failed",
+      "description": "Screen-reader label on a photoshoot image slot whose generation failed.",
+      "file": "features/photoshoot/views/photoshoot_generating_step.dart"
+    },
+    {
+      "key": "recommendTabMatches",
+      "value": "Matches",
+      "description": "Recommendations tab label for finding pieces that match the selected ones.",
+      "file": "features/recommendations/views/recommendations_page.dart"
+    },
+    {
+      "key": "recommendTabComplete",
+      "value": "Complete",
+      "description": "Recommendations tab label for completing a look from selected pieces.",
+      "file": "features/recommendations/views/recommendations_page.dart"
+    },
+    {
+      "key": "recommendTabWeather",
+      "value": "Weather",
+      "description": "Recommendations tab label for weather-based picks.",
+      "file": "features/recommendations/views/recommendations_page.dart"
+    },
+    {
+      "key": "recommendTabColours",
+      "value": "Colours",
+      "description": "Recommendations tab label for lucky colours.",
+      "file": "features/recommendations/views/recommendations_page.dart"
+    },
+    {
+      "key": "recommendTabShop",
+      "value": "Shop",
+      "description": "Recommendations tab label for what to buy.",
+      "file": "features/recommendations/views/recommendations_page.dart"
+    },
+    {
+      "key": "recommendNoMatchesTitle",
+      "value": "No matches yet",
+      "description": "Empty state on the Matches tab before any piece has been picked.",
+      "file": "features/recommendations/widgets/find_matches_tab.dart"
+    },
+    {
+      "key": "recommendNoMatchesBody",
+      "value": "Pick a piece and we'll find what goes with it.",
+      "description": "Explanation under the Matches empty state.",
+      "file": "features/recommendations/widgets/find_matches_tab.dart"
+    },
+    {
+      "key": "recommendPickPiece",
+      "value": "Pick a piece",
+      "description": "Button that opens the closet picker, used on the Matches and Complete tabs.",
+      "file": "features/recommendations/widgets/find_matches_tab.dart"
+    },
+    {
+      "key": "recommendNothingMatchesTitle",
+      "value": "Nothing matches these yet",
+      "description": "Empty state on the Matches tab when the selected pieces have no matches.",
+      "file": "features/recommendations/widgets/find_matches_tab.dart"
+    },
+    {
+      "key": "recommendNothingMatchesBody",
+      "value": "Try other pieces, or add more to your closet.",
+      "description": "Explanation under the no-matches empty state.",
+      "file": "features/recommendations/widgets/find_matches_tab.dart"
+    },
+    {
+      "key": "recommendChangePieces",
+      "value": "Change pieces",
+      "description": "Action that reopens the piece picker from the no-matches empty state.",
+      "file": "features/recommendations/widgets/find_matches_tab.dart"
+    },
+    {
+      "key": "recommendDefaultReason",
+      "value": "It suits the pieces you picked.",
+      "description": "Fallback reason in the match detail sheet when the server sends none.",
+      "file": "features/recommendations/widgets/find_matches_tab.dart"
+    },
+    {
+      "key": "recommendCompleteTitle",
+      "value": "Complete a look",
+      "description": "Empty state title on the Complete tab before a piece is picked.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendCompleteBody",
+      "value": "Pick a piece and we'll fill in the rest.",
+      "description": "Explanation under the Complete tab empty state.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendWorking",
+      "value": "Working",
+      "description": "Generate button label while looks are being generated.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendGenerate",
+      "value": "Generate",
+      "description": "Generate button label on the Complete tab.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendChooseStyleBody",
+      "value": "Choose a style, then generate.",
+      "description": "Hint shown on the Complete tab before the first look is generated.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendNoLooksTitle",
+      "value": "No looks for these pieces",
+      "description": "Empty state when the generated request returned no looks.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendNoLooksBody",
+      "value": "Try another style or other pieces.",
+      "description": "Explanation under the no-looks empty state.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendDefaultLook",
+      "value": "A look for your pieces",
+      "description": "Fallback title of a generated look when the server sends no description.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendNoPiecesBody",
+      "value": "No pieces came back for this look.",
+      "description": "Shown under a generated look that contains no pieces.",
+      "file": "features/recommendations/widgets/complete_look_tab.dart"
+    },
+    {
+      "key": "recommendCityLabel",
+      "value": "City",
+      "description": "Label of the city text field on the Weather tab.",
+      "file": "features/recommendations/widgets/weather_based_tab.dart"
+    },
+    {
+      "key": "recommendCheck",
+      "value": "Check",
+      "description": "Button that fetches the weather for the entered city.",
+      "file": "features/recommendations/widgets/weather_based_tab.dart"
+    },
+    {
+      "key": "recommendWeatherTitle",
+      "value": "What's the weather?",
+      "description": "Empty state title on the Weather tab before a city is set.",
+      "file": "features/recommendations/widgets/weather_based_tab.dart"
+    },
+    {
+      "key": "recommendWeatherBody",
+      "value": "Enter your city to get picks for today.",
+      "description": "Explanation under the Weather tab empty state.",
+      "file": "features/recommendations/widgets/weather_based_tab.dart"
+    },
+    {
+      "key": "recommendWearToday",
+      "value": "Wear today",
+      "description": "Heading above the weather-based piece picks.",
+      "file": "features/recommendations/widgets/weather_based_tab.dart"
+    },
+    {
+      "key": "recommendWeatherNoPieces",
+      "value": "No pieces in your closet for this weather yet.",
+      "description": "Shown when the closet has no piece suited to today's weather.",
+      "file": "features/recommendations/widgets/weather_based_tab.dart"
+    },
+    {
+      "key": "recommendBudgetLabel",
+      "value": "Budget up to",
+      "description": "Label next to the price slider on the Shop tab.",
+      "file": "features/recommendations/widgets/shopping_tab.dart"
+    },
+    {
+      "key": "recommendLooking",
+      "value": "Looking",
+      "description": "Button label while shopping suggestions are loading.",
+      "file": "features/recommendations/widgets/shopping_tab.dart"
+    },
+    {
+      "key": "recommendFindWhatToBuy",
+      "value": "Find what to buy",
+      "description": "Button label on the Shop tab that requests purchase suggestions.",
+      "file": "features/recommendations/widgets/shopping_tab.dart"
+    },
+    {
+      "key": "recommendFillGapsTitle",
+      "value": "Fill the gaps",
+      "description": "Empty state title on the Shop tab before the first search.",
+      "file": "features/recommendations/widgets/shopping_tab.dart"
+    },
+    {
+      "key": "recommendFillGapsBody",
+      "value": "Set a budget and we'll suggest what your closet is missing.",
+      "description": "Explanation under the Shop tab empty state.",
+      "file": "features/recommendations/widgets/shopping_tab.dart"
+    },
+    {
+      "key": "recommendNoGapsTitle",
+      "value": "No gaps found",
+      "description": "Empty state when the Shop search returned nothing.",
+      "file": "features/recommendations/widgets/shopping_tab.dart"
+    },
+    {
+      "key": "recommendNoGapsBody",
+      "value": "Try a bigger budget or another category.",
+      "description": "Explanation under the no-gaps empty state.",
+      "file": "features/recommendations/widgets/shopping_tab.dart"
+    },
+    {
+      "key": "recommendMoodEveryday",
+      "value": "Everyday",
+      "description": "Segment on the Colours tab for a normal day.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendMoodBigMeeting",
+      "value": "Big meeting",
+      "description": "Segment on the Colours tab for an important meeting day.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendDayLabel",
+      "value": "Day",
+      "description": "Label of the date field on the Colours tab.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendReadingStars",
+      "value": "Reading the stars",
+      "description": "Button label while the colour reading loads.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendGetMyColours",
+      "value": "Get my colours",
+      "description": "Button label on the Colours tab that requests the reading.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendLuckyColoursTitle",
+      "value": "Your lucky colours",
+      "description": "Empty state title on the Colours tab before a reading.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendLuckyColoursBody",
+      "value": "Pick a day and we'll suggest colours and pieces for it.",
+      "description": "Explanation under the Colours tab empty state.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendLuckyColoursSection",
+      "value": "Lucky colours",
+      "description": "Section heading listing the day's lucky colours.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendAvoidColoursSection",
+      "value": "Colours to go easy on",
+      "description": "Section heading listing the colours to avoid on the chosen day.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendBirthDateTitle",
+      "value": "Add your birth date",
+      "description": "Section heading shown on the Colours tab when the profile has no birth date.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendBirthDateBody",
+      "value": "We need your date of birth to read your colours.",
+      "description": "Explanation under the add-birth-date heading.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendEditProfile",
+      "value": "Edit profile",
+      "description": "Button that opens the profile editor from the Colours tab.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendNothingThisDay",
+      "value": "Nothing for this day.",
+      "description": "Shown when a colour section has no entries for the chosen day.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendUnnamedColour",
+      "value": "Unnamed colour",
+      "description": "Fallback name for a colour the server returned without one.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendFromCloset",
+      "value": "From your closet",
+      "description": "Section heading listing own pieces in the lucky colours.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendNoPiecesInColours",
+      "value": "No pieces in these colours yet.",
+      "description": "Shown when no own piece matches the lucky colours.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendOutfitIdeas",
+      "value": "Outfit ideas",
+      "description": "Section heading listing outfit suggestions for the lucky colours.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendNoOutfitsInColours",
+      "value": "No full outfit in these colours yet.",
+      "description": "Shown when no outfit suggestion exists for the lucky colours.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendDefaultOutfitIdea",
+      "value": "An outfit idea",
+      "description": "Fallback description for a suggested outfit the server sent without one.",
+      "file": "features/recommendations/widgets/astrology_tab.dart"
+    },
+    {
+      "key": "recommendPickUpToThree",
+      "value": "Pick up to three pieces",
+      "description": "Heading of the closet picker sheet used by the recommendations tabs.",
+      "file": "features/recommendations/widgets/recommendation_widgets.dart"
+    },
+    {
+      "key": "recommendEmptyClosetBody",
+      "value": "Add a few pieces first, then come back for matches.",
+      "description": "Explanation under the empty-closet state in the recommendations piece picker.",
+      "file": "features/recommendations/widgets/recommendation_widgets.dart"
+    },
+    {
+      "key": "dashboardDressForDay",
+      "value": "Dress for the day ahead.",
+      "description": "Fallback weather advice on the home tab when the server sends none.",
+      "file": "features/dashboard/widgets/suggestions_section.dart"
+    },
+    {
+      "key": "dashboardOutfitOfDay",
+      "value": "Outfit of the day",
+      "description": "Small label above today's outfit name on the home tab.",
+      "file": "features/dashboard/widgets/suggestions_section.dart"
+    },
+    {
+      "key": "dashboardFreshLook",
+      "value": "A fresh look",
+      "description": "Fallback name when today's outfit has no name.",
+      "file": "features/dashboard/widgets/suggestions_section.dart"
+    }
+  ],
+  "deferred": [
+    {
+      "value": "My outfit \"{name}\" on FitCheck AI: {url}",
+      "file": "features/outfits/views/outfit_detail_page.dart",
+      "reason": "Interpolated share payload built for the OS share sheet; needs a placeholder key plus the URL."
+    },
+    {
+      "value": "\"{name}\" is removed. Its pieces stay in your closet.",
+      "file": "features/outfits/views/outfit_detail_page.dart",
+      "reason": "Interpolated confirm-delete body; needs a placeholder key."
+    },
+    {
+      "value": "Show all {count}",
+      "file": "features/outfits/views/outfit_detail_page.dart",
+      "reason": "Interpolated count; would need an ICU key."
+    },
+    {
+      "value": "Remove {pieceName}",
+      "file": "features/outfits/views/outfit_builder_page.dart",
+      "reason": "Interpolated tooltip on each chosen piece tile."
+    },
+    {
+      "value": "{pieceName}, chosen",
+      "file": "features/outfits/views/outfit_builder_page.dart",
+      "reason": "Interpolated screen-reader label combining the item name and selection state."
+    },
+    {
+      "value": "1 piece chosen / {count} pieces chosen",
+      "file": "features/outfits/views/outfit_builder_page.dart",
+      "reason": "Plural heading; no existing ICU key matches this wording."
+    },
+    {
+      "value": "Untitled",
+      "file": "features/outfits/views/outfit_collections_page.dart",
+      "reason": "Fallback name inside the static _name helper, which has no BuildContext; passing l10n through it would mean restructuring the helper and all call sites."
+    },
+    {
+      "value": "Delete \"{name}\"?",
+      "file": "features/outfits/views/outfit_collections_page.dart",
+      "reason": "Interpolated dialog title; needs a placeholder key."
+    },
+    {
+      "value": "Add to \"{name}\"",
+      "file": "features/outfits/views/outfit_collections_page.dart",
+      "reason": "Interpolated dialog title; needs a placeholder key."
+    },
+    {
+      "value": "Add {count}",
+      "file": "features/outfits/views/outfit_collections_page.dart",
+      "reason": "Interpolated button label; would need an ICU key."
+    },
+    {
+      "value": "Saved to favourites / Removed from favourites / Not saved / Logged as worn today / Nice pick / Outfit removed / Deleted / Not deleted / A copy is in your outfits / Duplicated / Not duplicated / Not shared / Collection not created / Collection updated. / Collection not updated / Collection deleted. / Collection not deleted / Outfits not added",
+      "file": "features/outfits/providers/outfit_providers.dart",
+      "reason": "OutfitProviders has no BuildContext; snackbar copy is emitted from notifier methods."
+    },
+    {
+      "value": "Preview not created / Give the outfit a name. / Name / Choose at least one piece. / Pieces / {name} is in your outfits. / Saved / Outfit not saved",
+      "file": "features/outfits/providers/outfit_builder_provider.dart",
+      "reason": "OutfitBuilderNotifier has no BuildContext; snackbar copy is emitted from notifier methods."
+    },
+    {
+      "value": "{ready} ready, {failed} failed / {count} photos ready",
+      "file": "features/photoshoot/views/photoshoot_content.dart",
+      "reason": "Interpolated result summary; needs two ICU keys."
+    },
+    {
+      "value": "Step {current} of 4",
+      "file": "features/photoshoot/views/photoshoot_content.dart",
+      "reason": "Interpolated step counter; the existing photoshootStepOf key includes the step name and is used as the screen-reader label."
+    },
+    {
+      "value": "Continue with {count} photo(s)",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart",
+      "reason": "Interpolated plural button label."
+    },
+    {
+      "value": "{count} of {max} photos",
+      "file": "features/photoshoot/views/photoshoot_upload_step.dart",
+      "reason": "Interpolated progress line above the photo grid."
+    },
+    {
+      "value": "About {seconds}s left / About {m}m {s}s left / About {m}m left",
+      "file": "features/photoshoot/views/photoshoot_generating_step.dart",
+      "reason": "Duration format built in a static helper with no BuildContext; needs plural and unit localization."
+    },
+    {
+      "value": "Now: {scene}",
+      "file": "features/photoshoot/views/photoshoot_generating_step.dart",
+      "reason": "Interpolated label mixing own prefix with the server-provided scene name."
+    },
+    {
+      "value": "Saving {current} of {count}",
+      "file": "features/photoshoot/views/photoshoot_results_step.dart",
+      "reason": "Interpolated download progress label."
+    },
+    {
+      "value": "Save all {count} to gallery",
+      "file": "features/photoshoot/views/photoshoot_results_step.dart",
+      "reason": "Interpolated plural button label."
+    },
+    {
+      "value": "{count} left today",
+      "file": "features/photoshoot/views/photoshoot_results_step.dart",
+      "reason": "Interpolated remaining-quota line."
+    },
+    {
+      "value": "Photo {number} failed",
+      "file": "features/photoshoot/views/photoshoot_results_step.dart",
+      "reason": "Interpolated failure label on a failed slot."
+    },
+    {
+      "value": "{formatLabel}, selected",
+      "file": "features/photoshoot/views/photoshoot_configure_step.dart",
+      "reason": "Interpolated screen-reader label combining the aspect-ratio name, its ratio and a hardcoded 'selected' suffix."
+    },
+    {
+      "value": "1:1 / 3:4 / 4:3",
+      "file": "features/photoshoot/views/photoshoot_configure_step.dart",
+      "reason": "Aspect-ratio figures are not translatable text."
+    },
+    {
+      "value": "You can add up to {max} photos. / Photo limit / Add at least one photo. / No photos / Describe the look you want. / Prompt needed / Preparing your photos / Starting / Generating / Batch {n} of {total} / Partly done / We lost the connection. Please try again. / Could not cancel / Photo {n} is ready. / Saved to your gallery. / Saved / Not saved / All {n} photos are in your gallery. / Some photos not saved / Retry failed",
+      "file": "features/photoshoot/providers/photoshoot_provider.dart",
+      "reason": "PhotoshootNotifier and ErrorHandler calls have no BuildContext; status strings are also partly server-driven."
+    },
+    {
+      "value": "AI Photoshoot",
+      "file": "features/photoshoot/providers/photoshoot_provider.dart",
+      "reason": "Consent feature label passed to a service without a BuildContext."
+    },
+    {
+      "value": "{score}% match",
+      "file": "features/recommendations/widgets/find_matches_tab.dart",
+      "reason": "Interpolated percentage caption."
+    },
+    {
+      "value": "{score}% match",
+      "file": "features/recommendations/widgets/complete_look_tab.dart",
+      "reason": "Interpolated percentage caption on a generated look."
+    },
+    {
+      "value": "{score}% match",
+      "file": "features/recommendations/widgets/astrology_tab.dart",
+      "reason": "Interpolated percentage caption on a suggested outfit."
+    },
+    {
+      "value": "{picked} of {max} picked",
+      "file": "features/recommendations/widgets/recommendation_widgets.dart",
+      "reason": "Interpolated selection counter in the piece picker."
+    },
+    {
+      "value": "Remove {pieceName}",
+      "file": "features/recommendations/widgets/recommendation_widgets.dart",
+      "reason": "Interpolated tooltip and screen-reader label on a selected piece thumbnail."
+    },
+    {
+      "value": "Adds 1 outfit / Adds {count} outfits",
+      "file": "features/recommendations/widgets/shopping_tab.dart",
+      "reason": "Interpolated plural footnote on a shopping gap card."
+    },
+    {
+      "value": "${price} per wear",
+      "file": "features/recommendations/widgets/shopping_tab.dart",
+      "reason": "Money format; needs currency and number formatting."
+    },
+    {
+      "value": "{priority} priority",
+      "file": "features/recommendations/widgets/shopping_tab.dart",
+      "reason": "Interpolated priority label on a shopping gap card."
+    },
+    {
+      "value": "{temperature} {unit}, {condition} in {location}",
+      "file": "features/recommendations/widgets/weather_based_tab.dart",
+      "reason": "Interpolated screen-reader label built from server-provided weather values."
+    },
+    {
+      "value": "Unknown",
+      "file": "features/recommendations/widgets/weather_based_tab.dart",
+      "reason": "Part of the interpolated weather screen-reader label above."
+    },
+    {
+      "value": "Months and dates in the day picker",
+      "file": "features/recommendations/widgets/astrology_tab.dart",
+      "reason": "Date/number format produced by AppDateUtils and the Material date picker."
+    },
+    {
+      "value": "Server-provided: colour names and reasons, category names, outfit descriptions, match reasons, gap descriptions, weather condition and location",
+      "file": "features/recommendations/widgets",
+      "reason": "Server-provided text; fallbacks for the missing case were extracted."
+    },
+    {
+      "value": "{temperature}°C",
+      "file": "features/dashboard/widgets/suggestions_section.dart",
+      "reason": "Number plus hardcoded Celsius unit; needs temperature-unit localization."
+    },
+    {
+      "value": "Choose a garment photo first. / No garment",
+      "file": "features/tryon/providers/tryon_provider.dart",
+      "reason": "TryOnNotifier has no BuildContext; validation snackbar copy is emitted from notifier methods."
+    },
+    {
+      "value": "Wait for your photo to finish uploading. / Still uploading",
+      "file": "features/tryon/providers/tryon_provider.dart",
+      "reason": "TryOnNotifier has no BuildContext; snackbar copy emitted from notifier methods."
+    },
+    {
+      "value": "Add a photo of yourself first. / Your photo",
+      "file": "features/tryon/providers/tryon_provider.dart",
+      "reason": "TryOnNotifier has no BuildContext; snackbar copy emitted from notifier methods."
+    },
+    {
+      "value": "Your photo is updated. / Saved / Upload failed",
+      "file": "features/tryon/providers/tryon_provider.dart",
+      "reason": "TryOnNotifier has no BuildContext; snackbar copy emitted from notifier methods."
+    },
+    {
+      "value": "Your try-on is ready. / Done / Try-on failed",
+      "file": "features/tryon/providers/tryon_provider.dart",
+      "reason": "TryOnNotifier has no BuildContext; snackbar copy emitted from notifier methods."
+    },
+    {
+      "value": "Saved to your gallery. / Saved / Not saved",
+      "file": "features/tryon/providers/tryon_provider.dart",
+      "reason": "TryOnNotifier has no BuildContext; snackbar copy emitted from notifier methods."
+    },
+    {
+      "value": "Virtual Try-On",
+      "file": "features/tryon/providers/tryon_provider.dart",
+      "reason": "Consent feature label passed to a service without a BuildContext."
+    },
+    {
+      "value": "No image came back. Please try again. / The image was empty.",
+      "file": "features/tryon/providers/tryon_provider.dart",
+      "reason": "Exception messages thrown from the notifier for the error handler to map."
+    }
+  ]
+}

@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useRef, forwardRef, memo } from 'react'
 import type { ComponentProps } from 'react'
+import { useTranslation } from '@/i18n'
 import {
   Trash2,
   RefreshCw,
@@ -120,6 +121,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
   onRegenerate,
   isRegenerating = false,
 }: ExtractedItemCardProps) {
+  const { t } = useTranslation()
   const [isExpanded, setIsExpanded] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [showDuplicates, setShowDuplicates] = useState(false)
@@ -264,7 +266,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
               ) : (
                 <div className="text-center">
                   <div className="h-8 w-8 mx-auto mb-2 border-2 border-border border-dashed rounded-md" />
-                  <span className="text-xs">No image</span>
+                  <span className="text-xs">{t('extract.noImage')}</span>
                 </div>
               )}
             </div>
@@ -272,19 +274,19 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
 
           {/* Studio photo still rendering — source/crop stays visible underneath */}
           {isGenerating && !item.generatedImageUrl && (
-            <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
+            <div className="absolute bottom-2 start-2 flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Polishing photo…
+              {t('extract.statusPolishing')}
             </div>
           )}
           {isStudioReady && (
-            <div className="absolute bottom-2 left-2 rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium text-white">
-              Ready
+            <div className="absolute bottom-2 start-2 rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium text-white">
+              {t('extract.statusReady')}
             </div>
           )}
           {!isGenerating && !isStudioReady && !hasFailed && item.sourcePreviewUrl && (
-            <div className="absolute bottom-2 left-2 rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium text-white">
-              Detected
+            <div className="absolute bottom-2 start-2 rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium text-white">
+              {t('extract.statusDetected')}
             </div>
           )}
 
@@ -294,7 +296,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
               needs whitespace around `-`; the underscore form is Tailwind's
               escape for it. min-w-0 + overflow-hidden keep a long badge itself
               clipped to the cap instead of widening the flex column. */}
-          <div className="absolute top-2 left-2 flex max-w-[calc(100%_-_124px)] min-w-0 flex-col items-start gap-1 overflow-hidden">
+          <div className="absolute top-2 start-2 flex max-w-[calc(100%_-_124px)] min-w-0 flex-col items-start gap-1 overflow-hidden">
             {hasDuplicates && (
               <TooltipProvider>
                 <Tooltip>
@@ -306,12 +308,12 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
                       badgeVariant="outline"
                       badgeClassName="border-border bg-background/90 text-foreground cursor-help"
                     >
-                      <Copy className="h-3 w-3 mr-1" />
+                      <Copy className="h-3 w-3 me-1" />
                       {duplicates.length} similar
                     </TouchBadge>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="max-w-xs">
-                    <p className="font-medium mb-1">Similar items found:</p>
+                    <p className="font-medium mb-1">{t('extract.similarItemsFound')}</p>
                     <ul className="text-xs space-y-1">
                       {topDuplicates.map((dup) => (
                         <li key={dup.id}>
@@ -334,37 +336,37 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
             )}
             {isCheckingDuplicates && (
               <Badge variant="outline" className="border-border bg-background/90 text-foreground">
-                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                Checking...
+                <RefreshCw className="h-3 w-3 me-1 animate-spin" />
+                {t('extract.statusChecking')}
               </Badge>
             )}
             {isLowConfidence && !hasFailed && (
               <Badge variant="outline" className="border-border bg-background/90 text-foreground">
-                <AlertTriangle className="h-3 w-3 mr-1" />
-                Review
+                <AlertTriangle className="h-3 w-3 me-1" />
+                {t('extract.statusReview')}
               </Badge>
             )}
             {hasFailed && (
               <Badge variant="destructive">
-                Failed
+                {t('extract.statusFailed')}
               </Badge>
             )}
             {!isIncluded && (
               <Badge variant="outline" className="border-border bg-background/90 text-foreground text-muted-foreground">
-                Excluded
+                {t('extract.statusExcluded')}
               </Badge>
             )}
           </div>
 
           {/* Action buttons */}
-          <div className="absolute top-2 right-2 flex gap-1">
+          <div className="absolute top-2 end-2 flex gap-1">
             <Button
               variant="secondary"
               size="icon"
               className="border border-border bg-background/90 hover:bg-accent"
               onClick={() => onRegenerate(item.tempId)}
               disabled={isRegenerating}
-              aria-label="Regenerate item"
+              aria-label={t('extract.regenerateItem')}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
             </Button>
@@ -373,14 +375,14 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
               size="icon"
               className="border border-border bg-background/90 text-muted-foreground hover:bg-accent hover:text-destructive"
               onClick={() => setShowConfirmDelete(true)}
-              aria-label="Delete item"
+              aria-label={t('extract.deleteItem')}
             >
               <Trash2 className="h-3.5 w-3.5 text-destructive" />
             </Button>
           </div>
 
           {/* Confidence indicator */}
-          <div className="absolute bottom-2 right-2">
+          <div className="absolute bottom-2 end-2">
             {/* The number IS the signal; colour-coding it as well was a third
                 tinted-pill family on one card. Same chip as every other state
                 here, tabular figures so the digits do not jitter. */}
@@ -397,21 +399,21 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
         {showConfirmDelete && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
             <div className="bg-card rounded-lg p-4 mx-4 text-center space-y-3 shadow-pressed">
-              <p className="text-sm font-medium text-foreground">Delete this item?</p>
+              <p className="text-sm font-medium text-foreground">{t('extract.deleteConfirm')}</p>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowConfirmDelete(false)}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   variant="destructive"
                   size="sm"
                   onClick={() => onDelete(item.tempId)}
                 >
-                  Delete
+                  {t('common.delete')}
                 </Button>
               </div>
             </div>
@@ -432,7 +434,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
               <span />
             )}
             <div className="flex min-h-[44px] shrink-0 items-center gap-2">
-              <Label htmlFor={`include-${item.tempId}`} className="text-xs text-muted-foreground">Include</Label>
+              <Label htmlFor={`include-${item.tempId}`} className="text-xs text-muted-foreground">{t('extract.include')}</Label>
               <Switch
                 id={`include-${item.tempId}`}
                 checked={isIncluded}
@@ -486,19 +488,19 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
           <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="w-full text-xs">
-                <Edit2 className="h-3 w-3 mr-1" />
+                <Edit2 className="h-3 w-3 me-1" />
                 {isExpanded ? 'Less details' : 'More details'}
                 {isExpanded ? (
-                  <ChevronUp className="h-3 w-3 ml-1" />
+                  <ChevronUp className="h-3 w-3 ms-1" />
                 ) : (
-                  <ChevronDown className="h-3 w-3 ml-1" />
+                  <ChevronDown className="h-3 w-3 ms-1" />
                 )}
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-3 pt-2">
               {/* Sub-category */}
               <div>
-                <Label className="text-xs">Sub-category</Label>
+                <Label className="text-xs">{t('extract.subCategory')}</Label>
                 <Input
                   value={item.sub_category || ''}
                   onChange={(e) => onUpdate(item.tempId, { sub_category: e.target.value })}
@@ -512,26 +514,26 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
                   the cards wide enough for the split to pay off. */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs">Brand</Label>
+                  <Label className="text-xs">{t('extract.brand')}</Label>
                   <Input
                     value={item.brand || ''}
                     onChange={(e) => onUpdate(item.tempId, { brand: e.target.value })}
-                    placeholder="Brand"
+                    placeholder={t('extract.brand')}
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Material</Label>
+                  <Label className="text-xs">{t('extract.material')}</Label>
                   <Input
                     value={item.material || ''}
                     onChange={(e) => onUpdate(item.tempId, { material: e.target.value })}
-                    placeholder="Material"
+                    placeholder={t('extract.material')}
                   />
                 </div>
               </div>
 
               {/* Pattern */}
               <div>
-                <Label className="text-xs">Pattern</Label>
+                <Label className="text-xs">{t('extract.pattern')}</Label>
                 <Input
                   value={item.pattern || ''}
                   onChange={(e) => onUpdate(item.tempId, { pattern: e.target.value })}
@@ -541,7 +543,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
 
               {/* Color picker */}
               <div>
-                <Label className="text-xs">Colors</Label>
+                <Label className="text-xs">{t('extract.colors')}</Label>
                 <div className="flex flex-wrap gap-x-2 gap-y-2.5 mt-1">
                   {COMMON_COLORS.map((color) => (
                     <TouchBadge
@@ -557,7 +559,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
               </div>
 
               <div>
-                <Label className="text-xs">Use cases</Label>
+                <Label className="text-xs">{t('extract.useCases')}</Label>
                 <div className="flex flex-wrap gap-x-2 gap-y-2.5 mt-1">
                   {DEFAULT_USE_CASES.map((useCase) => (
                     <TouchBadge
@@ -580,7 +582,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
                         addCustomUseCase()
                       }
                     }}
-                    placeholder="Add custom use case"
+                    placeholder={t('extract.addCustomUseCase')}
                   />
                   <Button
                     type="button"
@@ -588,7 +590,7 @@ export const ExtractedItemCard = memo(function ExtractedItemCard({
                     variant="outline"
                     className="h-11 w-11"
                     onClick={addCustomUseCase}
-                    aria-label="Add custom use case"
+                    aria-label={t('extract.addCustomUseCase')}
                   >
                     <Plus className="h-3 w-3" />
                   </Button>

@@ -1,0 +1,1048 @@
+{
+  "group": "account",
+  "files": [
+    "features/calendar/views/calendar_page.dart",
+    "features/profile/views/profile_content.dart",
+    "features/profile/views/profile_page.dart",
+    "features/profile/views/body_profiles_page.dart",
+    "features/profile/views/profile_edit_page.dart",
+    "features/profile/views/help_page.dart",
+    "features/feedback/views/feedback_page.dart",
+    "features/legal/views/legal_page.dart",
+    "core/utils/permission_helper.dart"
+  ],
+  "keys": [
+    {
+      "key": "calendarTitle",
+      "value": "Calendar",
+      "description": "Screen title of the planner (calendar) page. Also reused as the label of the Calendar row in the More hub.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarGoToToday",
+      "value": "Go to today",
+      "description": "Tooltip on the icon button in the planner app bar that jumps the grid to today's date.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarConnectTooltip",
+      "value": "Connect a calendar",
+      "description": "Tooltip on the icon button in the planner app bar that opens the connected-calendars sheet.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarAddEvent",
+      "value": "Add event",
+      "description": "Floating action button on the planner that opens the new-event dialog.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarEmptyTitle",
+      "value": "Nothing planned",
+      "description": "Empty-state title under the day heading when the selected day has no events.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarEmptyBody",
+      "value": "Add an event and plan what to wear.",
+      "description": "One line of help under calendarEmptyTitle.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarPreviousMonth",
+      "value": "Previous month",
+      "description": "Tooltip on the left chevron that shows the previous month in the month grid.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarNextMonth",
+      "value": "Next month",
+      "description": "Tooltip on the right chevron that shows the next month in the month grid.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarAllDay",
+      "value": "All day",
+      "description": "Used twice: the switch label in the event form that marks an event as all-day, and the time column text of an all-day event row.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarOutfitLinked",
+      "value": "Outfit linked",
+      "description": "Accessibility (screen reader) label of the hanger icon on an event row that has an outfit attached.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarEventOptions",
+      "value": "Event options",
+      "description": "Tooltip on the overflow (three dots) menu of an event row.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarDeleteTitle",
+      "value": "Delete this event?",
+      "description": "Title of the confirmation dialog shown before deleting an event.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarChangeOutfit",
+      "value": "Change outfit",
+      "description": "Event overflow menu item shown when an outfit is already linked.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarLinkOutfit",
+      "value": "Link an outfit",
+      "description": "Event overflow menu item when no outfit is linked, and the heading of the outfit picker sheet it opens.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarRemoveOutfit",
+      "value": "Remove outfit",
+      "description": "Event overflow menu item that unlinks the outfit from the event.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarNewEvent",
+      "value": "New event",
+      "description": "Title of the event form dialog when creating an event.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarEditEvent",
+      "value": "Edit event",
+      "description": "Title of the event form dialog when editing an existing event.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarTitleLabel",
+      "value": "Title",
+      "description": "Field label for the event name in the event form.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarTitleRequired",
+      "value": "Add a title",
+      "description": "Validation error shown under the event name field when it is left empty.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarEndBeforeStart",
+      "value": "End after the start time",
+      "description": "Validation error shown when the event's end time is not after its start time.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarStarts",
+      "value": "Starts",
+      "description": "Row label for the event start date and time picker.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarEnds",
+      "value": "Ends",
+      "description": "Row label for the event end date and time picker.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarPlaceOptional",
+      "value": "Place (optional)",
+      "description": "Field label for the event location.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarNotesOptional",
+      "value": "Notes (optional)",
+      "description": "Field label for the event description/notes.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarLinkOutfitEmptyBody",
+      "value": "Build an outfit, then link it to this event.",
+      "description": "Empty-state help in the outfit picker sheet when the user has no outfits yet.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarBuildOutfit",
+      "value": "Build an outfit",
+      "description": "Action button in that empty state that opens the outfit builder.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarConnectionsTitle",
+      "value": "Calendars",
+      "description": "Heading of the bottom sheet that lists connected and connectable calendars.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarConnectionsBody",
+      "value": "Events you add here stay in FitCheck.",
+      "description": "One line of help under calendarConnectionsTitle.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarDisconnect",
+      "value": "Disconnect",
+      "description": "Button on a connected calendar row that removes the connection.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "calendarNotAvailable",
+      "value": "Not available yet",
+      "description": "Subtitle on calendar providers that cannot sync yet, and the toast title shown when the user taps one.",
+      "file": "features/calendar/views/calendar_page.dart"
+    },
+    {
+      "key": "profileSectionExplore",
+      "value": "Explore",
+      "description": "Group title above the Try-on, For you, Calendar and Rewards rows in the More hub.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileNavTryOn",
+      "value": "Try-on",
+      "description": "Row in the More hub that opens virtual try-on.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileNavRewards",
+      "value": "Rewards",
+      "description": "Row in the More hub that opens rewards and achievements.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileSupport",
+      "value": "Support",
+      "description": "Group title of the Support section in the More hub. Also reused as the group title and the row label on the Privacy and terms page.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileHelp",
+      "value": "Help",
+      "description": "Row in the More hub that opens the Help page, and the Help page app bar title.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileAbout",
+      "value": "About",
+      "description": "Row in the More hub that opens the About dialog.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileAboutBody",
+      "value": "Your closet, outfits and plans in one place.",
+      "description": "One line describing the app, under its name in the About dialog.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileSignOutTitle",
+      "value": "Sign out?",
+      "description": "Title of the confirmation dialog shown before signing out.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileSignOutBody",
+      "value": "You can sign back in at any time.",
+      "description": "Body text of the sign-out confirmation dialog.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileEditTitle",
+      "value": "Edit profile",
+      "description": "App bar title of the profile edit page, the heading of the body-profile sheet in edit mode, and the accessibility label of the identity card that opens it.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileYourProfile",
+      "value": "Your profile",
+      "description": "Placeholder shown on the identity card when the account has no name.",
+      "file": "features/profile/views/profile_content.dart"
+    },
+    {
+      "key": "profileBodyProfiles",
+      "value": "Body profiles",
+      "description": "App bar title of the body profiles page, and the More hub row that opens it.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyEmptyTitle",
+      "value": "No body profiles yet",
+      "description": "Empty-state title when the user has saved no body profiles.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyEmptyBody",
+      "value": "Add your height and build to get a better fit.",
+      "description": "Empty-state help under profileBodyEmptyTitle.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyAdd",
+      "value": "Add a profile",
+      "description": "Empty-state action and the bottom button that open the new-body-profile form.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyDefaultNote",
+      "value": "Your default profile is used for fit and try-on.",
+      "description": "Explanatory line above the list of saved body profiles.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyDefaultBadge",
+      "value": "Default",
+      "description": "Badge shown next to the name of the default body profile. The two leading spaces are added in code, not in this string.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyMakeDefault",
+      "value": "Make default",
+      "description": "Overflow menu item that makes a body profile the default.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyDeleteBody",
+      "value": "You cannot undo this.",
+      "description": "Body of the confirmation dialog for deleting a body profile.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyRequired",
+      "value": "Required",
+      "description": "Validation error under an empty field in the body profile form.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyCheckNumber",
+      "value": "Check this number",
+      "description": "Validation error when a height or weight is empty, zero or above the allowed maximum.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyNew",
+      "value": "New body profile",
+      "description": "Heading of the body profile sheet when creating a new profile.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyNameHint",
+      "value": "For example, Me",
+      "description": "Hint text in the profile name field.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyHeight",
+      "value": "Height",
+      "description": "Field label for height in the body profile form.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyWeight",
+      "value": "Weight",
+      "description": "Field label for weight in the body profile form.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodyBuild",
+      "value": "Build",
+      "description": "Field label for body build/shape in the body profile form.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBodySkinTone",
+      "value": "Skin tone",
+      "description": "Field label for skin tone in the body profile form.",
+      "file": "features/profile/views/body_profiles_page.dart"
+    },
+    {
+      "key": "profileBirthDateNeededBody",
+      "value": "Add a date of birth to go with the birth time.",
+      "description": "Toast message when the user enters a birth time without a birth date.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileBirthDateNeededTitle",
+      "value": "Date of birth needed",
+      "description": "Title of that toast message.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profilePartlySavedBody",
+      "value": "We saved your name and photo. Birth details did not save; try again later.",
+      "description": "Warning toast when the server saved the name and photo but skipped the birth details.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profilePartlySavedTitle",
+      "value": "Partly saved",
+      "description": "Title of that warning toast.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileSavedBody",
+      "value": "Your profile is saved.",
+      "description": "Success toast shown after saving the profile.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileChangePhoto",
+      "value": "Change profile photo",
+      "description": "Accessibility (screen reader) label of the tappable profile photo card.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profilePhotoLabel",
+      "value": "Profile photo",
+      "description": "Heading inside the profile photo card.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profilePhotoHint",
+      "value": "Tap to choose a new one",
+      "description": "One line of help under profilePhotoLabel.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileBirthDateLabel",
+      "value": "Date of birth (optional)",
+      "description": "Field label for the birth date picker.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileBirthTimeLabel",
+      "value": "Birth time (optional)",
+      "description": "Field label for the birth time picker.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileBirthTimeHelper",
+      "value": "Makes Vedic suggestions more exact",
+      "description": "Helper text under the birth time field.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileBirthPlaceLabel",
+      "value": "Birth place (optional)",
+      "description": "Field label for the birth place field.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileBirthPlaceHint",
+      "value": "For example, New Delhi, India",
+      "description": "Hint text in the birth place field.",
+      "file": "features/profile/views/profile_edit_page.dart"
+    },
+    {
+      "key": "profileHelpContactTitle",
+      "value": "Ask us anything",
+      "description": "Heading of the contact card at the top of the Help page.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileHelpContactBody",
+      "value": "Send a message and we reply by email, usually within a day.",
+      "description": "One line of help under profileHelpContactTitle.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileHelpContactAction",
+      "value": "Contact support",
+      "description": "Button on the Help page that opens the feedback form.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileHelpFaqTitle",
+      "value": "Common questions",
+      "description": "Group title above the FAQ list on the Help page.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqAddPiecesTitle",
+      "value": "How do I add pieces to my closet?",
+      "description": "FAQ question on the Help page about adding closet items.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqAddPiecesBody",
+      "value": "Tap Add item on the Closet tab. Take a photo or pick one from your gallery; we find each piece and tag it for you.",
+      "description": "FAQ answer under profileFaqAddPiecesTitle.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqMatchingTitle",
+      "value": "How does outfit matching work?",
+      "description": "FAQ question on the Help page about outfit suggestions.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqMatchingBody",
+      "value": "Open For you and pick pieces you own. We suggest what goes with them and build full outfits from your closet.",
+      "description": "FAQ answer under profileFaqMatchingTitle.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqTryOnTitle",
+      "value": "Can I use my own photos for try-on?",
+      "description": "FAQ question on the Help page about try-on photos.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqTryOnBody",
+      "value": "Yes. Add a full-length photo of yourself, then choose pieces to see them on you.",
+      "description": "FAQ answer under profileFaqTryOnTitle.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqRewardsTitle",
+      "value": "How do I earn rewards?",
+      "description": "FAQ question on the Help page about streaks and rewards.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqRewardsBody",
+      "value": "Plan and log outfits often. Streaks and achievements build as you go.",
+      "description": "FAQ answer under profileFaqRewardsTitle.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqPrivacyTitle",
+      "value": "Is my closet private?",
+      "description": "FAQ question on the Help page about privacy.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileFaqPrivacyBody",
+      "value": "Yes. Your closet and outfits are private unless you share a link to one outfit.",
+      "description": "FAQ answer under profileFaqPrivacyTitle.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileHelpMoreTitle",
+      "value": "More help",
+      "description": "Group title above the extra help links on the Help page.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileHelpGuides",
+      "value": "Guides",
+      "description": "Row on the Help page that opens the external documentation site.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "profileHelpGuidesBody",
+      "value": "How each feature works",
+      "description": "Subtitle of the Guides row.",
+      "file": "features/profile/views/help_page.dart"
+    },
+    {
+      "key": "feedbackCategoryBug",
+      "value": "Something broke",
+      "description": "Feedback category chip for bug reports.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackCategoryIdea",
+      "value": "An idea",
+      "description": "Feedback category chip for feature requests.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackCategoryGeneral",
+      "value": "General",
+      "description": "Feedback category chip for general feedback.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackCategoryHelp",
+      "value": "I need help",
+      "description": "Feedback category chip for support requests.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackHintBug",
+      "value": "What happened, and what did you expect? Steps help us fix it.",
+      "description": "Hint inside the details field when the bug-report category is selected.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackHintIdea",
+      "value": "What would you like, and why?",
+      "description": "Hint inside the details field when the feature-request category is selected.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackHintGeneral",
+      "value": "Tell us what you think, or ask a question.",
+      "description": "Hint inside the details field for general feedback and support categories.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackAttachmentLimitBody",
+      "value": "You can add up to 5 images.",
+      "description": "Toast message when the user tries to attach more than five screenshots.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackAttachmentLimitTitle",
+      "value": "Limit reached",
+      "description": "Title of that toast message.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackImageTooLargeBody",
+      "value": "Choose an image under 5 MB.",
+      "description": "Toast message when the picked screenshot is too large.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackImageTooLargeTitle",
+      "value": "Image too large",
+      "description": "Title of that toast message.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackTitle",
+      "value": "Send feedback",
+      "description": "App bar title of the feedback page. Also the label of the Send feedback row in the More hub.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackAboutLabel",
+      "value": "What is it about?",
+      "description": "Heading above the feedback category chips.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackSubjectLabel",
+      "value": "Subject",
+      "description": "Field label for the feedback subject.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackSubjectRequired",
+      "value": "Add a subject",
+      "description": "Validation error when the subject field is empty.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackSubjectTooShort",
+      "value": "Subject must be at least 3 characters",
+      "description": "Validation error when the subject is shorter than 3 characters.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackDetailsLabel",
+      "value": "Details",
+      "description": "Field label for the feedback description.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackDetailsRequired",
+      "value": "Add some details",
+      "description": "Validation error when the description field is empty.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackDetailsTooShort",
+      "value": "Description must be at least 10 characters",
+      "description": "Validation error when the description is shorter than 10 characters.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackAddScreenshot",
+      "value": "Add a screenshot",
+      "description": "Button that opens the camera/gallery picker for attachments.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackAttachmentHint",
+      "value": "Up to 5, 5 MB each",
+      "description": "Small hint next to the add-screenshot button describing the attachment limits.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackSend",
+      "value": "Send",
+      "description": "Submit button of the feedback form.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackEmptyTitle",
+      "value": "Nothing sent yet",
+      "description": "Empty-state title in the list of the user's previous feedback.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackEmptyBody",
+      "value": "What you send shows up here with its status.",
+      "description": "Empty-state help under feedbackEmptyTitle.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackHistoryTitle",
+      "value": "What you sent",
+      "description": "Group title above the user's previous feedback tickets.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackStatusOpen",
+      "value": "Open",
+      "description": "Status label on a feedback ticket that is open.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackStatusInProgress",
+      "value": "In progress",
+      "description": "Status label on a feedback ticket that is being worked on.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackStatusResolved",
+      "value": "Resolved",
+      "description": "Status label on a feedback ticket that is resolved.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "feedbackStatusClosed",
+      "value": "Closed",
+      "description": "Status label on a feedback ticket that is closed.",
+      "file": "features/feedback/views/feedback_page.dart"
+    },
+    {
+      "key": "legalIntro",
+      "value": "How we protect your data, and the terms for using FitCheck AI.",
+      "description": "Intro paragraph at the top of the Privacy and terms page.",
+      "file": "features/legal/views/legal_page.dart"
+    },
+    {
+      "key": "legalPolicies",
+      "value": "Policies",
+      "description": "Group title above the privacy policy and terms rows.",
+      "file": "features/legal/views/legal_page.dart"
+    },
+    {
+      "key": "legalPrivacySubtitle",
+      "value": "What we collect and why",
+      "description": "Subtitle of the Privacy policy row.",
+      "file": "features/legal/views/legal_page.dart"
+    },
+    {
+      "key": "legalTermsTitle",
+      "value": "Terms of service",
+      "description": "Title of the row that opens the terms of service.",
+      "file": "features/legal/views/legal_page.dart"
+    },
+    {
+      "key": "legalTermsSubtitle",
+      "value": "The rules for using the app",
+      "description": "Subtitle of the Terms of service row.",
+      "file": "features/legal/views/legal_page.dart"
+    },
+    {
+      "key": "legalLicences",
+      "value": "Open-source licences",
+      "description": "Title of the row that opens the licence page.",
+      "file": "features/legal/views/legal_page.dart"
+    },
+    {
+      "key": "legalSupportSubtitle",
+      "value": "Help, contact and privacy requests",
+      "description": "Subtitle of the Support row on the Privacy and terms page.",
+      "file": "features/legal/views/legal_page.dart"
+    },
+    {
+      "key": "legalReportAbuse",
+      "value": "Report a problem or abuse",
+      "description": "Title of the row that emails support. Also used as the subject of that email when the mail app opens.",
+      "file": "features/legal/views/legal_page.dart"
+    },
+    {
+      "key": "permissionCameraTitle",
+      "value": "Camera Access",
+      "description": "Title of the pre-permission dialog shown before iOS asks for camera access.",
+      "file": "core/utils/permission_helper.dart"
+    },
+    {
+      "key": "permissionCameraRationale",
+      "value": "FitCheck AI uses your camera to capture photos of your clothing and outfits for AI try-on and closet organization.",
+      "description": "Body of the pre-permission dialog for the camera.",
+      "file": "core/utils/permission_helper.dart"
+    },
+    {
+      "key": "permissionPhotoTitle",
+      "value": "Photo Access",
+      "description": "Title of the pre-permission dialog shown before iOS asks for photo library access.",
+      "file": "core/utils/permission_helper.dart"
+    },
+    {
+      "key": "permissionPhotoRationale",
+      "value": "FitCheck AI needs access to your photos so you can select clothing and outfit images for AI features and your closet.",
+      "description": "Body of the pre-permission dialog for the photo library.",
+      "file": "core/utils/permission_helper.dart"
+    },
+    {
+      "key": "permissionNotNow",
+      "value": "Not Now",
+      "description": "Dismiss button in the dialog shown after a permission was denied.",
+      "file": "core/utils/permission_helper.dart"
+    },
+    {
+      "key": "permissionOpenSettings",
+      "value": "Open Settings",
+      "description": "Button in the denied-permission dialog that deep-links to the system Settings app.",
+      "file": "core/utils/permission_helper.dart"
+    }
+  ],
+  "deferred": [
+    {
+      "value": "\"${event.title}\" will be removed.",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Interpolated with the user's event title; needs an ARB placeholder."
+    },
+    {
+      "value": "day-cell semantics: 'today', '1 event', '$events events' joined with ', '",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Built by joining a list including a count; '1 event'/'N events' is a plural and 'today' is a relative-date word. Needs an ARB plural plus a date/relative-time source."
+    },
+    {
+      "value": "const _weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Weekday abbreviations. Must come from DateFormat with the active locale, not a translated constant list."
+    },
+    {
+      "value": "const _weekdayNames = ['Monday', ... 'Sunday']",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Weekday names used to build the day heading. Must come from DateFormat with the active locale."
+    },
+    {
+      "value": "'${_weekdayNames[...]}, ${date...}' (_dayTitle)",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Date heading ('Wednesday, Sep 23'); date formatting, not translatable copy."
+    },
+    {
+      "value": "'${formatTimeOnly(start)} to ${formatTimeOnly(end)}'",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Time range joined by the word 'to'; needs a localized pattern like '{start} to {end}' with locale-aware time formatting."
+    },
+    {
+      "value": "'Google Calendar', 'Apple Calendar', 'Outlook'",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Brand names in a static const option list; kept untranslated by convention."
+    },
+    {
+      "value": "'This app'",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Provider display name for the local calendar; only reaches the user inside the interpolated toast listed below, so it is left for that follow-up."
+    },
+    {
+      "value": "'Syncing with ${_name(provider)} is not available yet. You can still add events here.'",
+      "file": "features/calendar/views/calendar_page.dart",
+      "reason": "Interpolated with the provider name; needs an ARB placeholder."
+    },
+    {
+      "value": "'Version ' (AppVersionLabel prefix)",
+      "file": "features/profile/views/profile_content.dart",
+      "reason": "Prefix concatenated with the version number; needs a formatted key such as 'Version {version}'."
+    },
+    {
+      "value": "stats.totalItems == 1 ? 'piece' : 'pieces'",
+      "file": "features/profile/views/profile_content.dart",
+      "reason": "Plural count on the stats card; needs an ARB plural key."
+    },
+    {
+      "value": "stats.totalOutfits == 1 ? 'outfit' : 'outfits'",
+      "file": "features/profile/views/profile_content.dart",
+      "reason": "Plural count on the stats card; needs an ARB plural key."
+    },
+    {
+      "value": "'Most worn: ${worn.name}, ${worn.timesWorn} times'",
+      "file": "features/profile/views/profile_content.dart",
+      "reason": "Interpolated with item name and count. The existing dashboardMostWorn key already covers this wording; wire it up with placeholders in one pass."
+    },
+    {
+      "value": "'${value ?? 'No'} $label' (semantics label on a stats figure)",
+      "file": "features/profile/views/profile_content.dart",
+      "reason": "Accessibility label assembled from a count and a label; needs placeholders and plural handling."
+    },
+    {
+      "value": "'Options for ${profile.name}'",
+      "file": "features/profile/views/body_profiles_page.dart",
+      "reason": "Interpolated with the profile name; needs an ARB placeholder."
+    },
+    {
+      "value": "'Delete ${profile.name}?'",
+      "file": "features/profile/views/body_profiles_page.dart",
+      "reason": "Interpolated with the profile name; needs an ARB placeholder."
+    },
+    {
+      "value": "'${profile.heightCm.toStringAsFixed(0)} cm · ${profile.weightKg.toStringAsFixed(1)} kg'",
+      "file": "features/profile/views/body_profiles_page.dart",
+      "reason": "Measurement formatting with unit abbreviations; must follow the locale's number format and unit preference."
+    },
+    {
+      "value": "'${profile.bodyShape} build · ${profile.skinTone} skin'",
+      "file": "features/profile/views/body_profiles_page.dart",
+      "reason": "Two interpolated data values with English suffixes ('build', 'skin'); needs placeholders."
+    },
+    {
+      "value": "'cm' / 'kg' (suffixText on the height and weight fields)",
+      "file": "features/profile/views/body_profiles_page.dart",
+      "reason": "Unit abbreviations; tied to the measurement unit setting and not safe to translate in isolation."
+    },
+    {
+      "value": "'Regular' / 'Medium' (initial values of the build and skin tone text fields)",
+      "file": "features/profile/views/body_profiles_page.dart",
+      "reason": "Default field values that are posted to the API as data, not labels. Translating them would send different data per locale."
+    },
+    {
+      "value": "'Remove image ${index + 1}'",
+      "file": "features/feedback/views/feedback_page.dart",
+      "reason": "Tooltip interpolated with the attachment number; needs an ARB placeholder."
+    },
+    {
+      "value": "'${_categoryLabel(...)} · ${formatDate(createdAt)}'",
+      "file": "features/feedback/views/feedback_page.dart",
+      "reason": "Ticket subtitle joining a translated category with a formatted date; needs a localized pattern."
+    },
+    {
+      "value": "'Camera' / 'Photos' (permissionName passed to PermissionHelper.showDeniedRecovery)",
+      "file": "features/feedback/views/feedback_page.dart",
+      "reason": "Noun fed into the interpolated permission-recovery dialog; deferred with that dialog."
+    },
+    {
+      "value": "'Email ${AppConstants.supportEmail}. We review reports within 24 hours.'",
+      "file": "features/legal/views/legal_page.dart",
+      "reason": "Interpolated with the support email address; needs an ARB placeholder."
+    },
+    {
+      "value": "'$permissionName Access Needed'",
+      "file": "core/utils/permission_helper.dart",
+      "reason": "Interpolated with the permission noun; needs an ARB placeholder."
+    },
+    {
+      "value": "'Access to $permissionName is currently denied. Open Settings to enable it so you can continue.'",
+      "file": "core/utils/permission_helper.dart",
+      "reason": "Interpolated with the permission noun; needs an ARB placeholder."
+    },
+    {
+      "value": "'Signed in as $name' / 'Signed in'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Interpolated with the user's name. auth_provider.dart is a Riverpod Notifier with no BuildContext, so it cannot reach AppLocalizations; needs a context-carrying callback or an l10n accessor before extraction."
+    },
+    {
+      "value": "'Welcome back' (toast title after email sign-in)",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Notifier has no BuildContext; toast titles are shown through the static ErrorHandler, which resolves localizations from a global context the notifier cannot supply."
+    },
+    {
+      "value": "'Sign-in failed'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available (same reason as above)."
+    },
+    {
+      "value": "'Check your inbox for a confirmation email, then sign in.'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast body in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Confirm your email' (toast title)",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Your closet is ready.'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast body in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Welcome' (toast title after registration)",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Sign-up failed'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Google sign-in failed'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Apple sign-in failed'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'You are signed out.'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast body in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Signed out' (toast title)",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Sign-out failed'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Check your email for a reset link.'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast body in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Email sent' (toast title)",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Could not send the email'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Your password is updated.'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast body in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Password updated' (toast title)",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Password not updated'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'We sent a new confirmation email.'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast body in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "'Email not sent'",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Toast title in the Notifier; no BuildContext available."
+    },
+    {
+      "value": "Exception('Sign-in failed. Please try again.'), Exception('Sign-up failed. Please try again.'), Exception('Apple sign-in failed.')",
+      "file": "features/auth/providers/auth_provider.dart",
+      "reason": "Internal exception messages thrown in the Notifier and surfaced by ErrorHandler; error copy is handled centrally in core/utils/error_handler.dart and the throw sites have no BuildContext."
+    },
+    {
+      "value": "'Unable to start Google Sign-In. Please try again.'",
+      "file": "features/auth/services/auth_service.dart",
+      "reason": "AuthException message carrying errorCode GOOGLE_SIGN_IN_START_FAILED; errorCode-based copy is translated centrally in core/utils/error_handler.dart, and the service has no BuildContext."
+    },
+    {
+      "value": "'You and your friend both get 1 month of Pro free!' / 'Referral Applied!'",
+      "file": "features/auth/services/user_initialization_service.dart",
+      "reason": "Service layer with no BuildContext; the referral copy is shown through the static ErrorHandler. Needs the same localized-callback refactor as the rest of the auth service layer."
+    }
+  ]
+}

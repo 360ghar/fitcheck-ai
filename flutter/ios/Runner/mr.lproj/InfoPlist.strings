@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI ला तुमच्या आउटफिट आणि वॉर्डरोब वस्तूंचे फोटो घेण्यासाठी कॅमेराचा प्रवेश हवा आहे.";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI ला तुमच्या आउटफिट आणि वॉर्डरोब वस्तूंच्या इमेज निवडण्यासाठी फोटो लायब्ररीचा प्रवेश हवा आहे.";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI ला तुमच्या AI-निर्मित आउटफिट फोटो तुमच्या फोटो लायब्ररीमध्ये साठवण्याची आवश्यकता आहे.";

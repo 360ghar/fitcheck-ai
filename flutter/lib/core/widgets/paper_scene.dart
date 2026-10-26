@@ -775,11 +775,11 @@ class AppTabHeader extends StatelessWidget {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
     final heading = Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing20,
-        AppConstants.spacing12,
-        AppConstants.spacing8,
-        AppConstants.spacing12,
+      padding: const EdgeInsetsDirectional.only(
+        start: AppConstants.spacing20,
+        top: AppConstants.spacing12,
+        end: AppConstants.spacing8,
+        bottom: AppConstants.spacing12,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,

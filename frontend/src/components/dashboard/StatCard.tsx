@@ -123,7 +123,7 @@ export const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
         )}
       >
         {/* Solid semantic accent bar */}
-        <div className={cn('absolute top-0 left-0 right-0 h-1', config.bar)} />
+        <div className={cn('absolute top-0 start-0 end-0 h-1', config.bar)} />
 
         <div className="p-3 md:p-4">
           <div className="flex items-center gap-3">

@@ -58,7 +58,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
           >
             <Icon className="h-4 w-4" />
             <span>{label}</span>
-            {theme === value && <Check className="ml-auto h-4 w-4" />}
+            {theme === value && <Check className="ms-auto h-4 w-4" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

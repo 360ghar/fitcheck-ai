@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ItemImage } from '@/components/ui/item-image'
 import { ActionStatusLabel, ActionErrorNote } from '@/components/ui/action-status'
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
+import { useTranslation } from '@/i18n'
 import type { AstrologyRecommendation, AstrologyRecommendationMode, Item } from '@/types'
 
 interface AstrologyTabProps {
@@ -81,6 +82,7 @@ export function AstrologyTab({
   onModeChange,
   onRun,
 }: AstrologyTabProps) {
+  const { t } = useTranslation()
   const elapsedSeconds = useElapsedSeconds(isLoading)
   const outfitNameById = new Map<string, string>()
   for (const group of data?.wardrobe_picks || []) {
@@ -95,34 +97,34 @@ export function AstrologyTab({
         <CardHeader className="px-4 py-3 md:px-6 md:py-4">
           <CardTitle className="text-base md:text-lg flex items-center gap-2">
             <Stars className="h-4 w-4 text-primary" />
-            Astrology Color Guide
+            {t('astro.colorGuide')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label htmlFor="astrology-recommendation-type" className="block text-sm font-medium text-foreground mb-1">Recommendation Type</label>
+              <label htmlFor="astrology-recommendation-type" className="block text-sm font-medium text-foreground mb-1">{t('astro.recommendationType')}</label>
               <select
                 id="astrology-recommendation-type"
                 value={mode}
                 onChange={(e) => onModeChange(e.target.value as AstrologyRecommendationMode)}
                 className="w-full h-11 px-3 border border-border rounded-md bg-background text-foreground"
               >
-                <option value="daily">Daily</option>
-                <option value="important_meeting">Important Meeting</option>
+                <option value="daily">{t('astro.daily')}</option>
+                <option value="important_meeting">{t('astro.importantMeeting')}</option>
               </select>
             </div>
 
             <div>
-              <label htmlFor="astrology-target-date" className="block text-sm font-medium text-foreground mb-1">Target Date</label>
+              <label htmlFor="astrology-target-date" className="block text-sm font-medium text-foreground mb-1">{t('astro.targetDate')}</label>
               <div className="relative">
-                <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <CalendarDays className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   id="astrology-target-date"
                   type="date"
                   value={targetDate}
                   onChange={(e) => onTargetDateChange(e.target.value)}
-                  className="w-full h-11 pl-9 pr-3 border border-border rounded-md bg-background text-foreground"
+                  className="w-full h-11 ps-9 pe-3 border border-border rounded-md bg-background text-foreground"
                 />
               </div>
             </div>
@@ -169,7 +171,7 @@ export function AstrologyTab({
                 </div>
               )}
               <Button asChild>
-                <Link to="/profile?tab=account">Complete Profile</Link>
+                <Link to="/profile?tab=account">{t('astro.completeProfile')}</Link>
               </Button>
             </div>
           </CardContent>
@@ -183,7 +185,7 @@ export function AstrologyTab({
               <CardHeader className="px-4 py-3 md:px-6 md:py-4">
                 <CardTitle className="text-base md:text-lg flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-primary" />
-                  Lucky Colors
+                  {t('astro.luckyColors')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4 md:px-6 md:pb-6">
@@ -207,11 +209,11 @@ export function AstrologyTab({
 
             <Card>
               <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-                <CardTitle className="text-base md:text-lg">Lower-Priority Colors</CardTitle>
+                <CardTitle className="text-base md:text-lg">{t('astro.lowerPriorityColors')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4 md:px-6 md:pb-6">
                 {(data.avoid_colors || []).length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No avoid colors for this day.</div>
+                  <div className="text-sm text-muted-foreground">{t('astro.noAvoidColors')}</div>
                 ) : (
                   (data.avoid_colors || []).map((color) => (
                     <div key={color.name} className="flex items-center justify-between gap-3 p-3 border border-border rounded-md">
@@ -235,7 +237,7 @@ export function AstrologyTab({
 
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">Closet Picks</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t('astro.closetPicks')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               {(data.wardrobe_picks || []).length === 0 ? (
@@ -265,11 +267,11 @@ export function AstrologyTab({
 
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">Suggested Outfits</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t('astro.suggestedOutfits')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 px-4 pb-4 md:px-6 md:pb-6">
               {(data.suggested_outfits || []).length === 0 ? (
-                <div className="text-sm text-muted-foreground">No complete outfit could be assembled yet.</div>
+                <div className="text-sm text-muted-foreground">{t('astro.noCompleteOutfit')}</div>
               ) : (
                 (data.suggested_outfits || []).map((outfit) => (
                   <div key={outfit.item_ids.join('-')} className="p-3 border border-border rounded-md">

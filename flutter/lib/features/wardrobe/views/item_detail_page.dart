@@ -4,9 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../domain/constants/use_cases.dart';
 import '../models/item_model.dart';
 import '../providers/wardrobe_providers.dart';
 import '../widgets/garment_glyph.dart';
@@ -69,9 +70,9 @@ class _BackRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
+    alignment: AlignmentDirectional.centerStart,
     child: IconButton(
-      tooltip: 'Back',
+      tooltip: context.l10n.actionBack,
       icon: const Icon(Icons.arrow_back_rounded),
       onPressed: () => Navigator.maybePop(context),
     ),
@@ -89,19 +90,19 @@ class _DetailBody extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete this piece?'),
-        content: const Text('Outfits that use it lose this piece.'),
+        title: Text(context.l10n.itemDetailDeleteTitle),
+        content: Text(context.l10n.itemDetailDeleteBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.actionCancel),
           ),
           TextButton(
             style: TextButton.styleFrom(
               foregroundColor: PaperTokens.of(context).error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: Text(context.l10n.actionDelete),
           ),
         ],
       ),
@@ -119,25 +120,30 @@ class _DetailBody extends ConsumerWidget {
       wardrobeBusyProvider.select((s) => s.contains(item.id)),
     );
     final images = item.itemImages ?? const [];
+    final l10n = context.l10n;
     final summary = [
-      item.category.displayName,
-      item.condition.displayName,
+      item.category.label(l10n),
+      item.condition.label(l10n),
       if (item.brand?.isNotEmpty ?? false) item.brand!,
-      if (item.size?.isNotEmpty ?? false) 'Size ${item.size}',
+      if (item.size?.isNotEmpty ?? false) l10n.itemSize(item.size!),
     ].join(' · ');
     final details = <(String, String)>[
-      if (item.colors?.isNotEmpty ?? false) ('Colours', item.colors!.join(', ')),
-      if (item.material?.isNotEmpty ?? false) ('Material', item.material!),
-      if (item.pattern?.isNotEmpty ?? false) ('Pattern', item.pattern!),
+      if (item.colors?.isNotEmpty ?? false)
+        (l10n.itemColours, item.colors!.join(', ')),
+      if (item.material?.isNotEmpty ?? false) (l10n.itemMaterial, item.material!),
+      if (item.pattern?.isNotEmpty ?? false) (l10n.itemPattern, item.pattern!),
       if (item.occasionTags?.isNotEmpty ?? false)
-        ('Use cases', item.occasionTags!.map(UseCases.displayLabel).join(', ')),
-      if (item.location?.isNotEmpty ?? false) ('Kept in', item.location!),
-      if (item.price != null) ('Price', item.price!.toStringAsFixed(2)),
+        (
+          l10n.itemUseCases,
+          item.occasionTags!.map((tag) => localizedTaxonomy(l10n, tag)).join(', '),
+        ),
+      if (item.location?.isNotEmpty ?? false) (l10n.itemKeptIn, item.location!),
+      if (item.price != null) (l10n.itemPrice, item.price!.toStringAsFixed(2)),
       if (item.purchaseDate != null)
-        ('Bought', AppDateUtils.formatMonthDayYear(item.purchaseDate!)),
-      if (item.tags?.isNotEmpty ?? false) ('Tags', item.tags!.join(', ')),
+        (l10n.itemBought, AppDateUtils.formatMonthDayYear(item.purchaseDate!)),
+      if (item.tags?.isNotEmpty ?? false) (l10n.itemTags, item.tags!.join(', ')),
       if (item.createdAt != null)
-        ('Added', AppDateUtils.formatRelativeTime(item.createdAt!)),
+        (l10n.itemAdded, AppDateUtils.formatRelativeTime(item.createdAt!)),
     ];
 
     return CustomScrollView(
@@ -150,14 +156,14 @@ class _DetailBody extends ConsumerWidget {
           flexibleSpace: const PaperGrainFill(),
           actions: [
             IconButton(
-              tooltip: 'Edit',
+              tooltip: l10n.actionEdit,
               icon: const Icon(Icons.edit_outlined),
               onPressed: () => context.push(
                 Routes.itemEdit(item.id),
               ),
             ),
             IconButton(
-              tooltip: 'Delete',
+              tooltip: l10n.actionDelete,
               icon: const Icon(Icons.delete_outline_rounded),
               onPressed: () => _delete(context, ref),
             ),
@@ -220,8 +226,8 @@ class _DetailBody extends ConsumerWidget {
                   ),
                   IconButton(
                     tooltip: item.isFavorite
-                        ? 'Remove favourite'
-                        : 'Add to favourites',
+                        ? l10n.closetUnfavourite
+                        : l10n.itemAddFavourite,
                     onPressed: busy
                         ? null
                         : () => ref
@@ -245,12 +251,15 @@ class _DetailBody extends ConsumerWidget {
               PaperSurface(
                 child: Row(
                   children: [
-                    _Figure(value: paperFigure(item.wornCount), label: 'times worn'),
+                    _Figure(
+                      value: paperFigure(item.wornCount),
+                      label: l10n.itemTimesWornLabel,
+                    ),
                     _Figure(
                       value: item.lastWornAt == null
-                          ? 'Never'
+                          ? l10n.itemNeverWorn
                           : AppDateUtils.formatRelativeTime(item.lastWornAt!),
-                      label: 'last worn',
+                      label: l10n.itemLastWornLabel,
                     ),
                   ],
                 ),
@@ -355,7 +364,7 @@ class _WornBar extends ConsumerWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.today_outlined),
-          label: const Text('Wore it today'),
+          label: Text(context.l10n.closetWoreToday),
         ),
       ),
     );

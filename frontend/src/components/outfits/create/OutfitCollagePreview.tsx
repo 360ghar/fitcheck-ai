@@ -110,7 +110,7 @@ export function OutfitCollagePreview({ items, className }: OutfitCollagePreviewP
             'flex min-h-0 flex-1 flex-col',
             // Only reserve the rail's width when something is actually in it, so
             // an outfit with no accessories stays centred in the full frame.
-            hasRail && 'pr-[22%]'
+            hasRail && 'pe-[22%]'
           )}
         >
           {BAND_ORDER.map((band) => (
@@ -134,7 +134,7 @@ export function OutfitCollagePreview({ items, className }: OutfitCollagePreviewP
         </div>
 
         {hasRail && (
-          <div className="absolute inset-y-0 right-0 flex w-[18%] flex-col items-center justify-center gap-sm">
+          <div className="absolute inset-y-0 end-0 flex w-[18%] flex-col items-center justify-center gap-sm">
             {bands.rail.slice(0, 4).map((item, i) => (
               <Piece
                 key={item.id}

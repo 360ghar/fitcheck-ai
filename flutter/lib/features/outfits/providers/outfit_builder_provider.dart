@@ -149,7 +149,9 @@ class OutfitBuilderNotifier extends Notifier<OutfitDraft> {
     } catch (e, stack) {
       ErrorHandler.showError(
         e,
-        title: 'Preview not created',
+        title:
+            ErrorHandler.l10n?.outfitPreviewNotCreatedTitle ??
+            'Preview not created',
         stackTrace: stack,
       );
     } finally {
@@ -164,13 +166,17 @@ class OutfitBuilderNotifier extends Notifier<OutfitDraft> {
     if (state.saving) return null;
     final name = state.name.trim();
     if (name.isEmpty) {
-      ErrorHandler.showValidation('Give the outfit a name.', title: 'Name');
+      ErrorHandler.showValidation(
+        ErrorHandler.l10n?.outfitGiveNameBody ?? 'Give the outfit a name.',
+        title: ErrorHandler.l10n?.outfitNameMissingTitle ?? 'Name',
+      );
       return null;
     }
     if (state.pieces.isEmpty) {
       ErrorHandler.showValidation(
-        'Choose at least one piece.',
-        title: 'Pieces',
+        ErrorHandler.l10n?.outfitChooseAtLeastOnePieceBody ??
+            'Choose at least one piece.',
+        title: ErrorHandler.l10n?.outfitPiecesHeading ?? 'Pieces',
       );
       return null;
     }
@@ -200,10 +206,17 @@ class OutfitBuilderNotifier extends Notifier<OutfitDraft> {
       if (ref.exists(outfitsProvider)) {
         ref.read(outfitsProvider.notifier).add(outfit);
       }
-      ErrorHandler.showSuccess('$name is in your outfits.', title: 'Saved');
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.outfitCreatedBody(name) ?? '$name is in your outfits.',
+        title: ErrorHandler.l10n?.outfitSavedTitle ?? 'Saved',
+      );
       return outfit;
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Outfit not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.outfitNotSavedTitle ?? 'Outfit not saved',
+        stackTrace: stack,
+      );
       return null;
     } finally {
       if (ref.mounted) state = state.copyWith(saving: false);

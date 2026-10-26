@@ -142,6 +142,16 @@ MULTI_ITEM_RESPONSE_FORMAT: Dict[str, Any] = {
 
 # =============================================================================
 # PROMPTS
+#
+# CANONICAL-ENGLISH ZONE. Everything below populates columns the client
+# localizes at display time (`taxonomy_l10n.dart`): category, sub_category,
+# colors, material, pattern, brand, description. Never splice
+# `language_instruction(...)` into these prompts — a Hindi `sub_category` or a
+# translated `description` would duplicate a user's whole wardrobe per language
+# switch, fracture the embedding index (one vector space per language) and feed
+# a non-English garment description to the image model. The one free-text field
+# the client renders untranslated is `person_label` (see docs/BACKEND.md →
+# "Language contract"); it stays English here for that same reason.
 # =============================================================================
 
 

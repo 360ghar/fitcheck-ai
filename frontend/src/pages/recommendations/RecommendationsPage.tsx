@@ -72,8 +72,9 @@ function formatScore(score: number | undefined | null): string {
 
 /** Skeleton shown while the closet store is still loading its first page. */
 function ClosetLoadingSkeleton() {
+  const { t } = useTranslation()
   return (
-    <div className="space-y-4" role="status" aria-label="Loading your closet">
+    <div className="space-y-4" role="status" aria-label={t('rec.loadingCloset')}>
       <Skeleton className="h-4 w-1/2" />
       <div className="flex flex-wrap gap-2">
         <Skeleton className="h-6 w-20 rounded-full" />
@@ -165,7 +166,10 @@ const enrichItemWithImages = (item: Item, wardrobeItems: Item[]): Item => {
   return item
 }
 
+import { useTranslation } from '@/i18n'
+
 export default function RecommendationsPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabFromUrl = searchParams.get('tab') as TabType | null
@@ -494,15 +498,15 @@ export default function RecommendationsPage() {
       {/* Header */}
       <div className="mb-4 md:mb-4">
         <h1 className="text-xl md:text-2xl font-bold text-foreground flex items-center">
-          <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-primary mr-2" />
-          AI Recommendations
+          <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-primary me-2" />
+          {t('rec.title')}
         </h1>
         <p className="mt-1 md:mt-2 text-sm text-muted-foreground">
-          Get personalized outfit suggestions powered by AI
+          {t('rec.subtitle')}
         </p>
       </div>
 
-      <ScrollableTabs className="mb-4 md:mb-6" aria-label="Recommendation tools">
+      <ScrollableTabs className="mb-4 md:mb-6" aria-label={t('rec.tools')}>
         {tabs.map((tab) => (
           <ScrollableTab
             key={tab.id}
@@ -529,19 +533,19 @@ export default function RecommendationsPage() {
         {activeTab === 'today' && (
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">What to wear today</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t('rec.whatToWearToday')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               {closetState === 'error' ? (
                 <ErrorState
-                  title="Your closet could not be loaded"
+                  title={t('rec.closetLoadError')}
                   description={wardrobeError?.message || 'Try again to load your wardrobe before requesting recommendations.'}
                   onRetry={() => void fetchItems(true)}
                 />
               ) : closetState === 'empty' ? (
                 <EmptyState
                   icon={Shirt}
-                  title="Add clothes first"
+                  title={t('rec.addClothesFirst')}
                   description="Upload a few photos — AI catalogs each item, then we can suggest what to wear."
                   actionLabel="Upload photos"
                   onAction={() => navigate('/wardrobe?action=add')}
@@ -552,7 +556,7 @@ export default function RecommendationsPage() {
                 <>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
-                      Weather-aware picks from your closet for right now.
+                      {t('rec.weatherSubtitle')}
                     </p>
                     <Button
                       variant="outline"
@@ -597,7 +601,7 @@ export default function RecommendationsPage() {
                         <p className="text-sm text-foreground">{weatherData.notes.join(' ')}</p>
                       )}
                       <div>
-                        <p className="text-sm font-semibold mb-2">From your closet</p>
+                        <p className="text-sm font-semibold mb-2">{t('rec.fromYourCloset')}</p>
                         {weatherSuggestedItems.length === 0 ? (
                           <p className="text-sm text-muted-foreground">
                             No matching clean items for preferred categories (
@@ -620,14 +624,14 @@ export default function RecommendationsPage() {
                       <div className="flex flex-wrap gap-2">
                         {weatherSuggestedItems.length > 0 && (
                           <Button asChild variant="outline" size="sm">
-                            <Link to={`/outfits/new?items=${weatherSuggestedItems.map((i) => i.id).join(',')}`}>Save as outfit</Link>
+                            <Link to={`/outfits/new?items=${weatherSuggestedItems.map((i) => i.id).join(',')}`}>{t('rec.saveAsOutfit')}</Link>
                           </Button>
                         )}
                         <Button asChild variant="outline" size="sm">
-                          <Link to="/try-on">Try on</Link>
+                          <Link to="/try-on">{t('rec.tryOn')}</Link>
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => selectTab('complete')}>
-                          Complete look tools
+                          {t('rec.completeLookTools')}
                         </Button>
                       </div>
                     </div>
@@ -641,19 +645,19 @@ export default function RecommendationsPage() {
         {activeTab === 'match' && (
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">Find Matches</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t('rec.findMatches')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               {closetState === 'error' ? (
                 <ErrorState
-                  title="Your closet could not be loaded"
+                  title={t('rec.closetLoadError')}
                   description={wardrobeError?.message || 'Try again to load items for matching.'}
                   onRetry={() => void fetchItems(true)}
                 />
               ) : closetState === 'empty' ? (
                 <EmptyState
                   icon={Shirt}
-                  title="Add items first"
+                  title={t('rec.addItemsFirst')}
                   description="Add closet items to find matching pieces."
                   actionLabel="Add item"
                   onAction={() => navigate('/wardrobe?action=add')}
@@ -663,16 +667,16 @@ export default function RecommendationsPage() {
               ) : (
                 <>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       value={matchSearch}
                       onChange={(e) => setMatchSearch(e.target.value)}
-                      placeholder="Search closet…"
-                      className="h-11 pl-9"
-                      aria-label="Search items to match"
+                      placeholder={t('rec.searchCloset')}
+                      className="h-11 ps-9"
+                      aria-label={t('rec.searchItemsToMatch')}
                     />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[18rem] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[18rem] overflow-y-auto pe-1">
                     {filteredMatchItems.map((item) => {
                       const selected = matchItemId === item.id
                       return (
@@ -681,7 +685,7 @@ export default function RecommendationsPage() {
                           type="button"
                           onClick={() => setMatchItemId(item.id)}
                           className={cn(
-                            'text-left p-2 rounded-lg border transition-colors',
+                            'text-start-left p-2 rounded-lg border transition-colors',
                             selected
                               ? 'border-primary bg-primary/10 ring-1 ring-primary'
                               : 'border-border hover:border-primary/40'
@@ -709,7 +713,7 @@ export default function RecommendationsPage() {
 
                   {selectedMatchItem && (
                     <div className="p-3 rounded-lg bg-muted">
-                      <div className="text-sm text-muted-foreground mb-2">Selected</div>
+                      <div className="text-sm text-muted-foreground mb-2">{t('rec.selected')}</div>
                       {renderItemCard(selectedMatchItem)}
                     </div>
                   )}
@@ -717,9 +721,9 @@ export default function RecommendationsPage() {
                   {matchData && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <div className="text-sm font-semibold text-foreground">Matching items</div>
+                        <div className="text-sm font-semibold text-foreground">{t('rec.matchingItems')}</div>
                         {matchData.matches.length === 0 ? (
-                          <div className="text-sm text-muted-foreground">No matches found.</div>
+                          <div className="text-sm text-muted-foreground">{t('rec.noMatches')}</div>
                         ) : (
                           <div className="scroll-rail flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
                             {matchData.matches
@@ -743,9 +747,9 @@ export default function RecommendationsPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <div className="text-sm font-semibold text-foreground">Complete looks</div>
+                        <div className="text-sm font-semibold text-foreground">{t('rec.completeLooks')}</div>
                         {matchData.complete_looks.length === 0 ? (
-                          <div className="text-sm text-muted-foreground">No complete looks yet.</div>
+                          <div className="text-sm text-muted-foreground">{t('rec.noCompleteLooks')}</div>
                         ) : (
                           <div className="scroll-rail flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
                             {matchData.complete_looks.slice(0, 4).map((look) => (
@@ -780,12 +784,12 @@ export default function RecommendationsPage() {
         {activeTab === 'complete' && (
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">Complete Look</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t('rec.completeLook')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="text-sm text-muted-foreground">
-                  Select a few items and generate full outfit suggestions.
+                  {t('rec.completeLookHint')}
                 </div>
                 <Button
                   onClick={runCompleteLook}
@@ -805,7 +809,7 @@ export default function RecommendationsPage() {
 
               {closetState === 'loading' && <ClosetLoadingSkeleton />}
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[18rem] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[18rem] overflow-y-auto pe-1">
                 {items.map((item) => {
                   const selected = completeSelection.has(item.id)
                   return (
@@ -814,7 +818,7 @@ export default function RecommendationsPage() {
                       type="button"
                       onClick={() => toggleCompleteItem(item.id)}
                       className={cn(
-                        'p-2 md:p-3 rounded-lg border text-left transition-colors touch-target',
+                        'p-2 md:p-3 rounded-lg border text-start-left transition-colors touch-target',
                         selected
                           ? 'border-primary bg-primary/10'
                           : 'border-border hover:border-muted-foreground'
@@ -828,7 +832,7 @@ export default function RecommendationsPage() {
 
               {completeLooks.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-sm font-semibold text-foreground">Suggestions</div>
+                  <div className="text-sm font-semibold text-foreground">{t('rec.suggestions')}</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {completeLooks.map((look) => (
                       <div key={look.items.map((it) => it.id).join('-')} className="p-3 rounded-lg border border-border">
@@ -853,7 +857,7 @@ export default function RecommendationsPage() {
               {completeLooks.length === 0 && hasAttemptedComplete && !isLoadingComplete && !completeError && (
                 <div className="p-4 rounded-lg bg-muted text-center">
                   <div className="text-sm text-muted-foreground">
-                    No outfit suggestions could be generated.
+                    {t('rec.noSuggestions')}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     Try adding more items to your closet for better suggestions.
@@ -863,14 +867,14 @@ export default function RecommendationsPage() {
 
               {closetState === 'error' && (
                 <ErrorState
-                  title="Your closet could not be loaded"
+                  title={t('rec.closetLoadError')}
                   description={wardrobeError?.message || 'Try again to unlock recommendations.'}
                   onRetry={() => void fetchItems(true)}
                 />
               )}
               {closetState === 'empty' && (
                 <div className="text-sm text-muted-foreground">
-                  Add items to your closet first to unlock recommendations.
+                  {t('rec.addItemsToUnlock')}
                 </div>
               )}
             </CardContent>
@@ -880,12 +884,12 @@ export default function RecommendationsPage() {
         {activeTab === 'weather' && (
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">Weather-Based</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t('rec.weatherBased')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-end">
                 <div className="flex-1 w-full space-y-2">
-                  <label htmlFor="recommendation-weather-location" className="text-sm font-medium text-foreground">Location (optional)</label>
+                  <label htmlFor="recommendation-weather-location" className="text-sm font-medium text-foreground">{t('rec.locationOptional')}</label>
                   <Input
                     id="recommendation-weather-location"
                     name="weather_location"
@@ -924,7 +928,7 @@ export default function RecommendationsPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="p-3 rounded-lg bg-muted">
-                      <div className="text-sm font-semibold text-foreground mb-2">Preferred categories</div>
+                      <div className="text-sm font-semibold text-foreground mb-2">{t('rec.preferredCategories')}</div>
                       <div className="flex flex-wrap gap-2">
                         {weatherData.preferred_categories.map((c) => (
                           <Badge key={c} variant="secondary" className="capitalize">
@@ -934,10 +938,10 @@ export default function RecommendationsPage() {
                       </div>
                     </div>
                     <div className="p-3 rounded-lg bg-muted">
-                      <div className="text-sm font-semibold text-foreground mb-2">Extra items</div>
+                      <div className="text-sm font-semibold text-foreground mb-2">{t('rec.extraItems')}</div>
                       <div className="flex flex-wrap gap-2">
                         {(weatherData.additional_items || []).length === 0 ? (
-                          <span className="text-sm text-muted-foreground">None</span>
+                          <span className="text-sm text-muted-foreground">{t('rec.none')}</span>
                         ) : (
                           weatherData.additional_items.map((x) => (
                             <Badge key={x} variant="outline">
@@ -951,7 +955,7 @@ export default function RecommendationsPage() {
 
                   {weatherSuggestedItems.length > 0 && (
                     <div>
-                      <div className="text-sm font-semibold text-foreground mb-2">Pieces from your closet</div>
+                      <div className="text-sm font-semibold text-foreground mb-2">{t('rec.piecesFromCloset')}</div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {weatherSuggestedItems.map((item) => (
                           <div key={item.id} className="p-2 rounded-lg border border-border">
@@ -983,12 +987,12 @@ export default function RecommendationsPage() {
         {activeTab === 'shopping' && (
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">Shopping Recommendations</CardTitle>
+              <CardTitle className="text-base md:text-lg">{t('rec.shopping')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <label htmlFor="recommendation-shopping-category" className="text-sm font-medium text-foreground">Category</label>
+                  <label htmlFor="recommendation-shopping-category" className="text-sm font-medium text-foreground">{t('rec.shoppingCategory')}</label>
                   <Input
                     id="recommendation-shopping-category"
                     name="shopping_category"
@@ -999,7 +1003,7 @@ export default function RecommendationsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="recommendation-shopping-style" className="text-sm font-medium text-foreground">Style</label>
+                  <label htmlFor="recommendation-shopping-style" className="text-sm font-medium text-foreground">{t('rec.shoppingStyle')}</label>
                   <Input
                     id="recommendation-shopping-style"
                     name="shopping_style"
@@ -1010,7 +1014,7 @@ export default function RecommendationsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="recommendation-shopping-budget" className="text-sm font-medium text-foreground">Budget</label>
+                  <label htmlFor="recommendation-shopping-budget" className="text-sm font-medium text-foreground">{t('rec.shoppingBudget')}</label>
                   <Input
                     id="recommendation-shopping-budget"
                     name="shopping_budget"
@@ -1058,7 +1062,7 @@ export default function RecommendationsPage() {
 
               {shopping.length === 0 && !isLoadingShopping && !shoppingError && (
                 <div className="text-sm text-muted-foreground">
-                  Generate suggestions to see recommended items to buy.
+                  {t('rec.shoppingEmpty')}
                 </div>
               )}
             </CardContent>
@@ -1068,7 +1072,7 @@ export default function RecommendationsPage() {
 
       {/* Tips section */}
       <div className="mt-6 md:mt-8 bg-primary/10 rounded-lg p-4 md:p-6">
-        <h3 className="font-medium text-primary mb-2">Pro Tips</h3>
+        <h3 className="font-medium text-primary mb-2">{t('rec.proTips')}</h3>
         <ul className="text-sm text-primary/80 space-y-1">
           <li>• The more items you add, the better the recommendations become</li>
           <li>• Tag your items with styles and occasions for better matches</li>

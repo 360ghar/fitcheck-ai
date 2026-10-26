@@ -23,6 +23,7 @@ import { SEO } from '@/components/seo'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { formatDate, useTranslation } from '@/i18n'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { withAuthContext } from '@/pages/auth/authRedirect'
@@ -54,6 +55,7 @@ function unavailableCopy(status?: GiftVoucher['status']): { title: string; body:
 }
 
 export default function GiftClaimPage() {
+  const { t } = useTranslation()
   const { publicId = '' } = useParams()
   const isAuthenticated = useIsAuthenticated()
   const user = useAuthStore((state) => state.user)
@@ -165,7 +167,7 @@ export default function GiftClaimPage() {
               FITCHECK <span className="text-[#e00016]">AI</span>
             </Link>
             <Badge variant="outline" className="border-[#d8cfc1] bg-[#fffdf8] text-[#151411]">
-              <LockKeyhole className="mr-1 h-3 w-3" aria-hidden="true" /> Private invitation
+              <LockKeyhole className="me-1 h-3 w-3" aria-hidden="true" /> {t('gift.privateInvitation')}
             </Badge>
           </header>
 
@@ -173,15 +175,15 @@ export default function GiftClaimPage() {
             <div className="grid min-h-[70dvh] place-items-center">
               <div className="text-center">
                 <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#e00016]" aria-hidden="true" />
-                <p className="mt-3 text-sm text-[#6b655d]">Opening private gift…</p>
+                <p className="mt-3 text-sm text-[#6b655d]">{t('gift.opening')}</p>
               </div>
             </div>
           ) : !voucher ? (
             <div className="mx-auto max-w-xl py-24 text-center">
               <Gift className="mx-auto h-10 w-10 text-[#6b655d]" aria-hidden="true" />
-              <h1 className="mt-5 font-display text-3xl font-bold">Gift not available</h1>
+              <h1 className="mt-5 font-display text-3xl font-bold">{t('gift.unavailable')}</h1>
               <p className="mt-3 text-[#6b655d]">{error || 'Check the private link and try again.'}</p>
-              <Button asChild className="mt-6"><Link to="/">Go to FitCheck</Link></Button>
+              <Button asChild className="mt-6"><Link to="/">{t('gift.goToFitCheck')}</Link></Button>
             </div>
           ) : (
             <div className="grid gap-8 py-8 lg:grid-cols-[minmax(320px,0.88fr)_minmax(340px,0.72fr)] lg:items-center lg:gap-14 lg:py-12">
@@ -200,7 +202,7 @@ export default function GiftClaimPage() {
 
               <section className="rounded-lg border border-[#d8cfc1] bg-[#fffdf8] p-6 sm:p-8">
                 <p className="font-display text-xs font-bold uppercase tracking-[0.24em] text-[#e00016]">
-                  FitCheck private gifts
+                  {t('gift.privateGifts')}
                 </p>
                 <h1 className="mt-3 font-display text-3xl font-extrabold tracking-[-0.045em] sm:text-4xl">
                   {claimResult ? 'Your Pro gift is secured.' : `${voucher.from_name} made this for you.`}
@@ -215,12 +217,16 @@ export default function GiftClaimPage() {
                       </AlertTitle>
                       <AlertDescription>
                         {claimResult.entitlement_status === 'active'
-                          ? `Access ends ${claimResult.active_ends_at ? new Date(claimResult.active_ends_at).toLocaleDateString() : 'after the full gift term'}. It does not auto-renew.`
+                          ? claimResult.active_ends_at
+                            ? t('gift.accessEnds', {
+                                date: formatDate(new Date(claimResult.active_ends_at)),
+                              })
+                            : t('gift.accessEndsUnknown')
                           : `It will start after your current Pro access. ${claimResult.queued_count} gift${claimResult.queued_count === 1 ? '' : 's'} in your queue.`}
                       </AlertDescription>
                     </Alert>
                     <Button asChild size="lg" className="mt-5 w-full">
-                      <Link to="/dashboard"><Sparkles aria-hidden="true" /> Open FitCheck Pro</Link>
+                      <Link to="/dashboard"><Sparkles aria-hidden="true" /> {t('gift.openPro')}</Link>
                     </Button>
                   </div>
                 ) : voucher.status !== 'issued' ? (
@@ -231,27 +237,27 @@ export default function GiftClaimPage() {
                       <AlertDescription>{unavailable.body}</AlertDescription>
                     </Alert>
                     <Button asChild variant="outline" className="mt-5 w-full border-[#d8cfc1] text-[#151411]">
-                      <Link to="/">Discover FitCheck</Link>
+                      <Link to="/">{t('gift.discoverFitCheck')}</Link>
                     </Button>
                   </div>
                 ) : (
                   <div className="mt-6 space-y-5">
                     <div className="grid grid-cols-2 gap-3 border-y border-[#d8cfc1] py-5">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.16em] text-[#6b655d]">Your access</p>
+                        <p className="text-xs uppercase tracking-[0.16em] text-[#6b655d]">{t('gift.yourAccess')}</p>
                         <p className="mt-1 font-display text-lg font-bold">
                           {voucher.duration_months === 12 ? '1 year' : `${voucher.duration_months} month${voucher.duration_months === 1 ? '' : 's'}`} Pro
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs uppercase tracking-[0.16em] text-[#6b655d]">Retail value</p>
+                        <p className="text-xs uppercase tracking-[0.16em] text-[#6b655d]">{t('gift.retailValue')}</p>
                         <p className="mt-1 font-display text-lg font-bold">{formatUsd(voucher.retail_value_cents)}</p>
                       </div>
                     </div>
 
                     {error && (
                       <Alert variant="destructive">
-                        <AlertTitle>Claim not completed</AlertTitle>
+                        <AlertTitle>{t('gift.claimNotCompleted')}</AlertTitle>
                         <AlertDescription>{error}</AlertDescription>
                       </Alert>
                     )}
@@ -263,30 +269,30 @@ export default function GiftClaimPage() {
                         </p>
                         <div className="mt-4 grid gap-2 sm:grid-cols-2">
                           <Button asChild size="lg">
-                            <Link to={withAuthContext('/auth/login', undefined, returnTo)}>Sign in to claim</Link>
+                            <Link to={withAuthContext('/auth/login', undefined, returnTo)}>{t('gift.signInToClaim')}</Link>
                           </Button>
                           <Button asChild variant="outline" size="lg" className="border-[#d8cfc1] text-[#151411]">
-                            <Link to={withAuthContext('/auth/register', undefined, returnTo)}>Create account</Link>
+                            <Link to={withAuthContext('/auth/register', undefined, returnTo)}>{t('gift.createAccount')}</Link>
                           </Button>
                         </div>
                       </div>
                     ) : !user?.email_verified ? (
                       <Alert className="border-[#d8cfc1] bg-[#f7f2e9]">
                         <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                        <AlertTitle>Verify your email to claim</AlertTitle>
-                        <AlertDescription>Open the FitCheck verification email, then return to this page. The private gift is saved in this browser.</AlertDescription>
+                        <AlertTitle>{t('gift.verifyEmailTitle')}</AlertTitle>
+                        <AlertDescription>{t('gift.verifyEmailBody')}</AlertDescription>
                       </Alert>
                     ) : (
                       <>
                         {!credential && (
                           <div className="space-y-2">
-                            <Label htmlFor="printed-gift-code" className="text-[#151411]">Enter a code from a legacy gift</Label>
+                            <Label htmlFor="printed-gift-code" className="text-[#151411]">{t('gift.legacyCodeLabel')}</Label>
                             <Input
                               id="printed-gift-code"
                               name="gift_code"
                               value={printedCode}
                               onChange={(event) => setPrintedCode(event.target.value.toUpperCase())}
-                              placeholder="XXXXX-XXXXX-XXXXX…"
+                              placeholder={t('gift.legacyCodePlaceholder')}
                               autoComplete="off"
                               autoCapitalize="none"
                               autoCorrect="off"
@@ -297,7 +303,7 @@ export default function GiftClaimPage() {
                         )}
                         {credential && (
                           <div className="flex items-center gap-2 text-sm font-semibold text-[#173d22]" aria-live="polite">
-                            <Check className="h-4 w-4" aria-hidden="true" /> Secure gift link detected
+                            <Check className="h-4 w-4" aria-hidden="true" /> {t('gift.secureLink')}
                           </div>
                         )}
                         <Button

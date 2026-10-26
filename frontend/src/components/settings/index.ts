@@ -1,4 +1,5 @@
 export { AISettingsPanel } from './AISettingsPanel'
+export { LanguageSwitcher } from './LanguageSwitcher'
 export { LocationInput } from './LocationInput'
 export { SubscriptionPanel } from './SubscriptionPanel'
 export { SupportPanel } from './SupportPanel'

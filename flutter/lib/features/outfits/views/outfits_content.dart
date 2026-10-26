@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/state/paged_state.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/season.dart';
@@ -150,15 +152,16 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
       ];
     }
     if (page.isEmpty) {
+      final l10n = context.l10n;
       return [
         SliverFillRemaining(
           hasScrollBody: false,
           child: filters.isFiltered
               ? AppEmptyState(
                   scene: PaperScenes.outfits,
-                  title: 'No outfits match',
-                  message: 'Try fewer filters or another search.',
-                  actionLabel: 'Clear filters',
+                  title: l10n.outfitNoMatchesTitle,
+                  message: l10n.closetNoMatchesBody,
+                  actionLabel: l10n.closetClearFilters,
                   onAction: () {
                     _closeSearch();
                     ref.read(outfitFiltersProvider.notifier).clear();
@@ -166,9 +169,9 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
                 )
               : AppEmptyState(
                   scene: PaperScenes.outfits,
-                  title: 'No outfits yet',
-                  message: 'Pair pieces from your closet and save the look.',
-                  actionLabel: 'Build an outfit',
+                  title: l10n.outfitEmptyTitle,
+                  message: l10n.outfitEmptyBody,
+                  actionLabel: l10n.actionCreateOutfit,
                   actionIcon: Icons.style_outlined,
                   onAction: () => context.push(Routes.outfitBuilder),
                 ),
@@ -198,6 +201,7 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
 
   Widget _header(PagedState<OutfitModel>? page, {required bool failed}) {
     final tokens = PaperTokens.of(context);
+    final l10n = context.l10n;
     final text = Theme.of(context).textTheme;
     final Widget title = _searching
         ? TextField(
@@ -205,22 +209,20 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
             autofocus: true,
             textInputAction: TextInputAction.search,
             onChanged: _onSearchChanged,
-            decoration: const InputDecoration(
-              hintText: 'Search your outfits',
-              prefixIcon: Icon(Icons.search_rounded),
+            decoration: InputDecoration(
+              hintText: l10n.outfitSearchHint,
+              prefixIcon: const Icon(Icons.search_rounded),
             ),
           )
         : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Outfits', style: text.displaySmall?.copyWith(fontSize: 34)),
+              Text(l10n.tabOutfits, style: text.displaySmall?.copyWith(fontSize: 34)),
               Text(
                 page == null
-                    ? (failed ? ' ' : 'Loading your outfits')
-                    : page.total == 1
-                    ? '1 outfit'
-                    : '${page.total} outfits',
+                    ? (failed ? ' ' : l10n.outfitLoading)
+                    : l10n.outfitCount(page.total),
                 style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
             ],
@@ -228,7 +230,7 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
+        padding: const EdgeInsetsDirectional.fromSTEB(
           AppConstants.spacing20,
           AppConstants.spacing12,
           AppConstants.spacing8,
@@ -239,18 +241,18 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
             Expanded(child: title),
             if (_searching)
               IconButton(
-                tooltip: 'Close search',
+                tooltip: l10n.closetCloseSearch,
                 icon: const Icon(Icons.close_rounded),
                 onPressed: _closeSearch,
               )
             else ...[
               IconButton(
-                tooltip: 'Search',
+                tooltip: l10n.actionSearch,
                 icon: const Icon(Icons.search_rounded),
                 onPressed: () => setState(() => _searching = true),
               ),
               PopupMenuButton<String>(
-                tooltip: 'More',
+                tooltip: l10n.tabMore,
                 icon: const Icon(Icons.tune_rounded),
                 onSelected: (value) => value == 'filter'
                     ? showModalBottomSheet<void>(
@@ -259,14 +261,14 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
                         builder: (_) => const _FilterSheet(),
                       )
                     : context.push(Routes.outfitCollections),
-                itemBuilder: (_) => const [
+                itemBuilder: (_) => [
                   PopupMenuItem(
                     value: 'filter',
-                    child: Text('Style and season'),
+                    child: Text(l10n.outfitFilterMenu),
                   ),
                   PopupMenuItem(
                     value: 'collections',
-                    child: Text('Collections'),
+                    child: Text(l10n.outfitCollections),
                   ),
                 ],
               ),
@@ -280,57 +282,62 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
   Future<void> _showOptions(OutfitModel outfit) async {
     final action = await showModalBottomSheet<String>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppConstants.spacing20,
-                AppConstants.spacing20,
-                AppConstants.spacing20,
-                AppConstants.spacing8,
+      builder: (context) {
+        final l10n = context.l10n;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(
+                  AppConstants.spacing20,
+                  AppConstants.spacing20,
+                  AppConstants.spacing20,
+                  AppConstants.spacing8,
+                ),
+                child: Text(
+                  outfit.name,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              child: Text(
-                outfit.name,
-                style: Theme.of(context).textTheme.headlineSmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              ListTile(
+                leading: Icon(
+                  outfit.isFavorite
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                ),
+                title: Text(
+                  outfit.isFavorite ? l10n.closetUnfavourite : l10n.closetFavourite,
+                ),
+                onTap: () => Navigator.pop(context, 'favorite'),
               ),
-            ),
-            ListTile(
-              leading: Icon(
-                outfit.isFavorite
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: Text(l10n.actionEdit),
+                onTap: () => Navigator.pop(context, 'edit'),
               ),
-              title: Text(outfit.isFavorite ? 'Remove favourite' : 'Favourite'),
-              onTap: () => Navigator.pop(context, 'favorite'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Edit'),
-              onTap: () => Navigator.pop(context, 'edit'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.copy_all_outlined),
-              title: const Text('Duplicate'),
-              onTap: () => Navigator.pop(context, 'duplicate'),
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.delete_outline_rounded,
-                color: PaperTokens.of(context).error,
+              ListTile(
+                leading: const Icon(Icons.copy_all_outlined),
+                title: Text(l10n.outfitDuplicate),
+                onTap: () => Navigator.pop(context, 'duplicate'),
               ),
-              title: Text(
-                'Delete',
-                style: TextStyle(color: PaperTokens.of(context).error),
+              ListTile(
+                leading: Icon(
+                  Icons.delete_outline_rounded,
+                  color: PaperTokens.of(context).error,
+                ),
+                title: Text(
+                  l10n.actionDelete,
+                  style: TextStyle(color: PaperTokens.of(context).error),
+                ),
+                onTap: () => Navigator.pop(context, 'delete'),
               ),
-              onTap: () => Navigator.pop(context, 'delete'),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
     if (!mounted) return;
     switch (action) {
@@ -344,19 +351,19 @@ class _OutfitsContentState extends ConsumerState<OutfitsContent> {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Delete this outfit?'),
-            content: const Text('Its pieces stay in your closet.'),
+            title: Text(context.l10n.outfitDeleteTitle),
+            content: Text(context.l10n.outfitDeleteBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(context.l10n.actionCancel),
               ),
               TextButton(
                 style: TextButton.styleFrom(
                   foregroundColor: PaperTokens.of(context).error,
                 ),
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
+                child: Text(context.l10n.actionDelete),
               ),
             ],
           ),
@@ -373,9 +380,10 @@ class _FilterChips extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     final notifier = ref.read(outfitFiltersProvider.notifier);
     Widget chip(String label, bool selected, VoidCallback onTap) => Padding(
-      padding: const EdgeInsets.only(right: AppConstants.spacing8),
+      padding: const EdgeInsetsDirectional.only(end: AppConstants.spacing8),
       child: FilterChip(
         label: Text(label),
         selected: selected,
@@ -393,7 +401,7 @@ class _FilterChips extends ConsumerWidget {
         ),
         children: [
           chip(
-            'All',
+            l10n.actionAll,
             filters.styles.isEmpty &&
                 filters.seasons.isEmpty &&
                 !filters.favoritesOnly &&
@@ -401,18 +409,18 @@ class _FilterChips extends ConsumerWidget {
             notifier.clearChips,
           ),
           chip(
-            'Favourites',
+            l10n.closetFavourites,
             filters.favoritesOnly,
             () => notifier.setFavoritesOnly(!filters.favoritesOnly),
           ),
           chip(
-            'Drafts',
+            l10n.outfitDrafts,
             filters.draftsOnly,
             () => notifier.setDraftsOnly(!filters.draftsOnly),
           ),
           for (final s in Style.values)
             chip(
-              s.displayName,
+              s.label(l10n),
               filters.styles.contains(s),
               () => notifier.toggleStyle(s),
             ),
@@ -440,8 +448,8 @@ class _OutfitCard extends ConsumerWidget {
     final image = outfit.outfitImages?.firstOrNull;
     final pieces = outfit.items ?? const <ItemModel>[];
     final details = [
-      if (outfit.style != null) outfit.style!.displayName,
-      if (outfit.isDraft) 'Draft',
+      if (outfit.style != null) outfit.style!.label(context.l10n),
+      if (outfit.isDraft) context.l10n.outfitDraft,
     ].join(' · ');
 
     return PaperSurface(
@@ -450,7 +458,9 @@ class _OutfitCard extends ConsumerWidget {
       clipBehavior: Clip.antiAlias,
       onTap: () => onTap(outfit),
       onLongPress: () => onLongPress(outfit),
-      semanticLabel: '${outfit.name}${outfit.isFavorite ? ', favourite' : ''}',
+      semanticLabel: outfit.isFavorite
+          ? '${outfit.name}, ${context.l10n.closetFavourite}'
+          : outfit.name,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -479,7 +489,7 @@ class _OutfitCard extends ConsumerWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(
+            padding: const EdgeInsetsDirectional.fromSTEB(
               AppConstants.spacing12,
               AppConstants.spacing8,
               AppConstants.spacing8,
@@ -529,6 +539,7 @@ class _FilterSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     final filters = ref.watch(outfitFiltersProvider);
     final notifier = ref.read(outfitFiltersProvider.notifier);
     final text = Theme.of(context).textTheme;
@@ -539,9 +550,9 @@ class _FilterSheet extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Style and season', style: text.headlineSmall),
+            Text(l10n.outfitFilterMenu, style: text.headlineSmall),
             const SizedBox(height: AppConstants.spacing16),
-            Text('Style', style: text.titleSmall),
+            Text(l10n.filterStyle, style: text.titleSmall),
             const SizedBox(height: AppConstants.spacing8),
             Wrap(
               spacing: AppConstants.spacing8,
@@ -549,14 +560,14 @@ class _FilterSheet extends ConsumerWidget {
               children: [
                 for (final s in Style.values)
                   FilterChip(
-                    label: Text(s.displayName),
+                    label: Text(s.label(l10n)),
                     selected: filters.styles.contains(s),
                     onSelected: (_) => notifier.toggleStyle(s),
                   ),
               ],
             ),
             const SizedBox(height: AppConstants.spacing20),
-            Text('Season', style: text.titleSmall),
+            Text(l10n.filterSeason, style: text.titleSmall),
             const SizedBox(height: AppConstants.spacing8),
             Wrap(
               spacing: AppConstants.spacing8,
@@ -564,7 +575,7 @@ class _FilterSheet extends ConsumerWidget {
               children: [
                 for (final s in Season.values)
                   FilterChip(
-                    label: Text(s.displayName),
+                    label: Text(s.label(l10n)),
                     selected: filters.seasons.contains(s),
                     onSelected: (_) => notifier.toggleSeason(s),
                   ),
@@ -578,12 +589,12 @@ class _FilterSheet extends ConsumerWidget {
                     notifier.clear();
                     Navigator.pop(context);
                   },
-                  child: const Text('Clear all'),
+                  child: Text(l10n.closetClearAll),
                 ),
                 const Spacer(),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Done'),
+                  child: Text(l10n.actionDone),
                 ),
               ],
             ),

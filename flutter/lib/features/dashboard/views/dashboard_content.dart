@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -30,9 +31,7 @@ class DashboardContent extends ConsumerStatefulWidget {
 class _DashboardContentState extends ConsumerState<DashboardContent> {
   Future<void> _refresh() async {
     await Future.wait([
-      ref
-          .refresh(dashboardProvider.future)
-          .then<void>((_) {}, onError: (_) {}),
+      ref.refresh(dashboardProvider.future).then<void>((_) {}, onError: (_) {}),
       if (EnvConfig.giftVouchersEnabled)
         ref.read(giftProvider.notifier).refresh(),
     ]);
@@ -47,7 +46,9 @@ class _DashboardContentState extends ConsumerState<DashboardContent> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(child: SafeArea(bottom: false, child: _header())),
+            SliverToBoxAdapter(
+              child: SafeArea(bottom: false, child: _header()),
+            ),
             const SliverToBoxAdapter(
               child: PaperScene(preset: PaperScenes.home, height: 150),
             ),
@@ -124,19 +125,19 @@ class _DashboardContentState extends ConsumerState<DashboardContent> {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
     final user = ref.watch(authProvider.select((s) => s.user));
-    final name = user?.fullName?.split(' ').first ??
-        user?.email.split('@').first;
+    final name =
+        user?.fullName?.split(' ').first ?? user?.email.split('@').first;
     final initial = (name?.isNotEmpty ?? false)
         ? name!.substring(0, 1).toUpperCase()
         : null;
     final avatarUrl = user?.avatarUrl;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing20,
-        AppConstants.spacing12,
-        AppConstants.spacing12,
-        0,
+      padding: const EdgeInsetsDirectional.only(
+        start: AppConstants.spacing20,
+        top: AppConstants.spacing12,
+        end: AppConstants.spacing12,
+        bottom: 0,
       ),
       child: Row(
         children: [
@@ -145,11 +146,16 @@ class _DashboardContentState extends ConsumerState<DashboardContent> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Good ${_getGreeting()}',
+                  switch (_greetingPeriod()) {
+                    _Greeting.morning => context.l10n.dashboardGreetingMorning,
+                    _Greeting.afternoon =>
+                      context.l10n.dashboardGreetingAfternoon,
+                    _Greeting.evening => context.l10n.dashboardGreetingEvening,
+                  },
                   style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
                 ),
                 Text(
-                  name ?? 'Welcome',
+                  name ?? context.l10n.dashboardWelcome,
                   style: text.displaySmall?.copyWith(fontSize: 34),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -159,7 +165,7 @@ class _DashboardContentState extends ConsumerState<DashboardContent> {
           ),
           Semantics(
             button: true,
-            label: 'Open profile',
+            label: context.l10n.dashboardOpenProfile,
             child: InkResponse(
               // Tab 4 is the profile hub: switch in place.
               onTap: () => context.go(Routes.more),
@@ -267,11 +273,13 @@ class _DashboardContentState extends ConsumerState<DashboardContent> {
     return _buildReferralBanner(referralDismissed);
   }
 
-  String _getGreeting() {
+  /// The greeting is a translated sentence rather than "Good " + a word: a
+  /// number of languages do not put the parts in that order.
+  _Greeting _greetingPeriod() {
     final hour = ref.watch(dashboardGreetingHourProvider);
-    if (hour < 12) return 'morning';
-    if (hour < 17) return 'afternoon';
-    return 'evening';
+    if (hour < 12) return _Greeting.morning;
+    if (hour < 17) return _Greeting.afternoon;
+    return _Greeting.evening;
   }
 }
 
@@ -296,3 +304,6 @@ class _Initial extends StatelessWidget {
     );
   }
 }
+
+/// Which greeting to show, chosen from the hour of the day.
+enum _Greeting { morning, afternoon, evening }

@@ -18,7 +18,9 @@ final tryOnImagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
 
 Future<bool> _aiConsent(Ref ref) => ref
     .read(aiConsentServiceProvider)
-    .ensureConsent(featureLabel: 'Virtual Try-On');
+    .ensureConsent(
+      featureLabel: ErrorHandler.l10n?.tryonConsentFeatureLabel ?? 'Virtual Try-On',
+    );
 
 // Avatar ----------------------------------------------------------------------
 
@@ -84,11 +86,18 @@ class TryOnAvatarNotifier extends AsyncNotifier<TryOnAvatar> {
       final url = await _repo.uploadAvatar(picked.path);
       if (!ref.mounted) return;
       state = AsyncData(TryOnAvatar(url: url));
-      ErrorHandler.showSuccess('Your photo is updated.', title: 'Saved');
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.tryonAvatarUpdatedBody ?? 'Your photo is updated.',
+        title: ErrorHandler.l10n?.tryonSavedTitle ?? 'Saved',
+      );
     } catch (e, stack) {
       if (!ref.mounted) return;
       state = AsyncData(TryOnAvatar(url: current?.url));
-      ErrorHandler.showError(e, title: 'Upload failed', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.tryonUploadFailedTitle ?? 'Upload failed',
+        stackTrace: stack,
+      );
     }
   }
 }
@@ -222,23 +231,26 @@ class TryOnNotifier extends Notifier<TryOnState> {
     if (state.generating) return;
     if (garment == null) {
       ErrorHandler.showValidation(
-        'Choose a garment photo first.',
-        title: 'No garment',
+        ErrorHandler.l10n?.tryonChooseGarmentFirstBody ??
+            'Choose a garment photo first.',
+        title: ErrorHandler.l10n?.tryonNoGarmentTitle ?? 'No garment',
       );
       return;
     }
     final avatar = ref.read(tryOnAvatarProvider).value;
     if (avatar?.isUploading ?? false) {
       ErrorHandler.showValidation(
-        'Wait for your photo to finish uploading.',
-        title: 'Still uploading',
+        ErrorHandler.l10n?.tryonWaitForUploadBody ??
+            'Wait for your photo to finish uploading.',
+        title: ErrorHandler.l10n?.tryonStillUploadingTitle ?? 'Still uploading',
       );
       return;
     }
     if (avatar?.url == null) {
       ErrorHandler.showValidation(
-        'Add a photo of yourself first.',
-        title: 'Your photo',
+        ErrorHandler.l10n?.tryonAddYourPhotoFirstBody ??
+            'Add a photo of yourself first.',
+        title: ErrorHandler.l10n?.tryOnYourPhoto ?? 'Your photo',
       );
       return;
     }
@@ -269,9 +281,16 @@ class TryOnNotifier extends Notifier<TryOnState> {
         resultUrl: (url == null || url.isEmpty) ? null : url,
         resultBytes: bytesOut,
       );
-      ErrorHandler.showSuccess('Your try-on is ready.', title: 'Done');
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.tryonReadyBody ?? 'Your try-on is ready.',
+        title: ErrorHandler.l10n?.actionDone ?? 'Done',
+      );
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Try-on failed', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.tryonFailedTitle ?? 'Try-on failed',
+        stackTrace: stack,
+      );
     } finally {
       if (ref.mounted) state = state.copyWith(generating: false);
     }
@@ -287,9 +306,16 @@ class TryOnNotifier extends Notifier<TryOnState> {
         bytes,
         'tryon_${DateTime.now().millisecondsSinceEpoch}',
       );
-      ErrorHandler.showSuccess('Saved to your gallery.', title: 'Saved');
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.tryonSavedToGalleryBody ?? 'Saved to your gallery.',
+        title: ErrorHandler.l10n?.tryonSavedTitle ?? 'Saved',
+      );
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.tryonNotSavedTitle ?? 'Not saved',
+        stackTrace: stack,
+      );
     }
   }
 }

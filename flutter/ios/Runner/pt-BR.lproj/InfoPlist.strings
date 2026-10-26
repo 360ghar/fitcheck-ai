@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "O FitCheck AI precisa de acesso à câmera para tirar fotos dos seus looks e peças do guarda-roupa.";
+"NSPhotoLibraryUsageDescription" = "O FitCheck AI precisa de acesso à galeria de fotos para selecionar imagens dos seus looks e peças.";
+"NSPhotoLibraryAddUsageDescription" = "O FitCheck AI precisa salvar as fotos de looks geradas por IA na sua galeria.";

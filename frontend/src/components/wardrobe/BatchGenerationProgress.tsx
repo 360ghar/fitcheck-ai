@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import type { DetectedItem } from '@/types';
+import { useTranslation } from '@/i18n'
 
 interface BatchGenerationProgressProps {
   /** All detected items being processed */
@@ -37,14 +38,14 @@ interface BatchGenerationProgressProps {
 /**
  * Get status indicator for an item
  */
-function getStatusIndicator(item: DetectedItem) {
+function getStatusIndicator(item: DetectedItem, t: ReturnType<typeof useTranslation>['t']) {
   switch (item.status) {
     case 'generating':
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
           <div className="flex flex-col items-center">
             <Loader2 className="h-6 w-6 text-white animate-spin" />
-            <span className="text-xs text-white mt-1">Generating...</span>
+            <span className="text-xs text-white mt-1">{t('extract.generating')}</span>
           </div>
         </div>
       );
@@ -52,7 +53,7 @@ function getStatusIndicator(item: DetectedItem) {
     // BatchExtractionProgress. Legible over any garment photo, no all-around glow.
     case 'generated':
       return (
-        <div className="absolute top-1.5 right-1.5">
+        <div className="absolute top-1.5 end-1.5">
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success-pale text-success">
             <CheckCircle2 className="h-3.5 w-3.5" />
           </span>
@@ -119,6 +120,7 @@ export function BatchGenerationProgress({
   error,
   batchSize = 5,
 }: BatchGenerationProgressProps) {
+  const { t } = useTranslation()
   const totalItems = items.length;
   const processedCount = itemsGenerated + itemsFailed;
 
@@ -138,10 +140,10 @@ export function BatchGenerationProgress({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-foreground">
-              Generating Product Images
+              {t('extract.generatingImages')}
             </h3>
             <p className="text-sm text-muted-foreground">
-              Creating clean product photos for your wardrobe...
+              {t('extract.generatingImagesBody')}
             </p>
           </div>
           {isProcessing && (
@@ -167,7 +169,7 @@ export function BatchGenerationProgress({
             <span className="text-muted-foreground">
               {processedCount} of {totalItems} items generated
               {itemsFailed > 0 && (
-                <span className="text-error ml-1">
+                <span className="text-error ms-1">
                   ({itemsFailed} failed)
                 </span>
               )}
@@ -194,7 +196,7 @@ export function BatchGenerationProgress({
           <AlertCircle className="h-5 w-5 text-error flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-error">
-              Error during generation
+              {t('extract.generationError')}
             </p>
             <p className="text-sm text-error mt-1">
               {error}
@@ -225,7 +227,7 @@ export function BatchGenerationProgress({
                 getItemPlaceholder(item)
               )}
 
-              {getStatusIndicator(item)}
+              {getStatusIndicator(item, t)}
 
               {/* Item info overlay */}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
@@ -248,7 +250,7 @@ export function BatchGenerationProgress({
 
               {/* Batch number badge for current batch items */}
               {isInCurrentBatch(index) && item.status !== 'generated' && item.status !== 'failed' && (
-                <div className="absolute top-1.5 left-1.5 bg-accent-purple text-white text-xs font-bold px-1.5 py-0.5 rounded-md">
+                <div className="absolute top-1.5 start-1.5 bg-accent-purple text-white text-xs font-bold px-1.5 py-0.5 rounded-md">
                   #{index - currentBatchStart + 1}
                 </div>
               )}
@@ -263,19 +265,19 @@ export function BatchGenerationProgress({
           <p className="text-2xl font-bold text-foreground">
             {items.filter((i) => i.status === 'detected' || i.status === 'generating').length}
           </p>
-          <p className="text-xs text-muted-foreground">Pending</p>
+          <p className="text-xs text-muted-foreground">{t('extract.pending')}</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-success">
             {itemsGenerated}
           </p>
-          <p className="text-xs text-muted-foreground">Generated</p>
+          <p className="text-xs text-muted-foreground">{t('extract.generated')}</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-error">
             {itemsFailed}
           </p>
-          <p className="text-xs text-muted-foreground">Failed</p>
+          <p className="text-xs text-muted-foreground">{t('extract.statusFailed')}</p>
         </div>
       </div>
 
@@ -287,7 +289,7 @@ export function BatchGenerationProgress({
             onClick={onCancel}
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
           >
-            Cancel Generation
+            {t('extract.cancelGeneration')}
           </Button>
         </div>
       )}

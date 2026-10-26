@@ -10,6 +10,7 @@ import 'package:fitcheck_ai/features/photoshoot/providers/photoshoot_provider.da
 import 'package:fitcheck_ai/features/photoshoot/repositories/photoshoot_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:fitcheck_ai/core/services/notification_service.dart'
     show scaffoldMessengerKey;
@@ -251,6 +252,9 @@ void main() {
       (tester) async {
         await tester.pumpWidget(
           MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
             scaffoldMessengerKey: scaffoldMessengerKey,
             home: const Scaffold(body: SizedBox()),
           ),

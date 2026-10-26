@@ -22,6 +22,7 @@ import 'package:fitcheck_ai/features/auth/providers/auth_provider.dart';
 import 'package:fitcheck_ai/features/settings/models/user_preferences_model.dart';
 import 'package:fitcheck_ai/features/settings/providers/settings_provider.dart';
 import 'package:fitcheck_ai/features/settings/repositories/settings_repository.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -198,6 +199,9 @@ void main() {
   Future<ProviderContainer> start(WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         scaffoldMessengerKey: scaffoldMessengerKey,
         home: const Scaffold(body: SizedBox()),
       ),

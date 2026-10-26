@@ -1,0 +1,493 @@
+{
+  "_comment": "User-visible English strings the backend returns (or bakes into a rendered image) as-is. These belong in the Flutter ARB catalogs; the backend must not grow a second translation system. Generated 2026-10-25 from backend/app. Fields: source (backend module), location (file:line), text, kind (prose|label|template|freetext), reached_by_client (does a shipped client render it today), rendered_by (Flutter file, or null when the backend renders it itself / nothing renders it yet), client_localized (is that Flutter file already using ARB lookups for this string), notes (interpolation variables for prose/template, and the required client action). Regenerate by grepping: every string below came from a literal in a response model, an endpoint payload, or a Pillow draw call.",
+  "_kinds": {
+    "label": "Short fixed noun/phrase. Drops straight into an ARB entry with no placeholders.",
+    "template": "Fixed sentence carrying interpolation variables. ARB-able as a message with placeholders; the variables are named in notes.",
+    "prose": "A sentence or paragraph assembled in Python (concatenation or f-string) that reads as written copy. ARB-able only after the assembly moves to the client, or as a message with the whole variable set as placeholders.",
+    "freetext": "Model output or user input. Cannot go in an ARB at all. Needs runtime translation or must be stored canonically and localized at read time."
+  },
+  "totals": {
+    "strings": 46,
+    "by_source": {
+      "recommendations.py": 15,
+      "astrology_service.py": 12,
+      "gift_artwork_service.py": 8,
+      "photoshoot_service.py": 6,
+      "item_extraction_agent.py": 3,
+      "models/gift.py": 1,
+      "services/ai_service.py": 1
+    },
+    "by_kind": {
+      "prose": 22,
+      "label": 12,
+      "template": 9,
+      "freetext": 3
+    },
+    "freetext_un_arb_able": 3,
+    "reached_by_client": 43,
+    "baked_into_a_rendered_png": 8,
+    "distinct_flutter_files_affected": 7
+  },
+  "strings": [
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:820",
+      "text": "Dress in warm layers to stay comfortable.",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/weather_based_tab.dart",
+      "client_localized": false,
+      "notes": "GET /api/v1/recommendations/weather -> data.notes[]. Shown under 'Wear today' when temp_c < 5. No variables."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:834",
+      "text": "Choose breathable fabrics and lighter colors.",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/weather_based_tab.dart",
+      "client_localized": false,
+      "notes": "Same notes[] array; temp_c > 27 branch. No variables."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:840",
+      "text": "Rain expected \u2014 consider waterproof layers.",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/weather_based_tab.dart",
+      "client_localized": false,
+      "notes": "Appended when weather_state is rainy/stormy, so it stacks with one of the two above. No variables. Carries an em dash."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:939",
+      "text": "Add your date of birth in profile settings to unlock astrology recommendations.",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "GET /recommendations/astrology -> data.notes[] when status == 'profile_required'. Rendered by _ProfileRequired (astrology_tab.dart:213-229). No variables. NOTE: the copy says 'date of birth' but the endpoint also requires birth_time and birth_place (recommendations.py:926-935), so it under-describes the gate."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:942",
+      "text": "Database astrology columns are missing; using auth-metadata fallback for now. Run migration 002_astrology_profile.sql in Supabase.",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "Developer-facing ops message shown to END USERS when users.birth_* columns are absent. Rendered in _ProfileRequired. No variables. Should probably not be user-visible at all; flagging rather than fixing."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:521",
+      "text": "Add more versatile {cat} to increase outfit options.",
+      "kind": "template",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/shopping_tab.dart",
+      "client_localized": false,
+      "notes": "Interpolated by f-string with `cat` (a canonical English category slug: tops|bottoms|shoes|outerwear|accessories|swimwear|activewear|other). Rendered at shopping_tab.dart:192-230 as gap['description']. ARB placeholder: {category}, but the client must map the slug through taxonomy_l10n.dart FIRST - the raw slug is already displayed untranslated today."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:550",
+      "text": "Similar style and attributes",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/find_matches_tab.dart",
+      "client_localized": false,
+      "notes": "reasons[] entry on GET /recommendations/similar-items. Reached via the match card. No variables."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:565",
+      "text": "Similar category/colors",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/find_matches_tab.dart",
+      "client_localized": false,
+      "notes": "Fallback reasons[] entry. No variables."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:632",
+      "text": "A complete look built from your wardrobe",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/complete_look_tab.dart",
+      "client_localized": false,
+      "notes": "complete_looks[].description from POST /recommendations/match. Rendered at complete_look_tab.dart:183 with a hard-coded English fallback 'A look for your pieces' in the same expression. No variables."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:683",
+      "text": "Suggested look for {occasion}",
+      "kind": "template",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/complete_look_tab.dart",
+      "client_localized": false,
+      "notes": "Interpolated by f-string with `effective_occasion or 'any occasion'`, where 'any occasion' is itself a hard-coded English literal inside the same expression. POST /recommendations/complete-look. ARB placeholder: {occasion}; the 'any occasion' branch needs its own ARB entry. The occasion value is a client-supplied query param, so it is already whatever the user's UI sent - do not translate it."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:311",
+      "text": "complements your {source_category}",
+      "kind": "template",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/find_matches_tab.dart",
+      "client_localized": false,
+      "notes": "Built in _score_match and capitalized by the caller (entry['reasons'] = [r.capitalize() ...], recommendations.py:458) before going out as reasons[]. Interpolation variable: source_cat (canonical English category slug, lowercased). The .capitalize() is English-only formatting and must not survive localization. ARB placeholder: {category} behind the taxonomy mapper."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:321",
+      "text": "matches your colors",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/find_matches_tab.dart",
+      "client_localized": false,
+      "notes": "reasons[] entry from _score_match. Also passed through .capitalize(). No variables."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:324",
+      "text": "coordinates with neutrals",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/find_matches_tab.dart",
+      "client_localized": false,
+      "notes": "reasons[] entry from _score_match. Also passed through .capitalize(). No variables."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:1320",
+      "text": "{season_capsule}",
+      "kind": "template",
+      "reached_by_client": false,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "GET /recommendations/capsule -> data.name, built as f\"{season or 'All-season'} capsule\". Spanish/Japanese cannot follow the English 'noun + capsule' word order, so this must become an ARB message, not a concatenation. Interpolation variables: season (client-supplied param, may be null) and the literal 'All-season'. No Flutter file references 'capsule' today, so nothing renders it yet."
+    },
+    {
+      "source": "recommendations.py",
+      "location": "backend/app/api/v1/recommendations.py:1321",
+      "text": "A minimal set of versatile items from your wardrobe.",
+      "kind": "prose",
+      "reached_by_client": false,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "GET /recommendations/capsule -> data.description. No variables. Not rendered by any Flutter file today."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:165",
+      "text": "Meeting mode favors composed and communication-forward color pairings.",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "Appended to notes[] when mode == 'important_meeting'. Rendered in _ProfileRequired's sibling note list / _Quiet. No variables."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:394",
+      "text": "Ruling planet today: {ruling_planet}.",
+      "kind": "template",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "notes[0] from _score_colors. Interpolation variable: ruling_planet, one of Moon|Mars|Mercury|Jupiter|Venus|Saturn|Sun (English planet names, _WEEKDAY_PLANETS at astrology_service.py:32-38). ARB placeholder: {planet}, planet names mapped through their own ARB entries. Also reaches context.ruling_planet, rendered separately."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:395",
+      "text": "Use one lucky color as the focal outfit color and keep others neutral.",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "notes[1] from _score_colors. No variables."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:412",
+      "text": "Lower day-wise harmony from Vedic weighting",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "avoid_colors[].reason. Rendered at astrology_tab.dart:288-291 as c['reason']. No variables."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:423",
+      "text": "{ruling_planet} support for the day",
+      "kind": "template",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "lucky_colors[].reason when the ruling planet appears in that color's planet map. Interpolation variable: ruling_planet (English planet name). ARB placeholder: {planet}. Also rendered at astrology_tab.dart:288-291."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:425",
+      "text": "Boosts confident and professional presence",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "lucky_colors[].reason in important_meeting mode. No variables."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:426",
+      "text": "Balanced by day-wise Vedic color weighting",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "lucky_colors[].reason default. No variables."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:515",
+      "text": "Meeting-ready contrast look",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "suggested_outfits[].description, important_meeting branch. Rendered at astrology_tab.dart:447 as o['description'] with a hard-coded English fallback 'An outfit idea'. No variables."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:517",
+      "text": "Day-wise balanced look",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "suggested_outfits[].description, daily branch. No variables."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:32-38",
+      "text": "Moon, Mars, Mercury, Jupiter, Venus, Saturn, Sun",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "Seven weekday ruling-planet names, surfaced as context.ruling_planet AND baked into the two reason templates above. Needs seven ARB entries plus a slug->ARB map, so the same string is not translated twice in two different places."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:65-76",
+      "text": "Aries, Taurus, Gemini, Cancer, Leo, Virgo, Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "Twelve zodiac sign names, surfaced as context.sidereal_sun_sign / moon_sign / ascendant. Twelve ARB entries."
+    },
+    {
+      "source": "astrology_service.py",
+      "location": "backend/app/services/astrology_service.py:353",
+      "text": "Aries, Taurus, Gemini, ... (second copy)",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/recommendations/widgets/astrology_tab.dart",
+      "client_localized": false,
+      "notes": "The zodiac list is DUPLICATED inside _resolve_lagna (zodiac = [...], astrology_service.py:340-352) as a local list distinct from _SIGN_COLOR_BIAS keys. Two sources of truth for the same twelve display strings; a client ARB map fixes both at once, but the backend duplication should be collapsed separately."
+    },
+    {
+      "source": "photoshoot_service.py",
+      "location": "backend/app/services/photoshoot_service.py:107",
+      "text": "Professional headshots for LinkedIn and business profiles",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/photoshoot/views/photoshoot_configure_step.dart",
+      "client_localized": false,
+      "notes": "GET /api/v1/photoshoot/use-cases -> data[].description for use_case='linkedin'. Rendered at photoshoot_configure_step.dart:163. Also selected as `tiles` in the UI. No variables."
+    },
+    {
+      "source": "photoshoot_service.py",
+      "location": "backend/app/services/photoshoot_service.py:125",
+      "text": "Attractive, genuine photos for dating profiles",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/photoshoot/views/photoshoot_configure_step.dart",
+      "client_localized": false,
+      "notes": "use_case='dating'. No variables."
+    },
+    {
+      "source": "photoshoot_service.py",
+      "location": "backend/app/services/photoshoot_service.py:142",
+      "text": "High-fashion model portfolio shots",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/photoshoot/views/photoshoot_configure_step.dart",
+      "client_localized": false,
+      "notes": "use_case='portfolio'. No variables."
+    },
+    {
+      "source": "photoshoot_service.py",
+      "location": "backend/app/services/photoshoot_service.py:158",
+      "text": "Trendy, aesthetic Instagram-worthy content",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/photoshoot/views/photoshoot_configure_step.dart",
+      "client_localized": false,
+      "notes": "use_case='instagram'. No variables."
+    },
+    {
+      "source": "photoshoot_service.py",
+      "location": "backend/app/services/photoshoot_service.py:174",
+      "text": "Trendy, artistic aesthetic photos with creative styling",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/photoshoot/views/photoshoot_configure_step.dart",
+      "client_localized": false,
+      "notes": "use_case='aesthetic'. No variables."
+    },
+    {
+      "source": "photoshoot_service.py",
+      "location": "backend/app/services/photoshoot_service.py:190",
+      "text": "Create your own custom photoshoot theme",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/photoshoot/views/photoshoot_configure_step.dart",
+      "client_localized": false,
+      "notes": "use_case='custom'. No variables. The use-case `label` field is separate and already client-side."
+    },
+    {
+      "source": "gift_artwork_service.py",
+      "location": "backend/app/services/gift_artwork_service.py:158",
+      "text": "FITCHECK AI  /  PRIVATE GIFT",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "BAKED INTO THE PNG by Pillow, so no ARB can reach it - the image is the payload (GET /gifts/{id}/artwork). Translating it needs a per-language font for the display face AND a per-language render, i.e. the render becomes language-keyed. Highest-effort item in this inventory; brand marks can reasonably stay English, so decide that explicitly rather than by omission."
+    },
+    {
+      "source": "gift_artwork_service.py",
+      "location": "backend/app/services/gift_artwork_service.py:188",
+      "text": "CREATED FOR",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "Baked into the portrait PNG. Same constraint as above."
+    },
+    {
+      "source": "gift_artwork_service.py",
+      "location": "backend/app/services/gift_artwork_service.py:195",
+      "text": "A GIFT FROM",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "Baked into the portrait PNG."
+    },
+    {
+      "source": "gift_artwork_service.py",
+      "location": "backend/app/services/gift_artwork_service.py:269",
+      "text": "A FITCHECK PRO GIFT",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "Baked into the landscape PNG."
+    },
+    {
+      "source": "gift_artwork_service.py",
+      "location": "backend/app/services/gift_artwork_service.py:229",
+      "text": "PRIVATE LINK",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "Baked into the landscape PNG."
+    },
+    {
+      "source": "gift_artwork_service.py",
+      "location": "backend/app/services/gift_artwork_service.py:236",
+      "text": "SHARED SEPARATELY",
+      "kind": "label",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "Baked into the landscape PNG."
+    },
+    {
+      "source": "gift_artwork_service.py",
+      "location": "backend/app/services/gift_artwork_service.py:246",
+      "text": "PROMOTIONAL GIFT \u00b7 CLAIM BY {date}",
+      "kind": "template",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "Baked into the landscape PNG footer. Interpolation variable: expiry, formatted with strftime('%b %d, %Y').upper() - an ENGLISH month abbreviation, so the date is untranslatable independently of the surrounding words. Also the sibling literal 'GIFT VOUCHER \u00b7 NO EXPIRY BEFORE CLAIM' (line 248) carries no variable."
+    },
+    {
+      "source": "gift_artwork_service.py",
+      "location": "backend/app/services/gift_artwork_service.py:54-59",
+      "text": "1 MONTH / 1 YEAR / {n} MONTHS",
+      "kind": "template",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "Baked into both PNG variants. Interpolation variable: months. Plural rules matter here (one month / two months / few months in Slavic languages), and English '1 YEAR' collapses 12 months, which some locales would phrase differently."
+    },
+    {
+      "source": "models/gift.py",
+      "location": "backend/app/models/gift.py:44-47",
+      "text": "Happy Birthday / Happy Anniversary",
+      "kind": "prose",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "Fixed occasion greetings baked into the voucher PNG. The docstring explicitly says to keep this in sync with `giftOccasionGreeting` in frontend/src/api/gifts.ts and flutter/lib/features/gifts/models/gift_models.dart - so the SAME string already lives in three places, and only the client copies can be localized. Decide one owner."
+    },
+    {
+      "source": "item_extraction_agent.py",
+      "location": "backend/app/agents/item_extraction_agent.py:652",
+      "text": "<model-generated dense garment description>",
+      "kind": "freetext",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/wardrobe/widgets/extracted_item_card.dart",
+      "client_localized": false,
+      "notes": "detailed_description / description on every extracted item. CANNOT go in an ARB - it is model output. Per the language contract it must stay canonical English (it feeds the image generator and the embedding index), so the CLIENT cannot localize it either. Correct handling is: do not display it as user copy, or send it through runtime translation. Today it is displayed raw."
+    },
+    {
+      "source": "item_extraction_agent.py",
+      "location": "backend/app/agents/item_extraction_agent.py:182",
+      "text": "left, red jacket",
+      "kind": "freetext",
+      "reached_by_client": true,
+      "rendered_by": "flutter/lib/features/wardrobe/widgets/ai_extraction_widget.dart",
+      "client_localized": false,
+      "notes": "person_label - a model-written visual cue like 'left, red jacket' used to tell duplicate people apart. Rendered at ai_extraction_widget.dart (label: i.personLabel) and extracted_item_card.dart:person. CANNOT go in an ARB. It is short, positional and low-stakes, which makes it a good first target for on-device translation if that is ever added; otherwise move it out of the UI."
+    },
+    {
+      "source": "item_extraction_agent.py",
+      "location": "backend/app/agents/item_extraction_agent.py:739",
+      "text": "<model-generated scene summary>",
+      "kind": "freetext",
+      "reached_by_client": true,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "image_description on SyncExtractionResponse (models/ai.py). Parsed into the Flutter model as imageDescription but no widget reads it today, so it is carried, not shown. Same ARB constraint as the other freetext entries."
+    },
+    {
+      "source": "services/ai_service.py",
+      "location": "backend/app/services/ai_service.py:462-477",
+      "text": "excellent style match / good style compatibility / complementary {cand} for your {source} / matching colors",
+      "kind": "template",
+      "reached_by_client": false,
+      "rendered_by": null,
+      "client_localized": false,
+      "notes": "SmartMatcher._get_match_reasons. No route calls AIService.find_matching_items today (only generate_item_embedding is used), so this is dead-ish code. Listed so it is not missed when someone wires it up: it would emit English reasons through the same reasons[] field the SHIPPED _score_match reasons use."
+    }
+  ]
+}

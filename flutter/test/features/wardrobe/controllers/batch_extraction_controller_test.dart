@@ -284,6 +284,9 @@ BatchExtractedItem generatedItem({
   FakeItemRepository? items,
   FakeSocialImportRepository? social,
   Future<String?> Function(File)? encoder,
+  /// Replaces the (empty) deep-link stream so a test can deliver an OAuth
+  /// callback the way the OS does.
+  Stream<Uri>? links,
 }) {
   final container = ProviderContainer(
     retry: noRetry,
@@ -305,7 +308,9 @@ BatchExtractedItem generatedItem({
       extractionJobsPersistenceProvider.overrideWithValue(
         InMemoryPersistenceService(),
       ),
-      socialCallbackLinksProvider.overrideWithValue(const Stream<Uri>.empty()),
+      socialCallbackLinksProvider.overrideWithValue(
+        links ?? const Stream<Uri>.empty(),
+      ),
       batchImageEncoderProvider.overrideWithValue(
         encoder ?? (_) async => 'QUJD',
       ),
@@ -754,6 +759,88 @@ void main() {
         expect(read(h.container).socialError, 'Invalid credentials');
       },
     );
+  });
+
+  group('social import OAuth callback', () {
+    // The custom-scheme callback is the one deep link that does session work
+    // rather than navigation. The generic campaign deep-link router must not
+    // claim it (proven by resolveDeepLink returning null in
+    // test/core/deeplinks/deep_link_router_test.dart); these two tests prove
+    // this end still works.
+    testWidgets('a success callback adopts the job id and refreshes status', (
+      tester,
+    ) async {
+      final links = StreamController<Uri>.broadcast();
+      addTearDown(links.close);
+      final repo = FakeSocialImportRepository()
+        // Terminal immediately: the callback would otherwise start the SSE
+        // fallback and leave polls running past the end of the test.
+        ..onGetStatus = (id) async =>
+            socialJob(id, SocialImportJobStatus.completed);
+      final h = host(social: repo, links: links.stream);
+      await tester.pump();
+
+      links.add(
+        Uri.parse(
+          'fitcheck.ai://social-import-callback'
+          '?job_id=social-9&status=success',
+        ),
+      );
+      // Let the listener, the status refresh and the snackbar settle.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(read(h.container).socialJobId, 'social-9');
+      expect(repo.getStatusCalls, greaterThanOrEqualTo(1));
+      expect(h.notifier.debugHoldsCredentials, isFalse);
+    });
+
+    testWidgets('a different job id is ignored while an import is active', (
+      tester,
+    ) async {
+      final links = StreamController<Uri>.broadcast();
+      addTearDown(links.close);
+      final repo = FakeSocialImportRepository()
+        ..onGetStatus = (id) async =>
+            socialJob(id, SocialImportJobStatus.completed);
+      final h = host(social: repo, links: links.stream);
+      await tester.pump();
+
+      links.add(
+        Uri.parse(
+          'fitcheck.ai://social-import-callback?job_id=social-1&status=success',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(read(h.container).socialJobId, 'social-1');
+
+      // Deliberate guard: a late callback for a stale job must not hijack the
+      // import the user is currently watching.
+      links.add(
+        Uri.parse(
+          'fitcheck.ai://social-import-callback?job_id=social-2&status=success',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(read(h.container).socialJobId, 'social-1');
+    });
+
+    testWidgets('an unrelated link is ignored', (tester) async {
+      final links = StreamController<Uri>.broadcast();
+      addTearDown(links.close);
+      final repo = FakeSocialImportRepository();
+      final h = host(social: repo, links: links.stream);
+      await tester.pump();
+
+      // A campaign link must not be mistaken for an OAuth callback.
+      links.add(Uri.parse('fitcheck.ai://subscription'));
+      await tester.pump();
+
+      expect(read(h.container).socialJobId, isEmpty);
+      expect(repo.getStatusCalls, 0);
+    });
   });
 
   group('Sentry capture guard', () {

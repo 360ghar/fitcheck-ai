@@ -39,7 +39,7 @@ export function WizardSteps({
                 disabled={!canClick}
                 onClick={() => canClick && onStepClick?.(step.id)}
                 className={cn(
-                  'w-full text-left',
+                  'w-full text-start-left',
                   canClick && 'cursor-pointer'
                 )}
                 aria-current={isCurrent ? 'step' : undefined}

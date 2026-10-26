@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../wardrobe/providers/wardrobe_providers.dart';
@@ -66,9 +67,15 @@ class _AstrologyTabState extends ConsumerState<AstrologyTab>
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       SegmentedButton<String>(
-        segments: const [
-          ButtonSegment(value: 'daily', label: Text('Everyday')),
-          ButtonSegment(value: 'important_meeting', label: Text('Big meeting')),
+        segments: [
+          ButtonSegment(
+            value: 'daily',
+            label: Text(context.l10n.recommendMoodEveryday),
+          ),
+          ButtonSegment(
+            value: 'important_meeting',
+            label: Text(context.l10n.recommendMoodBigMeeting),
+          ),
         ],
         selected: {_mode},
         showSelectedIcon: false,
@@ -79,9 +86,9 @@ class _AstrologyTabState extends ConsumerState<AstrologyTab>
         onTap: _pickDate,
         borderRadius: BorderRadius.circular(AppConstants.radius12),
         child: InputDecorator(
-          decoration: const InputDecoration(
-            labelText: 'Day',
-            suffixIcon: Icon(Icons.calendar_today_outlined),
+          decoration: InputDecoration(
+            labelText: context.l10n.recommendDayLabel,
+            suffixIcon: const Icon(Icons.calendar_today_outlined),
           ),
           child: Text(AppDateUtils.formatMonthDayYear(_date)),
         ),
@@ -91,7 +98,11 @@ class _AstrologyTabState extends ConsumerState<AstrologyTab>
         onPressed: loading
             ? null
             : () => _astrology.fetch(mode: _mode, date: _date),
-        child: Text(loading ? 'Reading the stars' : 'Get my colours'),
+        child: Text(
+          loading
+              ? context.l10n.recommendReadingStars
+              : context.l10n.recommendGetMyColours,
+        ),
       ),
     ],
   );
@@ -120,13 +131,13 @@ class _AstrologyTabState extends ConsumerState<AstrologyTab>
       ];
     }
     if (data == null || data.isEmpty) {
-      return const [
+      return [
         SliverFillRemaining(
           hasScrollBody: false,
           child: AppEmptyState(
             scene: PaperScenes.home,
-            title: 'Your lucky colours',
-            message: "Pick a day and we'll suggest colours and pieces for it.",
+            title: context.l10n.recommendLuckyColoursTitle,
+            message: context.l10n.recommendLuckyColoursBody,
           ),
         ),
       ];
@@ -135,11 +146,11 @@ class _AstrologyTabState extends ConsumerState<AstrologyTab>
         ? [_ProfileRequired(notes: _strings(data['notes']))]
         : [
             _ColourSection(
-              title: 'Lucky colours',
+              title: context.l10n.recommendLuckyColoursSection,
               colours: _maps(data['lucky_colors']),
             ),
             _ColourSection(
-              title: 'Colours to go easy on',
+              title: context.l10n.recommendAvoidColoursSection,
               colours: _maps(data['avoid_colors']),
             ),
             _PicksSection(groups: _maps(data['wardrobe_picks'])),
@@ -216,9 +227,9 @@ class _ProfileRequired extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _Section(
-    title: 'Add your birth date',
+    title: context.l10n.recommendBirthDateTitle,
     children: [
-      const _Quiet('We need your date of birth to read your colours.'),
+      _Quiet(context.l10n.recommendBirthDateBody),
       for (final note in notes) ...[
         const SizedBox(height: AppConstants.spacing4),
         _Quiet(note),
@@ -226,7 +237,7 @@ class _ProfileRequired extends StatelessWidget {
       const SizedBox(height: AppConstants.spacing16),
       ElevatedButton(
         onPressed: () => context.push(Routes.profileEdit),
-        child: const Text('Edit profile'),
+        child: Text(context.l10n.recommendEditProfile),
       ),
     ],
   );
@@ -257,7 +268,7 @@ class _ColourSection extends StatelessWidget {
     return _Section(
       title: title,
       children: [
-        if (colours.isEmpty) const _Quiet('Nothing for this day.'),
+        if (colours.isEmpty) _Quiet(context.l10n.recommendNothingThisDay),
         for (final c in colours)
           Padding(
             padding: const EdgeInsets.symmetric(
@@ -282,7 +293,8 @@ class _ColourSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        c['name']?.toString() ?? 'Unnamed colour',
+                        c['name']?.toString() ??
+                            context.l10n.recommendUnnamedColour,
                         style: text.titleSmall,
                       ),
                       if ((c['reason']?.toString() ?? '').isNotEmpty)
@@ -297,7 +309,7 @@ class _ColourSection extends StatelessWidget {
                 ),
                 if (_confidence(c['confidence']) case final confidence?)
                   Padding(
-                    padding: const EdgeInsets.only(left: AppConstants.spacing8),
+                    padding: const EdgeInsetsDirectional.only(start: AppConstants.spacing8),
                     child: Text(
                       '${(confidence * 100).round()}%',
                       style: text.labelLarge?.copyWith(
@@ -352,9 +364,9 @@ class _PicksSection extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     final remint = ref.read(itemRepositoryProvider).remintImageUrl;
     return _Section(
-      title: 'From your closet',
+      title: context.l10n.recommendFromCloset,
       children: [
-        if (groups.isEmpty) const _Quiet('No pieces in these colours yet.'),
+        if (groups.isEmpty) _Quiet(context.l10n.recommendNoPiecesInColours),
         for (final group in groups) ...[
           Padding(
             padding: const EdgeInsets.only(
@@ -362,7 +374,10 @@ class _PicksSection extends ConsumerWidget {
               bottom: AppConstants.spacing8,
             ),
             child: Text(
-              capitalizeWords(group['category']?.toString() ?? 'Other'),
+              capitalizeWords(
+                group['category']?.toString() ??
+                    context.l10n.categoryOther,
+              ),
               style: text.titleSmall?.copyWith(color: tokens.textSecondary),
             ),
           ),
@@ -405,7 +420,8 @@ class _PicksSection extends ConsumerWidget {
                   const SizedBox(width: AppConstants.spacing12),
                   Expanded(
                     child: Text(
-                      item['name']?.toString() ?? 'Unnamed piece',
+                      item['name']?.toString() ??
+                          context.l10n.statsUnnamedPiece,
                       style: text.bodyLarge,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -430,10 +446,10 @@ class _OutfitsSection extends StatelessWidget {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
     return _Section(
-      title: 'Outfit ideas',
+      title: context.l10n.recommendOutfitIdeas,
       children: [
         if (outfits.isEmpty)
-          const _Quiet('No full outfit in these colours yet.'),
+          _Quiet(context.l10n.recommendNoOutfitsInColours),
         for (final o in outfits)
           Padding(
             padding: const EdgeInsets.symmetric(
@@ -444,15 +460,16 @@ class _OutfitsSection extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    o['description']?.toString() ?? 'An outfit idea',
+                    o['description']?.toString() ??
+                        context.l10n.recommendDefaultOutfitIdea,
                     style: text.bodyLarge,
                   ),
                 ),
                 if (o['match_score'] case final num score)
                   Padding(
-                    padding: const EdgeInsets.only(left: AppConstants.spacing8),
+                    padding: const EdgeInsetsDirectional.only(start: AppConstants.spacing8),
                     child: Text(
-                      '${score.round()}% match',
+                      context.l10n.recommendMatchPercent(score.round()),
                       style: text.labelLarge?.copyWith(
                         color: tokens.stock.accent,
                       ),

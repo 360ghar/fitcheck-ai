@@ -6,6 +6,7 @@ import 'package:fitcheck_ai/domain/enums/condition.dart' as domain;
 import 'package:fitcheck_ai/features/outfits/widgets/outfit_collage.dart';
 import 'package:fitcheck_ai/features/wardrobe/models/item_model.dart';
 import 'package:fitcheck_ai/features/wardrobe/widgets/garment_glyph.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,6 +33,9 @@ Future<void> _pump(WidgetTester tester, List<ItemModel> pieces) =>
     tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
           theme: AppTheme.lightTheme,
           home: Scaffold(
             body: SizedBox(

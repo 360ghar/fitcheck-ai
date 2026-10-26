@@ -85,8 +85,8 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       {/* Paper accordion item: a sheet on its slab. */}
       <div className="paper-sheet">
-        <CollapsibleTrigger className="group flex min-h-14 w-full items-center justify-between rounded-2xl px-5 py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <span className="pr-4 text-[15px] font-semibold text-paper-text md:text-base">
+        <CollapsibleTrigger className="group flex min-h-14 w-full items-center justify-between rounded-2xl px-5 py-5 text-start-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          <span className="pe-4 text-[15px] font-semibold text-paper-text md:text-base">
             {question}
           </span>
           <ChevronDown
@@ -99,7 +99,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         {/* Height animation rides on Radix's --radix-collapsible-content-height
             var via the accordion-down/up keyframes in tailwind.config.ts. */}
         <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-          <div className="space-y-2 px-5 pb-5 pr-8 text-[15px] leading-relaxed text-paper-text-2 [overflow-wrap:anywhere]">
+          <div className="space-y-2 px-5 pb-5 pe-8 text-[15px] leading-relaxed text-paper-text-2 [overflow-wrap:anywhere]">
             <p>{answer}</p>
             {question.includes('Acloset') && (
               <p className="text-sm">

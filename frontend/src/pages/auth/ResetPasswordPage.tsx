@@ -9,6 +9,7 @@ import { AlertCircle, CheckCircle, Eye, EyeOff, Lock } from 'lucide-react'
 import { confirmPasswordReset } from '@/api/auth'
 import { Button } from '@/components/ui/button'
 import SEO from '@/components/seo/SEO'
+import { useTranslation, type Translate } from '@/i18n'
 
 function getHashParams(): URLSearchParams {
   const raw = typeof window !== 'undefined' ? window.location.hash : ''
@@ -27,16 +28,17 @@ function getSearchParams(): URLSearchParams {
  * gets a clear inline reason instead of a generic "Failed to reset password"
  * 422. Returns the first unmet requirement, or null when the password is valid.
  */
-function getPasswordStrengthError(pwd: string): string | null {
-  if (pwd.length < 8) return 'Password must be at least 8 characters'
-  if (!/[A-Z]/.test(pwd)) return 'Password must contain at least one uppercase letter'
-  if (!/[a-z]/.test(pwd)) return 'Password must contain at least one lowercase letter'
-  if (!/\d/.test(pwd)) return 'Password must contain at least one digit'
-  if (!/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) return 'Password must contain at least one special character'
+function getPasswordStrengthError(pwd: string, t: Translate): string | null {
+  if (pwd.length < 8) return t('auth.pwdMin8')
+  if (!/[A-Z]/.test(pwd)) return t('auth.pwdUpper')
+  if (!/[a-z]/.test(pwd)) return t('auth.pwdLower')
+  if (!/\d/.test(pwd)) return t('auth.pwdDigit')
+  if (!/[1!@#$%^&*(),.?":{}|<>]/.test(pwd)) return t('auth.pwdSpecial')
   return null
 }
 
 export default function ResetPasswordPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -76,16 +78,16 @@ export default function ResetPasswordPage() {
     setSuccess(null)
 
     if (!accessToken || !refreshToken) {
-      setError('Missing reset session. Please re-open the link from your email.')
+      setError(t('auth.missingResetSession'))
       return
     }
 
     if (!passwordsMatch) {
-      setError('Passwords do not match.')
+      setError(t('auth.passwordMismatch'))
       return
     }
 
-    const strengthError = getPasswordStrengthError(password)
+    const strengthError = getPasswordStrengthError(password, t)
     if (strengthError) {
       setError(strengthError)
       return
@@ -98,10 +100,10 @@ export default function ResetPasswordPage() {
         refresh_token: refreshToken,
         new_password: password,
       })
-      setSuccess(resp.message || 'Password updated. You can sign in now.')
+      setSuccess(resp.message || t('auth.passwordUpdated'))
       setTimeout(() => navigate('/auth/login'), 800)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to reset password'
+      const msg = err instanceof Error ? err.message : t('auth.resetFailed')
       setError(msg)
     } finally {
       setIsLoading(false)
@@ -116,22 +118,22 @@ export default function ResetPasswordPage() {
         noIndex={true}
       />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h1 className="text-xl md:text-2xl font-extrabold text-foreground">Choose a new password</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Your new password must be at least 8 characters.</p>
+        <h1 className="text-xl md:text-2xl font-extrabold text-foreground">{t('auth.resetTitle')}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t('auth.resetSubtitle')}</p>
       </div>
 
       <div className="mt-6 md:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="rounded-2xl border border-border bg-card py-6 px-4 sm:py-8 sm:px-10">
           {error && (
             <div role="alert" className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start">
-              <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />
+              <AlertCircle className="h-5 w-5 text-destructive mt-0.5 me-2 flex-shrink-0" />
               <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
 
           {success && (
             <div role="status" aria-live="polite" className="mb-4 p-3 bg-success/10 border border-success/30 rounded-md flex items-start">
-              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 me-2 flex-shrink-0" />
               <p className="text-sm text-green-800 dark:text-green-300">{success}</p>
             </div>
           )}
@@ -139,10 +141,10 @@ export default function ResetPasswordPage() {
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-foreground">
-                New password
+                {t('auth.newPasswordLabel')}
               </label>
               <div className="mt-1 relative rounded-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -154,14 +156,14 @@ export default function ResetPasswordPage() {
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
-                  placeholder="••••••••"
+                  className="block w-full h-12 ps-10 pe-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  placeholder={t('auth.passwordPlaceholder')}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((visible) => !visible)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground touch-target"
-                  aria-label={showPassword ? 'Hide new password' : 'Show new password'}
+                  className="absolute inset-y-0 end-0 flex items-center pe-3 text-muted-foreground hover:text-foreground touch-target"
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -170,10 +172,10 @@ export default function ResetPasswordPage() {
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground">
-                Confirm password
+                {t('auth.confirmPasswordLabel')}
               </label>
               <div className="mt-1 relative rounded-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 start-0 ps-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
@@ -185,11 +187,11 @@ export default function ResetPasswordPage() {
                   minLength={8}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-10 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  className="block w-full h-12 ps-10 pe-10 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
                   placeholder="••••••••"
                 />
                 {confirmPassword.length > 0 ? (
-                  <div className="absolute inset-y-0 right-10 flex items-center">
+                  <div className="absolute inset-y-0 end-10 flex items-center">
                     {passwordsMatch ? (
                       <CheckCircle className="h-5 w-5 text-green-500" />
                     ) : (
@@ -200,14 +202,14 @@ export default function ResetPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword((visible) => !visible)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground touch-target"
-                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                  className="absolute inset-y-0 end-0 flex items-center pe-3 text-muted-foreground hover:text-foreground touch-target"
+                  aria-label={showConfirmPassword ? t('auth.hideConfirmPassword') : t('auth.showConfirmPassword')}
                 >
                   {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
               {!passwordsMatch && confirmPassword.length > 0 && (
-                <p className="mt-1 text-sm text-destructive">Passwords do not match</p>
+                <p className="mt-1 text-sm text-destructive">{t('auth.passwordMismatch')}</p>
               )}
             </div>
 
@@ -217,14 +219,14 @@ export default function ResetPasswordPage() {
                 disabled={isLoading || !!success}
                 className="w-full h-12"
               >
-                {isLoading ? 'Updating…' : success ? 'Updated!' : 'Update password'}
+                {isLoading ? t('auth.updating') : success ? t('auth.updated') : t('auth.resetSubmit')}
               </Button>
             </div>
           </form>
 
           <div className="mt-6 text-center">
             <Link to="/auth/login" className="text-sm font-medium text-primary hover:text-primary/80">
-              Back to sign in
+              {t('auth.backToSignIn')}
             </Link>
           </div>
         </div>

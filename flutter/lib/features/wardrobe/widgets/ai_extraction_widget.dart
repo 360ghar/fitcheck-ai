@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
@@ -120,7 +121,7 @@ class ExtractionProcessingView extends ConsumerWidget {
             const Spacer(),
             if (secondsLeft > 0)
               Text(
-                'About $secondsLeft s left',
+                context.l10n.photoshootAboutSecondsLeft(secondsLeft),
                 style: text.bodySmall?.copyWith(color: tokens.textSecondary),
               ),
           ],
@@ -135,18 +136,18 @@ class ExtractionProcessingView extends ConsumerWidget {
             onPressed: () {
               Navigator.pop(context);
               ErrorHandler.showInfo(
-                'Still working. We will let you know when your pieces are ready.',
-                title: 'Running in background',
+                context.l10n.batchStillWorkingMessage,
+                title: context.l10n.batchRunningInBackgroundTitle,
               );
             },
             icon: const Icon(Icons.notifications_active_rounded, size: 20),
-            label: const Text('Send to background'),
+            label: Text(context.l10n.batchSendToBackgroundAction),
           ),
         ),
         Center(
           child: TextButton(
             onPressed: ref.read(provider.notifier).cancelExtraction,
-            child: const Text('Cancel'),
+            child: Text(context.l10n.actionCancel),
           ),
         ),
       ],
@@ -175,13 +176,15 @@ class _PieceStatusList extends ConsumerWidget {
           children: [
             Expanded(
               child: Text(
-                '$done of ${statuses.length} studio photos ready',
+                context.l10n.photoshootStudioPhotosReadyCount(done, statuses.length),
                 style: text.bodyMedium,
               ),
             ),
             for (final status in statuses.values)
               Padding(
-                padding: const EdgeInsets.only(left: AppConstants.spacing4),
+                padding: const EdgeInsetsDirectional.only(
+                  start: AppConstants.spacing4,
+                ),
                 child: Icon(
                   switch (status) {
                     'complete' => Icons.check_rounded,
@@ -230,8 +233,7 @@ class ExtractionResultsView extends ConsumerWidget {
               if (failure != null)
                 SliverToBoxAdapter(
                   child: AppErrorBanner(
-                    message:
-                        'Studio photos stopped early. You can still save these pieces.',
+                    message: context.l10n.batchStudioPhotosStoppedBody,
                   ),
                 ),
               SliverPadding(
@@ -285,9 +287,9 @@ class ExtractionResultsView extends ConsumerWidget {
                           },
                     child: Text(
                       saving
-                          ? 'Saving'
+                          ? context.l10n.batchSavingLabel
                           : included == 0
-                          ? 'Choose pieces to save'
+                          ? context.l10n.batchChoosePiecesToSave
                           : included == 1
                           ? 'Save 1 piece'
                           : 'Save $included pieces',
@@ -295,7 +297,7 @@ class ExtractionResultsView extends ConsumerWidget {
                   ),
                   TextButton(
                     onPressed: saving ? null : notifier.reset,
-                    child: const Text('Start over'),
+                    child: Text(context.l10n.batchStartOverAction),
                   ),
                 ],
               );
@@ -328,8 +330,8 @@ class _ResultsHeader extends ConsumerWidget {
         const SizedBox(height: AppConstants.spacing4),
         Text(
           ready >= count
-              ? 'Tap a piece to skip it.'
-              : '$ready of $count studio photos ready. Tap a piece to skip it.',
+              ? context.l10n.batchTapPieceToSkip
+              : context.l10n.photoshootStudioPhotosReadyTap(ready, count),
           style: text.bodyMedium?.copyWith(
             color: PaperTokens.of(context).textSecondary,
           ),
@@ -407,16 +409,16 @@ class PersonGroupList extends StatelessWidget {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
     return PaperSurface(
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spacing16,
-        AppConstants.spacing12,
-        AppConstants.spacing4,
-        AppConstants.spacing4,
+      padding: const EdgeInsetsDirectional.only(
+        start: AppConstants.spacing16,
+        top: AppConstants.spacing12,
+        end: AppConstants.spacing4,
+        bottom: AppConstants.spacing4,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('People in the photos', style: text.titleSmall),
+          Text(context.l10n.batchPeopleInPhotosTitle, style: text.titleSmall),
           for (final g in groups)
             Row(
               children: [
@@ -440,11 +442,11 @@ class PersonGroupList extends StatelessWidget {
                   onPressed: g.included == g.total
                       ? null
                       : () => onSet(g.key, true),
-                  child: const Text('Include'),
+                  child: Text(context.l10n.batchIncludeAction),
                 ),
                 TextButton(
                   onPressed: g.included == 0 ? null : () => onSet(g.key, false),
-                  child: const Text('Skip'),
+                  child: Text(context.l10n.batchSkipAction),
                 ),
               ],
             ),
@@ -527,11 +529,11 @@ class _PieceCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppConstants.spacing12,
-              AppConstants.spacing8,
-              AppConstants.spacing4,
-              AppConstants.spacing8,
+            padding: const EdgeInsetsDirectional.only(
+              start: AppConstants.spacing12,
+              top: AppConstants.spacing8,
+              end: AppConstants.spacing4,
+              bottom: AppConstants.spacing8,
             ),
             child: Row(
               children: [
@@ -549,8 +551,8 @@ class _PieceCard extends StatelessWidget {
                         url != null
                             ? (item.colors?.take(2).join(', ') ?? '')
                             : failed
-                            ? 'Your photo is used'
-                            : 'Making studio photo',
+                            ? context.l10n.batchYourPhotoIsUsedLabel
+                            : context.l10n.batchMakingStudioPhotoLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.bodySmall?.copyWith(
@@ -602,11 +604,11 @@ class StillGeneratingBanner extends ConsumerWidget {
         0,
       ),
       child: PaperSurface(
-        padding: const EdgeInsets.fromLTRB(
-          AppConstants.spacing16,
-          AppConstants.spacing12,
-          AppConstants.spacing8,
-          AppConstants.spacing12,
+        padding: const EdgeInsetsDirectional.only(
+          start: AppConstants.spacing16,
+          top: AppConstants.spacing12,
+          end: AppConstants.spacing8,
+          bottom: AppConstants.spacing12,
         ),
         child: Row(
           children: [
@@ -621,7 +623,7 @@ class StillGeneratingBanner extends ConsumerWidget {
             const SizedBox(width: AppConstants.spacing12),
             Expanded(
               child: Text(
-                'Studio photos still on their way. You can leave — we will let you know.',
+                context.l10n.batchStudioPhotosOnWayBody,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: PaperTokens.of(context).textSecondary,
                 ),
@@ -631,11 +633,11 @@ class StillGeneratingBanner extends ConsumerWidget {
               onPressed: () {
                 Navigator.pop(context);
                 ErrorHandler.showInfo(
-                  'Still working. We will let you know when your pieces are ready.',
-                  title: 'Running in background',
+                  context.l10n.batchStillWorkingMessage,
+                  title: context.l10n.batchRunningInBackgroundTitle,
                 );
               },
-              child: const Text('Leave'),
+              child: Text(context.l10n.batchLeaveAction),
             ),
           ],
         ),
@@ -655,7 +657,7 @@ class _UseCases extends ConsumerWidget {
     return UseCasePicker(
       selected: ref.watch(provider.select((s) => s.useCases)),
       onToggle: ref.read(provider.notifier).toggleUseCase,
-      helper: 'Added to every piece you save.',
+      helper: context.l10n.batchUseCaseHelper,
     );
   }
 }
@@ -681,11 +683,11 @@ class ExtractionFailureView extends ConsumerWidget {
 
     final manual = TextButton(
       onPressed: notifier.openManualEntry,
-      child: const Text('Enter details yourself'),
+      child: Text(context.l10n.batchEnterDetailsYourselfAction),
     );
     final another = TextButton(
       onPressed: notifier.reset,
-      child: const Text('Choose another photo'),
+      child: Text(context.l10n.batchChooseAnotherPhotoAction),
     );
     final paywall = EnvConfig.paywallEnabled;
 
@@ -699,51 +701,53 @@ class ExtractionFailureView extends ConsumerWidget {
     ) = switch (failure.kind) {
       ItemAddFailureKind.connection => (
         PaperScenes.offline,
-        'Connection lost',
-        'Check your connection, then try again.',
-        'Try again',
+        context.l10n.batchConnectionLostTitle,
+        context.l10n.batchConnectionLostBody,
+        context.l10n.batchTryAgainAction,
         retry,
         [manual],
       ),
       ItemAddFailureKind.dailyLimit => (
         PaperScenes.oops,
-        'Daily limit reached',
+        context.l10n.batchDailyLimitTitle,
         paywall
-            ? 'Upgrade to Pro for more scans, or enter the details yourself.'
-            : 'Your scans reset tomorrow. You can enter the details yourself now.',
-        paywall ? 'See plans' : null,
+            ? context.l10n.batchDailyLimitBodyPaywall
+            : context.l10n.batchDailyLimitBodyFree,
+        paywall ? context.l10n.batchSeePlansAction : null,
         paywall ? () => context.push(Routes.subscription) : null,
         [manual],
       ),
       ItemAddFailureKind.busy => (
         PaperScenes.oops,
-        'Our AI is busy',
-        'This is on our side. Try again in a few minutes.',
-        'Try again',
+        context.l10n.batchAiBusyTitle,
+        context.l10n.batchAiBusyBody,
+        context.l10n.batchTryAgainAction,
         retry,
         [manual],
       ),
       ItemAddFailureKind.noItems => (
         PaperScenes.closet,
-        'No pieces found',
-        'Try a clearer photo, or enter the details yourself.',
-        'Choose another photo',
+        context.l10n.batchNoPiecesFoundTitle,
+        context.l10n.batchNoPiecesBody,
+        context.l10n.batchChooseAnotherPhotoAction,
         notifier.reset,
         [manual],
       ),
       ItemAddFailureKind.aiUnavailable => (
         PaperScenes.oops,
-        'Scanning is unavailable',
-        'Enter the details yourself for now.',
-        'Enter details yourself',
+        context.l10n.batchScanningUnavailableTitle,
+        context.l10n.batchScanningUnavailableBody,
+        context.l10n.batchEnterDetailsYourselfAction,
         notifier.openManualEntry,
         [another],
       ),
       ItemAddFailureKind.other => (
         PaperScenes.oops,
-        'The scan did not finish',
-        failure.message.isEmpty ? 'Try again.' : failure.message,
-        'Try again',
+        context.l10n.batchScanDidNotFinishTitle,
+        failure.message.isEmpty
+            ? context.l10n.batchTryAgainBody
+            : failure.message,
+        context.l10n.batchTryAgainAction,
         retry,
         [manual],
       ),

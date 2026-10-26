@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "preferences": {
+    "voice": {
+      "value": "af_sky",
+      "confirmed_in": [
+        "fitcheck-ai-explainer"
+      ],
+      "updated_at": "2026-10-04T20:06:03.765Z"
+    },
+    "aspect": {
+      "value": "1080x1920",
+      "confirmed_in": [
+        "fitcheck-ai-explainer"
+      ],
+      "updated_at": "2026-10-04T20:06:03.773Z"
+    },
+    "destination": {
+      "value": "instagram-reels",
+      "confirmed_in": [
+        "fitcheck-ai-explainer"
+      ],
+      "updated_at": "2026-10-04T20:06:03.779Z"
+    },
+    "language": {
+      "value": "en",
+      "confirmed_in": [
+        "fitcheck-ai-explainer"
+      ],
+      "updated_at": "2026-10-04T20:07:18.416Z"
+    },
+    "storyboard": {
+      "value": "no",
+      "confirmed_in": [
+        "fitcheck-ai-explainer"
+      ],
+      "updated_at": "2026-10-04T20:07:18.441Z"
+    },
+    "style_preset.faceless-explainer": {
+      "value": "capsule",
+      "confirmed_in": [
+        "fitcheck-ai-explainer"
+      ],
+      "updated_at": "2026-10-04T20:07:18.469Z"
+    }
+  },
+  "sightings": {}
+}

@@ -365,12 +365,18 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
     if (_starting || state.isProcessing) return;
     _starting = true;
     try {
-      if (!await ref.read(aiConsentGateProvider)('AI Wardrobe Extraction')) {
+      if (!await ref.read(aiConsentGateProvider)(
+        ErrorHandler.l10n?.wardrobeAiConsentLabel ?? 'AI Wardrobe Extraction',
+      )) {
         return;
       }
       if (!_alive) return;
       if (state.images.isEmpty) {
-        state = state.copyWith(error: 'Choose at least one photo.');
+        state = state.copyWith(
+          error:
+              ErrorHandler.l10n?.batchChooseAtLeastOnePhotoBody ??
+              'Choose at least one photo.',
+        );
         return;
       }
       _sse?.cancel();
@@ -421,7 +427,9 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
             image.id,
             (img) => img.copyWith(
               status: BatchImageStatus.failed,
-              error: 'This photo could not be read.',
+              error:
+                  ErrorHandler.l10n?.batchPhotoUnreadableBody ??
+                  'This photo could not be read.',
             ),
           );
         } else {
@@ -432,7 +440,9 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
 
       if (inputs.isEmpty) {
         state = state.copyWith(
-          error: 'None of these photos could be read. Try other photos.',
+          error:
+              ErrorHandler.l10n?.batchNoPhotosReadableBody ??
+              'None of these photos could be read. Try other photos.',
           status: BatchJobStatus.failed,
         );
         return;
@@ -457,7 +467,7 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
       ];
       await jobs.trackBatch(
         jobId: response.jobId,
-        label:
+        label: ErrorHandler.l10n?.batchJobLabelPhotos(submitted.length) ??
             '${submitted.length} ${submitted.length == 1 ? 'photo' : 'photos'}',
         sourcePaths: [for (final image in submitted) image.filePath],
         imageIds: [for (final image in submitted) image.id],
@@ -545,7 +555,9 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
                       : image.status,
               },
               error: byId[image.id]?.status == 'failed'
-                  ? (byId[image.id]?.error ?? 'No pieces found in this photo.')
+                  ? (byId[image.id]?.error ??
+                        ErrorHandler.l10n?.batchNoPiecesInPhotoBody ??
+                        'No pieces found in this photo.')
                   : image.error,
               extractedItems: [
                 for (final item in detected)
@@ -670,7 +682,10 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
         _sse?.cancel();
       case 'job_failed':
         state = state.copyWith(
-          error: data?['error']?.toString() ?? 'Finding pieces failed.',
+          error:
+              data?['error']?.toString() ??
+              ErrorHandler.l10n?.batchFindingPiecesFailedBody ??
+              'Finding pieces failed.',
           status: BatchJobStatus.failed,
         );
         _sse?.cancel();
@@ -711,7 +726,10 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
         imageId,
         (img) => img.copyWith(
           status: BatchImageStatus.failed,
-          error: data['error']?.toString() ?? 'No pieces found in this photo.',
+          error:
+              data['error']?.toString() ??
+              ErrorHandler.l10n?.batchNoPiecesInPhotoBody ??
+              'No pieces found in this photo.',
         ),
       );
     }
@@ -810,7 +828,10 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
               return;
             case 'failed':
               state = next.copyWith(
-                error: status.error ?? 'Finding pieces failed.',
+                error:
+                    status.error ??
+                    ErrorHandler.l10n?.batchFindingPiecesFailedBody ??
+                    'Finding pieces failed.',
                 status: BatchJobStatus.failed,
               );
               return;
@@ -827,7 +848,9 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
       }
       if (!_alive || id != state.jobId) return;
       state = state.copyWith(
-        error: 'We lost the connection while working. Try again.',
+        error:
+            ErrorHandler.l10n?.batchConnectionLostWorkingBody ??
+            'We lost the connection while working. Try again.',
         status: BatchJobStatus.failed,
       );
       ErrorHandler.reportError(
@@ -848,7 +871,11 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
     try {
       await ref.read(extractionJobsProvider.notifier).cancel(id);
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not cancelled', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.batchNotCancelledTitle ?? 'Not cancelled',
+        stackTrace: stack,
+      );
     }
   }
 
@@ -1199,15 +1226,19 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
     if (url.isEmpty) {
       // Nothing typed yet.
     } else if (_instagramPost.hasMatch(url)) {
-      error = 'Post links are not supported. Enter a profile link.';
+      error =
+          ErrorHandler.l10n?.batchPostLinkUnsupportedBody ??
+          'Post links are not supported. Enter a profile link.';
     } else if (url.contains(' ')) {
-      error = 'Links cannot contain spaces.';
+      error = ErrorHandler.l10n?.batchLinkSpacesBody ?? 'Links cannot contain spaces.';
     } else if (_instagramProfile.hasMatch(url) ||
         _facebookProfile.hasMatch(url) ||
         _fbProfile.hasMatch(url)) {
       valid = true;
     } else if (url.startsWith('http')) {
-      error = 'Enter an Instagram or Facebook profile link.';
+      error =
+          ErrorHandler.l10n?.batchEnterProfileLinkBody ??
+          'Enter an Instagram or Facebook profile link.';
     }
     state = state.copyWith(
       socialUrl: url,
@@ -1220,12 +1251,18 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
     if (state.socialLoading) return;
     final url = sourceUrl.trim();
     if (url.isEmpty) {
-      state = state.copyWith(socialError: 'Enter a profile link.');
+      state = state.copyWith(
+        socialError:
+            ErrorHandler.l10n?.batchEnterProfileLinkShortBody ??
+            'Enter a profile link.',
+      );
       return;
     }
     state = state.copyWith(socialLoading: true, socialError: '');
     try {
-      if (!await ref.read(aiConsentGateProvider)('AI Wardrobe Extraction')) {
+      if (!await ref.read(aiConsentGateProvider)(
+        ErrorHandler.l10n?.wardrobeAiConsentLabel ?? 'AI Wardrobe Extraction',
+      )) {
         return;
       }
       final started = await _socialRepo.startJob(sourceUrl: url);
@@ -1277,11 +1314,16 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
         mode: LaunchMode.externalApplication,
       );
       if (!launched) {
-        throw Exception('The sign-in page did not open. Try again.');
+        throw Exception(
+          ErrorHandler.l10n?.batchSignInPageNotOpenBody ??
+              'The sign-in page did not open. Try again.',
+        );
       }
       ErrorHandler.showInfo(
-        'Sign in in your browser, then come back to FitCheck.',
-        title: 'Connect your account',
+        ErrorHandler.l10n?.batchSignInBrowserBody ??
+            'Sign in in your browser, then come back to FitCheck.',
+        title:
+            ErrorHandler.l10n?.batchConnectAccountTitle ?? 'Connect your account',
       );
     } catch (e) {
       if (_alive) {
@@ -1334,11 +1376,14 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
       if (needsOtp) {
         state = state.copyWith(
           waitingForOtp: true,
-          socialError: 'Enter the code from your authenticator app.',
+          socialError:
+              ErrorHandler.l10n?.batchEnterAuthenticatorCodeBody ??
+              'Enter the code from your authenticator app.',
         );
       } else if (lower.contains('checkpoint') || lower.contains('security')) {
         state = state.copyWith(
           socialError:
+              ErrorHandler.l10n?.batchInstagramSecurityCheckBody ??
               'Instagram wants a security check. Sign in in your browser first.',
         );
       } else {
@@ -1355,7 +1400,9 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
     if (login == null) {
       state = state.copyWith(
         waitingForOtp: false,
-        socialError: 'Enter your username and password again.',
+        socialError:
+            ErrorHandler.l10n?.batchEnterCredentialsAgainBody ??
+            'Enter your username and password again.',
       );
       return;
     }
@@ -1533,22 +1580,31 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
           waitingForOtp: true,
           twoFactorIdentifier:
               event.data['two_factor_identifier']?.toString() ?? '',
-          socialError: message ?? 'Enter the code from your authenticator app.',
+          socialError:
+              message ??
+              ErrorHandler.l10n?.batchEnterAuthenticatorCodeBody ??
+              'Enter the code from your authenticator app.',
         ),
         'checkpoint_required' => next.copyWith(
           waitingForOtp: false,
           socialError:
               message ??
+              ErrorHandler.l10n?.batchInstagramSecurityCheckBody ??
               'Instagram wants a security check. Sign in in your browser first.',
         ),
         'login_failed' => next.copyWith(
           waitingForOtp: false,
           socialError:
-              message ?? 'Sign-in failed. Check your username and password.',
+              message ??
+              ErrorHandler.l10n?.batchSignInFailedBody ??
+              'Sign-in failed. Check your username and password.',
         ),
         _ => next.copyWith(
           waitingForOtp: false,
-          socialError: message ?? 'Sign in to keep importing.',
+          socialError:
+              message ??
+              ErrorHandler.l10n?.batchSignInToKeepImportingBody ??
+              'Sign in to keep importing.',
         ),
       };
     }
@@ -1590,6 +1646,7 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
       if (!_alive || id != state.socialJobId) return;
       state = state.copyWith(
         socialError:
+            ErrorHandler.l10n?.batchImportConnectionLostBody ??
             'We lost the connection to the import. Refresh to check it.',
       );
       ErrorHandler.reportError(
@@ -1616,7 +1673,9 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
     }
     final status = (uri.queryParameters['status'] ?? '').toLowerCase();
     final message =
-        uri.queryParameters['message'] ?? 'Your account was not connected.';
+        uri.queryParameters['message'] ??
+        ErrorHandler.l10n?.batchAccountNotConnectedBody ??
+        'Your account was not connected.';
     if (status == 'success') {
       await refreshSocialStatus();
       if (_alive && state.socialJob != null && !state.socialJob!.isTerminal) {
@@ -1625,12 +1684,18 @@ class BatchExtractionNotifier extends Notifier<BatchState> {
           lastEventId: _lastEventIdOrNull,
         );
       }
-      ErrorHandler.showSuccess(message, title: 'Account connected');
+      ErrorHandler.showSuccess(
+        message,
+        title: ErrorHandler.l10n?.batchAccountConnectedTitle ?? 'Account connected',
+      );
       return;
     }
     if (_alive) state = state.copyWith(socialError: message);
     await refreshSocialStatus();
-    ErrorHandler.showError(message, title: 'Not connected');
+    ErrorHandler.showError(
+      message,
+      title: ErrorHandler.l10n?.batchNotConnectedTitle ?? 'Not connected',
+    );
   }
 
   Future<void> _restoreSocialImportState() async {

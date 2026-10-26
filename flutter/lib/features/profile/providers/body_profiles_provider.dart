@@ -53,10 +53,17 @@ class BodyProfilesNotifier extends AsyncNotifier<List<BodyProfileModel>> {
     try {
       final created = await _repository.createBodyProfile(request);
       if (ref.mounted) _upsert(created);
-      ErrorHandler.showSuccess('Your body profile is saved.', title: 'Saved');
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.bodyProfileSavedBody ?? 'Your body profile is saved.',
+        title: ErrorHandler.l10n?.bodyProfileSavedTitle ?? 'Saved',
+      );
       return true;
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.bodyProfileNotSavedTitle ?? 'Not saved',
+        stackTrace: stack,
+      );
       return false;
     }
   }
@@ -65,10 +72,17 @@ class BodyProfilesNotifier extends AsyncNotifier<List<BodyProfileModel>> {
     try {
       final updated = await _repository.updateBodyProfile(id, request);
       if (ref.mounted) _upsert(updated);
-      ErrorHandler.showSuccess('Your changes are saved.', title: 'Saved');
+      ErrorHandler.showSuccess(
+        ErrorHandler.l10n?.itemEditSavedBody ?? 'Your changes are saved.',
+        title: ErrorHandler.l10n?.bodyProfileSavedTitle ?? 'Saved',
+      );
       return true;
     } catch (e, stack) {
-      ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+      ErrorHandler.showError(
+        e,
+        title: ErrorHandler.l10n?.bodyProfileNotSavedTitle ?? 'Not saved',
+        stackTrace: stack,
+      );
       return false;
     }
   }
@@ -81,9 +95,16 @@ class BodyProfilesNotifier extends AsyncNotifier<List<BodyProfileModel>> {
           const UpdateBodyProfileRequest(isDefault: true),
         );
         if (ref.mounted) _upsert(updated);
-        ErrorHandler.showSuccess('Set as your default profile.');
+        ErrorHandler.showSuccess(
+          ErrorHandler.l10n?.bodyProfileSetDefaultBody ??
+              'Set as your default profile.',
+        );
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Not saved', stackTrace: stack);
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.bodyProfileNotSavedTitle ?? 'Not saved',
+          stackTrace: stack,
+        );
       }
     });
   }
@@ -102,9 +123,16 @@ class BodyProfilesNotifier extends AsyncNotifier<List<BodyProfileModel>> {
           // remaining profile; reload so the local flags match the server.
           if (current.any((p) => p.id == id && p.isDefault)) await refresh();
         }
-        ErrorHandler.showSuccess('Body profile deleted.', title: 'Deleted');
+        ErrorHandler.showSuccess(
+          ErrorHandler.l10n?.bodyProfileDeletedBody ?? 'Body profile deleted.',
+          title: ErrorHandler.l10n?.bodyProfileDeletedTitle ?? 'Deleted',
+        );
       } catch (e, stack) {
-        ErrorHandler.showError(e, title: 'Not deleted', stackTrace: stack);
+        ErrorHandler.showError(
+          e,
+          title: ErrorHandler.l10n?.bodyProfileNotDeletedTitle ?? 'Not deleted',
+          stackTrace: stack,
+        );
       }
     });
   }

@@ -15,7 +15,7 @@ If knowledge lives only in chat, Slack, or someone’s head, it does not exist f
 
 ## 3. Map, not encyclopedia
 
-Root `AGENTS.md` / `CLAUDE.md` stay small. Durable rules live under `docs/` and are linked. A giant instruction file crowds out the task and rots.
+Root `AGENTS.md` stay small. Durable rules live under `docs/` and are linked. A giant instruction file crowds out the task and rots.
 
 ## 4. Enforce invariants, not micro-style
 

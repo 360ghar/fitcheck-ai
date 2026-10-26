@@ -8,9 +8,12 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/i18n/l10n.dart';
+import '../../../core/i18n/taxonomy_l10n.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/directional_icon.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../models/outfit_model.dart';
 import '../providers/outfit_providers.dart';
@@ -43,10 +46,10 @@ class OutfitDetailPage extends ConsumerWidget {
                         child: Column(
                           children: [
                             Align(
-                              alignment: Alignment.centerLeft,
+                              alignment: AlignmentDirectional.centerStart,
                               child: IconButton(
-                                tooltip: 'Back',
-                                icon: const Icon(Icons.arrow_back_rounded),
+                                tooltip: context.l10n.actionBack,
+                                icon: const DirectionalIcon(Icons.arrow_back_rounded),
                                 onPressed: () => Navigator.maybePop(context),
                               ),
                             ),
@@ -118,21 +121,21 @@ class _Body extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete this outfit?'),
+        title: Text(context.l10n.outfitDeleteTitle),
         content: Text(
-          '"${outfit.name}" is removed. Its pieces stay in your closet.',
+          context.l10n.outfitNamedRemoved(outfit.name),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.actionCancel),
           ),
           TextButton(
             style: TextButton.styleFrom(
               foregroundColor: PaperTokens.of(context).error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: Text(context.l10n.actionDelete),
           ),
         ],
       ),
@@ -152,10 +155,12 @@ class _Body extends ConsumerWidget {
     final images = outfit.outfitImages ?? const [];
     final pieces = outfit.items ?? const <ItemModel>[];
     final summary = [
-      if (outfit.style != null) outfit.style!.displayName,
-      if (outfit.season != null) outfit.season!.displayName,
-      '${pieces.isEmpty ? outfit.itemIds.length : pieces.length} pieces',
-      if (outfit.isDraft) 'Draft',
+      if (outfit.style != null) outfit.style!.label(context.l10n),
+      if (outfit.season != null) outfit.season!.label(context.l10n),
+      context.l10n.closetPieceCount(
+        pieces.isEmpty ? outfit.itemIds.length : pieces.length,
+      ),
+      if (outfit.isDraft) context.l10n.outfitDraft,
     ].join(' · ');
 
     return CustomScrollView(
@@ -168,31 +173,31 @@ class _Body extends ConsumerWidget {
           flexibleSpace: const PaperGrainFill(),
           actions: [
             IconButton(
-              tooltip: 'Edit',
+              tooltip: context.l10n.actionEdit,
               icon: const Icon(Icons.edit_outlined),
               onPressed: () => context.push(Routes.outfitEdit(outfit.id)),
             ),
             Builder(
               builder: (buttonContext) => IconButton(
-                tooltip: 'Share',
+                tooltip: context.l10n.outfitShareTooltip,
                 icon: const Icon(Icons.ios_share_rounded),
                 onPressed: () => _share(buttonContext, ref),
               ),
             ),
             PopupMenuButton<String>(
-              tooltip: 'More',
+              tooltip: context.l10n.tabMore,
               onSelected: (value) => value == 'duplicate'
                   ? ref.read(outfitsProvider.notifier).duplicate(outfit.id)
                   : _delete(context, ref),
               itemBuilder: (context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'duplicate',
-                  child: Text('Duplicate'),
+                  child: Text(context.l10n.outfitDuplicate),
                 ),
                 PopupMenuItem(
                   value: 'delete',
                   child: Text(
-                    'Delete',
+                    context.l10n.actionDelete,
                     style: TextStyle(color: PaperTokens.of(context).error),
                   ),
                 ),
@@ -252,8 +257,8 @@ class _Body extends ConsumerWidget {
                   ),
                   IconButton(
                     tooltip: outfit.isFavorite
-                        ? 'Remove favourite'
-                        : 'Save to favourites',
+                        ? context.l10n.closetUnfavourite
+                        : context.l10n.outfitSaveFavourite,
                     onPressed: busy
                         ? null
                         : () => ref
@@ -275,7 +280,10 @@ class _Body extends ConsumerWidget {
               ],
               if (pieces.isNotEmpty) ...[
                 const SizedBox(height: AppConstants.spacing20),
-                Text('Pieces', style: text.headlineSmall),
+                Text(
+                  context.l10n.outfitPiecesHeading,
+                  style: text.headlineSmall,
+                ),
                 const SizedBox(height: AppConstants.spacing8),
                 SizedBox(
                   height: 132,
@@ -294,13 +302,13 @@ class _Body extends ConsumerWidget {
                   children: [
                     _Figure(
                       value: paperFigure(outfit.wornCount),
-                      label: 'times worn',
+                      label: context.l10n.itemTimesWornLabel,
                     ),
                     _Figure(
                       value: outfit.lastWornAt == null
-                          ? 'Never'
+                          ? context.l10n.itemNeverWorn
                           : AppDateUtils.formatRelativeTime(outfit.lastWornAt!),
-                      label: 'last worn',
+                      label: context.l10n.itemLastWornLabel,
                     ),
                   ],
                 ),
@@ -394,7 +402,7 @@ class _WearHistory extends ConsumerWidget {
     final Widget body;
     if (outfit.wornCount == 0) {
       body = Text(
-        'Wear it once and the dates show up here.',
+        context.l10n.outfitWearHistoryEmpty,
         style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
       );
     } else {
@@ -438,12 +446,12 @@ class _WearHistory extends ConsumerWidget {
             // The first eight are a preview, not the whole history.
             if (value.length > 8)
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: TextButton(
                   onPressed: () => showDialog<void>(
                     context: context,
                     builder: (dialogContext) => AlertDialog(
-                      title: const Text('Wear history'),
+                      title: Text(dialogContext.l10n.outfitWearHistoryTitle),
                       // Long histories must scroll inside the dialog instead
                       // of pushing the Close action off-screen.
                       scrollable: true,
@@ -474,12 +482,12 @@ class _WearHistory extends ConsumerWidget {
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(dialogContext),
-                          child: const Text('Close'),
+                          child: Text(dialogContext.l10n.actionClose),
                         ),
                       ],
                     ),
                   ),
-                  child: Text('Show all ${value.length}'),
+                  child: Text(context.l10n.outfitShowAllCount(value.length)),
                 ),
               ),
           ],
@@ -488,13 +496,13 @@ class _WearHistory extends ConsumerWidget {
           children: [
             Expanded(
               child: Text(
-                "Couldn't load the dates.",
+                context.l10n.outfitWearHistoryError,
                 style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
               ),
             ),
             TextButton(
               onPressed: () => ref.invalidate(wearHistoryProvider(outfit.id)),
-              child: const Text('Retry'),
+              child: Text(context.l10n.actionRetry),
             ),
           ],
         ),
@@ -505,7 +513,10 @@ class _WearHistory extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Worn on', style: text.headlineSmall),
+          Text(
+            context.l10n.outfitWornOn,
+            style: text.headlineSmall,
+          ),
           const SizedBox(height: AppConstants.spacing8),
           body,
         ],
@@ -536,7 +547,7 @@ class _WornBar extends ConsumerWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.today_outlined),
-          label: const Text('Wore it today'),
+          label: Text(context.l10n.closetWoreToday),
         ),
       ),
     );

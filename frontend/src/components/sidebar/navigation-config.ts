@@ -13,7 +13,8 @@ import {
 import { FEATURES } from '@/lib/feature-flags'
 
 export interface NavItem {
-  name: string
+  /** Message id for the visible name. Resolved with `t()` at render, never here. */
+  labelKey: string
   href: string
   icon: LucideIcon
   badge?: string | number
@@ -25,17 +26,22 @@ export interface NavItem {
  * The gamification entry stays declared here rather than being deleted, so
  * turning `VITE_ENABLE_GAMIFICATION=true` back on needs no code edit — only an
  * env change and a rebuild.
+ *
+ * Labels are message ids, not English text: this array is built once at module
+ * scope, and resolving a translation here would freeze the nav in whatever
+ * language happened to be active at import time. The sidebar resolves
+ * `labelKey` per render so a language switch repaints the nav.
  */
 const ALL_NAV_ITEMS: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Photoshoot', href: '/photoshoot', icon: Camera },
-  { name: 'Closet', href: '/wardrobe', icon: Shirt },
-  { name: 'Outfits', href: '/outfits', icon: Layers },
-  { name: 'Try On', href: '/try-on', icon: Wand2 },
-  { name: 'Calendar', href: '/calendar', icon: Calendar },
-  { name: 'Recommendations', href: '/recommendations', icon: Sparkles },
-  { name: 'Gift Pro', href: '/gifts', icon: Gift },
-  { name: 'Gamification', href: '/gamification', icon: Flame },
+  { labelKey: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { labelKey: 'nav.photoshoot', href: '/photoshoot', icon: Camera },
+  { labelKey: 'nav.closet', href: '/wardrobe', icon: Shirt },
+  { labelKey: 'nav.outfits', href: '/outfits', icon: Layers },
+  { labelKey: 'nav.tryOn', href: '/try-on', icon: Wand2 },
+  { labelKey: 'nav.calendar', href: '/calendar', icon: Calendar },
+  { labelKey: 'nav.recommendations', href: '/recommendations', icon: Sparkles },
+  { labelKey: 'nav.giftPro', href: '/gifts', icon: Gift },
+  { labelKey: 'nav.gamification', href: '/gamification', icon: Flame },
 ]
 
 /**

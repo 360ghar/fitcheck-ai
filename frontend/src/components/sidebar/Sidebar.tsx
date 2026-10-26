@@ -9,6 +9,7 @@ import { navigationItems } from './navigation-config'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from '@/i18n'
 
 interface SidebarProps {
   className?: string
@@ -16,15 +17,19 @@ interface SidebarProps {
 
 export function Sidebar({ className }: SidebarProps) {
   const { isCollapsed } = useSidebar()
+  const { t } = useTranslation()
 
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border bg-background transition-[width] duration-200 ease-out',
+        // Logical sides throughout: on an RTL page the sidebar belongs on the
+        // right (inline-start), and `start-0`/`border-r` would pin it to the
+        // wrong edge with the border on its outer side.
+        'fixed inset-y-0 start-0 z-40 flex flex-col border-e border-border bg-background transition-[width] duration-200 ease-out',
         isCollapsed ? 'w-16' : 'w-60',
         className
       )}
-      aria-label="Main sidebar"
+      aria-label={t('nav.mainNavigation')}
     >
       {/* Logo and collapse toggle */}
       <div
@@ -45,7 +50,7 @@ export function Sidebar({ className }: SidebarProps) {
               key={item.href}
               href={item.href}
               icon={item.icon}
-              label={item.name}
+              label={t(item.labelKey)}
               badge={item.badge}
             />
           ))}
@@ -53,10 +58,10 @@ export function Sidebar({ className }: SidebarProps) {
       </SidebarNav>
 
       <div className="px-3 pb-3">
-        <Button asChild className={cn('w-full', isCollapsed && 'px-0')} aria-label="Add to wardrobe">
+        <Button asChild className={cn('w-full', isCollapsed && 'px-0')} aria-label={t('nav.addToWardrobe')}>
           <Link to="/wardrobe?action=add">
             <Plus className="h-4 w-4" />
-            {!isCollapsed && 'Add item'}
+            {!isCollapsed && t('nav.addItem')}
           </Link>
         </Button>
       </div>

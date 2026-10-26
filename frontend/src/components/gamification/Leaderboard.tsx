@@ -12,6 +12,7 @@
  */
 
 import { useState } from 'react'
+import { formatNumber, useTranslation } from '@/i18n'
 import {
   Trophy,
   Medal,
@@ -104,6 +105,7 @@ function RankBadge({ rank }: { rank: number }) {
 }
 
 function Podium({ entries }: { entries: LeaderboardEntry[] }) {
+  const { t } = useTranslation()
   const top3 = entries.slice(0, 3)
   const [first, second, third] = [
     top3.find((e) => e.rank === 1),
@@ -128,7 +130,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
             )}
           </Avatar>
           <p className="text-sm font-medium mt-2 max-w-20 truncate text-foreground">{second.username}</p>
-          <p className="text-xs text-muted-foreground">{second.total_points.toLocaleString()} pts</p>
+          <p className="text-xs text-muted-foreground">{t('leaderboard.points', { count: second.total_points })}</p>
           <div className="w-16 sm:w-20 h-24 bg-gray-400 rounded-t-lg mt-2 flex items-end justify-center pb-2">
             <span className="text-2xl font-bold text-white">2</span>
           </div>
@@ -147,10 +149,10 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
               </AvatarFallback>
             )}
           </Avatar>
-          <Trophy className="h-8 w-8 text-yellow-500 absolute -bottom-2 -right-2 fill-yellow-500" />
+          <Trophy className="h-8 w-8 text-yellow-500 absolute -bottom-2 --end-2 fill-yellow-500" />
         </div>
         <p className="text-sm font-semibold mt-2 max-w-24 truncate text-foreground">{first.username}</p>
-        <p className="text-xs text-muted-foreground">{first.total_points.toLocaleString()} pts</p>
+        <p className="text-xs text-muted-foreground">{t('leaderboard.points', { count: first.total_points })}</p>
         <div className="w-20 sm:w-24 h-32 bg-yellow-500 rounded-t-lg mt-2 flex items-end justify-center pb-2">
           <span className="text-3xl font-bold text-white">1</span>
         </div>
@@ -169,7 +171,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
             )}
           </Avatar>
           <p className="text-sm font-medium mt-2 max-w-20 truncate text-foreground">{third.username}</p>
-          <p className="text-xs text-muted-foreground">{third.total_points.toLocaleString()} pts</p>
+          <p className="text-xs text-muted-foreground">{t('leaderboard.points', { count: third.total_points })}</p>
           <div className="w-16 sm:w-20 h-16 bg-amber-700 rounded-t-lg mt-2 flex items-end justify-center pb-2">
             <span className="text-2xl font-bold text-white">3</span>
           </div>
@@ -188,6 +190,7 @@ function LeaderboardRow({
   isCurrentUser: boolean
   showRank?: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <div
       className={`
@@ -211,13 +214,13 @@ function LeaderboardRow({
         <div className="flex items-center gap-2">
           <p className="font-medium truncate text-foreground">{entry.username}</p>
           {isCurrentUser && (
-            <Badge variant="secondary" className="text-xs">You</Badge>
+            <Badge variant="secondary" className="text-xs">{t('leaderboard.you')}</Badge>
           )}
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>Level {entry.level}</span>
           <span>•</span>
-          <span className="font-semibold text-primary">{entry.total_points.toLocaleString()} pts</span>
+          <span className="font-semibold text-primary">{t('leaderboard.points', { count: entry.total_points })}</span>
         </div>
       </div>
 
@@ -251,6 +254,7 @@ export function Leaderboard({
   onPeriodChange,
   period = 'all'
 }: LeaderboardProps) {
+  const { t } = useTranslation()
   const [showAll, setShowAll] = useState(false)
 
   // Find if current user is in the visible list
@@ -275,9 +279,9 @@ export function Leaderboard({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="all">{t('leaderboard.allTime')}</SelectItem>
+                <SelectItem value="week">{t('leaderboard.thisWeek')}</SelectItem>
+                <SelectItem value="month">{t('leaderboard.thisMonth')}</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -307,7 +311,7 @@ export function Leaderboard({
             className="w-full"
             onClick={() => setShowAll(true)}
           >
-            Show All ({entries.length}) <ChevronDown className="h-4 w-4 ml-2" />
+            Show All ({entries.length}) <ChevronDown className="h-4 w-4 ms-2" />
           </Button>
         )}
 
@@ -315,7 +319,7 @@ export function Leaderboard({
         {userRank && !isCurrentUserVisible && (
           <div className="pt-4 border-t border-border">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-foreground">Your Ranking</p>
+              <p className="text-sm font-medium text-foreground">{t('leaderboard.yourRanking')}</p>
               <Badge variant="outline">
                 Top {userRank.top_percentile}%
               </Badge>
@@ -340,15 +344,15 @@ export function Leaderboard({
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-xl sm:text-2xl font-bold text-primary">#{userRank.rank}</p>
-                <p className="text-xs text-muted-foreground">Your Rank</p>
+                <p className="text-xs text-muted-foreground">{t('leaderboard.yourRank')}</p>
               </div>
               <div>
                 <p className="text-xl sm:text-2xl font-bold text-foreground">{userRank.level}</p>
-                <p className="text-xs text-muted-foreground">Level</p>
+                <p className="text-xs text-muted-foreground">{t('leaderboard.level')}</p>
               </div>
               <div>
-                <p className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-500">{userRank.total_points.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Total Points</p>
+                <p className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-500">{formatNumber(userRank.total_points)}</p>
+                <p className="text-xs text-muted-foreground">{t('leaderboard.totalPoints')}</p>
               </div>
             </div>
           </div>

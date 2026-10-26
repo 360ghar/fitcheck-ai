@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// User-visible message when the store rail is not serving the plan's
 /// products: the store answered and resolved zero of the queried IDs (e.g.
@@ -158,7 +159,8 @@ class IapService {
   }) async {
     if (!await _purchase.isAvailable()) {
       throw IapException(
-        message: 'Store purchases are not available on this device.',
+        message: ErrorHandler.l10n?.billingStoreUnavailableBody ??
+            'Store purchases are not available on this device.',
       );
     }
     final String? storeAccountId = appAccountToken == null
@@ -182,8 +184,9 @@ class IapService {
       // showing a generic "Purchase failed" the user can only retry into.
       if (e.code == 'storekit_duplicate_product_object') {
         throw IapException(
-          message: 'This purchase is still being processed. Reopen the app in '
-              'a moment and it will finish automatically.',
+          message: ErrorHandler.l10n?.billingPurchaseProcessingBody ??
+              'This purchase is still being processed. Reopen the app in a '
+                  'minute to see your plan.',
           errorCode: e.code,
           details: 'productId=${product.id} | ${e.toString()}',
         );

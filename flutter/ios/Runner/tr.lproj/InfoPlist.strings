@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "Kıyafetlerinin ve gardırobunun fotoğraflarını çekmek için FitCheck AI kamera erişimine ihtiyaç duyar.";
+"NSPhotoLibraryUsageDescription" = "Kıyafetlerinin ve gardırop ürünlerinin fotoğraflarını seçmek için FitCheck AI fotoğraf arşivine erişmelidir.";
+"NSPhotoLibraryAddUsageDescription" = "Yapay zeka tarafından oluşturulan kıyafet fotoğraflarını fotoğraf arşivine kaydetmek için FitCheck AI izne ihtiyaç duyar.";

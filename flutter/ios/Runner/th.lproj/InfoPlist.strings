@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "FitCheck AI ต้องเข้าถึงกล้องเพื่อถ่ายภาพชุดของคุณ";
+"NSPhotoLibraryUsageDescription" = "FitCheck AI ต้องเข้าถึงคลังรูปภาพเพื่อเลือกรูปชุดของคุณ";
+"NSPhotoLibraryAddUsageDescription" = "FitCheck AI ต้องบันทึกภาพชุดจาก AI ของคุณลงในคลังรูปภาพ";

@@ -18,7 +18,7 @@ const CLAY_PRESS =
 const buttonVariants = cva(
   // Motion: press feedback is a transform scale (motion-safe gated), not a
   // color swap alone — the press should feel mechanical, not like a repaint.
-  "relative inline-flex min-w-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-bold leading-none text-ink transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out motion-safe:active:scale-[0.97] before:absolute before:-inset-y-0.5 before:left-0 before:right-0 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-surface-card disabled:text-ash disabled:opacity-100 disabled:motion-safe:scale-100 cursor-pointer [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "relative inline-flex min-w-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-bold leading-none text-ink transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out motion-safe:active:scale-[0.97] before:absolute before:-inset-y-0.5 before:start-0 before:end-0 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-surface-card disabled:text-ash disabled:opacity-100 disabled:motion-safe:scale-100 cursor-pointer [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {

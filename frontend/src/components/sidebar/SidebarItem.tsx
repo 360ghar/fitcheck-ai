@@ -68,7 +68,7 @@ export function SidebarItem({
         {label}
       </span>
       {badge !== undefined && !isCollapsed && (
-        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
+        <span className="ms-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
           {badge}
         </span>
       )}
@@ -82,7 +82,7 @@ export function SidebarItem({
         <TooltipContent side="right" sideOffset={10}>
           <p>{label}</p>
           {badge !== undefined && (
-            <span className="ml-1 text-xs text-muted-foreground">({badge})</span>
+            <span className="ms-1 text-xs text-muted-foreground">({badge})</span>
           )}
         </TooltipContent>
       </Tooltip>

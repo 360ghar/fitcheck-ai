@@ -8,6 +8,7 @@ import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../models/gamification_model.dart';
 import '../providers/gamification_providers.dart';
+import '../../../core/i18n/l10n.dart';
 
 /// Streak, achievements and the leaderboard.
 class GamificationPage extends ConsumerWidget {
@@ -33,7 +34,7 @@ class GamificationPage extends ConsumerWidget {
     return PaperStockScope(
       stock: PaperStockId.marigold,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Rewards')),
+        appBar: AppBar(title: Text(context.l10n.rewardsTitle)),
         // Root-navigator page: restore the shell tabs below the content.
         bottomNavigationBar: AppBottomNavigationBar.shellBar(
           context,
@@ -176,13 +177,13 @@ class _StreakCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'day streak',
+                            context.l10n.rewardsDayStreakLabel,
                             style: text.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
-                            'Best ${value.longestStreak} days',
+                            context.l10n.rewardsBestStreak(value.longestStreak),
                             style: text.bodyMedium?.copyWith(
                               color: tokens.textSecondary,
                             ),
@@ -244,10 +245,10 @@ class _Achievements extends StatelessWidget {
         children: [
           // A retained empty list can still carry a failed refresh: show it.
           ?error,
-          const AppEmptyState(
+          AppEmptyState(
             scene: PaperScenes.outfits,
-            title: 'No achievements yet',
-            message: 'Add pieces and plan outfits to earn your first.',
+            title: context.l10n.rewardsNoAchievementsTitle,
+            message: context.l10n.rewardsNoAchievementsBody,
           ),
         ],
       );
@@ -388,10 +389,10 @@ class _Leaderboard extends StatelessWidget {
         children: [
           // A retained empty list can still carry a failed refresh: show it.
           ?error,
-          const AppEmptyState(
+          AppEmptyState(
             scene: PaperScenes.home,
-            title: 'No one on the board yet',
-            message: 'Plan outfits to earn points and show up here.',
+            title: context.l10n.rewardsEmptyLeaderboardTitle,
+            message: context.l10n.rewardsEmptyLeaderboardBody,
           ),
         ],
       );
@@ -496,7 +497,7 @@ class _LeaderRow extends StatelessWidget {
           ),
           const SizedBox(width: AppConstants.spacing8),
           Text(
-            '${entry.points} pts',
+            context.l10n.rewardsPointsValue(entry.points),
             style: text.labelLarge?.copyWith(color: tokens.textSecondary),
           ),
         ],

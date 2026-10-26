@@ -457,7 +457,9 @@
   }
 
   .skip-link {
-    @apply fixed left-4 top-4 z-[200] rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground shadow-lg;
+    /* `start-4` not `left-4`: the skip link is the first focusable element on
+       every page and must appear on the reading-start edge in an RTL document. */
+    @apply fixed start-4 top-4 z-[200] rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground shadow-lg;
     /* The system face: this off-screen link is on every page, and in Inter
        it alone made the paper landing download Inter (47 KB). */
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -895,8 +897,10 @@ a.text-primary {
   .paper-tear::after {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
+    /* `inset-inline` rather than `left`/`right`: the tear spans both edges, and
+       a physical pair silently pins the wrong side once the document flips to
+       RTL. */
+    inset-inline: 0;
     height: 16px;
     pointer-events: none;
     -webkit-mask: url('/paper/tear.svg') repeat-x 0 0 / 240px 16px;
@@ -922,8 +926,7 @@ a.text-primary {
   .paper-tear-bottom::after {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
+    inset-inline: 0;
     height: 16px;
     pointer-events: none;
     transform: scaleY(-1);
@@ -1452,4 +1455,39 @@ a.text-primary {
     color: hsl(var(--paper-floor-mark));
     white-space: nowrap;
   }
+}
+
+/* ============================================================================
+   RIGHT-TO-LEFT
+   ============================================================================
+
+   Direction itself is set on <html> by the i18n provider (`dir="rtl"` for
+   Arabic, Hebrew and Urdu), before paint — see src/i18n/preload.ts.
+
+   Layout is mirrored by using logical utilities at the source rather than by
+   adding `[dir="rtl"]` overrides here: `ps-*`/`pe-*`, `ms-*`/`me-*`,
+   `start-*`/`end-*`, `border-s`/`border-e`, `text-start`/`text-end`, and
+   `inset-inline` in raw CSS. An override block is a second layout that has to
+   be kept in sync with the first one forever; logical properties are one layout
+   that happens to mirror.
+
+   Two exceptions are deliberate and live below rather than inline, because they
+   are about a *composition*, not a box edge:
+
+   1. The "signature" diagram (`.sig-*`) is an absolutely positioned collage
+      whose pieces are placed at explicit `cqw` offsets from the left. Mirroring
+      it is a design decision about the artwork, not a mechanical property swap,
+      so it is pinned LTR instead of half-mirrored.
+   2. Numeric code, IDs and URLs stay LTR inside an RTL paragraph. `<bdi>` and
+      `dir="ltr"` on the element are the right tool for those; this is the
+      fallback for anything that slips through.
+*/
+[dir='rtl'] .sig-stage {
+  direction: ltr;
+}
+
+[dir='rtl'] .font-mono,
+[dir='rtl'] code {
+  direction: ltr;
+  unicode-bidi: isolate;
 }

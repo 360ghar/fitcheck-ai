@@ -271,7 +271,7 @@ export default function BlogIndexPage() {
                                 {post.category}
                               </span>
                               <span className="flex items-center text-gray-500 dark:text-gray-400">
-                                <Clock className="w-3.5 h-3.5 mr-1" />
+                                <Clock className="w-3.5 h-3.5 me-1" />
                                 {post.read_time}
                               </span>
                             </div>
@@ -289,12 +289,12 @@ export default function BlogIndexPage() {
                             {/* Footer */}
                             <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-800">
                               <span className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                                <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                                <Calendar className="w-3.5 h-3.5 me-1.5" />
                                 {formatDate(post.date)}
                               </span>
                               <span className="text-sm font-medium text-primary dark:text-primary flex items-center">
                                 Read more
-                                <ArrowRight className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" />
+                                <ArrowRight className="w-4 h-4 ms-1 transform group-hover:translate-x-1 transition-transform" />
                               </span>
                             </div>
                           </div>

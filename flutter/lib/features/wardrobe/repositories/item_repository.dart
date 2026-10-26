@@ -65,7 +65,7 @@ class ItemRepository {
     for (final body in slice)
       BatchSaveFailure(
         tempId: body['temp_id']?.toString() ?? '',
-        message: 'Nothing was saved. Try again.',
+        message: ErrorHandler.l10n?.jobsNothingSavedBody ?? 'Nothing was saved. Try again.',
       ),
   ];
 
@@ -259,7 +259,11 @@ class ItemRepository {
     }
     List<BatchSaveFailure> failed = [
       for (final tempId in unsavable)
-        BatchSaveFailure(tempId: tempId, message: 'Photo upload failed.'),
+        BatchSaveFailure(
+          tempId: tempId,
+          message: ErrorHandler.l10n?.jobsPhotoUploadFailedBody ??
+              'Photo upload failed.',
+        ),
     ];
     final saved = <SavedPiece>[];
     // Slices keep each request under the backend's per-call entry cap; one

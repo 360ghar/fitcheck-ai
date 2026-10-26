@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/routes/app_routes.dart';
+import '../../../core/i18n/l10n.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/paper.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -69,15 +70,15 @@ class _MainShellPageState extends ConsumerState<MainShellPage> {
         child: switch (current) {
           2 => FloatingActionButton.extended(
             onPressed: () => context.push(Routes.wardrobeAdd),
-            tooltip: 'Add closet item',
+            tooltip: context.l10n.actionAddItem,
             icon: const Icon(Icons.add),
-            label: const Text('Add Item'),
+            label: Text(context.l10n.actionAddItem),
           ),
           3 => FloatingActionButton.extended(
             onPressed: () => context.push(Routes.outfitBuilder),
-            tooltip: 'Create new outfit',
+            tooltip: context.l10n.actionCreateOutfit,
             icon: const Icon(Icons.add),
-            label: const Text('Create Outfit'),
+            label: Text(context.l10n.actionCreateOutfit),
           ),
           _ => const SizedBox.shrink(),
         },

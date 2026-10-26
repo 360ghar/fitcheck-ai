@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PinGrid } from '@/components/wardrobe/pin-grid'
 import type { SocialImportPhoto } from '@/types'
+import { useTranslation } from '@/i18n'
 
 interface SocialImportQueueReviewProps {
   awaitingPhoto?: SocialImportPhoto | null
@@ -25,10 +26,11 @@ export function SocialImportQueueReview({
   onItemUpdate,
   isBusy = false,
 }: SocialImportQueueReviewProps) {
+  const { t } = useTranslation()
   if (!awaitingPhoto) {
     return (
       <div className="rounded-lg border border-border p-6 text-center text-sm text-muted-foreground">
-        No photo is currently awaiting your review.
+        {t('extract.awaitingReview')}
       </div>
     )
   }
@@ -38,7 +40,7 @@ export function SocialImportQueueReview({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3 rounded-md border border-border bg-surface-soft p-4">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-foreground">Awaiting Confirmation</p>
+            <p className="text-sm font-semibold text-foreground">{t('extract.awaitingConfirmation')}</p>
             <Badge>Photo #{awaitingPhoto.ordinal}</Badge>
           </div>
 
@@ -54,12 +56,12 @@ export function SocialImportQueueReview({
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Input
                     defaultValue={item.name || ''}
-                    placeholder="Item name"
+                    placeholder={t('extract.itemName')}
                     onBlur={(e) => onItemUpdate(awaitingPhoto.id, item.id, { name: e.target.value.trim() || null })}
                   />
                   <Input
                     defaultValue={item.category}
-                    placeholder="Category"
+                    placeholder={t('filters.category')}
                     onBlur={(e) => onItemUpdate(awaitingPhoto.id, item.id, { category: e.target.value.trim() || item.category })}
                   />
                 </div>
@@ -67,7 +69,7 @@ export function SocialImportQueueReview({
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <Input
                     defaultValue={(item.colors || []).join(', ')}
-                    placeholder="Colors (comma-separated)"
+                    placeholder={t('extract.colorsCommaSeparated')}
                     onBlur={(e) =>
                       onItemUpdate(awaitingPhoto.id, item.id, {
                         colors: e.target.value
@@ -79,7 +81,7 @@ export function SocialImportQueueReview({
                   />
                   <Input
                     defaultValue={item.material || ''}
-                    placeholder="Material"
+                    placeholder={t('extract.material')}
                     onBlur={(e) => onItemUpdate(awaitingPhoto.id, item.id, { material: e.target.value.trim() || null })}
                   />
                 </div>
@@ -101,28 +103,28 @@ export function SocialImportQueueReview({
 
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button variant="outline" disabled={isBusy} onClick={() => onReject()}>
-              <X className="mr-2 h-4 w-4" />
-              Reject
+              <X className="me-2 h-4 w-4" />
+              {t('extract.reject')}
             </Button>
             <Button disabled={isBusy} onClick={() => onApprove()}>
-              <Check className="mr-2 h-4 w-4" />
-              Approve & Save
+              <Check className="me-2 h-4 w-4" />
+              {t('extract.approveAndSave')}
             </Button>
           </div>
         </div>
 
         <div className="space-y-3 rounded-md border border-border bg-surface-soft p-4">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-foreground">Next In Background</p>
+            <p className="text-sm font-semibold text-foreground">{t('extract.nextInBackground')}</p>
             {bufferedPhoto ? (
-              <Badge variant="secondary">Ready</Badge>
+              <Badge variant="secondary">{t('extract.statusReady')}</Badge>
             ) : processingPhoto ? (
               <Badge variant="outline" className="gap-1">
                 <Clock3 className="h-3.5 w-3.5" />
-                Processing
+                {t('extract.processing')}
               </Badge>
             ) : (
-              <Badge variant="outline">Waiting</Badge>
+              <Badge variant="outline">{t('extract.waiting')}</Badge>
             )}
           </div>
 

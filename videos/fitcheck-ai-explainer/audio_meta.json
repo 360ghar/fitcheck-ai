@@ -1,0 +1,1249 @@
+{
+  "bgm": {
+    "path": "assets/bgm/track.wav",
+    "volume": 0.12,
+    "query": null,
+    "duration_s": null
+  },
+  "bgm_pending": true,
+  "voices": [
+    {
+      "frame": 1,
+      "path": "assets/voice/01.wav",
+      "duration_s": 2.816,
+      "words": []
+    },
+    {
+      "frame": 2,
+      "path": "assets/voice/02.wav",
+      "duration_s": 4.693,
+      "words": [
+        {
+          "id": "w0",
+          "text": "15",
+          "start": 0.08,
+          "end": 0.42
+        },
+        {
+          "id": "w1",
+          "text": "minutes",
+          "start": 0.42,
+          "end": 0.91
+        },
+        {
+          "id": "w2",
+          "text": "deciding,",
+          "start": 0.91,
+          "end": 1.62
+        },
+        {
+          "id": "w3",
+          "text": "3",
+          "start": 1.62,
+          "end": 1.83
+        },
+        {
+          "id": "w4",
+          "text": "impulse",
+          "start": 1.83,
+          "end": 2.33
+        },
+        {
+          "id": "w5",
+          "text": "buys",
+          "start": 2.33,
+          "end": 2.62
+        },
+        {
+          "id": "w6",
+          "text": "a",
+          "start": 2.62,
+          "end": 2.69
+        },
+        {
+          "id": "w7",
+          "text": "month,",
+          "start": 2.69,
+          "end": 3.19
+        },
+        {
+          "id": "w8",
+          "text": "and",
+          "start": 3.19,
+          "end": 3.35
+        },
+        {
+          "id": "w9",
+          "text": "half",
+          "start": 3.35,
+          "end": 3.53
+        },
+        {
+          "id": "w10",
+          "text": "your",
+          "start": 3.65,
+          "end": 3.79
+        },
+        {
+          "id": "w11",
+          "text": "closet",
+          "start": 3.79,
+          "end": 4.12
+        },
+        {
+          "id": "w12",
+          "text": "forgotten.",
+          "start": 4.12,
+          "end": 4.64
+        }
+      ]
+    },
+    {
+      "frame": 3,
+      "path": "assets/voice/03.wav",
+      "duration_s": 3.285,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Meet",
+          "start": 0.04,
+          "end": 0.34
+        },
+        {
+          "id": "w1",
+          "text": "FitCheck",
+          "start": 0.34,
+          "end": 1.01
+        },
+        {
+          "id": "w2",
+          "text": "AI,",
+          "start": 1.01,
+          "end": 1.2
+        },
+        {
+          "id": "w3",
+          "text": "your",
+          "start": 1.42,
+          "end": 1.72
+        },
+        {
+          "id": "w4",
+          "text": "closet",
+          "start": 1.72,
+          "end": 2.26
+        },
+        {
+          "id": "w5",
+          "text": "rebuilt",
+          "start": 2.26,
+          "end": 2.89
+        },
+        {
+          "id": "w6",
+          "text": "by",
+          "start": 2.89,
+          "end": 3.06
+        },
+        {
+          "id": "w7",
+          "text": "AI.",
+          "start": 3.06,
+          "end": 3.28
+        }
+      ]
+    },
+    {
+      "frame": 4,
+      "path": "assets/voice/04.wav",
+      "duration_s": 5.675,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Snap",
+          "start": 0.08,
+          "end": 0.25
+        },
+        {
+          "id": "w1",
+          "text": "photos",
+          "start": 0.25,
+          "end": 0.63
+        },
+        {
+          "id": "w2",
+          "text": "of",
+          "start": 0.63,
+          "end": 0.75
+        },
+        {
+          "id": "w3",
+          "text": "your",
+          "start": 0.75,
+          "end": 0.87
+        },
+        {
+          "id": "w4",
+          "text": "clothes.",
+          "start": 1,
+          "end": 1.66
+        },
+        {
+          "id": "w5",
+          "text": "The",
+          "start": 1.74,
+          "end": 1.87
+        },
+        {
+          "id": "w6",
+          "text": "AI",
+          "start": 1.87,
+          "end": 1.94
+        },
+        {
+          "id": "w7",
+          "text": "extracts",
+          "start": 2.1,
+          "end": 2.53
+        },
+        {
+          "id": "w8",
+          "text": "every",
+          "start": 2.66,
+          "end": 2.9
+        },
+        {
+          "id": "w9",
+          "text": "item,",
+          "start": 2.93,
+          "end": 3.38
+        },
+        {
+          "id": "w10",
+          "text": "color,",
+          "start": 3.38,
+          "end": 3.79
+        },
+        {
+          "id": "w11",
+          "text": "fabric,",
+          "start": 3.79,
+          "end": 4.28
+        },
+        {
+          "id": "w12",
+          "text": "pattern,",
+          "start": 4.36,
+          "end": 4.86
+        },
+        {
+          "id": "w13",
+          "text": "automatically.",
+          "start": 4.93,
+          "end": 6.7
+        }
+      ]
+    },
+    {
+      "frame": 5,
+      "path": "assets/voice/05.wav",
+      "duration_s": 5.163,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Your",
+          "start": 0.05,
+          "end": 0.27
+        },
+        {
+          "id": "w1",
+          "text": "wardrobe",
+          "start": 0.27,
+          "end": 0.66
+        },
+        {
+          "id": "w2",
+          "text": "cataloged",
+          "start": 0.9,
+          "end": 1.36
+        },
+        {
+          "id": "w3",
+          "text": "and",
+          "start": 1.44,
+          "end": 1.61
+        },
+        {
+          "id": "w4",
+          "text": "searchable.",
+          "start": 1.61,
+          "end": 2.54
+        },
+        {
+          "id": "w5",
+          "text": "Favorites,",
+          "start": 2.59,
+          "end": 3.15
+        },
+        {
+          "id": "w6",
+          "text": "filters,",
+          "start": 3.15,
+          "end": 3.68
+        },
+        {
+          "id": "w7",
+          "text": "and",
+          "start": 3.68,
+          "end": 3.86
+        },
+        {
+          "id": "w8",
+          "text": "matches",
+          "start": 3.86,
+          "end": 4.28
+        },
+        {
+          "id": "w9",
+          "text": "that",
+          "start": 4.28,
+          "end": 4.47
+        },
+        {
+          "id": "w10",
+          "text": "learn",
+          "start": 4.47,
+          "end": 4.7
+        },
+        {
+          "id": "w11",
+          "text": "your",
+          "start": 4.7,
+          "end": 4.71
+        },
+        {
+          "id": "w12",
+          "text": "style.",
+          "start": 5.14,
+          "end": 5.29
+        }
+      ]
+    },
+    {
+      "frame": 6,
+      "path": "assets/voice/06.wav",
+      "duration_s": 3.947,
+      "words": [
+        {
+          "id": "w0",
+          "text": "mix",
+          "start": 0.05,
+          "end": 0.16
+        },
+        {
+          "id": "w1",
+          "text": "and",
+          "start": 0.31,
+          "end": 0.4
+        },
+        {
+          "id": "w2",
+          "text": "match,",
+          "start": 0.4,
+          "end": 0.8
+        },
+        {
+          "id": "w3",
+          "text": "or",
+          "start": 0.92,
+          "end": 1.02
+        },
+        {
+          "id": "w4",
+          "text": "let",
+          "start": 1.02,
+          "end": 1.24
+        },
+        {
+          "id": "w5",
+          "text": "the",
+          "start": 1.24,
+          "end": 1.46
+        },
+        {
+          "id": "w6",
+          "text": "AI",
+          "start": 1.46,
+          "end": 1.6
+        },
+        {
+          "id": "w7",
+          "text": "dress",
+          "start": 1.6,
+          "end": 1.96
+        },
+        {
+          "id": "w8",
+          "text": "you.",
+          "start": 1.96,
+          "end": 2.44
+        },
+        {
+          "id": "w9",
+          "text": "One",
+          "start": 2.49,
+          "end": 2.6
+        },
+        {
+          "id": "w10",
+          "text": "tap",
+          "start": 2.75,
+          "end": 2.82
+        },
+        {
+          "id": "w11",
+          "text": "generates",
+          "start": 2.82,
+          "end": 3.41
+        },
+        {
+          "id": "w12",
+          "text": "the",
+          "start": 3.41,
+          "end": 3.58
+        },
+        {
+          "id": "w13",
+          "text": "look.",
+          "start": 3.67,
+          "end": 4.1
+        }
+      ]
+    },
+    {
+      "frame": 7,
+      "path": "assets/voice/07.wav",
+      "duration_s": 4.011,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Plan",
+          "start": 0.08,
+          "end": 0.25
+        },
+        {
+          "id": "w1",
+          "text": "the",
+          "start": 0.25,
+          "end": 0.44
+        },
+        {
+          "id": "w2",
+          "text": "week,",
+          "start": 0.44,
+          "end": 0.84
+        },
+        {
+          "id": "w3",
+          "text": "it",
+          "start": 0.91,
+          "end": 0.93
+        },
+        {
+          "id": "w4",
+          "text": "checks",
+          "start": 0.93,
+          "end": 1.2
+        },
+        {
+          "id": "w5",
+          "text": "your",
+          "start": 1.21,
+          "end": 1.4
+        },
+        {
+          "id": "w6",
+          "text": "calendar",
+          "start": 1.4,
+          "end": 1.79
+        },
+        {
+          "id": "w7",
+          "text": "and",
+          "start": 1.81,
+          "end": 1.97
+        },
+        {
+          "id": "w8",
+          "text": "the",
+          "start": 1.97,
+          "end": 2.11
+        },
+        {
+          "id": "w9",
+          "text": "weather,",
+          "start": 2.16,
+          "end": 2.54
+        },
+        {
+          "id": "w10",
+          "text": "so",
+          "start": 2.62,
+          "end": 2.65
+        },
+        {
+          "id": "w11",
+          "text": "you",
+          "start": 2.65,
+          "end": 2.81
+        },
+        {
+          "id": "w12",
+          "text": "never",
+          "start": 2.81,
+          "end": 3.02
+        },
+        {
+          "id": "w13",
+          "text": "freeze",
+          "start": 3.14,
+          "end": 3.37
+        },
+        {
+          "id": "w14",
+          "text": "in",
+          "start": 3.45,
+          "end": 3.52
+        },
+        {
+          "id": "w15",
+          "text": "a",
+          "start": 3.53,
+          "end": 3.58
+        },
+        {
+          "id": "w16",
+          "text": "meeting.",
+          "start": 3.58,
+          "end": 4.16
+        }
+      ]
+    },
+    {
+      "frame": 8,
+      "path": "assets/voice/08.wav",
+      "duration_s": 5.077,
+      "words": [
+        {
+          "id": "w0",
+          "text": "See",
+          "start": 0.1,
+          "end": 0.18
+        },
+        {
+          "id": "w1",
+          "text": "it",
+          "start": 0.18,
+          "end": 0.26
+        },
+        {
+          "id": "w2",
+          "text": "before",
+          "start": 0.34,
+          "end": 0.67
+        },
+        {
+          "id": "w3",
+          "text": "you",
+          "start": 0.67,
+          "end": 0.85
+        },
+        {
+          "id": "w4",
+          "text": "wear",
+          "start": 0.85,
+          "end": 0.98
+        },
+        {
+          "id": "w5",
+          "text": "it.",
+          "start": 1.24,
+          "end": 1.26
+        },
+        {
+          "id": "w6",
+          "text": "Virtual",
+          "start": 1.37,
+          "end": 1.82
+        },
+        {
+          "id": "w7",
+          "text": "try-on.",
+          "start": 1.82,
+          "end": 2.54
+        },
+        {
+          "id": "w8",
+          "text": "Photo",
+          "start": 2.64,
+          "end": 2.8
+        },
+        {
+          "id": "w9",
+          "text": "shoot",
+          "start": 2.88,
+          "end": 3.14
+        },
+        {
+          "id": "w10",
+          "text": "ready",
+          "start": 3.14,
+          "end": 3.44
+        },
+        {
+          "id": "w11",
+          "text": "images",
+          "start": 3.44,
+          "end": 3.52
+        },
+        {
+          "id": "w12",
+          "text": "straight",
+          "start": 3.82,
+          "end": 4.2
+        },
+        {
+          "id": "w13",
+          "text": "from",
+          "start": 4.26,
+          "end": 4.42
+        },
+        {
+          "id": "w14",
+          "text": "your",
+          "start": 4.42,
+          "end": 4.62
+        },
+        {
+          "id": "w15",
+          "text": "phone.",
+          "start": 4.62,
+          "end": 5.04
+        }
+      ]
+    },
+    {
+      "frame": 9,
+      "path": "assets/voice/09.wav",
+      "duration_s": 4.907,
+      "words": [
+        {
+          "id": "w0",
+          "text": "It",
+          "start": 0.03,
+          "end": 0.07
+        },
+        {
+          "id": "w1",
+          "text": "finds",
+          "start": 0.2,
+          "end": 0.37
+        },
+        {
+          "id": "w2",
+          "text": "the",
+          "start": 0.44,
+          "end": 0.61
+        },
+        {
+          "id": "w3",
+          "text": "gaps,",
+          "start": 0.61,
+          "end": 0.89
+        },
+        {
+          "id": "w4",
+          "text": "the",
+          "start": 1.03,
+          "end": 1.2
+        },
+        {
+          "id": "w5",
+          "text": "missing",
+          "start": 1.21,
+          "end": 1.65
+        },
+        {
+          "id": "w6",
+          "text": "jacket,",
+          "start": 1.72,
+          "end": 2.12
+        },
+        {
+          "id": "w7",
+          "text": "the",
+          "start": 2.15,
+          "end": 2.19
+        },
+        {
+          "id": "w8",
+          "text": "better",
+          "start": 2.32,
+          "end": 2.61
+        },
+        {
+          "id": "w9",
+          "text": "alternative,",
+          "start": 2.66,
+          "end": 3.38
+        },
+        {
+          "id": "w10",
+          "text": "and",
+          "start": 3.41,
+          "end": 3.54
+        },
+        {
+          "id": "w11",
+          "text": "scores",
+          "start": 3.6,
+          "end": 3.77
+        },
+        {
+          "id": "w12",
+          "text": "what",
+          "start": 3.87,
+          "end": 3.97
+        },
+        {
+          "id": "w13",
+          "text": "you",
+          "start": 3.97,
+          "end": 4.29
+        },
+        {
+          "id": "w14",
+          "text": "already",
+          "start": 4.29,
+          "end": 4.59
+        },
+        {
+          "id": "w15",
+          "text": "own.",
+          "start": 4.59,
+          "end": 4.92
+        }
+      ]
+    },
+    {
+      "frame": 10,
+      "path": "assets/voice/10.wav",
+      "duration_s": 2.795,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Share",
+          "start": 0.1,
+          "end": 0.28
+        },
+        {
+          "id": "w1",
+          "text": "the",
+          "start": 0.28,
+          "end": 0.36
+        },
+        {
+          "id": "w2",
+          "text": "fit,",
+          "start": 0.49,
+          "end": 0.62
+        },
+        {
+          "id": "w3",
+          "text": "build",
+          "start": 0.79,
+          "end": 0.96
+        },
+        {
+          "id": "w4",
+          "text": "streaks,",
+          "start": 0.99,
+          "end": 1.48
+        },
+        {
+          "id": "w5",
+          "text": "climb",
+          "start": 1.62,
+          "end": 1.77
+        },
+        {
+          "id": "w6",
+          "text": "the",
+          "start": 1.77,
+          "end": 1.93
+        },
+        {
+          "id": "w7",
+          "text": "leaderboard.",
+          "start": 1.93,
+          "end": 2.79
+        }
+      ]
+    },
+    {
+      "frame": 11,
+      "path": "assets/voice/11.wav",
+      "duration_s": 7.445,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Emma",
+          "start": 0.04,
+          "end": 0.23
+        },
+        {
+          "id": "w1",
+          "text": "found",
+          "start": 0.32,
+          "end": 0.49
+        },
+        {
+          "id": "w2",
+          "text": "50",
+          "start": 0.63,
+          "end": 0.89
+        },
+        {
+          "id": "w3",
+          "text": "new",
+          "start": 0.89,
+          "end": 1.07
+        },
+        {
+          "id": "w4",
+          "text": "outfits",
+          "start": 1.07,
+          "end": 1.48
+        },
+        {
+          "id": "w5",
+          "text": "in",
+          "start": 1.5,
+          "end": 1.59
+        },
+        {
+          "id": "w6",
+          "text": "the",
+          "start": 1.59,
+          "end": 1.64
+        },
+        {
+          "id": "w7",
+          "text": "clothes",
+          "start": 1.77,
+          "end": 2.04
+        },
+        {
+          "id": "w8",
+          "text": "she",
+          "start": 2.04,
+          "end": 2.28
+        },
+        {
+          "id": "w9",
+          "text": "already",
+          "start": 2.28,
+          "end": 2.84
+        },
+        {
+          "id": "w10",
+          "text": "owned.",
+          "start": 2.84,
+          "end": 3.3
+        },
+        {
+          "id": "w11",
+          "text": "Marcus",
+          "start": 3.34,
+          "end": 3.73
+        },
+        {
+          "id": "w12",
+          "text": "saves",
+          "start": 3.73,
+          "end": 3.98
+        },
+        {
+          "id": "w13",
+          "text": "two",
+          "start": 4.09,
+          "end": 4.3
+        },
+        {
+          "id": "w14",
+          "text": "hours",
+          "start": 4.3,
+          "end": 4.66
+        },
+        {
+          "id": "w15",
+          "text": "every",
+          "start": 4.66,
+          "end": 4.94
+        },
+        {
+          "id": "w16",
+          "text": "week.",
+          "start": 5.07,
+          "end": 5.54
+        },
+        {
+          "id": "w17",
+          "text": "Priya",
+          "start": 5.58,
+          "end": 5.77
+        },
+        {
+          "id": "w18",
+          "text": "grew",
+          "start": 5.86,
+          "end": 6.03
+        },
+        {
+          "id": "w19",
+          "text": "engagement",
+          "start": 6.17,
+          "end": 6.7
+        },
+        {
+          "id": "w20",
+          "text": "40%.",
+          "start": 6.7,
+          "end": 7.34
+        }
+      ]
+    },
+    {
+      "frame": 12,
+      "path": "assets/voice/12.wav",
+      "duration_s": 5.525,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Start",
+          "start": 0.07,
+          "end": 0.27
+        },
+        {
+          "id": "w1",
+          "text": "free,",
+          "start": 0.44,
+          "end": 0.66
+        },
+        {
+          "id": "w2",
+          "text": "plus",
+          "start": 0.88,
+          "end": 0.98
+        },
+        {
+          "id": "w3",
+          "text": "and",
+          "start": 0.98,
+          "end": 1.15
+        },
+        {
+          "id": "w4",
+          "text": "pro",
+          "start": 1.26,
+          "end": 1.38
+        },
+        {
+          "id": "w5",
+          "text": "unlock",
+          "start": 1.38,
+          "end": 1.68
+        },
+        {
+          "id": "w6",
+          "text": "try-on,",
+          "start": 1.88,
+          "end": 2.4
+        },
+        {
+          "id": "w7",
+          "text": "analytics",
+          "start": 2.47,
+          "end": 2.94
+        },
+        {
+          "id": "w8",
+          "text": "and",
+          "start": 2.94,
+          "end": 3.06
+        },
+        {
+          "id": "w9",
+          "text": "planning.",
+          "start": 3.28,
+          "end": 3.8
+        },
+        {
+          "id": "w10",
+          "text": "Yearly",
+          "start": 3.87,
+          "end": 4.07
+        },
+        {
+          "id": "w11",
+          "text": "billing",
+          "start": 4.24,
+          "end": 4.46
+        },
+        {
+          "id": "w12",
+          "text": "gets",
+          "start": 4.68,
+          "end": 4.74
+        },
+        {
+          "id": "w13",
+          "text": "two",
+          "start": 4.74,
+          "end": 4.9
+        },
+        {
+          "id": "w14",
+          "text": "months",
+          "start": 4.9,
+          "end": 5.22
+        },
+        {
+          "id": "w15",
+          "text": "free.",
+          "start": 5.23,
+          "end": 5.48
+        }
+      ]
+    },
+    {
+      "frame": 13,
+      "path": "assets/voice/13.wav",
+      "duration_s": 3.499,
+      "words": [
+        {
+          "id": "w0",
+          "text": "FitCheck",
+          "start": 0.1,
+          "end": 0.85
+        },
+        {
+          "id": "w1",
+          "text": "AI,",
+          "start": 0.85,
+          "end": 1.06
+        },
+        {
+          "id": "w2",
+          "text": "worn",
+          "start": 1.29,
+          "end": 1.51
+        },
+        {
+          "id": "w3",
+          "text": "yesterday,",
+          "start": 1.51,
+          "end": 2.09
+        },
+        {
+          "id": "w4",
+          "text": "decided",
+          "start": 2.24,
+          "end": 2.7
+        },
+        {
+          "id": "w5",
+          "text": "in",
+          "start": 2.7,
+          "end": 2.81
+        },
+        {
+          "id": "w6",
+          "text": "seconds.",
+          "start": 2.84,
+          "end": 3.44
+        }
+      ]
+    }
+  ],
+  "sfx": [
+    {
+      "frame": 1,
+      "file": "assets/sfx/pop.mp3",
+      "offset_s": 0,
+      "duration_s": 0.72,
+      "volume": 0.35
+    },
+    {
+      "frame": 1,
+      "file": "assets/sfx/whoosh-short.mp3",
+      "offset_s": 0,
+      "duration_s": 0.57,
+      "volume": 0.35
+    },
+    {
+      "frame": 2,
+      "file": "assets/sfx/click.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    },
+    {
+      "frame": 3,
+      "file": "assets/sfx/sparkle.mp3",
+      "offset_s": 0,
+      "duration_s": 1.8,
+      "volume": 0.35
+    },
+    {
+      "frame": 3,
+      "file": "assets/sfx/pop.mp3",
+      "offset_s": 0,
+      "duration_s": 0.72,
+      "volume": 0.35
+    },
+    {
+      "frame": 4,
+      "file": "assets/sfx/click.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    },
+    {
+      "frame": 4,
+      "file": "assets/sfx/chime.mp3",
+      "offset_s": 0,
+      "duration_s": 2.5,
+      "volume": 0.35
+    },
+    {
+      "frame": 4,
+      "file": "assets/sfx/key-press.mp3",
+      "offset_s": 0,
+      "duration_s": 0.4,
+      "volume": 0.35
+    },
+    {
+      "frame": 5,
+      "file": "assets/sfx/key-press.mp3",
+      "offset_s": 0,
+      "duration_s": 0.4,
+      "volume": 0.35
+    },
+    {
+      "frame": 5,
+      "file": "assets/sfx/sparkle.mp3",
+      "offset_s": 0,
+      "duration_s": 1.8,
+      "volume": 0.35
+    },
+    {
+      "frame": 6,
+      "file": "assets/sfx/click.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    },
+    {
+      "frame": 6,
+      "file": "assets/sfx/sparkle.mp3",
+      "offset_s": 0,
+      "duration_s": 1.8,
+      "volume": 0.35
+    },
+    {
+      "frame": 7,
+      "file": "assets/sfx/whoosh-short.mp3",
+      "offset_s": 0,
+      "duration_s": 0.57,
+      "volume": 0.35
+    },
+    {
+      "frame": 7,
+      "file": "assets/sfx/pop.mp3",
+      "offset_s": 0,
+      "duration_s": 0.72,
+      "volume": 0.35
+    },
+    {
+      "frame": 8,
+      "file": "assets/sfx/whoosh-short.mp3",
+      "offset_s": 0,
+      "duration_s": 0.57,
+      "volume": 0.35
+    },
+    {
+      "frame": 8,
+      "file": "assets/sfx/click.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    },
+    {
+      "frame": 9,
+      "file": "assets/sfx/sparkle.mp3",
+      "offset_s": 0,
+      "duration_s": 1.8,
+      "volume": 0.35
+    },
+    {
+      "frame": 9,
+      "file": "assets/sfx/whoosh-short.mp3",
+      "offset_s": 0,
+      "duration_s": 0.57,
+      "volume": 0.35
+    },
+    {
+      "frame": 10,
+      "file": "assets/sfx/chime.mp3",
+      "offset_s": 0,
+      "duration_s": 2.5,
+      "volume": 0.35
+    },
+    {
+      "frame": 10,
+      "file": "assets/sfx/click.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    },
+    {
+      "frame": 11,
+      "file": "assets/sfx/whoosh-short.mp3",
+      "offset_s": 0,
+      "duration_s": 0.57,
+      "volume": 0.35
+    },
+    {
+      "frame": 12,
+      "file": "assets/sfx/click.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    },
+    {
+      "frame": 12,
+      "file": "assets/sfx/chime.mp3",
+      "offset_s": 0,
+      "duration_s": 2.5,
+      "volume": 0.35
+    },
+    {
+      "frame": 13,
+      "file": "assets/sfx/impact-bass-1.mp3",
+      "offset_s": 0,
+      "duration_s": 2.12,
+      "volume": 0.35
+    }
+  ]
+}

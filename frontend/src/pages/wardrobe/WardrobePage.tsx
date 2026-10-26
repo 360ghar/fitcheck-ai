@@ -49,24 +49,28 @@ import { useJobUiStore } from '@/stores/jobUiStore'
 import { useColumnCount } from '@/hooks/useColumnCount'
 import { useIsSplitViewport, useIsWideViewport } from '@/hooks/useMediaQuery'
 import { EmptyState } from '@/components/ui/empty-state'
+import { categoryLabel, useTranslation } from '@/i18n'
 import { FilterChip } from '@/components/ui/filter-chip'
 
 // Quick category filter chips (Alta-style), mirror the FilterPanel categories.
-const CATEGORY_CHIPS: { value: Category | 'all'; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'tops', label: 'Tops' },
-  { value: 'bottoms', label: 'Bottoms' },
-  { value: 'shoes', label: 'Shoes' },
-  { value: 'outerwear', label: 'Outerwear' },
-  { value: 'accessories', label: 'Accessories' },
-  { value: 'activewear', label: 'Activewear' },
-  { value: 'swimwear', label: 'Swimwear' },
-  { value: 'other', label: 'Other' },
+// Canonical stored values only; the chip label comes from `categoryLabel` so it
+// follows the active language without duplicating the taxonomy here.
+const CATEGORY_CHIPS: (Category | 'all')[] = [
+  'all',
+  'tops',
+  'bottoms',
+  'shoes',
+  'outerwear',
+  'accessories',
+  'activewear',
+  'swimwear',
+  'other',
 ]
 
 const LIST_PATH = '/wardrobe'
 
 export default function WardrobePage() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -594,16 +598,16 @@ export default function WardrobePage() {
       <>
         <EmptyState
           icon={Shirt}
-          title="No items match"
-          description="Try adjusting your filters or search query"
-          actionLabel="Clear filters"
+          title={t('wardrobe.noMatchTitle')}
+          description={t('wardrobe.noMatchBody')}
+          actionLabel={t('wardrobe.clearFilters')}
           onAction={handleResetFilters}
         />
       </>
     ) : (
       <EmptyState
         icon={Shirt}
-        title="Your closet is empty"
+        title={t('wardrobe.emptyTitle')}
         description="Upload photos and AI finds each item, so you can build outfits the same day."
         actionLabel="Upload photos"
         onAction={() => setIsUploadModalOpen(true)}
@@ -634,21 +638,21 @@ export default function WardrobePage() {
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-2">
         <div>
-          <h1 className="type-heading-xl text-foreground">Closet</h1>
+          <h1 className="type-heading-xl text-foreground">{t('wardrobe.title')}</h1>
           <p className="type-body-sm text-muted-foreground">
             {displayCount} {displayCount === 1 ? 'item' : 'items'}
           </p>
         </div>
         <Button onClick={() => setIsUploadModalOpen(true)} className="hidden md:flex">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Item
+          <Plus className="h-4 w-4 me-2" />
+          {t('common.addItem')}
         </Button>
       </div>
 
       <div className="md:hidden mb-4">
         <Button onClick={() => setIsUploadModalOpen(true)} className="w-full">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Item
+          <Plus className="h-4 w-4 me-2" />
+          {t('common.addItem')}
         </Button>
       </div>
 
@@ -664,8 +668,8 @@ export default function WardrobePage() {
               void fetchItems(true)
             }}
           >
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-            Try again
+            <RefreshCw className="h-3.5 w-3.5 me-1.5" />
+            {t('common.retry')}
           </Button>
         </div>
       )}
@@ -684,21 +688,21 @@ export default function WardrobePage() {
       <div
         className="scroll-rail mb-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
-        aria-label="Filter by category"
+        aria-label={t('wardrobe.filterByCategory')}
       >
         {CATEGORY_CHIPS.map((chip) => {
-          const isActive = filters.category === chip.value
+          const isActive = filters.category === chip
           return (
             <FilterChip
-              key={chip.value}
+              key={chip}
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => handleFilterChange('category', chip.value)}
+              onClick={() => handleFilterChange('category', chip)}
               active={isActive}
               className="shrink-0"
             >
-              {chip.label}
+              {chip === 'all' ? t('filters.allCategories') : categoryLabel(t, chip)}
             </FilterChip>
           )
         })}
@@ -714,18 +718,18 @@ export default function WardrobePage() {
           // which turned a 44px toolbar into most of a pill.
           className="sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top)+0.5rem)] z-30 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5 md:top-4"
           role="toolbar"
-          aria-label="Selected items actions"
+          aria-label={t('wardrobe.selectedActions')}
         >
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-2 text-xs text-primary-foreground">
               {selectedItems.size}
             </span>
-            selected
+            {t('wardrobe.selected')}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="tertiary" size="sm" className="touch-target" onClick={() => clearSelectedItems()}>
-              <X className="h-4 w-4 mr-1.5" />
-              Clear
+              <X className="h-4 w-4 me-1.5" />
+              {t('common.clear')}
             </Button>
             <Button
               variant="destructive"
@@ -733,8 +737,8 @@ export default function WardrobePage() {
               className="touch-target"
               onClick={() => setIsBulkDeleteOpen(true)}
             >
-              <Trash2 className="h-4 w-4 mr-1.5" />
-              Delete
+              <Trash2 className="h-4 w-4 me-1.5" />
+              {t('common.delete')}
             </Button>
           </div>
         </div>
@@ -793,15 +797,15 @@ export default function WardrobePage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete item?</AlertDialogTitle>
+            <AlertDialogTitle>{t('wardrobe.deleteItemTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
               {itemPendingDelete
-                ? `"${itemPendingDelete.name}" will be permanently removed from your closet. This cannot be undone.`
-                : 'This item will be permanently removed from your closet.'}
+                ? t('wardrobe.deleteItemNamed', { name: itemPendingDelete.name })
+                : t('wardrobe.deleteItemBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}
@@ -826,14 +830,12 @@ export default function WardrobePage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {selectedItems.size} item{selectedItems.size === 1 ? '' : 's'}?
+              {t('wardrobe.deleteSelected', { count: selectedItems.size })}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Selected items will be permanently removed from your closet. This cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t('wardrobe.deleteSelectedBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}

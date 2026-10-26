@@ -200,6 +200,10 @@ class UserSettingsBase(BaseModel):
     default_location: Optional[str] = Field(None, max_length=255)
     timezone: Optional[str] = Field(None, max_length=50)
     language: str = Field("en", max_length=10)
+    # TRUE when the user picked `language`; FALSE means "follow the device".
+    # Without this, an explicit English choice is indistinguishable from the
+    # VARCHAR DEFAULT 'en' on an untouched row (migration 065).
+    language_explicit: bool = False
     measurement_units: str = "imperial"  # 'imperial' or 'metric'
     notifications_enabled: bool = True
     email_marketing: bool = False
@@ -211,6 +215,10 @@ class UserSettingsUpdate(BaseModel):
     default_location: Optional[str] = Field(None, max_length=255)
     timezone: Optional[str] = Field(None, max_length=50)
     language: Optional[str] = Field(None, max_length=10)
+    # Optional by design: the route DERIVES it from `language` when the client
+    # does not send it, so an older client keeps working. A client that wants
+    # to state the intent outright may send it.
+    language_explicit: Optional[bool] = None
     measurement_units: Optional[str] = None
     notifications_enabled: Optional[bool] = None
     email_marketing: Optional[bool] = None

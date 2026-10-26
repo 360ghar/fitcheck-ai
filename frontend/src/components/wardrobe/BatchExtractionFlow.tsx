@@ -41,6 +41,7 @@ import { SocialImportQueueReview } from './SocialImportQueueReview';
 import { SocialImportProgress } from './SocialImportProgress';
 import type { BatchJobUiStatus, DetectedItem, ItemCreate } from '@/types';
 import { FEATURES } from '@/lib/feature-flags';
+import { useTranslation } from '@/i18n'
 
 const BATCH_WIZARD_STEPS = [
   { id: 'select', label: 'Select' },
@@ -210,6 +211,7 @@ export function BatchExtractionFlow({
   isOpen = true,
   onJobStatusChange,
 }: BatchExtractionFlowProps) {
+  const { t } = useTranslation()
   // Use the batch extraction hook
   const {
     state,
@@ -439,21 +441,21 @@ export function BatchExtractionFlow({
       }
       if (isActivelyWorking) {
         toast({
-          title: 'Still working',
-          description: 'Open anytime from the progress pill at the bottom.',
+          title: t('extract.stillWorkingTitle'),
+          description: t('extract.stillWorkingBody'),
           action: onRequestOpen ? (
-            <ToastAction altText="View progress" onClick={() => onRequestOpen()}>
-              View
+            <ToastAction altText={t('extract.viewProgress')} onClick={() => onRequestOpen()}>
+              {t('extract.view')}
             </ToastAction>
           ) : undefined,
         });
       } else if (hasReviewItems) {
         toast({
-          title: 'Review saved in progress',
-          description: 'Open anytime from the progress pill to finish saving.',
+          title: t('extract.reviewInProgressTitle'),
+          description: t('extract.reviewInProgressBody'),
           action: onRequestOpen ? (
-            <ToastAction altText="View progress" onClick={() => onRequestOpen()}>
-              View
+            <ToastAction altText={t('extract.viewProgress')} onClick={() => onRequestOpen()}>
+              {t('extract.view')}
             </ToastAction>
           ) : undefined,
         });
@@ -475,6 +477,7 @@ export function BatchExtractionFlow({
     reset,
     socialImport,
     state.step,
+    t,
     toast,
   ]);
 
@@ -832,7 +835,7 @@ export function BatchExtractionFlow({
             <Sparkles className="h-5 w-5 text-primary" />
             {getStepTitle()}
             {(isConnected || socialImport.state.isConnected) && (
-              <span className="inline-flex items-center gap-1 text-xs font-normal text-success ml-2">
+              <span className="inline-flex items-center gap-1 text-xs font-normal text-success ms-2">
                 <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
                 Live
               </span>
@@ -867,7 +870,7 @@ export function BatchExtractionFlow({
                     }`}
                     onClick={() => setInputMode('upload')}
                   >
-                    Upload Photos
+                    {t('extract.uploadPhotos')}
                   </button>
                   <button
                     type="button"
@@ -878,7 +881,7 @@ export function BatchExtractionFlow({
                     }`}
                     onClick={() => setInputMode('social')}
                   >
-                    Import URL
+                    {t('extract.importUrl')}
                   </button>
                 </div>
               )}
@@ -949,7 +952,7 @@ export function BatchExtractionFlow({
                   {socialImport.state.jobId && (
                     <div className="flex justify-end gap-2 border-t pt-4">
                       <Button variant="outline" onClick={socialImport.cancelJob}>
-                        Cancel Job
+                        {t('extract.cancelJob')}
                       </Button>
                       <Button
                         variant="outline"
@@ -970,7 +973,7 @@ export function BatchExtractionFlow({
             <div className="flex flex-col items-center justify-center py-16 space-y-6">
               <div className="relative">
                 <Upload className="h-16 w-16 text-accent-purple" />
-                <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-accent-purple/70 animate-spin" />
+                <Loader2 className="absolute --end-2 -bottom-2 h-8 w-8 text-accent-purple/70 animate-spin" />
               </div>
               <div className="text-center space-y-2">
                 <p className="text-lg font-medium text-foreground">
@@ -1054,21 +1057,21 @@ export function BatchExtractionFlow({
                     <p className="text-2xl font-bold text-foreground">
                       {state.images.length}
                     </p>
-                    <p className="text-xs text-muted-foreground">Images</p>
+                    <p className="text-xs text-muted-foreground">{t('extract.images')}</p>
                   </div>
                   <div className="hidden sm:block h-8 w-px bg-border" />
                   <div className="text-center">
                     <p className="text-2xl font-bold text-foreground">
                       {activeItems.length}
                     </p>
-                    <p className="text-xs text-muted-foreground">Items Found</p>
+                    <p className="text-xs text-muted-foreground">{t('extract.itemsFound')}</p>
                   </div>
                   <div className="hidden sm:block h-8 w-px bg-border" />
                   <div className="text-center">
                     <p className="text-2xl font-bold text-foreground">
                       {generatedCount}
                     </p>
-                    <p className="text-xs text-muted-foreground">Studio ready</p>
+                    <p className="text-xs text-muted-foreground">{t('extract.studioReady')}</p>
                   </div>
                   {failedCount > 0 && (
                     <>
@@ -1077,7 +1080,7 @@ export function BatchExtractionFlow({
                         <p className="text-2xl font-bold text-destructive">
                           {failedCount}
                         </p>
-                        <p className="text-xs text-muted-foreground">Failed</p>
+                        <p className="text-xs text-muted-foreground">{t('extract.statusFailed')}</p>
                       </div>
                     </>
                   )}
@@ -1088,7 +1091,7 @@ export function BatchExtractionFlow({
                         <p className="text-2xl font-bold text-muted-foreground">
                           {deletedCount}
                         </p>
-                        <p className="text-xs text-muted-foreground">Removed</p>
+                        <p className="text-xs text-muted-foreground">{t('extract.removed')}</p>
                       </div>
                     </>
                   )}
@@ -1099,10 +1102,10 @@ export function BatchExtractionFlow({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-foreground">
-                    Original Photos
+                    {t('extract.originalPhotos')}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Tap any photo to zoom
+                    {t('extract.tapPhotoToZoom')}
                   </p>
                 </div>
                 <BatchOriginalsReview images={state.images} />
@@ -1134,11 +1137,11 @@ export function BatchExtractionFlow({
             <div className="flex flex-col items-center justify-center py-16 space-y-6">
               <div className="relative">
                 <CheckCircle2 className="h-16 w-16 text-success" />
-                <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-success/70 animate-spin" />
+                <Loader2 className="absolute --end-2 -bottom-2 h-8 w-8 text-success/70 animate-spin" />
               </div>
               <div className="text-center space-y-2">
                 <p className="text-lg font-medium text-foreground">
-                  Saving items to closet...
+                  {t('extract.savingToCloset')}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {Math.round(savingProgress)}% complete
@@ -1146,7 +1149,7 @@ export function BatchExtractionFlow({
               </div>
               <Progress value={savingProgress} className="w-64 h-2" />
               <p className="text-xs text-muted-foreground/70">
-                Uploading items to your closet…
+                {t('extract.uploadingToCloset')}
               </p>
             </div>
           )}

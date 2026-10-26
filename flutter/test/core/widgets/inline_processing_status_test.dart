@@ -1,3 +1,4 @@
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitcheck_ai/core/widgets/inline_processing_status.dart';
@@ -7,6 +8,9 @@ void main() {
   // to catch both the overflow risk of Flexible-in-a-min-Row and the
   // ambient-color-inheritance regression a hardcoded text color would cause.
   Widget wrap(Widget child) => MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: Scaffold(
           body: TextButton(onPressed: () {}, child: child),
         ),

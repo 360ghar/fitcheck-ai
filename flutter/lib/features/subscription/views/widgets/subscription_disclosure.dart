@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/i18n/l10n.dart';
 import '../../../../core/widgets/app_ui.dart';
 
 /// Auto-renewing subscription disclosure, rendered directly under the plan
@@ -24,7 +25,7 @@ class SubscriptionDisclosure extends StatelessWidget {
     super.key,
     required this.priceSummary,
     required this.isApple,
-    this.planNames = 'Plus and Pro are auto-renewing subscriptions',
+    required this.planNames,
   });
 
   /// e.g. "Plus is $10/month or $100/year; Pro is $20/month or $200/year."
@@ -37,16 +38,13 @@ class SubscriptionDisclosure extends StatelessWidget {
   /// Plus subscriber is only offered Pro.
   final String planNames;
 
-  String get _billingSentence => isApple
-      ? 'Payment is charged to your Apple ID at confirmation of purchase.'
-      : 'Payment is charged to your Google Play account at confirmation of '
-            'purchase.';
+  String _billingSentence(AppLocalizations l10n) => isApple
+      ? l10n.billingDisclosureAppleBilling
+      : l10n.billingDisclosureGoogleBilling;
 
-  String get _manageSentence => isApple
-      ? 'Manage or cancel any time in Settings › your Apple ID › '
-            'Subscriptions.'
-      : 'Manage or cancel any time in Google Play › Payments and '
-            'subscriptions.';
+  String _manageSentence(AppLocalizations l10n) => isApple
+      ? l10n.billingDisclosureAppleManage
+      : l10n.billingDisclosureGoogleManage;
 
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
@@ -70,6 +68,7 @@ class SubscriptionDisclosure extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PaperTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final l10n = context.l10n;
     // textSecondary rather than the muted caption tone: this is required
     // disclosure a reviewer has to be able to read. Both pass WCAG AA.
     final bodyStyle = text.bodySmall?.copyWith(
@@ -86,10 +85,9 @@ class SubscriptionDisclosure extends StatelessWidget {
       children: [
         Text(
           '$planNames. $priceSummary '
-          '$_billingSentence '
-          'Your subscription renews automatically for the same period at the '
-          'same price unless you turn off auto-renew at least 24 hours before '
-          'the current period ends. $_manageSentence',
+          '${_billingSentence(l10n)} '
+          '${l10n.billingDisclosureRenewalTerms} '
+          '${_manageSentence(l10n)}',
           style: bodyStyle,
         ),
         const SizedBox(height: AppConstants.spacing4),
@@ -106,20 +104,20 @@ class SubscriptionDisclosure extends StatelessWidget {
           children: [
             Semantics(
               button: true,
-              label: 'Terms of use',
+              label: l10n.paywallTerms,
               child: TextButton(
                 onPressed: () => _openUrl(AppConstants.termsOfServiceUrl),
                 style: _linkButtonStyle(linkStyle),
-                child: const Text('Terms of use'),
+                child: Text(l10n.paywallTerms),
               ),
             ),
             Semantics(
               button: true,
-              label: 'Privacy policy',
+              label: l10n.paywallPrivacy,
               child: TextButton(
                 onPressed: () => _openUrl(AppConstants.privacyPolicyUrl),
                 style: _linkButtonStyle(linkStyle),
-                child: const Text('Privacy policy'),
+                child: Text(l10n.paywallPrivacy),
               ),
             ),
           ],

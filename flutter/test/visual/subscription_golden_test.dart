@@ -8,6 +8,7 @@ import 'package:fitcheck_ai/features/gifts/views/gift_vouchers_page.dart';
 import 'package:fitcheck_ai/features/subscription/models/subscription_model.dart';
 import 'package:fitcheck_ai/features/subscription/providers/subscription_providers.dart';
 import 'package:fitcheck_ai/features/subscription/services/purchase_recovery_service.dart';
+import 'package:fitcheck_ai/features/subscription/services/trial_eligibility.dart';
 import 'package:fitcheck_ai/features/subscription/views/referral_page.dart';
 import 'package:fitcheck_ai/features/subscription/views/subscription_page.dart';
 import 'package:flutter/material.dart';
@@ -41,8 +42,14 @@ void main() {
   });
   tearDown(() => iap.dispose());
 
-  List overrides() => [
+  List overrides({TrialEligibility trial = TrialEligibility.unknown}) => [
     subscriptionRepositoryProvider.overrideWithValue(repo),
+    // No StoreKit in a widget test, so eligibility is answered here. The
+    // default (`unknown`) is what Android and a failed probe see, and it must
+    // render the honest non-trial copy.
+    trialEligibilityServiceProvider.overrideWithValue(
+      _FakeTrialEligibility(trial),
+    ),
     purchaseRecoveryServiceProvider.overrideWithValue(
       PurchaseRecoveryService(iapService: iap, repository: repo),
     ),
@@ -75,8 +82,14 @@ void main() {
     String file, {
     bool dark = false,
     String? scrollTo,
+    TrialEligibility trial = TrialEligibility.unknown,
   }) async {
-    await pumpPhone(tester, page, dark: dark, overrides: overrides());
+    await pumpPhone(
+      tester,
+      page,
+      dark: dark,
+      overrides: overrides(trial: trial),
+    );
     await tester.pump(const Duration(milliseconds: 300));
     if (scrollTo != null) {
       await Scrollable.ensureVisible(
@@ -108,6 +121,35 @@ void main() {
     await snap(tester, const SubscriptionPage(), 'paywall_top_light');
   });
 
+  // The trial is the reason the paywall was reworked, so it gets its own
+  // golden in both themes. On a 390x844 phone the headline, the free-tier
+  // summary and the price that follows the free month must all be legible
+  // without scrolling (App Review 3.1.2).
+  for (final dark in [false, true]) {
+    testWidgets('paywall trial eligible ${dark ? 'dark' : 'light'}', (
+      tester,
+    ) async {
+      storeReady();
+      await snap(
+        tester,
+        const SubscriptionPage(),
+        'paywall_trial_${dark ? 'dark' : 'light'}',
+        dark: dark,
+        trial: TrialEligibility.eligible,
+      );
+    });
+  }
+
+  testWidgets('paywall trial already used', (tester) async {
+    storeReady();
+    await snap(
+      tester,
+      const SubscriptionPage(),
+      'paywall_trial_used_light',
+      trial: TrialEligibility.ineligible,
+    );
+  });
+
   for (final dark in [false, true]) {
     testWidgets('paywall plans ${dark ? 'dark' : 'light'}', (tester) async {
       storeReady();
@@ -116,7 +158,8 @@ void main() {
         const SubscriptionPage(),
         'paywall_plans_${dark ? 'dark' : 'light'}',
         dark: dark,
-        scrollTo: 'Choose a plan',
+        // The page header is now the localized `paywallTitle` string.
+        scrollTo: 'Choose your plan',
       );
     });
   }
@@ -140,7 +183,8 @@ void main() {
       tester,
       const SubscriptionPage(),
       'paywall_store_unavailable_light',
-      scrollTo: 'Choose a plan',
+      // The page header is now the localized `paywallTitle` string.
+      scrollTo: 'Choose your plan',
     );
   });
 
@@ -168,4 +212,14 @@ void main() {
       scrollTo: 'Send a free invitation',
     );
   });
+}
+
+/// Answers eligibility without the StoreKit channel.
+class _FakeTrialEligibility extends TrialEligibilityService {
+  const _FakeTrialEligibility(this.answer);
+
+  final TrialEligibility answer;
+
+  @override
+  Future<TrialEligibility> check(String productId) async => answer;
 }

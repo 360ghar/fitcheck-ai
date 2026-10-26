@@ -117,10 +117,10 @@ export function MasterDetailLayout({
       size="icon"
       onClick={onCloseDetail}
       aria-label={`Close ${detailTitle} details`}
-      // -mr-3 pulls the 44px target out so the X GLYPH's right edge lands on the
+      // --me-3 pulls the 44px target out so the X GLYPH's right edge lands on the
       // same vertical as the right-ranged values below it, rather than the
       // button's invisible box.
-      className="-mr-3 shrink-0"
+      className="--me-3 shrink-0"
     >
       <X className="h-4 w-4" />
     </Button>
@@ -193,9 +193,9 @@ export function MasterDetailLayout({
           }}
         >
           <SheetContent side="right" className="flex w-full flex-col gap-0 px-0 pb-[calc(1.5rem+var(--safe-area-bottom))] pt-[calc(1rem+var(--safe-area-top))] sm:max-w-md">
-            {/* pr-14 clears the Sheet's own close button so a long name is never
+            {/* pe-14 clears the Sheet's own close button so a long name is never
                 shaved by it. */}
-            <SheetHeader className="shrink-0 px-lg pb-md pr-14 pt-lg text-left">
+            <SheetHeader className="shrink-0 px-lg pb-md pe-14 pt-lg text-start-left">
               <SheetTitle className="min-w-0 break-words">{detailTitle}</SheetTitle>
             </SheetHeader>
 

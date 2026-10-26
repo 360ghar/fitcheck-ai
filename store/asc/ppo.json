@@ -1,0 +1,127 @@
+{
+  "_comment": "Product page optimization experiments. Each experiment changes exactly one variable against the live control page and declares the metric that variable is allowed to move. Read by node scripts/asc/grow.mjs ppo. Apple allows three treatments per experiment and three running experiments; running them concurrently splits the same small traffic across nine cells, so grow.mjs enforces one started experiment at a time.",
+  "trafficProportion": 75,
+  "_trafficComment": "Percentage of eligible traffic in the experiment. 100 means every user who reaches the product page during the window sees a treatment at random. Set this lower only if a treatment is risky enough to hurt the live conversion rate; a partial proportion costs power linearly.",
+  "runPolicy": "sequential",
+  "_runPolicyComment": "Only one experiment may be started at a time. Apple will happily let three run; the statistics will not survive it.",
+  "experiments": [
+    {
+      "slug": "icon-tap-through",
+      "name": "PPO 1 - Icon: three marks",
+      "variable": "appIcon",
+      "_variableComment": "The app icon is the only thing that changes. Frames stay identical to the control page in every treatment.",
+      "hypothesis": "The current icon reads as a generic paper card at 60px in search results and says nothing about clothing. A mark that reads as a garment on a hanger at 40pt will be recognised as a wardrobe app before the title is read, raising tap-through from the search results list.",
+      "metric": "impressions to product page views (tap-through rate)",
+      "_metricComment": "An icon test can only move the impression-to-view step. Installs depend on the page, which is unchanged, so measuring installs here would dilute the read by an order of magnitude.",
+      "minimumPerCell": 1200,
+      "_minimumComment": "Impressions before the result is worth reading. With a 1-5 percent baseline tap-through rate, fewer than roughly 1200 impressions per cell cannot separate a real lift from noise.",
+      "treatments": [
+        {
+          "name": "Icon A - hanger mark",
+          "appIconName": "AppIcon_Hanger",
+          "frames": null
+        },
+        {
+          "name": "Icon B - folded stack",
+          "appIconName": "AppIcon_Stack",
+          "frames": null
+        },
+        {
+          "name": "Icon C - mirror silhouette",
+          "appIconName": "AppIcon_Mirror",
+          "frames": null
+        }
+      ],
+      "_setupNote": "Icon treatments reference icons by name only. The names above must already exist in App Store Connect (App Information, or an Xcode asset catalog on a build) before grow.mjs can create these treatments; Apple's API exposes no endpoint that lists or uploads app icons, so grow.mjs cannot create or verify them. If the names do not exist, the create fails and grow.mjs prints Apple's own error. This is the one treatment type that needs a manual step first."
+    },
+    {
+      "slug": "lead-frame",
+      "name": "PPO 2 - First screenshot: try-on vs photoshoot vs closet",
+      "variable": "leadFrame",
+      "_variableComment": "Only frame order changes. The same six frames appear in every treatment; the first position differs.",
+      "hypothesis": "The app's differentiator is seeing an outfit on your own body, not cataloguing clothes. Leading with the try-on frame (3) instead of the photoshoot frame (4) will raise conversion, because a visitor arriving from an ad or search has already been promised styling and the first screenshot is the only one most of them see.",
+      "metric": "product page views to installs (conversion rate)",
+      "minimumPerCell": 800,
+      "_minimumComment": "Product page views, not impressions. Conversion rate denominators are views, and a page with 800 views per cell can resolve a 15 percent relative lift.",
+      "treatments": [
+        {
+          "name": "Lead: virtual try-on",
+          "frames": [
+            "tryon",
+            "photoshoot",
+            "closet",
+            "daily",
+            "wear",
+            "offer"
+          ]
+        },
+        {
+          "name": "Lead: AI photoshoot",
+          "frames": [
+            "photoshoot",
+            "tryon",
+            "closet",
+            "daily",
+            "wear",
+            "offer"
+          ]
+        },
+        {
+          "name": "Lead: closet grid",
+          "frames": [
+            "closet",
+            "tryon",
+            "photoshoot",
+            "daily",
+            "wear",
+            "offer"
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "gallery-depth",
+      "name": "PPO 3 - Gallery depth: 3 vs 5 vs 6 frames",
+      "variable": "frameCount",
+      "_variableComment": "Only the number of frames changes. Every treatment starts with the same three frames and truncates at a different depth, so the comparison is length and nothing else. Depth is capped at six because six is what the render pipeline produces today.",
+      "hypothesis": "Most visitors never scroll past the third screenshot, so frames four to six add visual noise without adding persuasion. A three-frame gallery will not lose conversion against six; if that holds, the render pipeline stops producing three frames per locale, which is the single largest saving available in the creative pass.",
+      "metric": "product page views to installs (conversion rate)",
+      "minimumPerCell": 800,
+      "_minimumComment": "Same denominator as PPO 2. This experiment is a non-inferiority test: five frames wins by not losing, which needs the same sample as detecting a loss.",
+      "dependsOn": "lead-frame",
+      "_dependsOnComment": "The lead frame must be chosen first; testing depth against a losing lead frame measures the wrong thing. grow.mjs refuses to start this experiment while PPO 2 is running.",
+      "treatments": [
+        {
+          "name": "Depth: 3 frames",
+          "frames": [
+            "tryon",
+            "photoshoot",
+            "closet"
+          ]
+        },
+        {
+          "name": "Depth: 5 frames",
+          "frames": [
+            "tryon",
+            "photoshoot",
+            "closet",
+            "daily",
+            "wear"
+          ]
+        },
+        {
+          "name": "Depth: 6 frames",
+          "frames": [
+            "tryon",
+            "photoshoot",
+            "closet",
+            "daily",
+            "wear",
+            "offer"
+          ]
+        }
+      ]
+    }
+  ],
+  "_frameComment": "Frame ids are the ones in store/creative/copy.json: closet, daily, tryon, photoshoot, wear, offer. Six frames exist; Apple accepts up to ten. A treatment whose frames are not present in store/creative/manifest.json is reported as unplaceable and grow.mjs will not start that experiment."
+}

@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "오울프와 의류 아이템 사진을 촬영하려면 카메라 권한이 필요합니다.";
+"NSPhotoLibraryUsageDescription" = "오울프와 의류 아이템 이미지를 선택하려면 사진 자료 권한이 필요합니다.";
+"NSPhotoLibraryAddUsageDescription" = "AI가 생성한 오울프 사진을 사진 자료에 저장하려면 권한이 필요합니다.";

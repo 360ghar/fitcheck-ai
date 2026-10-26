@@ -1,0 +1,5108 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "budget": 100,
+  "locales": [
+    {
+      "locale": "ar-SA",
+      "native": "العربية",
+      "tier": 1,
+      "keywords": "موضة,منظم,ستايل,إطلالة,تنسيق ملابس,تنسيق الإطلالات,اختيار ملابس,ما أرتدي,إطلالة يومية,انسيب",
+      "characters": 91,
+      "kept": [
+        "موضة",
+        "منظم",
+        "ستايل",
+        "إطلالة",
+        "تنسيق ملابس",
+        "تنسيق الإطلالات",
+        "اختيار ملابس",
+        "ما أرتدي",
+        "إطلالة يومية",
+        "انسيب"
+      ],
+      "added": [],
+      "dropped": [
+        {
+          "term": "ملابس",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "دواليب ملابس",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "خزانة الملابس",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ملابس اليوم",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "لباس مناسب",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "جرّب قبل الشراء",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "إطلالة عمل",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "اختيار اللباس",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "تنسيق الأزياء",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "فهم الألوان",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "مستحضرات تجميل",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "فني التصوير",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "إكسسوارات",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "أسلوب الموضة",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "تنسيق الحقائب",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ملابس رسمية",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "تنسيق الساعدي",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "موضة الرجال",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "موضة النساء",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "تنسيق الأطفال",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ملابس رياضية",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "تنسيق الشاطئ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "تنسيق الشعر",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "235bd53e74c11e3c"
+    },
+    {
+      "locale": "bn-BD",
+      "native": "বাংলা",
+      "tier": 1,
+      "keywords": "পোশাক,ফ্যাশন,ড্রেস,লুক,ক্যাপসুল,প্লাটফর্ম,শপ,ডিজাইন,ড্রেসিং রুম,ক্লোজET,জ্যাংলার,ইন্ডোর সাজ,জামা,গজল",
+      "characters": 100,
+      "kept": [
+        "পোশাক",
+        "ফ্যাশন",
+        "ড্রেস",
+        "লুক",
+        "ক্যাপসুল",
+        "প্লাটফর্ম",
+        "শপ",
+        "ডিজাইন",
+        "ড্রেসিং রুম",
+        "ক্লোজET",
+        "জ্যাংলার",
+        "ইন্ডোর সাজ"
+      ],
+      "added": [
+        "জামা",
+        "গজল"
+      ],
+      "dropped": [
+        {
+          "term": "স্টাইল",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "প্যান্ট",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "শার্ট",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "আউটফিট",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "দৈনিক লুক",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "বর্ষা",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "গরম",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ঠান্ডা",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "মিরর",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ক্যামেরা",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ভিডিও",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ফটো",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "স্টাইল",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "সংগ্রহ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "গবেষণা",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "পরিবেশ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "অফিস",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "পার্টি",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "উৎসব",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "259586da3c20e14e"
+    },
+    {
+      "locale": "de-DE",
+      "native": "Deutsch",
+      "tier": 1,
+      "keywords": "mode,kleidung,planer,kapsel,styling,lookbook,anprobieren,kombinieren,garderobe,kleidungsort,wardrobe",
+      "characters": 100,
+      "kept": [
+        "mode",
+        "kleidung",
+        "planer",
+        "kapsel",
+        "styling",
+        "lookbook",
+        "anprobieren",
+        "kombinieren",
+        "garderobe",
+        "kleidungsort"
+      ],
+      "added": [
+        "wardrobe"
+      ],
+      "dropped": [
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "look",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "clothes",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "closet",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dress",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit generator",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "style",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ai stylist",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "style advisor",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ootd",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "d135b6678160937d"
+    },
+    {
+      "locale": "en-GB",
+      "native": "English (UK)",
+      "tier": 1,
+      "keywords": "planner,fashion,virtual,clothing,organizer,photoshoot,headshot,capsule,daily,style,look,ootd,styling",
+      "characters": 100,
+      "kept": [
+        "planner",
+        "fashion",
+        "virtual",
+        "clothing",
+        "organizer",
+        "photoshoot",
+        "headshot",
+        "capsule",
+        "daily",
+        "style",
+        "look",
+        "ootd",
+        "styling"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "wardrobe",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "closet",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "wardrobe box",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfits",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "outfit ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dress code",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "closet management",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "style guide",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "closet audit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "try on",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "fashion planner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit tracker",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit builder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit planner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "clothing storage",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion lookbook",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion trends",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion forecast",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "ee80c85b3f2fbfb6"
+    },
+    {
+      "locale": "en-US",
+      "native": "English (US)",
+      "tier": 1,
+      "keywords": "planner,fashion,virtual,clothing,organizer,photoshoot,headshot,capsule,daily,style,look,ootd,shoe",
+      "characters": 97,
+      "kept": [
+        "planner",
+        "fashion",
+        "virtual",
+        "clothing",
+        "organizer",
+        "photoshoot",
+        "headshot",
+        "capsule",
+        "daily",
+        "style",
+        "look",
+        "ootd"
+      ],
+      "added": [
+        "shoe"
+      ],
+      "dropped": [
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "wardrobe",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "closet",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "attire",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "dress",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "wardrobe organizer",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dress up",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylist",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "try on",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "clothing tracker",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual fitting",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit generator",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "closet scan",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "personal stylist",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "style guide",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion planner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "lookbook",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion sense",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "ee80c85b3f2fbfb6"
+    },
+    {
+      "locale": "es-ES",
+      "native": "Español (España)",
+      "tier": 1,
+      "keywords": "moda,ropa,outfit,vestir,fotos,estilo,organizador,tendencias,diario,conjunto,guardarropa,prendas,foto",
+      "characters": 100,
+      "kept": [
+        "moda",
+        "ropa",
+        "outfit",
+        "vestir",
+        "fotos",
+        "estilo",
+        "organizador",
+        "tendencias",
+        "diario",
+        "conjunto",
+        "guardarropa",
+        "prendas"
+      ],
+      "added": [
+        "foto"
+      ],
+      "dropped": [
+        {
+          "term": "look",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "armario",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "vestuario",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "guarda",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "buscar",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "inspiración",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "combinar",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "mezclar",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tiempo",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "clima",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografía",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "retrato",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "diseño",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "look",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "looks",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "cápsula",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "colección",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ootd",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "43f21bd659384ab3"
+    },
+    {
+      "locale": "es-MX",
+      "native": "Español (México)",
+      "tier": 1,
+      "keywords": "moda,armario,ropa,organizador,sesion,foto,perfil,capsula,diario,estilo,look,ootd,vestuario digital",
+      "characters": 98,
+      "kept": [
+        "moda",
+        "armario",
+        "ropa",
+        "organizador",
+        "sesion",
+        "foto",
+        "perfil",
+        "capsula",
+        "diario",
+        "estilo",
+        "look",
+        "ootd",
+        "vestuario digital"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "lookbook",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "armario virtual",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit planner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "coleccion ropa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "estilista online",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "armario digital",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "moda personal",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vestido del dia",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "combina ropa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfits diarios",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion ai",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "prueba de ropa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotos de perfil",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "foto inteligente",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "estilo diario",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tendencias moda",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "moda urbana",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "de7427f1fe9183d1"
+    },
+    {
+      "locale": "fr-FR",
+      "native": "Français",
+      "tier": 1,
+      "keywords": "garde-robe,vêtement,conseil,look,essayage,photo,portrait,style,armoire,outfit du jour,virtual,ootd",
+      "characters": 98,
+      "kept": [
+        "garde-robe",
+        "vêtement",
+        "conseil",
+        "look",
+        "essayage",
+        "photo",
+        "portrait",
+        "style",
+        "armoire",
+        "outfit du jour"
+      ],
+      "added": [
+        "virtual",
+        "ootd"
+      ],
+      "dropped": [
+        {
+          "term": "tenue",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "tenue",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "essayage",
+          "reason": "duplicate"
+        },
+        {
+          "term": "essayage virtuel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "essayage virtuel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "essayage virtuel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "essayage virtuel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "essayage virtuel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "essayage virtuel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "essayage virtuel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "essayage virtuel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "style",
+          "reason": "duplicate"
+        },
+        {
+          "term": "mod",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "tendance",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "6726e07236e39b48"
+    },
+    {
+      "locale": "gu-IN",
+      "native": "ગુજરાતી",
+      "tier": 1,
+      "keywords": "પરિધાન,ફેશન,કપડાં,સાધન,શૈલી,દેખાવ,રૂપ,મોડલ,પહેરવશા,બેસિક કબાટ,વર્ક કબાટ,સ્માર્ટ આઉટફિટ,કપડાં માનેશી",
+      "characters": 99,
+      "kept": [
+        "પરિધાન",
+        "ફેશન",
+        "કપડાં",
+        "સાધન",
+        "શૈલી",
+        "દેખાવ",
+        "રૂપ",
+        "મોડલ",
+        "પહેરવશા",
+        "બેસિક કબાટ",
+        "વર્ક કબાટ",
+        "સ્માર્ટ આઉટફિટ"
+      ],
+      "added": [
+        "કપડાં માનેશી"
+      ],
+      "dropped": [
+        {
+          "term": "કબાટ",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "આઉટફિટ",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "કબાટ ઓર્ગેનાઇઝર",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "સ્ટાઈલ ગાઈડ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "સીઝનલ આઉટફિટ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "મિશ્ર કપડાં",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ક્લોઝેટ ડિજિટલ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "આઉટફિટ આઈડિયા",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "વર્શિંગ ડ્રેસ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "રિસેપ્શન ડ્રેસ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "મિક્સ એન્ડ મેચ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "વર્ચ્યુઅલ ટ્રાય ઓન",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "AI હેડશોટ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "પોર્ટ્રેટ ફોટો",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ઓફિસ ડ્રેસ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "કેઝ્યુઅલ લુક",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ટ્રેન્ડિંગ સ્ટાઈલ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "બિઝનેસ ફોટો",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "પ્રોફેશનલ ફોટો",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ડ્રેસ કોડ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ઓટીડી",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "bda4eddafcc393c2"
+    },
+    {
+      "locale": "hi",
+      "native": "हिन्दी",
+      "tier": 1,
+      "keywords": "कपड़े,स्टाइल,फैशन,कैप्सूल,पहनने,दैनिक,लुक,कॉलर्बाक,क्लोज़ेट,कैसीन,सिज़नल,मौसम,पहनाव,कपड़ा,स्टाइलिंग",
+      "characters": 99,
+      "kept": [
+        "कपड़े",
+        "स्टाइल",
+        "फैशन",
+        "कैप्सूल",
+        "पहनने",
+        "दैनिक",
+        "लुक",
+        "कॉलर्बाक",
+        "क्लोज़ेट",
+        "कैसीन",
+        "सिज़नल",
+        "मौसम",
+        "पहनाव"
+      ],
+      "added": [
+        "कपड़ा",
+        "स्टाइलिंग"
+      ],
+      "dropped": [
+        {
+          "term": "आउटफिट",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "वॉर्डरोब",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "वॉर्डरोब",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "आउटफिट",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "कॉर्पोरेट",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ऑफिस",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "यूनिफ़ॉर्म",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "गर्म",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ठंडा",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "बारिश",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "समाधान",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "फोटो",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "हाईफ़ाई",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "तस्वीर",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "मॉड",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ओटीडी",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "डिज़ाइन",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "फिटनेस",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "155834a4a3dee779"
+    },
+    {
+      "locale": "it",
+      "native": "Italiano",
+      "tier": 1,
+      "keywords": "guardaroba,abbigliamento,digitale,foto,stile,vestiti,look,armadio digitale,guardaroba vestiti",
+      "characters": 93,
+      "kept": [
+        "guardaroba",
+        "abbigliamento",
+        "digitale",
+        "foto",
+        "stile",
+        "vestiti",
+        "look",
+        "armadio digitale",
+        "guardaroba vestiti"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "closet virtuale",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "moda digitale",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "cosa indossare",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit giornata",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stili coordinati",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "abbigliamento stagione",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "coordinato tempo",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "look meteo",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "proiezione outfit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografo virtuale",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "wardrobe planner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion ai",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylist personale",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "capsule wardrobe",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "f71513179e13a4a8"
+    },
+    {
+      "locale": "ja",
+      "native": "日本語",
+      "tier": 1,
+      "keywords": "ファッション,着こなし,バーチャル,クロゼット,洋服,トレンド,服選び,スタイリング,服,服の選び方,今日のコーデ,服の組み合わせ,服の整理,着る服が決まらない,AIファッション,試着シミュレーション",
+      "characters": 100,
+      "kept": [
+        "ファッション",
+        "着こなし",
+        "バーチャル",
+        "クロゼット",
+        "洋服",
+        "トレンド",
+        "服選び",
+        "スタイリング",
+        "服",
+        "服の選び方",
+        "今日のコーデ",
+        "服の組み合わせ",
+        "服の整理",
+        "着る服が決まらない",
+        "AIファッション",
+        "試着シミュレーション"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "コーデ",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "服装",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "服の管理",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "お洋服",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "コーデ提案",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "着る服",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "コーデ悩み",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "クローゼット整理",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "コーデ例",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "服装アドバイス",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "コーデ診断",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "おめかえ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "天気コーデ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "コーデ検索",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "服の撮影",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "写真コーデ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tryon",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ootd",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "キャプセルワードローブ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "スタイリスト",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "おしゃれ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "スタイル",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "28d79c82db9893ac"
+    },
+    {
+      "locale": "kn-IN",
+      "native": "ಕನ್ನಡ",
+      "tier": 1,
+      "keywords": "ಫ್ಯಾಷನ್,ಸ್ಟೈಲ್,ಶಾಪಿಂಗ್,ಮನೆ,ಪೋಷಾಕು,ಬಟ್ಟೆ,ವಿನ್ಯಾಸ,ವಸತ್ರ,ದಿವಯ್ಯ,ಉಡುಪು ಸೂಚನೆ,ವಸತ್ರ ಸಂಗ್ರಹ,ತಯಾರಿ,ತರಹಾಸು",
+      "characters": 98,
+      "kept": [
+        "ಫ್ಯಾಷನ್",
+        "ಸ್ಟೈಲ್",
+        "ಶಾಪಿಂಗ್",
+        "ಮನೆ",
+        "ಪೋಷಾಕು",
+        "ಬಟ್ಟೆ",
+        "ವಿನ್ಯಾಸ",
+        "ವಸತ್ರ",
+        "ದಿವಯ್ಯ",
+        "ಉಡುಪು ಸೂಚನೆ",
+        "ವಸತ್ರ ಸಂಗ್ರಹ"
+      ],
+      "added": [
+        "ತಯಾರಿ",
+        "ತರಹಾಸು"
+      ],
+      "dropped": [
+        {
+          "term": "ಉಡುಪು",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ಟ್ರೈ ಆನ್",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "ಮಾದರ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ದೋಷ ನಿರ್ವಹಣೆ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಸಿಹಿ ಆಡು",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಬಾಡು",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಸೂಚನೆ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಬ್ಯಾಡ್ ಫೋಟೋ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಸಿಹಿ ದೋಷ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ದೋಷ ಕಾಣುವಿಕೆ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಹೆಡ್‌ಶಾಟ್",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಫೋಟೋ ಪಛ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಫೋಟೋಶೋಟ್",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಪ್ರೊಫೆಷನಲ್ ಫೋಟೋ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಉಡುಪು ಬದಲಾವಣೆ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಗ್ರಾಹಕ ಫೋಟೋ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಸ್ಟಾಂಡರ್ಡ್ ಫೋಟೋ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಫೋಟೋ ಬದಲಾವಣೆ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಫೋಟೋ ವಿಸ್ತರಣೆ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಐ ಏ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಕ್ಲೋಸ್‌ಅಪ್",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ಐ ಕ್ಲೋಸ್‌ಅಪ್",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "8a9d7394a91a7ff8"
+    },
+    {
+      "locale": "ko",
+      "native": "한국어",
+      "tier": 1,
+      "keywords": "패션,가상피팅,정리,화보,프로필,캡슐,데일리,룩,오피셜,오늘 뭐 입지,매일옷,옷 정리,헤드샷,인물화보,디지털 옷장,스마트 옷장,시즌별,기온,날씨,패션플래너,ootd,행쇼,옷차림",
+      "characters": 98,
+      "kept": [
+        "패션",
+        "가상피팅",
+        "정리",
+        "화보",
+        "프로필",
+        "캡슐",
+        "데일리",
+        "룩",
+        "오피셜",
+        "오늘 뭐 입지",
+        "매일옷",
+        "옷 정리",
+        "헤드샷",
+        "인물화보",
+        "디지털 옷장",
+        "스마트 옷장",
+        "시즌별",
+        "기온",
+        "날씨",
+        "패션플래너",
+        "ootd",
+        "행쇼"
+      ],
+      "added": [
+        "옷차림"
+      ],
+      "dropped": [
+        {
+          "term": "옷",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "스타일",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "코디",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "출장 코디",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "여드름 피부",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "테라피",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "아이디어",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "옷 추천",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "셀카 보정",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "화보 제작",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "피팅룸",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "스타일",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "룩북",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "패턴",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "트렌드",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "스타일링",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "디지털",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "81a0d31e9f4aa1e1"
+    },
+    {
+      "locale": "ml-IN",
+      "native": "മലയാളം",
+      "tier": 1,
+      "keywords": "ധാരണം,ഷൂട്ട്,ഫാഷൻ,സ്റ്റൈൽ,ഡിസൈൻ,ട്രെൻഡ്,ലുക്ക്,വസ്ത്രം,ഡ്രസ്,വസ്ത്ര ഷോപ്പ്,വസ്ത്ര വകഭേദം,കിടെ",
+      "characters": 93,
+      "kept": [
+        "ധാരണം",
+        "ഷൂട്ട്",
+        "ഫാഷൻ",
+        "സ്റ്റൈൽ",
+        "ഡിസൈൻ",
+        "ട്രെൻഡ്",
+        "ലുക്ക്",
+        "വസ്ത്രം",
+        "ഡ്രസ്",
+        "വസ്ത്ര ഷോപ്പ്",
+        "വസ്ത്ര വകഭേദം",
+        "കിടെ"
+      ],
+      "added": [],
+      "dropped": [
+        {
+          "term": "ശേഖരം",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "കലാശേഖരം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "പരിധി വസ്ത്രം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ഓഫീസ് ഡ്രെസ്",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ഉത്സവ വസ്ത്രം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "കുടുംബ വസ്ത്രം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "വസ്ത്ര സംഭരണം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "സ്റ്റൈൽ ആശയങ്ങൾ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "വർഷാകുല ഡ്രെസ്",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "വസ്ത്ര വരണം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "വസ്ത്ര ശുചിത്വം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "പ്രായമുള്ള വസ്ത്രം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "വസ്ത്ര നിർമ്മാണം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "മുഖപടം വർച്ച്",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "വസ്ത്ര നിലവാരം",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ഇംഗ്ലീഷ് ഡ്രെസ്",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ഓൺലൈൻ ഷോപ്പ്",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "12da7e4fc3eacb00"
+    },
+    {
+      "locale": "mr-IN",
+      "native": "मराठी",
+      "tier": 1,
+      "keywords": "प्लॅनर,फॅशन,व्हर्च्युअल,ऑर्गनायझर,फोटोशुट,हेडशॉट,कॅप्सूल,दैनिक,स्टाईल,लुक,ओओटीडी,कपड्यांचा संग्रह",
+      "characters": 97,
+      "kept": [
+        "प्लॅनर",
+        "फॅशन",
+        "व्हर्च्युअल",
+        "ऑर्गनायझर",
+        "फोटोशुट",
+        "हेडशॉट",
+        "कॅप्सूल",
+        "दैनिक",
+        "स्टाईल",
+        "लुक",
+        "ओओटीडी",
+        "कपड्यांचा संग्रह"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "ड्रेस",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "कपडे",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "वॉर्डरोब",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "क्लोसेट",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "आउटफिट",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "सत्र",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "मौसम",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "आयडिया",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "स्टाईलिंग",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "फोटो",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "AI",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ट्राइऑन",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "फॅशंस",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "कलर",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "वर्कआउट",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ब्रांड",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "73884acc696dc3be"
+    },
+    {
+      "locale": "pa-IN",
+      "native": "ਪੰਜਾਬੀ",
+      "tier": 1,
+      "keywords": "ਫੈਸ਼ਨ,ਡਰੈੱਸ,ਅਲਮਾਰੀ,ਲੁੱਕ,ਕੱਪੜੇ,ਡਿਜੀਟਲ ਚੋਕਟਾ,ਕੁੱਲ ਮੈਡਨ,ਆਊਟਫਿੱਟ,ਆਊਟਫਿੱਟ ਆਈਡੀਆ,ਕੀ ਪਹਿਨਾਂ,ਪਹਿਨਾਵਾ,ਸ਼ੈਲੀ",
+      "characters": 98,
+      "kept": [
+        "ਫੈਸ਼ਨ",
+        "ਡਰੈੱਸ",
+        "ਅਲਮਾਰੀ",
+        "ਲੁੱਕ",
+        "ਕੱਪੜੇ",
+        "ਡਿਜੀਟਲ ਚੋਕਟਾ",
+        "ਕੁੱਲ ਮੈਡਨ",
+        "ਆਊਟਫਿੱਟ",
+        "ਆਊਟਫਿੱਟ ਆਈਡੀਆ",
+        "ਕੀ ਪਹਿਨਾਂ"
+      ],
+      "added": [
+        "ਪਹਿਨਾਵਾ",
+        "ਸ਼ੈਲੀ"
+      ],
+      "dropped": [
+        {
+          "term": "ਪੁਸ਼ਾਕ",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ਸਟਾਈਲ",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "ਮੌਸਮ ਅਨੁਸਾਰ ਪਹਿਨਾਵਾ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਦਿਨ ਦੀ ਯੂਨੀਫਾਰਮ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਕਹਾਣੀ ਬੋਲੇ ਕਪੜੇ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਹਫ਼ਤੇ ਬਾਜ਼ੀਆਂ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਕਪੜਿਆਂ ਦੀ ਸੂਚੀ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਵੈਰਚੁਅਲ ਟਰਾਈ ਓਨ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਆਊਟਫਿੱਟ ਬਲਡਰ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਫੋਟੋਸ਼ੂਟ ਐਏਆਈ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਸਿਰਦਰੀਆਂ ਐਏਆਈ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਕੱਪੜੇ ਆਰਗਨਾਈਜ਼ਰ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਆਊਟਫਿੱਟ ਖੋਜੋ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਕਪੜਿਆਂ ਦੀ ਦਰਸ਼ਕ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਕੈਪਸੂਲ ਵਾਰਡਰੋਬ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਕਮਰਾ ਤੇਸੀ ਗੁਦਾਮ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਆਫਿਸ ਸ਼ੈਲੀ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਸਟਾਈਲ ਆਈਡੀਆ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਵਾਰਡਰੋਬ ਸਟਾਈਲਿਸਟ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ਮੁੱਕੇ ਸ਼ੈਲੀ",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "1a23be363a40f801"
+    },
+    {
+      "locale": "pt-BR",
+      "native": "Português (Brasil)",
+      "tier": 1,
+      "keywords": "moda,armário,roupas,organizador,ensaio,foto,perfil,cápsula,diário,estilo,ootd,guardaroupa,vestimenta",
+      "characters": 100,
+      "kept": [
+        "moda",
+        "armário",
+        "roupas",
+        "organizador",
+        "ensaio",
+        "foto",
+        "perfil",
+        "cápsula",
+        "diário",
+        "estilo",
+        "ootd",
+        "guardaroupa"
+      ],
+      "added": [
+        "vestimenta"
+      ],
+      "dropped": [
+        {
+          "term": "look",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "closet virtual",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "armário inteligente",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "acessório",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vestuário",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "look diário",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "combinar roupas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "o que vestir",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "organizar guarda-roupa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "look para casar",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "roupa de trabalho",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "foto de perfil",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ensaio fotográfico",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "provador online",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "look",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "tendência",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "estilo pessoal",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "moda íntima",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "bacb3c31c39628fa"
+    },
+    {
+      "locale": "ta-IN",
+      "native": "தமிழ்",
+      "tier": 1,
+      "keywords": "ஃபேஷன்,ஸ்டைல்,திட்டமிடுபவர்,தோற்றம்,போட்டோஷூட்,தினசரி,ஆடனை எடுக்க,படவாதீ,பாவி,பாபிள்,ஆடை அமைப்பு",
+      "characters": 96,
+      "kept": [
+        "ஃபேஷன்",
+        "ஸ்டைல்",
+        "திட்டமிடுபவர்",
+        "தோற்றம்",
+        "போட்டோஷூட்",
+        "தினசரி",
+        "ஆடனை எடுக்க",
+        "படவாதீ",
+        "பாவி",
+        "பாபிள்"
+      ],
+      "added": [
+        "ஆடை அமைப்பு"
+      ],
+      "dropped": [
+        {
+          "term": "அலமாரி",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ஆடைகள்",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "அலமாரி",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ஆடை சேகரிப்பு",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "மாதிரி",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ஆடை அலமாரி",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "என்ன அணிய வேண்டும்",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ஆடை கோப்புகள்",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "வானிலை ஆடை",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "என் ஆடை",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "புதிய ஆடை",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "காட்சி",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "மாதிரிகள்",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "தனிப்பட்ட ஆடை",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "புதிய தோற்றம்",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "முகப் புகைப்படம்",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "மூடிய ஆடை",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "பாபிடை ஆடை",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "e28dd100a65bf18c"
+    },
+    {
+      "locale": "te-IN",
+      "native": "తెలుగు",
+      "tier": 1,
+      "keywords": "ప్లానర్,ఫ్యాషన్,ఆర్గనైజర్,ఫోటోషూట్,లుక్,ట్రెండ్,వార్డ్రోబ్,సీజన్ వార్డ్రోబ్,కాంబినేషన్,ఫోటో బాక్సరీ",
+      "characters": 99,
+      "kept": [
+        "ప్లానర్",
+        "ఫ్యాషన్",
+        "ఆర్గనైజర్",
+        "ఫోటోషూట్",
+        "లుక్",
+        "ట్రెండ్",
+        "వార్డ్రోబ్",
+        "సీజన్ వార్డ్రోబ్",
+        "కాంబినేషన్"
+      ],
+      "added": [
+        "ఫోటో బాక్సరీ"
+      ],
+      "dropped": [
+        {
+          "term": "దుస్తులు",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "శైలి",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "ఆపరేషనల్ వేయర్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ప్రాక్తికల్ డ్రెస్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "డ్రెస్ కోర్డీనేటర్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "స్టైల్ ఐడియాస్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "కస్టమ్ లుక్స్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "విస్‌క్యుయస్ ట్రై",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "వర్చువల్ మిరా",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "కలర్ కోఆర్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "హెడ్‌షాట్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "వెతర్ ఆడెంట్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "గడ్డీ బ్యాగ్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "చేతిచీములు",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "కాపసూల్ వేయర్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ఫెస్టీవ్ వేయర్",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "మల్టీస్టెప్ స్టైల్",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "e9c3ee072c0a77af"
+    },
+    {
+      "locale": "tr",
+      "native": "Türkçe",
+      "tier": 1,
+      "keywords": "moda,sanal,kıyafet,düzenleyici,çekim,vesikalık,kapsül,günlük,tarz,görünüm,kombinler,gardırop,ootd",
+      "characters": 97,
+      "kept": [
+        "moda",
+        "sanal",
+        "kıyafet",
+        "düzenleyici",
+        "çekim",
+        "vesikalık",
+        "kapsül",
+        "günlük",
+        "tarz",
+        "görünüm",
+        "kombinler",
+        "gardırop"
+      ],
+      "added": [
+        "ootd"
+      ],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "kıyafet listesi",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "giyim stili",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kişisel stil",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dolap envanteri",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "günlük stil",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stil önerisi",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ne giyeyim",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dolap düzenleme",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kombin önerisi",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kış kombin",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "yaz kombin",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "hava durumu kombin",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "şık görünüm",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "sanal prova",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "profesyonel portre",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotoğraf düzenleme",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "hızlı seçim",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion plan",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "moda haftası",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "31091007b64a2e88"
+    },
+    {
+      "locale": "zh-Hans",
+      "native": "简体中文",
+      "tier": 1,
+      "keywords": "搭配,胶囊,试穿,造型,美学,OOTD,自拍,智能衣橱,穿搭建议,每日穿搭,穿衣指南,衣橱整理,衣橱管理,穿搭灵感,穿搭助手,AI试衣,虚拟试穿,照片试衣,数字衣橱,拍照记录,AI造型,衣柜收纳",
+      "characters": 97,
+      "kept": [
+        "搭配",
+        "胶囊",
+        "试穿",
+        "造型",
+        "美学",
+        "OOTD",
+        "自拍",
+        "智能衣橱",
+        "穿搭建议",
+        "每日穿搭",
+        "穿衣指南",
+        "衣橱整理",
+        "衣橱管理",
+        "穿搭灵感",
+        "穿搭助手",
+        "AI试衣",
+        "虚拟试穿",
+        "照片试衣",
+        "数字衣橱",
+        "拍照记录",
+        "AI造型"
+      ],
+      "added": [
+        "衣柜收纳"
+      ],
+      "dropped": [
+        {
+          "term": "穿搭",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "衣橱",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "今日穿搭",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "形象管理",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "穿搭规划",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "换季衣橱",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "穿搭公式",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "懒人穿搭",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "职场穿搭",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "约会穿搭",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "旅行穿搭",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "显高显瘦",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "风格测试",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "智能收纳",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "时尚单品",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "身材管理",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ootd",
+          "reason": "duplicate"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "dd2a29cccc7090dc"
+    },
+    {
+      "locale": "zh-Hant",
+      "native": "繁體中文",
+      "tier": 1,
+      "keywords": "規劃,時尚,虛擬,服飾,整理,寫真,大頭照,膠囊,日常,風格,ootd,服飾管理,衣櫃管理,穿衣指南,季節穿搭,變裝,穿搭建議,衣服整理,服裝搭配,試衣,形象照,個人照,試穿效果,衣櫃收納,服裝清單",
+      "characters": 99,
+      "kept": [
+        "規劃",
+        "時尚",
+        "虛擬",
+        "服飾",
+        "整理",
+        "寫真",
+        "大頭照",
+        "膠囊",
+        "日常",
+        "風格",
+        "ootd",
+        "服飾管理",
+        "衣櫃管理",
+        "穿衣指南",
+        "季節穿搭",
+        "變裝",
+        "穿搭建議",
+        "衣服整理",
+        "服裝搭配",
+        "試衣",
+        "形象照",
+        "個人照",
+        "試穿效果"
+      ],
+      "added": [
+        "衣櫃收納",
+        "服裝清單"
+      ],
+      "dropped": [
+        {
+          "term": "穿搭",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "衣櫥",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "造型",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "衣櫃管理",
+          "reason": "duplicate"
+        },
+        {
+          "term": "每日穿搭",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "穿搭靈感",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "形象提升",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "衣櫥整理",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "造型建議",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "穿搭指南",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "穿搭靈感",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "服裝搭配",
+          "reason": "duplicate"
+        },
+        {
+          "term": "個人形象",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "天氣穿搭",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "個人寫真",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "虛擬試衣",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "智能穿搭",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "生活照",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "虛擬試穿",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "變裝玩法",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "OOTD記錄",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "fb6d943203e60147"
+    },
+    {
+      "locale": "cs",
+      "native": "Čeština",
+      "tier": 2,
+      "keywords": "plánovač,móda,oblečení,organizér,focení,portrét,kapsulový,denní,vzhled,ootd,co si dát,oblek,šaty",
+      "characters": 96,
+      "kept": [
+        "plánovač",
+        "móda",
+        "oblečení",
+        "organizér",
+        "focení",
+        "portrét",
+        "kapsulový",
+        "denní",
+        "vzhled",
+        "ootd",
+        "co si dát"
+      ],
+      "added": [
+        "oblek",
+        "šaty"
+      ],
+      "dropped": [
+        {
+          "term": "styl",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "šatník",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "vzhled",
+          "reason": "duplicate"
+        },
+        {
+          "term": "moda",
+          "reason": "duplicate"
+        },
+        {
+          "term": "co nosit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kombinace",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tipy",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "pohodlně",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "elegantně",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylist",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "virtualní",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "fotka",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plán",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "portrét",
+          "reason": "duplicate"
+        },
+        {
+          "term": "focení",
+          "reason": "duplicate"
+        },
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "inspirace",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "styling",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "sezóna",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tendence",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "počasí",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "2f49bc6a22a4e212"
+    },
+    {
+      "locale": "da",
+      "native": "Dansk",
+      "tier": 2,
+      "keywords": "planlægger,mode,virtuel,tøj,organisator,fotoshoot,portræt,kapsel,daglig,stil,look,ootd,klædeskab",
+      "characters": 96,
+      "kept": [
+        "planlægger",
+        "mode",
+        "virtuel",
+        "tøj",
+        "organisator",
+        "fotoshoot",
+        "portræt",
+        "kapsel",
+        "daglig",
+        "stil",
+        "look",
+        "ootd",
+        "klædeskab"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "garderobeskab",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "klæder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "garderober",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "sæson",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "digitalt",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "digitalt",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "garderobe",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "vejr",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fremvisning",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plads",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "farve",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "passer",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "sigt",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "styling",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "match",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "fotografering",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "portræt",
+          "reason": "duplicate"
+        },
+        {
+          "term": "billeder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "0b96b10d1cafde9f"
+    },
+    {
+      "locale": "fi",
+      "native": "Suomi",
+      "tier": 2,
+      "keywords": "vaatteet,muoti,asut,kapselipukeutuminen,kuva,asusteet,asu,yhdistely,tyylitali,vaatteiden järjestely",
+      "characters": 99,
+      "kept": [
+        "vaatteet",
+        "muoti",
+        "asut",
+        "kapselipukeutuminen",
+        "kuva",
+        "asusteet",
+        "asu",
+        "yhdistely",
+        "tyylitali",
+        "vaatteiden järjestely"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "vaatekaappi",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "puku",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vaatetus",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vaatetuskoti",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vaateneuvot",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vaatetyyppäisyys",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vaatekuva",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tyyli",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ootd",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vaatetustyylit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vaatetyyppi",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "fad2fc3e2fcff68d"
+    },
+    {
+      "locale": "fr-CA",
+      "native": "Français (Canada)",
+      "tier": 2,
+      "keywords": "mode,virtuel,vetement,organisateur,portrait,capsule,quotidien,tenue,ootd,combinaison,garnet,armoire",
+      "characters": 99,
+      "kept": [
+        "mode",
+        "virtuel",
+        "vetement",
+        "organisateur",
+        "portrait",
+        "capsule",
+        "quotidien",
+        "tenue",
+        "ootd",
+        "combinaison",
+        "garnet",
+        "armoire"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "garde robe",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "look",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "outfit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dressing",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tenue",
+          "reason": "duplicate"
+        },
+        {
+          "term": "coordonner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "météo",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "saison",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "occasions",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "essayage",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "coiffure",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "portrait",
+          "reason": "duplicate"
+        },
+        {
+          "term": "organisation",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "style",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "travail",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "soirée",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "voyage",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "45d06ffb206af8c9"
+    },
+    {
+      "locale": "he",
+      "native": "עברית",
+      "tier": 2,
+      "keywords": "אופנה,קפסולה,יומי,מראה,ארגון,תמונה,בגדים,ארוני בגדים,ארגון ארון,מה ללבוש,שילובי בגדים,לבוש חכם,שמלות",
+      "characters": 100,
+      "kept": [
+        "אופנה",
+        "קפסולה",
+        "יומי",
+        "מראה",
+        "ארגון",
+        "תמונה",
+        "בגדים",
+        "ארוני בגדים",
+        "ארגון ארון",
+        "מה ללבוש",
+        "שילובי בגדים",
+        "לבוש חכם"
+      ],
+      "added": [
+        "שמלות"
+      ],
+      "dropped": [
+        {
+          "term": "סטייל",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "שיער ותיק",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "מכנסיים",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "חולצות",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ג'קטים",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "נעליים",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "תיקים",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "אביזרים",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "לבוש חכם",
+          "reason": "duplicate"
+        },
+        {
+          "term": "אופנה יומית",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "לבוש לעבודה",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "לבוש לחתונה",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "לבוש לסטודיו",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "לבוש עונתי",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "לבוש לחופש",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "לבוש לספורט",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "לבוש למוצ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "תמונות לבוש",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "צילום אופנה",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "צילום סמו",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "צילום פורטרט",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "764fde0779fdfe28"
+    },
+    {
+      "locale": "id",
+      "native": "Bahasa Indonesia",
+      "tier": 2,
+      "keywords": "kapsul,berpakaian,pakaian,mode,pameran,busana,perencana,harian,styling,wardrobe,outfit,penampilan",
+      "characters": 97,
+      "kept": [
+        "kapsul",
+        "berpakaian",
+        "pakaian",
+        "mode",
+        "pameran",
+        "busana",
+        "perencana",
+        "harian",
+        "styling",
+        "wardrobe",
+        "outfit",
+        "penampilan"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "lembari",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "catalog baju",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit harian",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "gaya berpakaian",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "pilih outfit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "coba baju",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "padu padan",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "virtual tryon",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "headshot ai",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "koordinasi busana",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion wanita",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ootd",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografi produk",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tips fashion",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "aa4eeeda801d55a2"
+    },
+    {
+      "locale": "ms",
+      "native": "Bahasa Melayu",
+      "tier": 2,
+      "keywords": "pakaian,penganjur,bergaya,penata,kapsul,harian,rintangan,gambar,almari digital,kombinasi baju,fesyen",
+      "characters": 100,
+      "kept": [
+        "pakaian",
+        "penganjur",
+        "bergaya",
+        "penata",
+        "kapsul",
+        "harian",
+        "rintangan",
+        "gambar",
+        "almari digital",
+        "kombinasi baju",
+        "fesyen"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "almari pakaian",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "senarai almari",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "penyusunan fesyen",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "apa nak pakai",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "cadangan baju",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "padanan pakaian",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "gaya berbusana",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "baju musim",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "try on virtual",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "headshot",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "gambar gaya",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "susun atur",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "foto gaya",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ootd",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fesyen harian",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "gaya kemas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stailo harian",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "f894376ced3603b7"
+    },
+    {
+      "locale": "nl-NL",
+      "native": "Nederlands",
+      "tier": 2,
+      "keywords": "garderobe,mode,organizer,fotoshoot,portret,capsule,stijl,look,ootd,kledingkast,outfit idee,dresscode",
+      "characters": 100,
+      "kept": [
+        "garderobe",
+        "mode",
+        "organizer",
+        "fotoshoot",
+        "portret",
+        "capsule",
+        "stijl",
+        "look",
+        "ootd",
+        "kledingkast"
+      ],
+      "added": [
+        "outfit idee",
+        "dresscode"
+      ],
+      "dropped": [
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "kleding",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "wat trek ik aan",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit tip",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kleed combinaties",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit maken",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kleding combineren",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kledingtip",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "styling tip",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit planner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit plan",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dressup",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "ec907778434de577"
+    },
+    {
+      "locale": "no",
+      "native": "Norsk",
+      "tier": 2,
+      "keywords": "planlegger,mote,virtuell,klær,organisator,fotoshoot,portrett,kapsel,daglig,look,ootd,garderobe,plagg",
+      "characters": 100,
+      "kept": [
+        "planlegger",
+        "mote",
+        "virtuell",
+        "klær",
+        "organisator",
+        "fotoshoot",
+        "portrett",
+        "kapsel",
+        "daglig",
+        "look",
+        "ootd",
+        "garderobe",
+        "plagg"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "skapeplagg",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "klessamling",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "klädkasse",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plaggarbet",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "klärutstyr",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "klädsel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plaggbas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "skapet",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dresscode",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "håll orden",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plaggskifte",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plaggtips",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "modetips",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plaggrådgiver",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "styling",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylisten",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "modedesigner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stilberådgivare",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "5dced7d2b08d429b"
+    },
+    {
+      "locale": "or-IN",
+      "native": "ଓଡ଼ିଆ",
+      "tier": 2,
+      "keywords": "ଫ୍ୟାଶନ,ଡ୍ରେସ,ପୋଷାକ,ସାଜସଜ୍ଜା,ଡାସ୍,ବସ୍ତ୍ର,ଆରମ୍ବ,ପରିଚ୍ଛା,ଧାରଣ,କେମ୍ ନେ,ଆଉଟଫିଟ,ଫିଟ୍,ଟ୍ରାଇ,ପିଚ୍ଚର,କ୍ଲୋଜେଟ୍",
+      "characters": 100,
+      "kept": [
+        "ଫ୍ୟାଶନ",
+        "ଡ୍ରେସ",
+        "ପୋଷାକ",
+        "ସାଜସଜ୍ଜା",
+        "ଡାସ୍",
+        "ବସ୍ତ୍ର",
+        "ଆରମ୍ବ",
+        "ପରିଚ୍ଛା",
+        "ଧାରଣ",
+        "କେମ୍ ନେ",
+        "ଆଉଟଫିଟ",
+        "ଫିଟ୍",
+        "ଟ୍ରାଇ",
+        "ପିଚ୍ଚର"
+      ],
+      "added": [
+        "କ୍ଲୋଜେଟ୍"
+      ],
+      "dropped": [
+        {
+          "term": "ଷ୍ଟାଇଲ",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "ସ୍ମାର୍ଟ କ୍ଲୋଜେଟ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ୱାର୍ଡ୍ରୋବ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ବେସ୍ଟ ଆଉଟଫିଟ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଫ୍ୟାଶନ ଇଡିଓ଼",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "କିଛି ପିନ୍ଧିବାକୁ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଦିନସ୍ଥିତ ପିଢ଼ୁ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ୱେତର ଡେସ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଆଇଏ",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ମୋଟେ ଦେଖା",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଆଲଗା ସାଇଜ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଫଟୋ ଷ୍ଟୁଡିଓ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ସେଲଫି ଇଫେକ୍ଟ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ରଙ୍ଗ ମାଟ୍ଚିଂ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଅନୁକରଣ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଟ୍ରାୟଅନ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଟ୍ରାୟଅନ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଟ୍ରାୟଅନ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "କଳାକୃତି",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ସବ୍ଲେମ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ଲୁକ୍ ବୁକ୍",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "କ୍ୟାପ୍ସୁଲ୍",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "ac7d704549f66f3d"
+    },
+    {
+      "locale": "pl",
+      "native": "Polski",
+      "tier": 2,
+      "keywords": "moda,ubrania,garderoba,outfit,przymierzalnia,zdjęcia,kapsułowa,codzienny,look,co założyć,pogoda",
+      "characters": 95,
+      "kept": [
+        "moda",
+        "ubrania",
+        "garderoba",
+        "outfit",
+        "przymierzalnia",
+        "zdjęcia",
+        "kapsułowa",
+        "codzienny",
+        "look",
+        "co założyć",
+        "pogoda"
+      ],
+      "added": [],
+      "dropped": [
+        {
+          "term": "styl",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "organizator szafy",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ubrania online",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "personal stylist",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylistka AI",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylizacje",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "co włożyć",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "pomysł na outfit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "jak się ubrać",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit na randkę",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "co nosić",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "wirtualna przymierka",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "zdjęcia w garderobie",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit generator",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual tryon",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "zdjęcia głowy",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion tips",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit dnia",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit biznes",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit casual",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit sportowy",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit na wakacje",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit do pracy",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "356415be2104861e"
+    },
+    {
+      "locale": "pt-PT",
+      "native": "Português (Portugal)",
+      "tier": 2,
+      "keywords": "moda,vestuário,organizador,fotos,perfil,cápsula,diário,estilo,visual,ootd,guarda-roupa,vestido,festa",
+      "characters": 100,
+      "kept": [
+        "moda",
+        "vestuário",
+        "organizador",
+        "fotos",
+        "perfil",
+        "cápsula",
+        "diário",
+        "estilo",
+        "visual",
+        "ootd",
+        "guarda-roupa",
+        "vestido",
+        "festa"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "clipe",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "roupa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "roupas de trabalho",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "armário",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vestimentas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "estilista online",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "conjunto",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "combinações",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "look do dia",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "inspiração moda",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit planning",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "prova virtual",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografia virtual",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotossessão",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "closet digital",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "provar roupa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "estilo pessoal",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tendências",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "e010b4b5ada2e91f"
+    },
+    {
+      "locale": "ru",
+      "native": "Русский",
+      "tier": 2,
+      "keywords": "планировщик,мода,виртуальный,одежда,органайзер,фотосессия,портрет,капсула,стиль,лук,ootd,приложение",
+      "characters": 99,
+      "kept": [
+        "планировщик",
+        "мода",
+        "виртуальный",
+        "одежда",
+        "органайзер",
+        "фотосессия",
+        "портрет",
+        "капсула",
+        "стиль",
+        "лук",
+        "ootd",
+        "приложение"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "гардеробный",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "шкаф",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "шкафчик",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "вещи",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "одежда",
+          "reason": "duplicate"
+        },
+        {
+          "term": "комбинатория",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "подбор",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "собираю",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "собираю образ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "что надеть",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "сочетание",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "мэтчинг одежды",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "виртуальная",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "примерка",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "мэтчинг",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "стиль",
+          "reason": "duplicate"
+        },
+        {
+          "term": "образ",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "лук",
+          "reason": "duplicate"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "0d47ce36661388e0"
+    },
+    {
+      "locale": "sk",
+      "native": "Slovenčina",
+      "tier": 2,
+      "keywords": "plánovač,móda,virtuálny,oblečenie,organizér,fotenie,portrét,kapsulový,denný,vzhľad,ootd,trikotáž",
+      "characters": 96,
+      "kept": [
+        "plánovač",
+        "móda",
+        "virtuálny",
+        "oblečenie",
+        "organizér",
+        "fotenie",
+        "portrét",
+        "kapsulový",
+        "denný",
+        "vzhľad",
+        "ootd"
+      ],
+      "added": [
+        "trikotáž"
+      ],
+      "dropped": [
+        {
+          "term": "štýl",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "bunda",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kovbojky",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tričko",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "sukňa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "blejzár",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "šaty",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "topánky",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "koža",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "čo sa obliecť",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kombinácia",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "skúšobňa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografia",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "inšpirácia",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylist",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "obraz",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "sezónny",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "denim",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "luxus",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "elegancia",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "b1dd508642323b87"
+    },
+    {
+      "locale": "sv",
+      "native": "Svenska",
+      "tier": 2,
+      "keywords": "mode,kläder,outfit,kapselgarderob,kombinera,garderobshanterare,porträtt,kamera,digital garderob",
+      "characters": 95,
+      "kept": [
+        "mode",
+        "kläder",
+        "outfit",
+        "kapselgarderob",
+        "kombinera",
+        "garderobshanterare",
+        "porträtt",
+        "kamera",
+        "digital garderob"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "vardagskläder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plagg",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "digital klädförråd",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "plagg lista",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dräkter",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "digital garderober",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vilket kläder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "mode tips",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kläder kombina",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit inspiration",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vädret kläder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografera kläder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual provning",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "AI kläder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "klädassistent",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografi kläder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stil",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "modedetaljer",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kapsel",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "skönhet",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "c558b3c03b95a100"
+    },
+    {
+      "locale": "th",
+      "native": "ไทย",
+      "tier": 2,
+      "keywords": "ชุด,แฟชั่น,ชุดเดรส,มิกซ์แอนด์แมทช์,แคปซูล,ลุค,ไอเดียชุด,ชุดสวย,ชุดทำงาน,ชุดลำลอง,ชุดทางการ,ชุดผู้ชาย",
+      "characters": 100,
+      "kept": [
+        "ชุด",
+        "แฟชั่น",
+        "ชุดเดรส",
+        "มิกซ์แอนด์แมทช์",
+        "แคปซูล",
+        "ลุค",
+        "ไอเดียชุด",
+        "ชุดสวย",
+        "ชุดทำงาน"
+      ],
+      "added": [
+        "ชุดลำลอง",
+        "ชุดทางการ",
+        "ชุดผู้ชาย"
+      ],
+      "dropped": [
+        {
+          "term": "แต่งตัว",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "เสื้อผ้า",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ตู้เสื้อผ้า",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "ตู้เสื้อผ้า",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ชุดเดรส",
+          "reason": "duplicate"
+        },
+        {
+          "term": "ชุดผู้หญิง",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "แต่งตัว",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ชุดไปเที่ยว",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ชุดไปเดท",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "มิกซ์แอนด์แมทช์",
+          "reason": "duplicate"
+        },
+        {
+          "term": "ตู้เสื้อผ้าดิจิทัล",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ลองชุดเสมือน",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ภาพถ่ายบุคคล",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ชุดตามอากาศ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "สไตล์",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ootd",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "eb12586c99e21871"
+    },
+    {
+      "locale": "uk",
+      "native": "Українська",
+      "tier": 2,
+      "keywords": "планувальник,мода,віртуальний,одяг,органайзер,фотосесія,портрет,капсула,щоденний,ootd,комбінатор",
+      "characters": 96,
+      "kept": [
+        "планувальник",
+        "мода",
+        "віртуальний",
+        "одяг",
+        "органайзер",
+        "фотосесія",
+        "портрет",
+        "капсула",
+        "щоденний",
+        "ootd"
+      ],
+      "added": [
+        "комбінатор"
+      ],
+      "dropped": [
+        {
+          "term": "образ",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "образ",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "офісний",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "вечірній",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "класичний",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "casual",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "спілкування",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "стильний",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "стилець",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "сезонний",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "побутовий",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "літній",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "зимовий",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "весняний",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "осенній",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "вигляд",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "405d7dae3f86feb4"
+    },
+    {
+      "locale": "ur-PK",
+      "native": "اردو",
+      "tier": 2,
+      "keywords": "اسٹائل,فیشن,کپڑے,تصویر,ڈیزائن,آؤٹ فٹ,موسم,کپڑا,تبدیل,پہننے کی تجاویز,دیجیٹل الماری,وائرٹل ٹرائی آن",
+      "characters": 98,
+      "kept": [
+        "اسٹائل",
+        "فیشن",
+        "کپڑے",
+        "تصویر",
+        "ڈیزائن",
+        "آؤٹ فٹ",
+        "موسم",
+        "کپڑا",
+        "تبدیل",
+        "پہننے کی تجاویز",
+        "دیجیٹل الماری",
+        "وائرٹل ٹرائی آن"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "کپڑوں کی لائبریری",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "لباسوں کا مجموعہ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "لباسوں کی جگہ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "لباس کا انتخاب",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "کپڑوں کا انتظام",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "پوشاک سوجسٹن",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ڈریس کد",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "فیشن گائیڈ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "پوشاک کوڈ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "آؤٹ فٹ آئیڈیاز",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "آپٹیم مینٹ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "کپڑوں کی دیکھ بھال",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ویٹر اینڈ آؤٹ فٹ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ای اے ڈبلیو اوورڈر",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "لباسوں کی تصویر",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "آئی ڈی اسٹائلر",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "فیشن سیشن",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "فیشن اسٹائل",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "مقبول فیشن ٹرنڈز",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "کیمپلس وارڈروب",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ایستھٹک ڈیزائن",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "55d1ba40a90cc8d8"
+    },
+    {
+      "locale": "vi",
+      "native": "Tiếng Việt",
+      "tier": 2,
+      "keywords": "phốiđồ,thờitrang,tủđồ,thửđồ,cá nhân,ootd,phongcách,chânđdung,capsule,trangphục,tủ quần áo,phối đồ nữ",
+      "characters": 100,
+      "kept": [
+        "phốiđồ",
+        "thờitrang",
+        "tủđồ",
+        "thửđồ",
+        "cá nhân",
+        "ootd",
+        "phongcách",
+        "chânđdung",
+        "capsule",
+        "trangphục",
+        "tủ quần áo",
+        "phối đồ nữ"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "gợi ý mặc gì",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "quần áo theo mùa",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kiểm tra quần áo",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tổ chức tủ đồ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "mặc đồ hợp gu",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "sự kiện cá nhân",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "thời trang cá nhân",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "cá nhân hóa thời trang",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "gợi ý thời tiết",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "tạo hình ảnh",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "chụp ảnh ảo",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "phân tích trang phục",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "mix đồ",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "đồ công sở",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "đồ dạo chơi",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "0ac4ae092694cbd9"
+    },
+    {
+      "locale": "ca",
+      "native": "Català",
+      "tier": 3,
+      "keywords": "moda,conjunt,roba,càpsula,patró,tendència,imatge,vestidor,robari,vestits,sabates,closet,color,ootd",
+      "characters": 98,
+      "kept": [
+        "moda",
+        "conjunt",
+        "roba",
+        "càpsula",
+        "patró",
+        "tendència",
+        "imatge",
+        "vestidor",
+        "robari",
+        "vestits",
+        "sabates",
+        "closet",
+        "color"
+      ],
+      "added": [
+        "ootd"
+      ],
+      "dropped": [
+        {
+          "term": "estil",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "conjunts",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "armari",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "vestidor",
+          "reason": "duplicate"
+        },
+        {
+          "term": "roba",
+          "reason": "duplicate"
+        },
+        {
+          "term": "roba digital",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "conjunt de roba",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "conjunts IA",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "conjunts diaris",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "proves virtuals",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografia IA",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "estil",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "estilista",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "moda IA",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "estil personal",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "e27e6188a917afe0"
+    },
+    {
+      "locale": "el",
+      "native": "Ελληνικά",
+      "tier": 3,
+      "keywords": "μόδα,ρούχα,οργανωτής,πορτρέτο,εμφάνιση,ντύσιμο,καθημερινά,συλλογή ρούχων,ιδέες outfit,closet,ootd",
+      "characters": 97,
+      "kept": [
+        "μόδα",
+        "ρούχα",
+        "οργανωτής",
+        "πορτρέτο",
+        "εμφάνιση",
+        "ντύσιμο",
+        "καθημερινά",
+        "συλλογή ρούχων",
+        "ιδέες outfit"
+      ],
+      "added": [
+        "closet",
+        "ootd"
+      ],
+      "dropped": [
+        {
+          "term": "στυλ",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "closet organizer",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "wardrobe",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "συνδυασμός ρούχων",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "εμφάνιση",
+          "reason": "duplicate"
+        },
+        {
+          "term": "ντύσιμο",
+          "reason": "duplicate"
+        },
+        {
+          "term": "δωρεάν μήνας",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "AI style",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "weather outfits",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "τυλίματα",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "styling",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "pro version",
+          "reason": "discouraged or infringing term"
+        },
+        {
+          "term": "fashion check",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylist",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "lookbook",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "7426fbf6730aa64d"
+    },
+    {
+      "locale": "en-AU",
+      "native": "English (Australia)",
+      "tier": 3,
+      "keywords": "planner,fashion,virtual,clothing,organizer,photoshoot,headshot,capsule,daily,style,look,ootd",
+      "characters": 92,
+      "kept": [
+        "planner",
+        "fashion",
+        "virtual",
+        "clothing",
+        "organizer",
+        "photoshoot",
+        "headshot",
+        "capsule",
+        "daily",
+        "style",
+        "look",
+        "ootd"
+      ],
+      "added": [],
+      "dropped": [
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "wardrobe",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "closet",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "clothes organizer",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "what to wear",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "wardrobe box",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "look of the day",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "closet space",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "digital closet",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit builder",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "photo try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "clothing manager",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit generator",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion planner",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylist",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "capsule wardrobe",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dress up game",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "personal stylist",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion tips",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "ee80c85b3f2fbfb6"
+    },
+    {
+      "locale": "en-CA",
+      "native": "English (Canada)",
+      "tier": 3,
+      "keywords": "planner,fashion,virtual,clothing,organizer,photoshoot,headshot,capsule,daily,style,look,ootd",
+      "characters": 92,
+      "kept": [
+        "planner",
+        "fashion",
+        "virtual",
+        "clothing",
+        "organizer",
+        "photoshoot",
+        "headshot",
+        "capsule",
+        "daily",
+        "style",
+        "look",
+        "ootd"
+      ],
+      "added": [],
+      "dropped": [
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "wardrobe",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "closet",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "outfit ideas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit generator",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "photograph clothes",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dress up",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylist",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "fashion ai",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "ee80c85b3f2fbfb6"
+    },
+    {
+      "locale": "hr",
+      "native": "Hrvatski",
+      "tier": 3,
+      "keywords": "planer,moda,virtualno,odjeća,organizator,foto,portret,kapsula,dnevno,look,ootd,moderna,izgled,članci",
+      "characters": 100,
+      "kept": [
+        "planer",
+        "moda",
+        "virtualno",
+        "odjeća",
+        "organizator",
+        "foto",
+        "portret",
+        "kapsula",
+        "dnevno",
+        "look",
+        "ootd",
+        "moderna",
+        "izgled",
+        "članci"
+      ],
+      "added": [],
+      "dropped": [],
+      "rejected": [
+        {
+          "term": "stil",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "garderober",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "kombinacije",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "modni savjet",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "slaganje",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ljeto",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "zima",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "probati",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "trendovi",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "119086c3cdf47946"
+    },
+    {
+      "locale": "hu",
+      "native": "Magyar",
+      "tier": 3,
+      "keywords": "tervező,divat,virtuális,ruházat,rendszerező,fotózás,portré,kapszula,napi,stílus,ootd,szettelés",
+      "characters": 94,
+      "kept": [
+        "tervező",
+        "divat",
+        "virtuális",
+        "ruházat",
+        "rendszerező",
+        "fotózás",
+        "portré",
+        "kapszula",
+        "napi",
+        "stílus",
+        "ootd",
+        "szettelés"
+      ],
+      "added": [],
+      "dropped": [
+        {
+          "term": "szett",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "ruhaköltemény",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ruhaházas",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "szerelés",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "szettelés",
+          "reason": "duplicate"
+        },
+        {
+          "term": "összeszerelés",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ruhaajánló",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtuális próbálgatás",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "szettajánló",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "gépkezelés",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "személyre szabott",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "1a93993471f6c06d"
+    },
+    {
+      "locale": "ro",
+      "native": "Română",
+      "tier": 3,
+      "keywords": "planificator,modă,virtual,îmbrăcăminte,organizator,ședință,portret,capsulă,zilnic,look,ootd,haine",
+      "characters": 97,
+      "kept": [
+        "planificator",
+        "modă",
+        "virtual",
+        "îmbrăcăminte",
+        "organizator",
+        "ședință",
+        "portret",
+        "capsulă",
+        "zilnic",
+        "look",
+        "ootd"
+      ],
+      "added": [
+        "haine"
+      ],
+      "dropped": [
+        {
+          "term": "stil",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "garderobă",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ținute",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "ce să port",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "idei",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "combinații",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "poze",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtual try on",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit ai",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografiere",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "headshot",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "stylist",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fashion",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "dress",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "styling",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "d22802ceebf0283d"
+    },
+    {
+      "locale": "sl-SI",
+      "native": "Slovenščina",
+      "tier": 3,
+      "keywords": "načrtovalec,moda,virtualno,oblačila,organizator,foto,portret,kapsula,dnevno,videz,ootd,snežka,izbor",
+      "characters": 99,
+      "kept": [
+        "načrtovalec",
+        "moda",
+        "virtualno",
+        "oblačila",
+        "organizator",
+        "foto",
+        "portret",
+        "kapsula",
+        "dnevno",
+        "videz",
+        "ootd"
+      ],
+      "added": [
+        "snežka",
+        "izbor"
+      ],
+      "dropped": [
+        {
+          "term": "stil",
+          "reason": "already in name or subtitle"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "omara",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "stili",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "oblačila",
+          "reason": "duplicate"
+        },
+        {
+          "term": "moda",
+          "reason": "duplicate"
+        },
+        {
+          "term": "stil",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "foto",
+          "reason": "duplicate"
+        },
+        {
+          "term": "modni",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "navdihi",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "izgled",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "pomerjanje",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "kombinacije",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "portret",
+          "reason": "duplicate"
+        },
+        {
+          "term": "pose",
+          "reason": "does not fit the remaining budget"
+        }
+      ],
+      "_rules": "344358ec4f7fbec5",
+      "_basis": "77a0b74632b572f1"
+    },
+    {
+      "locale": "it-IT",
+      "native": "Italiano",
+      "tier": 1,
+      "keywords": "moda,guardaroba,digitale,abbigliamento,look,stile,foto,cerca,vestiti,organizer,personal,consigli",
+      "characters": 96,
+      "kept": [
+        "moda",
+        "guardaroba",
+        "digitale",
+        "abbigliamento",
+        "look",
+        "stile",
+        "foto",
+        "cerca",
+        "vestiti"
+      ],
+      "added": [
+        "organizer",
+        "personal",
+        "consigli"
+      ],
+      "dropped": [
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "app",
+          "reason": "discouraged or infringing term"
+        }
+      ],
+      "rejected": [
+        {
+          "term": "armadio",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "abbigliamento",
+          "reason": "duplicate"
+        },
+        {
+          "term": "abbinamenti",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "abbina",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "vestire",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "virtuale",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "creatore",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "fotografia",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "capsule",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "outfit",
+          "reason": "already in name or subtitle"
+        },
+        {
+          "term": "tendenza",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "ootd",
+          "reason": "does not fit the remaining budget"
+        },
+        {
+          "term": "moda",
+          "reason": "duplicate"
+        }
+      ]
+    }
+  ]
+}

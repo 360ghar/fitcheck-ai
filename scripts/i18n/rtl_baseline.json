@@ -1,0 +1,4 @@
+{
+  "_comment": "Physical-direction layout call sites that predate the RTL gate. Fix the code, then re-run with --write-baseline to shrink this list. Do not add entries by hand; use 'rtl-allow:' comments for genuinely physical layouts.",
+  "sites": []
+}

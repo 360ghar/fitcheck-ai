@@ -7,6 +7,7 @@ import 'package:fitcheck_ai/features/feedback/models/feedback_model.dart';
 import 'package:fitcheck_ai/features/feedback/providers/feedback_provider.dart';
 import 'package:fitcheck_ai/features/feedback/repositories/feedback_repository.dart';
 import 'package:fitcheck_ai/features/feedback/views/feedback_page.dart';
+import 'package:fitcheck_ai/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -56,6 +57,9 @@ Future<void> _pump(WidgetTester tester, FakeFeedbackRepository repo) async {
       retry: noRetry,
       overrides: [feedbackRepositoryProvider.overrideWithValue(repo)],
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         scaffoldMessengerKey: scaffoldMessengerKey,
         home: const MediaQuery(
           data: MediaQueryData(disableAnimations: true),

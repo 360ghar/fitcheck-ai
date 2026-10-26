@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fitcheck_ai/core/i18n/l10n.dart';
 import 'package:fitcheck_ai/core/providers.dart' show noRetry;
 import 'package:fitcheck_ai/core/widgets/app_ui.dart';
 import 'package:fitcheck_ai/features/gamification/models/gamification_model.dart';
@@ -51,12 +52,20 @@ class _ToggleAchievementsRepo extends _Repo {
   }
 }
 
-Future<void> _pump(WidgetTester tester, _Repo repo) async {  await tester.pumpWidget(
+Future<void> _pump(WidgetTester tester, _Repo repo) async {
+  await tester.pumpWidget(
     ProviderScope(
       retry: noRetry,
       overrides: [gamificationRepositoryProvider.overrideWithValue(repo)],
-      child: const MaterialApp(
-        home: MediaQuery(
+      child: MaterialApp(
+        // GamificationPage renders the shared AppBottomNavigationBar, which
+        // reads `context.l10n`. `AppLocalizations.of` is non-nullable, so a
+        // MaterialApp without these delegates throws "Null check operator used
+        // on a null value" instead of rendering English.
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: const MediaQuery(
           data: MediaQueryData(disableAnimations: true),
           child: GamificationPage(),
         ),
@@ -99,40 +108,44 @@ void main() {
     expect(find.text('Try again'), findsOneWidget);
   });
 
-  testWidgets('a failed refresh on an empty list keeps the banner and the empty state', (
-    tester,
-  ) async {
-    final repo = _ToggleAchievementsRepo();
-    final container = ProviderContainer(
-      retry: noRetry,
-      overrides: [gamificationRepositoryProvider.overrideWithValue(repo)],
-    );
-    addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: MediaQuery(
-            data: MediaQueryData(disableAnimations: true),
-            child: GamificationPage(),
+  testWidgets(
+    'a failed refresh on an empty list keeps the banner and the empty state',
+    (tester) async {
+      final repo = _ToggleAchievementsRepo();
+      final container = ProviderContainer(
+        retry: noRetry,
+        overrides: [gamificationRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: const MediaQuery(
+              data: MediaQueryData(disableAnimations: true),
+              child: GamificationPage(),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    await tester.scrollUntilVisible(
-      find.text('No achievements yet'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+      await tester.scrollUntilVisible(
+        find.text('No achievements yet'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
 
-    repo.failAchievements = true;
-    container.invalidate(achievementsProvider);
-    await tester.pump();
-    await tester.pump();
+      repo.failAchievements = true;
+      container.invalidate(achievementsProvider);
+      await tester.pump();
+      await tester.pump();
 
-    expect(find.text('No achievements yet'), findsOneWidget);
-    expect(find.byType(AppErrorBanner), findsOneWidget);
-  });
+      expect(find.text('No achievements yet'), findsOneWidget);
+      expect(find.byType(AppErrorBanner), findsOneWidget);
+    },
+  );
 }

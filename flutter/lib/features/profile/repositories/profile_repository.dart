@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Repository for user profile API calls
 class ProfileRepository {
@@ -71,8 +72,9 @@ class ProfileRepository {
       );
       final url = _extractData(response.data)['avatar_url'];
       if (url is! String || url.isEmpty) {
-        throw const ServerException(
-          message: 'Avatar upload did not return an image URL.',
+        throw ServerException(
+          message: ErrorHandler.l10n?.profileAvatarUploadNoUrl ??
+              'Avatar upload did not return an image URL.',
           statusCode: 502,
         );
       }

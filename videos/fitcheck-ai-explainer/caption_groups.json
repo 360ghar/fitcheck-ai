@@ -1,0 +1,1723 @@
+{
+  "total_duration_s": 93.57,
+  "width": 1080,
+  "height": 1920,
+  "groups": [
+    {
+      "id": "caption-group-0",
+      "frame": 2,
+      "start": 6.1,
+      "end": 7.64,
+      "text": "15 minutes deciding,",
+      "words": [
+        {
+          "id": "caption-word-0-0",
+          "text": "15",
+          "start": 6.1,
+          "end": 6.44
+        },
+        {
+          "id": "caption-word-0-1",
+          "text": "minutes",
+          "start": 6.44,
+          "end": 6.93
+        },
+        {
+          "id": "caption-word-0-2",
+          "text": "deciding,",
+          "start": 6.93,
+          "end": 7.64
+        }
+      ]
+    },
+    {
+      "id": "caption-group-1",
+      "frame": 2,
+      "start": 7.64,
+      "end": 8.64,
+      "text": "3 impulse buys",
+      "words": [
+        {
+          "id": "caption-word-1-0",
+          "text": "3",
+          "start": 7.64,
+          "end": 7.85
+        },
+        {
+          "id": "caption-word-1-1",
+          "text": "impulse",
+          "start": 7.85,
+          "end": 8.35
+        },
+        {
+          "id": "caption-word-1-2",
+          "text": "buys",
+          "start": 8.35,
+          "end": 8.64
+        }
+      ]
+    },
+    {
+      "id": "caption-group-2",
+      "frame": 2,
+      "start": 8.64,
+      "end": 9.21,
+      "text": "a month,",
+      "words": [
+        {
+          "id": "caption-word-2-0",
+          "text": "a",
+          "start": 8.64,
+          "end": 8.71
+        },
+        {
+          "id": "caption-word-2-1",
+          "text": "month,",
+          "start": 8.71,
+          "end": 9.21
+        }
+      ]
+    },
+    {
+      "id": "caption-group-3",
+      "frame": 2,
+      "start": 9.21,
+      "end": 9.67,
+      "text": "and half",
+      "words": [
+        {
+          "id": "caption-word-3-0",
+          "text": "and",
+          "start": 9.21,
+          "end": 9.37
+        },
+        {
+          "id": "caption-word-3-1",
+          "text": "half",
+          "start": 9.37,
+          "end": 9.55
+        }
+      ]
+    },
+    {
+      "id": "caption-group-4",
+      "frame": 2,
+      "start": 9.67,
+      "end": 10.78,
+      "text": "your closet forgotten.",
+      "words": [
+        {
+          "id": "caption-word-4-0",
+          "text": "your",
+          "start": 9.67,
+          "end": 9.81
+        },
+        {
+          "id": "caption-word-4-1",
+          "text": "closet",
+          "start": 9.81,
+          "end": 10.14
+        },
+        {
+          "id": "caption-word-4-2",
+          "text": "forgotten.",
+          "start": 10.14,
+          "end": 10.66
+        }
+      ]
+    },
+    {
+      "id": "caption-group-5",
+      "frame": 3,
+      "start": 13.25,
+      "end": 14.53,
+      "text": "Meet FitCheck AI,",
+      "words": [
+        {
+          "id": "caption-word-5-0",
+          "text": "Meet",
+          "start": 13.25,
+          "end": 13.55
+        },
+        {
+          "id": "caption-word-5-1",
+          "text": "FitCheck",
+          "start": 13.55,
+          "end": 14.22
+        },
+        {
+          "id": "caption-word-5-2",
+          "text": "AI,",
+          "start": 14.22,
+          "end": 14.41
+        }
+      ]
+    },
+    {
+      "id": "caption-group-6",
+      "frame": 3,
+      "start": 14.63,
+      "end": 16.1,
+      "text": "your closet rebuilt",
+      "words": [
+        {
+          "id": "caption-word-6-0",
+          "text": "your",
+          "start": 14.63,
+          "end": 14.93
+        },
+        {
+          "id": "caption-word-6-1",
+          "text": "closet",
+          "start": 14.93,
+          "end": 15.47
+        },
+        {
+          "id": "caption-word-6-2",
+          "text": "rebuilt",
+          "start": 15.47,
+          "end": 16.1
+        }
+      ]
+    },
+    {
+      "id": "caption-group-7",
+      "frame": 3,
+      "start": 16.1,
+      "end": 16.61,
+      "text": "by AI.",
+      "words": [
+        {
+          "id": "caption-word-7-0",
+          "text": "by",
+          "start": 16.1,
+          "end": 16.27
+        },
+        {
+          "id": "caption-word-7-1",
+          "text": "AI.",
+          "start": 16.27,
+          "end": 16.49
+        }
+      ]
+    },
+    {
+      "id": "caption-group-8",
+      "frame": 4,
+      "start": 19.08,
+      "end": 19.63,
+      "text": "Snap photos",
+      "words": [
+        {
+          "id": "caption-word-8-0",
+          "text": "Snap",
+          "start": 19.08,
+          "end": 19.25
+        },
+        {
+          "id": "caption-word-8-1",
+          "text": "photos",
+          "start": 19.25,
+          "end": 19.63
+        }
+      ]
+    },
+    {
+      "id": "caption-group-9",
+      "frame": 4,
+      "start": 19.63,
+      "end": 20.74,
+      "text": "of your clothes.",
+      "words": [
+        {
+          "id": "caption-word-9-0",
+          "text": "of",
+          "start": 19.63,
+          "end": 19.75
+        },
+        {
+          "id": "caption-word-9-1",
+          "text": "your",
+          "start": 19.75,
+          "end": 19.87
+        },
+        {
+          "id": "caption-word-9-2",
+          "text": "clothes.",
+          "start": 20,
+          "end": 20.66
+        }
+      ]
+    },
+    {
+      "id": "caption-group-10",
+      "frame": 4,
+      "start": 20.74,
+      "end": 21.06,
+      "text": "The AI",
+      "words": [
+        {
+          "id": "caption-word-10-0",
+          "text": "The",
+          "start": 20.74,
+          "end": 20.87
+        },
+        {
+          "id": "caption-word-10-1",
+          "text": "AI",
+          "start": 20.87,
+          "end": 20.94
+        }
+      ]
+    },
+    {
+      "id": "caption-group-11",
+      "frame": 4,
+      "start": 21.1,
+      "end": 22.38,
+      "text": "extracts every item,",
+      "words": [
+        {
+          "id": "caption-word-11-0",
+          "text": "extracts",
+          "start": 21.1,
+          "end": 21.53
+        },
+        {
+          "id": "caption-word-11-1",
+          "text": "every",
+          "start": 21.66,
+          "end": 21.9
+        },
+        {
+          "id": "caption-word-11-2",
+          "text": "item,",
+          "start": 21.93,
+          "end": 22.38
+        }
+      ]
+    },
+    {
+      "id": "caption-group-12",
+      "frame": 4,
+      "start": 22.38,
+      "end": 22.79,
+      "text": "color,",
+      "words": [
+        {
+          "id": "caption-word-12-0",
+          "text": "color,",
+          "start": 22.38,
+          "end": 22.79
+        }
+      ]
+    },
+    {
+      "id": "caption-group-13",
+      "frame": 4,
+      "start": 22.79,
+      "end": 23.36,
+      "text": "fabric,",
+      "words": [
+        {
+          "id": "caption-word-13-0",
+          "text": "fabric,",
+          "start": 22.79,
+          "end": 23.28
+        }
+      ]
+    },
+    {
+      "id": "caption-group-14",
+      "frame": 4,
+      "start": 23.36,
+      "end": 23.93,
+      "text": "pattern,",
+      "words": [
+        {
+          "id": "caption-word-14-0",
+          "text": "pattern,",
+          "start": 23.36,
+          "end": 23.86
+        }
+      ]
+    },
+    {
+      "id": "caption-group-15",
+      "frame": 4,
+      "start": 23.93,
+      "end": 25.82,
+      "text": "automatically.",
+      "words": [
+        {
+          "id": "caption-word-15-0",
+          "text": "automatically.",
+          "start": 23.93,
+          "end": 25.7
+        }
+      ]
+    },
+    {
+      "id": "caption-group-16",
+      "frame": 5,
+      "start": 27.23,
+      "end": 27.96,
+      "text": "Your wardrobe",
+      "words": [
+        {
+          "id": "caption-word-16-0",
+          "text": "Your",
+          "start": 27.23,
+          "end": 27.45
+        },
+        {
+          "id": "caption-word-16-1",
+          "text": "wardrobe",
+          "start": 27.45,
+          "end": 27.84
+        }
+      ]
+    },
+    {
+      "id": "caption-group-17",
+      "frame": 5,
+      "start": 28.08,
+      "end": 29.77,
+      "text": "cataloged and searchable.",
+      "words": [
+        {
+          "id": "caption-word-17-0",
+          "text": "cataloged",
+          "start": 28.08,
+          "end": 28.54
+        },
+        {
+          "id": "caption-word-17-1",
+          "text": "and",
+          "start": 28.62,
+          "end": 28.79
+        },
+        {
+          "id": "caption-word-17-2",
+          "text": "searchable.",
+          "start": 28.79,
+          "end": 29.72
+        }
+      ]
+    },
+    {
+      "id": "caption-group-18",
+      "frame": 5,
+      "start": 29.77,
+      "end": 30.33,
+      "text": "Favorites,",
+      "words": [
+        {
+          "id": "caption-word-18-0",
+          "text": "Favorites,",
+          "start": 29.77,
+          "end": 30.33
+        }
+      ]
+    },
+    {
+      "id": "caption-group-19",
+      "frame": 5,
+      "start": 30.33,
+      "end": 30.86,
+      "text": "filters,",
+      "words": [
+        {
+          "id": "caption-word-19-0",
+          "text": "filters,",
+          "start": 30.33,
+          "end": 30.86
+        }
+      ]
+    },
+    {
+      "id": "caption-group-20",
+      "frame": 5,
+      "start": 30.86,
+      "end": 31.46,
+      "text": "and matches",
+      "words": [
+        {
+          "id": "caption-word-20-0",
+          "text": "and",
+          "start": 30.86,
+          "end": 31.04
+        },
+        {
+          "id": "caption-word-20-1",
+          "text": "matches",
+          "start": 31.04,
+          "end": 31.46
+        }
+      ]
+    },
+    {
+      "id": "caption-group-21",
+      "frame": 5,
+      "start": 31.46,
+      "end": 31.88,
+      "text": "that learn",
+      "words": [
+        {
+          "id": "caption-word-21-0",
+          "text": "that",
+          "start": 31.46,
+          "end": 31.65
+        },
+        {
+          "id": "caption-word-21-1",
+          "text": "learn",
+          "start": 31.65,
+          "end": 31.88
+        }
+      ]
+    },
+    {
+      "id": "caption-group-22",
+      "frame": 5,
+      "start": 31.88,
+      "end": 32.01,
+      "text": "your",
+      "words": [
+        {
+          "id": "caption-word-22-0",
+          "text": "your",
+          "start": 31.88,
+          "end": 31.89
+        }
+      ]
+    },
+    {
+      "id": "caption-group-23",
+      "frame": 5,
+      "start": 32.32,
+      "end": 32.59,
+      "text": "style.",
+      "words": [
+        {
+          "id": "caption-word-23-0",
+          "text": "style.",
+          "start": 32.32,
+          "end": 32.47
+        }
+      ]
+    },
+    {
+      "id": "caption-group-24",
+      "frame": 6,
+      "start": 34.89,
+      "end": 35.24,
+      "text": "mix and",
+      "words": [
+        {
+          "id": "caption-word-24-0",
+          "text": "mix",
+          "start": 34.89,
+          "end": 35
+        },
+        {
+          "id": "caption-word-24-1",
+          "text": "and",
+          "start": 35.15,
+          "end": 35.24
+        }
+      ]
+    },
+    {
+      "id": "caption-group-25",
+      "frame": 6,
+      "start": 35.24,
+      "end": 35.76,
+      "text": "match,",
+      "words": [
+        {
+          "id": "caption-word-25-0",
+          "text": "match,",
+          "start": 35.24,
+          "end": 35.64
+        }
+      ]
+    },
+    {
+      "id": "caption-group-26",
+      "frame": 6,
+      "start": 35.76,
+      "end": 36.08,
+      "text": "or let",
+      "words": [
+        {
+          "id": "caption-word-26-0",
+          "text": "or",
+          "start": 35.76,
+          "end": 35.86
+        },
+        {
+          "id": "caption-word-26-1",
+          "text": "let",
+          "start": 35.86,
+          "end": 36.08
+        }
+      ]
+    },
+    {
+      "id": "caption-group-27",
+      "frame": 6,
+      "start": 36.08,
+      "end": 36.44,
+      "text": "the AI",
+      "words": [
+        {
+          "id": "caption-word-27-0",
+          "text": "the",
+          "start": 36.08,
+          "end": 36.3
+        },
+        {
+          "id": "caption-word-27-1",
+          "text": "AI",
+          "start": 36.3,
+          "end": 36.44
+        }
+      ]
+    },
+    {
+      "id": "caption-group-28",
+      "frame": 6,
+      "start": 36.44,
+      "end": 37.33,
+      "text": "dress you.",
+      "words": [
+        {
+          "id": "caption-word-28-0",
+          "text": "dress",
+          "start": 36.44,
+          "end": 36.8
+        },
+        {
+          "id": "caption-word-28-1",
+          "text": "you.",
+          "start": 36.8,
+          "end": 37.28
+        }
+      ]
+    },
+    {
+      "id": "caption-group-29",
+      "frame": 6,
+      "start": 37.33,
+      "end": 37.66,
+      "text": "One tap",
+      "words": [
+        {
+          "id": "caption-word-29-0",
+          "text": "One",
+          "start": 37.33,
+          "end": 37.44
+        },
+        {
+          "id": "caption-word-29-1",
+          "text": "tap",
+          "start": 37.59,
+          "end": 37.66
+        }
+      ]
+    },
+    {
+      "id": "caption-group-30",
+      "frame": 6,
+      "start": 37.66,
+      "end": 39.06,
+      "text": "generates the look.",
+      "words": [
+        {
+          "id": "caption-word-30-0",
+          "text": "generates",
+          "start": 37.66,
+          "end": 38.25
+        },
+        {
+          "id": "caption-word-30-1",
+          "text": "the",
+          "start": 38.25,
+          "end": 38.42
+        },
+        {
+          "id": "caption-word-30-2",
+          "text": "look.",
+          "start": 38.51,
+          "end": 38.94
+        }
+      ]
+    },
+    {
+      "id": "caption-group-31",
+      "frame": 7,
+      "start": 41.37,
+      "end": 41.73,
+      "text": "Plan the",
+      "words": [
+        {
+          "id": "caption-word-31-0",
+          "text": "Plan",
+          "start": 41.37,
+          "end": 41.54
+        },
+        {
+          "id": "caption-word-31-1",
+          "text": "the",
+          "start": 41.54,
+          "end": 41.73
+        }
+      ]
+    },
+    {
+      "id": "caption-group-32",
+      "frame": 7,
+      "start": 41.73,
+      "end": 42.2,
+      "text": "week,",
+      "words": [
+        {
+          "id": "caption-word-32-0",
+          "text": "week,",
+          "start": 41.73,
+          "end": 42.13
+        }
+      ]
+    },
+    {
+      "id": "caption-group-33",
+      "frame": 7,
+      "start": 42.2,
+      "end": 42.5,
+      "text": "it checks",
+      "words": [
+        {
+          "id": "caption-word-33-0",
+          "text": "it",
+          "start": 42.2,
+          "end": 42.22
+        },
+        {
+          "id": "caption-word-33-1",
+          "text": "checks",
+          "start": 42.22,
+          "end": 42.49
+        }
+      ]
+    },
+    {
+      "id": "caption-group-34",
+      "frame": 7,
+      "start": 42.5,
+      "end": 43.1,
+      "text": "your calendar",
+      "words": [
+        {
+          "id": "caption-word-34-0",
+          "text": "your",
+          "start": 42.5,
+          "end": 42.69
+        },
+        {
+          "id": "caption-word-34-1",
+          "text": "calendar",
+          "start": 42.69,
+          "end": 43.08
+        }
+      ]
+    },
+    {
+      "id": "caption-group-35",
+      "frame": 7,
+      "start": 43.1,
+      "end": 43.45,
+      "text": "and the",
+      "words": [
+        {
+          "id": "caption-word-35-0",
+          "text": "and",
+          "start": 43.1,
+          "end": 43.26
+        },
+        {
+          "id": "caption-word-35-1",
+          "text": "the",
+          "start": 43.26,
+          "end": 43.4
+        }
+      ]
+    },
+    {
+      "id": "caption-group-36",
+      "frame": 7,
+      "start": 43.45,
+      "end": 43.91,
+      "text": "weather,",
+      "words": [
+        {
+          "id": "caption-word-36-0",
+          "text": "weather,",
+          "start": 43.45,
+          "end": 43.83
+        }
+      ]
+    },
+    {
+      "id": "caption-group-37",
+      "frame": 7,
+      "start": 43.91,
+      "end": 44.1,
+      "text": "so you",
+      "words": [
+        {
+          "id": "caption-word-37-0",
+          "text": "so",
+          "start": 43.91,
+          "end": 43.94
+        },
+        {
+          "id": "caption-word-37-1",
+          "text": "you",
+          "start": 43.94,
+          "end": 44.1
+        }
+      ]
+    },
+    {
+      "id": "caption-group-38",
+      "frame": 7,
+      "start": 44.1,
+      "end": 44.74,
+      "text": "never freeze",
+      "words": [
+        {
+          "id": "caption-word-38-0",
+          "text": "never",
+          "start": 44.1,
+          "end": 44.31
+        },
+        {
+          "id": "caption-word-38-1",
+          "text": "freeze",
+          "start": 44.43,
+          "end": 44.66
+        }
+      ]
+    },
+    {
+      "id": "caption-group-39",
+      "frame": 7,
+      "start": 44.74,
+      "end": 45.57,
+      "text": "in a meeting.",
+      "words": [
+        {
+          "id": "caption-word-39-0",
+          "text": "in",
+          "start": 44.74,
+          "end": 44.81
+        },
+        {
+          "id": "caption-word-39-1",
+          "text": "a",
+          "start": 44.82,
+          "end": 44.87
+        },
+        {
+          "id": "caption-word-39-2",
+          "text": "meeting.",
+          "start": 44.87,
+          "end": 45.45
+        }
+      ]
+    },
+    {
+      "id": "caption-group-40",
+      "frame": 8,
+      "start": 47.9,
+      "end": 48.14,
+      "text": "See it",
+      "words": [
+        {
+          "id": "caption-word-40-0",
+          "text": "See",
+          "start": 47.9,
+          "end": 47.98
+        },
+        {
+          "id": "caption-word-40-1",
+          "text": "it",
+          "start": 47.98,
+          "end": 48.06
+        }
+      ]
+    },
+    {
+      "id": "caption-group-41",
+      "frame": 8,
+      "start": 48.14,
+      "end": 48.65,
+      "text": "before you",
+      "words": [
+        {
+          "id": "caption-word-41-0",
+          "text": "before",
+          "start": 48.14,
+          "end": 48.47
+        },
+        {
+          "id": "caption-word-41-1",
+          "text": "you",
+          "start": 48.47,
+          "end": 48.65
+        }
+      ]
+    },
+    {
+      "id": "caption-group-42",
+      "frame": 8,
+      "start": 48.65,
+      "end": 48.9,
+      "text": "wear",
+      "words": [
+        {
+          "id": "caption-word-42-0",
+          "text": "wear",
+          "start": 48.65,
+          "end": 48.78
+        }
+      ]
+    },
+    {
+      "id": "caption-group-43",
+      "frame": 8,
+      "start": 49.04,
+      "end": 49.17,
+      "text": "it.",
+      "words": [
+        {
+          "id": "caption-word-43-0",
+          "text": "it.",
+          "start": 49.04,
+          "end": 49.06
+        }
+      ]
+    },
+    {
+      "id": "caption-group-44",
+      "frame": 8,
+      "start": 49.17,
+      "end": 50.44,
+      "text": "Virtual try-on.",
+      "words": [
+        {
+          "id": "caption-word-44-0",
+          "text": "Virtual",
+          "start": 49.17,
+          "end": 49.62
+        },
+        {
+          "id": "caption-word-44-1",
+          "text": "try-on.",
+          "start": 49.62,
+          "end": 50.34
+        }
+      ]
+    },
+    {
+      "id": "caption-group-45",
+      "frame": 8,
+      "start": 50.44,
+      "end": 50.94,
+      "text": "Photo shoot",
+      "words": [
+        {
+          "id": "caption-word-45-0",
+          "text": "Photo",
+          "start": 50.44,
+          "end": 50.6
+        },
+        {
+          "id": "caption-word-45-1",
+          "text": "shoot",
+          "start": 50.68,
+          "end": 50.94
+        }
+      ]
+    },
+    {
+      "id": "caption-group-46",
+      "frame": 8,
+      "start": 50.94,
+      "end": 51.44,
+      "text": "ready images",
+      "words": [
+        {
+          "id": "caption-word-46-0",
+          "text": "ready",
+          "start": 50.94,
+          "end": 51.24
+        },
+        {
+          "id": "caption-word-46-1",
+          "text": "images",
+          "start": 51.24,
+          "end": 51.32
+        }
+      ]
+    },
+    {
+      "id": "caption-group-47",
+      "frame": 8,
+      "start": 51.62,
+      "end": 52.22,
+      "text": "straight from",
+      "words": [
+        {
+          "id": "caption-word-47-0",
+          "text": "straight",
+          "start": 51.62,
+          "end": 52
+        },
+        {
+          "id": "caption-word-47-1",
+          "text": "from",
+          "start": 52.06,
+          "end": 52.22
+        }
+      ]
+    },
+    {
+      "id": "caption-group-48",
+      "frame": 8,
+      "start": 52.22,
+      "end": 52.96,
+      "text": "your phone.",
+      "words": [
+        {
+          "id": "caption-word-48-0",
+          "text": "your",
+          "start": 52.22,
+          "end": 52.42
+        },
+        {
+          "id": "caption-word-48-1",
+          "text": "phone.",
+          "start": 52.42,
+          "end": 52.84
+        }
+      ]
+    },
+    {
+      "id": "caption-group-49",
+      "frame": 9,
+      "start": 55.41,
+      "end": 55.82,
+      "text": "It finds",
+      "words": [
+        {
+          "id": "caption-word-49-0",
+          "text": "It",
+          "start": 55.41,
+          "end": 55.45
+        },
+        {
+          "id": "caption-word-49-1",
+          "text": "finds",
+          "start": 55.58,
+          "end": 55.75
+        }
+      ]
+    },
+    {
+      "id": "caption-group-50",
+      "frame": 9,
+      "start": 55.82,
+      "end": 56.39,
+      "text": "the gaps,",
+      "words": [
+        {
+          "id": "caption-word-50-0",
+          "text": "the",
+          "start": 55.82,
+          "end": 55.99
+        },
+        {
+          "id": "caption-word-50-1",
+          "text": "gaps,",
+          "start": 55.99,
+          "end": 56.27
+        }
+      ]
+    },
+    {
+      "id": "caption-group-51",
+      "frame": 9,
+      "start": 56.41,
+      "end": 57.53,
+      "text": "the missing jacket,",
+      "words": [
+        {
+          "id": "caption-word-51-0",
+          "text": "the",
+          "start": 56.41,
+          "end": 56.58
+        },
+        {
+          "id": "caption-word-51-1",
+          "text": "missing",
+          "start": 56.59,
+          "end": 57.03
+        },
+        {
+          "id": "caption-word-51-2",
+          "text": "jacket,",
+          "start": 57.1,
+          "end": 57.5
+        }
+      ]
+    },
+    {
+      "id": "caption-group-52",
+      "frame": 9,
+      "start": 57.53,
+      "end": 58.79,
+      "text": "the better alternative,",
+      "words": [
+        {
+          "id": "caption-word-52-0",
+          "text": "the",
+          "start": 57.53,
+          "end": 57.57
+        },
+        {
+          "id": "caption-word-52-1",
+          "text": "better",
+          "start": 57.7,
+          "end": 57.99
+        },
+        {
+          "id": "caption-word-52-2",
+          "text": "alternative,",
+          "start": 58.04,
+          "end": 58.76
+        }
+      ]
+    },
+    {
+      "id": "caption-group-53",
+      "frame": 9,
+      "start": 58.79,
+      "end": 59.25,
+      "text": "and scores",
+      "words": [
+        {
+          "id": "caption-word-53-0",
+          "text": "and",
+          "start": 58.79,
+          "end": 58.92
+        },
+        {
+          "id": "caption-word-53-1",
+          "text": "scores",
+          "start": 58.98,
+          "end": 59.15
+        }
+      ]
+    },
+    {
+      "id": "caption-group-54",
+      "frame": 9,
+      "start": 59.25,
+      "end": 59.67,
+      "text": "what you",
+      "words": [
+        {
+          "id": "caption-word-54-0",
+          "text": "what",
+          "start": 59.25,
+          "end": 59.35
+        },
+        {
+          "id": "caption-word-54-1",
+          "text": "you",
+          "start": 59.35,
+          "end": 59.67
+        }
+      ]
+    },
+    {
+      "id": "caption-group-55",
+      "frame": 9,
+      "start": 59.67,
+      "end": 60.42,
+      "text": "already own.",
+      "words": [
+        {
+          "id": "caption-word-55-0",
+          "text": "already",
+          "start": 59.67,
+          "end": 59.97
+        },
+        {
+          "id": "caption-word-55-1",
+          "text": "own.",
+          "start": 59.97,
+          "end": 60.3
+        }
+      ]
+    },
+    {
+      "id": "caption-group-56",
+      "frame": 10,
+      "start": 62.89,
+      "end": 63.27,
+      "text": "Share the",
+      "words": [
+        {
+          "id": "caption-word-56-0",
+          "text": "Share",
+          "start": 62.89,
+          "end": 63.07
+        },
+        {
+          "id": "caption-word-56-1",
+          "text": "the",
+          "start": 63.07,
+          "end": 63.15
+        }
+      ]
+    },
+    {
+      "id": "caption-group-57",
+      "frame": 10,
+      "start": 63.28,
+      "end": 63.53,
+      "text": "fit,",
+      "words": [
+        {
+          "id": "caption-word-57-0",
+          "text": "fit,",
+          "start": 63.28,
+          "end": 63.41
+        }
+      ]
+    },
+    {
+      "id": "caption-group-58",
+      "frame": 10,
+      "start": 63.58,
+      "end": 64.39,
+      "text": "build streaks,",
+      "words": [
+        {
+          "id": "caption-word-58-0",
+          "text": "build",
+          "start": 63.58,
+          "end": 63.75
+        },
+        {
+          "id": "caption-word-58-1",
+          "text": "streaks,",
+          "start": 63.78,
+          "end": 64.27
+        }
+      ]
+    },
+    {
+      "id": "caption-group-59",
+      "frame": 10,
+      "start": 64.41,
+      "end": 65.7,
+      "text": "climb the leaderboard.",
+      "words": [
+        {
+          "id": "caption-word-59-0",
+          "text": "climb",
+          "start": 64.41,
+          "end": 64.56
+        },
+        {
+          "id": "caption-word-59-1",
+          "text": "the",
+          "start": 64.56,
+          "end": 64.72
+        },
+        {
+          "id": "caption-word-59-2",
+          "text": "leaderboard.",
+          "start": 64.72,
+          "end": 65.58
+        }
+      ]
+    },
+    {
+      "id": "caption-group-60",
+      "frame": 11,
+      "start": 68.13,
+      "end": 68.7,
+      "text": "Emma found",
+      "words": [
+        {
+          "id": "caption-word-60-0",
+          "text": "Emma",
+          "start": 68.13,
+          "end": 68.32
+        },
+        {
+          "id": "caption-word-60-1",
+          "text": "found",
+          "start": 68.41,
+          "end": 68.58
+        }
+      ]
+    },
+    {
+      "id": "caption-group-61",
+      "frame": 11,
+      "start": 68.72,
+      "end": 69.16,
+      "text": "50 new",
+      "words": [
+        {
+          "id": "caption-word-61-0",
+          "text": "50",
+          "start": 68.72,
+          "end": 68.98
+        },
+        {
+          "id": "caption-word-61-1",
+          "text": "new",
+          "start": 68.98,
+          "end": 69.16
+        }
+      ]
+    },
+    {
+      "id": "caption-group-62",
+      "frame": 11,
+      "start": 69.16,
+      "end": 69.68,
+      "text": "outfits in",
+      "words": [
+        {
+          "id": "caption-word-62-0",
+          "text": "outfits",
+          "start": 69.16,
+          "end": 69.57
+        },
+        {
+          "id": "caption-word-62-1",
+          "text": "in",
+          "start": 69.59,
+          "end": 69.68
+        }
+      ]
+    },
+    {
+      "id": "caption-group-63",
+      "frame": 11,
+      "start": 69.68,
+      "end": 70.13,
+      "text": "the clothes",
+      "words": [
+        {
+          "id": "caption-word-63-0",
+          "text": "the",
+          "start": 69.68,
+          "end": 69.73
+        },
+        {
+          "id": "caption-word-63-1",
+          "text": "clothes",
+          "start": 69.86,
+          "end": 70.13
+        }
+      ]
+    },
+    {
+      "id": "caption-group-64",
+      "frame": 11,
+      "start": 70.13,
+      "end": 71.43,
+      "text": "she already owned.",
+      "words": [
+        {
+          "id": "caption-word-64-0",
+          "text": "she",
+          "start": 70.13,
+          "end": 70.37
+        },
+        {
+          "id": "caption-word-64-1",
+          "text": "already",
+          "start": 70.37,
+          "end": 70.93
+        },
+        {
+          "id": "caption-word-64-2",
+          "text": "owned.",
+          "start": 70.93,
+          "end": 71.39
+        }
+      ]
+    },
+    {
+      "id": "caption-group-65",
+      "frame": 11,
+      "start": 71.43,
+      "end": 72.18,
+      "text": "Marcus saves",
+      "words": [
+        {
+          "id": "caption-word-65-0",
+          "text": "Marcus",
+          "start": 71.43,
+          "end": 71.82
+        },
+        {
+          "id": "caption-word-65-1",
+          "text": "saves",
+          "start": 71.82,
+          "end": 72.07
+        }
+      ]
+    },
+    {
+      "id": "caption-group-66",
+      "frame": 11,
+      "start": 72.18,
+      "end": 72.75,
+      "text": "two hours",
+      "words": [
+        {
+          "id": "caption-word-66-0",
+          "text": "two",
+          "start": 72.18,
+          "end": 72.39
+        },
+        {
+          "id": "caption-word-66-1",
+          "text": "hours",
+          "start": 72.39,
+          "end": 72.75
+        }
+      ]
+    },
+    {
+      "id": "caption-group-67",
+      "frame": 11,
+      "start": 72.75,
+      "end": 73.67,
+      "text": "every week.",
+      "words": [
+        {
+          "id": "caption-word-67-0",
+          "text": "every",
+          "start": 72.75,
+          "end": 73.03
+        },
+        {
+          "id": "caption-word-67-1",
+          "text": "week.",
+          "start": 73.16,
+          "end": 73.63
+        }
+      ]
+    },
+    {
+      "id": "caption-group-68",
+      "frame": 11,
+      "start": 73.67,
+      "end": 74.79,
+      "text": "Priya grew engagement",
+      "words": [
+        {
+          "id": "caption-word-68-0",
+          "text": "Priya",
+          "start": 73.67,
+          "end": 73.86
+        },
+        {
+          "id": "caption-word-68-1",
+          "text": "grew",
+          "start": 73.95,
+          "end": 74.12
+        },
+        {
+          "id": "caption-word-68-2",
+          "text": "engagement",
+          "start": 74.26,
+          "end": 74.79
+        }
+      ]
+    },
+    {
+      "id": "caption-group-69",
+      "frame": 11,
+      "start": 74.79,
+      "end": 75.55,
+      "text": "40%.",
+      "words": [
+        {
+          "id": "caption-word-69-0",
+          "text": "40%.",
+          "start": 74.79,
+          "end": 75.43
+        }
+      ]
+    },
+    {
+      "id": "caption-group-70",
+      "frame": 12,
+      "start": 78.61,
+      "end": 79.32,
+      "text": "Start free,",
+      "words": [
+        {
+          "id": "caption-word-70-0",
+          "text": "Start",
+          "start": 78.61,
+          "end": 78.81
+        },
+        {
+          "id": "caption-word-70-1",
+          "text": "free,",
+          "start": 78.98,
+          "end": 79.2
+        }
+      ]
+    },
+    {
+      "id": "caption-group-71",
+      "frame": 12,
+      "start": 79.42,
+      "end": 79.8,
+      "text": "plus and",
+      "words": [
+        {
+          "id": "caption-word-71-0",
+          "text": "plus",
+          "start": 79.42,
+          "end": 79.52
+        },
+        {
+          "id": "caption-word-71-1",
+          "text": "and",
+          "start": 79.52,
+          "end": 79.69
+        }
+      ]
+    },
+    {
+      "id": "caption-group-72",
+      "frame": 12,
+      "start": 79.8,
+      "end": 80.34,
+      "text": "pro unlock",
+      "words": [
+        {
+          "id": "caption-word-72-0",
+          "text": "pro",
+          "start": 79.8,
+          "end": 79.92
+        },
+        {
+          "id": "caption-word-72-1",
+          "text": "unlock",
+          "start": 79.92,
+          "end": 80.22
+        }
+      ]
+    },
+    {
+      "id": "caption-group-73",
+      "frame": 12,
+      "start": 80.42,
+      "end": 81.01,
+      "text": "try-on,",
+      "words": [
+        {
+          "id": "caption-word-73-0",
+          "text": "try-on,",
+          "start": 80.42,
+          "end": 80.94
+        }
+      ]
+    },
+    {
+      "id": "caption-group-74",
+      "frame": 12,
+      "start": 81.01,
+      "end": 81.72,
+      "text": "analytics and",
+      "words": [
+        {
+          "id": "caption-word-74-0",
+          "text": "analytics",
+          "start": 81.01,
+          "end": 81.48
+        },
+        {
+          "id": "caption-word-74-1",
+          "text": "and",
+          "start": 81.48,
+          "end": 81.6
+        }
+      ]
+    },
+    {
+      "id": "caption-group-75",
+      "frame": 12,
+      "start": 81.82,
+      "end": 82.41,
+      "text": "planning.",
+      "words": [
+        {
+          "id": "caption-word-75-0",
+          "text": "planning.",
+          "start": 81.82,
+          "end": 82.34
+        }
+      ]
+    },
+    {
+      "id": "caption-group-76",
+      "frame": 12,
+      "start": 82.41,
+      "end": 83.12,
+      "text": "Yearly billing",
+      "words": [
+        {
+          "id": "caption-word-76-0",
+          "text": "Yearly",
+          "start": 82.41,
+          "end": 82.61
+        },
+        {
+          "id": "caption-word-76-1",
+          "text": "billing",
+          "start": 82.78,
+          "end": 83
+        }
+      ]
+    },
+    {
+      "id": "caption-group-77",
+      "frame": 12,
+      "start": 83.22,
+      "end": 83.44,
+      "text": "gets two",
+      "words": [
+        {
+          "id": "caption-word-77-0",
+          "text": "gets",
+          "start": 83.22,
+          "end": 83.28
+        },
+        {
+          "id": "caption-word-77-1",
+          "text": "two",
+          "start": 83.28,
+          "end": 83.44
+        }
+      ]
+    },
+    {
+      "id": "caption-group-78",
+      "frame": 12,
+      "start": 83.44,
+      "end": 84.14,
+      "text": "months free.",
+      "words": [
+        {
+          "id": "caption-word-78-0",
+          "text": "months",
+          "start": 83.44,
+          "end": 83.76
+        },
+        {
+          "id": "caption-word-78-1",
+          "text": "free.",
+          "start": 83.77,
+          "end": 84.02
+        }
+      ]
+    },
+    {
+      "id": "caption-group-79",
+      "frame": 13,
+      "start": 86.67,
+      "end": 87.75,
+      "text": "FitCheck AI,",
+      "words": [
+        {
+          "id": "caption-word-79-0",
+          "text": "FitCheck",
+          "start": 86.67,
+          "end": 87.42
+        },
+        {
+          "id": "caption-word-79-1",
+          "text": "AI,",
+          "start": 87.42,
+          "end": 87.63
+        }
+      ]
+    },
+    {
+      "id": "caption-group-80",
+      "frame": 13,
+      "start": 87.86,
+      "end": 88.78,
+      "text": "worn yesterday,",
+      "words": [
+        {
+          "id": "caption-word-80-0",
+          "text": "worn",
+          "start": 87.86,
+          "end": 88.08
+        },
+        {
+          "id": "caption-word-80-1",
+          "text": "yesterday,",
+          "start": 88.08,
+          "end": 88.66
+        }
+      ]
+    },
+    {
+      "id": "caption-group-81",
+      "frame": 13,
+      "start": 88.81,
+      "end": 90.13,
+      "text": "decided in seconds.",
+      "words": [
+        {
+          "id": "caption-word-81-0",
+          "text": "decided",
+          "start": 88.81,
+          "end": 89.27
+        },
+        {
+          "id": "caption-word-81-1",
+          "text": "in",
+          "start": 89.27,
+          "end": 89.38
+        },
+        {
+          "id": "caption-word-81-2",
+          "text": "seconds.",
+          "start": 89.41,
+          "end": 90.01
+        }
+      ]
+    }
+  ]
+}

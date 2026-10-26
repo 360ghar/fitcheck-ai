@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useTranslation } from '@/i18n'
 import type { Item } from '@/types'
 import type { ItemEditor } from './useItemEditor'
 
@@ -37,6 +38,7 @@ export function ItemDetailActions({
   onDelete,
   onCreateOutfit,
 }: ItemDetailActionsProps) {
+  const { t } = useTranslation()
   if (editor.isEditing) {
     return (
       <div className="flex items-center gap-sm">
@@ -48,12 +50,12 @@ export function ItemDetailActions({
           {editor.isSaving ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              <span className="truncate">Saving…</span>
+              <span className="truncate">{t('actions.saving')}</span>
             </>
           ) : (
             <>
               <Check className="h-4 w-4" aria-hidden="true" />
-              <span className="truncate">Save changes</span>
+              <span className="truncate">{t('actions.saveChanges')}</span>
             </>
           )}
         </Button>
@@ -73,7 +75,7 @@ export function ItemDetailActions({
     <div className="flex flex-wrap items-center gap-sm">
       <Button onClick={onMarkWorn} disabled={isBusy} className="min-w-0 flex-1 basis-32">
         <Check className="h-4 w-4" aria-hidden="true" />
-        <span className="truncate">Mark as worn</span>
+        <span className="truncate">{t('actions.markAsWorn')}</span>
       </Button>
 
       {/* Favorite left the overflow menu: the grid cards dropped their hearts,
@@ -94,25 +96,25 @@ export function ItemDetailActions({
         />
       </Button>
 
-      <Button variant="tertiary" size="icon" onClick={editor.begin} disabled={isBusy} aria-label="Edit item" className="shrink-0">
+      <Button variant="tertiary" size="icon" onClick={editor.begin} disabled={isBusy} aria-label={t('actions.editItem')} className="shrink-0">
         <Pencil className="h-4 w-4" aria-hidden="true" />
       </Button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="tertiary" size="icon" aria-label="More item actions" className="shrink-0">
+          <Button variant="tertiary" size="icon" aria-label={t('actions.moreItemActions')} className="shrink-0">
             <MoreVertical className="h-4 w-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           {onCreateOutfit && (
             <DropdownMenuItem onClick={onCreateOutfit}>
-              <Shirt className="h-4 w-4 mr-2" aria-hidden="true" />
+              <Shirt className="h-4 w-4 me-2" aria-hidden="true" />
               Create outfit with this item
             </DropdownMenuItem>
           )}
           <DropdownMenuItem className="text-destructive" disabled={isBusy} onClick={onDelete}>
-            <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+            <Trash2 className="h-4 w-4 me-2" aria-hidden="true" />
             Delete item
           </DropdownMenuItem>
         </DropdownMenuContent>

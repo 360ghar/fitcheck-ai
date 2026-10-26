@@ -42,7 +42,7 @@ const DialogContent = React.forwardRef<
         "inset-0 max-h-full rounded-none",
         "pt-[calc(1.5rem+var(--safe-area-top))] pb-[calc(1.5rem+var(--safe-area-bottom))]",
         // Desktop: centered modal
-        "sm:inset-auto sm:left-[50%] sm:top-[50%] sm:max-w-lg sm:max-h-[90vh] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:pt-6 sm:pb-6",
+        "sm:inset-auto sm:start-[50%] sm:top-[50%] sm:max-w-lg sm:max-h-[90vh] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:pt-6 sm:pb-6",
         // Animations - slide up on mobile, zoom on desktop
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -58,7 +58,7 @@ const DialogContent = React.forwardRef<
       <div className="overflow-y-auto max-h-full sm:max-h-none">
         {children}
       </div>
-      <DialogPrimitive.Close className="absolute right-4 top-[calc(1rem+var(--safe-area-top))] sm:top-4 rounded-full bg-surface-card text-ink transition-colors hover:bg-secondary disabled:pointer-events-none touch-target flex items-center justify-center">
+      <DialogPrimitive.Close className="absolute end-4 top-[calc(1rem+var(--safe-area-top))] sm:top-4 rounded-full bg-surface-card text-ink transition-colors hover:bg-secondary disabled:pointer-events-none touch-target flex items-center justify-center">
         <X className="h-5 w-5 sm:h-4 sm:w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
@@ -73,7 +73,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left",
+      "flex flex-col space-y-1.5 text-center sm:text-start-left",
       className
     )}
     {...props}
