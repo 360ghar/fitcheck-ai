@@ -432,7 +432,7 @@ a language without the flag keeps its preference.
 
 **Migration 065 is written but NOT applied** — it ships in the next production write batch:
 
-```
+```bash
 psql "$SUPABASE_DB_URL" -f backend/db/supabase/migrations/065_language_explicit.sql
 ```
 

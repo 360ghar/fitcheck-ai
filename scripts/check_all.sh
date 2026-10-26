@@ -32,6 +32,19 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_architecture.py
 echo "== docs structure =="
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_docs_structure.py
 
+# CI lints markdown with markdownlint-cli2 and this script did not, so six bare
+# code fences reached a PR before anything local noticed. Same command as
+# .github/workflows/docs-ci.yml; npx needs the network the first time and caches
+# after that.
+echo "== markdown lint =="
+if command -v markdownlint-cli2 >/dev/null 2>&1; then
+  markdownlint-cli2 --config .markdownlint.json "docs/**/*.md" "AGENTS.md" "ARCHITECTURE.md" "README.md"
+elif command -v npx >/dev/null 2>&1; then
+  npx --yes markdownlint-cli2@0.24.0 --config .markdownlint.json "docs/**/*.md" "AGENTS.md" "ARCHITECTURE.md" "README.md"
+else
+  missing_check "markdown lint" "no markdownlint-cli2 and no npx"
+fi
+
 echo "== migrations =="
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_migrations.py
 

@@ -30,7 +30,7 @@ The install funnel has exactly three steps and each growth surface moves exactly
 one of them. Getting this mapping wrong is how teams spend a quarter optimizing
 the wrong number.
 
-```
+```text
 impressions  →  product page views  →  installs
    (1)                 (2)                 (3)
 ```

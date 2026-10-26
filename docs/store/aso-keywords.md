@@ -57,7 +57,7 @@ anchor to.
 
 The Vietnamese field shipped as:
 
-```
+```text
 phối,thời,trang,tủ,đồ,cá,nhân,trang,phục,phong,cách,mặc,đẹp,chụp,ảnh
 ```
 

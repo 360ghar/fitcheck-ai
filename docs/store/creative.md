@@ -45,7 +45,7 @@ Do not trust a remembered number here. Two things were checked on 2026-10-26.
 
 **Live account, via the App Store Connect API:**
 
-```
+```http
 GET /v1/apps/{appId}/appStoreVersions
 GET /v1/appStoreVersions/{versionId}/appStoreVersionLocalizations
 GET /v1/appStoreVersionLocalizations/{locId}/appScreenshotSets

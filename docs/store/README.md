@@ -10,7 +10,7 @@ measures. Read this before running anything; then read
 
 ## The shape of it
 
-```
+```text
 store/asc/*.json        declarative intent — what the listing should say
 store/creative/         rendered pixels + a manifest that describes them
         │

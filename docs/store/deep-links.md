@@ -19,7 +19,7 @@ Registered in `flutter/ios/Runner/Info.plist` under `CFBundleURLTypes` →
 
 Any of these shapes resolve identically:
 
-```
+```text
 fitcheck.ai://wardrobe          # host form
 fitcheck.ai:///wardrobe         # path form
 fitcheck.ai://wardrobe/         # trailing slash
