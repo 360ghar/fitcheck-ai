@@ -1,6 +1,6 @@
 # Flutter
 
-Last updated: 2026-10-27
+Last updated: 2026-10-26
 
 Mobile client under `flutter/`. State and dependency injection use Riverpod 3 (no code generation). Routing uses go_router. The paper-cut diorama design system lives in `lib/core/theme/` and `lib/core/widgets/`. The app has no GetX; `test/core/utils/snackbar_policy_test.dart` fails on a `package:get/` import.
 
